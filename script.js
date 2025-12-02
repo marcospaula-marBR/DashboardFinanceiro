@@ -179,12 +179,14 @@ function initCharts() {
 }
 
 // ========================================
-// GOOGLE SHEETS INTEGRATION
-// ========================================
+// Google Sheets Integration
 async function loadFromGoogleSheets() {
     const SHEET_ID = '1aBSas0JlWuXEubN6ti7tYVUPrCz_qfmXA6LWwbdPMiw';
-    const SHEET_NAME = 'Dados'; // Ou o nome da sua aba
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_NAME}`;
+    const SHEET_NAME = 'Dados';
+
+    // Construir URL em partes para evitar problemas
+    const baseUrl = 'https:' + '//' + 'docs.google.com/spreadsheets/d/';
+    const url = baseUrl + SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + SHEET_NAME;
 
     document.getElementById('loadingOverlay').classList.remove('d-none');
     document.getElementById('fileStatus').textContent = 'Carregando dados do Google Sheets...';
