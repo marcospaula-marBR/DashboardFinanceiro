@@ -1168,6 +1168,122 @@ function downloadCSV(csv, filename) {
 }
 
 // ========================================
+// OMIE API INTEGRATION
+// ========================================
+let omieService = null;
+
+function initOmieService() {
+    omieService = new OmieService();
+    updateOmieButton();
+}
+
+function updateOmieButton() {
+    const btn = document.getElementById('btnOmieConfig');
+    if (omieService && omieService.isAuthenticated()) {
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-success');
+        btn.innerHTML = '<i class="bi bi-cloud-check me-1"></i><span class="d-none d-md-inline">Omie Conectado</span>';
+    } else {
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-info');
+        btn.innerHTML = '<i class="bi bi-cloud-arrow-down me-1"></i><span class="d-none d-md-inline">Conectar Omie</span>';
+    }
+}
+
+// Save Omie Configuration
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Omie Service
+    initOmieService();
+
+    // Save Config Button
+    document.getElementById('btnSaveOmieConfig').addEventListener('click', async () => {
+        const appKey = document.getElementById('omieAppKey').value.trim();
+        const appSecret = document.getElementById('omieAppSecret').value.trim();
+        const statusDiv = document.getElementById('omieConfigStatus');
+
+        if (!appKey || !appSecret) {
+            statusDiv.innerHTML = '<div class="alert alert-danger">Preencha App Key e App Secret!</div>';
+            return;
+        }
+
+        // Save credentials
+        omieService.setCredentials(appKey, appSecret);
+
+        // Test connection
+        statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split"></i> Testando conexão...</div>';
+
+        try {
+            // Try to list categories as a connection test
+            await omieService.listCategories();
+
+            statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> Conexão estabelecida com sucesso!</div>';
+            updateOmieButton();
+
+            // Close modal after 2 seconds
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('omieConfigModal')).hide();
+                statusDiv.innerHTML = '';
+            }, 2000);
+
+        } catch (error) {
+            statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> Erro: ${error.message}</div>`;
+        }
+    });
+
+    // Load existing credentials on modal open
+    document.getElementById('omieConfigModal').addEventListener('show.bs.modal', () => {
+        if (omieService && omieService.isAuthenticated()) {
+            document.getElementById('omieAppKey').value = omieService.appKey || '';
+            // Don't show secret for security
+        }
+    });
+});
+
+// Sync Data from Omie
+async function syncFromOmie() {
+    if (!omieService || !omieService.isAuthenticated()) {
+        alert('Configure as credenciais da API Omie primeiro!');
+        document.getElementById('btnOmieConfig').click();
+        return;
+    }
+
+    // Show loading
+    document.getElementById('loadingOverlay').classList.remove('d-none');
+    document.getElementById('fileStatus').textContent = 'Sincronizando com Omie...';
+
+    try {
+        // Ask for date range
+        const dataInicio = prompt('Data Início (DD/MM/YYYY):', '01/01/2024');
+        const dataFim = prompt('Data Fim (DD/MM/YYYY):', '31/12/2025');
+
+        if (!dataInicio || !dataFim) {
+            throw new Error('Datas não informadas');
+        }
+
+        // Sync data
+        const data = await omieService.syncData(dataInicio, dataFim);
+
+        if (data.length === 0) {
+            throw new Error('Nenhum dado encontrado no período informado');
+        }
+
+        // Process data as if it was a CSV
+        state.rawData = data;
+        extractMetadata(data);
+        applyFilters();
+
+        document.getElementById('loadingOverlay').classList.add('d-none');
+        document.getElementById('fileStatus').textContent = `✅ ${data.length} lançamentos sincronizados do Omie`;
+        document.getElementById('lastUpdate').textContent = `Sincronizado em: ${new Date().toLocaleTimeString()}`;
+
+    } catch (error) {
+        document.getElementById('loadingOverlay').classList.add('d-none');
+        alert(`Erro ao sincronizar com Omie: ${error.message}`);
+        console.error(error);
+    }
+}
+
+// ========================================
 // PDF EXPORT FUNCTION
 // ========================================
 async function exportToPDF() {
