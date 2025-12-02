@@ -1,0 +1,1403 @@
+// Configuration
+const CONFIG = {
+    COLORS: {
+        primary: '#F2911B',
+        secondary: '#262223',
+        success: '#2ecc71',
+        danger: '#e74c3c',
+        info: '#3498db',
+        dark: '#262223',
+        light: '#F2F2F2',
+        accent: '#00477A'
+    },
+    MESES_ORDEM: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+    ESTRUTURA_DRE: [
+        { titulo: "Receita Bruta de Vendas", tipo: "linha", categorias: ["Receita Bruta de Vendas"] },
+        { titulo: "Receitas Indiretas", tipo: "linha", categorias: ["Receitas Indiretas"] },
+        { titulo: "Total Entradas Operacionais", tipo: "card", var: "total_entradas" },
+        { titulo: "", tipo: "divisor" },
+        { titulo: "Outras Receitas", tipo: "linha", categorias: ["Outras Receitas"] },
+        { titulo: "Receitas Financeiras", tipo: "linha", categorias: ["Receitas Financeiras"] },
+        { titulo: "Honorários", tipo: "linha", categorias: ["Honorários"] },
+        { titulo: "Juros e Devoluções", tipo: "linha", categorias: ["Juros e devoluções"] },
+        { titulo: "Outras Entradas", tipo: "card", var: "outras_entradas" },
+        { titulo: "", tipo: "divisor" },
+        { titulo: "Impostos", tipo: "linha", categorias: ["Impostos"] },
+        { titulo: "Provisão IRPJ e CSSL Trimestral", tipo: "linha", categorias: ["Provisão - IRPJ e CSSL Trimestral"] },
+        { titulo: "Total de Impostos", tipo: "card", var: "total_impostos" },
+        { titulo: "", tipo: "divisor" },
+        { titulo: "Credenciado Operacional", tipo: "linha", categorias: ["Credenciado Operacional", "Adiantamento - Credenciado Operacional"] },
+        { titulo: "Terceirização de Mão de Obra", tipo: "linha", categorias: ["Terceirização de Mão de Obra"] },
+        { titulo: "CLTs", tipo: "linha", categorias: ["Despesas com Pessoal"] },
+        { titulo: "Custo dos Serviços Prestados", tipo: "linha", categorias: ["Custo dos Serviços Prestados"] },
+        { titulo: "Preventiva - B2G", tipo: "linha", categorias: ["Preventiva - B2G", "Manutenção Preventiva"] },
+        { titulo: "Corretiva - B2G", tipo: "linha", categorias: ["Corretiva - B2G", "Manutenção Corretiva"] },
+        { titulo: "Outros Custos", tipo: "linha", categorias: ["Outros Custos"] },
+        { titulo: "Total Custos Operacionais", tipo: "card", var: "total_custos" },
+        { titulo: "", tipo: "divisor" },
+        { titulo: "Credenciado Administrativo", tipo: "linha", categorias: ["Credenciado Administrativo", "Adiantamento - Credenciado Administrativo"] },
+        { titulo: "Credenciado TI", tipo: "linha", categorias: ["Credenciado TI", "Adiantamento - Credenciado TI"] },
+        { titulo: "Despesas Administrativas", tipo: "linha", categorias: ["Despesas Administrativas"] },
+        { titulo: "Despesas de Vendas e Marketing", tipo: "linha", categorias: ["Despesas de Vendas e Marketing"] },
+        { titulo: "Despesas Financeiras", tipo: "linha", categorias: ["Despesas Financeiras"] },
+        { titulo: "Outros Tributos", tipo: "linha", categorias: ["Outros Tributos"] },
+        { titulo: "Despesas Eventuais", tipo: "linha", categorias: ["Jurídico"] },
+        { titulo: "Despesas Variáveis", tipo: "linha", categorias: ["Despesas Variáveis"] },
+        { titulo: "Intermediação de Negócios", tipo: "linha", categorias: ["Intermediação de Negócios"] },
+        { titulo: "Total Despesas Rateadas", tipo: "card", var: "total_despesas" },
+        { titulo: "", tipo: "divisor" },
+        { titulo: "Consórcios a contemplar", tipo: "linha", categorias: ["Consórcios - a contemplar"] },
+        { titulo: "Serviços", tipo: "linha_calc", formula: "servicos_menos_consorcios", categorias: ["Serviços"] },
+        { titulo: "Ativos", tipo: "linha", categorias: ["Ativos"] },
+        { titulo: "Total Investimentos", tipo: "card", var: "total_investimentos" },
+        { titulo: "", tipo: "divisor" },
+        { titulo: "Total Saídas", tipo: "card", var: "total_saidas" },
+        { titulo: "Fluxo de Caixa Livre FCL", tipo: "card", var: "fcl" },
+        { titulo: "Lucro s/ Receita Operacional", tipo: "card_percentual", var: "perc_lucro" },
+        { titulo: "FCL s/ Receita Operacional", tipo: "card_percentual", var: "perc_fcl" },
+        { titulo: "Mútuo Entradas", tipo: "card", var: "mutuo_entradas", categorias: ["Mútuo - Entradas"] },
+        { titulo: "Mútuo Saídas", tipo: "card", var: "mutuo_saidas", categorias: ["Mútuo - Saídas"] },
+        { titulo: "Distribuição de Dividendos", tipo: "card", var: "dividendos", categorias: ["Distribuição de Dividendos", "Dividendos"] },
+        // New Metrics Definitions (for calculation purposes, not necessarily DRE rows)
+        { titulo: "Pessoal", tipo: "card", var: "pessoal", categorias: ["Despesas com Pessoal", "Credenciado Administrativo", "Adiantamento - Credenciado Administrativo", "Credenciado TI", "Adiantamento - Credenciado TI", "Credenciado Operacional", "Adiantamento - Credenciado Operacional"] },
+        { titulo: "Corretiva", tipo: "card", var: "corretiva", categorias: ["Corretiva - B2G", "Manutenção Corretiva"] },
+        { titulo: "Preventiva", tipo: "card", var: "preventiva", categorias: ["Preventiva - B2G", "Manutenção Preventiva"] }
+    ]
+};
+
+// State
+let state = {
+    rawData: [],
+    filteredData: [],
+    mapaMeses: {}, // colName -> normalizedMonth
+    filters: {
+        empresas: [],
+        anos: [],
+        meses: [],
+        projetos: [],
+        categorias: []
+    },
+    metrics: {},
+    dreData: [],
+    charts: {
+        main: null,
+        pie: null
+    }
+};
+
+// Initialization
+document.addEventListener('DOMContentLoaded', () => {
+    initEventListeners();
+    initCharts();
+});
+
+function initEventListeners() {
+    // File Upload
+    document.getElementById('csvFile').addEventListener('change', handleFileUpload);
+
+    // Filters with Cascading Support
+    const filterOrder = ['Ano', 'Mes', 'Empresa', 'Projeto', 'Categoria'];
+    filterOrder.forEach(filter => {
+        document.getElementById(`filter${filter}`).addEventListener('change', (e) => {
+            const selectedOptions = Array.from(e.target.selectedOptions).map(opt => opt.value);
+            const key = filter.toLowerCase() + (filter === 'Mes' ? 'es' : 's'); // pluralize
+            state.filters[key] = selectedOptions;
+
+            // Update dependent filters (cascade)
+            updateCascadeFilters(filter);
+
+            applyFilters();
+        });
+    });
+
+    document.getElementById('btnClearFilters').addEventListener('click', clearFilters);
+    document.getElementById('toggleSidebar').addEventListener('click', () => {
+        document.getElementById('sidebar').classList.toggle('active');
+    });
+
+    // Desktop Sidebar Toggle
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('mainContent');
+        const icon = document.querySelector('#sidebarToggle i');
+
+        sidebar.classList.toggle('collapsed');
+        mainContent.classList.toggle('expanded');
+
+        if (sidebar.classList.contains('collapsed')) {
+            icon.classList.remove('bi-chevron-left');
+            icon.classList.add('bi-chevron-right');
+        } else {
+            icon.classList.remove('bi-chevron-right');
+            icon.classList.add('bi-chevron-left');
+        }
+    });
+
+    document.getElementById('btnExportTable').addEventListener('click', exportTableToCSV);
+}
+
+function initCharts() {
+    const ctxMain = document.getElementById('mainChart').getContext('2d');
+    const ctxPie = document.getElementById('pieChart').getContext('2d');
+
+    // Initialize Main Chart (empty)
+    state.charts.main = new Chart(ctxMain, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: []
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    // Initialize Pie Chart (empty)
+    state.charts.pie = new Chart(ctxPie, {
+        type: 'doughnut',
+        data: {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: [],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            cutout: '70%'
+        }
+    });
+}
+
+// Data Processing
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    document.getElementById('loadingOverlay').classList.remove('d-none');
+    document.getElementById('fileStatus').textContent = `Carregando: ${file.name}`;
+
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        encoding: "ISO-8859-1", // Try Latin-1 first as it's common in Brazil
+        complete: (results) => {
+            if (results.errors.length > 0 && results.data.length === 0) {
+                // Retry with UTF-8 if Latin-1 fails badly
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    encoding: "UTF-8",
+                    complete: processParsedData
+                });
+            } else {
+                processParsedData(results);
+            }
+        }
+    });
+}
+
+function processParsedData(results) {
+    let data = results.data;
+
+    // Clean keys and values
+    data = data.map(row => {
+        const newRow = {};
+        Object.keys(row).forEach(key => {
+            const cleanKey = key.trim().replace(/["']/g, '');
+            if (cleanKey) {
+                newRow[cleanKey] = row[key];
+            }
+        });
+        return newRow;
+    });
+
+    // Filter invalid rows
+    data = data.filter(row =>
+        row['Projeto'] && row['Categoria'] &&
+        row['Projeto'].trim() !== '' && row['Categoria'].trim() !== ''
+    );
+
+    // Normalize text
+    data.forEach(row => {
+        row['Projeto'] = toTitleCase(row['Projeto']);
+        row['Empresa'] = row['Empresa'] ? row['Empresa'].trim() : '';
+        row['Categoria'] = row['Categoria'] ? row['Categoria'].trim() : '';
+    });
+
+    state.rawData = data;
+    extractMetadata(data);
+
+    // Initial Filter Application
+    applyFilters();
+
+    document.getElementById('loadingOverlay').classList.add('d-none');
+    document.getElementById('fileStatus').textContent = `✅ ${data.length} registros carregados`;
+    document.getElementById('lastUpdate').textContent = `Atualizado em: ${new Date().toLocaleTimeString()}`;
+}
+
+function toTitleCase(str) {
+    return str.replace(/\w\S*/g, function (txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); });
+}
+
+function extractMetadata(data) {
+    // Extract Years and Map Months
+    const colunasData = Object.keys(data[0]).filter(k => !['Empresa', 'Projeto', 'Categoria'].includes(k));
+    const anos = new Set();
+    state.mapaMeses = {};
+
+    colunasData.forEach(col => {
+        const partes = col.split('/');
+        if (partes.length === 2) {
+            const mesNome = partes[0].trim();
+            const ano = partes[1].trim();
+            anos.add(ano);
+            state.mapaMeses[col] = normalizeMes(mesNome);
+        }
+    });
+
+    // Populate Filter Options - Initial Load (All Options)
+    populateSelect('filterAno', Array.from(anos).sort());
+
+    // Get all unique months from data
+    const allMonths = [...new Set(
+        Object.keys(state.mapaMeses).map(col => state.mapaMeses[col])
+    )].sort((a, b) => {
+        return CONFIG.MESES_ORDEM.indexOf(a) - CONFIG.MESES_ORDEM.indexOf(b);
+    });
+
+    populateSelect('filterMes', allMonths);
+    populateSelect('filterEmpresa', [...new Set(data.map(d => d.Empresa))].sort());
+    populateSelect('filterProjeto', [...new Set(data.map(d => d.Projeto))].sort());
+    populateSelect('filterCategoria', [...new Set(data.map(d => d.Categoria))].sort());
+}
+
+function normalizeMes(mes) {
+    return mes.trim().charAt(0).toUpperCase() + mes.trim().slice(1).toLowerCase();
+}
+
+function updateCascadeFilters(changedFilter) {
+    // Filter order: Ano → Mes → Empresa → Projeto → Categoria
+    const filterOrder = ['Ano', 'Mes', 'Empresa', 'Projeto', 'Categoria'];
+    const changedIndex = filterOrder.indexOf(changedFilter);
+
+    if (changedIndex === -1) return;
+
+    // Get currently filtered data based on filters up to and including the changed filter
+    let filteredData = [...state.rawData];
+    const f = state.filters;
+
+    // Apply filters up to the changed filter
+    if (f.anos.length > 0 && changedIndex >= 0) {
+        const validCols = Object.keys(state.mapaMeses).filter(col => {
+            const ano = col.split('/')[1]?.trim();
+            return f.anos.some(selectedAno => ano === selectedAno || ano === selectedAno.slice(-2));
+        });
+        // Don't filter rows yet, just mark valid columns
+    }
+
+    // Now update subsequent filters
+    for (let i = changedIndex + 1; i < filterOrder.length; i++) {
+        const filterToUpdate = filterOrder[i];
+        let options = [];
+
+        // Build filtered dataset considering all previous filters
+        let tempData = [...state.rawData];
+
+        // Apply Year filter
+        if (f.anos.length > 0) {
+            const validYearCols = Object.keys(state.mapaMeses).filter(col => {
+                const ano = col.split('/')[1]?.trim();
+                return f.anos.some(selectedAno => ano === selectedAno || ano === selectedAno.slice(-2));
+            });
+            tempData = tempData.map(row => ({
+                ...row,
+                _hasYearData: validYearCols.some(col => {
+                    const val = parseFloat(row[col]?.toString().replace(',', '.') || 0);
+                    return val !== 0;
+                })
+            })).filter(row => row._hasYearData);
+        }
+
+        // Apply Month filter
+        if (f.meses.length > 0 && i > filterOrder.indexOf('Mes')) {
+            const validMonthCols = Object.keys(state.mapaMeses).filter(col => {
+                const mes = state.mapaMeses[col];
+                const ano = col.split('/')[1]?.trim();
+                const yearMatches = f.anos.length === 0 || f.anos.some(selectedAno => ano === selectedAno || ano === selectedAno.slice(-2));
+                return f.meses.includes(mes) && yearMatches;
+            });
+            tempData = tempData.map(row => ({
+                ...row,
+                _hasMonthData: validMonthCols.some(col => {
+                    const val = parseFloat(row[col]?.toString().replace(',', '.') || 0);
+                    return val !== 0;
+                })
+            })).filter(row => row._hasMonthData);
+        }
+
+        // Apply Empresa filter
+        if (f.empresas.length > 0 && i > filterOrder.indexOf('Empresa')) {
+            tempData = tempData.filter(row => f.empresas.includes(row.Empresa));
+        }
+
+        // Apply Projeto filter
+        if (f.projetos.length > 0 && i > filterOrder.indexOf('Projeto')) {
+            tempData = tempData.filter(row => f.projetos.includes(row.Projeto));
+        }
+
+        // Get unique options for this filter
+        switch (filterToUpdate) {
+            case 'Ano':
+                // Extract unique years
+                const yearsSet = new Set();
+                Object.keys(state.mapaMeses).forEach(col => {
+                    const ano = col.split('/')[1]?.trim();
+                    if (ano) yearsSet.add(ano);
+                });
+                options = Array.from(yearsSet).sort();
+                break;
+
+            case 'Mes':
+                // Extract unique months that exist in the selected years
+                const monthsSet = new Set();
+                Object.keys(state.mapaMeses).forEach(col => {
+                    const ano = col.split('/')[1]?.trim();
+                    const mes = state.mapaMeses[col];
+                    const yearMatches = f.anos.length === 0 || f.anos.some(selectedAno => ano === selectedAno || ano === selectedAno.slice(-2));
+                    if (yearMatches && mes) {
+                        monthsSet.add(mes);
+                    }
+                });
+                options = Array.from(monthsSet).sort((a, b) => {
+                    return CONFIG.MESES_ORDEM.indexOf(a) - CONFIG.MESES_ORDEM.indexOf(b);
+                });
+                break;
+
+            case 'Empresa':
+                options = [...new Set(tempData.map(d => d.Empresa))].sort();
+                break;
+
+            case 'Projeto':
+                options = [...new Set(tempData.map(d => d.Projeto))].sort();
+                break;
+
+            case 'Categoria':
+                options = [...new Set(tempData.map(d => d.Categoria))].sort();
+                break;
+        }
+
+        // Update the select element
+        const filterId = `filter${filterToUpdate}`;
+        populateSelect(filterId, options);
+
+        // Reset the selection for this filter
+        const filterKey = filterToUpdate.toLowerCase() + (filterToUpdate === 'Mes' ? 'es' : 's');
+        state.filters[filterKey] = [];
+    }
+}
+
+function populateSelect(id, options) {
+    const select = document.getElementById(id);
+    select.innerHTML = '';
+    options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt;
+        select.appendChild(option);
+    });
+}
+
+// Filtering Logic
+function applyFilters() {
+    let df = [...state.rawData];
+    const f = state.filters;
+
+    // 1. Filter by Empresa
+    if (f.empresas.length > 0) {
+        df = df.filter(row => f.empresas.includes(row.Empresa));
+    }
+
+    // 2. Filter by Projeto
+    if (f.projetos.length > 0) {
+        df = df.filter(row => f.projetos.includes(row.Projeto));
+    }
+
+    // 3. Filter by Categoria
+    if (f.categorias.length > 0) {
+        df = df.filter(row => f.categorias.includes(row.Categoria));
+    }
+
+    // 4. Filter Columns (Months/Years)
+    // We don't filter rows for dates, we filter which columns we consider for calculation
+    const validColumns = getValidColumns(f.anos, f.meses);
+
+    // Calculate Totals for each row based on valid columns
+    df.forEach(row => {
+        let total = 0;
+        validColumns.forEach(col => {
+            const val = parseFloat(row[col]?.toString().replace(',', '.') || 0);
+            if (!isNaN(val)) total += val;
+        });
+        row._TotalCalculado = total;
+    });
+
+    state.filteredData = df;
+    state.validColumns = validColumns;
+
+    calculateDRE();
+    updateUI();
+}
+
+function getValidColumns(anosFiltro, mesesFiltro) {
+    const allCols = Object.keys(state.mapaMeses);
+    return allCols.filter(col => {
+        const partes = col.split('/');
+        const mes = state.mapaMeses[col];
+        const ano = partes[1].trim();
+
+        const anoOk = anosFiltro.length === 0 || anosFiltro.includes(ano);
+        const mesOk = mesesFiltro.length === 0 || mesesFiltro.includes(mes);
+
+        return anoOk && mesOk;
+    });
+}
+
+// Core Calculation
+function calculateDRE() {
+    const df = state.filteredData;
+    const cols = state.validColumns;
+
+    // Helper to sum values
+    const sumByCat = (categorias) => {
+        return df
+            .filter(row => categorias.includes(row.Categoria))
+            .reduce((sum, row) => {
+                let rowSum = 0;
+                cols.forEach(col => {
+                    rowSum += parseFloat(row[col]?.toString().replace(',', '.') || 0);
+                });
+                return sum + rowSum;
+            }, 0);
+    };
+
+    const sumByCatAndMonth = (categorias, col) => {
+        return df
+            .filter(row => categorias.includes(row.Categoria))
+            .reduce((sum, row) => sum + parseFloat(row[col]?.toString().replace(',', '.') || 0), 0);
+    };
+
+    // Pre-calculate totals by category for efficiency
+    const catTotals = {};
+    const catMonthly = {};
+
+    // Initialize
+    [...new Set(df.map(r => r.Categoria))].forEach(cat => {
+        catTotals[cat] = 0;
+        catMonthly[cat] = {};
+        cols.forEach(c => catMonthly[cat][c] = 0);
+    });
+
+    // Sum
+    df.forEach(row => {
+        const cat = row.Categoria;
+        cols.forEach(col => {
+            const val = parseFloat(row[col]?.toString().replace(',', '.') || 0);
+            catTotals[cat] += val;
+            catMonthly[cat][col] += val;
+        });
+    });
+    // DEBUG: Log unique categories and specific totals
+    console.log("=== DEBUG: Categorias Encontradas ===");
+    console.log("Todas as categorias:", Object.keys(catTotals).sort());
+    console.log("\n--- Buscando Preventiva e Corretiva ---");
+    console.log("Total para 'Corretiva - B2G':", catTotals["Corretiva - B2G"]);
+    console.log("Total para 'Preventiva - B2G':", catTotals["Preventiva - B2G"]);
+    console.log("Total para 'Manutenção Corretiva':", catTotals["Manutenção Corretiva"]);
+    console.log("Total para 'Manutenção Preventiva':", catTotals["Manutenção Preventiva"]);
+    console.log("=====================================\n");
+
+    // --- DRE Structure Calculation ---
+    const valoresTotal = {};
+    const valoresMensal = {};
+
+    // Special logic for "Serviços" formula
+    const servicosBaseTotal = catTotals['Serviços'] || 0;
+    const consorciosTotal = catTotals['Consórcios - a contemplar'] || 0;
+
+    CONFIG.ESTRUTURA_DRE.forEach(item => {
+        if (item.tipo === 'linha') {
+            // Sum categories
+            let total = 0;
+            item.categorias.forEach(cat => total += (catTotals[cat] || 0));
+            valoresTotal[item.titulo] = total;
+
+            valoresMensal[item.titulo] = {};
+            cols.forEach(col => {
+                let mesTotal = 0;
+                item.categorias.forEach(cat => mesTotal += (catMonthly[cat]?.[col] || 0));
+                valoresMensal[item.titulo][col] = mesTotal;
+            });
+
+        } else if (item.tipo === 'linha_calc') {
+            if (item.formula === 'servicos_menos_consorcios') {
+                valoresTotal[item.titulo] = servicosBaseTotal - consorciosTotal;
+
+                valoresMensal[item.titulo] = {};
+                cols.forEach(col => {
+                    const s = catMonthly['Serviços']?.[col] || 0;
+                    const c = catMonthly['Consórcios - a contemplar']?.[col] || 0;
+                    valoresMensal[item.titulo][col] = s - c;
+                });
+            }
+        }
+    });
+
+    // --- Aggregators ---
+    const getVal = (key) => valoresTotal[key] || 0;
+
+    const receitaOperacional = getVal("Receita Bruta de Vendas");
+    const receitaIndireta = getVal("Receitas Indiretas");
+    const totalEntradas = receitaOperacional + receitaIndireta;
+
+    const outrasEntradas = getVal("Outras Receitas") + getVal("Receitas Financeiras") + getVal("Honorários") + getVal("Juros e Devoluções");
+
+    const totalImpostos = getVal("Impostos") + getVal("Provisão IRPJ e CSSL Trimestral");
+
+    const totalCustos = getVal("Credenciado Operacional") + getVal("Terceirização de Mão de Obra") +
+        getVal("CLTs") + getVal("Custo dos Serviços Prestados") + getVal("Preventiva - B2G") +
+        getVal("Corretiva - B2G") + getVal("Outros Custos");
+
+    const totalDespesas = getVal("Credenciado Administrativo") + getVal("Credenciado TI") +
+        getVal("Despesas Administrativas") + getVal("Despesas de Vendas e Marketing") + getVal("Despesas Financeiras") +
+        getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios");
+
+    const totalInvestimentos = getVal("Consórcios a contemplar") + getVal("Serviços") + getVal("Ativos");
+
+    const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
+
+    const resultado = totalEntradas + getVal("Ativos") + outrasEntradas - totalSaidas;
+    const fcl = resultado - getVal("Ativos");
+
+    const percLucro = totalEntradas !== 0 ? (resultado / totalEntradas * 100) : 0;
+    const percFcl = totalEntradas !== 0 ? (fcl / totalEntradas * 100) : 0;
+
+    // New Metrics Calculation
+    const pessoal = sumByCat([
+        "Despesas com Pessoal",
+        "Credenciado Administrativo", "Adiantamento - Credenciado Administrativo",
+        "Credenciado TI", "Adiantamento - Credenciado TI",
+        "Credenciado Operacional", "Adiantamento - Credenciado Operacional",
+        "Terceirização de Mão de Obra"
+    ]);
+
+    const corretiva = sumByCat(["Corretiva - B2G", "Manutenção Corretiva"]);
+    const preventiva = sumByCat(["Preventiva - B2G", "Manutenção Preventiva"]);
+
+    // Novos Cards: Credenciados, CLTs e Terceirização
+    const credenciados = sumByCat([
+        "Credenciado Administrativo", "Adiantamento - Credenciado Administrativo",
+        "Credenciado TI", "Adiantamento - Credenciado TI",
+        "Credenciado Operacional", "Adiantamento - Credenciado Operacional"
+    ]);
+
+    const clts = sumByCat(["Despesas com Pessoal"]);
+    const terceirizacao = sumByCat(["Terceirização de Mão de Obra"]);
+    // Store Metrics
+    state.metrics = {
+        total_entradas: totalEntradas,
+        outras_entradas: outrasEntradas,
+        total_impostos: totalImpostos,
+        total_custos: totalCustos,
+        total_despesas: totalDespesas,
+        total_investimentos: totalInvestimentos,
+        total_saidas: totalSaidas,
+        resultado: resultado,
+        fcl: fcl,
+        perc_lucro: percLucro,
+        perc_fcl: percFcl,
+        pessoal: pessoal,
+        corretiva: corretiva,
+        preventiva: preventiva,
+        credenciados: credenciados,
+        clts: clts,
+        terceirizacao: terceirizacao,
+        // Percentuais em relação à Receita Operacional
+        perc_total_saidas: totalEntradas !== 0 ? (totalSaidas / totalEntradas * 100) : 0,
+        perc_resultado: totalEntradas !== 0 ? (resultado / totalEntradas * 100) : 0,
+        perc_fcl_receita: totalEntradas !== 0 ? (fcl / totalEntradas * 100) : 0,
+        // Percentuais em relação ao Total de Saídas
+        perc_custos: totalSaidas !== 0 ? (totalCustos / totalSaidas * 100) : 0,
+        perc_despesas: totalSaidas !== 0 ? (totalDespesas / totalSaidas * 100) : 0,
+        perc_investimentos: totalSaidas !== 0 ? (totalInvestimentos / totalSaidas * 100) : 0,
+        perc_impostos: totalSaidas !== 0 ? (totalImpostos / totalSaidas * 100) : 0,
+        perc_pessoal: totalSaidas !== 0 ? (pessoal / totalSaidas * 100) : 0,
+        perc_corretiva: totalSaidas !== 0 ? (corretiva / totalSaidas * 100) : 0,
+        perc_preventiva: totalSaidas !== 0 ? (preventiva / totalSaidas * 100) : 0,
+        // Detailed for charts
+        receita_operacional: receitaOperacional,
+        receita_indireta: receitaIndireta,
+        perc_credenciados: totalSaidas !== 0 ? (credenciados / totalSaidas * 100) : 0,
+        perc_clts: totalSaidas !== 0 ? (clts / totalSaidas * 100) : 0,
+        perc_terceirizacao: totalSaidas !== 0 ? (terceirizacao / totalSaidas * 100) : 0,
+    };
+
+    // Prepare Table Data
+    state.dreData = [];
+    CONFIG.ESTRUTURA_DRE.forEach(item => {
+        if (item.tipo === 'divisor') {
+            state.dreData.push({ type: 'divisor' });
+        } else if (['linha', 'linha_calc'].includes(item.type) || ['linha', 'linha_calc'].includes(item.tipo)) {
+            const row = {
+                descricao: item.titulo,
+                type: 'data',
+                total: valoresTotal[item.titulo] || 0,
+                media: (valoresTotal[item.titulo] || 0) / (cols.length || 1),
+                meses: valoresMensal[item.titulo] || {},
+                // Calculate Year Totals
+                total2024: calculateYearTotal(item.titulo, '2024', valoresMensal),
+                total2025: calculateYearTotal(item.titulo, '2025', valoresMensal)
+            };
+            row.total2425 = row.total2024 + row.total2025;
+            state.dreData.push(row);
+        }
+    });
+}
+
+function calculateYearTotal(titulo, year, valoresMensal) {
+    let sum = 0;
+    const rowValues = valoresMensal[titulo] || {};
+    Object.keys(rowValues).forEach(col => {
+        // Check if the column name contains the year (e.g., "Jan/24" contains "24")
+        // We use the last two digits of the year for matching if the full year isn't present
+        const shortYear = year.slice(-2);
+        if (col.includes(year) || col.includes('/' + shortYear)) {
+            sum += rowValues[col];
+        }
+    });
+    return sum;
+}
+
+// UI Updates
+function updateUI() {
+    updateCards();
+    updateCharts();
+    updateTable();
+}
+
+function updateCards() {
+    const m = state.metrics;
+
+    // Row 1 (Main KPIs)
+    const row1 = [
+        { key: 'total_entradas', title: 'Receitas Operacionais', icon: 'bi-graph-up-arrow', color: 'primary', bgColor: 'bg-blue-soft' },
+        { key: 'total_saidas', title: 'Total Saídas', icon: 'bi-graph-down-arrow', color: 'danger', bgColor: 'bg-red-soft', percentKey: 'perc_total_saidas' },
+        { key: 'resultado', title: 'Resultado', icon: 'bi-bullseye', color: 'highlight', bgColor: 'bg-yellow-soft', percentKey: 'perc_resultado' },
+        { key: 'fcl', title: 'FCL', icon: 'bi-wallet2', color: 'success', bgColor: 'bg-green-soft', percentKey: 'perc_fcl_receita' }
+    ];
+
+    renderCards('kpiRow1', row1, m, 3);
+
+    // Row 2 (Secondary KPIs + New Metrics)
+    const row2 = [
+        { key: 'total_custos', title: 'Custos Operacionais', icon: 'bi-gear', color: 'info', percentKey: 'perc_custos' },
+        { key: 'total_despesas', title: 'Despesas Rateadas', icon: 'bi-calculator', color: 'info', percentKey: 'perc_despesas' },
+        { key: 'total_investimentos', title: 'Investimentos', icon: 'bi-piggy-bank', color: 'info', percentKey: 'perc_investimentos' },
+        { key: 'total_impostos', title: 'Impostos', icon: 'bi-bank', color: 'danger', percentKey: 'perc_impostos' },
+        { key: 'perc_lucro', title: 'Margem Lucro', icon: 'bi-percent', color: 'success', isPercent: true },
+        { key: 'perc_fcl', title: 'Margem FCL', icon: 'bi-percent', color: 'success', isPercent: true },
+        // New Cards
+        { key: 'pessoal', title: 'Pessoal', icon: 'bi-people', color: 'info', percentKey: 'perc_pessoal' },
+        { key: 'credenciados', title: 'Credenciados', icon: 'bi-person-badge', color: 'primary', percentKey: 'perc_credenciados' },
+        { key: 'clts', title: 'CLTs', icon: 'bi-person-vcard', color: 'success', percentKey: 'perc_clts' },
+        { key: 'terceirizacao', title: 'Terceirização', icon: 'bi-people-fill', color: 'warning', percentKey: 'perc_terceirizacao' },
+        { key: 'corretiva', title: 'Corretiva', icon: 'bi-tools', color: 'danger', percentKey: 'perc_corretiva' },
+        { key: 'preventiva', title: 'Preventiva', icon: 'bi-shield-check', color: 'success', percentKey: 'perc_preventiva' }
+    ];
+
+    // Adjust column size for row 2 to fit more cards (e.g., col-lg-2 for 6 cards per row)
+    // We have 12 cards now in row 2. 2 per row on mobile, 4 or 6 on desktop.
+    renderCards('kpiRow2', row2, m, 2);
+}
+
+function renderCards(containerId, cards, metrics, colSize) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    cards.forEach(card => {
+        const val = metrics[card.key] || 0;
+        const formattedVal = card.isPercent ? val.toFixed(2) + '%' : formatCurrency(val);
+        const colClass = `col-6 col-md-4 col-lg-${colSize}`; // Adjusted for better fit
+        const cardClass = card.color === 'highlight' ? 'card-highlight' : `card-${card.color}`;
+        const bgClass = card.bgColor || '';
+
+        // Adicionar percentual se existir
+        let percentHtml = '';
+        if (card.percentKey && metrics[card.percentKey] !== undefined) {
+            const percentVal = metrics[card.percentKey];
+            percentHtml = `<div class="card-percent">${percentVal.toFixed(1)}%</div>`;
+        }
+
+        const html = `
+            <div class="${colClass}">
+                <div class="metric-card ${cardClass} ${bgClass}" onclick="showCardDetails('${card.key}', '${card.title}')">
+                    <div class="icon-box">
+                        <i class="bi ${card.icon}"></i>
+                    </div>
+                    <div class="title">${card.title}</div>
+                    <div class="value">${formattedVal}</div>
+                    ${percentHtml}
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+    });
+}
+
+function updateCharts() {
+    const ctxMain = document.getElementById('mainChart').getContext('2d');
+    const ctxPie = document.getElementById('pieChart').getContext('2d');
+
+    // Prepare Data for Main Chart (Monthly)
+    const labels = state.validColumns.map(c => {
+        // c is already "Mes/Ano" format from the CSV headers usually, or we ensure it is
+        // The CSV headers are like "jan/24", "fev/24".
+        // Let's capitalize them properly: "Jan/24"
+        const [mes, ano] = c.split('/');
+        return `${mes.charAt(0).toUpperCase() + mes.slice(1)}/${ano}`;
+    });
+
+    // 1. Receitas Operacionais (Monthly)
+    const monthlyReceitas = labels.map((_, i) => {
+        const col = state.validColumns[i];
+        let sum = 0;
+        state.dreData.forEach(row => {
+            if (row.type === 'data' && ['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(row.descricao)) {
+                sum += row.meses[col] || 0;
+            }
+        });
+        return sum;
+    });
+
+    // 2. Saídas (Monthly)
+    const monthlySaidas = labels.map((_, i) => {
+        const col = state.validColumns[i];
+        let sum = 0;
+        state.dreData.forEach(row => {
+            if (row.type === 'data') {
+                const isInflow = ['Receita Bruta de Vendas', 'Receitas Indiretas', 'Outras Receitas', 'Receitas Financeiras', 'Honorários', 'Juros e Devoluções', 'Ativos'].includes(row.descricao);
+                if (!isInflow) {
+                    sum += row.meses[col] || 0;
+                }
+            }
+        });
+        return sum;
+    });
+
+    // 3. Resultado (Monthly)
+    const monthlyResult = labels.map((_, i) => {
+        const col = state.validColumns[i];
+        let res = 0;
+        state.dreData.forEach(row => {
+            if (row.type === 'data') {
+                const val = row.meses[col] || 0;
+                if (['Receita Bruta de Vendas', 'Receitas Indiretas', 'Outras Receitas', 'Receitas Financeiras', 'Honorários', 'Juros e Devoluções', 'Ativos'].includes(row.descricao)) {
+                    res += val;
+                } else {
+                    res -= val;
+                }
+            }
+        });
+        return res;
+    });
+
+    // 4. FCL - Fluxo de Caixa Livre (Monthly) = Resultado - Ativos
+    const monthlyFCL = labels.map((_, i) => {
+        const col = state.validColumns[i];
+        const resultado = monthlyResult[i];
+        let ativos = 0;
+        state.dreData.forEach(row => {
+            if (row.type === 'data' && row.descricao === 'Ativos') {
+                ativos += row.meses[col] || 0;
+            }
+        });
+        return resultado - ativos;
+    });
+
+    // Tooltip Callback for Percentage Change
+    const tooltipCallback = {
+        label: function (context) {
+            let label = context.dataset.label || '';
+            if (label) {
+                label += ': ';
+            }
+            if (context.parsed.y !== null) {
+                label += formatCurrency(context.parsed.y);
+            }
+
+            const dataIndex = context.dataIndex;
+            if (dataIndex > 0) {
+                const current = context.parsed.y;
+                const prev = context.dataset.data[dataIndex - 1];
+
+                if (prev !== 0) {
+                    const change = ((current - prev) / Math.abs(prev)) * 100;
+                    const icon = change >= 0 ? '▲' : '▼';
+                    label += ` (${icon} ${Math.abs(change).toFixed(1)}%)`;
+                }
+            }
+            return label;
+        }
+    };
+
+    if (state.charts.main) state.charts.main.destroy();
+    state.charts.main = new Chart(ctxMain, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Receitas Operacionais',
+                    data: monthlyReceitas,
+                    backgroundColor: CONFIG.COLORS.primary,
+                    borderRadius: 4,
+                    order: 3
+                },
+                {
+                    label: 'Saídas',
+                    data: monthlySaidas,
+                    backgroundColor: CONFIG.COLORS.danger,
+                    borderRadius: 4,
+                    order: 4
+                },
+                {
+                    label: 'Resultado',
+                    data: monthlyResult,
+                    type: 'line',
+                    borderColor: CONFIG.COLORS.secondary,
+                    borderWidth: 2,
+                    tension: 0.4,
+                    pointBackgroundColor: CONFIG.COLORS.secondary,
+                    order: 1
+                },
+                {
+                    label: 'FCL',
+                    data: monthlyFCL,
+                    type: 'line',
+                    borderColor: CONFIG.COLORS.success,
+                    borderWidth: 2,
+                    tension: 0.4,
+                    pointBackgroundColor: CONFIG.COLORS.success,
+                    order: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: tooltipCallback
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { borderDash: [2, 4] }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    // Pie Chart
+    const m = state.metrics;
+    if (state.charts.pie) state.charts.pie.destroy();
+
+    const pieData = [m.total_custos, m.total_despesas, m.total_impostos, m.total_investimentos];
+    const pieTotal = pieData.reduce((a, b) => a + b, 0);
+
+    state.charts.pie = new Chart(ctxPie, {
+        type: 'doughnut',
+        data: {
+            labels: ['Custos', 'Despesas', 'Impostos', 'Investimentos'],
+            datasets: [{
+                data: pieData,
+                backgroundColor: [CONFIG.COLORS.info, CONFIG.COLORS.secondary, CONFIG.COLORS.danger, CONFIG.COLORS.success],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const value = context.parsed;
+                            const percentage = pieTotal > 0 ? ((value / pieTotal) * 100).toFixed(1) + '%' : '0%';
+                            return `${context.label}: ${formatCurrency(value)} (${percentage})`;
+                        }
+                    }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+}
+
+function updateTable() {
+    const thead = document.querySelector('#dreTable thead');
+    const tbody = document.querySelector('#dreTable tbody');
+
+    // Identify 2024 and 2025 columns
+    const cols2024 = state.validColumns.filter(c => c.includes('24'));
+    const cols2025 = state.validColumns.filter(c => c.includes('25'));
+
+    // Sort columns chronologically (assuming they are already sorted by input, but let's be safe if needed, though input order is usually chronological)
+    // For now, we trust state.validColumns order.
+
+    // Headers
+    let headerHTML = '<tr><th style="min-width: 250px;">Descrição</th>';
+
+    // Add 2024 columns
+    cols2024.forEach(col => {
+        headerHTML += `<th class="text-end">${col}</th>`;
+    });
+    // Add Total 2024
+    if (cols2024.length > 0) {
+        headerHTML += `<th class="text-end table-warning">Total 2024</th>`;
+    }
+
+    // Add 2025 columns
+    cols2025.forEach(col => {
+        headerHTML += `<th class="text-end">${col}</th>`;
+    });
+    // Add Total 2025
+    if (cols2025.length > 0) {
+        headerHTML += `<th class="text-end table-warning">Total 2025</th>`;
+    }
+
+    headerHTML += '<th class="text-end table-secondary text-white">Total 24/25</th>';
+    headerHTML += '<th class="text-end bg-light">Média</th>';
+    headerHTML += '</tr>';
+    thead.innerHTML = headerHTML;
+
+    // Body
+    let bodyHTML = '';
+    state.dreData.forEach(row => {
+        if (row.type === 'divisor') {
+            // Calculate colspan dynamically
+            let colSpan = 1 + cols2024.length + (cols2024.length > 0 ? 1 : 0) + cols2025.length + (cols2025.length > 0 ? 1 : 0) + 2;
+            bodyHTML += `<tr><td colspan="${colSpan}" class="p-0"><hr class="my-0 border-secondary opacity-25"></td></tr>`;
+        } else {
+            bodyHTML += `<tr>`;
+            bodyHTML += `<td class="fw-medium">${row.descricao}</td>`;
+
+            // 2024 Values
+            cols2024.forEach(col => {
+                bodyHTML += `<td class="text-end">${formatCurrency(row.meses[col] || 0)}</td>`;
+            });
+            // Total 2024
+            if (cols2024.length > 0) {
+                bodyHTML += `<td class="text-end table-warning fw-bold">${formatCurrency(row.total2024)}</td>`;
+            }
+
+            // 2025 Values
+            cols2025.forEach(col => {
+                bodyHTML += `<td class="text-end">${formatCurrency(row.meses[col] || 0)}</td>`;
+            });
+            // Total 2025
+            if (cols2025.length > 0) {
+                bodyHTML += `<td class="text-end table-warning fw-bold">${formatCurrency(row.total2025)}</td>`;
+            }
+
+            // Total 24/25 & Media
+            bodyHTML += `<td class="text-end table-secondary text-white fw-bold">${formatCurrency(row.total2425)}</td>`;
+            bodyHTML += `<td class="text-end text-muted bg-light">${formatCurrency(row.media)}</td>`;
+            bodyHTML += `</tr>`;
+        }
+    });
+    tbody.innerHTML = bodyHTML;
+}
+
+// Utils
+function formatCurrency(value) {
+    if (value === undefined || value === null) return 'R$ 0';
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+}
+
+function clearFilters() {
+    document.querySelectorAll('select').forEach(select => select.value = '');
+    state.filters = { empresas: [], anos: [], meses: [], projetos: [], categorias: [] };
+    applyFilters();
+}
+
+function showCardDetails(key, title) {
+    const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
+    document.getElementById('modalTitle').textContent = title;
+
+    const total = state.metrics[key] || 0;
+    document.getElementById('modalTotalValue').textContent = formatCurrency(total);
+    document.getElementById('modalAvgValue').textContent = formatCurrency(total / (state.validColumns.length || 1));
+
+    // Logic to find contributing categories
+    let contributingCategories = [];
+
+    // We need to look at CONFIG.ESTRUTURA_DRE to find which categories map to this metric
+    // Or if it's a direct aggregate like 'total_custos', we find the lines that sum up to it.
+
+    // Map metric keys to DRE Line Titles or Categories
+    const metricMap = {
+        'total_entradas': ['Receita Bruta de Vendas', 'Receitas Indiretas'],
+        'outras_entradas': ['Outras Receitas', 'Receitas Financeiras', 'Honorários', 'Juros e devoluções'],
+        'total_impostos': ['Impostos', 'Provisão - IRPJ e CSSL Trimestral'],
+        'total_custos': ['Credenciado Operacional', 'Adiantamento - Credenciado Operacional', 'Terceirização de Mão de Obra', 'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva', 'Corretiva - B2G', 'Manutenção Corretiva', 'Outros Custos'],
+        'total_despesas': ['Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo', 'Credenciado TI', 'Adiantamento - Credenciado TI', 'Despesas Administrativas', 'Despesas de Vendas e Marketing', 'Despesas Financeiras', 'Outros Tributos', 'Jurídico', 'Despesas Variáveis', 'Intermediação de Negócios'],
+        'total_investimentos': ['Consórcios - a contemplar', 'Serviços', 'Ativos'],
+        'mutuo_entradas': ['Mútuo - Entradas'],
+        'mutuo_saidas': ['Mútuo - Saídas'],
+        'dividendos': ['Distribuição de Dividendos', 'Dividendos'],
+        'pessoal': ["Despesas com Pessoal", "Credenciado Administrativo", "Adiantamento - Credenciado Administrativo", "Credenciado TI", "Adiantamento - Credenciado TI", "Credenciado Operacional", "Adiantamento - Credenciado Operacional", "Terceirização de Mão de Obra"],
+        'corretiva': ["Corretiva - B2G", "Manutenção Corretiva"],
+        'preventiva': ["Preventiva - B2G", "Manutenção Preventiva"],
+        'credenciados': ["Credenciado Administrativo", "Adiantamento - Credenciado Administrativo", "Credenciado TI", "Adiantamento - Credenciado TI", "Credenciado Operacional", "Adiantamento - Credenciado Operacional"],
+        'clts': ["Despesas com Pessoal"],
+        'terceirizacao': ["Terceirização de Mão de Obra"]
+    };
+
+    const targetCategories = metricMap[key];
+
+    if (targetCategories) {
+        // Calculate totals for these categories from filtered data
+        const catTotals = {};
+        state.filteredData.forEach(row => {
+            if (targetCategories.includes(row.Categoria)) {
+                if (!catTotals[row.Categoria]) catTotals[row.Categoria] = 0;
+                // Sum only valid columns
+                state.validColumns.forEach(col => {
+                    catTotals[row.Categoria] += parseFloat(row[col]?.toString().replace(',', '.') || 0);
+                });
+            }
+        });
+
+        // Convert to array and sort
+        contributingCategories = Object.entries(catTotals)
+            .map(([cat, val]) => ({ category: cat, value: val }))
+            .sort((a, b) => b.value - a.value);
+
+    } else if (key === 'total_saidas') {
+        // Breakdown for Total Saídas
+        const m = state.metrics;
+        contributingCategories = [
+            { category: 'Custos Operacionais', value: m.total_custos },
+            { category: 'Despesas Rateadas', value: m.total_despesas },
+            { category: 'Impostos', value: m.total_impostos },
+            { category: 'Investimentos', value: m.total_investimentos }
+        ].sort((a, b) => b.value - a.value);
+    } else if (key === 'resultado' || key === 'fcl') {
+        // For high level aggregates, maybe show the major groups?
+        // For now, let's just show a message for these complex ones or try to break it down by major groups
+        contributingCategories = []; // Keep empty to show "Details unavailable" or handle differently
+    }
+
+    const tbody = document.querySelector('#modalTable tbody');
+    tbody.innerHTML = '';
+
+    if (contributingCategories.length > 0) {
+        contributingCategories.forEach(item => {
+            const percent = total !== 0 ? (item.value / total * 100).toFixed(1) + '%' : '0%';
+            const row = `
+                <tr>
+                    <td>${item.category}</td>
+                    <td class="text-end">${formatCurrency(item.value)}</td>
+                    <td class="text-end">${percent}</td>
+                </tr>
+            `;
+            tbody.insertAdjacentHTML('beforeend', row);
+        });
+    } else {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Detalhamento não disponível para este item consolidado.</td></tr>';
+    }
+
+    modal.show();
+}
+
+function exportTableToCSV() {
+    // Simple CSV export implementation
+    let csv = [];
+    const rows = document.querySelectorAll("#dreTable tr");
+
+    for (let i = 0; i < rows.length; i++) {
+        let row = [], cols = rows[i].querySelectorAll("td, th");
+        for (let j = 0; j < cols.length; j++)
+            row.push('"' + cols[j].innerText + '"');
+        csv.push(row.join(","));
+    }
+
+    downloadCSV(csv.join("\n"), "dre_export.csv");
+}
+
+function downloadCSV(csv, filename) {
+    let csvFile;
+    let downloadLink;
+
+    csvFile = new Blob([csv], { type: "text/csv" });
+    downloadLink = document.createElement("a");
+    downloadLink.download = filename;
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+    downloadLink.style.display = "none";
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+}
+
+// ========================================
+// PDF EXPORT FUNCTION
+// ========================================
+async function exportToPDF() {
+    try {
+        // Show loading overlay
+        document.getElementById('loadingOverlay').classList.remove('d-none');
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+
+        let yPosition = 20;
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const margin = 15;
+
+        // ========== PÁGINA 1: CABEÇALHO E FILTROS ==========
+
+        // Logo (se existir)
+        const logo = document.querySelector('header img');
+        if (logo && logo.complete) {
+            try {
+                const logoCanvas = await html2canvas(logo, { scale: 2 });
+                const logoData = logoCanvas.toDataURL('image/png');
+                doc.addImage(logoData, 'PNG', margin, yPosition, 40, 10);
+            } catch (e) {
+                console.log('Logo não capturado');
+            }
+        }
+
+        // Título
+        doc.setFontSize(20);
+        doc.setTextColor(38, 34, 35);
+        doc.text('Demonstração do Resultado - DRE', pageWidth / 2, yPosition + 15, { align: 'center' });
+
+        // Data de geração
+        doc.setFontSize(10);
+        doc.setTextColor(108, 117, 125);
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        doc.text(`Gerado em: ${dataGeracao}`, pageWidth / 2, yPosition + 22, { align: 'center' });
+
+        yPosition = 50;
+
+        // Filtros aplicados
+        doc.setFontSize(12);
+        doc.setTextColor(38, 34, 35);
+        doc.text('Filtros Aplicados:', margin, yPosition);
+        yPosition += 7;
+
+        doc.setFontSize(10);
+        doc.setTextColor(108, 117, 125);
+
+        const filtros = [];
+        if (state.filters.anos?.length > 0) filtros.push(`Anos: ${state.filters.anos.join(', ')}`);
+        if (state.filters.meses?.length > 0) filtros.push(`Meses: ${state.filters.meses.join(', ')}`);
+        if (state.filters.empresas?.length > 0) filtros.push(`Empresas: ${state.filters.empresas.join(', ')}`);
+        if (state.filters.projetos?.length > 0) filtros.push(`Projetos: ${state.filters.projetos.join(', ')}`);
+
+        if (filtros.length === 0) {
+            doc.text('Todos os dados (sem filtros)', margin + 5, yPosition);
+            yPosition += 6;
+        } else {
+            filtros.forEach(filtro => {
+                doc.text(`• ${filtro}`, margin + 5, yPosition);
+                yPosition += 6;
+            });
+        }
+
+        yPosition += 10;
+
+        // ========== CARDS PRINCIPAIS ==========
+        doc.setFontSize(14);
+        doc.setTextColor(38, 34, 35);
+        doc.text('Indicadores Principais', margin, yPosition);
+        yPosition += 10;
+
+        const kpiData = [
+            { label: 'Receitas Operacionais', value: state.metrics.total_entradas || 0 },
+            { label: 'Total Saídas', value: state.metrics.total_saidas || 0 },
+            { label: 'Resultado', value: state.metrics.resultado || 0 },
+            { label: 'FCL', value: state.metrics.fcl || 0 }
+        ];
+
+        const cardWidth = (pageWidth - 2 * margin - 9) / 2;
+        const cardHeight = 25;
+        let xPos = margin;
+        let row = 0;
+
+        kpiData.forEach((kpi, index) => {
+            if (index % 2 === 0 && index > 0) {
+                row++;
+                xPos = margin;
+            }
+
+            const yPos = yPosition + (row * (cardHeight + 5));
+
+            // Fundo do card
+            doc.setFillColor(245, 245, 245);
+            doc.rect(xPos, yPos, cardWidth, cardHeight, 'F');
+
+            // Label
+            doc.setFontSize(9);
+            doc.setTextColor(108, 117, 125);
+            doc.text(kpi.label, xPos + 3, yPos + 7);
+
+            // Valor
+            doc.setFontSize(14);
+            doc.setTextColor(38, 34, 35);
+            doc.text(formatCurrency(kpi.value), xPos + 3, yPos + 17);
+
+            xPos += cardWidth + 3;
+        });
+
+        yPosition += (Math.ceil(kpiData.length / 2) * (cardHeight + 5)) + 15;
+
+        // ========== NOVA PÁGINA: GRÁFICOS ==========
+        doc.addPage();
+        yPosition = 20;
+
+        doc.setFontSize(14);
+        doc.setTextColor(38, 34, 35);
+        doc.text('Análise Gráfica', margin, yPosition);
+        yPosition += 10;
+
+        // Capturar gráfico principal
+        const mainChart = document.getElementById('mainChart');
+        if (mainChart) {
+            try {
+                const chartCanvas = await html2canvas(mainChart.parentElement, {
+                    scale: 2,
+                    backgroundColor: '#ffffff'
+                });
+                const chartData = chartCanvas.toDataURL('image/png');
+                doc.addImage(chartData, 'PNG', margin, yPosition, pageWidth - 2 * margin, 80);
+                yPosition += 90;
+            } catch (e) {
+                console.log('Gráfico não capturado', e);
+            }
+        }
+
+        // Capturar gráfico de pizza
+        const pieChart = document.getElementById('pieChart');
+        if (pieChart) {
+            try {
+                const pieCanvas = await html2canvas(pieChart.parentElement, {
+                    scale: 2,
+                    backgroundColor: '#ffffff'
+                });
+                const pieData = pieCanvas.toDataURL('image/png');
+                const pieWidth = 80;
+                doc.addImage(pieData, 'PNG', (pageWidth - pieWidth) / 2, yPosition, pieWidth, 80);
+            } catch (e) {
+                console.log('Gráfico pizza não capturado', e);
+            }
+        }
+
+        // ========== CARDS SECUNDÁRIOS ==========
+        doc.addPage();
+        yPosition = 20;
+
+        doc.setFontSize(14);
+        doc.setTextColor(38, 34, 35);
+        doc.text('Indicadores Detalhados', margin, yPosition);
+        yPosition += 10;
+
+        const kpiSecondary = [
+            { label: 'Total Impostos', value: state.metrics.total_impostos || 0 },
+            { label: 'Total Custos', value: state.metrics.total_custos || 0 },
+            { label: 'Total Despesas', value: state.metrics.total_despesas || 0 },
+            { label: 'Total Investimentos', value: state.metrics.total_investimentos || 0 },
+            { label: 'Pessoal', value: state.metrics.pessoal || 0 },
+            { label: 'Mútuo Entradas', value: state.metrics.mutuo_entradas || 0 },
+            { label: 'Mútuo Saídas', value: state.metrics.mutuo_saidas || 0 },
+            { label: 'Dividendos', value: state.metrics.dividendos || 0 },
+            { label: 'Corretiva', value: state.metrics.corretiva || 0 },
+            { label: 'Preventiva', value: state.metrics.preventiva || 0 },
+            { label: 'Margem Lucro %', value: state.metrics.perc_lucro || 0, isPercent: true },
+            { label: 'Margem FCL %', value: state.metrics.perc_fcl || 0, isPercent: true }
+        ];
+
+        const secCardWidth = (pageWidth - 2 * margin - 6) / 3;
+        const secCardHeight = 20;
+        let secXPos = margin;
+        let secRow = 0;
+
+        kpiSecondary.forEach((kpi, index) => {
+            if (index % 3 === 0 && index > 0) {
+                secRow++;
+                secXPos = margin;
+            }
+
+            const yPos = yPosition + (secRow * (secCardHeight + 5));
+
+            if (yPos > pageHeight - 40) {
+                doc.addPage();
+                yPosition = 20;
+                secRow = 0;
+                doc.setFontSize(14);
+                doc.text('Indicadores Detalhados (cont.)', margin, yPosition);
+                yPosition += 10;
+            }
+
+            const finalYPos = yPosition + (secRow * (secCardHeight + 5));
+
+            doc.setFillColor(250, 250, 250);
+            doc.rect(secXPos, finalYPos, secCardWidth, secCardHeight, 'F');
+            doc.setDrawColor(230, 230, 230);
+            doc.rect(secXPos, finalYPos, secCardWidth, secCardHeight);
+
+            doc.setFontSize(8);
+            doc.setTextColor(108, 117, 125);
+            doc.text(kpi.label, secXPos + 2, finalYPos + 6);
+
+            doc.setFontSize(11);
+            doc.setTextColor(38, 34, 35);
+            const displayValue = kpi.isPercent ? kpi.value.toFixed(2) + '%' : formatCurrency(kpi.value);
+            doc.text(displayValue, secXPos + 2, finalYPos + 14);
+
+            secXPos += secCardWidth + 2;
+        });
+
+
+        // Salvar PDF
+        doc.save(`DRE_${new Date().toISOString().split('T')[0]}.pdf`);
+
+        // Hide loading
+        document.getElementById('loadingOverlay').classList.add('d-none');
+
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        alert('Erro ao gerar PDF. Verifique o console para mais detalhes.');
+        document.getElementById('loadingOverlay').classList.add('d-none');
+    }
+}

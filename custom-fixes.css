@@ -1,0 +1,130 @@
+/* Custom Fixes - Applied after main styles.css */
+
+/* FIX 1: Main Content - Prevents content from being hidden under sidebar */
+.main-content {
+    margin-left: var(--sidebar-width);
+    padding: 2rem;
+    transition: all 0.3s ease;
+}
+
+.main-content.expanded {
+    margin-left: 80px;
+}
+
+/* Sidebar Toggle Button Styles */
+.sidebar.collapsed .sidebar-toggle-btn {
+    margin-left: 0;
+    transform: rotate(180deg);
+}
+
+.sidebar.collapsed .sidebar-toggle-btn:hover {
+    transform: rotate(180deg) scale(1.1);
+}
+
+/* Responsive: Remove margin on mobile */
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0 !important;
+    }
+}
+
+/* FIX 2: Cores das Colunas de Totais Anuais */
+.table-warning {
+    background-color: #FFE5CC !important;
+    /* Laranja claro */
+}
+
+.table-secondary {
+    background-color: #E8E8E8 !important;
+    /* Cinza claro */
+    color: #262223 !important;
+    /* Texto escuro para contraste */
+}
+
+/* FIX 3: Sticky KPI Cards */
+#kpiRow1 {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: linear-gradient(135deg, #F5F5F5 0%, #E8E8E8 100%);
+    padding: 1rem 0;
+    margin-left: -2rem;
+    margin-right: -2rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    transition: box-shadow 0.3s ease;
+}
+
+#kpiRow1.scrolled {
+    box-shadow: 0 12px 36px rgba(38, 34, 35, 0.45);
+}
+
+/* FIX 4: Fundos Suaves nos KPI Cards */
+.bg-blue-soft {
+    background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%) !important;
+}
+
+.bg-red-soft {
+    background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%) !important;
+}
+
+.bg-yellow-soft {
+    background: linear-gradient(135deg, #FFF9E6 0%, #FFE5B4 100%) !important;
+}
+
+.bg-green-soft {
+    background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%) !important;
+}
+
+/* FIX 5: Destacar Itens Selecionados nos Filtros */
+.form-select option {
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s ease;
+}
+
+/* Opções selecionadas ficam destacadas */
+.form-select option:checked {
+    background: linear-gradient(135deg, #F2911B 0%, #FFB347 100%) !important;
+    color: white !important;
+    font-weight: 600;
+    position: relative;
+}
+
+/* Visual feedback ao passar o mouse */
+.form-select option:hover {
+    background-color: rgba(242, 145, 27, 0.2) !important;
+    cursor: pointer;
+}
+
+/* Melhorar a aparência geral dos selects múltiplos */
+.form-select[multiple] {
+    min-height: 150px;
+    padding: 0.5rem;
+}
+
+.form-select[multiple]:focus {
+    box-shadow: 0 0 0 0.25rem rgba(242, 145, 27, 0.25);
+    border-color: var(--primary-color);
+}
+
+/* Badge de contador de itens selecionados */
+.filter-count-badge {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+    font-weight: 600;
+    min-width: 20px;
+    text-align: center;
+}
+
+/* Percentual nos cards */
+.metric-card .card-percent {
+    font-size: 0.85rem;
+    color: rgba(20, 17, 17, 0.8);
+    font-weight: 500;
+    margin-top: 4px;
+}
