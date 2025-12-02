@@ -742,28 +742,28 @@ function updateCards() {
     // Row 1 (Main KPIs)
     const row1 = [
         { key: 'total_entradas', title: 'Receitas Operacionais', icon: 'bi-graph-up-arrow', color: 'primary', bgColor: 'bg-blue-soft' },
-        { key: 'total_saidas', title: 'Total Saídas', icon: 'bi-graph-down-arrow', color: 'danger', bgColor: 'bg-red-soft', percentKey: 'perc_total_saidas' },
-        { key: 'resultado', title: 'Resultado', icon: 'bi-bullseye', color: 'highlight', bgColor: 'bg-yellow-soft', percentKey: 'perc_resultado' },
-        { key: 'fcl', title: 'FCL', icon: 'bi-wallet2', color: 'success', bgColor: 'bg-green-soft', percentKey: 'perc_fcl_receita' }
+        { key: 'total_saidas', title: 'Total Saídas', icon: 'bi-graph-down-arrow', color: 'danger', bgColor: 'bg-red-soft', percentKey: 'perc_total_saidas', percentRefIcon: 'bi-graph-up-arrow' },
+        { key: 'resultado', title: 'Resultado', icon: 'bi-bullseye', color: 'highlight', bgColor: 'bg-yellow-soft', percentKey: 'perc_resultado', percentRefIcon: 'bi-graph-up-arrow' },
+        { key: 'fcl', title: 'FCL', icon: 'bi-wallet2', color: 'success', bgColor: 'bg-green-soft', percentKey: 'perc_fcl_receita', percentRefIcon: 'bi-graph-up-arrow' }
     ];
 
     renderCards('kpiRow1', row1, m, 3);
 
     // Row 2 (Secondary KPIs + New Metrics)
     const row2 = [
-        { key: 'total_custos', title: 'Custos Operacionais', icon: 'bi-gear', color: 'info', percentKey: 'perc_custos' },
-        { key: 'total_despesas', title: 'Despesas Rateadas', icon: 'bi-calculator', color: 'info', percentKey: 'perc_despesas' },
-        { key: 'total_investimentos', title: 'Investimentos', icon: 'bi-piggy-bank', color: 'info', percentKey: 'perc_investimentos' },
-        { key: 'total_impostos', title: 'Impostos', icon: 'bi-bank', color: 'danger', percentKey: 'perc_impostos' },
+        { key: 'total_custos', title: 'Custos Operacionais', icon: 'bi-gear', color: 'info', percentKey: 'perc_custos', percentRefIcon: 'bi-graph-down-arrow' },
+        { key: 'total_despesas', title: 'Despesas Rateadas', icon: 'bi-calculator', color: 'info', percentKey: 'perc_despesas', percentRefIcon: 'bi-graph-down-arrow' },
+        { key: 'total_investimentos', title: 'Investimentos', icon: 'bi-piggy-bank', color: 'info', percentKey: 'perc_investimentos', percentRefIcon: 'bi-graph-down-arrow' },
+        { key: 'total_impostos', title: 'Impostos', icon: 'bi-bank', color: 'danger', percentKey: 'perc_impostos', percentRefIcon: 'bi-graph-down-arrow' },
         { key: 'perc_lucro', title: 'Margem Lucro', icon: 'bi-percent', color: 'success', isPercent: true },
         { key: 'perc_fcl', title: 'Margem FCL', icon: 'bi-percent', color: 'success', isPercent: true },
         // New Cards
-        { key: 'pessoal', title: 'Pessoal', icon: 'bi-people', color: 'info', percentKey: 'perc_pessoal' },
-        { key: 'credenciados', title: 'Credenciados', icon: 'bi-person-badge', color: 'primary', percentKey: 'perc_credenciados' },
-        { key: 'clts', title: 'CLTs', icon: 'bi-person-vcard', color: 'success', percentKey: 'perc_clts' },
-        { key: 'terceirizacao', title: 'Terceirização', icon: 'bi-people-fill', color: 'warning', percentKey: 'perc_terceirizacao' },
-        { key: 'corretiva', title: 'Corretiva', icon: 'bi-tools', color: 'danger', percentKey: 'perc_corretiva' },
-        { key: 'preventiva', title: 'Preventiva', icon: 'bi-shield-check', color: 'success', percentKey: 'perc_preventiva' }
+        { key: 'pessoal', title: 'Pessoal', icon: 'bi-people', color: 'info', percentKey: 'perc_pessoal', percentRefIcon: 'bi-graph-down-arrow' },
+        { key: 'credenciados', title: 'Credenciados', icon: 'bi-person-badge', color: 'primary', percentKey: 'perc_credenciados', percentRefIcon: 'bi-graph-down-arrow' },
+        { key: 'clts', title: 'CLTs', icon: 'bi-person-vcard', color: 'success', percentKey: 'perc_clts', percentRefIcon: 'bi-graph-down-arrow' },
+        { key: 'terceirizacao', title: 'Terceirização', icon: 'bi-people-fill', color: 'warning', percentKey: 'perc_terceirizacao', percentRefIcon: 'bi-graph-down-arrow' },
+        { key: 'corretiva', title: 'Corretiva', icon: 'bi-tools', color: 'danger', percentKey: 'perc_corretiva', percentRefIcon: 'bi-graph-down-arrow' },
+        { key: 'preventiva', title: 'Preventiva', icon: 'bi-shield-check', color: 'success', percentKey: 'perc_preventiva', percentRefIcon: 'bi-graph-down-arrow' }
     ];
 
     // Adjust column size for row 2 to fit more cards (e.g., col-lg-2 for 6 cards per row)
@@ -785,7 +785,9 @@ function renderCards(containerId, cards, metrics, colSize) {
         let percentHtml = '';
         if (card.percentKey && metrics[card.percentKey] !== undefined) {
             const percentVal = metrics[card.percentKey];
-            percentHtml = `<div class="card-percent">${percentVal.toFixed(1)}%</div>`;
+            // Adicionar ícone de referência se fornecido
+            const refIcon = card.percentRefIcon ? `<i class="bi ${card.percentRefIcon} me-1" style="font-size: 0.75rem;"></i>` : '';
+            percentHtml = `<div class="card-percent">${refIcon}${percentVal.toFixed(1)}%</div>`;
         }
 
         const html = `
