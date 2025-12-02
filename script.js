@@ -786,8 +786,10 @@ function renderCards(containerId, cards, metrics, colSize) {
         if (card.percentKey && metrics[card.percentKey] !== undefined) {
             const percentVal = metrics[card.percentKey];
             // Adicionar ícone de referência se fornecido
-            const refIcon = card.percentRefIcon ? `<i class="bi ${card.percentRefIcon} me-1" style="font-size: 0.75rem;"></i>` : '';
-            percentHtml = `<div class="card-percent">${refIcon}${percentVal.toFixed(1)}%</div>`;
+            const refIcon = card.percentRefIcon ? `<i class="bi ${card.percentRefIcon} me-1"></i>` : '';
+            // Definir classe baseada no tipo de referência
+            const refClass = card.percentRefIcon === 'bi-graph-up-arrow' ? 'percent-ref-receitas' : 'percent-ref-saidas';
+            percentHtml = `<div class="card-percent ${refClass}">${refIcon}${percentVal.toFixed(1)}%</div>`;
         }
 
         const html = `

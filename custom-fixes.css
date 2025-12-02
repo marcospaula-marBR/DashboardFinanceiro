@@ -145,3 +145,30 @@
     transform: scale(1.05);
     transition: all 0.2s ease;
 }
+
+/* Cores dinâmicas por referência */
+.card-percent.percent-ref-receitas {
+    color: #F2911B;
+    background: rgba(242, 145, 27, 0.1);
+}
+
+.card-percent.percent-ref-receitas i {
+    color: #F2911B;
+}
+
+.metric-card:hover .card-percent.percent-ref-receitas {
+    background: rgba(242, 145, 27, 0.15);
+}
+
+.card-percent.percent-ref-saidas {
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+}
+
+.card-percent.percent-ref-saidas i {
+    color: #e74c3c;
+}
+
+.metric-card:hover .card-percent.percent-ref-saidas {
+    background: rgba(231, 76, 60, 0.15);
+}
