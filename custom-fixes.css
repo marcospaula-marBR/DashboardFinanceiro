@@ -172,3 +172,16 @@
 .metric-card:hover .card-percent.percent-ref-saidas {
     background: rgba(231, 76, 60, 0.15);
 }
+
+.card-percent.percent-ref-pessoal {
+    color: #3498db;
+    background: rgba(52, 152, 219, 0.1);
+}
+
+.card-percent.percent-ref-pessoal i {
+    color: #3498db;
+}
+
+.metric-card:hover .card-percent.percent-ref-pessoal {
+    background: rgba(52, 152, 219, 0.15);
+}

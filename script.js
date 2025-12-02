@@ -696,6 +696,10 @@ function calculateDRE() {
         perc_terceirizacao_receita: totalEntradas !== 0 ? (terceirizacao / totalEntradas * 100) : 0,
         perc_corretiva_receita: totalEntradas !== 0 ? (corretiva / totalEntradas * 100) : 0,
         perc_preventiva_receita: totalEntradas !== 0 ? (preventiva / totalEntradas * 100) : 0,
+        // Percentuais em relação ao Pessoal (para Credenciados, CLTs, Terceirização)
+        perc_credenciados_pessoal: pessoal !== 0 ? (credenciados / pessoal * 100) : 0,
+        perc_clts_pessoal: pessoal !== 0 ? (clts / pessoal * 100) : 0,
+        perc_terceirizacao_pessoal: pessoal !== 0 ? (terceirizacao / pessoal * 100) : 0,
         // Detailed for charts
         receita_operacional: receitaOperacional,
         receita_indireta: receitaIndireta,
@@ -770,9 +774,9 @@ function updateCards() {
         { key: 'perc_fcl', title: 'Margem FCL', icon: 'bi-percent', color: 'success', isPercent: true },
         // New Cards
         { key: 'pessoal', title: 'Pessoal', icon: 'bi-people', color: 'info', percentKey: 'perc_pessoal', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_pessoal_receita', percentRefIcon2: 'bi-graph-up-arrow' },
-        { key: 'credenciados', title: 'Credenciados', icon: 'bi-person-badge', color: 'primary', percentKey: 'perc_credenciados', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_credenciados_receita', percentRefIcon2: 'bi-graph-up-arrow' },
-        { key: 'clts', title: 'CLTs', icon: 'bi-person-vcard', color: 'success', percentKey: 'perc_clts', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_clts_receita', percentRefIcon2: 'bi-graph-up-arrow' },
-        { key: 'terceirizacao', title: 'Terceirização', icon: 'bi-people-fill', color: 'warning', percentKey: 'perc_terceirizacao', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_terceirizacao_receita', percentRefIcon2: 'bi-graph-up-arrow' },
+        { key: 'credenciados', title: 'Credenciados', icon: 'bi-person-badge', color: 'primary', percentKey: 'perc_credenciados', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_credenciados_receita', percentRefIcon2: 'bi-graph-up-arrow', percentKey3: 'perc_credenciados_pessoal', percentRefIcon3: 'bi-people' },
+        { key: 'clts', title: 'CLTs', icon: 'bi-person-vcard', color: 'success', percentKey: 'perc_clts', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_clts_receita', percentRefIcon2: 'bi-graph-up-arrow', percentKey3: 'perc_clts_pessoal', percentRefIcon3: 'bi-people' },
+        { key: 'terceirizacao', title: 'Terceirização', icon: 'bi-people-fill', color: 'warning', percentKey: 'perc_terceirizacao', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_terceirizacao_receita', percentRefIcon2: 'bi-graph-up-arrow', percentKey3: 'perc_terceirizacao_pessoal', percentRefIcon3: 'bi-people' },
         { key: 'corretiva', title: 'Corretiva', icon: 'bi-tools', color: 'danger', percentKey: 'perc_corretiva', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_corretiva_receita', percentRefIcon2: 'bi-graph-up-arrow' },
         { key: 'preventiva', title: 'Preventiva', icon: 'bi-shield-check', color: 'success', percentKey: 'perc_preventiva', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_preventiva_receita', percentRefIcon2: 'bi-graph-up-arrow' }
     ];
@@ -807,6 +811,13 @@ function renderCards(containerId, cards, metrics, colSize) {
             const refIcon2 = card.percentRefIcon2 ? `<i class="bi ${card.percentRefIcon2} me-1"></i>` : '';
             const refClass2 = card.percentRefIcon2 === 'bi-graph-up-arrow' ? 'percent-ref-receitas' : 'percent-ref-saidas';
             percentHtml += `<div class="card-percent ${refClass2}">${refIcon2}${percentVal2.toFixed(1)}%</div>`;
+        }
+
+        // Adicionar terceiro percentual se existir
+        if (card.percentKey3 && metrics[card.percentKey3] !== undefined) {
+            const percentVal3 = metrics[card.percentKey3];
+            const refIcon3 = card.percentRefIcon3 ? `<i class="bi ${card.percentRefIcon3} me-1"></i>` : '';
+            percentHtml += `<div class="card-percent percent-ref-pessoal">${refIcon3}${percentVal3.toFixed(1)}%</div>`;
         }
 
         const html = `
