@@ -645,6 +645,10 @@ function calculateDRE() {
     const corretiva = sumByCat(["Corretiva - B2G", "Manutenção Corretiva"]);
     const preventiva = sumByCat(["Preventiva - B2G", "Manutenção Preventiva"]);
 
+    // Calcular Total e Média de Equipamentos
+    const totalEquipamentos = sumByCat(["Equipamentos"]);
+    const mediaEquipamentos = cols.length > 0 ? (totalEquipamentos / cols.length) : 0;
+
     // Novos Cards: Credenciados, CLTs e Terceirização
     const credenciados = sumByCat([
         "Credenciado Administrativo", "Adiantamento - Credenciado Administrativo",
@@ -670,6 +674,8 @@ function calculateDRE() {
         pessoal: pessoal,
         corretiva: corretiva,
         preventiva: preventiva,
+        total_equipamentos: totalEquipamentos,
+        media_equipamentos: mediaEquipamentos,
         credenciados: credenciados,
         clts: clts,
         terceirizacao: terceirizacao,
@@ -770,8 +776,8 @@ function updateCards() {
         { key: 'total_despesas', title: 'Despesas Rateadas', icon: 'bi-calculator', color: 'info', percentKey: 'perc_despesas', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_despesas_receita', percentRefIcon2: 'bi-graph-up-arrow' },
         { key: 'total_investimentos', title: 'Investimentos', icon: 'bi-piggy-bank', color: 'info', percentKey: 'perc_investimentos', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_investimentos_receita', percentRefIcon2: 'bi-graph-up-arrow' },
         { key: 'total_impostos', title: 'Impostos', icon: 'bi-bank', color: 'danger', percentKey: 'perc_impostos', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_impostos_receita', percentRefIcon2: 'bi-graph-up-arrow' },
-        { key: 'perc_lucro', title: 'Margem Lucro', icon: 'bi-percent', color: 'success', isPercent: true },
-        { key: 'perc_fcl', title: 'Margem FCL', icon: 'bi-percent', color: 'success', isPercent: true },
+        { key: 'total_equipamentos', title: 'Total Equipamentos', icon: 'bi-pc-display-horizontal', color: 'success', isInteger: true },
+        { key: 'media_equipamentos', title: 'Média Equipamentos', icon: 'bi-pc-display', color: 'success', isInteger: true },
         // New Cards
         { key: 'pessoal', title: 'Pessoal', icon: 'bi-people', color: 'info', percentKey: 'perc_pessoal', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_pessoal_receita', percentRefIcon2: 'bi-graph-up-arrow' },
         { key: 'credenciados', title: 'Credenciados', icon: 'bi-person-badge', color: 'primary', percentKey: 'perc_credenciados', percentRefIcon: 'bi-graph-down-arrow', percentKey2: 'perc_credenciados_receita', percentRefIcon2: 'bi-graph-up-arrow', percentKey3: 'perc_credenciados_pessoal', percentRefIcon3: 'bi-people' },
@@ -791,7 +797,14 @@ function renderCards(containerId, cards, metrics, colSize) {
     container.innerHTML = '';
     cards.forEach(card => {
         const val = metrics[card.key] || 0;
-        const formattedVal = card.isPercent ? val.toFixed(2) + '%' : formatCurrency(val);
+        let formattedVal;
+        if (card.isPercent) {
+            formattedVal = val.toFixed(2) + '%';
+        } else if (card.isInteger) {
+            formattedVal = Math.abs(Math.round(val)).toLocaleString('pt-BR');
+        } else {
+            formattedVal = formatCurrency(val);
+        }
         const colClass = `col-6 col-md-4 col-lg-${colSize}`; // Adjusted for better fit
         const cardClass = card.color === 'highlight' ? 'card-highlight' : `card-${card.color}`;
         const bgClass = card.bgColor || '';
