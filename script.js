@@ -178,6 +178,34 @@ function initCharts() {
     });
 }
 
+// ========================================
+// GOOGLE SHEETS INTEGRATION
+// ========================================
+async function loadFromGoogleSheets() {
+    const SHEET_ID = '1aBSas0JlWuXEubN6ti7tYVUPrCz_qfmXA6LWwbdPMiw';
+    const SHEET_NAME = 'Planilha1'; // Ou o nome da sua aba
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_NAME}`;
+
+    document.getElementById('loadingOverlay').classList.remove('d-none');
+    document.getElementById('fileStatus').textContent = 'Carregando dados do Google Sheets...';
+
+    try {
+        const response = await fetch(url);
+        const csvText = await response.text();
+
+        Papa.parse(csvText, {
+            header: true,
+            skipEmptyLines: true,
+            complete: processParsedData
+        });
+
+    } catch (error) {
+        document.getElementById('loadingOverlay').classList.add('d-none');
+        alert(`Erro ao carregar Google Sheets: ${error.message}`);
+        console.error(error);
+    }
+}
+
 // Data Processing
 function handleFileUpload(event) {
     const file = event.target.files[0];
