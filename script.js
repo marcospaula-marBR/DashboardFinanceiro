@@ -866,20 +866,30 @@ function updateCharts() {
         return total;
     });
 
-    // 3. Resultado (Monthly)
+    // 3. Resultado (Monthly) = MESMA LÓGICA DOS CARDS
     const monthlyResult = labels.map((_, i) => {
         const col = state.validColumns[i];
-        const receitas = monthlyReceitas[i];
+
+        // Total Entradas
+        const totalEntradas = monthlyReceitas[i];
+
+        // Outras Entradas
         const outrasEntradas = getRowValue('Outras Receitas', col) +
             getRowValue('Receitas Financeiras', col) +
             getRowValue('Honorários', col) +
             getRowValue('Juros e Devoluções', col);
+
+        // Ativos
         const ativos = getRowValue('Ativos', col);
-        const saidas = monthlySaidas[i];
-        return receitas + outrasEntradas + ativos - saidas;
+
+        // Total Saídas
+        const totalSaidas = monthlySaidas[i];
+
+        // Resultado = totalEntradas + ativos + outrasEntradas - totalSaidas
+        return totalEntradas + ativos + outrasEntradas - totalSaidas;
     });
 
-    // 4. FCL (Monthly)
+    // 4. FCL (Monthly) = Resultado - Ativos
     const monthlyFCL = labels.map((_, i) => {
         const col = state.validColumns[i];
         const resultado = monthlyResult[i];
