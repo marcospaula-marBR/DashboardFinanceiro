@@ -817,86 +817,73 @@ function updateCharts() {
         return `${mes.charAt(0).toUpperCase() + mes.slice(1)}/${ano}`;
     });
 
+    // Helper: Pegar valor de uma linha específica
+    const getRowValue = (descricao, col) => {
+        const row = state.dreData.find(r => r.type === 'data' && r.descricao === descricao);
+        return row ? (row.meses[col] || 0) : 0;
+    };
+
     // 1. Receitas Operacionais (Monthly)
     const monthlyReceitas = labels.map((_, i) => {
         const col = state.validColumns[i];
-        let sum = 0;
-        state.dreData.forEach(row => {
-            if (row.type === 'data' && ['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(row.descricao)) {
-                sum += row.meses[col] || 0;
-            }
-        });
-        return sum;
+        return getRowValue('Receita Bruta de Vendas', col) + getRowValue('Receitas Indiretas', col);
     });
 
-    // 2. Saídas (Monthly) - Usar os totalizadores calculados
+    // 2. Saídas (Monthly)
     const monthlySaidas = labels.map((_, i) => {
         const col = state.validColumns[i];
+        let total = 0;
 
-        // Somar: Impostos + Custos + Despesas + Investimentos
-        let impostos = 0;
-        let custos = 0;
-        let despesas = 0;
-        let investimentos = 0;
+        // Impostos
+        total += getRowValue('Impostos', col);
+        total += getRowValue('Provisão IRPJ e CSSL Trimestral', col);
 
-        state.dreData.forEach(row => {
-            if (row.type === 'data') {
-                const val = row.meses[col] || 0;
-                const desc = row.descricao;
+        // Custos
+        total += getRowValue('Credenciado Operacional', col);
+        total += getRowValue('Terceirização de Mão de Obra', col);
+        total += getRowValue('CLTs', col);
+        total += getRowValue('Custo dos Serviços Prestados', col);
+        total += getRowValue('Preventiva - B2G', col);
+        total += getRowValue('Corretiva - B2G', col);
+        total += getRowValue('Outros Custos', col);
 
-                // Impostos
-                if (['Impostos', 'Provisão IRPJ e CSSL Trimestral'].includes(desc)) {
-                    impostos += val;
-                }
-                // Custos
-                else if (['Credenciado Operacional', 'Terceirização de Mão de Obra', 'CLTs',
-                    'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Corretiva - B2G',
-                    'Outros Custos'].includes(desc)) {
-                    custos += val;
-                }
-                // Despesas
-                else if (['Credenciado Administrativo', 'Credenciado TI', 'Despesas Administrativas',
-                    'Despesas de Vendas e Marketing', 'Despesas Financeiras', 'Outros Tributos',
-                    'Despesas Eventuais', 'Despesas Variáveis', 'Intermediação de Negócios'].includes(desc)) {
-                    despesas += val;
-                }
-                // Investimentos
-                else if (['Consórcios a contemplar', 'Serviços', 'Ativos'].includes(desc)) {
-                    investimentos += val;
-                }
-            }
-        });
+        // Despesas
+        total += getRowValue('Credenciado Administrativo', col);
+        total += getRowValue('Credenciado TI', col);
+        total += getRowValue('Despesas Administrativas', col);
+        total += getRowValue('Despesas de Vendas e Marketing', col);
+        total += getRowValue('Despesas Financeiras', col);
+        total += getRowValue('Outros Tributos', col);
+        total += getRowValue('Despesas Eventuais', col);
+        total += getRowValue('Despesas Variáveis', col);
+        total += getRowValue('Intermediação de Negócios', col);
 
-        return impostos + custos + despesas + investimentos;
+        // Investimentos
+        total += getRowValue('Consórcios a contemplar', col);
+        total += getRowValue('Serviços', col);
+        total += getRowValue('Ativos', col);
+
+        return total;
     });
 
     // 3. Resultado (Monthly)
     const monthlyResult = labels.map((_, i) => {
         const col = state.validColumns[i];
-        let res = 0;
-        state.dreData.forEach(row => {
-            if (row.type === 'data') {
-                const val = row.meses[col] || 0;
-                if (['Receita Bruta de Vendas', 'Receitas Indiretas', 'Outras Receitas', 'Receitas Financeiras', 'Honorários', 'Juros e Devoluções', 'Ativos'].includes(row.descricao)) {
-                    res += val;
-                } else {
-                    res -= val;
-                }
-            }
-        });
-        return res;
+        const receitas = monthlyReceitas[i];
+        const outrasEntradas = getRowValue('Outras Receitas', col) +
+            getRowValue('Receitas Financeiras', col) +
+            getRowValue('Honorários', col) +
+            getRowValue('Juros e Devoluções', col);
+        const ativos = getRowValue('Ativos', col);
+        const saidas = monthlySaidas[i];
+        return receitas + outrasEntradas + ativos - saidas;
     });
 
-    // 4. FCL - Fluxo de Caixa Livre (Monthly) = Resultado - Ativos
+    // 4. FCL (Monthly)
     const monthlyFCL = labels.map((_, i) => {
         const col = state.validColumns[i];
         const resultado = monthlyResult[i];
-        let ativos = 0;
-        state.dreData.forEach(row => {
-            if (row.type === 'data' && row.descricao === 'Ativos') {
-                ativos += row.meses[col] || 0;
-            }
-        });
+        const ativos = getRowValue('Ativos', col);
         return resultado - ativos;
     });
 
