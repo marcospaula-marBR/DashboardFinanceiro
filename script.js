@@ -829,19 +829,45 @@ function updateCharts() {
         return sum;
     });
 
-    // 2. Saídas (Monthly)
+    // 2. Saídas (Monthly) - Usar os totalizadores calculados
     const monthlySaidas = labels.map((_, i) => {
         const col = state.validColumns[i];
-        let sum = 0;
+
+        // Somar: Impostos + Custos + Despesas + Investimentos
+        let impostos = 0;
+        let custos = 0;
+        let despesas = 0;
+        let investimentos = 0;
+
         state.dreData.forEach(row => {
             if (row.type === 'data') {
-                const isInflow = ['Receita Bruta de Vendas', 'Receitas Indiretas', 'Outras Receitas', 'Receitas Financeiras', 'Honorários', 'Juros e Devoluções', 'Ativos'].includes(row.descricao);
-                if (!isInflow) {
-                    sum += row.meses[col] || 0;
+                const val = row.meses[col] || 0;
+                const desc = row.descricao;
+
+                // Impostos
+                if (['Impostos', 'Provisão IRPJ e CSSL Trimestral'].includes(desc)) {
+                    impostos += val;
+                }
+                // Custos
+                else if (['Credenciado Operacional', 'Terceirização de Mão de Obra', 'CLTs',
+                    'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Corretiva - B2G',
+                    'Outros Custos'].includes(desc)) {
+                    custos += val;
+                }
+                // Despesas
+                else if (['Credenciado Administrativo', 'Credenciado TI', 'Despesas Administrativas',
+                    'Despesas de Vendas e Marketing', 'Despesas Financeiras', 'Outros Tributos',
+                    'Despesas Eventuais', 'Despesas Variáveis', 'Intermediação de Negócios'].includes(desc)) {
+                    despesas += val;
+                }
+                // Investimentos
+                else if (['Consórcios a contemplar', 'Serviços', 'Ativos'].includes(desc)) {
+                    investimentos += val;
                 }
             }
         });
-        return sum;
+
+        return impostos + custos + despesas + investimentos;
     });
 
     // 3. Resultado (Monthly)
