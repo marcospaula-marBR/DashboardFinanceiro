@@ -798,26 +798,30 @@ function renderCards(containerId, cards, metrics, colSize) {
 
         // Adicionar percentuais se existirem
         let percentHtml = '';
+        let percents = [];
+
         if (card.percentKey && metrics[card.percentKey] !== undefined) {
             const percentVal = metrics[card.percentKey];
-            const refIcon = card.percentRefIcon ? `<i class="bi ${card.percentRefIcon} me-1"></i>` : '';
+            const refIcon = card.percentRefIcon ? `<i class="bi ${card.percentRefIcon}"></i>` : '';
             const refClass = card.percentRefIcon === 'bi-graph-up-arrow' ? 'percent-ref-receitas' : 'percent-ref-saidas';
-            percentHtml = `<div class="card-percent ${refClass}">${refIcon}${percentVal.toFixed(1)}%</div>`;
+            percents.push(`<div class="card-percent ${refClass}">${refIcon}${percentVal.toFixed(1)}%</div>`);
         }
 
-        // Adicionar segundo percentual se existir
         if (card.percentKey2 && metrics[card.percentKey2] !== undefined) {
             const percentVal2 = metrics[card.percentKey2];
-            const refIcon2 = card.percentRefIcon2 ? `<i class="bi ${card.percentRefIcon2} me-1"></i>` : '';
+            const refIcon2 = card.percentRefIcon2 ? `<i class="bi ${card.percentRefIcon2}"></i>` : '';
             const refClass2 = card.percentRefIcon2 === 'bi-graph-up-arrow' ? 'percent-ref-receitas' : 'percent-ref-saidas';
-            percentHtml += `<div class="card-percent ${refClass2}">${refIcon2}${percentVal2.toFixed(1)}%</div>`;
+            percents.push(`<div class="card-percent ${refClass2}">${refIcon2}${percentVal2.toFixed(1)}%</div>`);
         }
 
-        // Adicionar terceiro percentual se existir
         if (card.percentKey3 && metrics[card.percentKey3] !== undefined) {
             const percentVal3 = metrics[card.percentKey3];
-            const refIcon3 = card.percentRefIcon3 ? `<i class="bi ${card.percentRefIcon3} me-1"></i>` : '';
-            percentHtml += `<div class="card-percent percent-ref-pessoal">${refIcon3}${percentVal3.toFixed(1)}%</div>`;
+            const refIcon3 = card.percentRefIcon3 ? `<i class="bi ${card.percentRefIcon3}"></i>` : '';
+            percents.push(`<div class="card-percent percent-ref-pessoal">${refIcon3}${percentVal3.toFixed(1)}%</div>`);
+        }
+
+        if (percents.length > 0) {
+            percentHtml = `<div class="card-percents-container">${percents.join('')}</div>`;
         }
 
         const html = `
