@@ -89,7 +89,7 @@ let state = {
 // Google Sheets Integration
 // ========================================
 async function loadFromGoogleSheets() {
-    const SHEET_ID = '1aBSas0JlWuXEubN6ti7tYVUPrCz_qfmXA6LWwbdPMiw';
+    const SHEET_ID = '1z7dsU-jmd51XVgQonqxJKqXqEAlKuLJiI04KJBt9OQQ';
     const SHEET_NAME = 'Dados';
 
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
