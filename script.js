@@ -587,7 +587,8 @@ function calculateDRE() {
 
     const totalDespesas = getVal("Credenciado Administrativo") + getVal("Credenciado TI") +
         getVal("Despesas Administrativas") + getVal("Despesas de Vendas e Marketing") + getVal("Despesas Financeiras") +
-        getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios");
+        getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios") +
+        getVal("Distribuição de Dividendos");
 
     const totalInvestimentos = getVal("Consórcios a contemplar") + getVal("Serviços") + getVal("Ativos");
 
@@ -1155,7 +1156,7 @@ function showCardDetails(key, title) {
         'outras_entradas': ['Outras Receitas', 'Receitas Financeiras', 'Honorários', 'Juros e devoluções'],
         'total_impostos': ['Impostos', 'Provisão - IRPJ e CSSL Trimestral'],
         'total_custos': ['Credenciado Operacional', 'Adiantamento - Credenciado Operacional', 'Terceirização de Mão de Obra', 'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva', 'Corretiva - B2G', 'Manutenção Corretiva', 'Outros Custos'],
-        'total_despesas': ['Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo', 'Credenciado TI', 'Adiantamento - Credenciado TI', 'Despesas Administrativas', 'Despesas de Vendas e Marketing', 'Despesas Financeiras', 'Outros Tributos', 'Jurídico', 'Despesas Variáveis', 'Intermediação de Negócios'],
+        'total_despesas': ['Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo', 'Credenciado TI', 'Adiantamento - Credenciado TI', 'Despesas Administrativas', 'Despesas de Vendas e Marketing', 'Despesas Financeiras', 'Outros Tributos', 'Jurídico', 'Despesas Variáveis', 'Intermediação de Negócios', 'Distribuição de Dividendos', 'Dividendos'],
         'total_investimentos': ['Consórcios - a contemplar', 'Serviços', 'Ativos'],
         'mutuo_entradas': ['Mútuo - Entradas'],
         'mutuo_saidas': ['Mútuo - Saídas'],
