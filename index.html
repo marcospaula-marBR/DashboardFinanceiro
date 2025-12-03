@@ -224,6 +224,22 @@
         </div>
     </div>
 
+    <!-- Modal Por Máquina -->
+    <div id="porMaquinaModal" class="por-maquina-modal">
+        <div class="por-maquina-backdrop" onclick="closePorMaquinaModal()"></div>
+        <div class="por-maquina-content">
+            <div class="por-maquina-header">
+                <h2><i class="bi bi-pc-display-horizontal me-2"></i>Análise por Equipamento</h2>
+                <button class="por-maquina-close" onclick="closePorMaquinaModal()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="por-maquina-body" id="porMaquinaBody">
+                <!-- Conteúdo será gerado dinamicamente -->
+            </div>
+        </div>
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loadingOverlay"
         class="d-none position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-flex justify-content-center align-items-center"

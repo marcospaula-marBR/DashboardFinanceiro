@@ -837,18 +837,24 @@ function renderCards(containerId, cards, metrics, colSize) {
             percentHtml = `<div class="card-percents-container">${percents.join('')}</div>`;
         }
 
+        // Definir comportamento de clique
+        const clickableClass = card.key === 'total_equipamentos' ? 'card-clickable' : '';
+        const clickHandler = card.key === 'total_equipamentos'
+            ? 'onclick="openPorMaquinaModal()"'
+            : `onclick="showCardDetails('${card.key}', '${card.title}')"`;
+
         const html = `
-            <div class="${colClass}">
-                <div class="metric-card ${cardClass} ${bgClass}" onclick="showCardDetails('${card.key}', '${card.title}')">
-                    <div class="icon-box">
-                        <i class="bi ${card.icon}"></i>
-                    </div>
-                    <div class="title">${card.title}</div>
-                    <div class="value">${formattedVal}</div>
-                    ${percentHtml}
+        <div class="${colClass}">
+            <div class="metric-card ${cardClass} ${bgClass} ${clickableClass}" ${clickHandler}>
+                <div class="icon-box">
+                    <i class="bi ${card.icon}"></i>
                 </div>
+                <div class="title">${card.title}</div>
+                <div class="value">${formattedVal}</div>
+                ${percentHtml}
             </div>
-        `;
+        </div>
+    `;
         container.insertAdjacentHTML('beforeend', html);
     });
 }
@@ -1514,4 +1520,88 @@ async function exportToPDF() {
         alert('Erro ao gerar PDF. Verifique o console para mais detalhes.');
         document.getElementById('loadingOverlay').classList.add('d-none');
     }
+
+    // ========================================
+    // MODAL POR MÁQUINA
+    // ========================================
+    function openPorMaquinaModal() {
+        const totalEquipamentos = state.metrics.total_equipamentos;
+
+        if (!totalEquipamentos || totalEquipamentos === 0) {
+            alert('Nenhum equipamento encontrado no período filtrado.');
+            return;
+        }
+
+        const m = state.metrics;
+
+        // Definir todos os cards com seus ícones (exceto Média Equipamentos)
+        const cards = [
+            { title: 'Receitas Operacionais', value: m.total_entradas, icon: 'bi-graph-up-arrow', color: 'primary' },
+            { title: 'Total Saídas', value: m.total_saidas, icon: 'bi-graph-down-arrow', color: 'danger' },
+            { title: 'Resultado', value: m.resultado, icon: 'bi-bullseye', color: 'warning' },
+            { title: 'FCL', value: m.fcl, icon: 'bi-wallet2', color: 'success' },
+            { title: 'Custos Operacionais', value: m.total_custos, icon: 'bi-gear', color: 'info' },
+            { title: 'Despesas Rateadas', value: m.total_despesas, icon: 'bi-calculator', color: 'info' },
+            { title: 'Investimentos', value: m.total_investimentos, icon: 'bi-piggy-bank', color: 'info' },
+            { title: 'Impostos', value: m.total_impostos, icon: 'bi-bank', color: 'danger' },
+            { title: 'Pessoal', value: m.pessoal, icon: 'bi-people', color: 'info' },
+            { title: 'Credenciados', value: m.credenciados, icon: 'bi-person-badge', color: 'primary' },
+            { title: 'CLTs', value: m.clts, icon: 'bi-person-vcard', color: 'success' },
+            { title: 'Terceirização', value: m.terceirizacao, icon: 'bi-people-fill', color: 'warning' },
+            { title: 'Corretiva', value: m.corretiva, icon: 'bi-tools', color: 'danger' },
+            { title: 'Preventiva', value: m.preventiva, icon: 'bi-shield-check', color: 'success' }
+        ];
+
+        // Gerar HTML
+        let html = '<div class="por-maquina-grid">';
+
+        cards.forEach(card => {
+            const porMaquina = card.value / totalEquipamentos;
+
+            html += `
+            <div class="por-maquina-item">
+                <div class="por-maquina-item-header">
+                    <div class="por-maquina-item-icon">
+                        <i class="bi ${card.icon}"></i>
+                    </div>
+                    <div class="por-maquina-item-title">${card.title}</div>
+                </div>
+                <div class="por-maquina-item-values">
+                    <div class="por-maquina-value-row">
+                        <span class="por-maquina-value-label">Total</span>
+                        <span class="por-maquina-value-number">${formatCurrency(card.value)}</span>
+                    </div>
+                    <div class="por-maquina-divider"></div>
+                    <div class="por-maquina-value-row">
+                        <span class="por-maquina-value-label">Por Equipamento</span>
+                        <span class="por-maquina-value-number por-maquina-value-highlight">${formatCurrency(porMaquina)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        });
+
+        html += '</div>';
+
+        // Inserir no modal
+        document.getElementById('porMaquinaBody').innerHTML = html;
+
+        // Mostrar modal
+        document.getElementById('porMaquinaModal').classList.add('active');
+
+        // Prevenir scroll do body
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closePorMaquinaModal() {
+        document.getElementById('porMaquinaModal').classList.remove('active');
+        document.body.style.overflow = 'auto';
+    }
+
+    // Fechar ao pressionar ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closePorMaquinaModal();
+        }
+    });
 }
