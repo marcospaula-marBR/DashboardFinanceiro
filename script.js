@@ -1594,16 +1594,17 @@ function openPorMaquinaModal() {
 
     // Prevenir scroll do body
     document.body.style.overflow = 'hidden';
-}
 
-function closePorMaquinaModal() {
-    document.getElementById('porMaquinaModal').classList.remove('active');
-    document.body.style.overflow = 'auto';
-}
 
-// Fechar ao pressionar ESC
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closePorMaquinaModal();
+    function closePorMaquinaModal() {
+        document.getElementById('porMaquinaModal').classList.remove('active');
+        document.body.style.overflow = 'auto';
     }
-});
+
+    // Fechar ao pressionar ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closePorMaquinaModal();
+        }
+    });
+}
