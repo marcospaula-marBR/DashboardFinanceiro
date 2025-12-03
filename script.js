@@ -728,21 +728,7 @@ function updateCards() {
 
     // Row 1 (Main KPIs)
     const row1 = [
-        {
-            key: 'total_entradas',
-            title: 'Receitas Totais',
-            icon: 'bi-graph-up-arrow',
-            color: 'primary',
-            bgColor: 'bg-blue-soft',
-            isBreakdown: true,
-            breakdown: {
-                total: m.total_entradas + m.outras_entradas,
-                items: [
-                    { label: 'Operacionais', value: m.total_entradas },
-                    { label: 'Outras Entradas', value: m.outras_entradas }
-                ]
-            }
-        },
+        { key: 'total_entradas', title: 'Receitas Operacionais', icon: 'bi-graph-up-arrow', color: 'primary', bgColor: 'bg-blue-soft' },
         { key: 'total_saidas', title: 'Total Saídas', icon: 'bi-graph-down-arrow', color: 'danger', bgColor: 'bg-red-soft', percentKey: 'perc_total_saidas', percentRefIcon: 'bi-graph-up-arrow' },
         { key: 'resultado', title: 'Resultado', icon: 'bi-bullseye', color: 'highlight', bgColor: 'bg-yellow-soft', percentKey: 'perc_resultado', percentRefIcon: 'bi-graph-up-arrow' },
         { key: 'fcl', title: 'FCL', icon: 'bi-wallet2', color: 'success', bgColor: 'bg-green-soft', percentKey: 'perc_fcl_receita', percentRefIcon: 'bi-graph-up-arrow' }
@@ -775,7 +761,6 @@ function updateCards() {
 function renderCards(containerId, cards, metrics, colSize) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
-
     cards.forEach(card => {
         const val = metrics[card.key] || 0;
         let formattedVal;
@@ -786,8 +771,7 @@ function renderCards(containerId, cards, metrics, colSize) {
         } else {
             formattedVal = formatCurrency(val);
         }
-
-        const colClass = `col-6 col-md-4 col-lg-${colSize}`;
+        const colClass = `col-6 col-md-4 col-lg-${colSize}`; // Adjusted for better fit
         const cardClass = card.color === 'highlight' ? 'card-highlight' : `card-${card.color}`;
         const bgClass = card.bgColor || '';
 
@@ -825,52 +809,21 @@ function renderCards(containerId, cards, metrics, colSize) {
             ? 'onclick="openPorMaquinaModal()"'
             : `onclick="showCardDetails('${card.key}', '${card.title}')"`;
 
-        // Declarar html uma única vez
-        let html;
-
-        // Verificar se é card com breakdown
-        if (card.isBreakdown && card.breakdown) {
-            html = `
-                <div class="${colClass}">
-                    <div class="metric-card ${cardClass} ${bgClass}">
-                        <div class="icon-box">
-                            <i class="bi ${card.icon}"></i>
-                        </div>
-                        <div class="title">${card.title}</div>
-                        <div class="value" style="font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem;">
-                            ${formatCurrency(card.breakdown.total)}
-                        </div>
-                        <div class="breakdown-container">
-                            ${card.breakdown.items.map(item => `
-                                <div class="breakdown-item">
-                                    <span class="breakdown-label">${item.label}</span>
-                                    <span class="breakdown-value">${formatCurrency(item.value)}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
+        const html = `
+        <div class="${colClass}">
+            <div class="metric-card ${cardClass} ${bgClass} ${clickableClass}" ${clickHandler}>
+                <div class="icon-box">
+                    <i class="bi ${card.icon}"></i>
                 </div>
-            `;
-        } else {
-            // Card normal
-            html = `
-                <div class="${colClass}">
-                    <div class="metric-card ${cardClass} ${bgClass} ${clickableClass}" ${clickHandler}>
-                        <div class="icon-box">
-                            <i class="bi ${card.icon}"></i>
-                        </div>
-                        <div class="title">${card.title}</div>
-                        <div class="value">${formattedVal}</div>
-                        ${percentHtml}
-                    </div>
-                </div>
-            `;
-        }
-
+                <div class="title">${card.title}</div>
+                <div class="value">${formattedVal}</div>
+                ${percentHtml}
+            </div>
+        </div>
+    `;
         container.insertAdjacentHTML('beforeend', html);
-    }); // Fecha o forEach
-} // Fecha a função renderCards
-
+    });
+}
 
 function updateCharts() {
     const ctxMain = document.getElementById('mainChart').getContext('2d');
