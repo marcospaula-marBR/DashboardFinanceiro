@@ -596,7 +596,7 @@ function calculateDRE() {
     const ativosRaw = getVal("Ativos");
 
     let servicosAjustado = 0;
-    if (servicosRaw > consorciosRaw) {
+    if (servicosRaw >= consorciosRaw) {
         servicosAjustado = servicosRaw - consorciosRaw;
     }
 
