@@ -128,7 +128,75 @@ async function loadFromGoogleSheets() {
     }
 }
 
-// Initialization
+// ========================================
+// Event Listeners
+// ========================================
+function initEventListeners() {
+    // File Upload
+    if (document.getElementById('csvFile')) {
+        document.getElementById('csvFile').addEventListener('change', handleFileUpload);
+    }
+
+    // Filters
+    const filterIds = ['filterPeriodo', 'filterEmpresa', 'filterProjeto', 'filterCategoria'];
+    filterIds.forEach(filterId => {
+        const element = document.getElementById(filterId);
+        if (element) {
+            element.addEventListener('change', (e) => {
+                const selectedOptions = Array.from(e.target.selectedOptions).map(opt => opt.value);
+                const filter = filterId.replace('filter', '');
+                const key = filter.toLowerCase() + 's';
+                state.filters[key] = selectedOptions;
+                
+                // Update cascade if needed
+                if (typeof updateCascadeFilters === 'function') {
+                    updateCascadeFilters(filter);
+                }
+                
+                applyFilters();
+            });
+        }
+    });
+
+    // Clear Filters
+    if (document.getElementById('btnClearFilters')) {
+        document.getElementById('btnClearFilters').addEventListener('click', clearFilters);
+    }
+
+    // Mobile Sidebar Toggle
+    if (document.getElementById('toggleSidebar')) {
+        document.getElementById('toggleSidebar').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('active');
+        });
+    }
+
+    // Desktop Sidebar Toggle
+    if (document.getElementById('sidebarToggle')) {
+        document.getElementById('sidebarToggle').addEventListener('click', () => {
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('mainContent');
+            const icon = document.querySelector('#sidebarToggle i');
+
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('expanded');
+
+            if (sidebar.classList.contains('collapsed')) {
+                icon.classList.remove('bi-chevron-left');
+                icon.classList.add('bi-chevron-right');
+            } else {
+                icon.classList.remove('bi-chevron-right');
+                icon.classList.add('bi-chevron-left');
+            }
+        });
+    }
+
+    // Export Table
+    if (document.getElementById('btnExportTable')) {
+        document.getElementById('btnExportTable').addEventListener('click', exportTableToCSV);
+    }
+}
+
+// Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
     initCharts();
@@ -247,6 +315,13 @@ function handleFileUpload(event) {
 function processParsedData(results) {
     let data = results.data;
 
+     // === DEBUG ADICIONAL ===
+    console.log('=== DEBUG processParsedData ===');
+    console.log('Total de linhas recebidas:', data.length);
+    console.log('Primeira linha RAW:', data[0]);
+    console.log('Chaves da primeira linha:', Object.keys(data[0] || {}));
+    console.log('Erros do Papa Parse:', results.errors);
+
     // Clean keys and values
     data = data.map(row => {
         const newRow = {};
@@ -272,6 +347,24 @@ function processParsedData(results) {
         row['Categoria'] = row['Categoria'] ? row['Categoria'].trim() : '';
     });
 
+    // === DEBUG APÓS LIMPEZA ===
+    console.log('=== DEBUG APÓS LIMPEZA ===');
+    console.log('Total de linhas após limpeza:', data.length);
+    console.log('Primeira linha após limpeza:', data[0]);
+    console.log('Categoria da primeira linha:', data[0].Categoria);
+    console.log('Projeto da primeira linha:', data[0].Projeto);
+    console.log('Empresa da primeira linha:', data[0].Empresa);
+    console.log('Chaves após limpeza:', Object.keys(data[0] || {}));
+
+    state.rawData = data;
+    extractMetadata(data);
+
+    // === DEBUG STATE.RAWDATA ===
+    console.log('=== DEBUG STATE.RAWDATA ===');
+    console.log('Total no state:', state.rawData.length);
+    console.log('Primeira linha no state:', state.rawData[0]);
+    console.log('Categoria no state:', state.rawData[0]?.Categoria);
+
     state.rawData = data;
     extractMetadata(data);
 
@@ -289,7 +382,7 @@ function toTitleCase(str) {
 
 function extractMetadata(data) {
     // Extract all month/year columns
-    const colunasData = Object.keys(data[0]).filter(k => !['Empresa', 'Projeto', 'Conta DRE', 'Categoria'].includes(k));
+    const colunasData = Object.keys(data[0]).filter(k => !['Empresa', 'Projeto', 'Categoria'].includes(k));
     const periodos = [];
     state.mapaMeses = {};
 
@@ -318,8 +411,8 @@ function extractMetadata(data) {
     populateSelect('filterEmpresa', [...new Set(data.map(d => d.Empresa))].sort());
     populateSelect('filterProjeto', [...new Set(data.map(d => d.Projeto))].sort());
     
-    // Filtro de Categoria usa coluna "Conta DRE"
-    populateSelect('filterCategoria', [...new Set(data.map(d => d['Conta DRE']))].sort());
+    // Filtro de Categoria usa coluna "Categoria"
+    populateSelect('filterCategoria', [...new Set(data.map(d => d.Categoria))].sort());
 }
 
 function normalizeMes(mes) {
@@ -402,8 +495,8 @@ function updateCascadeFilters(changedFilter) {
                 break;
 
             case 'Categoria':
-                // USA CONTA DRE AQUI! ← CORREÇÃO
-                options = [...new Set(tempData.map(d => d['Conta DRE']))].sort();
+                
+                options = [...new Set(tempData.map(d => d.Categoria))].sort();
                 break;
         }
 
@@ -442,9 +535,9 @@ function applyFilters() {
         df = df.filter(row => f.projetos.includes(row.Projeto));
     }
 
-    // 3. Filter by Conta DRE (usando filtro "categorias")
+    // 3. Filter by Categoria (usando filtro "categorias")
     if (f.categorias && f.categorias.length > 0) {
-        df = df.filter(row => f.categorias.includes(row['Conta DRE']));
+        df = df.filter(row => f.categorias.includes(row.Categoria));
     }
 
     // 4. Filter Columns (Periods)
@@ -510,16 +603,16 @@ function calculateDRE() {
     const catTotals = {};
     const catMonthly = {};
 
-    // Usar 'Conta DRE' como chave principal
-    [...new Set(df.map(r => r['Conta DRE']))].forEach(cat => {
+    // Usar 'Categoria' como chave principal
+    [...new Set(df.map(r => r.Categoria))].forEach(cat => {
         catTotals[cat] = 0;
         catMonthly[cat] = {};
         cols.forEach(c => catMonthly[cat][c] = 0);
     });
 
-    // Sum usando 'Conta DRE'
+    // Sum usando 'Categoria'
     df.forEach(row => {
-        const cat = row['Conta DRE'];
+        const cat = row.Categoria;
         cols.forEach(col => {
             const val = parseFloat(row[col]?.toString().replace(',', '.') || 0);
             catTotals[cat] += val;
