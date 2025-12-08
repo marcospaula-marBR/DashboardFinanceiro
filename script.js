@@ -1655,7 +1655,9 @@ async function exportToPDF() {
 // ========================================
 // MODAL POR MÁQUINA
 // ========================================
-function openPorMaquinaModal() {
+
+
+   function openPorMaquinaModal() {
     const totalEquipamentos = state.metrics.total_equipamentos;
 
     if (!totalEquipamentos || totalEquipamentos === 0) {
@@ -1665,7 +1667,12 @@ function openPorMaquinaModal() {
 
     const m = state.metrics;
 
-    // Definir todos os cards com seus ícones (exceto Média Equipamentos)
+    // Calcular total geral e média
+    const totalGeral = totalEquipamentos;
+    const numMeses = state.validColumns.length || 1;
+    const media = totalGeral / numMeses;
+
+    // Definir todos os cards com seus ícones
     const cards = [
         { title: 'Receitas Operacionais', value: m.total_entradas, icon: 'bi-graph-up-arrow', color: 'primary' },
         { title: 'Total Saídas', value: m.total_saidas, icon: 'bi-graph-down-arrow', color: 'danger' },
@@ -1714,6 +1721,11 @@ function openPorMaquinaModal() {
 
     html += '</div>';
 
+    // Preencher os cards do topo
+    document.getElementById('porMaquinaTotal').textContent = Math.round(totalGeral).toLocaleString('pt-BR');
+    document.getElementById('porMaquinaMedia').textContent = Math.round(media).toLocaleString('pt-BR');
+    document.getElementById('porMaquinaQtd').textContent = Math.round(media).toLocaleString('pt-BR');
+
     // Inserir no modal
     document.getElementById('porMaquinaBody').innerHTML = html;
 
@@ -1722,8 +1734,11 @@ function openPorMaquinaModal() {
 
     // Prevenir scroll do body
     document.body.style.overflow = 'hidden';
+}
 
-
+    // ========================================
+    // FECHAR MODAL POR MÁQUINA (GLOBAL)
+    // ========================================
     function closePorMaquinaModal() {
         document.getElementById('porMaquinaModal').classList.remove('active');
         document.body.style.overflow = 'auto';
@@ -1735,4 +1750,4 @@ function openPorMaquinaModal() {
             closePorMaquinaModal();
         }
     });
-}
+    
