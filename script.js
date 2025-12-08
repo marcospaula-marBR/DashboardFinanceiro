@@ -22,6 +22,7 @@ const CONFIG = {
         { titulo: "Receitas Financeiras", tipo: "linha", categorias: ["Receitas Financeiras"] },
         { titulo: "Honorários", tipo: "linha", categorias: ["Honorários"] },
         { titulo: "Juros e Devoluções", tipo: "linha", categorias: ["Juros e devoluções"] },
+        { titulo: "Recuperação de Despesas Variáveis", tipo: "linha", categorias: ["Recuperação de Despesas Variáveis"] },
         { titulo: "Outras Entradas", tipo: "card", var: "outras_entradas" },
         { titulo: "", tipo: "divisor" },
         { titulo: "Impostos", tipo: "linha", categorias: ["Impostos"] },
@@ -683,7 +684,7 @@ function calculateDRE() {
     const receitaIndireta = getVal("Receitas Indiretas");
     const totalEntradas = receitaOperacional + receitaIndireta;
 
-    const outrasEntradas = getVal("Outras Receitas") + getVal("Receitas Financeiras") + getVal("Honorários") + getVal("Juros e Devoluções");
+    const outrasEntradas = getVal("Outras Receitas") + getVal("Receitas Financeiras") + getVal("Honorários") + getVal("Juros e Devoluções") + getVal("Recuperação de Despesas Variáveis");
 
     const totalImpostos = getVal("Impostos") + getVal("Provisão IRPJ e CSSL Trimestral");
 
