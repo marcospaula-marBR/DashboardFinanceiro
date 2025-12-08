@@ -299,7 +299,7 @@ function toTitleCase(str) {
 
 function extractMetadata(data) {
     // Extract all month/year columns
-    const colunasData = Object.keys(data[0]).filter(k => !['Empresa', 'Projeto', 'Categoria'].includes(k));
+    const colunasData = Object.keys(data[0]).filter(k => !['Empresa', 'Projeto', 'Conta DRE', 'Categoria'].includes(k));
     const periodos = [];
     state.mapaMeses = {};
 
@@ -314,21 +314,22 @@ function extractMetadata(data) {
         }
     });
 
-    // Sort periods chronologically (by year then month)
+    // Sort periods chronologically
     periodos.sort((a, b) => {
         const yearDiff = a.ano.localeCompare(b.ano);
         if (yearDiff !== 0) return yearDiff;
         return CONFIG.MESES_ORDEM.indexOf(a.mes) - CONFIG.MESES_ORDEM.indexOf(b.mes);
     });
 
-    // Format as "Jan/24", "Fev/24", etc.
     const periodosFormatados = periodos.map(p => `${p.mes}/${p.ano}`);
 
-    // Populate Filter Options - Initial Load
+    // Populate Filter Options
     populateSelect('filterPeriodo', periodosFormatados);
     populateSelect('filterEmpresa', [...new Set(data.map(d => d.Empresa))].sort());
     populateSelect('filterProjeto', [...new Set(data.map(d => d.Projeto))].sort());
-    populateSelect('filterCategoria', [...new Set(data.map(d => d.Categoria))].sort());
+    
+    // Filtro de Categoria usa coluna "Conta DRE"
+    populateSelect('filterCategoria', [...new Set(data.map(d => d['Conta DRE']))].sort());
 }
 
 function normalizeMes(mes) {
@@ -363,7 +364,7 @@ function updateCascadeFilters(changedFilter) {
                     validPeriodCols.push(col);
                 }
             });
-
+            
             tempData = tempData.map(row => ({
                 ...row,
                 _hasPeriodData: validPeriodCols.some(col => {
@@ -411,7 +412,8 @@ function updateCascadeFilters(changedFilter) {
                 break;
 
             case 'Categoria':
-                options = [...new Set(tempData.map(d => d.Categoria))].sort();
+                // USA CONTA DRE AQUI! ← CORREÇÃO
+                options = [...new Set(tempData.map(d => d['Conta DRE']))].sort();
                 break;
         }
 
@@ -450,15 +452,15 @@ function applyFilters() {
         df = df.filter(row => f.projetos.includes(row.Projeto));
     }
 
-    // 3. Filter by Categoria
+    // 3. Filter by Conta DRE (usando filtro "categorias")
     if (f.categorias && f.categorias.length > 0) {
-        df = df.filter(row => f.categorias.includes(row.Categoria));
+        df = df.filter(row => f.categorias.includes(row['Conta DRE']));
     }
 
     // 4. Filter Columns (Periods)
     const validColumns = getValidColumns(f.periodos);
 
-    // Calculate Totals for each row based on valid columns
+    // Calculate Totals
     df.forEach(row => {
         let total = 0;
         validColumns.forEach(col => {
@@ -514,26 +516,26 @@ function calculateDRE() {
             .reduce((sum, row) => sum + parseFloat(row[col]?.toString().replace(',', '.') || 0), 0);
     };
 
-    // Pre-calculate totals by category for efficiency
+    // Pre-calculate totals by category
     const catTotals = {};
     const catMonthly = {};
 
-    // Initialize
-    [...new Set(df.map(r => r.Categoria))].forEach(cat => {
+    // Usar 'Conta DRE' como chave principal
+    [...new Set(df.map(r => r['Conta DRE']))].forEach(cat => {
         catTotals[cat] = 0;
         catMonthly[cat] = {};
         cols.forEach(c => catMonthly[cat][c] = 0);
     });
 
-    // Sum
+    // Sum usando 'Conta DRE'
     df.forEach(row => {
-        const cat = row.Categoria;
+        const cat = row['Conta DRE'];
         cols.forEach(col => {
             const val = parseFloat(row[col]?.toString().replace(',', '.') || 0);
             catTotals[cat] += val;
             catMonthly[cat][col] += val;
         });
-    });
+});
     // DEBUG: Log unique categories and specific totals
     console.log("=== DEBUG: Categorias Encontradas ===");
     console.log("Todas as categorias:", Object.keys(catTotals).sort());
