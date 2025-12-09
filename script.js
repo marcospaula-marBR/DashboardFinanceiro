@@ -1,4 +1,4 @@
-// Update: 09/12/2025 09:45 - Fix Crash in Modal (getCatTotal) & Expand Result Modal
+// Update: 09/12/2025 09:52 - Fix CLTs and Pessoal Calculations
 
 // Configuration
 const CONFIG = {
@@ -764,11 +764,11 @@ function calculateDRE() {
 
     const terceirizacao = sumCategories(["Terceirização de Mão de Obra"]);
 
-    // Correção: CLTs é calculado como "Despesas com Pessoal" MENOS Credenciados
-    const clts = getCatTotal("Despesas com Pessoal") - credenciados;
+    // CLTs deve refletir exatamente "Despesas com Pessoal"
+    const clts = getCatTotal("Despesas com Pessoal");
 
-    // Pessoal Total = CLT + Terceiros + Credenciados
-    const pessoal = clts + terceirizacao + credenciados;
+    // Pessoal Total = CLTs + Credenciados + Terceirização
+    const pessoal = clts + credenciados + terceirizacao;
 
     const corretiva = sumCategories(["Corretiva - B2G", "Manutenção Corretiva"]);
     const preventiva = sumCategories(["Preventiva - B2G", "Manutenção Preventiva"]);
