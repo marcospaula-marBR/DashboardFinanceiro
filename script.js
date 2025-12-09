@@ -1,4 +1,4 @@
-// Update: 03/12/2025 14:29
+// Update: 09/12/2025 09:18 - Revert Dividendos Calc + Fix Investimentos
 
 // Configuration
 const CONFIG = {
@@ -670,11 +670,7 @@ function calculateDRE() {
                 total -= divTotal;
             }
 
-            // Correção Espacial: Custo dos Serviços Prestados deve deduzir Credenciado Operacional
-            if (item.titulo === "Custo dos Serviços Prestados") {
-                const credOpTotal = getCatTotal("Credenciado Operacional") + getCatTotal("Adiantamento - Credenciado Operacional");
-                total -= credOpTotal;
-            }
+
 
             valoresTotal[item.titulo] = total;
 
@@ -689,11 +685,7 @@ function calculateDRE() {
                     mesTotal -= divMes;
                 }
 
-                // Correção Espacial Mensal: Custo dos Serviços Prestados
-                if (item.titulo === "Custo dos Serviços Prestados") {
-                    const credOpMes = getCatMonthly("Credenciado Operacional", col) + getCatMonthly("Adiantamento - Credenciado Operacional", col);
-                    mesTotal -= credOpMes;
-                }
+
 
                 valoresMensal[item.titulo][col] = mesTotal;
             });
@@ -738,7 +730,8 @@ function calculateDRE() {
 
     const totalImpostos = getVal("Impostos") + getVal("Provisão IRPJ e CSSL Trimestral");
 
-    const totalCustos = getVal("Credenciado Operacional") + getVal("Terceirização de Mão de Obra") +
+    const totalCustos = (getCatTotal("Credenciado Operacional") + getCatTotal("Adiantamento - Credenciado Operacional")) +
+        getVal("Terceirização de Mão de Obra") +
         getVal("CLTs") + getVal("Custo dos Serviços Prestados") + getVal("Preventiva - B2G") +
         getVal("Corretiva - B2G") + getVal("Outros Custos");
 
@@ -748,16 +741,8 @@ function calculateDRE() {
         (getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos"));
 
     // Nova regra de cálculo de Investimentos
-    const servicosRaw = getVal("Serviços");
-    const consorciosRaw = getVal("Consórcios a contemplar");
-    const ativosRaw = getVal("Ativos");
-
-    let servicosAjustado = 0;
-    if (servicosRaw >= consorciosRaw) {
-        servicosAjustado = servicosRaw - consorciosRaw;
-    }
-
-    const totalInvestimentos = ativosRaw + consorciosRaw + servicosAjustado;
+    // Soma direta das categorias brutas para evitar lógica de dedução da tabela
+    const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getCatTotal("Serviços") + getCatTotal("Ativos");
 
     const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
 
@@ -913,8 +898,8 @@ function updateCards() {
         },
 
         { key: 'total_saidas', title: 'Total Saídas', icon: 'bi-graph-down-arrow', color: 'danger', bgColor: 'bg-red-soft', percentKey: 'perc_total_saidas', percentRefIcon: 'bi-graph-up-arrow' },
-        { key: 'resultado', title: 'Resultado', icon: 'bi-bullseye', color: 'highlight', bgColor: 'bg-yellow-soft', percentKey: 'perc_resultado', percentRefIcon: 'bi-graph-up-arrow' },
-        { key: 'fcl', title: 'FCL', icon: 'bi-wallet2', color: 'success', bgColor: 'bg-green-soft', percentKey: 'perc_fcl_receita', percentRefIcon: 'bi-graph-up-arrow' }
+        { key: 'resultado', title: 'Resultado', icon: 'bi-bullseye', color: 'highlight', bgColor: 'bg-yellow-soft', percentKey: 'perc_resultado', percentRefIcon: 'bi-graph-up-arrow', isClickable: true },
+        { key: 'fcl', title: 'Fluxo de Caixa Livre - FCL', icon: 'bi-wallet2', color: 'success', bgColor: 'bg-green-soft', percentKey: 'perc_fcl_receita', percentRefIcon: 'bi-graph-up-arrow', isClickable: true }
     ];
 
     renderCards('kpiRow1', row1, m, 3);
@@ -1380,7 +1365,7 @@ function showCardDetails(key, title) {
         'outras_entradas': ['Outras Receitas', 'Receitas Financeiras', 'Honorários', 'Juros e devoluções'],
         'total_impostos': ['Impostos', 'Provisão - IRPJ e CSSL Trimestral'],
         'total_custos': ['Credenciado Operacional', 'Adiantamento - Credenciado Operacional', 'Terceirização de Mão de Obra', 'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva', 'Corretiva - B2G', 'Manutenção Corretiva', 'Outros Custos'],
-        'total_despesas': ['Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo', 'Credenciado TI', 'Adiantamento - Credenciado TI', 'Despesas Administrativas', 'Despesas de Vendas e Marketing', 'Despesas Financeiras', 'Outros Tributos', 'Jurídico', 'Despesas Variáveis', 'Intermediação de Negócios', 'Distribuição de Dividendos', 'Dividendos'],
+        'total_despesas': ['Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo', 'Credenciado TI', 'Adiantamento - Credenciado TI', 'Despesas Administrativas', 'Despesas de Vendas e Marketing', 'Despesas Financeiras', 'Outros Tributos', 'Jurídico', 'Despesas Variáveis', 'Intermediação de Negócios'],
         'total_investimentos': ['Consórcios - a contemplar', 'Serviços', 'Ativos'],
         'mutuo_entradas': ['Mútuo - Entradas'],
         'mutuo_saidas': ['Mútuo - Saídas'],
@@ -1422,10 +1407,22 @@ function showCardDetails(key, title) {
             { category: 'Impostos', value: m.total_impostos },
             { category: 'Investimentos', value: m.total_investimentos }
         ].sort((a, b) => b.value - a.value);
-    } else if (key === 'resultado' || key === 'fcl') {
-        // For high level aggregates, maybe show the major groups?
-        // For now, let's just show a message for these complex ones or try to break it down by major groups
-        contributingCategories = []; // Keep empty to show "Details unavailable" or handle differently
+    } else if (key === 'resultado') {
+        // Detalhamento do Resultado
+        const m = state.metrics;
+        contributingCategories = [
+            { category: '(+) Total Entradas', value: m.total_entradas },
+            { category: '(+) Outras Entradas', value: m.outras_entradas },
+            { category: '(+) Ativos (Ajuste)', value: getCatTotal("Ativos") },
+            { category: '(-) Total Saídas', value: -Math.abs(m.total_saidas) }
+        ];
+    } else if (key === 'fcl') {
+        // Detalhamento do FCL
+        const m = state.metrics;
+        contributingCategories = [
+            { category: 'Resultado', value: m.resultado },
+            { category: '(-) Ded. Ativos', value: -getCatTotal("Ativos") }
+        ];
     }
 
     const tbody = document.querySelector('#modalTable tbody');
@@ -1433,11 +1430,21 @@ function showCardDetails(key, title) {
 
     if (contributingCategories.length > 0) {
         contributingCategories.forEach(item => {
-            const percent = total !== 0 ? (item.value / total * 100).toFixed(1) + '%' : '0%';
+            // Percentual pode não fazer sentido matematicamente para somas/subtrações mistas, 
+            // mas mantemos a lógica de % em relação ao total do card para referência.
+            // Para valores negativos, o percentual mostrará o impacto negativo.
+
+            // let percent = total !== 0 ? (item.value / total * 100).toFixed(1) + '%' : '-';
+            // Ajuste: Para Resultado e FCL, o % direto pode ser confuso. Vamos mostrar '-' se for muito complexo ou manter.
+            // Vamos manter simples:
+            const percent = total !== 0 ? (Math.abs(item.value) / Math.abs(total) * 100).toFixed(1) + '%' : '-';
+
+            const colorClass = item.value < 0 ? 'text-danger' : 'text-success';
+
             const row = `
                 <tr>
                     <td>${item.category}</td>
-                    <td class="text-end">${formatCurrency(item.value)}</td>
+                    <td class="text-end ${colorClass}">${formatCurrency(item.value)}</td>
                     <td class="text-end">${percent}</td>
                 </tr>
             `;
