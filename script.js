@@ -1,4 +1,4 @@
-// Update: 09/12/2025 09:18 - Revert Dividendos Calc + Fix Investimentos
+// Update: 09/12/2025 09:25 - Fix CLTs Calculation
 
 // Configuration
 const CONFIG = {
