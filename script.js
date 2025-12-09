@@ -1,4 +1,4 @@
-// Update: 09/12/2025 09:25 - Fix CLTs Calculation
+// Update: 09/12/2025 09:45 - Fix Crash in Modal (getCatTotal) & Expand Result Modal
 
 // Configuration
 const CONFIG = {
@@ -764,8 +764,8 @@ function calculateDRE() {
 
     const terceirizacao = sumCategories(["Terceirização de Mão de Obra"]);
 
-    // Correção: CLTs deve repetir o valor de "Despesas com Pessoal"
-    const clts = getCatTotal("Despesas com Pessoal");
+    // Correção: CLTs é calculado como "Despesas com Pessoal" MENOS Credenciados
+    const clts = getCatTotal("Despesas com Pessoal") - credenciados;
 
     // Pessoal Total = CLT + Terceiros + Credenciados
     const pessoal = clts + terceirizacao + credenciados;
@@ -1353,6 +1353,18 @@ function showCardDetails(key, title) {
     document.getElementById('modalTotalValue').textContent = formatCurrency(total);
     document.getElementById('modalAvgValue').textContent = formatCurrency(total / (state.validColumns.length || 1));
 
+    // Helper para somar categoria específica nos dados filtrados (Case Insensitive Safe)
+    const getCatSum = (catName) => {
+        const target = catName.trim().toLowerCase();
+        let s = 0;
+        state.filteredData.forEach(row => {
+            if (row.Categoria && row.Categoria.trim().toLowerCase() === target) {
+                state.validColumns.forEach(col => s += parseFloat(row[col]?.toString().replace(',', '.') || 0));
+            }
+        });
+        return s;
+    };
+
     // Logic to find contributing categories
     let contributingCategories = [];
 
@@ -1411,17 +1423,20 @@ function showCardDetails(key, title) {
         // Detalhamento do Resultado
         const m = state.metrics;
         contributingCategories = [
-            { category: '(+) Total Entradas', value: m.total_entradas },
+            { category: '(+) Total Entradas Ops.', value: m.total_entradas },
             { category: '(+) Outras Entradas', value: m.outras_entradas },
-            { category: '(+) Ativos (Ajuste)', value: getCatTotal("Ativos") },
-            { category: '(-) Total Saídas', value: -Math.abs(m.total_saidas) }
+            { category: '(+) Ativos (Ajuste)', value: getCatSum("Ativos") },
+            { category: '(-) Impostos', value: -m.total_impostos },
+            { category: '(-) Custos Operacionais', value: -m.total_custos },
+            { category: '(-) Despesas Rateadas', value: -m.total_despesas },
+            { category: '(-) Investimentos', value: -m.total_investimentos }
         ];
     } else if (key === 'fcl') {
         // Detalhamento do FCL
         const m = state.metrics;
         contributingCategories = [
             { category: 'Resultado', value: m.resultado },
-            { category: '(-) Ded. Ativos', value: -getCatTotal("Ativos") }
+            { category: '(-) Ded. Ativos', value: -getCatSum("Ativos") }
         ];
     }
 
