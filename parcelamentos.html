@@ -118,6 +118,10 @@
                     <i class="bi bi-shield-check me-1"></i>
                     <span class="d-none d-md-inline">Seguros</span>
                 </a>
+                <button class="btn btn-success" id="btnExportPDF" onclick="exportToPDF()">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>
+                    <span class="d-none d-md-inline">Exportar PDF</span>
+                </button>
                 <button class="btn btn-primary d-md-none" id="toggleSidebar">
                     <i class="bi bi-list"></i>
                 </button>
@@ -254,7 +258,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- Optional if needed later -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <script src="parcelamentos.js"></script>
     <script>
@@ -265,7 +269,7 @@
             document.getElementById('appVersion').textContent = formatted;
         });
     </script>
-    
+
     <!-- BrisinhAI Scripts -->
     <script src="ai.service.v2.js"></script>
     <script src="brisinhai.js?v=9"></script>

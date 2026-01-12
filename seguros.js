@@ -544,3 +544,204 @@ function showKPIChart(type) {
 
     modal.show();
 }
+
+// ========================================
+// PDF EXPORT FUNCTION (Global)
+// ========================================
+
+async function exportToPDF() {
+    try {
+        const btn = document.getElementById('btnExportPDF');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
+        btn.disabled = true;
+
+        document.getElementById('loadingOverlay').classList.remove('d-none');
+
+        // --- Configuration ---
+        const PAGE_WIDTH = 800; // px
+        const PAGE_HEIGHT = 1130; // px
+        const PAGE_PADDING = 40; // px
+
+        function parseMarkdown(text) {
+            if (!text) return '';
+            let md = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>');
+            return md.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .map(line => `<p style="margin: 0 0 10px 0; line-height: 1.5; text-align: justify;">${line}</p>`)
+                .join('');
+        }
+
+        // --- AI Analysis ---
+        let aiAnalysisText = "";
+        if (window.getBrisinhAIAnalysis) {
+            aiAnalysisText = await window.getBrisinhAIAnalysis();
+        }
+
+        // --- Page Builder ---
+        const mainContainer = document.createElement('div');
+        Object.assign(mainContainer.style, {
+            position: 'absolute', top: '0', left: '-9999px', width: (PAGE_WIDTH + 40) + 'px'
+        });
+        document.body.appendChild(mainContainer);
+
+        let pages = [];
+        let currentPage = createPage();
+        pages.push(currentPage);
+        mainContainer.appendChild(currentPage);
+
+        function createPage() {
+            const div = document.createElement('div');
+            Object.assign(div.style, {
+                width: PAGE_WIDTH + 'px', height: PAGE_HEIGHT + 'px', backgroundColor: 'white',
+                padding: PAGE_PADDING + 'px', boxSizing: 'border-box', position: 'relative',
+                fontFamily: "'Outfit', sans-serif", color: '#262223', overflow: 'hidden',
+                display: 'flex', flexDirection: 'column'
+            });
+            return div;
+        }
+
+        function addToPage(element) {
+            currentPage.appendChild(element);
+            const totalHeight = Array.from(currentPage.children).reduce((acc, el) => acc + el.offsetHeight + (parseInt(getComputedStyle(el).marginBottom) || 0), 0);
+            if (totalHeight > (PAGE_HEIGHT - (PAGE_PADDING * 2))) {
+                currentPage.removeChild(element);
+                currentPage = createPage();
+                pages.push(currentPage);
+                mainContainer.appendChild(currentPage);
+                currentPage.appendChild(element);
+            }
+        }
+
+        // --- Header ---
+        const headerDiv = document.createElement('div');
+        headerDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #F2911B; padding-bottom: 20px; margin-bottom: 30px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div id="report-logo-ph"></div>
+                    <div>
+                        <h1 style="font-size: 24px; font-weight: 700; margin: 0;">Relatório de Seguros</h1>
+                        <p style="margin: 5px 0 0; color: #6c757d; font-size: 14px;">Mar Brasil</p>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <p style="font-weight: 600; margin:0;">Geral</p>
+                    <p style="font-size: 12px; color: #6c757d; margin:5px 0 0;">${new Date().toLocaleString('pt-BR')}</p>
+                </div>
+            </div>`;
+
+        try {
+            const logo = document.querySelector('.sidebar-header img') || document.querySelector('header img');
+            if (logo) {
+                const c = document.createElement('canvas');
+                c.width = logo.naturalWidth; c.height = logo.naturalHeight;
+                c.getContext('2d').drawImage(logo, 0, 0);
+                const i = document.createElement('img');
+                i.src = c.toDataURL();
+                i.style.maxHeight = '40px';
+                headerDiv.querySelector('#report-logo-ph').appendChild(i);
+            }
+        } catch (e) { }
+        addToPage(headerDiv);
+
+        // --- AI ---
+        const aiHeader = document.createElement('div');
+        aiHeader.innerHTML = `<h3 style="font-size: 16px; margin-bottom: 15px; border-left: 5px solid #F2911B; padding-left: 10px; background:#f8f9fa; padding:10px;">🤖 Análise de Seguros (BrisinhAI)</h3>`;
+        addToPage(aiHeader);
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = parseMarkdown(aiAnalysisText || "Análise indisponível.");
+        Array.from(tempDiv.children).forEach(p => {
+            p.style.fontSize = "12px"; p.style.lineHeight = "1.5"; p.style.marginBottom = "8px";
+            const pWrapper = document.createElement('div');
+            pWrapper.appendChild(p.cloneNode(true));
+            addToPage(pWrapper);
+        });
+        const spacer = document.createElement('div');
+        spacer.innerHTML = "&nbsp;";
+        addToPage(spacer);
+
+        // --- KPIs ---
+        const kpiSource = document.getElementById('kpiRow');
+        if (kpiSource) {
+            const kpiClone = kpiSource.cloneNode(true);
+            kpiClone.style.zoom = "0.8";
+            kpiClone.style.marginBottom = "30px";
+            kpiClone.style.display = 'grid';
+            kpiClone.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            kpiClone.style.gap = '10px';
+
+            Array.from(kpiClone.querySelectorAll('.col-md-4')).forEach(col => {
+                col.classList.remove('col-md-4');
+                col.style.width = 'auto';
+            });
+
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = `<h6 style="font-size:14px; font-weight:bold; margin-bottom:10px;">Destaques</h6>`;
+            wrapper.appendChild(kpiClone);
+            addToPage(wrapper);
+        }
+
+        // --- List of Policies ---
+        const listHeader = document.createElement('h3');
+        listHeader.innerHTML = 'Lista de Seguros';
+        listHeader.style.fontSize = '16px'; listHeader.style.borderBottom = '1px solid #dee2e6'; listHeader.style.marginBottom = '15px';
+        addToPage(listHeader);
+
+        const table = document.createElement('table');
+        Object.assign(table.style, { width: '100%', fontSize: '10px', borderCollapse: 'collapse', marginBottom: '20px' });
+        table.innerHTML = `<thead><tr style="background:#f8f9fa;"><th style="padding:5px; text-align:left;">Contratante/Item</th><th style="padding:5px; text-align:left;">Tipo</th><th style="padding:5px; text-align:left;">Seguradora</th><th style="padding:5px; text-align:left;">Vigência</th><th style="padding:5px; text-align:right;">Valor</th></tr></thead><tbody></tbody>`;
+
+        const tbody = table.querySelector('tbody');
+        const fmt = (v) => v ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
+
+        if (state.filteredData && state.filteredData.length > 0) {
+            state.filteredData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid #eee';
+                tr.innerHTML = `
+                    <td style="padding:5px;"><strong>${item.contratante}</strong><br><span style="color:#777">${item.item || ''}</span></td>
+                    <td style="padding:5px;">${item.tipo || ''}</td>
+                    <td style="padding:5px;">${item.seguradora || ''}</td>
+                    <td style="padding:5px;">${item.vigenciaFinal ? item.vigenciaFinal.toLocaleDateString('pt-BR') : '-'}</td>
+                    <td style="padding:5px; text-align:right;">${fmt(item.premioTotal)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="padding:10px; text-align:center;">Nenhum seguro encontrado.</td></tr>';
+        }
+        addToPage(table);
+
+        // --- Render PDF ---
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const PDF_W = 210; const PDF_H = 297;
+
+        for (let i = 0; i < pages.length; i++) {
+            if (i > 0) doc.addPage();
+            await new Promise(r => setTimeout(r, 100));
+            const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true, logging: false });
+            doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, PDF_W, PDF_H);
+        }
+
+        doc.save(`Seguros_MarBrasil_${new Date().toISOString().slice(0, 10)}.pdf`);
+
+        document.body.removeChild(mainContainer);
+        document.getElementById('loadingOverlay').classList.add('d-none');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+
+    } catch (e) {
+        console.error(e);
+        alert("Erro no PDF: " + e.message);
+        document.getElementById('loadingOverlay').classList.add('d-none');
+        document.getElementById('btnExportPDF').disabled = false;
+        document.getElementById('btnExportPDF').innerHTML = 'Exportar PDF';
+    }
+}
+
+// Expose globally
+window.exportToPDF = exportToPDF;

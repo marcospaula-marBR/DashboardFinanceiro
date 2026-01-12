@@ -2274,11 +2274,18 @@ function downloadCSV(csv, filename) {
 /**
  * Simple Markdown Parser
  */
+// Improved Markdown Parser
 function parseMarkdown(text) {
     if (!text) return '';
-    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/\n/g, '<br>');
+    let md = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Split by newlines and wrap in paragraphs for block layout control
+    return md.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => `<p style="margin: 0 0 10px 0; line-height: 1.5; text-align: justify;">${line}</p>`)
+        .join('');
 }
 
 // 1. Open Modal
@@ -2309,153 +2316,260 @@ async function generatePDFWithOptions(options) {
 
         document.getElementById('loadingOverlay').classList.remove('d-none');
 
+        // --- 1. CONFIGURATION ---
+        const PAGE_WIDTH = 800; // px (Simplified width for A4 ratio mapping)
+        const PAGE_HEIGHT = 1130; // px (approx A4 ratio 1.414)
+        const CONTENT_MAX_HEIGHT = 1000; // px (Leave space for padding/margins)
+        const PAGE_PADDING = 40; // px
+
+        // --- 2. GATHER CONTENT ---
         // AI Analysis
         let aiAnalysisText = "";
         if (options.includeAI && window.getBrisinhAIAnalysis) {
             aiAnalysisText = await window.getBrisinhAIAnalysis();
         }
 
-        // Create Report Container
-        const reportContainer = document.createElement('div');
-        reportContainer.id = 'pdf-report-container';
-        Object.assign(reportContainer.style, {
-            position: 'absolute', top: '-9999px', left: '0', width: '1200px',
-            backgroundColor: 'white', padding: '40px', fontFamily: "'Outfit', sans-serif", color: '#262223'
-        });
-
+        // Helper: Format Currency
         const fmt = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-        // HTML Builder
-        let html = `
+        // --- 3. PAGE BUILDER SYSTEM ---
+        const mainContainer = document.createElement('div');
+        Object.assign(mainContainer.style, {
+            position: 'absolute', top: '0', left: '-9999px', width: (PAGE_WIDTH + 40) + 'px' // Extra for borders
+        });
+        document.body.appendChild(mainContainer);
+
+        let pages = [];
+        let currentPage = createPage();
+        pages.push(currentPage);
+        mainContainer.appendChild(currentPage);
+
+        function createPage() {
+            const div = document.createElement('div');
+            Object.assign(div.style, {
+                width: PAGE_WIDTH + 'px',
+                height: PAGE_HEIGHT + 'px',
+                backgroundColor: 'white',
+                padding: PAGE_PADDING + 'px',
+                boxSizing: 'border-box',
+                position: 'relative',
+                fontFamily: "'Outfit', sans-serif",
+                color: '#262223',
+                overflow: 'hidden', // Hide overflow visually
+                display: 'flex',
+                flexDirection: 'column'
+            });
+            return div;
+        }
+
+        function addToPage(element) {
+            currentPage.appendChild(element);
+            // Check overflow
+            // We use scrollHeight of the content wrapper vs max height
+            // BUT since flexible layout, simple height check:
+            const totalHeight = Array.from(currentPage.children).reduce((acc, el) => acc + el.offsetHeight + (parseInt(el.style.marginBottom) || 0), 0);
+
+            // Adjust for padding
+            if (totalHeight > (PAGE_HEIGHT - (PAGE_PADDING * 2))) {
+                currentPage.removeChild(element);
+                currentPage = createPage();
+                pages.push(currentPage);
+                mainContainer.appendChild(currentPage);
+                // Optionally re-add minimal header/footer?
+                // For now, just continue flow
+                currentPage.appendChild(element);
+            }
+        }
+
+        // --- 4. BUILD HEADER ---
+        // We add header to the first page directly
+        const headerDiv = document.createElement('div');
+        headerDiv.innerHTML = `
             <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #F2911B; padding-bottom: 20px; margin-bottom: 30px;">
                 <div style="display: flex; align-items: center; gap: 15px;">
-                    <div id="report-logo-placeholder"></div>
+                    <div id="report-logo-ph"></div>
                     <div>
-                        <h1 style="font-size: 28px; font-weight: 700; margin: 0;">Relatório Financeiro</h1>
+                        <h1 style="font-size: 24px; font-weight: 700; margin: 0;">Relatório Financeiro</h1>
                         <p style="margin: 5px 0 0; color: #6c757d; font-size: 14px;">Mar Brasil</p>
                     </div>
                 </div>
-                
-                    <p style="font-weight: 600;">Ref: ${state.filters.periodos.join(', ') || 'Geral'}</p>
-                    <p style="font-size: 12px; color: #6c757d;">${new Date().toLocaleString('pt-BR')}</p>
+                <div style="text-align: right;">
+                    <p style="font-weight: 600; margin:0;">Ref: ${state.filters.periodos.join(', ') || 'Geral'}</p>
+                    <p style="font-size: 12px; color: #6c757d; margin:5px 0 0;">${new Date().toLocaleString('pt-BR')}</p>
                 </div>
             </div>`;
 
+        // Handle Logo
+        try {
+            const logo = document.querySelector('header img');
+            if (logo) {
+                const c = document.createElement('canvas');
+                c.width = logo.naturalWidth; c.height = logo.naturalHeight;
+                c.getContext('2d').drawImage(logo, 0, 0);
+                const i = document.createElement('img');
+                i.src = c.toDataURL();
+                i.style.maxHeight = '40px';
+                headerDiv.querySelector('#report-logo-ph').appendChild(i);
+            }
+        } catch (e) { console.warn('Logo error', e); }
+
+        addToPage(headerDiv);
+
+        // --- 5. BUILD CONTENT BLOCKS ---
+
+        // A. AI ANALYSIS
         if (options.includeAI) {
-            html += `
-            <div style="background: #f8f9fa; border-left: 5px solid #F2911B; padding: 20px; margin-bottom: 30px;">
-                <h3 style="font-size: 18px; margin-bottom: 15px;">🤖 Análise BrisinhAI</h3>
-                <div style="font-size: 14px; line-height: 1.6;">${parseMarkdown(aiAnalysisText || "Análise indisponível.")}</div>
-            </div>`;
+            const aiContainer = document.createElement('div');
+            aiContainer.innerHTML = `
+                <div style="background: #f8f9fa; border-left: 5px solid #F2911B; padding: 20px; margin-bottom: 30px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px;">🤖 Análise BrisinhAI</h3>
+                    <div id="ai-content-body" style="font-size: 12px; line-height: 1.6;">${parseMarkdown(aiAnalysisText || "Análise indisponível.")}</div>
+                </div>
+            `;
+            // The AI container itself might be huge. If so, we should split it.
+            // Simplified approach: Add the whole AI block if it fits. If not, split paragraphs.
+            // Let's split paragraphs to be safe because AI text can be long.
+
+            const aiHeader = document.createElement('div');
+            aiHeader.innerHTML = `<h3 style="font-size: 16px; margin-bottom: 15px; border-left: 5px solid #F2911B; padding-left: 10px; background:#f8f9fa; padding:10px;">🤖 Análise BrisinhAI</h3>`;
+            addToPage(aiHeader);
+
+            const paragraphsInfo = parseMarkdown(aiAnalysisText || "Análise indisponível.");
+            // parseMarkdown returns string with <p>. construct a temp div to nodes.
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = paragraphsInfo;
+
+            Array.from(tempDiv.children).forEach(p => {
+                // Style fix
+                p.style.fontSize = "12px";
+                p.style.lineHeight = "1.5";
+                p.style.marginBottom = "8px";
+                p.style.background = "#fff"; // ensure bg
+                // Wrap in a lightweight container just for margin safety
+                const pWrapper = document.createElement('div');
+                pWrapper.appendChild(p.cloneNode(true));
+                addToPage(pWrapper);
+            });
+
+            // Spacer
+            const spacer = document.createElement('div'); spacer.style.height = '20px';
+            addToPage(spacer);
         }
 
+        // B. KPI CARDS
         if (options.includeKPI) {
-            html += `
-            <h3 style="font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid #dee2e6;">Indicadores</h3>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px;">
-                <div style="background: #fff; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px;">
-                     <p style="font-size: 12px; text-transform: uppercase;">Entradas</p>
-                     <p style="font-size: 20px; font-weight: 700; color: #2ecc71;">${fmt(state.metrics.total_entradas || 0)}</p>
-                </div>
-                <div style="background: #fff; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px;">
-                     <p style="font-size: 12px; text-transform: uppercase;">Saídas</p>
-                     <p style="font-size: 20px; font-weight: 700; color: #e74c3c;">${fmt(state.metrics.total_saidas || 0)}</p>
-                </div>
-                <div style="background: #fff; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px;">
-                     <p style="font-size: 12px; text-transform: uppercase;">Resultado</p>
-                     <p style="font-size: 20px; font-weight: 700; color: #F2911B;">${fmt(state.metrics.resultado || 0)}</p>
-                </div>
-                <div style="background: #fff; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px;">
-                     <p style="font-size: 12px; text-transform: uppercase;">Margem</p>
-                     <p style="font-size: 20px; font-weight: 700; color: #3498db;">${(state.metrics.perc_lucro || 0).toFixed(1)}%</p>
-                </div>
+            const kpiDiv = document.createElement('div');
+            kpiDiv.style.zoom = "0.9"; // Scale down slightly to fit width
+            kpiDiv.innerHTML = `
+            <div style="margin-bottom: 30px;">
+                 <h3 style="font-size: 16px; margin-bottom: 10px; border-bottom: 1px solid #dee2e6;">Indicadores</h3>
+                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                    <div style="border: 1px solid #e9ecef; padding: 10px; border-radius: 6px;">
+                         <p style="font-size: 10px; text-transform: uppercase; margin:0;">Entradas</p>
+                         <p style="font-size: 16px; font-weight: 700; color: #2ecc71; margin:0;">${fmt(state.metrics.total_entradas || 0)}</p>
+                    </div>
+                    <div style="border: 1px solid #e9ecef; padding: 10px; border-radius: 6px;">
+                         <p style="font-size: 10px; text-transform: uppercase; margin:0;">Saídas</p>
+                         <p style="font-size: 16px; font-weight: 700; color: #e74c3c; margin:0;">${fmt(state.metrics.total_saidas || 0)}</p>
+                    </div>
+                    <div style="border: 1px solid #e9ecef; padding: 10px; border-radius: 6px;">
+                         <p style="font-size: 10px; text-transform: uppercase; margin:0;">Resultado</p>
+                         <p style="font-size: 16px; font-weight: 700; color: #F2911B; margin:0;">${fmt(state.metrics.resultado || 0)}</p>
+                    </div>
+                    <div style="border: 1px solid #e9ecef; padding: 10px; border-radius: 6px;">
+                         <p style="font-size: 10px; text-transform: uppercase; margin:0;">Margem</p>
+                         <p style="font-size: 16px; font-weight: 700; color: #3498db; margin:0;">${(state.metrics.perc_lucro || 0).toFixed(1)}%</p>
+                    </div>
+                 </div>
             </div>`;
+            addToPage(kpiDiv);
         }
 
+        // C. CHARTS
         if (options.includeChartEvol || options.includeChartComp) {
-            html += `<div style="display: grid; grid-template-columns: ${options.includeChartEvol && options.includeChartComp ? '2fr 1fr' : '1fr'}; gap: 20px; margin-bottom: 30px;">`;
-            if (options.includeChartEvol) html += `<div style="border: 1px solid #e9ecef; padding: 20px; border-radius: 8px;"><div id="report-main-chart-container" style="height: 300px;"></div></div>`;
-            if (options.includeChartComp) html += `<div style="border: 1px solid #e9ecef; padding: 20px; border-radius: 8px;"><div id="report-pie-chart-container" style="height: 300px;"></div></div>`;
-            html += `</div>`;
+            // We'll create one block for charts. If it doesn't fit, it moves to next page.
+            const chartContainer = document.createElement('div');
+            chartContainer.style.display = 'grid';
+            chartContainer.style.gridTemplateColumns = (options.includeChartEvol && options.includeChartComp) ? '2fr 1fr' : '1fr';
+            chartContainer.style.gap = '20px';
+            chartContainer.style.marginBottom = '30px';
+            chartContainer.style.height = '300px'; // Fixed height constraint
+
+            let hasContent = false;
+            if (options.includeChartEvol) {
+                const wrap = document.createElement('div');
+                wrap.style.border = '1px solid #e9ecef'; wrap.style.padding = '10px'; wrap.style.borderRadius = '8px';
+                const mc = document.getElementById('mainChart');
+                if (mc) {
+                    const c = document.createElement('canvas');
+                    c.width = mc.width; c.height = mc.height; c.style.width = '100%'; c.style.height = '100%';
+                    c.getContext('2d').drawImage(mc, 0, 0);
+                    wrap.appendChild(c);
+                    chartContainer.appendChild(wrap);
+                    hasContent = true;
+                }
+            }
+            if (options.includeChartComp) {
+                const wrap = document.createElement('div');
+                wrap.style.border = '1px solid #e9ecef'; wrap.style.padding = '10px'; wrap.style.borderRadius = '8px';
+                const pc = document.getElementById('pieChart');
+                if (pc) {
+                    const c = document.createElement('canvas');
+                    c.width = pc.width; c.height = pc.height; c.style.width = '100%'; c.style.height = '100%'; c.style.objectFit = 'contain';
+                    c.getContext('2d').drawImage(pc, 0, 0);
+                    wrap.appendChild(c);
+                    chartContainer.appendChild(wrap);
+                    hasContent = true;
+                }
+            }
+
+            if (hasContent) addToPage(chartContainer);
         }
 
+        // D. DETAILS
         if (options.includeDetails) {
-            html += `
-            <div style="page-break-before: always;"></div>
-            <h3 style="font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid #dee2e6;">Detalhes</h3>
-            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+            const detailsHeader = document.createElement('h3');
+            detailsHeader.innerHTML = 'Detalhes';
+            detailsHeader.style.fontSize = '16px';
+            detailsHeader.style.borderBottom = '1px solid #dee2e6';
+            addToPage(detailsHeader);
+
+            const table = document.createElement('table');
+            Object.assign(table.style, { width: '100%', fontSize: '12px', borderCollapse: 'collapse', marginBottom: '20px' });
+            table.innerHTML = `
                 <tr style="background: #f8f9fa;"><th style="padding: 8px; text-align: left;">Item</th><th style="padding: 8px; text-align: right;">Valor</th></tr>
                 <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Custos</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(state.metrics.total_custos || 0)}</td></tr>
                 <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Despesas</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(state.metrics.total_despesas || 0)}</td></tr>
-                 <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Pessoal</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(state.metrics.pessoal || 0)}</td></tr>
-            </table>`;
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Pessoal</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(state.metrics.pessoal || 0)}</td></tr>
+            `;
+            // Simple table fits easily.
+            addToPage(table);
         }
 
-        reportContainer.innerHTML = html;
-        document.body.appendChild(reportContainer);
-
-        const logo = document.querySelector('header img');
-        if (logo) {
-            try {
-                const c = document.createElement('canvas');
-                c.width = logo.naturalWidth || 100; c.height = logo.naturalHeight || 50;
-                c.getContext('2d').drawImage(logo, 0, 0);
-                const i = document.createElement('img');
-                i.src = c.toDataURL('image/png');
-                i.style.maxHeight = '50px';
-                document.getElementById('report-logo-placeholder').appendChild(i);
-            } catch (e) {
-                console.warn("Logo skipped due to taint:", e);
-                const s = document.createElement('span'); s.innerText = "Mar Brasil"; s.style.color = "#888"; s.style.fontWeight = "bold";
-                document.getElementById('report-logo-placeholder').appendChild(s);
-            }
-        }
-
-        if (options.includeChartEvol) {
-            const mc = document.getElementById('mainChart');
-            if (mc) {
-                const c = document.createElement('canvas');
-                c.width = mc.width; c.height = mc.height; c.style.width = '100%'; c.style.height = '100%';
-                c.getContext('2d').drawImage(mc, 0, 0);
-                document.getElementById('report-main-chart-container')?.appendChild(c);
-            }
-        }
-        if (options.includeChartComp) {
-            const pc = document.getElementById('pieChart');
-            if (pc) {
-                const c = document.createElement('canvas');
-                c.width = pc.width; c.height = pc.height; c.style.width = '100%'; c.style.height = '100%'; c.style.objectFit = 'contain';
-                c.getContext('2d').drawImage(pc, 0, 0);
-                document.getElementById('report-pie-chart-container')?.appendChild(c);
-            }
-        }
-
+        // --- 6. RENDER PDF ---
         const { jsPDF } = window.jspdf;
-        await new Promise(r => setTimeout(r, 500));
-        const canvas = await html2canvas(reportContainer, { scale: 2, useCORS: true, logging: false });
-        const imgData = canvas.toDataURL('image/png');
-        const doc = new jsPDF('l', 'mm', 'a4');
-        const pdfWidth = 297;
-        const pageHeight = 210;
-        const props = doc.getImageProperties(imgData);
-        const imgHeight = (props.height * pdfWidth) / props.width;
+        const doc = new jsPDF('p', 'mm', 'a4'); // Portrait
+        const PDF_W = 210;
+        const PDF_H = 297;
 
-        let heightLeft = imgHeight;
-        let position = 0;
+        // Render each page
+        for (let i = 0; i < pages.length; i++) {
+            if (i > 0) doc.addPage();
 
-        doc.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pageHeight;
+            // Wait for render
+            await new Promise(r => setTimeout(r, 100)); // buffer
 
-        while (heightLeft > 0) {
-            position -= pageHeight;
-            doc.addPage();
-            doc.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pageHeight;
+            const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true, logging: false });
+            const imgData = canvas.toDataURL('image/png');
+
+            // Fit to A4
+            doc.addImage(imgData, 'PNG', 0, 0, PDF_W, PDF_H);
         }
 
         doc.save(`Relatorio_MarBrasil_${new Date().toISOString().slice(0, 10)}.pdf`);
 
-        document.body.removeChild(reportContainer);
+        // Cleanup
+        document.body.removeChild(mainContainer);
         document.getElementById('loadingOverlay').classList.add('d-none');
         btn.innerHTML = originalText;
         btn.disabled = false;
@@ -2465,8 +2579,9 @@ async function generatePDFWithOptions(options) {
         alert("Erro no PDF: " + e.message);
         document.getElementById('loadingOverlay').classList.add('d-none');
         if (document.getElementById('btnExportPDF')) {
-            document.getElementById('btnExportPDF').innerHTML = originalText || 'Exportar PDF';
-            document.getElementById('btnExportPDF').disabled = false;
+            const btn = document.getElementById('btnExportPDF');
+            btn.innerHTML = 'Exportar PDF'; // Reset text blindly
+            btn.disabled = false;
         }
     }
 }

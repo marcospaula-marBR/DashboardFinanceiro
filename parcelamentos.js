@@ -631,3 +631,212 @@ function populateSelect(id, options) {
         opt.value = o; opt.text = o; s.appendChild(opt);
     });
 }
+
+// ========================================
+// PDF EXPORT FUNCTION (Global)
+// ========================================
+
+async function exportToPDF() {
+    try {
+        const btn = document.getElementById('btnExportPDF');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
+        btn.disabled = true;
+
+        document.getElementById('loadingOverlay').classList.remove('d-none');
+
+        // --- Configuration ---
+        const PAGE_WIDTH = 800;
+        const PAGE_HEIGHT = 1130;
+        const PAGE_PADDING = 40;
+
+        function parseMarkdown(text) {
+            if (!text) return '';
+            let md = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>');
+            return md.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .map(line => `<p style="margin: 0 0 10px 0; line-height: 1.5; text-align: justify;">${line}</p>`)
+                .join('');
+        }
+
+        let aiAnalysisText = "";
+        if (window.getBrisinhAIAnalysis) {
+            aiAnalysisText = await window.getBrisinhAIAnalysis();
+        }
+
+        const mainContainer = document.createElement('div');
+        Object.assign(mainContainer.style, {
+            position: 'absolute', top: '0', left: '-9999px', width: (PAGE_WIDTH + 40) + 'px'
+        });
+        document.body.appendChild(mainContainer);
+
+        let pages = [];
+        let currentPage = createPage();
+        pages.push(currentPage);
+        mainContainer.appendChild(currentPage);
+
+        function createPage() {
+            const div = document.createElement('div');
+            Object.assign(div.style, {
+                width: PAGE_WIDTH + 'px', height: PAGE_HEIGHT + 'px', backgroundColor: 'white',
+                padding: PAGE_PADDING + 'px', boxSizing: 'border-box', position: 'relative',
+                fontFamily: "'Outfit', sans-serif", color: '#262223', overflow: 'hidden',
+                display: 'flex', flexDirection: 'column'
+            });
+            return div;
+        }
+
+        function addToPage(element) {
+            currentPage.appendChild(element);
+            const totalHeight = Array.from(currentPage.children).reduce((acc, el) => acc + el.offsetHeight + (parseInt(getComputedStyle(el).marginBottom) || 0), 0);
+            if (totalHeight > (PAGE_HEIGHT - (PAGE_PADDING * 2))) {
+                currentPage.removeChild(element);
+                currentPage = createPage();
+                pages.push(currentPage);
+                mainContainer.appendChild(currentPage);
+                currentPage.appendChild(element);
+            }
+        }
+
+        // --- Header ---
+        const headerDiv = document.createElement('div');
+        headerDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #F2911B; padding-bottom: 20px; margin-bottom: 30px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div id="report-logo-ph"></div>
+                    <div>
+                        <h1 style="font-size: 24px; font-weight: 700; margin: 0;">Relatório de Parcelamentos</h1>
+                        <p style="margin: 5px 0 0; color: #6c757d; font-size: 14px;">Mar Brasil</p>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <p style="font-size: 12px; color: #6c757d; margin:5px 0 0;">${new Date().toLocaleString('pt-BR')}</p>
+                </div>
+            </div>`;
+
+        try {
+            const logo = document.querySelector('header img');
+            if (logo) {
+                const c = document.createElement('canvas');
+                c.width = logo.naturalWidth; c.height = logo.naturalHeight;
+                c.getContext('2d').drawImage(logo, 0, 0);
+                const i = document.createElement('img');
+                i.src = c.toDataURL();
+                i.style.maxHeight = '40px';
+                headerDiv.querySelector('#report-logo-ph').appendChild(i);
+            }
+        } catch (e) { }
+        addToPage(headerDiv);
+
+        // --- AI ---
+        const aiHeader = document.createElement('div');
+        aiHeader.innerHTML = `<h3 style="font-size: 16px; margin-bottom: 15px; border-left: 5px solid #F2911B; padding-left: 10px; background:#f8f9fa; padding:10px;">🤖 Análise de Dívidas (BrisinhAI)</h3>`;
+        addToPage(aiHeader);
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = parseMarkdown(aiAnalysisText || "Análise indisponível.");
+        Array.from(tempDiv.children).forEach(p => {
+            p.style.fontSize = "12px"; p.style.lineHeight = "1.5"; p.style.marginBottom = "8px";
+            const pWrapper = document.createElement('div');
+            pWrapper.appendChild(p.cloneNode(true));
+            addToPage(pWrapper);
+        });
+        const spacer = document.createElement('div');
+        spacer.innerHTML = "&nbsp;";
+        addToPage(spacer);
+
+        // --- KPIs ---
+        const kpiSource = document.getElementById('kpiRow');
+        if (kpiSource) {
+            const kpiClone = kpiSource.cloneNode(true);
+            kpiClone.style.zoom = "0.8"; // Print scale
+            kpiClone.style.marginBottom = "30px";
+            kpiClone.style.display = 'grid';
+            kpiClone.style.gridTemplateColumns = 'repeat(4, 1fr)';
+            kpiClone.style.gap = '10px';
+
+            // Clean up card classes or rely on HTML2Canvas.
+            // Replace col-md-3 with nothing or flex
+            Array.from(kpiClone.querySelectorAll('.col-md-3')).forEach(col => {
+                col.classList.remove('col-md-3');
+                col.style.width = 'auto'; // let grid handle
+            });
+
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = `<h6 style="font-size:14px; font-weight:bold; margin-bottom:10px;">Indicadores de Dívida</h6>`;
+            wrapper.appendChild(kpiClone);
+            addToPage(wrapper);
+        }
+
+        // --- Charts ---
+        const chartIds = [
+            { id: 'evolutionChart', title: 'Evolução do Saldo Devedor' },
+            { id: 'categoryChart', title: 'Por Categoria' },
+            { id: 'paidVsPendingChart', title: 'Pago vs Pendente' },
+            { id: 'topDebtsChart', title: 'Top 5 Parcelas' }
+        ];
+
+        // Charts Grid (2 per row)
+        for (let i = 0; i < chartIds.length; i += 2) {
+            const chartRow = document.createElement('div');
+            chartRow.style.display = 'flex';
+            chartRow.style.gap = '20px';
+            chartRow.style.marginBottom = '20px';
+            chartRow.style.height = '250px';
+
+            for (let j = i; j < i + 2 && j < chartIds.length; j++) {
+                const item = chartIds[j];
+                const canvasSource = document.getElementById(item.id);
+                if (canvasSource) {
+                    const card = document.createElement('div');
+                    Object.assign(card.style, { flex: '1', border: '1px solid #ddd', padding: '10px', borderRadius: '8px', display: 'flex', flexDirection: 'column' });
+
+                    const title = document.createElement('h6');
+                    title.textContent = item.title;
+                    title.style.fontSize = '12px'; title.style.fontWeight = 'bold'; title.style.marginBottom = '5px';
+                    card.appendChild(title);
+
+                    const c = document.createElement('canvas');
+                    c.width = canvasSource.width; c.height = canvasSource.height;
+                    c.style.width = '100%'; c.style.height = '100%'; c.style.objectFit = 'contain';
+                    c.getContext('2d').drawImage(canvasSource, 0, 0);
+                    card.appendChild(c);
+
+                    chartRow.appendChild(card);
+                }
+            }
+            if (chartRow.children.length > 0) addToPage(chartRow);
+        }
+
+        // --- Render PDF ---
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const PDF_W = 210; const PDF_H = 297;
+
+        for (let i = 0; i < pages.length; i++) {
+            if (i > 0) doc.addPage();
+            await new Promise(r => setTimeout(r, 100));
+            const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true, logging: false });
+            doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, PDF_W, PDF_H);
+        }
+
+        doc.save(`Parcelamentos_MarBrasil_${new Date().toISOString().slice(0, 10)}.pdf`);
+
+        document.body.removeChild(mainContainer);
+        document.getElementById('loadingOverlay').classList.add('d-none');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+
+    } catch (e) {
+        console.error(e);
+        alert("Erro no PDF: " + e.message);
+        document.getElementById('loadingOverlay').classList.add('d-none');
+        document.getElementById('btnExportPDF').disabled = false;
+        document.getElementById('btnExportPDF').innerHTML = 'Exportar PDF';
+    }
+}
+
+// Expose globally
+window.exportToPDF = exportToPDF;

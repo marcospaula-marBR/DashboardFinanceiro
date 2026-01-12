@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gatherPageSpecificData(context);
 
         // 4. Get Cards Data (Generic Fallback + Specifics)
-        document.querySelectorAll('.indicator-card, .metric-card').forEach(card => {
+        document.querySelectorAll('.indicator-card, .metric-card, #kpiRow .card, .kpi-card').forEach(card => {
             let title, value, subtitle;
 
             if (card.classList.contains('indicator-card')) {
@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Context
         const context = getDashboardContext();
 
-        if (context.indicadores.length === 0) {
+        if (context.indicadores.length === 0 && (!context.csvData || context.csvData.length === 0)) {
             addMessage('bot', "Não encontrei dados na tela. Por favor, carregue um arquivo CSV primeiro.");
             return;
         }

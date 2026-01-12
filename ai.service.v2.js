@@ -43,9 +43,9 @@ class GeminiService {
                 if (!response.ok) {
                     const errorData = await response.json();
 
-                    // Se for erro 503 (Overloaded), tenta novamente
-                    if (response.status === 503) {
-                        console.warn(`Tentativa ${attempt + 1} falhou: Modelo sobrecarregado. Tentando novamente...`);
+                    // Se for erro 503 (Overloaded) ou 500 (Internal), tenta novamente
+                    if (response.status === 503 || response.status === 500) {
+                        console.warn(`Tentativa ${attempt + 1} falhou: ${response.statusText}. Tentando novamente...`);
                         attempt++;
                         await new Promise(resolve => setTimeout(resolve, 2000)); // Espera 2s
                         continue;
@@ -81,7 +81,17 @@ class GeminiService {
     }
 
     _buildPrompt(data, userQuestion) {
-        const contextString = JSON.stringify(data, null, 2);
+        // Truncate CSV Data if too large (Safety limit for API payload)
+        const MAX_ROWS = 1500;
+        let sanitizedData = { ...data };
+
+        if (sanitizedData.csvData && Array.isArray(sanitizedData.csvData) && sanitizedData.csvData.length > MAX_ROWS) {
+            console.warn(`BrisinhAI: Truncating CSV data from ${sanitizedData.csvData.length} to ${MAX_ROWS} rows.`);
+            sanitizedData.csvData = sanitizedData.csvData.slice(0, MAX_ROWS);
+            sanitizedData.note = "Dataset truncated for analysis limit.";
+        }
+
+        const contextString = JSON.stringify(sanitizedData, null, 2);
         let persona = `
 Você é o BrisinhAI, um consultor financeiro especialista da empresa Mar Brasil.
 Sua persona é amigável, técnica mas acessível. Use emojis ocasionalmente.
