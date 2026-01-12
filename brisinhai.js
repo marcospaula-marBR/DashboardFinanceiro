@@ -129,6 +129,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const update = document.getElementById('lastUpdate')?.innerText;
         if (update) context.update = update;
 
+        // Get CSV Data from Global State (if available)
+        // script.js, script_v2.js, analise-setorial.js all use 'state' variable
+        if (typeof state !== 'undefined' && state) {
+            // Prefer filteredData if available (respects user filters), else rawData or processedData
+            const data = state.filteredData || state.processedData || state.rawData;
+            if (data && data.length > 0) {
+                // Limit data size to avoid token overflow? 
+                // For now, let's send it. If it's huge, we might need a summary strategy later.
+                // Converting to a simplified JSON string
+                // Limit to first 500 rows to be safe if massive? Or send all?
+                // DRE usually has < 1000 rows.
+                context.csvData = data.slice(0, 1000);
+                context.dataInfo = `Exibindo ${context.csvData.length} linhas de dados brutos.`;
+            }
+        }
+
         return context;
     }
 
