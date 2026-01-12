@@ -87,17 +87,42 @@ document.addEventListener('DOMContentLoaded', () => {
         context.filtros.periodo = getSelectedValues('filterPeriodo');
         context.filtros.empresa = getSelectedValues('filterEmpresa');
 
-        // Get Cards Data
-        document.querySelectorAll('.indicator-card').forEach(card => {
-            const title = card.querySelector('.card-title')?.innerText || "Indicador";
-            const value = card.querySelector('.display-5')?.innerText || "0";
-            const subtitle = card.querySelector('.text-muted')?.innerText || "";
+        // Get Cards Data (Support for both .indicator-card and .metric-card)
+        const cards = [];
+        document.querySelectorAll('.indicator-card, .metric-card').forEach(card => {
+            let title, value, subtitle;
 
-            context.indicadores.push({
-                indicador: title,
-                valor: value,
-                detalhe: subtitle
-            });
+            if (card.classList.contains('indicator-card')) {
+                // Indicadores V2 Structure
+                title = card.querySelector('.card-title')?.innerText;
+                value = card.querySelector('.display-5')?.innerText;
+                subtitle = card.querySelector('.text-muted:not(.card-title)')?.innerText;
+            } else {
+                // Index & Analise Setorial Structure (.metric-card)
+                title = card.querySelector('.title')?.innerText;
+                value = card.querySelector('.value')?.innerText;
+                subtitle = card.querySelector('.small.text-muted, .sub')?.innerText;
+
+                // Handle Breakdown Items (if present)
+                const breakdownItems = card.querySelectorAll('.breakdown-item');
+                if (breakdownItems.length > 0) {
+                    const details = [];
+                    breakdownItems.forEach(item => {
+                        const l = item.querySelector('.breakdown-label')?.innerText;
+                        const v = item.querySelector('.breakdown-value')?.innerText;
+                        if (l && v) details.push(`${l}: ${v}`);
+                    });
+                    if (details.length > 0) subtitle = (subtitle ? subtitle + ". " : "") + details.join(", ");
+                }
+            }
+
+            if (title || value) {
+                context.indicadores.push({
+                    indicador: title || "Sem Título",
+                    valor: value || "-",
+                    detalhe: subtitle || ""
+                });
+            }
         });
 
         // Get Last Update
