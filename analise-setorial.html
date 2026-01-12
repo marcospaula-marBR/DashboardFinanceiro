@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Análise Setorial - Mar Brasil | Gestão Financeira</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,8 +21,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="styles.css?v=1.4.0">
-    <link rel="stylesheet" href="custom-fixes.css?v=1.4.0">
+    <link rel="stylesheet" href="styles.css?v=10.1">
+    <link rel="stylesheet" href="custom-fixes.css?v=10.1">
 </head>
 
 <body>
@@ -74,7 +77,7 @@
                 </button>
 
                 <div class="mt-4 pt-4 border-top border-secondary text-white-50 text-center small">
-                    <small>Versão: <span id="appVersion">-</span></small>
+                    <small>Versão: <span id="appVersion">v10.0</span></small>
                 </div>
             </div>
         </div>
@@ -93,6 +96,10 @@
                 </div>
             </div>
             <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-outline-dark" id="btnPrivacyToggle" onclick="togglePrivacyMode()"
+                    title="Ocultar Valores">
+                    <i class="bi bi-eye"></i>
+                </button>
                 <a href="index.html" class="btn btn-outline-secondary">
                     <i class="bi bi-house me-1"></i>
                     <span class="d-none d-md-inline">DRE</span>
@@ -105,7 +112,7 @@
                     <i class="bi bi-shield-check me-1"></i>
                     <span class="d-none d-md-inline">Seguros</span>
                 </a>
-                <button class="btn btn-success" id="btnExportPDF" onclick="exportToPDF()">
+                <button class="btn btn-outline-danger" id="btnExportPDF" onclick="exportToPDF()">
                     <i class="bi bi-file-earmark-pdf me-1"></i>
                     <span class="d-none d-md-inline">Exportar PDF</span>
                 </button>
@@ -295,7 +302,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <script src="analise-setorial.js?v=1.4.0"></script>
+    <script src="analise-setorial.js?v=10.1"></script>
     <script>
         // Sticky KPI Cards - add shadow on scroll
         window.addEventListener('scroll', () => {
@@ -317,8 +324,8 @@
         });
     </script>
     <!-- BrisinhAI Scripts -->
-    <script src="ai.service.v2.js"></script>
-    <script src="brisinhai.js?v=9"></script>
+    <script src="ai.service.v2.js?v=10.1"></script>
+    <script src="brisinhai.js?v=10.1"></script>
 </body>
 
 </html>

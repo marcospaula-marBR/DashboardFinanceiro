@@ -2934,3 +2934,44 @@ document.addEventListener('DOMContentLoaded', () => {
         btnPorMaquina.addEventListener('click', openPorMaquinaModal);
     }
 });
+
+// ==========================================
+// Privacy Mode Logic
+// ==========================================
+window.togglePrivacyMode = function() {
+    document.body.classList.toggle('privacy-active');
+    const isPrivacyActive = document.body.classList.contains('privacy-active');
+    localStorage.setItem('privacyMode', isPrivacyActive);
+    updatePrivacyIcon();
+}
+
+function updatePrivacyIcon() {
+    const btn = document.getElementById('btnPrivacyToggle');
+    if (btn) {
+        const icon = btn.querySelector('i');
+        const isPrivacyActive = document.body.classList.contains('privacy-active');
+        if (isPrivacyActive) {
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+            btn.title = "Mostrar Valores";
+            btn.classList.add('btn-dark');
+            btn.classList.remove('btn-outline-dark');
+        } else {
+            icon.classList.remove('bi-eye-slash');
+            icon.classList.add('bi-eye');
+            btn.title = "Ocultar Valores";
+            btn.classList.remove('btn-dark');
+            btn.classList.add('btn-outline-dark');
+        }
+    }
+}
+
+// Initialize logic
+document.addEventListener('DOMContentLoaded', () => {
+    // Check local storage
+    const isPrivacyActive = localStorage.getItem('privacyMode') === 'true';
+    if (isPrivacyActive) {
+        document.body.classList.add('privacy-active');
+    }
+    updatePrivacyIcon();
+});
