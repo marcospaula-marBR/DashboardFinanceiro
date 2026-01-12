@@ -21,7 +21,7 @@ class GeminiService {
         // Não salvamos mais no localStorage para evitar conflitos de versão
     }
 
-    async generateAnalysis(contextData, userQuestion = null) {
+    async generateAnalysis(contextData, userQuestion = null, signal = null) {
         if (!this.isAuthenticated()) {
             throw new Error("API Key do Gemini não configurada.");
         }
@@ -32,12 +32,17 @@ class GeminiService {
 
         while (attempt < maxRetries) {
             try {
+                if (signal && signal.aborted) {
+                    throw new DOMException("The user aborted a request.", "AbortError");
+                }
+
                 const response = await fetch(`${GEMINI_API_URL}?key=${this.apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text: prompt }] }]
-                    })
+                    }),
+                    signal: signal
                 });
 
                 if (!response.ok) {

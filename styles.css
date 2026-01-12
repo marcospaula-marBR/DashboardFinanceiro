@@ -440,9 +440,9 @@ body {
 
 /* Privacy Mode */
 body.privacy-active .metric-card .value,
-body.privacy-active .metric-card .breakdown-value, 
-body.privacy-active .indicator-card h3.fw-bold,
-body.privacy-active .indicator-card p.small,
+body.privacy-active .metric-card .breakdown-value,
+body.privacy-active .indicator-card h2.card-title,
+body.privacy-active canvas,
 body.privacy-active #dreTable tbody td:not(:first-child),
 body.privacy-active #modalTotalValue,
 body.privacy-active #modalAvgValue,
@@ -450,8 +450,7 @@ body.privacy-active #porMaquinaTotal,
 body.privacy-active #porMaquinaMedia,
 body.privacy-active .card-percent,
 body.privacy-active .modal-body table td:not(:first-child),
-body.privacy-active .breakdown-item .breakdown-value
-{
+body.privacy-active .breakdown-item .breakdown-value {
     filter: blur(6px);
     user-select: none;
     cursor: default;

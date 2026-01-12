@@ -44,6 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             <div class="brisinhai-input-area">
                 <input type="text" class="brisinhai-input" id="brisinhaiInput" placeholder="Faça uma pergunta sobre os dados..." onkeypress="handleEnter(event)">
+                <button class="brisinhai-send-btn d-none" id="brisinhaiStop" title="Parar" style="background-color: #dc3545;">
+                    <i class="bi bi-stop-circle-fill"></i>
+                </button>
                 <button class="brisinhai-send-btn" id="brisinhaiSend" onclick="sendMessage()">
                     <i class="bi bi-send-fill"></i>
                 </button>
@@ -62,6 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const minimize = document.getElementById('brisinhaiMinimize');
     const messages = document.getElementById('brisinhaiMessages');
     const input = document.getElementById('brisinhaiInput');
+    const stopBtn = document.getElementById('brisinhaiStop');
+    const sendBtn = document.getElementById('brisinhaiSend');
 
     // Toggle Chat
     btn.addEventListener('click', () => {
@@ -235,6 +240,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return selected.length > 0 ? selected.join(", ") : "Todos";
     }
 
+    let currentController = null;
+
     // Send Message Logic
     window.sendMessage = async function () {
         const text = input.value.trim();
@@ -245,6 +252,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Check if there is an active request
+        if (currentController) {
+            currentController.abort();
+            currentController = null;
+        }
+        currentController = new AbortController();
+
         // User Message
         addMessage('user', text);
         input.value = '';
@@ -254,6 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (context.indicadores.length === 0 && (!context.csvData || context.csvData.length === 0)) {
             addMessage('bot', "Não encontrei dados na tela. Por favor, carregue um arquivo CSV primeiro.");
+            currentController = null;
             return;
         }
 
@@ -266,15 +281,43 @@ document.addEventListener('DOMContentLoaded', () => {
         messages.appendChild(loadingDiv);
         messages.scrollTop = messages.scrollHeight;
 
+        // UI State: Show Stop, Hide Send
+        stopBtn.classList.remove('d-none');
+        sendBtn.classList.add('d-none');
+
         try {
-            const response = await aiService.generateAnalysis(context, text);
-            document.getElementById(loadingId).remove();
+            const response = await aiService.generateAnalysis(context, text, currentController.signal);
+
+            // If we are here, it wasn't aborted
+            const loader = document.getElementById(loadingId);
+            if (loader) loader.remove();
+
             addMessage('bot', response);
         } catch (error) {
-            document.getElementById(loadingId).remove();
-            addMessage('bot', `❌ Erro: ${error.message}`);
+            const loader = document.getElementById(loadingId);
+            if (loader) loader.remove();
+
+            if (error.name === 'AbortError' || (error.code === 20 && error.name === 'ABORT_ERR')) {
+                // Quietly handle abort or show a small note
+                // addMessage('bot', '<em>Parado pelo usuário.</em>'); 
+            } else {
+                addMessage('bot', `❌ Erro: ${error.message}`);
+            }
+        } finally {
+            // Reset UI
+            stopBtn.classList.add('d-none');
+            sendBtn.classList.remove('d-none');
+            currentController = null;
         }
     }
+
+    // Stop Button Listener
+    stopBtn.addEventListener('click', () => {
+        if (currentController) {
+            currentController.abort();
+            currentController = null;
+        }
+    });
 
     // Exposed API for PDF Generation
     window.getBrisinhAIAnalysis = async function () {
