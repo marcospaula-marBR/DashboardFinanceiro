@@ -49,25 +49,13 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
         chat.classList.add('active');
         if (!aiService.isAuthenticated()) {
-            askForKey();
+            addMessage("bot", "⚠️ <strong>Configuração Necessária</strong><br>A chave da API não foi inserida no código. Por favor, edite o arquivo <code>ai.service.v2.js</code> e coloque sua chave.");
         }
     });
 
     close.addEventListener('click', () => {
         chat.classList.remove('active');
     });
-
-    // Helper: Ask for API Key
-    function askForKey() {
-        const key = prompt("Por favor, insira sua Chave de API do Gemini para ativar o BrisinhAI:");
-        if (key) {
-            aiService.setKey(key);
-            addMessage("bot", "Chave configurada! Como posso ajudar?");
-        } else {
-            addMessage("bot", "Preciso da chave para funcionar. Clique no meu ícone para tentar novamente.");
-            chat.classList.remove('active');
-        }
-    }
 
     // Helper: Add Message
     window.addMessage = function (type, text) {
@@ -132,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!text) return;
 
         if (!aiService.isAuthenticated()) {
-            askForKey();
+            addMessage('bot', "⚠️ Configure a API Key no arquivo <code>ai.service.v2.js</code>");
             return;
         }
 

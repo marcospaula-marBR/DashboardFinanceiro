@@ -1,19 +1,24 @@
 
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+
+
+
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
 class GeminiService {
     constructor() {
-        this.apiKey = localStorage.getItem('gemini_api_key') || '';
+        // MUITO IMPORTANTE: Substitua 'SUA_CHAVE_AQUI' pela sua API Key real do Google Gemini
+        this.apiKey = "AIzaSyAf94kI5iBxhiLyyKn1D5UjP_3znPcBQxY";
     }
 
     isAuthenticated() {
+        // Verifica se a chave existe e não é vazia
         return !!this.apiKey;
     }
 
     setKey(key) {
         this.apiKey = key;
-        localStorage.setItem('gemini_api_key', key);
+        // Não salvamos mais no localStorage para evitar conflitos de versão
     }
 
     async generateAnalysis(contextData, userQuestion = null) {
@@ -21,36 +26,57 @@ class GeminiService {
             throw new Error("API Key do Gemini não configurada.");
         }
 
-        // Construct the prompt
-        // contextData should be an object with relevant metrics
         const prompt = this._buildPrompt(contextData, userQuestion);
+        const maxRetries = 3;
+        let attempt = 0;
 
-        try {
-            const response = await fetch(`${GEMINI_API_URL}?key=${this.apiKey}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }]
-                })
-            });
+        while (attempt < maxRetries) {
+            try {
+                const response = await fetch(`${GEMINI_API_URL}?key=${this.apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`Erro na API Gemini: ${errorData.error?.message || response.statusText}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+
+                    // Se for erro 503 (Overloaded), tenta novamente
+                    if (response.status === 503) {
+                        console.warn(`Tentativa ${attempt + 1} falhou: Modelo sobrecarregado. Tentando novamente...`);
+                        attempt++;
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // Espera 2s
+                        continue;
+                    }
+
+                    throw new Error(`Erro na API Gemini: ${errorData.error?.message || response.statusText}`);
+                }
+
+                const data = await response.json();
+                return data.candidates[0].content.parts[0].text;
+
+            } catch (error) {
+                // Se esgotou as tentativas ou é outro erro, lança
+                if (attempt >= maxRetries - 1 || !error.message.includes("overloaded")) {
+                    console.error("Erro ao chamar Gemini:", error);
+                    if (error.message.includes("not found")) this.logAvailableModels();
+                    throw error;
+                }
+                attempt++;
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
+        }
+    }
 
+    async logAvailableModels() {
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${this.apiKey}`);
             const data = await response.json();
-            return data.candidates[0].content.parts[0].text;
-
-        } catch (error) {
-            console.error("Erro ao chamar Gemini:", error);
-            throw error;
+            console.log("Modelos Disponíveis para sua chave:", data.models);
+        } catch (e) {
+            console.error("Erro ao listar modelos:", e);
         }
     }
 
