@@ -107,6 +107,22 @@
             </div>
             <div class="d-flex gap-2 align-items-center">
 
+                <button class="btn btn-info text-white" id="btnFluxoCaixa" onclick="toggleProjectionMode()">
+                    <i class="bi bi-graph-up-arrow me-1"></i>
+                    <span class="d-none d-md-inline">Fluxo de Caixa</span>
+                </button>
+                <a href="analise-setorial.html" class="btn btn-primary text-white">
+                    <i class="bi bi-pie-chart me-1"></i>
+                    <span class="d-none d-md-inline">Análise Setorial</span>
+                </a>
+                <a href="parcelamentos.html" class="btn btn-warning text-dark fw-bold">
+                    <i class="bi bi-credit-card me-1"></i>
+                    <span class="d-none d-md-inline">Parcelamentos</span>
+                </a>
+                <a href="seguros.html" class="btn btn-secondary text-white">
+                    <i class="bi bi-shield-check me-1"></i>
+                    <span class="d-none d-md-inline">Seguros</span>
+                </a>
                 <button class="btn btn-success" id="btnExportPDF" onclick="exportToPDF()">
                     <i class="bi bi-file-earmark-pdf me-1"></i>
                     <span class="d-none d-md-inline">Exportar PDF</span>
@@ -143,6 +159,31 @@
                     </div>
                     <div class="card-body d-flex align-items-center justify-content-center">
                         <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Secondary Charts Row (Waterfall & Top Expenses) -->
+        <div class="row g-3 mb-4">
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="mb-0 fw-bold"><i class="bi bi-water me-2 text-primary"></i>Evolução de Saldo
+                            (Waterfall)</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="waterfallChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="mb-0 fw-bold"><i class="bi bi-list-ol me-2 text-primary"></i>Top 5 Despesas</h6>
+                    </div>
+                    <div class="card-body d-flex align-items-center justify-content-center">
+                        <canvas id="topExpensesChart"></canvas>
                     </div>
                 </div>
             </div>

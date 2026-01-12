@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mar Brasil | Portal Financeiro</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;600;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <style>
+        :root {
+            --primary: #F2911B;
+            --dark-bg: #1a1a1a;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-main: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--dark-bg);
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(242, 145, 27, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(0, 71, 122, 0.1) 0%, transparent 30%);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* --- 3D Logo Animation Container --- */
+        .logo-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin-bottom: 3rem;
+            perspective: 1000px;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .logo-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: rotate3d 10s linear infinite;
+        }
+
+        /* Círculos decorativos orbitando */
+        .orbit {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            border: 1px solid rgba(242, 145, 27, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .orbit-1 {
+            width: 240px;
+            height: 240px;
+            animation: spin 20s linear infinite;
+            border-color: rgba(242, 145, 27, 0.1);
+        }
+
+        .orbit-2 {
+            width: 300px;
+            height: 300px;
+            animation: spin-rev 25s linear infinite;
+            border-color: rgba(0, 71, 122, 0.15);
+        }
+
+        .logo-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 0 20px rgba(242, 145, 27, 0.4));
+        }
+
+        h1 {
+            font-weight: 200;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-size: 1.5rem;
+            margin-bottom: 4rem;
+            opacity: 0;
+            animation: fadeUp 1s ease forwards 0.5s;
+        }
+
+        h1 span {
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        /* --- Grid Navigation --- */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            width: 90%;
+            max-width: 900px;
+        }
+
+        @media (max-width: 768px) {
+            .nav-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .nav-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 2rem;
+            text-decoration: none;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            opacity: 0;
+            animation: fadeUp 0.8s ease forwards;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Staggered animation delays */
+        .nav-card:nth-child(1) {
+            animation-delay: 0.8s;
+        }
+
+        .nav-card:nth-child(2) {
+            animation-delay: 1.0s;
+        }
+
+        .nav-card:nth-child(3) {
+            animation-delay: 1.2s;
+        }
+
+        .nav-card:nth-child(4) {
+            animation-delay: 1.4s;
+        }
+
+        .nav-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--primary);
+            box-shadow: 0 10px 40px -10px rgba(242, 145, 27, 0.3);
+        }
+
+        .nav-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: 0.5s;
+        }
+
+        .nav-card:hover::before {
+            left: 100%;
+        }
+
+        .icon-box {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            color: var(--primary);
+            transition: 0.3s;
+        }
+
+        .nav-card:hover .icon-box {
+            background: var(--primary);
+            color: white;
+            transform: rotate(10deg);
+        }
+
+        .card-info h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+        }
+
+        .card-info p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 300;
+        }
+
+        /* --- Footer --- */
+        footer {
+            position: absolute;
+            bottom: 2rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        /* --- Keyframes --- */
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        @keyframes spin {
+            100% {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
+        }
+
+        @keyframes spin-rev {
+            100% {
+                transform: translate(-50%, -50%) rotate(-360deg);
+            }
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="orbit orbit-1"></div>
+    <div class="orbit orbit-2"></div>
+
+    <div class="logo-container">
+        <!-- Substituir src pelo caminho exato da imagem se diferente -->
+        <img src="Mar-Brasil-sem-fundo-preto.png" alt="Logo Mar Brasil" class="logo-img">
+    </div>
+
+    <h1>Portal <span>Financeiro</span></h1>
+
+    <div class="nav-grid">
+        <!-- DRE Geral -->
+        <a href="index.html" class="nav-card">
+            <div class="icon-box"><i class="bi bi-graph-up-arrow"></i></div>
+            <div class="card-info">
+                <h3>DRE Gerencial</h3>
+                <p>Visão completa de Receitas, Despesas e Lucro.</p>
+            </div>
+        </a>
+
+        <!-- Análise Setorial -->
+        <a href="analise-setorial.html" class="nav-card">
+            <div class="icon-box"><i class="bi bi-pie-chart-fill"></i></div>
+            <div class="card-info">
+                <h3>Análise Setorial</h3>
+                <p>Detalhamento de custos por área e equipe.</p>
+            </div>
+        </a>
+
+        <!-- Parcelamentos -->
+        <a href="parcelamentos.html" class="nav-card">
+            <div class="icon-box"><i class="bi bi-credit-card-2-front"></i></div>
+            <div class="card-info">
+                <h3>Parcelamentos</h3>
+                <p>Controle de dívidas e compromissos futuros.</p>
+            </div>
+        </a>
+
+        <!-- Seguros -->
+        <a href="seguros.html" class="nav-card">
+            <div class="icon-box"><i class="bi bi-shield-check"></i></div>
+            <div class="card-info">
+                <h3>Gestão de Seguros</h3>
+                <p>Apólices, vigências e coberturas ativas.</p>
+            </div>
+        </a>
+
+        <!-- Indicadores Financeiros -->
+        <a href="indicadores_v2.html" class="nav-card">
+            <div class="icon-box"><i class="bi bi-speedometer2"></i></div>
+            <div class="card-info">
+                <h3>Indicadores Financeiros</h3>
+                <p>EBITDA, Valuation e KPIs estratégicos.</p>
+            </div>
+        </a>
+    </div>
+
+
+</body>
+
+</html>

@@ -334,10 +334,21 @@ body {
 }
 
 /* Missing Sidebar Toggle Styles */
+.sidebar.collapsed .sidebar-toggle-btn {
+    transform: rotate(180deg);
+}
+
 .sidebar-toggle-btn:hover {
     transform: scale(1.1);
 }
 
+/* Main Content Base */
+.main-content {
+    margin-left: var(--sidebar-width);
+    padding: 2rem;
+    transition: all 0.3s ease;
+    min-height: 100vh;
+}
 
 .main-content.expanded {
     margin-left: 80px;
@@ -387,4 +398,42 @@ body {
 .metric-card:hover {
     box-shadow: var(--card-hover-shadow);
     transform: translateY(-4px);
+}
+
+/* Project Breakdown Row */
+.row-project-detail {
+    background-color: rgba(242, 145, 27, 0.03) !important;
+    font-size: 0.82rem !important;
+}
+
+.row-project-detail td {
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+    color: #555;
+    border-bottom: 1px dotted #e0e0e0 !important;
+}
+
+.btn-expand-project {
+    padding: 0;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    background: transparent;
+}
+
+.btn-expand-project:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.project-name-cell {
+    padding-left: 2rem !important;
+    font-style: italic;
+    color: var(--secondary-medium);
 }
