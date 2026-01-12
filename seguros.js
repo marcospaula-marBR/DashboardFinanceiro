@@ -95,6 +95,10 @@ function handleFileUpload(event) {
 }
 
 function processParsedData(data) {
+    // Expose data for BrisinhAI
+    window.FULL_CSV_DATA = data;
+    if (window.updateBrisinhAIContext) window.updateBrisinhAIContext();
+
     const normalize = (s) => s ? s.toString().trim() : '';
 
     // Heuristic mapping to names mentioned by user

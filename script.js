@@ -186,6 +186,9 @@ function handleFileUpload(event) {
 
 function processParsedData(results) {
     console.log("Processando dados parsed:", results);
+    // Expose data for BrisinhAI
+    window.FULL_CSV_DATA = results.data;
+    if (window.updateBrisinhAIContext) window.updateBrisinhAIContext();
     try {
         let data = results.data;
         if (!data || data.length === 0) {
@@ -2260,237 +2263,229 @@ function downloadCSV(csv, filename) {
 // ========================================
 // PDF EXPORT FUNCTION
 // ========================================
-async function exportToPDF() {
+// ========================================
+// PDF EXPORT FUNCTION (MODERN REPORT)
+// ========================================
+// ========================================
+// PDF EXPORT FUNCTION (CUSTOMIZABLE)
+// ========================================
+
+
+/**
+ * Simple Markdown Parser
+ */
+function parseMarkdown(text) {
+    if (!text) return '';
+    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br>');
+}
+
+// 1. Open Modal
+function exportToPDF() {
+    new bootstrap.Modal(document.getElementById('reportOptionsModal')).show();
+}
+
+// 2. Start Generation from Modal
+function startPDFGeneration() {
+    const options = {
+        includeAI: document.getElementById('checkAI').checked,
+        includeKPI: document.getElementById('checkKPI').checked,
+        includeChartEvol: document.getElementById('checkChartEvol').checked,
+        includeChartComp: document.getElementById('checkChartComp').checked,
+        includeDetails: document.getElementById('checkDet').checked
+    };
+    bootstrap.Modal.getInstance(document.getElementById('reportOptionsModal')).hide();
+    generatePDFWithOptions(options);
+}
+
+// 3. Generate PDF
+async function generatePDFWithOptions(options) {
     try {
-        // Show loading overlay
+        const btn = document.getElementById('btnExportPDF');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
+        btn.disabled = true;
+
         document.getElementById('loadingOverlay').classList.remove('d-none');
 
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'mm', 'a4');
+        // AI Analysis
+        let aiAnalysisText = "";
+        if (options.includeAI && window.getBrisinhAIAnalysis) {
+            aiAnalysisText = await window.getBrisinhAIAnalysis();
+        }
 
-        let yPosition = 20;
-        const pageWidth = 210;
-        const pageHeight = 297;
-        const margin = 15;
+        // Create Report Container
+        const reportContainer = document.createElement('div');
+        reportContainer.id = 'pdf-report-container';
+        Object.assign(reportContainer.style, {
+            position: 'absolute', top: '-9999px', left: '0', width: '1200px',
+            backgroundColor: 'white', padding: '40px', fontFamily: "'Outfit', sans-serif", color: '#262223'
+        });
 
-        // ========== PÁGINA 1: CABEÇALHO E FILTROS ==========
+        const fmt = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-        // Logo (se existir)
+        // HTML Builder
+        let html = `
+            <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #F2911B; padding-bottom: 20px; margin-bottom: 30px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div id="report-logo-placeholder"></div>
+                    <div>
+                        <h1 style="font-size: 28px; font-weight: 700; margin: 0;">Relatório Financeiro</h1>
+                        <p style="margin: 5px 0 0; color: #6c757d; font-size: 14px;">Mar Brasil</p>
+                    </div>
+                </div>
+                
+                    <p style="font-weight: 600;">Ref: ${state.filters.periodos.join(', ') || 'Geral'}</p>
+                    <p style="font-size: 12px; color: #6c757d;">${new Date().toLocaleString('pt-BR')}</p>
+                </div>
+            </div>`;
+
+        if (options.includeAI) {
+            html += `
+            <div style="background: #f8f9fa; border-left: 5px solid #F2911B; padding: 20px; margin-bottom: 30px;">
+                <h3 style="font-size: 18px; margin-bottom: 15px;">🤖 Análise BrisinhAI</h3>
+                <div style="font-size: 14px; line-height: 1.6;">${parseMarkdown(aiAnalysisText || "Análise indisponível.")}</div>
+            </div>`;
+        }
+
+        if (options.includeKPI) {
+            html += `
+            <h3 style="font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid #dee2e6;">Indicadores</h3>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px;">
+                <div style="background: #fff; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px;">
+                     <p style="font-size: 12px; text-transform: uppercase;">Entradas</p>
+                     <p style="font-size: 20px; font-weight: 700; color: #2ecc71;">${fmt(state.metrics.total_entradas || 0)}</p>
+                </div>
+                <div style="background: #fff; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px;">
+                     <p style="font-size: 12px; text-transform: uppercase;">Saídas</p>
+                     <p style="font-size: 20px; font-weight: 700; color: #e74c3c;">${fmt(state.metrics.total_saidas || 0)}</p>
+                </div>
+                <div style="background: #fff; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px;">
+                     <p style="font-size: 12px; text-transform: uppercase;">Resultado</p>
+                     <p style="font-size: 20px; font-weight: 700; color: #F2911B;">${fmt(state.metrics.resultado || 0)}</p>
+                </div>
+                <div style="background: #fff; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px;">
+                     <p style="font-size: 12px; text-transform: uppercase;">Margem</p>
+                     <p style="font-size: 20px; font-weight: 700; color: #3498db;">${(state.metrics.perc_lucro || 0).toFixed(1)}%</p>
+                </div>
+            </div>`;
+        }
+
+        if (options.includeChartEvol || options.includeChartComp) {
+            html += `<div style="display: grid; grid-template-columns: ${options.includeChartEvol && options.includeChartComp ? '2fr 1fr' : '1fr'}; gap: 20px; margin-bottom: 30px;">`;
+            if (options.includeChartEvol) html += `<div style="border: 1px solid #e9ecef; padding: 20px; border-radius: 8px;"><div id="report-main-chart-container" style="height: 300px;"></div></div>`;
+            if (options.includeChartComp) html += `<div style="border: 1px solid #e9ecef; padding: 20px; border-radius: 8px;"><div id="report-pie-chart-container" style="height: 300px;"></div></div>`;
+            html += `</div>`;
+        }
+
+        if (options.includeDetails) {
+            html += `
+            <div style="page-break-before: always;"></div>
+            <h3 style="font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid #dee2e6;">Detalhes</h3>
+            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+                <tr style="background: #f8f9fa;"><th style="padding: 8px; text-align: left;">Item</th><th style="padding: 8px; text-align: right;">Valor</th></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Custos</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(state.metrics.total_custos || 0)}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Despesas</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(state.metrics.total_despesas || 0)}</td></tr>
+                 <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Pessoal</td><td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(state.metrics.pessoal || 0)}</td></tr>
+            </table>`;
+        }
+
+        reportContainer.innerHTML = html;
+        document.body.appendChild(reportContainer);
+
         const logo = document.querySelector('header img');
-        if (logo && logo.complete) {
+        if (logo) {
             try {
-                const logoCanvas = await html2canvas(logo, { scale: 2 });
-                const logoData = logoCanvas.toDataURL('image/png');
-                doc.addImage(logoData, 'PNG', margin, yPosition, 40, 10);
+                const c = document.createElement('canvas');
+                c.width = logo.naturalWidth || 100; c.height = logo.naturalHeight || 50;
+                c.getContext('2d').drawImage(logo, 0, 0);
+                const i = document.createElement('img');
+                i.src = c.toDataURL('image/png');
+                i.style.maxHeight = '50px';
+                document.getElementById('report-logo-placeholder').appendChild(i);
             } catch (e) {
-                console.log('Logo não capturado');
+                console.warn("Logo skipped due to taint:", e);
+                const s = document.createElement('span'); s.innerText = "Mar Brasil"; s.style.color = "#888"; s.style.fontWeight = "bold";
+                document.getElementById('report-logo-placeholder').appendChild(s);
             }
         }
 
-        // Título
-        doc.setFontSize(20);
-        doc.setTextColor(38, 34, 35);
-        doc.text('Demonstração do Resultado - DRE', pageWidth / 2, yPosition + 15, { align: 'center' });
-
-        // Data de geração
-        doc.setFontSize(10);
-        doc.setTextColor(108, 117, 125);
-        const dataGeracao = new Date().toLocaleString('pt-BR');
-        doc.text(`Gerado em: ${dataGeracao}`, pageWidth / 2, yPosition + 22, { align: 'center' });
-
-        yPosition = 50;
-
-        // Filtros aplicados
-        doc.setFontSize(12);
-        doc.setTextColor(38, 34, 35);
-        doc.text('Filtros Aplicados:', margin, yPosition);
-        yPosition += 7;
-
-        doc.setFontSize(10);
-        doc.setTextColor(108, 117, 125);
-
-        const filtros = [];
-        if (state.filters.anos?.length > 0) filtros.push(`Anos: ${state.filters.anos.join(', ')}`);
-        if (state.filters.meses?.length > 0) filtros.push(`Meses: ${state.filters.meses.join(', ')}`);
-        if (state.filters.empresas?.length > 0) filtros.push(`Empresas: ${state.filters.empresas.join(', ')}`);
-        if (state.filters.projetos?.length > 0) filtros.push(`Projetos: ${state.filters.projetos.join(', ')}`);
-
-        if (filtros.length === 0) {
-            doc.text('Todos os dados (sem filtros)', margin + 5, yPosition);
-            yPosition += 6;
-        } else {
-            filtros.forEach(filtro => {
-                doc.text(`• ${filtro}`, margin + 5, yPosition);
-                yPosition += 6;
-            });
-        }
-
-        yPosition += 10;
-
-        // ========== CARDS PRINCIPAIS ==========
-        doc.setFontSize(14);
-        doc.setTextColor(38, 34, 35);
-        doc.text('Indicadores Principais', margin, yPosition);
-        yPosition += 10;
-
-        const kpiData = [
-            { label: 'Receitas Operacionais', value: state.metrics.total_entradas || 0 },
-            { label: 'Total Saídas', value: state.metrics.total_saidas || 0 },
-            { label: 'Resultado', value: state.metrics.resultado || 0 },
-            { label: 'FCL', value: state.metrics.fcl || 0 }
-        ];
-
-        const cardWidth = (pageWidth - 2 * margin - 9) / 2;
-        const cardHeight = 25;
-        let xPos = margin;
-        let row = 0;
-
-        kpiData.forEach((kpi, index) => {
-            if (index % 2 === 0 && index > 0) {
-                row++;
-                xPos = margin;
+        if (options.includeChartEvol) {
+            const mc = document.getElementById('mainChart');
+            if (mc) {
+                const c = document.createElement('canvas');
+                c.width = mc.width; c.height = mc.height; c.style.width = '100%'; c.style.height = '100%';
+                c.getContext('2d').drawImage(mc, 0, 0);
+                document.getElementById('report-main-chart-container')?.appendChild(c);
             }
-
-            const yPos = yPosition + (row * (cardHeight + 5));
-
-            // Fundo do card
-            doc.setFillColor(245, 245, 245);
-            doc.rect(xPos, yPos, cardWidth, cardHeight, 'F');
-
-            // Label
-            doc.setFontSize(9);
-            doc.setTextColor(108, 117, 125);
-            doc.text(kpi.label, xPos + 3, yPos + 7);
-
-            // Valor
-            doc.setFontSize(14);
-            doc.setTextColor(38, 34, 35);
-            doc.text(formatCurrency(kpi.value), xPos + 3, yPos + 17);
-
-            xPos += cardWidth + 3;
-        });
-
-        yPosition += (Math.ceil(kpiData.length / 2) * (cardHeight + 5)) + 15;
-
-        // ========== NOVA PÁGINA: GRÁFICOS ==========
-        doc.addPage();
-        yPosition = 20;
-
-        doc.setFontSize(14);
-        doc.setTextColor(38, 34, 35);
-        doc.text('Análise Gráfica', margin, yPosition);
-        yPosition += 10;
-
-        // Capturar gráfico principal
-        const mainChart = document.getElementById('mainChart');
-        if (mainChart) {
-            try {
-                const chartCanvas = await html2canvas(mainChart.parentElement, {
-                    scale: 2,
-                    backgroundColor: '#ffffff'
-                });
-                const chartData = chartCanvas.toDataURL('image/png');
-                doc.addImage(chartData, 'PNG', margin, yPosition, pageWidth - 2 * margin, 80);
-                yPosition += 90;
-            } catch (e) {
-                console.log('Gráfico não capturado', e);
+        }
+        if (options.includeChartComp) {
+            const pc = document.getElementById('pieChart');
+            if (pc) {
+                const c = document.createElement('canvas');
+                c.width = pc.width; c.height = pc.height; c.style.width = '100%'; c.style.height = '100%'; c.style.objectFit = 'contain';
+                c.getContext('2d').drawImage(pc, 0, 0);
+                document.getElementById('report-pie-chart-container')?.appendChild(c);
             }
         }
 
-        // Capturar gráfico de pizza
-        const pieChart = document.getElementById('pieChart');
-        if (pieChart) {
-            try {
-                const pieCanvas = await html2canvas(pieChart.parentElement, {
-                    scale: 2,
-                    backgroundColor: '#ffffff'
-                });
-                const pieData = pieCanvas.toDataURL('image/png');
-                const pieWidth = 80;
-                doc.addImage(pieData, 'PNG', (pageWidth - pieWidth) / 2, yPosition, pieWidth, 80);
-            } catch (e) {
-                console.log('Gráfico pizza não capturado', e);
-            }
+        const { jsPDF } = window.jspdf;
+        await new Promise(r => setTimeout(r, 500));
+        const canvas = await html2canvas(reportContainer, { scale: 2, useCORS: true, logging: false });
+        const imgData = canvas.toDataURL('image/png');
+        const doc = new jsPDF('l', 'mm', 'a4');
+        const pdfWidth = 297;
+        const pageHeight = 210;
+        const props = doc.getImageProperties(imgData);
+        const imgHeight = (props.height * pdfWidth) / props.width;
+
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        doc.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+            position -= pageHeight;
+            doc.addPage();
+            doc.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pageHeight;
         }
 
-        // ========== CARDS SECUNDÁRIOS ==========
-        doc.addPage();
-        yPosition = 20;
+        doc.save(`Relatorio_MarBrasil_${new Date().toISOString().slice(0, 10)}.pdf`);
 
-        doc.setFontSize(14);
-        doc.setTextColor(38, 34, 35);
-        doc.text('Indicadores Detalhados', margin, yPosition);
-        yPosition += 10;
-
-        const kpiSecondary = [
-            { label: 'Total Impostos', value: state.metrics.total_impostos || 0 },
-            { label: 'Total Custos', value: state.metrics.total_custos || 0 },
-            { label: 'Total Despesas', value: state.metrics.total_despesas || 0 },
-            { label: 'Total Investimentos', value: state.metrics.total_investimentos || 0 },
-            { label: 'Pessoal', value: state.metrics.pessoal || 0 },
-            { label: 'Mútuo Entradas', value: state.metrics.mutuo_entradas || 0 },
-            { label: 'Mútuo Saídas', value: state.metrics.mutuo_saidas || 0 },
-            { label: 'Dividendos', value: state.metrics.dividendos || 0 },
-            { label: 'Corretiva', value: state.metrics.corretiva || 0 },
-            { label: 'Preventiva', value: state.metrics.preventiva || 0 },
-            { label: 'Margem Lucro %', value: state.metrics.perc_lucro || 0, isPercent: true },
-            { label: 'Margem FCL %', value: state.metrics.perc_fcl || 0, isPercent: true }
-        ];
-
-        const secCardWidth = (pageWidth - 2 * margin - 6) / 3;
-        const secCardHeight = 20;
-        let secXPos = margin;
-        let secRow = 0;
-
-        kpiSecondary.forEach((kpi, index) => {
-            if (index % 3 === 0 && index > 0) {
-                secRow++;
-                secXPos = margin;
-            }
-
-            const yPos = yPosition + (secRow * (secCardHeight + 5));
-
-            if (yPos > pageHeight - 40) {
-                doc.addPage();
-                yPosition = 20;
-                secRow = 0;
-                doc.setFontSize(14);
-                doc.text('Indicadores Detalhados (cont.)', margin, yPosition);
-                yPosition += 10;
-            }
-
-            const finalYPos = yPosition + (secRow * (secCardHeight + 5));
-
-            doc.setFillColor(250, 250, 250);
-            doc.rect(secXPos, finalYPos, secCardWidth, secCardHeight, 'F');
-            doc.setDrawColor(230, 230, 230);
-            doc.rect(secXPos, finalYPos, secCardWidth, secCardHeight);
-
-            doc.setFontSize(8);
-            doc.setTextColor(108, 117, 125);
-            doc.text(kpi.label, secXPos + 2, finalYPos + 6);
-
-            doc.setFontSize(11);
-            doc.setTextColor(38, 34, 35);
-            const displayValue = kpi.isPercent ? kpi.value.toFixed(2) + '%' : formatCurrency(kpi.value);
-            doc.text(displayValue, secXPos + 2, finalYPos + 14);
-
-            secXPos += secCardWidth + 2;
-        });
-
-
-        // Salvar PDF
-        doc.save(`DRE_${new Date().toISOString().split('T')[0]}.pdf`);
-
-        // Hide loading
+        document.body.removeChild(reportContainer);
         document.getElementById('loadingOverlay').classList.add('d-none');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
 
-    } catch (error) {
-        console.error('Erro ao gerar PDF:', error);
-        alert('Erro ao gerar PDF. Verifique o console para mais detalhes.');
+    } catch (e) {
+        console.error(e);
+        alert("Erro no PDF: " + e.message);
         document.getElementById('loadingOverlay').classList.add('d-none');
+        if (document.getElementById('btnExportPDF')) {
+            document.getElementById('btnExportPDF').innerHTML = originalText || 'Exportar PDF';
+            document.getElementById('btnExportPDF').disabled = false;
+        }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ========================================
 // MODAL POR MÁQUINA
@@ -2537,7 +2532,7 @@ function openPorMaquinaModal() {
         const porMaquina = card.value / totalEquipamentos;
 
         html += `
-            <div class="por-maquina-item">
+    < div class="por-maquina-item" >
                 <div class="por-maquina-item-header">
                     <div class="por-maquina-item-icon">
                         <i class="bi ${card.icon}"></i>
@@ -2555,8 +2550,8 @@ function openPorMaquinaModal() {
                         <span class="por-maquina-value-number por-maquina-value-highlight">${formatCurrency(porMaquina)}</span>
                     </div>
                 </div>
-            </div>
-        `;
+            </div >
+    `;
     });
 
     html += '</div>';
@@ -2754,3 +2749,73 @@ function generateNext12Months(lastMonthStr) {
     return future;
 }
 // End of Script
+
+// ========================================
+// INITIALIZATION
+// ========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof initCharts === 'function') initCharts();
+
+    // CSV Parsing
+    const fileInput = document.getElementById('csvFile');
+    if (fileInput) {
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('loadingOverlay').classList.remove('d-none');
+            // document.getElementById('fileStatus').textContent = `Carregando: ${file.name}`;
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                encoding: "ISO-8859-1",
+                complete: (results) => {
+                    const headerCount = results.meta.fields ? results.meta.fields.length : 0;
+                    if ((results.errors.length > 0 && results.data.length === 0) || headerCount <= 1) {
+                        // Retry with UTF-8
+                        Papa.parse(file, {
+                            header: true,
+                            skipEmptyLines: true,
+                            encoding: "UTF-8",
+                            complete: (utfResults) => {
+                                processData(utfResults.data);
+                            }
+                        });
+                    } else {
+                        processData(results.data);
+                    }
+                },
+                error: (err) => {
+                    alert("Erro ao ler CSV: " + err.message);
+                    document.getElementById('loadingOverlay').classList.add('d-none');
+                }
+            });
+        });
+    }
+
+    // Analyze Button
+    const btnAnalyze = document.getElementById('analyzeBtn');
+    if (btnAnalyze) {
+        btnAnalyze.addEventListener('click', () => {
+            if (window.toggleBrisinhAI) {
+                window.toggleBrisinhAI();
+            } else {
+                alert("Assistente BrisinhAI não carregado.");
+            }
+        });
+    }
+
+    // PDF Export Button
+    const btnExport = document.getElementById('btnExportPDF');
+    if (btnExport) {
+        btnExport.addEventListener('click', exportToPDF);
+    }
+
+    // Por Maquina Modal
+    const btnPorMaquina = document.getElementById('btnPorMaquina');
+    if (btnPorMaquina) {
+        btnPorMaquina.addEventListener('click', openPorMaquinaModal);
+    }
+});

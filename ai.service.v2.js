@@ -82,33 +82,83 @@ class GeminiService {
 
     _buildPrompt(data, userQuestion) {
         const contextString = JSON.stringify(data, null, 2);
+        let persona = `
+Você é o BrisinhAI, um consultor financeiro especialista da empresa Mar Brasil.
+Sua persona é amigável, técnica mas acessível. Use emojis ocasionalmente.
+`;
+
+        // Define specific instructions based on page type
+        let focusArea = "";
+        switch (data.pageType) {
+            case 'DRE':
+                focusArea = `
+FOCO DA ANÁLISE (DRE):
+1. Analise a saúde financeira focando em Receita Líquida, Margem de Contribuição, EBITDA e Lucro Líquido.
+2. Identifique variações significativas nos custos e despesas.
+3. Compare o realizado com métricas ideais de mercado se possível.
+4. Sugira ações para redução de custos ou aumento de receita.
+`;
+                break;
+            case 'PARCELAMENTOS':
+                focusArea = `
+FOCO DA ANÁLISE (PARCELAMENTOS):
+1. Analise o perfil da dívida (curto vs longo prazo).
+2. Destaque os maiores credores e a concentração de dívida.
+3. Alerte sobre parcelas altas iminentes.
+4. Sugira estratégias de renegociação ou amortização se o fluxo de caixa permitir.
+`;
+                break;
+            case 'SEGUROS':
+                focusArea = `
+FOCO DA ANÁLISE (SEGUROS):
+1. Analise a cobertura total e o custo dos prêmios.
+2. Identifique apólices próximas do vencimento que precisam de renovação.
+3. Verifique se há concentração excessiva em uma única seguradora ou corretor.
+4. Sugira revisões de cobertura baseadas no custo-benefício.
+`;
+                break;
+            case 'SETORIAL':
+                focusArea = `
+FOCO DA ANÁLISE (SETORIAL):
+1. Identifique quais setores/centros de custo estão consumindo mais recursos.
+2. Analise a eficiência de cada setor comparando gastos vs resultados (se disponíveis).
+3. Aponte anomalias ou gastos fora do padrão (outliers).
+`;
+                break;
+            default:
+                focusArea = `
+FOCO DA ANÁLISE (GERAL):
+1. Analise os indicadores visíveis na tela.
+2. Forneça insights sobre tendências e pontos de atenção.
+`;
+                break;
+        }
 
         let basePrompt = `
-Você é o BrisinhAI, um consultor financeiro especialista da empresa Mar Brasil.
-Sua persona é amigável, técnica mas acessível, e focada em dar insights valiosos sobre a saúde financeira da empresa.
-Use emojis ocasionalmente para manter o tom leve, mas mantenha a seriedade na análise dos números.
+${persona}
+${focusArea}
 
-Abaixo estão os dados financeiros atuais da tela de Indicadores:
+Abaixo estão os dados capturados da tela atual (${data.pageType}):
 ${contextString}
 
-Analise esses dados e forneça um resumo executivo destacando:
-1. Pontos Fortes (o que está indo bem).
-2. Pontos de Atenção (onde os custos estão altos ou receitas baixas).
-3. Sugestões de melhoria.
+Gere um relatório executivo conciso contendo:
+- 📊 Resumo da Situação
+- ✅ Pontos Fortes
+- ⚠️ Pontos de Atenção
+- 💡 Recomendações Práticas
 `;
 
         if (userQuestion) {
             basePrompt = `
-Você é o BrisinhAI, um consultor financeiro especialista da empresa Mar Brasil.
-Sua persona é amigável, técnica mas acessível.
+${persona}
 
-Abaixo estão os dados financeiros atuais da tela de Indicadores:
+Abaixo estão os dados capturados da tela atual (${data.pageType}):
 ${contextString}
 
-O usuário fez a seguinte pergunta técnica:
+O usuário (gestor) fez a seguinte pergunta:
 "${userQuestion}"
 
-Responda à pergunta com base nos dados fornecidos. Se a pergunta não puder ser respondida com os dados atuais, explique o porquê.
+Responda diretamente à pergunta usando os dados fornecidos. Se necessário, cite os números para embasar sua resposta.
 `;
         }
 

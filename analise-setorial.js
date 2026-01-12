@@ -54,6 +54,10 @@ function handleFileUpload(event) {
 }
 
 function processData(results) {
+    // Expose data for BrisinhAI
+    window.FULL_CSV_DATA = results.data;
+    if (window.updateBrisinhAIContext) window.updateBrisinhAIContext();
+
     try {
         if (!results.data.length) throw new Error("CSV vazio");
 

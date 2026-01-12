@@ -9,11 +9,28 @@ document.addEventListener('DOMContentLoaded', () => {
             <img src="BrisinhAI.jpeg" alt="BrisinhAI">
         </div>
 
+        <style>
+            .brisinhai-chat-window.minimized {
+                height: 50px !important;
+                overflow: hidden;
+            }
+            .brisinhai-chat-window.minimized .brisinhai-messages,
+            .brisinhai-chat-window.minimized .brisinhai-input-area {
+                display: none;
+            }
+            .brisinhai-header {
+                cursor: pointer;
+            }
+        </style>
+
         <!-- Chat Window -->
         <div class="brisinhai-chat-window" id="brisinhaiChat">
             <div class="brisinhai-header">
                 <h3><i class="bi bi-robot"></i> BrisinhAI</h3>
-                <button class="brisinhai-close" id="brisinhaiClose"><i class="bi bi-x"></i></button>
+                <div style="display: flex; gap: 5px;">
+                    <button class="brisinhai-close" id="brisinhaiMinimize" title="Minimizar"><i class="bi bi-dash-lg"></i></button>
+                    <button class="brisinhai-close" id="brisinhaiClose" title="Fechar"><i class="bi bi-x-lg"></i></button>
+                </div>
             </div>
             
             <div class="brisinhai-messages" id="brisinhaiMessages">
@@ -42,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('brisinhaiBtn');
     const chat = document.getElementById('brisinhaiChat');
     const close = document.getElementById('brisinhaiClose');
+    const minimize = document.getElementById('brisinhaiMinimize');
     const messages = document.getElementById('brisinhaiMessages');
     const input = document.getElementById('brisinhaiInput');
 
@@ -55,6 +73,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     close.addEventListener('click', () => {
         chat.classList.remove('active');
+    });
+
+    minimize.addEventListener('click', (e) => {
+        e.stopPropagation();
+        chat.classList.toggle('minimized');
+        const icon = minimize.querySelector('i');
+        if (chat.classList.contains('minimized')) {
+            icon.classList.remove('bi-dash-lg');
+            icon.classList.add('bi-square'); // Restore icon
+        } else {
+            icon.classList.remove('bi-square');
+            icon.classList.add('bi-dash-lg');
+        }
+    });
+
+    // Maximize on header click if minimized
+    document.querySelector('.brisinhai-header').addEventListener('click', (e) => {
+        if (chat.classList.contains('minimized') && !e.target.closest('button')) {
+            chat.classList.remove('minimized');
+            minimize.querySelector('i').classList.replace('bi-square', 'bi-dash-lg');
+        }
     });
 
     // Helper: Add Message
@@ -79,31 +118,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // Helper: Gather Context
     function getDashboardContext() {
         const context = {
+            url: window.location.pathname,
+            pageType: 'unknown',
             filtros: {},
-            indicadores: []
+            indicadores: [],
+            resumo: {}
         };
 
-        // Get Filters
+        // 1. Detect Page Type
+        if (document.getElementById('dreTable')) context.pageType = 'DRE';
+        else if (document.getElementById('indicatorsContainer')) context.pageType = 'INDICADORES';
+        else if (document.getElementById('segurosGrid')) context.pageType = 'SEGUROS';
+        else if (document.getElementById('parcelasTable')) context.pageType = 'PARCELAMENTOS';
+        else if (document.getElementById('dataTable') && document.querySelector('h1')?.innerText.includes('Setorial')) context.pageType = 'SETORIAL';
+
+        // 2. Get Filters (Common to all)
         context.filtros.periodo = getSelectedValues('filterPeriodo');
         context.filtros.empresa = getSelectedValues('filterEmpresa');
 
-        // Get Cards Data (Support for both .indicator-card and .metric-card)
-        const cards = [];
+        // Other filters based on page
+        if (document.getElementById('filterCategoria')) context.filtros.categoria = getSelectedValues('filterCategoria');
+        if (document.getElementById('filterProjeto')) context.filtros.projeto = getSelectedValues('filterProjeto');
+
+        // 3. Gather Page-Specific Data
+        gatherPageSpecificData(context);
+
+        // 4. Get Cards Data (Generic Fallback + Specifics)
         document.querySelectorAll('.indicator-card, .metric-card').forEach(card => {
             let title, value, subtitle;
 
             if (card.classList.contains('indicator-card')) {
-                // Indicadores V2 Structure
                 title = card.querySelector('.card-title')?.innerText;
                 value = card.querySelector('.display-5')?.innerText;
                 subtitle = card.querySelector('.text-muted:not(.card-title)')?.innerText;
             } else {
-                // Index & Analise Setorial Structure (.metric-card)
                 title = card.querySelector('.title')?.innerText;
                 value = card.querySelector('.value')?.innerText;
                 subtitle = card.querySelector('.small.text-muted, .sub')?.innerText;
 
-                // Handle Breakdown Items (if present)
+                // Extra info in breakdown items
                 const breakdownItems = card.querySelectorAll('.breakdown-item');
                 if (breakdownItems.length > 0) {
                     const details = [];
@@ -118,34 +171,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (title || value) {
                 context.indicadores.push({
-                    indicador: title || "Sem Título",
-                    valor: value || "-",
-                    detalhe: subtitle || ""
+                    indicador: title?.trim() || "Sem Título",
+                    valor: value?.trim() || "-",
+                    detalhe: subtitle?.trim() || ""
                 });
             }
         });
 
-        // Get Last Update
+        // 5. Get Last Update
         const update = document.getElementById('lastUpdate')?.innerText;
         if (update) context.update = update;
 
-        // Get CSV Data from Global State (if available)
-        // script.js, script_v2.js, analise-setorial.js all use 'state' variable
-        if (typeof state !== 'undefined' && state) {
-            // Prefer filteredData if available (respects user filters), else rawData or processedData
-            const data = state.filteredData || state.processedData || state.rawData;
-            if (data && data.length > 0) {
-                // Limit data size to avoid token overflow? 
-                // For now, let's send it. If it's huge, we might need a summary strategy later.
-                // Converting to a simplified JSON string
-                // Limit to first 500 rows to be safe if massive? Or send all?
-                // DRE usually has < 1000 rows.
-                context.csvData = data.slice(0, 1000);
-                context.dataInfo = `Exibindo ${context.csvData.length} linhas de dados brutos.`;
+        if (update) context.update = update;
+
+        // 6. Global CSV Data (Added for deeper analysis)
+        if (typeof window.FULL_CSV_DATA !== 'undefined' && window.FULL_CSV_DATA.length > 0) {
+            context.csvData = window.FULL_CSV_DATA;
+            context.dataSummary = `Total de registros carregados: ${window.FULL_CSV_DATA.length}.`;
+        }
+
+        // 7. CSV Data Summary (Legacy/Fallback)
+        if (typeof state !== 'undefined' && state && state.filteredData) {
+            // Provide a summary of the data instead of raw rows if possible
+            context.dataSummary = `Total de registros filtrados: ${state.filteredData.length}.`;
+            // For DRE, maybe send the calculated DRE structure instead of raw CSV
+            if (context.pageType === 'DRE' && state.dreData) {
+                // dreData usually sits in UI, let's grab from table if state isn't populated with final DRE rows
             }
         }
 
         return context;
+    }
+
+    function gatherPageSpecificData(context) {
+        switch (context.pageType) {
+            case 'DRE':
+                // Scrape the main DRE table for high-level structure
+                const drePixel = {};
+                document.querySelectorAll('#dreTable tbody tr').forEach(tr => {
+                    const label = tr.querySelector('td:first-child')?.innerText?.trim();
+                    const val = tr.querySelector('.fw-bold')?.innerText?.trim(); // Assuming bold is the total column
+                    if (label && val) drePixel[label] = val;
+                });
+                context.resumo.dre = drePixel;
+                break;
+
+            case 'PARCELAMENTOS':
+                // Scrape KPI cards specifically if not covered by generic scraper
+                context.resumo.dividaTotal = document.querySelector('#evolutionChart')?.parentElement?.parentElement?.parentElement?.querySelector('.value')?.innerText;
+                break;
+
+            case 'SEGUROS':
+                // Any specific grid data?
+                // Maybe list top 5 insurances
+                break;
+        }
     }
 
     function getSelectedValues(id) {
@@ -195,6 +275,21 @@ document.addEventListener('DOMContentLoaded', () => {
             addMessage('bot', `❌ Erro: ${error.message}`);
         }
     }
+
+    // Exposed API for PDF Generation
+    window.getBrisinhAIAnalysis = async function () {
+        if (!aiService.isAuthenticated()) return "Erro: API Key não configurada.";
+
+        const context = getDashboardContext();
+        // Force a specific prompt for the report
+        try {
+            const analysis = await aiService.generateAnalysis(context, "Gere um relatório formal e completo para exportação em PDF, focado em insights estratégicos.");
+            return analysis;
+        } catch (error) {
+            console.error("Erro ao gerar análise para PDF:", error);
+            return "Não foi possível gerar a análise automática neste momento.";
+        }
+    };
 
     window.handleEnter = function (e) {
         if (e.key === 'Enter') sendMessage();

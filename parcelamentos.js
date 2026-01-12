@@ -255,6 +255,10 @@ function handleFileUpload(event) {
 }
 
 function processData(data) {
+    // Expose data for BrisinhAI
+    window.FULL_CSV_DATA = data;
+    if (window.updateBrisinhAIContext) window.updateBrisinhAIContext();
+
     const today = new Date();
     const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 

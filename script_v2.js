@@ -186,6 +186,9 @@ function handleFileUpload(event) {
 
 function processParsedData(results) {
     console.log("Processando dados parsed:", results);
+    // Expose data for BrisinhAI
+    window.FULL_CSV_DATA = results.data;
+    if (window.updateBrisinhAIContext) window.updateBrisinhAIContext();
     try {
         let data = results.data;
         if (!data || data.length === 0) {

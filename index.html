@@ -326,6 +326,69 @@
         </div>
     </div>
 
+
+    <!-- Modal Personalizar Relatório -->
+    <div class="modal fade" id="reportOptionsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold">Personalizar Relatório PDF</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-4">Selecione os itens que deseja incluir no relatório final.</p>
+
+                    <div class="vstack gap-3">
+                        <div class="form-check p-3 border rounded bg-light">
+                            <input class="form-check-input" type="checkbox" id="checkAI" checked>
+                            <label class="form-check-label d-flex align-items-center gap-2" for="checkAI">
+                                <span class="fs-5">🤖</span>
+                                <div>
+                                    <span class="fw-semibold">Análise Inteligente (BrisinhAI)</span>
+                                    <div class="small text-muted">Insights automáticos sobre seus dados</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkKPI" checked>
+                            <label class="form-check-label fw-medium" for="checkKPI">
+                                Indicadores Principais (KPIs)
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkChartEvol" checked>
+                            <label class="form-check-label fw-medium" for="checkChartEvol">
+                                Gráfico de Evolução (Receitas x Despesas)
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkChartComp" checked>
+                            <label class="form-check-label fw-medium" for="checkChartComp">
+                                Gráfico de Composição (Custos)
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkDet" checked>
+                            <label class="form-check-label fw-medium" for="checkDet">
+                                Indicadores Detalhados (Secundários)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary px-4" onclick="startPDFGeneration()">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>Gerar Relatório
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loadingOverlay"
         class="d-none position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-flex justify-content-center align-items-center"
@@ -368,7 +431,7 @@
     </script>
     <!-- BrisinhAI Scripts -->
     <script src="ai.service.v2.js"></script>
-    <script src="brisinhai.js?v=8"></script>
+    <script src="brisinhai.js?v=9"></script>
 </body>
 
 </html>
