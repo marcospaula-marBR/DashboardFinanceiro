@@ -21,13 +21,48 @@ document.addEventListener('DOMContentLoaded', () => {
             .brisinhai-header {
                 cursor: pointer;
             }
+            /* Voice Control Styles */
+            .brisinhai-mic-btn {
+                background: none;
+                border: none;
+                color: #6c757d;
+                cursor: pointer;
+                padding: 5px;
+                transition: color 0.3s;
+            }
+            .brisinhai-mic-btn:hover {
+                color: #0d6efd;
+            }
+            .brisinhai-mic-btn.listening {
+                color: #dc3545;
+                animation: pulse 1.5s infinite;
+            }
+            .brisinhai-voice-toggle {
+                background: none;
+                border: none;
+                color: white;
+                opacity: 0.8;
+                cursor: pointer;
+                transition: opacity 0.3s;
+            }
+            .brisinhai-voice-toggle:hover {
+                opacity: 1;
+            }
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.2); }
+                100% { transform: scale(1); }
+            }
         </style>
 
         <!-- Chat Window -->
         <div class="brisinhai-chat-window" id="brisinhaiChat">
             <div class="brisinhai-header">
                 <h3><i class="bi bi-robot"></i> BrisinhAI</h3>
-                <div style="display: flex; gap: 5px;">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <button class="brisinhai-voice-toggle me-2" id="brisinhaiVoiceToggle" title="Ativar/Desativar Voz">
+                        <i class="bi bi-volume-up-fill"></i>
+                    </button>
                     <button class="brisinhai-close" id="brisinhaiMinimize" title="Minimizar"><i class="bi bi-dash-lg"></i></button>
                     <button class="brisinhai-close" id="brisinhaiClose" title="Fechar"><i class="bi bi-x-lg"></i></button>
                 </div>
@@ -43,7 +78,10 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <div class="brisinhai-input-area">
-                <input type="text" class="brisinhai-input" id="brisinhaiInput" placeholder="Faça uma pergunta sobre os dados..." onkeypress="handleEnter(event)">
+                <button class="brisinhai-mic-btn" id="brisinhaiMic" title="Falar">
+                    <i class="bi bi-mic-fill"></i>
+                </button>
+                <input type="text" class="brisinhai-input" id="brisinhaiInput" placeholder="Digite ou fale..." onkeypress="handleEnter(event)">
                 <button class="brisinhai-send-btn d-none" id="brisinhaiStop" title="Parar" style="background-color: #dc3545;">
                     <i class="bi bi-stop-circle-fill"></i>
                 </button>
@@ -67,6 +105,101 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('brisinhaiInput');
     const stopBtn = document.getElementById('brisinhaiStop');
     const sendBtn = document.getElementById('brisinhaiSend');
+    const micBtn = document.getElementById('brisinhaiMic');
+    const voiceToggleBtn = document.getElementById('brisinhaiVoiceToggle');
+    
+    // Voice State
+    let isVoiceEnabled = true; // Default to on
+    let recognition = null;
+    let isListening = false;
+
+    // Initialize Speech Recognition
+    if ('webkitSpeechRecognition' in window) {
+        recognition = new webkitSpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'pt-BR';
+        
+        recognition.onstart = function() {
+            isListening = true;
+            micBtn.classList.add('listening');
+            input.placeholder = "Ouvindo...";
+        };
+
+        recognition.onend = function() {
+            isListening = false;
+            micBtn.classList.remove('listening');
+            input.placeholder = "Digite ou fale...";
+        };
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            input.value = transcript;
+            // Optional: Auto-send after voice? 
+            // For now, let user confirm by clicking send or pressing enter
+            // But usually voice assistants auto-submit. Let's auto-submit for better UX.
+            setTimeout(() => sendMessage(), 500);
+        };
+        
+        recognition.onerror = function(event) {
+            console.error("Erro no reconhecimento de voz:", event.error);
+            isListening = false;
+            micBtn.classList.remove('listening');
+            input.placeholder = "Erro no microfone. Tente digitar.";
+        };
+    } else {
+        micBtn.style.display = 'none'; // Hide if not supported
+        console.warn("Web Speech API não suportada neste navegador.");
+    }
+
+    // Mic Button Click
+    micBtn.addEventListener('click', () => {
+        if (!recognition) return;
+        if (isListening) {
+            recognition.stop();
+        } else {
+            recognition.start();
+        }
+    });
+
+    // Voice Toggle Click
+    voiceToggleBtn.addEventListener('click', () => {
+        isVoiceEnabled = !isVoiceEnabled;
+        updateVoiceIcon();
+        if (!isVoiceEnabled) {
+            window.speechSynthesis.cancel(); // Stop talking if muted
+        }
+    });
+
+    function updateVoiceIcon() {
+        const icon = voiceToggleBtn.querySelector('i');
+        if (isVoiceEnabled) {
+            icon.classList.remove('bi-volume-mute-fill');
+            icon.classList.add('bi-volume-up-fill');
+            voiceToggleBtn.title = "Desativar Voz";
+        } else {
+            icon.classList.remove('bi-volume-up-fill');
+            icon.classList.add('bi-volume-mute-fill');
+            voiceToggleBtn.title = "Ativar Voz";
+        }
+    }
+
+    // Text-to-Speech Helper
+    function speakText(text) {
+        if (!isVoiceEnabled) return;
+        
+        // Cancel previous speech
+        window.speechSynthesis.cancel();
+
+        // Strip HTML tags for clean reading
+        const cleanText = text.replace(/<[^>]*>/g, '').replace(/[*_#]/g, ''); // Simple strip
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.1; // Slightly faster
+        utterance.pitch = 1;
+        
+        window.speechSynthesis.speak(utterance);
+    }
 
     // Toggle Chat
     btn.addEventListener('click', () => {
@@ -293,6 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (loader) loader.remove();
 
             addMessage('bot', response);
+            speakText(response); // Speak the response
         } catch (error) {
             const loader = document.getElementById(loadingId);
             if (loader) loader.remove();
