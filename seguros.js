@@ -318,6 +318,25 @@ function renderGrid() {
                 ${item.seguradora}
             </div>
 
+            ${(() => {
+                if (!item.vencimento) return '';
+                const today = new Date();
+                const diffTime = item.vencimento - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const isUrgent = diffDays < 90;
+
+                const styleClass = isUrgent ? 'text-danger fw-bold' : 'text-muted';
+                const icon = isUrgent ? 'bi-exclamation-triangle-fill' : 'bi-calendar-event';
+
+                return `
+                <div class="mb-2 d-flex align-items-center gap-2 ${styleClass}" style="font-size: 0.8rem;">
+                    <i class="bi ${icon}"></i>
+                    <span>${item.vencimento.toLocaleDateString('pt-BR')}</span>
+                    ${isUrgent && diffDays > 0 ? `<span class="badge bg-danger-subtle text-danger" style="font-size: 0.65rem;">${diffDays} dias</span>` : ''}
+                    ${diffDays <= 0 ? `<span class="badge bg-danger text-white" style="font-size: 0.65rem;">VENCIDO</span>` : ''}
+                </div>`;
+            })()}
+
             ${item.assistencia ? `
             <div class="mb-2 p-2 rounded-3 bg-success-subtle text-success border border-success-subtle d-flex align-items-center justify-content-center gap-2" style="font-size: 0.85rem; font-weight: 700;">
                 <i class="bi bi-telephone-fill"></i> ${item.assistencia}
