@@ -12,7 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <style>
             .brisinhai-chat-window.minimized {
                 height: 50px !important;
+                min-height: 50px !important;
                 overflow: hidden;
+                resize: none !important;
             }
             .brisinhai-chat-window.minimized .brisinhai-messages,
             .brisinhai-chat-window.minimized .brisinhai-input-area {
@@ -56,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </style>
 
         <!-- Chat Window -->
-        <div class="brisinhai-chat-window" id="brisinhaiChat">
+        <div class="brisinhai-chat-window" id="brisinhaiChat" style="width: 400px; height: 600px; resize: both; overflow: auto; min-width: 300px; min-height: 400px;">
             <div class="brisinhai-header">
                 <h3><i class="bi bi-robot"></i> BrisinhAI</h3>
                 <div style="display: flex; gap: 5px; align-items: center;">
@@ -107,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendBtn = document.getElementById('brisinhaiSend');
     const micBtn = document.getElementById('brisinhaiMic');
     const voiceToggleBtn = document.getElementById('brisinhaiVoiceToggle');
-    
+
     // Voice State
     let isVoiceEnabled = true; // Default to on
     let recognition = null;
@@ -118,20 +120,20 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition = new webkitSpeechRecognition();
         recognition.continuous = false;
         recognition.lang = 'pt-BR';
-        
-        recognition.onstart = function() {
+
+        recognition.onstart = function () {
             isListening = true;
             micBtn.classList.add('listening');
             input.placeholder = "Ouvindo...";
         };
 
-        recognition.onend = function() {
+        recognition.onend = function () {
             isListening = false;
             micBtn.classList.remove('listening');
             input.placeholder = "Digite ou fale...";
         };
 
-        recognition.onresult = function(event) {
+        recognition.onresult = function (event) {
             const transcript = event.results[0][0].transcript;
             input.value = transcript;
             // Optional: Auto-send after voice? 
@@ -139,8 +141,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // But usually voice assistants auto-submit. Let's auto-submit for better UX.
             setTimeout(() => sendMessage(), 500);
         };
-        
-        recognition.onerror = function(event) {
+
+        recognition.onerror = function (event) {
             console.error("Erro no reconhecimento de voz:", event.error);
             isListening = false;
             micBtn.classList.remove('listening');
@@ -186,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Text-to-Speech Helper
     function speakText(text) {
         if (!isVoiceEnabled) return;
-        
+
         // Cancel previous speech
         window.speechSynthesis.cancel();
 
@@ -197,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         utterance.lang = 'pt-BR';
         utterance.rate = 1.1; // Slightly faster
         utterance.pitch = 1;
-        
+
         window.speechSynthesis.speak(utterance);
     }
 

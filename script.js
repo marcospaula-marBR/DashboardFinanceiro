@@ -2319,11 +2319,15 @@ function startPDFGeneration() {
 async function generatePDFWithOptions(options) {
     try {
         const btn = document.getElementById('btnExportPDF');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
-        btn.disabled = true;
+        let originalText = "";
+        if (btn) {
+            originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
+            btn.disabled = true;
+        }
 
-        document.getElementById('loadingOverlay').classList.remove('d-none');
+        const loader = document.getElementById('loadingOverlay');
+        if (loader) loader.classList.remove('d-none');
 
         // --- 1. CONFIGURATION ---
         const PAGE_WIDTH = 800; // px (Simplified width for A4 ratio mapping)
@@ -2579,18 +2583,27 @@ async function generatePDFWithOptions(options) {
 
         // Cleanup
         document.body.removeChild(mainContainer);
-        document.getElementById('loadingOverlay').classList.add('d-none');
-        btn.innerHTML = originalText;
-        btn.disabled = false;
+
+        const loaderCleanup = document.getElementById('loadingOverlay');
+        if (loaderCleanup) loaderCleanup.classList.add('d-none');
+
+        const btnCleanup = document.getElementById('btnExportPDF');
+        if (btnCleanup) {
+            btnCleanup.innerHTML = originalText;
+            btnCleanup.disabled = false;
+        }
 
     } catch (e) {
         console.error(e);
         alert("Erro no PDF: " + e.message);
-        document.getElementById('loadingOverlay').classList.add('d-none');
-        if (document.getElementById('btnExportPDF')) {
-            const btn = document.getElementById('btnExportPDF');
-            btn.innerHTML = 'Exportar PDF'; // Reset text blindly
-            btn.disabled = false;
+
+        const loaderErr = document.getElementById('loadingOverlay');
+        if (loaderErr) loaderErr.classList.add('d-none');
+
+        const btnErr = document.getElementById('btnExportPDF');
+        if (btnErr) {
+            btnErr.innerHTML = 'Exportar PDF';
+            btnErr.disabled = false;
         }
     }
 }

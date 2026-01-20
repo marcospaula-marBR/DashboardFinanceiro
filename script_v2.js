@@ -319,14 +319,8 @@ function extractMetadata(data) {
     populateSelect('filterProjeto', projetos);
     populateSelect('filterCategoria', categorias);
 
-    // Custom Logic for Indicators Page: Year only
-    const isIndicatorsPage = !!document.getElementById('indicatorsContainer');
-    if (isIndicatorsPage) {
-        const anos = [...new Set(periodos.map(p => p.ano))].sort();
-        populateSelect('filterPeriodo', anos);
-    } else {
-        populatePeriodSelect(periodosList);
-    }
+    // Standardize Periods across pages
+    populatePeriodSelect(periodosList);
 }
 
 function populatePeriodSelect(items) {
@@ -623,15 +617,12 @@ function getValidColumns(periodosFiltro) {
 
     return allCols.filter(col => {
         const mes = state.mapaMeses[col];
-        const ano = col.split('/')[1]?.trim();
-        const periodo = `${mes}/${ano}`;
+        const ano_bruto = col.split('/')[1]?.trim();
+        // Handle years being 2 or 4 digits
+        const ano = ano_bruto.length === 2 ? `20${ano_bruto}` : ano_bruto;
+        const periodo = `${mes}/${ano_bruto}`;
 
-        // Handle exact month match OR year match (if filter is just year)
-        // Check if user selected e.g. "2024" which matches the 'ano'
-        const isYearMatch = periodosFiltro.includes(ano);
-        const isMonthMatch = periodosFiltro.includes(periodo);
-
-        return isMonthMatch || isYearMatch;
+        return periodosFiltro.includes(periodo) || periodosFiltro.includes(ano);
     });
 }
 

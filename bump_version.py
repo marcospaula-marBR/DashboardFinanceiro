@@ -1,5 +1,6 @@
 import re
 import os
+import glob
 
 version_file = 'version.js'
 
@@ -24,8 +25,29 @@ def bump_version():
         with open(version_file, 'w', encoding='utf-8') as f:
             f.write(new_content)
         print(f"Versão atualizada para: v{new_version}")
+        
+        # Cache Busting for all HTML files
+        update_html_cache_busting(new_version)
     else:
         print("Padrão de versão não encontrado no arquivo.")
+
+def update_html_cache_busting(version):
+    html_files = glob.glob("*.html")
+    for html_path in html_files:
+        with open(html_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Update ?v=... in src and href
+        # matches: src="script.js?v=10.1" or href="style.css?v=10.1"
+        new_content = re.sub(r'(\.js|\.css)\?v=[\d\.]+', f'\\1?v={version}', content)
+        # Also handle cases where there is no ?v= yet for local files
+        # We target common local files to avoid breaking CDN links if they don't use ?v=
+        # But for this project, standardizing all is safer.
+        
+        if new_content != content:
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            print(f"Cache-busting atualizado em: {html_path}")
 
 if __name__ == "__main__":
     bump_version()
