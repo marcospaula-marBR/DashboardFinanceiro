@@ -12,6 +12,9 @@
 
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="version.js"></script>
 
     <style>
         :root {
@@ -316,9 +319,74 @@
                 <p>EBITDA, Valuation e KPIs estratégicos.</p>
             </div>
         </a>
+
+        <!-- Exportar PDF (Especial) -->
+        <a href="#" class="nav-card" onclick="exportToPDF(); return false;" id="btnExportLanding"
+            style="border-color: rgba(231, 76, 60, 0.3);">
+            <div class="icon-box" style="color: #e74c3c;"><i class="bi bi-file-earmark-pdf-fill"></i></div>
+            <div class="card-info">
+                <h3>Exportar Relatórios</h3>
+                <p>Gere o PDF consolidado com os dados atuais.</p>
+            </div>
+        </a>
     </div>
 
+    <!-- Modal for PDF Options (needed by script.js) -->
+    <div class="modal fade" id="reportOptionsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg text-dark">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">Configurar Relatório PDF</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-4">Selecione as seções que deseja incluir no documento.</p>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="checkAI" checked>
+                        <label class="form-check-label" for="checkAI">Análise Inteligente (BrisinhAI)</label>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="checkKPI" checked>
+                        <label class="form-check-label" for="checkKPI">Cards de Indicadores (KPIs)</label>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="checkChartEvol" checked>
+                        <label class="form-check-label" for="checkChartEvol">Gráficos e Evolução</label>
+                    </div>
+                    <div class="form-check form-switch mb-4">
+                        <input class="form-check-input" type="checkbox" id="checkDet" checked>
+                        <label class="form-check-label" for="checkDet">Detalhamento Completo (Tabela)</label>
+                    </div>
+                    <button class="btn btn-primary w-100 py-2 fw-bold" onclick="startPDFGeneration()">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>Gerar Relatório Agora
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-</body>
+    <footer>
+        <small>Mar Brasil - Gestão Financeira v<span id="appVersionDisplay">0.0</span></small>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- Chart.js and plugin needed for PDF generation if charts are included -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+    <script src="script.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.APP_VERSION) {
+                document.getElementById('appVersionDisplay').textContent = window.APP_VERSION;
+            }
+        });
+    </script>
 
 </html>

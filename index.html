@@ -23,6 +23,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css?v=10.1">
     <link rel="stylesheet" href="custom-fixes.css?v=10.1">
+    <script src="version.js"></script>
 </head>
 
 <body>
@@ -90,7 +91,7 @@
                 </button>
 
                 <div class="mt-4 pt-4 border-top border-secondary text-white-50 text-center small">
-                    <small>Versão: <span id="appVersion">v10.0</span></small>
+                    <small>Versão: <span id="appVersionDisplay">v0.0</span></small>
                 </div>
             </div>
         </div>
@@ -113,25 +114,9 @@
                     title="Ocultar Valores">
                     <i class="bi bi-eye"></i>
                 </button>
-                <button class="btn btn-info text-white" id="btnFluxoCaixa" onclick="toggleProjectionMode()">
-                    <i class="bi bi-graph-up-arrow me-1"></i>
-                    <span class="d-none d-md-inline">Fluxo de Caixa</span>
-                </button>
-                <a href="indicadores_v2.html" class="btn btn-success text-white">
-                    <i class="bi bi-bar-chart-fill me-1"></i>
-                    <span class="d-none d-md-inline">Indicadores</span>
-                </a>
-                <a href="analise-setorial.html" class="btn btn-primary text-white">
-                    <i class="bi bi-pie-chart me-1"></i>
-                    <span class="d-none d-md-inline">Análise Setorial</span>
-                </a>
-                <a href="parcelamentos.html" class="btn btn-warning text-dark fw-bold">
-                    <i class="bi bi-credit-card me-1"></i>
-                    <span class="d-none d-md-inline">Parcelamentos</span>
-                </a>
-                <a href="seguros.html" class="btn btn-secondary text-white">
-                    <i class="bi bi-shield-check me-1"></i>
-                    <span class="d-none d-md-inline">Seguros</span>
+                <a href="landing.html" class="btn btn-secondary text-white">
+                    <i class="bi bi-house-door me-1"></i>
+                    <span class="d-none d-md-inline">Voltar ao Início</span>
                 </a>
                 <button class="btn btn-outline-danger" id="btnExportPDF" onclick="exportToPDF()">
                     <i class="bi bi-file-earmark-pdf me-1"></i>
@@ -144,7 +129,7 @@
         </header>
 
         <!-- KPI Cards Row 1 (Main) -->
-        <div class="row g-3 mb-4" id="kpiRow1">
+        <div class="row g-3 mb-4 sticky-row" id="kpiRow1">
             <!-- Cards populated by JS -->
         </div>
 
@@ -430,9 +415,9 @@
 
         // Version Updater
         document.addEventListener('DOMContentLoaded', () => {
-            const date = new Date(document.lastModified);
-            const formatted = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            document.getElementById('appVersion').textContent = formatted;
+            if (window.APP_VERSION) {
+                document.getElementById('appVersionDisplay').textContent = 'v' + window.APP_VERSION;
+            }
         });
     </script>
     <!-- BrisinhAI Scripts -->

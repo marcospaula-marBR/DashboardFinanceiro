@@ -23,6 +23,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css?v=10.1">
     <link rel="stylesheet" href="custom-fixes.css?v=10.1">
+    <script src="version.js"></script>
     <style>
         .indicator-card {
             transition: transform 0.2s;
@@ -85,7 +86,7 @@
                 </button>
 
                 <div class="mt-4 pt-4 border-top border-secondary text-white-50 text-center small">
-                    <small>Versão: <span id="appVersion">v10.0</span></small>
+                    <small>Versão: <span id="appVersionDisplay">v0.0</span></small>
                 </div>
             </div>
         </div>
@@ -108,9 +109,9 @@
                     title="Ocultar Valores">
                     <i class="bi bi-eye"></i>
                 </button>
-                <a href="index.html" class="btn btn-outline-secondary">
-                    <i class="bi bi-house me-1"></i>
-                    <span class="d-none d-md-inline">Voltar ao DRE</span>
+                <a href="landing.html" class="btn btn-secondary text-white">
+                    <i class="bi bi-house-door me-1"></i>
+                    <span class="d-none d-md-inline">Voltar ao Início</span>
                 </a>
                 <button class="btn btn-outline-danger" id="btnExportPDF" onclick="exportToPDF()">
                     <i class="bi bi-file-earmark-pdf me-1"></i>
@@ -156,6 +157,14 @@
     <!-- BrisinhAI Scripts -->
     <script src="ai.service.v2.js?v=10.1"></script>
     <script src="brisinhai.js?v=10.1"></script>
+    <script>
+        // Version Updater
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.APP_VERSION) {
+                document.getElementById('appVersionDisplay').textContent = 'v' + window.APP_VERSION;
+            }
+        });
+    </script>
 </body>
 
 </html>

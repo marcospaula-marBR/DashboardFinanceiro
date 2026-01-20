@@ -22,6 +22,7 @@
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css?v=10.1">
+    <script src="version.js"></script>
     <style>
         :root {
             --smoke-bg: rgba(38, 34, 35, 0.85);
@@ -308,7 +309,7 @@
                 </button>
 
                 <div class="mt-4 pt-4 border-top border-secondary text-white-50 text-center small">
-                    <small>Versão: <span id="appVersion">v10.0</span></small>
+                    <small>Versão: <span id="appVersionDisplay">v0.0</span></small>
                 </div>
             </div>
         </div>
@@ -331,13 +332,9 @@
                     title="Ocultar Valores">
                     <i class="bi bi-eye"></i>
                 </button>
-                <a href="index.html" class="btn btn-info text-white">
-                    <i class="bi bi-graph-up-arrow me-1"></i>
-                    <span class="d-none d-md-inline">Fluxo de Caixa</span>
-                </a>
-                <a href="parcelamentos.html" class="btn btn-warning text-dark fw-bold">
-                    <i class="bi bi-credit-card me-1"></i>
-                    <span class="d-none d-md-inline">Parcelamentos</span>
+                <a href="landing.html" class="btn btn-secondary text-white">
+                    <i class="bi bi-house-door me-1"></i>
+                    <span class="d-none d-md-inline">Voltar ao Início</span>
                 </a>
                 <button class="btn btn-outline-danger" id="btnExportPDF" onclick="exportToPDF()">
                     <i class="bi bi-file-earmark-pdf me-1"></i>
@@ -413,6 +410,13 @@
     </div>
 
     <script>
+        // Version Updater
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.APP_VERSION) {
+                document.getElementById('appVersionDisplay').textContent = 'v' + window.APP_VERSION;
+            }
+        });
+
         // Sidebar Toggle Logic (same as main app)
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.getElementById('sidebar').classList.toggle('collapsed');

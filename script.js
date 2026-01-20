@@ -238,6 +238,7 @@ function processParsedData(results) {
         });
 
         state.rawData = data;
+        localStorage.setItem('dre_raw_data', JSON.stringify(data));
 
         // Populate metadata and filters
         extractMetadata(data);
@@ -547,6 +548,14 @@ function populateSelect(id, options) {
 
 // Filtering Logic
 function applyFilters() {
+    if (!state.rawData || state.rawData.length === 0) return;
+
+    // Check if we are on a dashboard page before running expensive UI updates
+    const isDashboardPage = document.getElementById('kpiRow1') || document.getElementById('mainChart');
+    if (!isDashboardPage && !window.FORCED_EXPORT) {
+        console.log("Not a dashboard page, skipping UI filter rendering.");
+        return;
+    }
     let df = [...state.rawData];
     const f = state.filters;
 
@@ -2938,7 +2947,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // Privacy Mode Logic
 // ==========================================
-window.togglePrivacyMode = function() {
+window.togglePrivacyMode = function () {
     document.body.classList.toggle('privacy-active');
     const isPrivacyActive = document.body.classList.contains('privacy-active');
     localStorage.setItem('privacyMode', isPrivacyActive);
@@ -2966,12 +2975,40 @@ function updatePrivacyIcon() {
     }
 }
 
-// Initialize logic
+// Initialize on startup
 document.addEventListener('DOMContentLoaded', () => {
-    // Check local storage
     const isPrivacyActive = localStorage.getItem('privacyMode') === 'true';
     if (isPrivacyActive) {
         document.body.classList.add('privacy-active');
     }
     updatePrivacyIcon();
+    loadStateFromStorage();
 });
+
+// Função para carregar dados do localStorage
+function loadStateFromStorage() {
+    const savedData = localStorage.getItem('dre_raw_data');
+    if (savedData) {
+        try {
+            const data = JSON.parse(savedData);
+            console.log("Dados carregados do localStorage:", data.length, "registros");
+            state.rawData = data;
+
+            // Expose for BrisinhAI
+            window.FULL_CSV_DATA = data;
+
+            extractMetadata(data);
+            applyFilters();
+
+            const fileStatus = document.getElementById('fileStatus');
+            if (fileStatus) fileStatus.textContent = `✅ ${data.length} registros (cache)`;
+
+            const lastUpdate = document.getElementById('lastUpdate');
+            if (lastUpdate) lastUpdate.textContent = `Carregado do cache local`;
+
+        } catch (e) {
+            console.error("Erro ao carregar cache local:", e);
+            localStorage.removeItem('dre_raw_data');
+        }
+    }
+}

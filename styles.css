@@ -19,6 +19,37 @@
     --gradient-dark: linear-gradient(135deg, #262223 0%, #4A4748 100%);
 }
 
+/* Sticky Header Container */
+.main-content header {
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    background: linear-gradient(135deg, #F5F5F5 0%, #E8E8E8 100%);
+    padding: 1rem 0;
+    margin-top: -2rem;
+    margin-bottom: 2rem !important;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+/* Sticky KPI Row */
+#kpiRow1.sticky-row {
+    position: sticky;
+    top: 100px; /* Adjust based on header height */
+    z-index: 890;
+    padding: 0.5rem 0;
+    margin-bottom: 1.5rem !important;
+    background: transparent;
+    transition: all 0.3s ease;
+}
+
+#kpiRow1.scrolled {
+    background: rgba(245, 245, 245, 0.9);
+    backdrop-filter: blur(10px);
+    margin: 0 -2rem;
+    padding: 1rem 2rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
 body {
     background: linear-gradient(135deg, #F5F5F5 0%, #E8E8E8 100%);
     font-family: 'Outfit', sans-serif;

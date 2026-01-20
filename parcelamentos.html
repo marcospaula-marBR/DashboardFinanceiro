@@ -23,6 +23,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css?v=10.1">
     <link rel="stylesheet" href="custom-fixes.css?v=10.1">
+    <script src="version.js"></script>
 </head>
 
 <body>
@@ -94,7 +95,7 @@
                 </div>
 
                 <div class="mt-4 pt-4 border-top border-secondary text-white-50 text-center small">
-                    <small>Versão: <span id="appVersion">v10.0</span></small>
+                    <small>Versão: <span id="appVersionDisplay">v0.0</span></small>
                 </div>
             </div>
         </div>
@@ -117,13 +118,9 @@
                     title="Ocultar Valores">
                     <i class="bi bi-eye"></i>
                 </button>
-                <a href="index.html" class="btn btn-info text-white">
-                    <i class="bi bi-graph-up-arrow me-1"></i>
-                    <span class="d-none d-md-inline">Fluxo de Caixa</span>
-                </a>
-                <a href="seguros.html" class="btn btn-secondary text-white">
-                    <i class="bi bi-shield-check me-1"></i>
-                    <span class="d-none d-md-inline">Seguros</span>
+                <a href="landing.html" class="btn btn-secondary text-white">
+                    <i class="bi bi-house-door me-1"></i>
+                    <span class="d-none d-md-inline">Voltar ao Início</span>
                 </a>
                 <button class="btn btn-outline-danger" id="btnExportPDF" onclick="exportToPDF()">
                     <i class="bi bi-file-earmark-pdf me-1"></i>
@@ -271,9 +268,9 @@
     <script>
         // Version Updater
         document.addEventListener('DOMContentLoaded', () => {
-            const date = new Date(document.lastModified);
-            const formatted = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            document.getElementById('appVersion').textContent = formatted;
+            if (window.APP_VERSION) {
+                document.getElementById('appVersionDisplay').textContent = 'v' + window.APP_VERSION;
+            }
         });
     </script>
 
