@@ -9,6 +9,36 @@ document.addEventListener('DOMContentLoaded', () => {
             <img src="BrisinhAI.jpeg" alt="BrisinhAI">
         </div>
         <style>
+            .brisinhai-float {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                width: 60px !important;
+                height: 60px !important;
+                border-radius: 50%;
+                background: white;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                z-index: 10000;
+                transition: transform 0.3s;
+                overflow: hidden;
+                border: 2px solid white;
+            }
+
+            .brisinhai-float:hover {
+                transform: scale(1.1);
+            }
+
+            .brisinhai-float img {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: cover !important;
+                border-radius: 50%;
+            }
+
             .brisinhai-chat-window {
                 position: fixed;
                 bottom: 100px;
@@ -20,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 box-shadow: 0 10px 40px rgba(0,0,0,0.2);
                 display: flex;
                 flex-direction: column;
-                z-index: 9999;
+                z-index: 10001 !important;
                 opacity: 0;
                 pointer-events: none;
                 transform: translateY(20px);
