@@ -2610,7 +2610,19 @@ async function generatePDFWithOptions(options) {
         }
     }
 }
-
+// Load persistent state on start
+document.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('dre_state_raw');
+    if (saved && (!state.rawData || state.rawData.length === 0)) {
+        try {
+            state.rawData = JSON.parse(saved);
+            // Re-run processing if we are on a page that needs it
+            if (typeof processData === 'function' && state.rawData.length > 0) {
+                processData(state.rawData);
+            }
+        } catch (e) { console.error("Error loading saved state", e); }
+    }
+});
 
 
 

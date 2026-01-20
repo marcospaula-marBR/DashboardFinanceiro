@@ -1673,7 +1673,7 @@ function updateCharts() {
                         tension: 0.3,
                         pointRadius: 3,
                         order: 1,
-                        hidden: true // Hide by default to reduce clutter
+                        hidden: false // Visible by default as requested
                     }
                 ]
             },

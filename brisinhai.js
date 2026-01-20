@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="brisinhai-float" id="brisinhaiBtn" title="Falar com BrisinhAI">
             <img src="BrisinhAI.jpeg" alt="BrisinhAI">
         </div>
-
+        <style>
             .brisinhai-chat-window {
                 position: fixed;
                 bottom: 100px;
