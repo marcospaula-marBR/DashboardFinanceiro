@@ -37,12 +37,13 @@ def update_html_cache_busting(version):
         with open(html_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Update ?v=... in src and href
-        # matches: src="script.js?v=10.1" or href="style.css?v=10.1"
+        # 1. Update existing ?v=...
         new_content = re.sub(r'(\.js|\.css)\?v=[\d\.]+', f'\\1?v={version}', content)
-        # Also handle cases where there is no ?v= yet for local files
-        # We target common local files to avoid breaking CDN links if they don't use ?v=
-        # But for this project, standardizing all is safer.
+        
+        # 2. Add ?v= to local files that don't have it yet
+        # Matches: src="script.js" or href="style.css"
+        # Avoids: absolute URLs (http://, https://)
+        new_content = re.sub(r'(src|href)="(?!(?:https?:)?//)([^"]+\.(?:js|css))"', f'\\1="\\2?v={version}"', new_content)
         
         if new_content != content:
             with open(html_path, 'w', encoding='utf-8') as f:

@@ -9,12 +9,48 @@ document.addEventListener('DOMContentLoaded', () => {
             <img src="BrisinhAI.jpeg" alt="BrisinhAI">
         </div>
 
-        <style>
+            .brisinhai-chat-window {
+                position: fixed;
+                bottom: 100px;
+                right: 30px;
+                width: 450px;
+                height: 650px;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                display: flex;
+                flex-direction: column;
+                z-index: 9999;
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(20px);
+                transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                overflow: hidden;
+                border: 1px solid rgba(0,0,0,0.1);
+            }
+
+            .brisinhai-chat-window.active {
+                opacity: 1;
+                pointer-events: all;
+                transform: translateY(0);
+            }
+
             .brisinhai-chat-window.minimized {
                 height: 50px !important;
                 min-height: 50px !important;
                 overflow: hidden;
                 resize: none !important;
+            }
+
+            /* Resize handle */
+            .brisinhai-resize-handle {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 15px;
+                height: 15px;
+                cursor: nwse-resize;
+                z-index: 10001;
             }
             .brisinhai-chat-window.minimized .brisinhai-messages,
             .brisinhai-chat-window.minimized .brisinhai-input-area {
@@ -58,7 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
         </style>
 
         <!-- Chat Window -->
-        <div class="brisinhai-chat-window" id="brisinhaiChat" style="width: 400px; height: 600px; resize: both; overflow: auto; min-width: 300px; min-height: 400px;">
+        <div class="brisinhai-chat-window" id="brisinhaiChat">
+            <div class="brisinhai-resize-handle"></div>
             <div class="brisinhai-header">
                 <h3><i class="bi bi-robot"></i> BrisinhAI</h3>
                 <div style="display: flex; gap: 5px; align-items: center;">
@@ -254,6 +291,32 @@ document.addEventListener('DOMContentLoaded', () => {
         messages.appendChild(div);
         messages.scrollTop = messages.scrollHeight;
     }
+
+    // Resizing Logic
+    let isResizing = false;
+    const resizeHandle = document.querySelector('.brisinhai-resize-handle');
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.cursor = 'nwse-resize';
+        e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+
+        const rect = chat.getBoundingClientRect();
+        const newWidth = rect.right - e.clientX;
+        const newHeight = rect.bottom - e.clientY;
+
+        if (newWidth > 300) chat.style.width = newWidth + 'px';
+        if (newHeight > 200) chat.style.height = newHeight + 'px';
+    });
+
+    window.addEventListener('mouseup', () => {
+        isResizing = false;
+        document.body.style.cursor = 'default';
+    });
 
     // Helper: Gather Context
     function getDashboardContext() {

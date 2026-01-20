@@ -2318,12 +2318,15 @@ function startPDFGeneration() {
 // 3. Generate PDF
 async function generatePDFWithOptions(options) {
     try {
-        const btn = document.getElementById('btnExportPDF');
+        const btnPDF = document.getElementById('btnExportPDF');
+        const btnLanding = document.getElementById('btnExportLanding');
+        const activeBtn = btnPDF || btnLanding;
+
         let originalText = "";
-        if (btn) {
-            originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
-            btn.disabled = true;
+        if (activeBtn) {
+            originalText = activeBtn.innerHTML;
+            activeBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
+            activeBtn.disabled = true;
         }
 
         const loader = document.getElementById('loadingOverlay');
