@@ -10,116 +10,164 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <style>
             .brisinhai-float {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
+                position: fixed !important;
+                bottom: 20px !important;
+                right: 20px !important;
                 width: 60px !important;
                 height: 60px !important;
-                border-radius: 50%;
-                background: white;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                z-index: 10000;
-                transition: transform 0.3s;
-                overflow: hidden;
-                border: 2px solid white;
+                border-radius: 50% !important;
+                background: white !important;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                cursor: pointer !important;
+                z-index: 10000 !important;
+                transition: transform 0.3s !important;
+                overflow: hidden !important;
+                border: 2px solid white !important;
             }
-
-            .brisinhai-float:hover {
-                transform: scale(1.1);
-            }
-
+            .brisinhai-float:hover { transform: scale(1.1) !important; }
             .brisinhai-float img {
                 width: 100% !important;
                 height: 100% !important;
                 object-fit: cover !important;
-                border-radius: 50%;
             }
 
             .brisinhai-chat-window {
-                position: fixed;
-                bottom: 100px;
-                right: 30px;
-                width: 450px;
-                height: 650px;
-                background: white;
-                border-radius: 12px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                display: flex;
-                flex-direction: column;
+                position: fixed !important;
+                bottom: 100px !important;
+                right: 30px !important;
+                width: 400px;
+                height: 600px;
+                background: white !important;
+                border-radius: 20px !important;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
+                display: flex !important;
+                flex-direction: column !important;
                 z-index: 10001 !important;
                 opacity: 0;
                 pointer-events: none;
                 transform: translateY(20px);
-                transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-                overflow: hidden;
-                border: 1px solid rgba(0,0,0,0.1);
+                transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+                overflow: hidden !important;
+                border: 1px solid rgba(0,0,0,0.1) !important;
             }
-
             .brisinhai-chat-window.active {
-                opacity: 1;
-                pointer-events: all;
-                transform: translateY(0);
+                opacity: 1 !important;
+                pointer-events: all !important;
+                transform: translateY(0) !important;
             }
-
             .brisinhai-chat-window.minimized {
-                height: 50px !important;
-                min-height: 50px !important;
-                overflow: hidden;
-                resize: none !important;
+                height: 60px !important;
+                min-height: 60px !important;
             }
 
-            /* Resize handle */
-            .brisinhai-resize-handle {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 15px;
-                height: 15px;
-                cursor: nwse-resize;
-                z-index: 10001;
-            }
-            .brisinhai-chat-window.minimized .brisinhai-messages,
-            .brisinhai-chat-window.minimized .brisinhai-input-area {
-                display: none;
-            }
             .brisinhai-header {
-                cursor: pointer;
+                padding: 15px 20px !important;
+                background: linear-gradient(135deg, #F2911B 0%, #FFB347 100%) !important;
+                color: white !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                cursor: pointer !important;
             }
-            /* Voice Control Styles */
-            .brisinhai-mic-btn {
-                background: none;
-                border: none;
-                color: #6c757d;
-                cursor: pointer;
-                padding: 5px;
-                transition: color 0.3s;
+            .brisinhai-header h3 {
+                margin: 0 !important;
+                font-size: 1.1rem !important;
+                font-weight: 600 !important;
+                color: white !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
             }
-            .brisinhai-mic-btn:hover {
-                color: #0d6efd;
+            .brisinhai-close {
+                background: rgba(255, 255, 255, 0.2) !important;
+                border: none !important;
+                color: white !important;
+                width: 30px !important;
+                height: 30px !important;
+                border-radius: 50% !important;
+                cursor: pointer !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
             }
-            .brisinhai-mic-btn.listening {
-                color: #dc3545;
-                animation: pulse 1.5s infinite;
+
+            .brisinhai-messages {
+                flex: 1 !important;
+                padding: 20px !important;
+                overflow-y: auto !important;
+                background: #f8f9fa !important;
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 15px !important;
             }
-            .brisinhai-voice-toggle {
-                background: none;
-                border: none;
-                color: white;
-                opacity: 0.8;
-                cursor: pointer;
-                transition: opacity 0.3s;
+            .message {
+                max-width: 85% !important;
+                padding: 12px 16px !important;
+                border-radius: 12px !important;
+                font-size: 0.95rem !important;
+                line-height: 1.5 !important;
             }
-            .brisinhai-voice-toggle:hover {
-                opacity: 1;
+            .message.bot {
+                background: white !important;
+                align-self: flex-start !important;
+                border-bottom-left-radius: 2px !important;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+                color: #262223 !important;
             }
-            @keyframes pulse {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.2); }
-                100% { transform: scale(1); }
+            .message.user {
+                background: #F2911B !important;
+                color: white !important;
+                align-self: flex-end !important;
+                border-bottom-right-radius: 2px !important;
+            }
+
+            .brisinhai-input-area {
+                padding: 15px !important;
+                background: white !important;
+                border-top: 1px solid rgba(0,0,0,0.05) !important;
+                display: flex !important;
+                gap: 10px !important;
+            }
+            .brisinhai-input {
+                flex: 1 !important;
+                padding: 10px 15px !important;
+                border: 1px solid #e0e0e0 !important;
+                border-radius: 20px !important;
+                outline: none !important;
+            }
+            .brisinhai-send-btn {
+                background: #F2911B !important;
+                color: white !important;
+                border: none !important;
+                width: 40px !important;
+                height: 40px !important;
+                border-radius: 50% !important;
+                cursor: pointer !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .brisinhai-resize-handle {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 15px !important;
+                height: 15px !important;
+                cursor: nwse-resize !important;
+                z-index: 10002 !important;
+            }
+
+            /* Animations and Dots */
+            .typing-dots { display: flex !important; gap: 4px !important; padding: 8px 12px !important; }
+            .dot { width: 8px; height: 8px; background: #ccc; border-radius: 50%; animation: brisinhai-bounce 1.4s infinite ease-in-out both; }
+            .dot:nth-child(1) { animation-delay: -0.32s; }
+            .dot:nth-child(2) { animation-delay: -0.16s; }
+            @keyframes brisinhai-bounce {
+                0%, 80%, 100% { transform: scale(0); }
+                40% { transform: scale(1); }
             }
         </style>
 
