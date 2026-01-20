@@ -362,8 +362,7 @@ function initEventListeners() {
                 const filter = filterId.replace('filter', '');
                 const key = filter.toLowerCase() + 's';
                 state.filters[key] = selectedOptions;
-
-                // Update cascade if needed
+                localStorage.setItem('dre_filters', JSON.stringify(state.filters));
                 if (typeof updateCascadeFilters === 'function') {
                     updateCascadeFilters(filter);
                 }
@@ -2684,7 +2683,7 @@ function openPorMaquinaModal() {
         const porMaquina = card.value / totalEquipamentos;
 
         html += `
-    < div class="por-maquina-item" >
+            <div class="por-maquina-item">
                 <div class="por-maquina-item-header">
                     <div class="por-maquina-item-icon">
                         <i class="bi ${card.icon}"></i>
@@ -2702,8 +2701,8 @@ function openPorMaquinaModal() {
                         <span class="por-maquina-value-number por-maquina-value-highlight">${formatCurrency(porMaquina)}</span>
                     </div>
                 </div>
-            </div >
-    `;
+            </div>
+        `;
     });
 
     html += '</div>';

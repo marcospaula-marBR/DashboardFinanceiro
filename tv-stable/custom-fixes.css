@@ -1,0 +1,1178 @@
+/* Custom Fixes - Applied after main styles.css */
+
+/* FIX 1: Main Content - Prevents content from being hidden under sidebar */
+.main-content {
+    margin-left: var(--sidebar-width);
+    padding: 2rem;
+    transition: all 0.3s ease;
+}
+
+.main-content.expanded {
+    margin-left: 80px;
+}
+
+/* Sidebar Toggle Button Styles */
+.sidebar.collapsed .sidebar-toggle-btn {
+    margin-left: 0;
+    transform: rotate(180deg);
+}
+
+.sidebar.collapsed .sidebar-toggle-btn:hover {
+    transform: rotate(180deg) scale(1.1);
+}
+
+/* Responsive: Remove margin on mobile */
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0 !important;
+    }
+}
+
+/* FIX 7: Specific Visibility for Omie Modal Inputs - FORCED */
+#omieModal input.form-control {
+    background-color: #ffffff !important;
+    color: #212529 !important;
+    /* Dark text */
+    border: 1px solid #ced4da !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+#omieModal input[type="date"] {
+    color: #212529 !important;
+    background-color: #ffffff !important;
+    appearance: auto !important;
+    /* Force browser default appearance */
+}
+
+/* FIX 2: Cores das Colunas de Totais Anuais */
+.table-warning {
+    background-color: #FFE5CC !important;
+    /* Laranja claro */
+}
+
+.table-secondary {
+    background-color: #E8E8E8 !important;
+    /* Cinza claro */
+    color: #262223 !important;
+    /* Texto escuro para contraste */
+}
+
+/* FIX 3: Sticky KPI Cards */
+#kpiRow1 {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: linear-gradient(135deg, #F5F5F5 0%, #E8E8E8 100%);
+    padding: 1rem 0;
+    margin-left: -2rem;
+    margin-right: -2rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    transition: box-shadow 0.3s ease;
+}
+
+#kpiRow1.scrolled {
+    box-shadow: 0 12px 36px rgba(38, 34, 35, 0.45);
+}
+
+/* FIX 4: Fundos Suaves nos KPI Cards */
+.bg-blue-soft {
+    background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%) !important;
+}
+
+.bg-red-soft {
+    background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%) !important;
+}
+
+.bg-yellow-soft {
+    background: linear-gradient(135deg, #FFF9E6 0%, #FFE5B4 100%) !important;
+}
+
+.bg-green-soft {
+    background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%) !important;
+}
+
+/* FIX 5: Destacar Itens Selecionados nos Filtros */
+.form-select option {
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s ease;
+}
+
+/* Opções selecionadas ficam destacadas */
+.form-select option:checked {
+    background: linear-gradient(135deg, #F2911B 0%, #FFB347 100%) !important;
+    color: white !important;
+    font-weight: 600;
+    position: relative;
+}
+
+/* Visual feedback ao passar o mouse */
+.form-select option:hover {
+    background-color: rgba(242, 145, 27, 0.2) !important;
+    cursor: pointer;
+}
+
+/* Melhorar a aparência geral dos selects múltiplos */
+.form-select[multiple] {
+    min-height: 150px;
+    padding: 0.5rem;
+}
+
+.form-select[multiple]:focus {
+    box-shadow: 0 0 0 0.25rem rgba(242, 145, 27, 0.25);
+    border-color: var(--primary-color);
+}
+
+/* Badge de contador de itens selecionados */
+.filter-count-badge {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+    font-weight: 600;
+    min-width: 20px;
+    text-align: center;
+}
+
+/* Container dos percentuais */
+.metric-card .card-percents-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    justify-content: center;
+}
+
+/* Percentual nos cards - DESTAQUE */
+.metric-card .card-percent {
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.metric-card .card-percent i {
+    font-size: 0.85rem;
+    margin-right: 3px;
+    opacity: 0.9;
+}
+
+/* Animação ao passar o mouse */
+.metric-card:hover .card-percent {
+    transform: scale(1.05);
+    transition: all 0.2s ease;
+}
+
+/* Cores dinâmicas por referência */
+.card-percent.percent-ref-receitas {
+    color: #F2911B;
+    background: rgba(242, 145, 27, 0.1);
+}
+
+.card-percent.percent-ref-receitas i {
+    color: #F2911B;
+}
+
+.metric-card:hover .card-percent.percent-ref-receitas {
+    background: rgba(242, 145, 27, 0.15);
+}
+
+.card-percent.percent-ref-saidas {
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+}
+
+.card-percent.percent-ref-saidas i {
+    color: #e74c3c;
+}
+
+.metric-card:hover .card-percent.percent-ref-saidas {
+    background: rgba(231, 76, 60, 0.15);
+}
+
+.card-percent.percent-ref-pessoal {
+    color: #3498db;
+    background: rgba(52, 152, 219, 0.1);
+}
+
+.card-percent.percent-ref-pessoal i {
+    color: #3498db;
+}
+
+.metric-card:hover .card-percent.percent-ref-pessoal {
+    background: rgba(52, 152, 219, 0.15);
+}
+
+/* ========================================
+   MODAL POR MÁQUINA - GLASSMORPHISM
+   ======================================== */
+
+.por-maquina-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.por-maquina-modal.active {
+    display: flex;
+}
+
+/* Backdrop com blur */
+.por-maquina-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(38, 34, 35, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    cursor: pointer;
+}
+
+/* Conteúdo do modal */
+.por-maquina-content {
+    position: relative;
+    width: 90%;
+    max-width: 1200px;
+    max-height: 85vh;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.2);
+    overflow: hidden;
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 10000;
+}
+
+/* Header */
+.por-maquina-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem 2.5rem;
+    background: linear-gradient(135deg, rgba(242, 145, 27, 0.15) 0%, rgba(242, 145, 27, 0.05) 100%);
+    border-bottom: 1px solid rgba(242, 145, 27, 0.2);
+}
+
+.por-maquina-header h2 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    display: flex;
+    align-items: center;
+}
+
+.por-maquina-header h2 i {
+    color: var(--primary-color);
+    font-size: 1.5rem;
+}
+
+.por-maquina-close {
+    background: rgba(231, 76, 60, 0.1);
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #e74c3c;
+    font-size: 1.2rem;
+}
+
+.por-maquina-close:hover {
+    background: rgba(231, 76, 60, 0.2);
+    transform: rotate(90deg) scale(1.1);
+}
+
+/* Body */
+.por-maquina-body {
+    padding: 2rem 2.5rem;
+    overflow-y: auto;
+    max-height: calc(85vh - 120px);
+}
+
+/* Grid de cards */
+.por-maquina-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+/* Card item */
+.por-maquina-item {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 249, 250, 0.9) 100%);
+    border-radius: 16px;
+    padding: 1.5rem;
+    border: 1px solid rgba(242, 145, 27, 0.1);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.por-maquina-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--primary-color);
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+}
+
+.por-maquina-item:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(242, 145, 27, 0.15);
+    border-color: rgba(242, 145, 27, 0.3);
+}
+
+.por-maquina-item:hover::before {
+    transform: scaleY(1);
+}
+
+.por-maquina-item-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.por-maquina-item-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-right: 1rem;
+    background: rgba(242, 145, 27, 0.1);
+    color: var(--primary-color);
+}
+
+.por-maquina-item-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.por-maquina-item-values {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.por-maquina-value-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.por-maquina-value-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.por-maquina-value-number {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.por-maquina-value-highlight {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 1.5rem;
+}
+
+.por-maquina-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(242, 145, 27, 0.2), transparent);
+}
+
+/* Animações */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Scrollbar customizada */
+.por-maquina-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.por-maquina-body::-webkit-scrollbar-track {
+    background: rgba(242, 145, 27, 0.05);
+    border-radius: 4px;
+}
+
+.por-maquina-body::-webkit-scrollbar-thumb {
+    background: rgba(242, 145, 27, 0.3);
+    border-radius: 4px;
+}
+
+.por-maquina-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(242, 145, 27, 0.5);
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .por-maquina-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .por-maquina-header {
+        padding: 1.5rem;
+    }
+
+    .por-maquina-header h2 {
+        font-size: 1.25rem;
+    }
+
+    .por-maquina-body {
+        padding: 1.5rem;
+    }
+
+    .por-maquina-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Card clicável - Total Equipamentos */
+.metric-card.card-clickable {
+    cursor: pointer;
+    position: relative;
+}
+
+.metric-card.card-clickable:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(242, 145, 27, 0.25);
+}
+
+.metric-card.card-clickable::after {
+    content: '\F345';
+    /* Ícone expand do Bootstrap Icons */
+    font-family: 'bootstrap-icons';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.metric-card.card-clickable:hover::after {
+    opacity: 1;
+    transform: scale(1.2);
+}
+
+/* ========================================
+   BREAKDOWN CONTAINER - RECEITAS
+   ======================================== */
+
+.breakdown-container {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.breakdown-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 6px;
+}
+
+.breakdown-label {
+    font-size: 0.7rem;
+    color: rgba(38, 34, 35, 0.7);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 4px;
+}
+
+.breakdown-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+/* ========================================
+   TV DASHBOARD MODE
+   ======================================== */
+
+#tv-dashboard {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #1a1a1a;
+    /* Dark Background */
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    color: white;
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+}
+
+.tv-header {
+    height: 80px;
+    padding: 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tv-logo {
+    height: 50px;
+    filter: brightness(0) invert(1);
+    /* Make logo white */
+}
+
+.tv-clock {
+    font-size: 2rem;
+    font-weight: 300;
+    letter-spacing: 2px;
+}
+
+.tv-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    /* Hide scrollbars */
+    padding: 40px;
+    perspective: 1000px;
+}
+
+/* The Scrolling Logic  - HORIZONTAL MARQUEE */
+.tv-scroll-container {
+    display: flex;
+    /* Horizontal */
+    gap: 40px;
+    /* Space between cards */
+    padding-left: 100vw;
+    /* Start off-screen right */
+
+    /* Animation: Move Left */
+    /* We use JS duplicating content, so we just move left endlessly? 
+       Actually with duplicated content (A + A), we animate from 0 to -50%.
+    */
+    padding-left: 0;
+    width: max-content;
+    /* Allow growing */
+    animation: scrollLeft 60s linear infinite;
+}
+
+.tv-scroll-container:hover {
+    animation-play-state: paused;
+}
+
+/* Animations */
+@keyframes scrollLeft {
+    0% {
+        transform: translateX(0);
+    }
+
+    100% {
+        transform: translateX(-50%);
+    }
+
+    /* Move half way (the length of one 'A') */
+}
+
+/* Dynamic Animation Class handled by JS */
+.scroll-animate {
+    animation: scrollLeft linear infinite;
+}
+
+/* TV Cards - Resize for horizontal flow */
+.tv-card {
+    min-width: 400px;
+    /* Fixed width for smooth flow */
+    /* ... rest is same ... */
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 25px;
+    backdrop-filter: blur(5px);
+    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.tv-card:hover {
+    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* Card Types */
+.tv-card.kpi {
+    border-left: 4px solid var(--primary-color);
+}
+
+.tv-card.equip {
+    border-left: 4px solid #3498db;
+}
+
+.tv-card-header {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tv-card-value {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.tv-card-sub {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.tv-val-positive {
+    color: #2ecc71;
+}
+
+.tv-val-negative {
+    color: #e74c3c;
+}
+
+.tv-val-neutral {
+    color: #f1c40f;
+}
+
+
+.tv-footer {
+    height: 50px;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* Animations */
+@keyframes autoScroll {
+    0% {
+        transform: translateY(0);
+    }
+
+    100% {
+        transform: translateY(-300%);
+    }
+
+    /* Depends on content height */
+}
+
+/* Dynamic Animation Class handled by JS */
+.scroll-animate {
+    animation: autoScroll linear infinite;
+}
+
+/* ========================================
+   BRISINHAI - AI ASSISTANT
+   ======================================== */
+
+.brisinhai-float {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    z-index: 9990;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 2px solid var(--primary-color);
+    overflow: hidden;
+}
+
+.brisinhai-float:hover {
+    transform: scale(1.1);
+    box-shadow: 0 8px 24px rgba(242, 145, 27, 0.3);
+}
+
+.brisinhai-float img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.brisinhai-chat-window {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    width: 380px;
+    height: 500px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    z-index: 9991;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform-origin: bottom right;
+    transform: scale(0);
+    opacity: 0;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.brisinhai-chat-window.active {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.brisinhai-header {
+    padding: 15px 20px;
+    background: linear-gradient(135deg, var(--primary-color) 0%, #FFB347 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.brisinhai-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.brisinhai-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.brisinhai-close:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.brisinhai-messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.message {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    position: relative;
+    word-wrap: break-word;
+}
+
+.message.bot {
+    background: white;
+    align-self: flex-start;
+    border-bottom-left-radius: 2px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.message.user {
+    background: var(--primary-color);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+    box-shadow: 0 2px 5px rgba(242, 145, 27, 0.2);
+}
+
+/* Markdown Styles inside messages */
+.message.bot p {
+    margin-bottom: 0.5rem;
+}
+
+.message.bot p:last-child {
+    margin-bottom: 0;
+}
+
+.message.bot ul {
+    padding-left: 20px;
+    margin-bottom: 0.5rem;
+}
+
+.message.bot strong {
+    color: var(--primary-color);
+}
+
+.brisinhai-input-area {
+    padding: 15px;
+    background: white;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    display: flex;
+    gap: 10px;
+}
+
+.brisinhai-input {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 20px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.brisinhai-input:focus {
+    border-color: var(--primary-color);
+}
+
+.brisinhai-send-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.brisinhai-send-btn:hover {
+    transform: scale(1.05);
+}
+
+/* Typing Indicator */
+.typing-dots {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px !important;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    background: #ccc;
+    border-radius: 50%;
+    animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.dot:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.dot:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0);
+    }
+
+    40% {
+        transform: scale(1);
+    }
+}
+
+@media (max-width: 480px) {
+    .brisinhai-chat-window {
+        bottom: 0;
+        right: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+    }
+
+    .brisinhai-float {
+        bottom: 20px;
+    }
+}
+
+/* FIX 8: Sticky Header (Menu Superior) */
+.main-content>header {
+    position: sticky;
+    top: 0;
+    z-index: 990;
+    /* Abaixo do modal (9999), acima dos KPI cards (100) */
+    background: rgba(248, 249, 250, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    /* Compensar padding do .main-content (2rem) */
+    margin-top: -2rem;
+    margin-left: -2rem;
+    margin-right: -2rem;
+
+    /* Restaurar espaçamento interno */
+    padding: 1rem 2rem;
+
+    /* Visual */
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    margin-bottom: 2rem !important;
+}
+
+/* Ajuste fino para Mobile */
+@media (max-width: 768px) {
+    .main-content>header {
+        margin-top: 0;
+        /* Mobile remove margin-left mas talvez não padding top? */
+        /* Se main-content padding mudar em mobile, ajustar aqui */
+        top: 0;
+    }
+}
+
+/* FIX 9: Estilo do Botão de Auditoria */
+#btnAuditExport {
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px rgba(242, 145, 27, 0.2);
+}
+
+#btnAuditExport:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(242, 145, 27, 0.3);
+}/* ========================================
+   TV DASHBOARD MODE (Restored)
+   ======================================== */
+
+#tv-dashboard {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #1a1a1a;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    color: white;
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+}
+
+.tv-header {
+    height: 80px;
+    padding: 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tv-logo {
+    height: 50px;
+    filter: brightness(0) invert(1);
+}
+
+.tv-clock {
+    font-size: 2rem;
+    font-weight: 300;
+    letter-spacing: 2px;
+}
+
+.tv-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    padding: 40px;
+    perspective: 1000px;
+    display: flex;
+    align-items: center;
+    /* Center Vertically */
+}
+
+/* HORIZONTAL MARQUEE */
+.tv-scroll-container {
+    display: flex;
+    gap: 40px;
+    padding-left: 0;
+    width: max-content;
+    animation: scrollLeft 60s linear infinite;
+}
+
+.tv-scroll-container:hover {
+    animation-play-state: paused;
+}
+
+@keyframes scrollLeft {
+    0% {
+        transform: translateX(0);
+    }
+
+    100% {
+        transform: translateX(-50%);
+    }
+
+    /* Assumes content is duplicated x2 */
+}
+
+/* TV Cards */
+.tv-card {
+    min-width: 400px;
+    max-width: 400px;
+    height: 350px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 25px;
+    backdrop-filter: blur(5px);
+    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.tv-card:hover {
+    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.tv-card.kpi {
+    border-left: 4px solid var(--primary-color);
+}
+
+.tv-card.equip {
+    border-left: 4px solid #3498db;
+}
+
+.tv-card-header {
+    font-size: 1.3rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tv-card-header i {
+    font-size: 1.5rem;
+}
+
+.tv-card-value {
+    font-size: 3.5rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    line-height: 1.1;
+}
+
+.tv-card-sub {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    font-weight: 500;
+}
+
+.tv-val-positive {
+    color: #2ecc71;
+}
+
+.tv-val-negative {
+    color: #e74c3c;
+}
+
+.tv-val-neutral {
+    color: #f1c40f;
+}
+
+.tv-footer {
+    height: 50px;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.4);
+    justify-content: space-between;
+    padding: 0 40px;
+}
