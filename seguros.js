@@ -29,7 +29,36 @@ let state = {
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
+    tryAutoLoad();
 });
+
+/**
+ * Tenta carregar dados automaticamente se estiver em ambiente remoto
+ */
+function tryAutoLoad() {
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    const defaultFile = 'dados-seguros.csv';
+
+    console.log(`Tentando auto-load Seguros (${defaultFile})...`);
+
+    fetch(defaultFile)
+        .then(response => {
+            if (!response.ok) throw new Error("Arquivo padrão não encontrado");
+            return response.blob();
+        })
+        .then(blob => {
+            const file = new File([blob], defaultFile, { type: 'text/csv' });
+            const event = { target: { files: [file] } };
+            handleFileUpload(event);
+
+            if (isGitHubPages) {
+                console.log("Ambiente GitHub Pages detectado.");
+            }
+        })
+        .catch(err => {
+            console.warn("Auto-load indisponível ou arquivo não encontrado:", err.message);
+        });
+}
 
 function initEventListeners() {
     const fileInput = document.getElementById('csvFileSeguros');

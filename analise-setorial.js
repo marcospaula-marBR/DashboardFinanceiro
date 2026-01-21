@@ -541,8 +541,9 @@ function handleError(m) { showLoading(false); alert(m); }
 
 // Função Auto-Load
 function tryAutoLoad() {
-    console.log("Tentando auto-load...");
-    fetch('dados-analise.csv')
+    const defaultFile = 'dados-analise.csv';
+    console.log(`Tentando auto-load (${defaultFile})...`);
+    fetch(defaultFile)
         .then(response => {
             if (!response.ok) throw new Error("Arquivo padrão não encontrado");
             return response.text();
@@ -557,7 +558,7 @@ function tryAutoLoad() {
             });
         })
         .catch(err => {
-            console.warn("Auto-load indisponível (requer servidor local):", err);
+            console.warn("Auto-load indisponível ou arquivo não encontrado:", err.message);
         });
 }
 

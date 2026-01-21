@@ -184,6 +184,41 @@ function handleFileUpload(event) {
     });
 }
 
+/**
+ * Tenta carregar dados automaticamente se estiver em ambiente remoto
+ * ou se o usuário desejar um carregamento padrão.
+ */
+function tryAutoLoad() {
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    const defaultFile = 'dados.csv';
+
+    console.log(`Tentando auto-load (${defaultFile})...`);
+
+    // Se estiver no GitHub Pages, podemos ocultar a seção de upload se o auto-load for bem sucedido
+    // Ou apenas deixar como uma facilidade.
+
+    fetch(defaultFile)
+        .then(response => {
+            if (!response.ok) throw new Error("Arquivo padrão não encontrado");
+            return response.blob();
+        })
+        .then(blob => {
+            const file = new File([blob], defaultFile, { type: 'text/csv' });
+            const event = { target: { files: [file] } };
+            handleFileUpload(event);
+
+            if (isGitHubPages) {
+                console.log("Ambiente GitHub Pages detectado. Ajustando interface...");
+                // Opcional: Ocultar seção de upload se carregou com sucesso
+                // const uploadSection = document.querySelector('.upload-section');
+                // if (uploadSection) uploadSection.style.display = 'none';
+            }
+        })
+        .catch(err => {
+            console.warn("Auto-load indisponível ou arquivo não encontrado:", err.message);
+        });
+}
+
 function processParsedData(results) {
     console.log("Processando dados parsed:", results);
     // Expose data for BrisinhAI
@@ -418,6 +453,7 @@ function initEventListeners() {
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
     initCharts();
+    tryAutoLoad();
 
     // Update version in sidebar
     const vEl = document.getElementById('appVersion');

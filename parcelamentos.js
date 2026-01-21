@@ -50,12 +50,40 @@ document.addEventListener('DOMContentLoaded', () => {
         initEventListeners();
         initCharts();
         console.log("Initialization complete");
-        alert("Sistema pronto! Pode carregar o CSV.");
+        tryAutoLoad();
     } catch (e) {
         console.error("Critical Init Error:", e);
         alert("Erro ao iniciar o aplicativo: " + e.message);
     }
 });
+
+/**
+ * Tenta carregar dados automaticamente se estiver em ambiente remoto
+ */
+function tryAutoLoad() {
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    const defaultFile = 'dados-parcelamentos.csv';
+
+    console.log(`Tentando auto-load Parcelamentos (${defaultFile})...`);
+
+    fetch(defaultFile)
+        .then(response => {
+            if (!response.ok) throw new Error("Arquivo padrão não encontrado");
+            return response.blob();
+        })
+        .then(blob => {
+            const file = new File([blob], defaultFile, { type: 'text/csv' });
+            const event = { target: { files: [file] } };
+            handleFileUpload(event);
+
+            if (isGitHubPages) {
+                console.log("Ambiente GitHub Pages detectado.");
+            }
+        })
+        .catch(err => {
+            console.warn("Auto-load indisponível ou arquivo não encontrado:", err.message);
+        });
+}
 
 function initEventListeners() {
     // File Upload
@@ -77,6 +105,7 @@ function initEventListeners() {
     } else {
         console.warn("Element #csvFileParcelas not found!");
     }
+    // ... (rest of the listeners)
 
     // Filters
     const filterIds = ['filterCategoria', 'filterFormato', 'filterEmpresa', 'filterStatus'];

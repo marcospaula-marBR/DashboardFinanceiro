@@ -184,6 +184,35 @@ function handleFileUpload(event) {
     });
 }
 
+/**
+ * Tenta carregar dados automaticamente se estiver em ambiente remoto
+ * ou se o usuário desejar um carregamento padrão.
+ */
+function tryAutoLoad() {
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    const defaultFile = 'dados.csv';
+
+    console.log(`Tentando auto-load Gerencial (${defaultFile})...`);
+
+    fetch(defaultFile)
+        .then(response => {
+            if (!response.ok) throw new Error("Arquivo padrão não encontrado");
+            return response.blob();
+        })
+        .then(blob => {
+            const file = new File([blob], defaultFile, { type: 'text/csv' });
+            const event = { target: { files: [file] } };
+            handleFileUpload(event);
+
+            if (isGitHubPages) {
+                console.log("Ambiente GitHub Pages detectado. Ajustando interface...");
+            }
+        })
+        .catch(err => {
+            console.warn("Auto-load indisponível ou arquivo não encontrado:", err.message);
+        });
+}
+
 function processParsedData(results) {
     console.log("Processando dados parsed:", results);
     // Expose data for BrisinhAI
@@ -238,6 +267,7 @@ function processParsedData(results) {
         });
 
         state.rawData = data;
+        localStorage.setItem('dre_raw_data', JSON.stringify(data));
 
         // Populate metadata and filters
         extractMetadata(data);
@@ -412,6 +442,7 @@ function initEventListeners() {
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
     initCharts();
+    tryAutoLoad();
 
     // Update version in sidebar
     const vEl = document.getElementById('appVersion');
