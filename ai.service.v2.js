@@ -3,29 +3,25 @@
 
 
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+const GEMINI_API_URL = "/api/chat";
 
 class GeminiService {
     constructor() {
-        // MUITO IMPORTANTE: Substitua 'SUA_CHAVE_AQUI' pela sua API Key real do Google Gemini
-        this.apiKey = "AIzaSyAf94kI5iBxhiLyyKn1D5UjP_3znPcBQxY";
+        // A chave não fica mais no código. 
+        // Ela é gerenciada pelo servidor (Proxy) via variáveis de ambiente.
+        this.apiKey = null;
     }
 
     isAuthenticated() {
-        // Verifica se a chave existe e não é vazia
-        return !!this.apiKey;
+        // Sempre retorna verdadeiro pois a autenticação é tratada no servidor Proxy
+        return true;
     }
 
     setKey(key) {
-        this.apiKey = key;
-        // Não salvamos mais no localStorage para evitar conflitos de versão
+        // Método mantido para compatibilidade, mas sem utilidade no modo Proxy
     }
 
     async generateAnalysis(contextData, userQuestion = null, signal = null) {
-        if (!this.isAuthenticated()) {
-            throw new Error("API Key do Gemini não configurada.");
-        }
-
         const prompt = this._buildPrompt(contextData, userQuestion);
         const maxRetries = 3;
         let attempt = 0;
@@ -36,11 +32,11 @@ class GeminiService {
                     throw new DOMException("The user aborted a request.", "AbortError");
                 }
 
-                const response = await fetch(`${GEMINI_API_URL}?key=${this.apiKey}`, {
+                const response = await fetch(GEMINI_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }]
+                        prompt: prompt
                     }),
                     signal: signal
                 });
@@ -48,15 +44,14 @@ class GeminiService {
                 if (!response.ok) {
                     const errorData = await response.json();
 
-                    // Se for erro 503 (Overloaded) ou 500 (Internal), tenta novamente
                     if (response.status === 503 || response.status === 500) {
                         console.warn(`Tentativa ${attempt + 1} falhou: ${response.statusText}. Tentando novamente...`);
                         attempt++;
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Espera 2s
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                         continue;
                     }
 
-                    throw new Error(`Erro na API Gemini: ${errorData.error?.message || response.statusText}`);
+                    throw new Error(`Erro na IA: ${errorData.error?.message || response.statusText}`);
                 }
 
                 const data = await response.json();
