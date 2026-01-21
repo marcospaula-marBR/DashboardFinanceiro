@@ -6,7 +6,16 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Método não permitido' });
     }
 
-    const { prompt } = req.body;
+    let { prompt } = req.body;
+
+    // Fallback caso o body não venha parseado (comum em algumas configs do Vercel)
+    if (typeof req.body === 'string') {
+        try {
+            const parsed = JSON.parse(req.body);
+            prompt = parsed.prompt;
+        } catch (e) { }
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
