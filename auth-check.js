@@ -1,8 +1,9 @@
 (function () {
+    const isAuthed = sessionStorage.getItem('dashboard_auth') === 'true';
     const path = window.location.pathname;
-    const isLandingPage = path.endsWith('landing.html') || path === '/' || path === '';
+    const isLoginPage = path === '/' || path.endsWith('index.html') || path === '';
 
-    if (sessionStorage.getItem('dashboard_auth') !== 'true' && !isLandingPage) {
-        window.location.href = '/landing.html';
+    if (!isAuthed && !isLoginPage) {
+        window.location.replace('/');
     }
 })();

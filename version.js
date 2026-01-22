@@ -1,1 +1,1 @@
-window.APP_VERSION = "12.00-SECURE";
+window.APP_VERSION = "12.5-ULTRA-SECURE";

@@ -3,9 +3,14 @@
 
 <head>
     <meta charset="UTF-8">
-    <script src="auth-check.js"></script>
+    <script src="auth-check.js?v=12.0"></script>
+    <script>
+        if (sessionStorage.getItem('dashboard_auth') !== 'true') {
+            window.location.replace('/');
+        }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Análise Setorial - Mar Brasil | Gestão Financeira</title>
+    <title>DRE - Mar Brasil | Gestão Financeira</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -44,8 +49,14 @@
         <div class="sidebar-content">
             <div class="upload-section mb-4">
                 <label for="csvFile" class="form-label text-white mb-2"><i class="bi bi-cloud-upload me-2"></i>Carregar
-                    Análise Setorial</label>
+                    DRE</label>
                 <input class="form-control form-control-sm" type="file" id="csvFile" accept=".csv">
+
+                <!-- DESABILITADO TEMPORARIAMENTE
+                <button class="btn btn-outline-light btn-sm w-100 mt-2" onclick="loadFromGoogleSheets()">
+                    <i class="bi bi-table me-2"></i>Carregar do Google Sheets
+                </button>
+                -->
                 <div id="fileStatus" class="form-text text-white-50 mt-2">Nenhum arquivo carregado</div>
             </div>
             <hr class="border-secondary">
@@ -61,8 +72,15 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Setor</label>
-                    <select class="form-select form-select-sm" id="filterSetor" multiple>
+                    <label class="form-label text-white">Empresa</label>
+                    <select class="form-select form-select-sm" id="filterEmpresa" multiple>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Projeto</label>
+                    <select class="form-select form-select-sm" id="filterProjeto" multiple>
                         <!-- Options populated by JS -->
                     </select>
                 </div>
@@ -93,7 +111,7 @@
             <div class="d-flex align-items-center gap-3">
                 <img src="Mar-Brasil-sem-fundo-preto.png" alt="Mar Brasil Logo" style="max-height: 120px;">
                 <div>
-                    <h1 class="h3 fw-bold text-dark mb-0">Análise Setorial</h1>
+                    <h1 class="h3 fw-bold text-dark mb-0">Demonstração do Resultado</h1>
                     <p class="text-muted mb-0" id="lastUpdate">Aguardando dados...</p>
                 </div>
             </div>
@@ -102,6 +120,10 @@
                     title="Ocultar Valores">
                     <i class="bi bi-eye"></i>
                 </button>
+                <a href="indicadores-gestao.html" class="btn btn-primary text-white fw-bold">
+                    <i class="bi bi-speedometer2 me-1"></i>
+                    <span class="d-none d-md-inline">Dashboard do Gestor</span>
+                </a>
                 <a href="index.html" class="btn btn-secondary text-white">
                     <i class="bi bi-house-door me-1"></i>
                     <span class="d-none d-md-inline">Voltar ao Início</span>
@@ -116,15 +138,8 @@
             </div>
         </header>
 
-        <!-- KPI Cards Row - Financial -->
-        <h6 class="text-uppercase text-muted mb-3 small fw-bold">Indicadores Financeiros</h6>
-        <div class="row g-3 mb-4" id="kpiRowFinancial">
-            <!-- Cards populated by JS -->
-        </div>
-
-        <!-- KPI Cards Row - People (Credenciados) -->
-        <h6 class="text-uppercase text-muted mb-3 small fw-bold">Métricas de Equipe (Credenciados)</h6>
-        <div class="row g-3 mb-4" id="kpiRowPeople">
+        <!-- KPI Cards Row 1 (Main) -->
+        <div class="row g-3 mb-4 sticky-row" id="kpiRow1">
             <!-- Cards populated by JS -->
         </div>
 
@@ -133,8 +148,8 @@
             <div class="col-lg-8">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-header bg-white border-0 py-3">
-                        <h6 class="mb-0 fw-bold"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Despesas por
-                            Setor (Coluna Empilhada)</h6>
+                        <h6 class="mb-0 fw-bold"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Receitas vs
+                            Despesas (Mensal)</h6>
                     </div>
                     <div class="card-body">
                         <canvas id="mainChart"></canvas>
@@ -144,7 +159,7 @@
             <div class="col-lg-4">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-header bg-white border-0 py-3">
-                        <h6 class="mb-0 fw-bold"><i class="bi bi-pie-chart me-2 text-primary"></i>Composição por Setor
+                        <h6 class="mb-0 fw-bold"><i class="bi bi-pie-chart me-2 text-primary"></i>Composição de Custos
                         </h6>
                     </div>
                     <div class="card-body d-flex align-items-center justify-content-center">
@@ -154,58 +169,46 @@
             </div>
         </div>
 
-        <!-- Line Chart for Multiple Months -->
-        <div class="row g-3 mb-4">
-            <div class="col-12">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-header bg-white border-0 py-3">
-                        <h6 class="mb-0 fw-bold"><i class="bi bi-graph-up me-2 text-primary"></i>Evolução Temporal
-                            (Linha)</h6>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="lineChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Top Categories Chart -->
+        <!-- Secondary Charts Row (Waterfall & Top Expenses) -->
         <div class="row g-3 mb-4">
             <div class="col-lg-6">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-header bg-white border-0 py-3">
-                        <h6 class="mb-0 fw-bold"><i class="bi bi-list-ol me-2 text-primary"></i>Top 10 Categorias</h6>
+                        <h6 class="mb-0 fw-bold"><i class="bi bi-water me-2 text-primary"></i>Evolução de Saldo
+                            (Waterfall)</h6>
                     </div>
                     <div class="card-body">
-                        <canvas id="topCategoriesChart"></canvas>
+                        <canvas id="waterfallChart"></canvas>
                     </div>
                 </div>
             </div>
             <div class="col-lg-6">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-header bg-white border-0 py-3">
-                        <h6 class="mb-0 fw-bold"><i class="bi bi-speedometer2 me-2 text-primary"></i>Variação Mensal
-                        </h6>
+                        <h6 class="mb-0 fw-bold"><i class="bi bi-list-ol me-2 text-primary"></i>Top 5 Despesas</h6>
                     </div>
-                    <div class="card-body">
-                        <canvas id="variationChart"></canvas>
+                    <div class="card-body d-flex align-items-center justify-content-center">
+                        <canvas id="topExpensesChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Data Table -->
+        <!-- KPI Cards Row 2 (Secondary) -->
+        <div class="row g-3 mb-4" id="kpiRow2">
+            <!-- Cards populated by JS -->
+        </div>
+        <!-- DRE Table -->
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-table me-2 text-primary"></i>Detalhamento por Setor e Categoria
-                </h6>
+                <h6 class="mb-0 fw-bold"><i class="bi bi-table me-2 text-primary"></i>Detalhamento Financeiro</h6>
                 <button class="btn btn-sm btn-outline-secondary" id="btnExportTable">
                     <i class="bi bi-download me-1"></i> Exportar
                 </button>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle mb-0" id="dataTable">
+                    <table class="table table-hover table-striped align-middle mb-0" id="dreTable">
                         <thead class="table-light sticky-top">
                             <!-- Headers populated by JS -->
                         </thead>
@@ -219,7 +222,7 @@
 
     </div>
 
-    <!-- Modal for Details -->
+    <!-- Modal for Card Details -->
     <div class="modal fade" id="detailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -257,12 +260,12 @@
                             </div>
                         </div>
                     </div>
-                    <h6 class="fw-bold mb-3">Composição Detalhada</h6>
+                    <h6 class="fw-bold mb-3">Composição por Categoria</h6>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover" id="modalTable">
                             <thead>
                                 <tr>
-                                    <th>Item</th>
+                                    <th>Categoria</th>
                                     <th class="text-end">Valor Total</th>
                                     <th class="text-end">%</th>
                                 </tr>
@@ -272,6 +275,116 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Por Máquina -->
+    <div id="porMaquinaModal" class="por-maquina-modal">
+        <div class="por-maquina-backdrop" onclick="closePorMaquinaModal()"></div>
+        <div class="por-maquina-content">
+            <div class="por-maquina-header">
+                <h2><i class="bi bi-pc-display-horizontal me-2"></i>Análise por Equipamento</h2>
+                <button class="por-maquina-close" onclick="closePorMaquinaModal()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="por-maquina-body">
+                <!-- Cards do Topo -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-1">Total Acumulado</h6>
+                                <h3 class="mb-0" id="porMaquinaTotal">-</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-1">Média Mensal</h6>
+                                <h3 class="mb-0" id="porMaquinaMedia">-</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h6 class="mb-1"><i class="bi bi-pc-display me-1"></i>Equipamentos</h6>
+                                <h3 class="mb-0" id="porMaquinaQtd">-</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela -->
+                <div id="porMaquinaBody">
+                    <!-- Conteúdo será gerado dinamicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal Personalizar Relatório -->
+    <div class="modal fade" id="reportOptionsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold">Personalizar Relatório PDF</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-4">Selecione os itens que deseja incluir no relatório final.</p>
+
+                    <div class="vstack gap-3">
+                        <div class="form-check p-3 border rounded bg-light">
+                            <input class="form-check-input" type="checkbox" id="checkAI" checked>
+                            <label class="form-check-label d-flex align-items-center gap-2" for="checkAI">
+                                <span class="fs-5">🤖</span>
+                                <div>
+                                    <span class="fw-semibold">Análise Inteligente (BrisinhAI)</span>
+                                    <div class="small text-muted">Insights automáticos sobre seus dados</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkKPI" checked>
+                            <label class="form-check-label fw-medium" for="checkKPI">
+                                Indicadores Principais (KPIs)
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkChartEvol" checked>
+                            <label class="form-check-label fw-medium" for="checkChartEvol">
+                                Gráfico de Evolução (Receitas x Despesas)
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkChartComp" checked>
+                            <label class="form-check-label fw-medium" for="checkChartComp">
+                                Gráfico de Composição (Custos)
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkDet" checked>
+                            <label class="form-check-label fw-medium" for="checkDet">
+                                Indicadores Detalhados (Secundários)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary px-4" onclick="startPDFGeneration()">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>Gerar Relatório
+                    </button>
                 </div>
             </div>
         </div>
@@ -296,11 +409,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <script src="analise-setorial.js?v=11.12"></script>
+    <script src="script.js?v=11.12"></script>
     <script>
         // Sticky KPI Cards - add shadow on scroll
         window.addEventListener('scroll', () => {
-            const kpiRow = document.getElementById('kpiRow');
+            const kpiRow = document.getElementById('kpiRow1');
             if (kpiRow) {
                 if (window.scrollY > 50) {
                     kpiRow.classList.add('scrolled');
