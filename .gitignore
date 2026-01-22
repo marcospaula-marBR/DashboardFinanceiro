@@ -21,3 +21,4 @@ Thumbs.db
 
 # Validations
 *.log
+.vercel
