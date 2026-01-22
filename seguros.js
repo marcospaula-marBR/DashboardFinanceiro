@@ -600,11 +600,14 @@ function showKPIChart(type) {
 async function exportToPDF() {
     try {
         const btn = document.getElementById('btnExportPDF');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
-        btn.disabled = true;
+        const originalText = btn ? btn.innerHTML : 'Exportar PDF';
+        if (btn) {
+            btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Gerando...';
+            btn.disabled = true;
+        }
 
-        document.getElementById('loadingOverlay').classList.remove('d-none');
+        const loader = document.getElementById('loadingOverlay');
+        if (loader) loader.classList.remove('d-none');
 
         // --- Configuration ---
         const PAGE_WIDTH = 800; // px
@@ -681,8 +684,8 @@ async function exportToPDF() {
             </div>`;
 
         try {
-            const logo = document.querySelector('.sidebar-header img') || document.querySelector('header img');
-            if (logo) {
+            const logo = document.querySelector('.sidebar-header img') || document.querySelector('header img') || document.querySelector('.sidebar-content img');
+            if (logo && logo.naturalWidth > 0) {
                 const c = document.createElement('canvas');
                 c.width = logo.naturalWidth; c.height = logo.naturalHeight;
                 c.getContext('2d').drawImage(logo, 0, 0);
@@ -750,11 +753,11 @@ async function exportToPDF() {
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid #eee';
                 tr.innerHTML = `
-                    <td style="padding:5px;"><strong>${item.contratante}</strong><br><span style="color:#777">${item.item || ''}</span></td>
+                    <td style="padding:5px;"><strong>${item.contratante || ''}</strong><br><span style="color:#777">${item.segurado || ''}</span></td>
                     <td style="padding:5px;">${item.tipo || ''}</td>
                     <td style="padding:5px;">${item.seguradora || ''}</td>
-                    <td style="padding:5px;">${item.vigenciaFinal ? item.vigenciaFinal.toLocaleDateString('pt-BR') : '-'}</td>
-                    <td style="padding:5px; text-align:right;">${fmt(item.premioTotal)}</td>
+                    <td style="padding:5px;">${item.vencimento ? item.vencimento.toLocaleDateString('pt-BR') : '-'}</td>
+                    <td style="padding:5px; text-align:right;">${fmt(item.premio)}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -778,16 +781,23 @@ async function exportToPDF() {
         doc.save(`Seguros_MarBrasil_${new Date().toISOString().slice(0, 10)}.pdf`);
 
         document.body.removeChild(mainContainer);
-        document.getElementById('loadingOverlay').classList.add('d-none');
-        btn.innerHTML = originalText;
-        btn.disabled = false;
+        const finalLoader = document.getElementById('loadingOverlay');
+        if (finalLoader) finalLoader.classList.add('d-none');
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
 
     } catch (e) {
         console.error(e);
         alert("Erro no PDF: " + e.message);
-        document.getElementById('loadingOverlay').classList.add('d-none');
-        document.getElementById('btnExportPDF').disabled = false;
-        document.getElementById('btnExportPDF').innerHTML = 'Exportar PDF';
+        const errorLoader = document.getElementById('loadingOverlay');
+        if (errorLoader) errorLoader.classList.add('d-none');
+        const errorBtn = document.getElementById('btnExportPDF');
+        if (errorBtn) {
+            errorBtn.disabled = false;
+            errorBtn.innerHTML = 'Exportar PDF';
+        }
     }
 }
 

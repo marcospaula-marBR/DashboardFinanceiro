@@ -222,7 +222,6 @@ function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    alert("Arquivo detectado: " + file.name);
     debug("Iniciando carregamento de: " + file.name);
 
     const overlay = document.getElementById('loadingOverlay');

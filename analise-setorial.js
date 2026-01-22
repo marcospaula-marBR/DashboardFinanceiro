@@ -3,7 +3,7 @@
 // Last Update: 08/01/2026 - 14:15
 
 const CONFIG = {
-    VERSION: "1.4.0",
+    VERSION: "16.0",
     COLORS: {
         primary: '#F2911B', secondary: '#262223', success: '#2ecc71',
         danger: '#e74c3c', info: '#3498db', light: '#F2F2F2',
@@ -42,15 +42,33 @@ function handleFileUpload(event) {
     safeSetText('fileStatus', `Carregando ${file.name}...`);
 
     const reader = new FileReader();
+    reader.onload = function (e) {
+        const arrayBuffer = e.target.result;
+        const bytes = new Uint8Array(arrayBuffer);
 
-    reader.onload = (e) => {
-        Papa.parse(e.target.result, {
-            header: true, skipEmptyLines: true,
-            complete: (results) => processData(results),
-            error: (err) => handleError(err.message)
+        let encoding = 'iso-8859-1';
+        // Detect UTF-8 BOM (EF BB BF)
+        if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+            encoding = 'utf-8';
+        }
+
+        const decoder = new TextDecoder(encoding);
+        const text = decoder.decode(arrayBuffer);
+
+        Papa.parse(text, {
+            header: true,
+            skipEmptyLines: 'greedy',
+            complete: (results) => {
+                processData(results);
+                showLoading(false);
+            },
+            error: (err) => {
+                handleError(err.message);
+                showLoading(false);
+            }
         });
     };
-    reader.readAsText(file, 'Windows-1252');
+    reader.readAsArrayBuffer(file);
 }
 
 function processData(results) {

@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="version.js?v=16.0"></script>
 
     <style>
         :root {
@@ -147,11 +148,13 @@
             flex-grow: 1;
             padding: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             min-height: calc(100vh - 80px);
             margin-top: 80px;
             max-width: 100vw;
+            padding-top: 50px;
         }
 
         .indicators-section {
@@ -369,9 +372,20 @@
     </header>
 
     <main class="main-container">
+        <!-- Novo Informativo Centralizado -->
+        <div style="text-align: center; margin-bottom: 40px; animation: fadeInDown 0.8s ease-out;">
+            <h3
+                style="color: var(--primary); font-weight: 800; text-transform: uppercase; letter-spacing: 6px; font-size: 1.8rem; margin: 0; text-shadow: 0 0 20px rgba(242, 145, 27, 0.3);">
+                Indicadores por Equipamento
+            </h3>
+            <div
+                style="width: 100px; height: 3px; background: var(--primary); margin: 15px auto; border-radius: 3px; opacity: 0.6;">
+            </div>
+        </div>
+
         <!-- Linha Única de Indicadores -->
         <section class="indicators-section">
-            <div class="section-title">Painel Estratégico de Indicadores (TV Prompt)</div>
+            <div class="section-title" style="display: none;">Painel Estratégico</div>
             <div class="indicators-grid" id="indicatorsGrid">
                 <div class="scroll-container" id="mainIndicatorsGrid">
                     <!-- Cards populated by JS -->
@@ -382,11 +396,11 @@
 
     <div id="versionDisplay"
         style="position: fixed; bottom: 20px; right: 20px; font-size: 0.6rem; color: var(--text-muted); opacity: 0.5;">
-        v2.5.0</div>
+        v16.0</div>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="indicadores-gestao.js"></script>
+    <script src="indicadores-gestao.js?v=16.0"></script>
 </body>
 
 </html>
