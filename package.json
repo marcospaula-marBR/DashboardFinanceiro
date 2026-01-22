@@ -4,9 +4,6 @@
     "type": "module",
     "description": "Dashboard Financeiro com IA",
     "main": "index.html",
-    "scripts": {
-        "build": "echo 'No build required'"
-    },
     "dependencies": {},
     "devDependencies": {},
     "engines": {
