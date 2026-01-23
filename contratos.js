@@ -34,7 +34,7 @@ async function initData() {
         if (!response.ok) throw new Error("Arquivo não encontrado.");
 
         const buffer = await response.arrayBuffer();
-        const decoder = new TextDecoder('iso-8859-1');
+        const decoder = new TextDecoder('utf-8');
         const text = decoder.decode(buffer);
 
         const results = Papa.parse(text, {
@@ -43,26 +43,32 @@ async function initData() {
             delimiter: ","
         });
 
-        console.log("CSV Results v24:", results);
+        console.log("CSV Results v25.1:", results);
 
-        state.dados = results.data.map(d => {
+        state.dados = results.data.map((d, index) => {
             const row = { valorFaturado: 0, valorLiquido: 0, impostos: 0 };
+
+            if (index === 0) console.log("Colunas detectadas:", Object.keys(d));
+
             Object.keys(d).forEach(key => {
                 const rawKey = key.trim();
                 const cleanKey = rawKey.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
 
-                if (cleanKey.includes('faturado')) row.valorFaturado = parseCurrency(d[rawKey]);
-                if (cleanKey.includes('liquido')) row.valorLiquido = parseCurrency(d[rawKey]);
-                if (cleanKey.includes('imposto')) row.impostos = parseCurrency(d[rawKey]);
-                if (cleanKey.includes('previs')) row.dataPrevisao = d[rawKey];
-                if (cleanKey.includes('emiss')) row.dataEmissao = d[rawKey];
-                if (cleanKey.includes('status')) row.statusOriginal = d[rawKey];
-                if (cleanKey.includes('contrato')) row.Contrato = d[rawKey];
-                if (cleanKey.includes('empresa')) row.Empresa = d[rawKey];
-                if (cleanKey.includes('ciclo')) row.Ciclo = d[rawKey];
+                const val = d[rawKey];
+                if (cleanKey.includes('faturado')) row.valorFaturado = parseCurrency(val);
+                if (cleanKey.includes('liquido')) row.valorLiquido = parseCurrency(val);
+                if (cleanKey.includes('imposto')) row.impostos = parseCurrency(val);
+
+                if (cleanKey.includes('previs')) row.dataPrevisao = val;
+                if (cleanKey.includes('emiss')) row.dataEmissao = val;
+                if (cleanKey.includes('status')) row.statusOriginal = val;
+                if (cleanKey.includes('contrato')) row.Contrato = val;
+                if (cleanKey.includes('empresa')) row.Empresa = val;
+                if (cleanKey.includes('ciclo')) row.Ciclo = val;
             });
-            // Fallback manual se necessário
-            if (!row.valorLiquido) row.valorLiquido = parseCurrency(d['Valor líquido'] || d['Valor l\u00edquido'] || d['Valor liquido']);
+
+            if (index < 3) console.log(`Linha ${index}: F=${row.valorFaturado}, L=${row.valorLiquido}, I=${row.impostos}`);
+
             row.analiseAtraso = calcularAtraso(row.dataPrevisao, row.statusOriginal);
             return row;
         });

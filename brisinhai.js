@@ -229,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isVoiceEnabled = true; // Default to on
     let recognition = null;
     let isListening = false;
+    let lastBotMessage = ""; // Para retomar o áudio ao desmutar
 
     // Initialize Speech Recognition
     if ('webkitSpeechRecognition' in window) {
@@ -284,6 +285,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateVoiceIcon();
         if (!isVoiceEnabled) {
             window.speechSynthesis.cancel(); // Stop talking if muted
+        } else if (lastBotMessage) {
+            speakText(lastBotMessage); // Retomar se houver mensagem
         }
     });
 
@@ -355,6 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper: Add Message
     window.addMessage = function (type, text) {
+        if (type === 'bot') lastBotMessage = text; // Armazena para retomada de áudio
         const div = document.createElement('div');
         div.className = `message ${type}`;
 
