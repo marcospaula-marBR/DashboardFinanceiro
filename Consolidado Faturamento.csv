@@ -1,9 +1,9 @@
 ﻿Contrato,Empresa,Ciclo,Solicitação,Emissão,Confirmação,Previsão,Valor Faturado,Valor líquido,Impostos,Status
-Contrato 1390/2024 - SESAP,Mar Brasil,Nov-25,12/1/25,12/2/25,12/3/25,12/30/25,"R$ 25,266.70","R$ 21,165.75","R$ 4,100.95",Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Nov-25,12/1/25,12/2/25,12/3/25,1/16/26,"R$ 4,211.07","R$ 3,527.59",R$ 683.48,Pago
-Contrato CRSN 6018/25 - CRSN,Mar Brasil,Nov-25,12/1/25,12/4/25,12/10/25,12/30/25,"R$ 23,767.51","R$ 19,909.89","R$ 3,857.62",Pendente
-Contrato CSP 274/24 - CMSP,Mar Brasil,Nov-25,12/10/25,12/10/25,12/11/25,12/29/25,"R$ 50,206.66","R$ 42,057.79","R$ 8,148.87",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/30/25,"R$ 460,899.42","R$ 381,483.41","R$ 79,416.01",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Nov-25,12/1/25,12/2/25,12/3/25,12/30/25,""R$ 25,266.70"",""R$ 21,165.75"",""R$ 4,100.95"",Pago"
+"Contrato 1390/2024 - SESAP,Mar Brasil,Nov-25,12/1/25,12/2/25,12/3/25,1/16/26,""R$ 4,211.07"",""R$ 3,527.59"",R$ 683.48,Pago"
+"Contrato CRSN 6018/25 - CRSN,Mar Brasil,Nov-25,12/1/25,12/4/25,12/10/25,12/30/25,""R$ 23,767.51"",""R$ 19,909.89"",""R$ 3,857.62"",Pendente"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,Nov-25,12/10/25,12/10/25,12/11/25,12/29/25,""R$ 50,206.66"",""R$ 42,057.79"",""R$ 8,148.87"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/30/25,""R$ 460,899.42"",""R$ 381,483.41"",""R$ 79,416.01"",Pago"
 Rede Alpha - VISCONDE LEOPOLDO,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/20/25,R$ 404.23,R$ 334.58,R$ 69.65,Pago
 Rede Alpha - AYRTON SENNA,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/20/25,R$ 404.23,R$ 334.58,R$ 69.65,Pago
 Rede Alpha - AFONSO PENNA,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/20/25,R$ 404.23,R$ 334.58,R$ 69.65,Pago
@@ -12,18 +12,18 @@ Rede Alpha - MARECHAL MALLET,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/20/25,
 Rede Alpha - COSTA 2,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/20/25,R$ 404.23,R$ 334.58,R$ 69.65,Pago
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/20/25,R$ 404.23,R$ 334.58,R$ 69.65,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/20/25,R$ 404.23,R$ 334.58,R$ 69.65,Pago
-Crestani,Mar Brasil,Nov-25,11/28/25,11/28/25,11/28/25,11/28/25,"R$ 54,156.25","R$ 46,449.46","R$ 7,706.79",Pago
-MAM,Mar Brasil,Nov-25,11/28/25,11/28/25,11/28/25,11/28/25,"R$ 45,545.00","R$ 39,063.65","R$ 6,481.35",Pago
+"Crestani,Mar Brasil,Nov-25,11/28/25,11/28/25,11/28/25,11/28/25,""R$ 54,156.25"",""R$ 46,449.46"",""R$ 7,706.79"",Pago"
+"MAM,Mar Brasil,Nov-25,11/28/25,11/28/25,11/28/25,11/28/25,""R$ 45,545.00"",""R$ 39,063.65"",""R$ 6,481.35"",Pago"
 Rossi Advocacia ,Mar Brasil,Nov-25,12/1/25,12/2/25,12/8/25,12/15/25,R$ 849.65,R$ 703.25,R$ 146.40,Pago
-Contrato Locação Cellula Mater,Ybox,Nov-25,12/1/25,12/1/25,12/8/25,12/30/25,"R$ 22,012.37","R$ 20,547.51","R$ 1,464.86",Pago
-Contrato Locação Polo Play,Ybox,Nov-25,12/1/25,12/1/25,12/8/25,12/20/25,"R$ 7,389.64","R$ 6,897.71",R$ 491.93,Pago
-Contrato Locação Posto Door,Ybox,Nov-25,12/1/25,12/1/25,12/8/25,12/15/25,"R$ 14,955.73","R$ 13,961.26",R$ 994.47,Pago
-Contrato Locação Caetés,Ybox,Nov-25,12/1/25,12/7/25,12/7/25,12/11/25,"R$ 2,600.00","R$ 2,600.00",,Pago
+"Contrato Locação Cellula Mater,Ybox,Nov-25,12/1/25,12/1/25,12/8/25,12/30/25,""R$ 22,012.37"",""R$ 20,547.51"",""R$ 1,464.86"",Pago"
+"Contrato Locação Polo Play,Ybox,Nov-25,12/1/25,12/1/25,12/8/25,12/20/25,""R$ 7,389.64"",""R$ 6,897.71"",R$ 491.93,Pago"
+"Contrato Locação Posto Door,Ybox,Nov-25,12/1/25,12/1/25,12/8/25,12/15/25,""R$ 14,955.73"",""R$ 13,961.26"",R$ 994.47,Pago"
+"Contrato Locação Caetés,Ybox,Nov-25,12/1/25,12/7/25,12/7/25,12/11/25,""R$ 2,600.00"",""R$ 2,600.00"",,Pago"
 Locação Casa 06 (Saniele),D.Z.M,Nov-25,12/1/25,12/1/25,,12/20/25,R$ 858.57,R$ 768.57,R$ 90.00,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Oct-25,10/31/25,11/5/25,11/6/25,12/4/25,"R$ 31,583.33","R$ 26,449.77","R$ 5,133.56",Pago
-Contrato 135/2025 - SEDUC,Mar Brasil,Oct-25,10/31/25,11/6/25,11/6/25,12/11/25,"R$ 170,635.65","R$ 142,900.48","R$ 27,735.17",Pago
-Contrato CSP 274/24 - CMSP,Mar Brasil,Oct-25,10/31/25,11/19/25,11/19/25,12/8/25,"R$ 50,206.66","R$ 42,046.05","R$ 8,160.61",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Oct-25,10/31/25,11/7/25,11/7/25,12/10/25,"R$ 460,899.42","R$ 381,375.70","R$ 79,523.72",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Oct-25,10/31/25,11/5/25,11/6/25,12/4/25,""R$ 31,583.33"",""R$ 26,449.77"",""R$ 5,133.56"",Pago"
+"Contrato 135/2025 - SEDUC,Mar Brasil,Oct-25,10/31/25,11/6/25,11/6/25,12/11/25,""R$ 170,635.65"",""R$ 142,900.48"",""R$ 27,735.17"",Pago"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,Oct-25,10/31/25,11/19/25,11/19/25,12/8/25,""R$ 50,206.66"",""R$ 42,046.05"",""R$ 8,160.61"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Oct-25,10/31/25,11/7/25,11/7/25,12/10/25,""R$ 460,899.42"",""R$ 381,375.70"",""R$ 79,523.72"",Pago"
 Rede Alpha - VISCONDE LEOPOLDO,Mar Brasil,Oct-25,10/31/25,11/5/25,11/5/25,11/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - AYRTON SENNA,Mar Brasil,Oct-25,10/31/25,11/5/25,11/5/25,11/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - AFONSO PENNA,Mar Brasil,Oct-25,10/31/25,11/5/25,11/5/25,11/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
@@ -32,16 +32,16 @@ Rede Alpha - MARECHAL MALLET,Mar Brasil,Oct-25,10/31/25,11/5/25,11/5/25,11/20/25
 Rede Alpha - COSTA 2,Mar Brasil,Oct-25,10/31/25,11/5/25,11/5/25,11/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Oct-25,10/31/25,11/5/25,11/5/25,11/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Oct-25,10/31/25,11/5/25,11/5/25,11/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
-Zasso,Mar Brasil,Oct-25,10/31/25,11/3/25,11/3/25,11/30/25,"R$ 7,305.76","R$ 6,264.39","R$ 1,041.37",Pendente
+"Zasso,Mar Brasil,Oct-25,10/31/25,11/3/25,11/3/25,11/30/25,""R$ 7,305.76"",""R$ 6,264.39"",""R$ 1,041.37"",Pendente"
 Rossi Advocacia ,Mar Brasil,Oct-25,10/31/25,11/5/25,11/10/25,11/15/25,R$ 849.65,R$ 703.05,R$ 146.60,Pago
-Contrato Locação Cellula Mater,Ybox,Oct-25,11/1/25,11/1/25,11/10/25,12/1/25,"R$ 22,012.37","R$ 20,515.53","R$ 1,496.84",Pago
-Contrato Locação Polo Play,Ybox,Oct-25,11/1/25,11/1/25,11/10/25,12/8/25,"R$ 7,389.64","R$ 6,887.14",R$ 502.50,Pago
-Contrato Locação Posto Door,Ybox,Oct-25,11/1/25,11/1/25,11/10/25,11/25/25,"R$ 14,955.73","R$ 13,938.74","R$ 1,016.99",Pago
-Contrato Locação Rua Caetés,Ybox,Oct-25,11/13/25,11/7/25,11/13/25,11/11/25,"R$ 2,600.00","R$ 2,423.20",R$ 176.80,Pago
+"Contrato Locação Cellula Mater,Ybox,Oct-25,11/1/25,11/1/25,11/10/25,12/1/25,""R$ 22,012.37"",""R$ 20,515.53"",""R$ 1,496.84"",Pago"
+"Contrato Locação Polo Play,Ybox,Oct-25,11/1/25,11/1/25,11/10/25,12/8/25,""R$ 7,389.64"",""R$ 6,887.14"",R$ 502.50,Pago"
+"Contrato Locação Posto Door,Ybox,Oct-25,11/1/25,11/1/25,11/10/25,11/25/25,""R$ 14,955.73"",""R$ 13,938.74"",""R$ 1,016.99"",Pago"
+"Contrato Locação Rua Caetés,Ybox,Oct-25,11/13/25,11/7/25,11/13/25,11/11/25,""R$ 2,600.00"",""R$ 2,423.20"",R$ 176.80,Pago"
 Locação Casa 06 (Saniele),D.Z.M,Oct-25,11/1/25,11/1/25,11/1/25,11/28/25,R$ 858.57,R$ 768.57,R$ 90.00,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Sep-25,10/1/25,10/10/25,10/16/25,11/7/25,"R$ 31,583.33","R$ 26,459.74","R$ 5,123.59",Pago
-Contrato CSP 274/24 - CMSP,Mar Brasil,Sep-25,10/22/25,10/23/25,10/24/25,11/7/25,"R$ 50,206.66","R$ 42,061.90","R$ 8,144.76",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Sep-25,10/1/25,10/8/25,10/22/25,10/30/25,"R$ 460,899.42","R$ 381,521.18","R$ 79,378.24",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Sep-25,10/1/25,10/10/25,10/16/25,11/7/25,""R$ 31,583.33"",""R$ 26,459.74"",""R$ 5,123.59"",Pago"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,Sep-25,10/22/25,10/23/25,10/24/25,11/7/25,""R$ 50,206.66"",""R$ 42,061.90"",""R$ 8,144.76"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Sep-25,10/1/25,10/8/25,10/22/25,10/30/25,""R$ 460,899.42"",""R$ 381,521.18"",""R$ 79,378.24"",Pago"
 Rede Alpha - AYRTON SENNA,Mar Brasil,Sep-25,10/1/25,10/14/25,10/20/25,10/20/25,R$ 404.23,R$ 334.61,R$ 69.62,Pago
 Rede Alpha - AFONSO PENNA,Mar Brasil,Sep-25,10/1/25,10/14/25,10/20/25,10/20/25,R$ 404.23,R$ 334.61,R$ 69.62,Pago
 Rede Alpha - DR CARVALHO,Mar Brasil,Sep-25,10/1/25,10/14/25,10/20/25,10/20/25,R$ 404.23,R$ 334.61,R$ 69.62,Pago
@@ -50,19 +50,19 @@ Rede Alpha - COSTA 2,Mar Brasil,Sep-25,10/1/25,10/14/25,10/20/25,10/20/25,R$ 404
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Sep-25,10/1/25,10/14/25,10/20/25,10/20/25,R$ 404.23,R$ 334.61,R$ 69.62,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Sep-25,10/1/25,10/14/25,10/20/25,10/20/25,R$ 404.23,R$ 334.61,R$ 69.62,Pago
 Rossi Advocacia ,Mar Brasil,Sep-25,10/1/25,10/9/25,10/15/25,10/15/25,R$ 849.65,R$ 703.32,R$ 146.33,Pago
-Praia Grande - SESAP,Mar Brasil,Sep-25,10/2/25,10/7/25,10/2/25,10/29/25,"R$ 3,000.00","R$ 2,483.33",R$ 516.67,Pago
-Praia Grande - SEAD,Mar Brasil,Sep-25,10/1/25,10/2/25,10/22/25,11/19/25,"R$ 29,057.96","R$ 24,053.46","R$ 5,004.50",Pago
-Oftalmológico,Mar Brasil,Sep-25,10/23/25,10/23/25,10/23/25,11/11/25,"R$ 32,732.98","R$ 28,077.54","R$ 4,655.44",Pago
-MAM,Mar Brasil,Sep-25,10/26/25,10/26/25,10/26/25,10/26/25,"R$ 12,725.00","R$ 10,915.19","R$ 1,809.81",Pago
-MAM,Mar Brasil,Sep-25,10/21/25,10/21/25,10/21/25,10/21/25,"R$ 26,445.00","R$ 22,683.87","R$ 3,761.13",Pago
-Contrato Locação Cellula Mater,Ybox,Sep-25,10/1/25,10/1/25,10/3/25,10/30/25,"R$ 22,012.37","R$ 20,547.51","R$ 1,464.86",Pago
-Contrato Locação Polo Play,Ybox,Sep-25,10/1/25,10/1/25,10/3/25,10/21/25,"R$ 7,389.64","R$ 6,897.71",R$ 491.93,Pago
-Contrato Locação Posto Door,Ybox,Sep-25,10/1/25,10/1/25,10/3/25,10/16/25,"R$ 14,955.73","R$ 13,961.26",R$ 994.47,Pago
-Locação Casa 03 (Marcos),D.Z.M,Sep-25,10/1/25,10/1/25,10/1/25,10/20/25,"R$ 1,000.00",R$ 890.00,R$ 110.00,Pendente
+"Praia Grande - SESAP,Mar Brasil,Sep-25,10/2/25,10/7/25,10/2/25,10/29/25,""R$ 3,000.00"",""R$ 2,483.33"",R$ 516.67,Pago"
+"Praia Grande - SEAD,Mar Brasil,Sep-25,10/1/25,10/2/25,10/22/25,11/19/25,""R$ 29,057.96"",""R$ 24,053.46"",""R$ 5,004.50"",Pago"
+"Oftalmológico,Mar Brasil,Sep-25,10/23/25,10/23/25,10/23/25,11/11/25,""R$ 32,732.98"",""R$ 28,077.54"",""R$ 4,655.44"",Pago"
+"MAM,Mar Brasil,Sep-25,10/26/25,10/26/25,10/26/25,10/26/25,""R$ 12,725.00"",""R$ 10,915.19"",""R$ 1,809.81"",Pago"
+"MAM,Mar Brasil,Sep-25,10/21/25,10/21/25,10/21/25,10/21/25,""R$ 26,445.00"",""R$ 22,683.87"",""R$ 3,761.13"",Pago"
+"Contrato Locação Cellula Mater,Ybox,Sep-25,10/1/25,10/1/25,10/3/25,10/30/25,""R$ 22,012.37"",""R$ 20,547.51"",""R$ 1,464.86"",Pago"
+"Contrato Locação Polo Play,Ybox,Sep-25,10/1/25,10/1/25,10/3/25,10/21/25,""R$ 7,389.64"",""R$ 6,897.71"",R$ 491.93,Pago"
+"Contrato Locação Posto Door,Ybox,Sep-25,10/1/25,10/1/25,10/3/25,10/16/25,""R$ 14,955.73"",""R$ 13,961.26"",R$ 994.47,Pago"
+"Locação Casa 03 (Marcos),D.Z.M,Sep-25,10/1/25,10/1/25,10/1/25,10/20/25,""R$ 1,000.00"",R$ 890.00,R$ 110.00,Pendente"
 Locação Casa 06 (Saniele),D.Z.M,Sep-25,10/1/25,10/1/25,10/1/25,11/3/25,R$ 858.57,R$ 768.57,R$ 90.00,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Aug-25,9/1/25,9/5/25,9/8/25,10/2/25,"R$ 31,583.33","R$ 26,162.47","R$ 5,420.86",Pago
-Contrato CSP 274/24 - CMSP,Mar Brasil,Aug-25,9/22/25,9/22/25,9/24/25,10/16/25,"R$ 50,206.66","R$ 42,091.42","R$ 8,115.24",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Aug-25,9/1/25,9/3/25,9/5/25,9/30/25,"R$ 460,899.42","R$ 381,792.14","R$ 79,107.28",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Aug-25,9/1/25,9/5/25,9/8/25,10/2/25,""R$ 31,583.33"",""R$ 26,162.47"",""R$ 5,420.86"",Pago"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,Aug-25,9/22/25,9/22/25,9/24/25,10/16/25,""R$ 50,206.66"",""R$ 42,091.42"",""R$ 8,115.24"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Aug-25,9/1/25,9/3/25,9/5/25,9/30/25,""R$ 460,899.42"",""R$ 381,792.14"",""R$ 79,107.28"",Pago"
 Rede Alpha - AFONSO PENNA,Mar Brasil,Aug-25,9/1/25,9/4/25,9/10/25,9/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - DR CARVALHO,Mar Brasil,Aug-25,9/1/25,9/4/25,9/10/25,9/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - MARECHAL MALLET,Mar Brasil,Aug-25,9/1/25,9/4/25,9/10/25,9/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
@@ -70,14 +70,14 @@ Rede Alpha - COSTA 2,Mar Brasil,Aug-25,9/1/25,9/4/25,9/10/25,9/20/25,R$ 404.23,R
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Aug-25,9/1/25,9/4/25,9/10/25,9/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Aug-25,9/1/25,9/4/25,9/10/25,9/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rossi Advocacia ,Mar Brasil,Aug-25,9/1/25,9/4/25,9/10/25,9/15/25,R$ 849.65,R$ 703.82,R$ 145.83,Pago
-Contrato Locação Cellula Mater,Ybox,Aug-25,9/1/25,9/1/25,,9/30/25,"R$ 21,402.22","R$ 19,937.36","R$ 1,464.86",Pago
-Contrato Locação Polo Play,Ybox,Aug-25,9/1/25,9/1/25,,9/20/25,"R$ 7,184.30","R$ 6,692.37",R$ 491.93,Pago
-Contrato Locação Posto Door,Ybox,Aug-25,9/1/25,9/1/25,,9/15/25,"R$ 14,531.48","R$ 13,537.01",R$ 994.47,Pago
+"Contrato Locação Cellula Mater,Ybox,Aug-25,9/1/25,9/1/25,,9/30/25,""R$ 21,402.22"",""R$ 19,937.36"",""R$ 1,464.86"",Pago"
+"Contrato Locação Polo Play,Ybox,Aug-25,9/1/25,9/1/25,,9/20/25,""R$ 7,184.30"",""R$ 6,692.37"",R$ 491.93,Pago"
+"Contrato Locação Posto Door,Ybox,Aug-25,9/1/25,9/1/25,,9/15/25,""R$ 14,531.48"",""R$ 13,537.01"",R$ 994.47,Pago"
 Locação Casa 03 (Marcos),D.Z.M,Aug-25,9/1/25,9/1/25,,9/20/25,R$ 987.80,R$ 877.80,R$ 110.00,Pendente
 Locação Casa 06 (Saniele),D.Z.M,Aug-25,9/1/25,9/1/25,,9/20/25,R$ 858.57,R$ 768.57,R$ 90.00,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Jul-25,7/31/25,8/4/25,8/4/25,9/2/25,"R$ 31,583.33","R$ 26,152.02","R$ 5,431.31",Pago
-Contrato CSP 274/24 - CMSP,Mar Brasil,Jul-25,8/1/25,8/26/25,8/30/25,9/11/25,"R$ 50,206.66","R$ 42,074.81","R$ 8,131.85",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Jul-25,7/31/25,8/1/25,8/4/25,9/1/25,"R$ 460,899.42","R$ 381,639.69","R$ 79,259.73",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Jul-25,7/31/25,8/4/25,8/4/25,9/2/25,""R$ 31,583.33"",""R$ 26,152.02"",""R$ 5,431.31"",Pago"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,Jul-25,8/1/25,8/26/25,8/30/25,9/11/25,""R$ 50,206.66"",""R$ 42,074.81"",""R$ 8,131.85"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Jul-25,7/31/25,8/1/25,8/4/25,9/1/25,""R$ 460,899.42"",""R$ 381,639.69"",""R$ 79,259.73"",Pago"
 Rede Alpha - AFONSO PENNA,Mar Brasil,Jul-25,7/31/25,8/1/25,8/4/25,8/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - DR CARVALHO,Mar Brasil,Jul-25,7/31/25,8/1/25,8/4/25,8/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - MARECHAL MALLET,Mar Brasil,Jul-25,7/31/25,8/1/25,8/4/25,8/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
@@ -85,15 +85,15 @@ Rede Alpha - COSTA 2,Mar Brasil,Jul-25,7/31/25,8/1/25,8/4/25,8/20/25,R$ 404.23,R
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Jul-25,7/31/25,8/1/25,8/4/25,8/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Jul-25,7/31/25,8/1/25,8/4/25,8/20/25,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rossi Advocacia ,Mar Brasil,Jul-25,7/31/25,8/1/25,8/5/25,8/15/25,R$ 849.65,R$ 703.54,R$ 146.11,Pago
-MAM,Mar Brasil,Jul-25,8/26/25,8/26/25,8/26/25,8/26/25,"R$ 52,879.00","R$ 45,371.90","R$ 7,507.10",Pago
-Contrato Locação Cellula Mater,Ybox,Jul-25,8/1/25,8/1/25,8/4/25,8/30/25,"R$ 21,402.22","R$ 19,937.36","R$ 1,464.86",Pago
-Contrato Locação Polo Play,Ybox,Jul-25,8/1/25,8/1/25,8/4/25,8/20/25,"R$ 7,184.30","R$ 6,692.37",R$ 491.93,Pago
-Contrato Locação Posto Door,Ybox,Jul-25,8/1/25,8/1/25,,8/15/25,"R$ 14,531.48","R$ 13,537.01",R$ 994.47,Pago
-Locação Casa 03 (Marcos),D.Z.M,Jul-25,8/1/25,8/1/25,8/1/25,8/20/25,"R$ 1,000.00",R$ 890.00,R$ 110.00,Pendente
+"MAM,Mar Brasil,Jul-25,8/26/25,8/26/25,8/26/25,8/26/25,""R$ 52,879.00"",""R$ 45,371.90"",""R$ 7,507.10"",Pago"
+"Contrato Locação Cellula Mater,Ybox,Jul-25,8/1/25,8/1/25,8/4/25,8/30/25,""R$ 21,402.22"",""R$ 19,937.36"",""R$ 1,464.86"",Pago"
+"Contrato Locação Polo Play,Ybox,Jul-25,8/1/25,8/1/25,8/4/25,8/20/25,""R$ 7,184.30"",""R$ 6,692.37"",R$ 491.93,Pago"
+"Contrato Locação Posto Door,Ybox,Jul-25,8/1/25,8/1/25,,8/15/25,""R$ 14,531.48"",""R$ 13,537.01"",R$ 994.47,Pago"
+"Locação Casa 03 (Marcos),D.Z.M,Jul-25,8/1/25,8/1/25,8/1/25,8/20/25,""R$ 1,000.00"",R$ 890.00,R$ 110.00,Pendente"
 Locação Casa 06 (Saniele),D.Z.M,Jul-25,8/1/25,8/1/25,8/1/25,8/25/25,R$ 858.57,R$ 768.57,R$ 90.00,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,8/10/25,"R$ 31,583.33","R$ 26,153.77","R$ 5,429.56",Pago
-Contrato CSP 274/24 - CMSP,Mar Brasil,Jun-25,7/1/25,7/3/25,7/29/25,8/12/25,"R$ 45,559.14","R$ 38,182.55","R$ 7,376.59",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Jun-25,6/30/25,7/1/25,7/3/25,8/11/25,"R$ 460,899.42","R$ 381,665.11","R$ 79,234.31",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,8/10/25,""R$ 31,583.33"",""R$ 26,153.77"",""R$ 5,429.56"",Pago"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,Jun-25,7/1/25,7/3/25,7/29/25,8/12/25,""R$ 45,559.14"",""R$ 38,182.55"",""R$ 7,376.59"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Jun-25,6/30/25,7/1/25,7/3/25,8/11/25,""R$ 460,899.42"",""R$ 381,665.11"",""R$ 79,234.31"",Pago"
 Rede Alpha - AFONSO PENNA,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,7/21/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - DR CARVALHO,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,7/21/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - MARECHAL MALLET,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,7/21/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
@@ -101,16 +101,16 @@ Rede Alpha - COSTA 2,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,7/21/25,R$ 380.00,R
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,7/21/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,7/21/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rossi Advocacia ,Mar Brasil,Jun-25,6/30/25,7/1/25,7/4/25,7/15/25,R$ 800.00,R$ 679.65,R$ 120.35,Pago
-Zasso,Mar Brasil,Jun-25,5/30/25,7/1/25,6/10/25,7/21/25,"R$ 3,000.00","R$ 2,574.26",R$ 425.74,Pago
-Crestani,Mar Brasil,Jun-25,7/29/25,7/29/25,7/29/25,7/29/25,"R$ 46,259.00","R$ 39,694.28","R$ 6,564.72",Pago
-Contrato Locação Cellula Mater,Ybox,Jun-25,7/1/25,7/1/25,,7/30/25,"R$ 21,402.22","R$ 19,937.36","R$ 1,464.86",Pago
-Contrato Locação Polo Play,Ybox,Jun-25,7/1/25,7/1/25,7/4/25,7/20/25,"R$ 7,184.30","R$ 6,692.37",R$ 491.93,Pago
-Contrato Locação Posto Door,Ybox,Jun-25,7/1/25,7/1/25,,7/15/25,"R$ 14,531.48","R$ 13,537.01",R$ 994.47,Pago
-Locação Casa 03 (Marcos),D.Z.M,Jun-25,7/1/25,7/1/25,7/1/25,7/20/25,"R$ 1,000.00",R$ 890.00,R$ 110.00,Pendente
+"Zasso,Mar Brasil,Jun-25,5/30/25,7/1/25,6/10/25,7/21/25,""R$ 3,000.00"",""R$ 2,574.26"",R$ 425.74,Pago"
+"Crestani,Mar Brasil,Jun-25,7/29/25,7/29/25,7/29/25,7/29/25,""R$ 46,259.00"",""R$ 39,694.28"",""R$ 6,564.72"",Pago"
+"Contrato Locação Cellula Mater,Ybox,Jun-25,7/1/25,7/1/25,,7/30/25,""R$ 21,402.22"",""R$ 19,937.36"",""R$ 1,464.86"",Pago"
+"Contrato Locação Polo Play,Ybox,Jun-25,7/1/25,7/1/25,7/4/25,7/20/25,""R$ 7,184.30"",""R$ 6,692.37"",R$ 491.93,Pago"
+"Contrato Locação Posto Door,Ybox,Jun-25,7/1/25,7/1/25,,7/15/25,""R$ 14,531.48"",""R$ 13,537.01"",R$ 994.47,Pago"
+"Locação Casa 03 (Marcos),D.Z.M,Jun-25,7/1/25,7/1/25,7/1/25,7/20/25,""R$ 1,000.00"",R$ 890.00,R$ 110.00,Pendente"
 Locação Casa 06 (Saniele),D.Z.M,Jun-25,7/1/25,7/1/25,7/4/25,7/20/25,R$ 822.25,R$ 732.25,R$ 90.00,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,May-25,5/30/25,6/3/25,,7/3/25,"R$ 31,583.33","R$ 26,147.80","R$ 5,435.53",Pago
-Contrato CSP 274/24 - CMSP,Mar Brasil,May-25,6/20/25,6/30/25,6/30/25,7/20/25,"R$ 49,831.85","R$ 41,754.05","R$ 8,077.80",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,May-25,5/30/25,6/3/25,6/10/25,6/30/25,"R$ 460,899.42","R$ 381,578.09","R$ 79,321.33",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,May-25,5/30/25,6/3/25,,7/3/25,""R$ 31,583.33"",""R$ 26,147.80"",""R$ 5,435.53"",Pago"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,May-25,6/20/25,6/30/25,6/30/25,7/20/25,""R$ 49,831.85"",""R$ 41,754.05"",""R$ 8,077.80"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,May-25,5/30/25,6/3/25,6/10/25,6/30/25,""R$ 460,899.42"",""R$ 381,578.09"",""R$ 79,321.33"",Pago"
 Rede Alpha - AFONSO PENNA,Mar Brasil,May-25,5/30/25,6/4/25,6/10/25,6/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - DR CARVALHO,Mar Brasil,May-25,5/30/25,6/4/25,6/10/25,6/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - MARECHAL MALLET,Mar Brasil,May-25,5/30/25,6/4/25,6/10/25,6/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
@@ -118,18 +118,18 @@ Rede Alpha - COSTA 2,Mar Brasil,May-25,5/30/25,6/4/25,6/10/25,6/20/25,R$ 380.00,
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,May-25,5/30/25,6/4/25,6/10/25,6/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,May-25,5/30/25,6/4/25,6/10/25,6/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rossi Advocacia ,Mar Brasil,May-25,5/30/25,6/2/25,6/10/25,6/15/25,R$ 800.00,R$ 662.32,R$ 137.68,Pago
-MAM,Mar Brasil,May-25,5/12/25,5/12/25,5/12/25,5/12/25,"R$ 52,885.75","R$ 45,370.62","R$ 7,515.13",Pago
-Município de Guarujá,Mar Brasil,May-25,6/18/25,6/18/25,6/18/25,8/18/25,"R$ 26,947.60","R$ 25,220.23","R$ 1,727.37",Pago
-Contrato Locação Cellula Mater,Ybox,May-25,5/30/25,6/2/25,,6/30/25,"R$ 21,402.22","R$ 19,953.23","R$ 1,448.99",Pago
-Contrato Locação Polo Play,Ybox,May-25,5/30/25,6/2/25,,6/20/25,"R$ 7,184.30","R$ 6,697.70",R$ 486.60,Pago
-Contrato Locação Posto Door,Ybox,May-25,5/30/25,6/2/25,,6/15/25,"R$ 14,531.48","R$ 13,547.78",R$ 983.70,Pago
+"MAM,Mar Brasil,May-25,5/12/25,5/12/25,5/12/25,5/12/25,""R$ 52,885.75"",""R$ 45,370.62"",""R$ 7,515.13"",Pago"
+"Município de Guarujá,Mar Brasil,May-25,6/18/25,6/18/25,6/18/25,8/18/25,""R$ 26,947.60"",""R$ 25,220.23"",""R$ 1,727.37"",Pago"
+"Contrato Locação Cellula Mater,Ybox,May-25,5/30/25,6/2/25,,6/30/25,""R$ 21,402.22"",""R$ 19,953.23"",""R$ 1,448.99"",Pago"
+"Contrato Locação Polo Play,Ybox,May-25,5/30/25,6/2/25,,6/20/25,""R$ 7,184.30"",""R$ 6,697.70"",R$ 486.60,Pago"
+"Contrato Locação Posto Door,Ybox,May-25,5/30/25,6/2/25,,6/15/25,""R$ 14,531.48"",""R$ 13,547.78"",R$ 983.70,Pago"
 Locação Casa 03 (Marcos),D.Z.M,May-25,5/30/25,6/2/25,6/2/25,6/20/25,R$ 354.84,R$ 314.23,R$ 40.61,Pago
 Locação Casa 06 (Saniele),D.Z.M,May-25,5/30/25,6/2/25,6/2/25,6/24/25,R$ 843.66,R$ 746.41,R$ 97.25,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Apr-25,4/30/25,5/2/25,5/2/25,6/5/25,"R$ 31,583.33","R$ 26,142.29","R$ 5,441.04",Pago
-Contrato Ata 54/2024 - ARP,Mar Brasil,Apr-25,5/28/25,5/28/25,5/29/25,5/30/25,"R$ 48,432.00","R$ 40,088.35","R$ 8,343.65",Pago
-Contrato CSP 274/24 - CMSP,Mar Brasil,Apr-25,5/20/25,5/27/25,5/27/25,6/10/25,"R$ 45,672.64","R$ 38,261.08","R$ 7,411.56",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/30/25,"R$ 460,899.42","R$ 381,497.67","R$ 79,401.75",Pago
-Contrato 033/2021 - Oftalmo,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,10/8/25,"R$ 5,776.41","R$ 4,954.57",R$ 821.84,Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Apr-25,4/30/25,5/2/25,5/2/25,6/5/25,""R$ 31,583.33"",""R$ 26,142.29"",""R$ 5,441.04"",Pago"
+"Contrato Ata 54/2024 - ARP,Mar Brasil,Apr-25,5/28/25,5/28/25,5/29/25,5/30/25,""R$ 48,432.00"",""R$ 40,088.35"",""R$ 8,343.65"",Pago"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,Apr-25,5/20/25,5/27/25,5/27/25,6/10/25,""R$ 45,672.64"",""R$ 38,261.08"",""R$ 7,411.56"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/30/25,""R$ 460,899.42"",""R$ 381,497.67"",""R$ 79,401.75"",Pago"
+"Contrato 033/2021 - Oftalmo,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,10/8/25,""R$ 5,776.41"",""R$ 4,954.57"",R$ 821.84,Pago"
 Rede Alpha - AFONSO PENNA,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - DR CARVALHO,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - MARECHAL MALLET,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
@@ -137,17 +137,17 @@ Rede Alpha - COSTA 2,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/20/25,R$ 380.00,R
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rossi Advocacia ,Mar Brasil,Apr-25,4/30/25,5/2/25,5/5/25,5/15/25,R$ 800.00,R$ 662.18,R$ 137.82,Pago
-MAM,Mar Brasil,Apr-25,4/15/25,4/15/25,4/15/25,4/15/25,"R$ 52,165.78","R$ 44,743.86","R$ 7,421.92",Pago
-Comando de Aviação PMSP,Mar Brasil,Apr-25,5/5/25,5/5/25,5/5/25,6/9/25,"R$ 10,890.00","R$ 9,013.92","R$ 1,876.08",Pago
-SEINFRA,Mar Brasil,Apr-25,5/27/25,5/27/25,5/27/25,7/3/25,"R$ 2,800.00","R$ 2,317.63",R$ 482.37,Pago
-Contrato Locação Cellula Mater,Ybox,Apr-25,4/30/25,5/2/25,5/5/25,6/2/25,"R$ 21,402.22","R$ 19,949.96","R$ 1,452.26",Pago
-Contrato Locação Polo Play,Ybox,Apr-25,4/30/25,5/2/25,5/5/25,5/21/25,"R$ 7,184.30","R$ 6,696.61",R$ 487.69,Pago
-Contrato Locação Posto Door,Ybox,Apr-25,4/30/25,5/2/25,5/5/25,5/16/25,"R$ 14,531.48","R$ 13,545.56",R$ 985.92,Pago
+"MAM,Mar Brasil,Apr-25,4/15/25,4/15/25,4/15/25,4/15/25,""R$ 52,165.78"",""R$ 44,743.86"",""R$ 7,421.92"",Pago"
+"Comando de Aviação PMSP,Mar Brasil,Apr-25,5/5/25,5/5/25,5/5/25,6/9/25,""R$ 10,890.00"",""R$ 9,013.92"",""R$ 1,876.08"",Pago"
+"SEINFRA,Mar Brasil,Apr-25,5/27/25,5/27/25,5/27/25,7/3/25,""R$ 2,800.00"",""R$ 2,317.63"",R$ 482.37,Pago"
+"Contrato Locação Cellula Mater,Ybox,Apr-25,4/30/25,5/2/25,5/5/25,6/2/25,""R$ 21,402.22"",""R$ 19,949.96"",""R$ 1,452.26"",Pago"
+"Contrato Locação Polo Play,Ybox,Apr-25,4/30/25,5/2/25,5/5/25,5/21/25,""R$ 7,184.30"",""R$ 6,696.61"",R$ 487.69,Pago"
+"Contrato Locação Posto Door,Ybox,Apr-25,4/30/25,5/2/25,5/5/25,5/16/25,""R$ 14,531.48"",""R$ 13,545.56"",R$ 985.92,Pago"
 Locação Casa 06 (Saniele),D.Z.M,Apr-25,4/30/25,5/2/25,5/2/25,5/20/25,R$ 929.73,R$ 826.32,R$ 103.41,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Mar-25,3/31/25,4/2/25,4/8/25,5/21/25,"R$ 31,583.33","R$ 26,162.62","R$ 5,420.71",Pago
-Contrato CSP 274/24 - CMSP,Mar Brasil,Mar-25,4/21/25,4/25/25,4/25/25,5/12/25,"R$ 32,408.84","R$ 27,170.53","R$ 5,238.31",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Mar-25,3/31/25,4/7/25,4/14/25,5/9/25,"R$ 460,899.42","R$ 381,794.31","R$ 79,105.11",Pago
-Contrato 033/2021 - Oftalmo,Mar Brasil,Mar-25,3/31/25,4/2/25,,8/5/25,"R$ 14,441.02","R$ 12,395.71","R$ 2,045.31",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Mar-25,3/31/25,4/2/25,4/8/25,5/21/25,""R$ 31,583.33"",""R$ 26,162.62"",""R$ 5,420.71"",Pago"
+"Contrato CSP 274/24 - CMSP,Mar Brasil,Mar-25,4/21/25,4/25/25,4/25/25,5/12/25,""R$ 32,408.84"",""R$ 27,170.53"",""R$ 5,238.31"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Mar-25,3/31/25,4/7/25,4/14/25,5/9/25,""R$ 460,899.42"",""R$ 381,794.31"",""R$ 79,105.11"",Pago"
+"Contrato 033/2021 - Oftalmo,Mar Brasil,Mar-25,3/31/25,4/2/25,,8/5/25,""R$ 14,441.02"",""R$ 12,395.71"",""R$ 2,045.31"",Pago"
 Rede Alpha - AFONSO PENNA,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - DR CARVALHO,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - MARECHAL MALLET,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
@@ -155,33 +155,33 @@ Rede Alpha - COSTA 2,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/20/25,R$ 380.00,R
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rossi Advocacia ,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/11/25,R$ 800.00,R$ 662.69,R$ 137.31,Pago
-Zasso,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/22/25,"R$ 2,850.00","R$ 2,446.35",R$ 403.65,Pago
-Contrato Locação Cellula Mater,Ybox,Mar-25,3/31/25,4/1/25,5/2/25,5/15/25,"R$ 21,402.22","R$ 19,956.26","R$ 1,445.96",Pago
-Contrato Locação Polo Play,Ybox,Mar-25,3/31/25,4/1/25,4/11/25,4/11/25,"R$ 7,184.30","R$ 6,698.72",R$ 485.58,Pago
-Contrato Locação Posto Door,Ybox,Mar-25,3/31/25,4/1/25,4/16/25,4/16/25,"R$ 14,531.48","R$ 13,549.83",R$ 981.65,Pago
+"Zasso,Mar Brasil,Mar-25,3/31/25,4/2/25,4/7/25,4/22/25,""R$ 2,850.00"",""R$ 2,446.35"",R$ 403.65,Pago"
+"Contrato Locação Cellula Mater,Ybox,Mar-25,3/31/25,4/1/25,5/2/25,5/15/25,""R$ 21,402.22"",""R$ 19,956.26"",""R$ 1,445.96"",Pago"
+"Contrato Locação Polo Play,Ybox,Mar-25,3/31/25,4/1/25,4/11/25,4/11/25,""R$ 7,184.30"",""R$ 6,698.72"",R$ 485.58,Pago"
+"Contrato Locação Posto Door,Ybox,Mar-25,3/31/25,4/1/25,4/16/25,4/16/25,""R$ 14,531.48"",""R$ 13,549.83"",R$ 981.65,Pago"
 Locação Casa 06 (Saniele),D.Z.M,Mar-25,3/31/25,4/1/25,4/1/25,4/22/25,R$ 981.39,R$ 882.16,R$ 99.23,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Feb-25,2/28/25,3/7/25,3/7/25,4/17/25,R$ 0.00,R$ 0.00,R$ 0.00,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Feb-25,2/28/25,3/7/25,3/7/25,10/1/25,R$ 0.00,R$ 0.00,R$ 0.00,Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Feb-25,2/28/25,3/7/25,3/15/25,4/10/25,R$ 0.00,R$ 0.00,R$ 0.00,Pago
-Contrato 033/2021 - Oftalmo,Mar Brasil,Feb-25,2/28/25,2/28/25,,3/26/25,R$ 0.00,R$ 0.00,R$ 0.00,Pago
-Rede Alpha - AFONSO PENNA,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,"R$ 2,280.11","R$ 1,908.63",R$ 371.48,Pago
+Contrato 1390/2024 - SESAP,Mar Brasil,Feb-25,2/28/25,3/7/25,3/7/25,4/17/25,R$ 31,583.33,R$ 26,151.59,R$ 5,431.74,Pago
+Contrato 1390/2024 - SESAP,Mar Brasil,Feb-25,2/28/25,3/7/25,3/7/25,10/1/25,R$ 6,442.80,R$ 5,875.95,R$ 566.85,Pago
+Contrato 12/2024 - SEDUC,Mar Brasil,Feb-25,2/28/25,3/7/25,3/15/25,4/10/25,R$ 384,217.38,R$ 318,139.19,R$ 66,078.19,Pago
+Contrato 033/2021 - Oftalmo,Mar Brasil,Feb-25,2/28/25,2/28/25,,3/26/25,R$ 14,441.02,R$ 12,390.67,R$ 2,050.35,Pago
+"Rede Alpha - AFONSO PENNA,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,""R$ 2,280.11"",""R$ 1,908.63"",R$ 371.48,Pago"
 Rede Alpha - DR CARVALHO,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,R$ 380.00,R$ 318.09,R$ 61.91,Pago
 Rede Alpha - MARECHAL MALLET,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,R$ 830.00,R$ 694.76,R$ 135.24,Pago
-Rede Alpha - COSTA 2,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,"R$ 4,108.59","R$ 3,439.24",R$ 669.35,Pago
-Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,"R$ 6,914.00","R$ 5,787.28","R$ 1,126.72",Pago
-Rede Alpha - POSTAL 500,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,"R$ 2,996.94","R$ 2,507.34",R$ 489.60,Pago
+"Rede Alpha - COSTA 2,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,""R$ 4,108.59"",""R$ 3,439.24"",R$ 669.35,Pago"
+"Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,""R$ 6,914.00"",""R$ 5,787.28"",""R$ 1,126.72"",Pago"
+"Rede Alpha - POSTAL 500,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/21/25,""R$ 2,996.94"",""R$ 2,507.34"",R$ 489.60,Pago"
 Rossi Advocacia ,Mar Brasil,Feb-25,2/28/25,3/7/25,,3/10/25,R$ 0.00,R$ 0.00,R$ 0.00,Pago
 MAM,Mar Brasil,Feb-25,3/31/24,3/31/24,3/31/24,2/19/25,R$ 0.00,R$ 0.00,R$ 0.00,Pago
 Crestani,Mar Brasil,Feb-25,3/31/24,3/31/24,3/31/24,11/29/24,R$ 0.00,R$ 0.00,R$ 0.00,Pago
-Contrato Locação Cellula Mater,Ybox,Feb-25,2/28/25,2/28/25,,3/31/25,"R$ 21,402.22","R$ 19,957.79","R$ 1,444.43",Pago
-Contrato Locação Polo Play,Ybox,Feb-25,2/28/25,2/28/25,,6/17/25,"R$ 7,184.30","R$ 6,699.23",R$ 485.07,Pago
-Contrato Locação Posto Door,Ybox,Feb-25,2/28/25,2/28/25,,3/18/25,"R$ 14,531.48","R$ 13,550.87",R$ 980.61,Pago
+"Contrato Locação Cellula Mater,Ybox,Feb-25,2/28/25,2/28/25,,3/31/25,""R$ 21,402.22"",""R$ 19,957.79"",""R$ 1,444.43"",Pago"
+"Contrato Locação Polo Play,Ybox,Feb-25,2/28/25,2/28/25,,6/17/25,""R$ 7,184.30"",""R$ 6,699.23"",R$ 485.07,Pago"
+"Contrato Locação Posto Door,Ybox,Feb-25,2/28/25,2/28/25,,3/18/25,""R$ 14,531.48"",""R$ 13,550.87"",R$ 980.61,Pago"
 Locação Casa 06 (Saniele),D.Z.M,Feb-25,2/28/25,2/28/25,2/28/25,3/18/25,R$ 972.01,R$ 899.83,R$ 72.18,Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Jan-25,2/4/25,2/12/25,2/13/25,4/4/25,"R$ 31,583.33","R$ 26,151.59","R$ 5,431.74",Pago
-Contrato 1390/2024 - SESAP,Mar Brasil,Jan-25,2/4/25,2/12/25,2/13/25,10/1/25,"R$ 3,760.64","R$ 3,434.98",R$ 325.66,Pago
-Contrato Ata 54/2024 - ARP,Mar Brasil,Jan-25,2/14/25,2/14/25,2/14/25,3/14/25,"R$ 13,080.00","R$ 10,848.58","R$ 2,231.42",Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Jan-25,2/4/25,2/7/25,1/17/25,2/28/25,"R$ 384,217.38","R$ 318,670.85","R$ 65,546.53",Pago
-Contrato 033/2021 - Oftalmo,Mar Brasil,Jan-25,2/4/25,2/4/25,,3/21/25,"R$ 14,441.02","R$ 12,410.65","R$ 2,030.37",Pago
+"Contrato 1390/2024 - SESAP,Mar Brasil,Jan-25,2/4/25,2/12/25,2/13/25,4/4/25,""R$ 31,583.33"",""R$ 26,151.59"",""R$ 5,431.74"",Pago"
+"Contrato 1390/2024 - SESAP,Mar Brasil,Jan-25,2/4/25,2/12/25,2/13/25,10/1/25,""R$ 3,760.64"",""R$ 3,434.98"",R$ 325.66,Pago"
+"Contrato Ata 54/2024 - ARP,Mar Brasil,Jan-25,2/14/25,2/14/25,2/14/25,3/14/25,""R$ 13,080.00"",""R$ 10,848.58"",""R$ 2,231.42"",Pago"
+"Contrato 12/2024 - SEDUC,Mar Brasil,Jan-25,2/4/25,2/7/25,1/17/25,2/28/25,""R$ 384,217.38"",""R$ 318,670.85"",""R$ 65,546.53"",Pago"
+"Contrato 033/2021 - Oftalmo,Mar Brasil,Jan-25,2/4/25,2/4/25,,3/21/25,""R$ 14,441.02"",""R$ 12,410.65"",""R$ 2,030.37"",Pago"
 Rede Alpha - AFONSO PENNA,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - DR CARVALHO,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - MARECHAL MALLET,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
@@ -189,18 +189,18 @@ Rede Alpha - COSTA 2,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/20/25,R$ 380.00,R$ 314.
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/20/25,R$ 380.00,R$ 314.78,R$ 65.22,Pago
 Rossi Advocacia ,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/20/25,R$ 800.00,R$ 687.52,R$ 112.48,Pago
-Rocha Church,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/18/25,"R$ 3,500.02","R$ 3,007.93",R$ 492.09,Pago
-Zasso,Mar Brasil,Jan-25,2/28/25,4/2/25,4/2/25,8/1/25,"R$ 1,500.00","R$ 1,289.11",R$ 210.90,Pago
-Zasso,Mar Brasil,Jan-25,2/6/25,2/7/25,,2/20/25,"R$ 1,500.00","R$ 1,289.11",R$ 210.90,Pago
-Contrato Locação Cellula Mater,Ybox,Jan-25,2/7/25,2/7/25,,3/5/25,"R$ 21,402.22","R$ 19,953.75","R$ 1,448.47",Pago
-Contrato Locação Polo Play,Ybox,Jan-25,2/7/25,2/7/25,,3/5/25,"R$ 7,184.30","R$ 6,697.88",R$ 486.42,Pago
-Contrato Locação Posto Door,Ybox,Jan-25,2/7/25,2/7/25,,2/18/25,"R$ 14,531.48","R$ 13,548.13",R$ 983.35,Pago
+"Rocha Church,Mar Brasil,Jan-25,2/6/25,2/12/25,,2/18/25,""R$ 3,500.02"",""R$ 3,007.93"",R$ 492.09,Pago"
+"Zasso,Mar Brasil,Jan-25,2/28/25,4/2/25,4/2/25,8/1/25,""R$ 1,500.00"",""R$ 1,289.11"",R$ 210.90,Pago"
+"Zasso,Mar Brasil,Jan-25,2/6/25,2/7/25,,2/20/25,""R$ 1,500.00"",""R$ 1,289.11"",R$ 210.90,Pago"
+"Contrato Locação Cellula Mater,Ybox,Jan-25,2/7/25,2/7/25,,3/5/25,""R$ 21,402.22"",""R$ 19,953.75"",""R$ 1,448.47"",Pago"
+"Contrato Locação Polo Play,Ybox,Jan-25,2/7/25,2/7/25,,3/5/25,""R$ 7,184.30"",""R$ 6,697.88"",R$ 486.42,Pago"
+"Contrato Locação Posto Door,Ybox,Jan-25,2/7/25,2/7/25,,2/18/25,""R$ 14,531.48"",""R$ 13,548.13"",R$ 983.35,Pago"
 Locação Casa 06 (Saniele),D.Z.M,Jan-25,2/7/25,2/7/25,2/7/25,2/12/25,R$ 919.22,R$ 827.43,R$ 91.79,Pago
-Contrato 12/2024 - SEDUC,Mar Brasil,Dec-25,1/2/26,1/7/26,1/9/26,1/30/26,"R$ 460,899.42","R$ 381,043.86","R$ 79,855.56",Pago
-Contrato Ata 54/2024 - ARP,Mar Brasil,Dec-25,1/2/26,1/8/26,1/9/26,1/30/26,"R$ 398,441.85","R$ 329,407.70","R$ 69,034.15",Pendente
-Contrato CRSN 6018/2025,Mar Brasil,Dec-25,1/2/26,1/7/26,1/8/26,1/30/26,"R$ 23,767.51","R$ 19,887.22","R$ 3,880.29",Pendente
-Contrato CSP 274/2024,Mar Brasil,Dec-25,1/2/26,,,1/30/26,"R$ 50,206.66","R$ 42,009.91","R$ 8,196.75",Pendente
-Contrato CREF4 2325/2025,Mar Brasil,Dec-25,12/27/25,1/8/26,1/9/26,1/30/26,"R$ 43,128.00","R$ 36,086.91","R$ 7,041.09",Pendente
+"Contrato 12/2024 - SEDUC,Mar Brasil,Dec-25,1/2/26,1/7/26,1/9/26,1/30/26,""R$ 460,899.42"",""R$ 381,043.86"",""R$ 79,855.56"",Pago"
+"Contrato Ata 54/2024 - ARP,Mar Brasil,Dec-25,1/2/26,1/8/26,1/9/26,1/30/26,""R$ 398,441.85"",""R$ 329,407.70"",""R$ 69,034.15"",Pendente"
+"Contrato CRSN 6018/2025,Mar Brasil,Dec-25,1/2/26,1/7/26,1/8/26,1/30/26,""R$ 23,767.51"",""R$ 19,887.22"",""R$ 3,880.29"",Pendente"
+"Contrato CSP 274/2024,Mar Brasil,Dec-25,1/2/26,,,1/30/26,""R$ 50,206.66"",""R$ 42,009.91"",""R$ 8,196.75"",Pendente"
+"Contrato CREF4 2325/2025,Mar Brasil,Dec-25,12/27/25,1/8/26,1/9/26,1/30/26,""R$ 43,128.00"",""R$ 36,086.91"",""R$ 7,041.09"",Pendente"
 Rossi Advogados,Mar Brasil,Dec-25,1/2/26,1/7/26,1/8/26,1/15/26,R$ 849.65,R$ 702.44,R$ 147.21,Pago
 Rede Alpha - AFONSO PENNA,Mar Brasil,Dec-25,1/2/26,1/7/26,1/8/26,1/20/26,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - AYRTON SENNA,Mar Brasil,Dec-25,1/2/26,1/7/26,1/8/26,1/20/26,R$ 404.23,R$ 339.01,R$ 65.22,Pago
@@ -211,9 +211,9 @@ Rede Alpha - VISCONDE LEOPOLDO,Mar Brasil,Dec-25,1/2/26,1/7/26,1/8/26,1/20/26,R$
 Rede Alpha - PRESIDENTE WILSON,Mar Brasil,Dec-25,1/2/26,1/7/26,1/8/26,1/20/26,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Rede Alpha - POSTAL 500,Mar Brasil,Dec-25,1/2/26,1/7/26,1/8/26,1/20/26,R$ 404.23,R$ 339.01,R$ 65.22,Pago
 Zasso,Mar Brasil,Dec-25,1/9/26,1/9/26,1/9/26,1/30/26,R$ 0.00,R$ 0.00,R$ 0.00,Pago
-MAM,Mar Brasil,Dec-25,12/19/25,12/19/25,12/19/25,12/19/25,"R$ 25,228.50","R$ 21,614.26","R$ 3,614.24",Pago
-Contrato Locação Cellula Mater,Ybox,Dec-25,1/2/26,1/2/26,1/8/26,1/30/26,"R$ 21,402.22","R$ 19,948.75","R$ 1,453.47",Pendente
-Contrato Locação Polo Play,Ybox,Dec-25,1/2/26,1/2/26,1/8/26,1/20/26,"R$ 7,184.30","R$ 6,696.20",R$ 488.10,Pendente
-Contrato Locação Posto Door,Ybox,Dec-25,1/2/26,1/2/26,1/8/26,1/15/26,"R$ 14,531.48","R$ 13,544.74",R$ 986.74,Pendente
-Contrato Locação Caetés,Ybox,Dec-25,1/9/26,1/9/26,1/9/26,1/9/26,"R$ 2,600.00","R$ 2,600.00",,Pago
+"MAM,Mar Brasil,Dec-25,12/19/25,12/19/25,12/19/25,12/19/25,""R$ 25,228.50"",""R$ 21,614.26"",""R$ 3,614.24"",Pago"
+"Contrato Locação Cellula Mater,Ybox,Dec-25,1/2/26,1/2/26,1/8/26,1/30/26,""R$ 21,402.22"",""R$ 19,948.75"",""R$ 1,453.47"",Pendente"
+"Contrato Locação Polo Play,Ybox,Dec-25,1/2/26,1/2/26,1/8/26,1/20/26,""R$ 7,184.30"",""R$ 6,696.20"",R$ 488.10,Pendente"
+"Contrato Locação Posto Door,Ybox,Dec-25,1/2/26,1/2/26,1/8/26,1/15/26,""R$ 14,531.48"",""R$ 13,544.74"",R$ 986.74,Pendente"
+"Contrato Locação Caetés,Ybox,Dec-25,1/9/26,1/9/26,1/9/26,1/9/26,""R$ 2,600.00"",""R$ 2,600.00"",,Pago"
 Locação Casa 06 (Saniele),D.Z.M,Dec-25,,,,1/15/25,R$ 890.79,R$ 806.08,R$ 84.71,Pendente

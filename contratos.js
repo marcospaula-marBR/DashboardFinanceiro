@@ -47,17 +47,15 @@ async function initData() {
 
         state.dados = results.data.map((d, index) => {
             const row = { valorFaturado: 0, valorLiquido: 0, impostos: 0 };
-
-            if (index === 0) console.log("Colunas detectadas:", Object.keys(d));
-
             Object.keys(d).forEach(key => {
                 const rawKey = key.trim();
                 const cleanKey = rawKey.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+                let val = d[rawKey];
+                if (typeof val === 'string') val = val.trim();
 
-                const val = d[rawKey];
-                if (cleanKey.includes('faturado')) row.valorFaturado = parseCurrency(val);
-                if (cleanKey === 'liquido' || cleanKey.includes('valor liquido')) row.valorLiquido = parseCurrency(val);
-                if (cleanKey === 'impostos' || cleanKey.includes('imposto')) row.impostos = parseCurrency(val);
+                if (cleanKey === 'faturado' || cleanKey === 'valor faturado') row.valorFaturado = parseCurrency(val);
+                else if (cleanKey === 'liquido' || cleanKey === 'valor liquido') row.valorLiquido = parseCurrency(val);
+                else if (cleanKey === 'impostos' || cleanKey === 'imposto') row.impostos = parseCurrency(val);
 
                 if (cleanKey.includes('previs')) row.dataPrevisao = val;
                 if (cleanKey.includes('emiss')) row.dataEmissao = val;
@@ -66,9 +64,11 @@ async function initData() {
                 if (cleanKey.includes('empresa')) row.Empresa = val;
                 if (cleanKey.includes('ciclo')) row.Ciclo = val;
             });
-
-            if (index < 3) console.log(`Linha ${index}: F=${row.valorFaturado}, L=${row.valorLiquido}, I=${row.impostos}`);
-
+            // Fallback
+            if (row.impostos === 0) {
+                const ik = Object.keys(d).find(k => k.toLowerCase().includes('imposto'));
+                if (ik) row.impostos = parseCurrency(d[ik]);
+            }
             row.analiseAtraso = calcularAtraso(row.dataPrevisao, row.Status);
             return row;
         });
@@ -273,9 +273,9 @@ function renderMatrix() {
         if (!matrix[key]) matrix[key] = { empresa: d.Empresa, vals: {} };
         if (!matrix[key].vals[d.Ciclo]) matrix[key].vals[d.Ciclo] = { faturado: 0, liquido: 0, impostos: 0 };
 
-        matrix[key].vals[d.Ciclo].faturado += (d.valorFaturado || 0);
-        matrix[key].vals[d.Ciclo].liquido += (d.valorLiquido || 0);
-        matrix[key].vals[d.Ciclo].impostos += (d.impostos || 0);
+        matrix[key].vals[d.Ciclo].faturado += Number(d.valorFaturado || 0);
+        matrix[key].vals[d.Ciclo].liquido += Number(d.valorLiquido || 0);
+        matrix[key].vals[d.Ciclo].impostos += Number(d.impostos || 0);
     });
 
     tbody.innerHTML = '';
@@ -318,25 +318,26 @@ function renderMatrix() {
 
         ciclos.forEach(c => {
             const v = matrix[cont].vals[c] || { faturado: 0, liquido: 0, impostos: 0 };
-            rowFat += v.faturado;
-            rowLiq += v.liquido;
-            rowImp += v.impostos;
+            rowFat += (v.faturado || 0);
+            rowLiq += (v.liquido || 0);
+            rowImp += (v.impostos || 0);
 
             html += `
-                <td class="val-cell-mini border-start privacy-mask">${v.faturado > 0 ? formatBRL(v.faturado) : '-'}</td>
-                <td class="val-cell-mini privacy-mask text-info">${v.liquido > 0 ? formatBRL(v.liquido) : '-'}</td>
-                <td class="val-cell-mini privacy-mask text-muted">${v.impostos !== 0 ? formatBRL(v.impostos) : '-'}</td>
+                <td class="val-cell-mini border-start privacy-mask">${v.faturado !== 0 ? formatBRL(v.faturado) : '-'}</td>
+                <td class="val-cell-mini privacy-mask text-info">${v.liquido !== 0 ? formatBRL(v.liquido) : '-'}</td>
+                <td class="val-cell-mini privacy-mask" style="color: #adb5bd !important;">${v.impostos !== 0 ? formatBRL(v.impostos) : '-'}</td>
             `;
         });
 
         html += `
             <td class="val-cell-mini border-start privacy-mask fw-bold text-warning">${formatBRL(rowFat)}</td>
             <td class="val-cell-mini privacy-mask fw-bold text-info">${formatBRL(rowLiq)}</td>
-            <td class="val-cell-mini privacy-mask fw-bold text-muted">${formatBRL(rowImp)}</td>
+            <td class="val-cell-mini privacy-mask fw-bold" style="color: #adb5bd !important;">${formatBRL(rowImp)}</td>
         `;
         tr.innerHTML = html;
         tbody.appendChild(tr);
     });
+    console.log("Matrix Renderizada v26.2. Amostra matrix keys:", Object.keys(matrix).slice(0, 3));
 }
 
 function renderCharts() {
