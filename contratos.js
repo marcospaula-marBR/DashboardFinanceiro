@@ -61,7 +61,7 @@ async function initData() {
 
                 if (cleanKey.includes('previs')) row.dataPrevisao = val;
                 if (cleanKey.includes('emiss')) row.dataEmissao = val;
-                if (cleanKey.includes('status')) row.statusOriginal = val;
+                if (cleanKey.includes('status')) row.Status = val;
                 if (cleanKey.includes('contrato')) row.Contrato = val;
                 if (cleanKey.includes('empresa')) row.Empresa = val;
                 if (cleanKey.includes('ciclo')) row.Ciclo = val;
@@ -69,7 +69,7 @@ async function initData() {
 
             if (index < 3) console.log(`Linha ${index}: F=${row.valorFaturado}, L=${row.valorLiquido}, I=${row.impostos}`);
 
-            row.analiseAtraso = calcularAtraso(row.dataPrevisao, row.statusOriginal);
+            row.analiseAtraso = calcularAtraso(row.dataPrevisao, row.Status);
             return row;
         });
 
@@ -279,6 +279,38 @@ function renderMatrix() {
     });
 
     tbody.innerHTML = '';
+
+    // Linha de TOTAIS (No Topo)
+    const totalsRow = document.createElement('tr');
+    totalsRow.style.background = 'rgba(242, 145, 27, 0.1)';
+    totalsRow.classList.add('fw-bold');
+    let totalsHtml = `<td class="contract-cell text-warning">TOTAIS DO PERÍODO</td>`;
+    let grandFat = 0, grandLiq = 0, grandImp = 0;
+
+    ciclos.forEach(c => {
+        const cycleData = state.filtered.filter(d => d.Ciclo === c);
+        const fat = cycleData.reduce((acc, d) => acc + d.valorFaturado, 0);
+        const liq = cycleData.reduce((acc, d) => acc + d.valorLiquido, 0);
+        const imp = cycleData.reduce((acc, d) => acc + d.impostos, 0);
+
+        grandFat += fat; grandLiq += liq; grandImp += imp;
+
+        totalsHtml += `
+            <td class="val-cell-mini border-start text-warning">${formatBRL(fat)}</td>
+            <td class="val-cell-mini text-warning">${formatBRL(liq)}</td>
+            <td class="val-cell-mini text-warning">${formatBRL(imp)}</td>
+        `;
+    });
+
+    totalsHtml += `
+        <td class="val-cell-mini border-start fw-800 text-warning bg-primary-subtle">${formatBRL(grandFat)}</td>
+        <td class="val-cell-mini fw-800 text-warning bg-primary-subtle">${formatBRL(grandLiq)}</td>
+        <td class="val-cell-mini fw-800 text-warning bg-primary-subtle">${formatBRL(grandImp)}</td>
+    `;
+    totalsRow.innerHTML = totalsHtml;
+    tbody.appendChild(totalsRow);
+
+    // Linhas de Contrato
     Object.keys(matrix).sort().forEach(cont => {
         const tr = document.createElement('tr');
         let rowFat = 0, rowLiq = 0, rowImp = 0;
@@ -338,11 +370,23 @@ function renderCharts() {
 
 function sortCiclo(a, b) {
     if (!a || !b) return 0;
-    const map = { "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6, "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12 };
-    const [mesA, anoA] = a.split('-');
-    const [mesB, anoB] = b.split('-');
-    if (anoA !== anoB) return parseInt(anoA) - parseInt(anoB);
-    return map[mesA.toLowerCase()] - map[mesB.toLowerCase()];
+    const map = {
+        "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6, "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12,
+        "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6, "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12
+    };
+
+    // Abreviações em inglês comuns em CSVs
+    const mapEN = { "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12 };
+
+    const [mA, aA] = a.toLowerCase().split('-');
+    const [mB, aB] = b.toLowerCase().split('-');
+
+    if (aA !== aB) return parseInt(aB) - parseInt(aA); // Inverso: mais novo primeiro
+
+    const valA = map[mA] || mapEN[mA] || 0;
+    const valB = map[mB] || mapEN[mB] || 0;
+
+    return valB - valA; // Inverso: mais novo primeiro
 }
 
 function parseCurrency(val) {
