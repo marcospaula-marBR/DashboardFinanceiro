@@ -56,8 +56,8 @@ async function initData() {
 
                 const val = d[rawKey];
                 if (cleanKey.includes('faturado')) row.valorFaturado = parseCurrency(val);
-                if (cleanKey.includes('liquido')) row.valorLiquido = parseCurrency(val);
-                if (cleanKey.includes('imposto')) row.impostos = parseCurrency(val);
+                if (cleanKey === 'liquido' || cleanKey.includes('valor liquido')) row.valorLiquido = parseCurrency(val);
+                if (cleanKey === 'impostos' || cleanKey.includes('imposto')) row.impostos = parseCurrency(val);
 
                 if (cleanKey.includes('previs')) row.dataPrevisao = val;
                 if (cleanKey.includes('emiss')) row.dataEmissao = val;
@@ -325,7 +325,7 @@ function renderMatrix() {
             html += `
                 <td class="val-cell-mini border-start privacy-mask">${v.faturado > 0 ? formatBRL(v.faturado) : '-'}</td>
                 <td class="val-cell-mini privacy-mask text-info">${v.liquido > 0 ? formatBRL(v.liquido) : '-'}</td>
-                <td class="val-cell-mini privacy-mask text-muted">${v.impostos > 0 ? formatBRL(v.impostos) : '-'}</td>
+                <td class="val-cell-mini privacy-mask text-muted">${v.impostos !== 0 ? formatBRL(v.impostos) : '-'}</td>
             `;
         });
 
