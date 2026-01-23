@@ -39,8 +39,7 @@ async function initData() {
 
         const results = Papa.parse(text, {
             header: true,
-            skipEmptyLines: 'greedy',
-            delimiter: ","
+            skipEmptyLines: 'greedy'
         });
 
         console.log("CSV Results v25.1:", results);
