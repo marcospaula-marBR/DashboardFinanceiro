@@ -1,1 +1,1 @@
-window.APP_VERSION = "16.0-ULTRA-RESILIENT";
+window.APP_VERSION = "24.0";

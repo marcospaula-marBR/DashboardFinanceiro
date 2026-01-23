@@ -328,11 +328,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     close.addEventListener('click', () => {
         chat.classList.remove('active');
+        window.speechSynthesis.cancel(); // Stop talking when closing
     });
 
     minimize.addEventListener('click', (e) => {
         e.stopPropagation();
         chat.classList.toggle('minimized');
+        window.speechSynthesis.cancel(); // stop talking when minimizing
         const icon = minimize.querySelector('i');
         if (chat.classList.contains('minimized')) {
             icon.classList.remove('bi-dash-lg');
@@ -590,6 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Stop Button Listener
     stopBtn.addEventListener('click', () => {
+        window.speechSynthesis.cancel(); // Stop the voice
         if (currentController) {
             currentController.abort();
             currentController = null;
