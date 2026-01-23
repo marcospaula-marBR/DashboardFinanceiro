@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <script src="auth-check.js?v=24.0"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Contratos | Mar Brasil v24.0</title>
+    <title>Dashboard de Contratos | Mar Brasil v25.0</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
@@ -14,9 +14,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
     <!-- Puxando o CSS oficial para manter o padrão -->
-    <link rel="stylesheet" href="styles.css?v=24.0">
-    <link rel="stylesheet" href="custom-fixes.css?v=24.0">
-    <script src="version.js?v=24.0"></script>
+    <link rel="stylesheet" href="styles.css?v=25.0">
+    <link rel="stylesheet" href="custom-fixes.css?v=25.0">
+    <script src="version.js?v=25.0"></script>
 
     <style>
         .status-badge {
@@ -151,13 +151,7 @@
                     <select id="filterCiclo" class="form-select form-select-sm bg-dark text-white" multiple
                         size="4"></select>
                 </div>
-                <div class="mb-3">
-                    <label class="text-warning small d-block mb-1 fw-bold">Visão de Valor</label>
-                    <select id="viewSelector" class="form-select form-select-sm bg-warning text-dark fw-bold">
-                        <option value="faturado">Valor Faturado</option>
-                        <option value="liquido">Valor Líquido</option>
-                    </select>
-                </div>
+                <!-- Visão de Valor Removida na v25.0 -->
                 <div class="mb-3">
                     <label class="text-white-50 small d-block mb-1">Contrato</label>
                     <select id="filterContrato" class="form-select form-select-sm bg-dark text-white" multiple
@@ -364,8 +358,8 @@
 
     <!-- BrisinhAI Integrado -->
     <div id="aiContainer"></div>
-    <script src="ai.service.v2.js?v=24.0"></script>
-    <script src="brisinhai.js?v=24.0"></script>
+    <script src="ai.service.v2.js?v=25.0"></script>
+    <script src="brisinhai.js?v=25.0"></script>
 </body>
 
 </html>

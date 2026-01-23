@@ -7,7 +7,6 @@ const state = {
     dados: [],
     filtered: [],
     charts: {},
-    viewType: 'faturado', // 'faturado' ou 'liquido'
     filters: { contrato: [], empresa: [], status: [], ciclo: [] }
 };
 
@@ -47,17 +46,23 @@ async function initData() {
         console.log("CSV Results v24:", results);
 
         state.dados = results.data.map(d => {
-            const row = { ...d };
+            const row = { valorFaturado: 0, valorLiquido: 0, impostos: 0 };
             Object.keys(d).forEach(key => {
-                const cleanKey = key.trim().toLowerCase();
-                if (cleanKey.includes('faturado')) row.valorFaturado = parseCurrency(d[key]);
-                if (cleanKey.includes('lído') || cleanKey.includes('liquido')) row.valorLiquido = parseCurrency(d[key]);
-                if (cleanKey.includes('imposto')) row.impostos = parseCurrency(d[key]);
-                if (cleanKey.includes('previs')) row.dataPrevisao = d[key];
-                if (cleanKey.includes('emiss')) row.dataEmissao = d[key];
-                if (cleanKey.includes('status')) row.statusOriginal = d[key];
+                const rawKey = key.trim();
+                const cleanKey = rawKey.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+
+                if (cleanKey.includes('faturado')) row.valorFaturado = parseCurrency(d[rawKey]);
+                if (cleanKey.includes('liquido')) row.valorLiquido = parseCurrency(d[rawKey]);
+                if (cleanKey.includes('imposto')) row.impostos = parseCurrency(d[rawKey]);
+                if (cleanKey.includes('previs')) row.dataPrevisao = d[rawKey];
+                if (cleanKey.includes('emiss')) row.dataEmissao = d[rawKey];
+                if (cleanKey.includes('status')) row.statusOriginal = d[rawKey];
+                if (cleanKey.includes('contrato')) row.Contrato = d[rawKey];
+                if (cleanKey.includes('empresa')) row.Empresa = d[rawKey];
+                if (cleanKey.includes('ciclo')) row.Ciclo = d[rawKey];
             });
-            if (row.valorLiquido === undefined) row.valorLiquido = parseCurrency(d['Valor líquido'] || d['Valor l\u00edquido']);
+            // Fallback manual se necessário
+            if (!row.valorLiquido) row.valorLiquido = parseCurrency(d['Valor líquido'] || d['Valor l\u00edquido'] || d['Valor liquido']);
             row.analiseAtraso = calcularAtraso(row.dataPrevisao, row.statusOriginal);
             return row;
         });
@@ -112,12 +117,15 @@ function initFilters() {
     fCic.addEventListener('change', () => { updateDashboard(); });
     fSta.addEventListener('change', () => { updateDashboard(); });
 
+    // Visão seletiva removida na v25.0
+    /*
     if (vSel) {
         vSel.addEventListener('change', (e) => {
             state.viewType = e.target.value;
             updateDashboard();
         });
     }
+    */
 
     // Sticky Scroll Effect
     window.addEventListener('scroll', () => {
@@ -230,38 +238,64 @@ function renderMatrix() {
     if (!tbody || !theadRow) return;
 
     const ciclos = [...new Set(state.filtered.map(d => d.Ciclo))].sort((a, b) => sortCiclo(a, b)).filter(Boolean);
-    const isLiquido = state.viewType === 'liquido';
 
-    theadRow.innerHTML = `<th class="contract-cell">Contrato / Empresa<br><small class="text-warning">${isLiquido ? '(Visão Líquida)' : '(Visão Faturada)'}</small></th>`;
+    // Header Principal
+    let headerHtml = `<th class="contract-cell" rowspan="2">Contrato / Empresa</th>`;
     ciclos.forEach(c => {
-        const th = document.createElement('th');
-        th.className = 'val-cell';
-        th.textContent = c;
-        theadRow.appendChild(th);
+        headerHtml += `<th colspan="3" class="text-center border-start">${c}</th>`;
     });
-    theadRow.innerHTML += `<th class="val-cell fw-bold text-primary">Total</th>`;
+    headerHtml += `<th colspan="3" class="text-center border-start fw-bold text-warning">TOTAL GERAL</th>`;
+    theadRow.innerHTML = headerHtml;
+
+    // Sub-header (Sub-colunas)
+    let subHeader = document.getElementById('matrixSubHeader');
+    if (!subHeader) {
+        subHeader = document.createElement('tr');
+        subHeader.id = 'matrixSubHeader';
+        theadRow.parentNode.appendChild(subHeader);
+    }
+    let subHtml = '';
+    ciclos.forEach(() => {
+        subHtml += `<th class="val-cell-mini border-start">Bruto</th><th class="val-cell-mini">Líq.</th><th class="val-cell-mini">Imp.</th>`;
+    });
+    subHtml += `<th class="val-cell-mini border-start text-warning">Bruto</th><th class="val-cell-mini text-warning">Líq.</th><th class="val-cell-mini text-warning">Imp.</th>`;
+    subHeader.innerHTML = subHtml;
 
     const matrix = {};
     state.filtered.forEach(d => {
         const key = d.Contrato || 'Sem Nome';
         if (!matrix[key]) matrix[key] = { empresa: d.Empresa, vals: {} };
-        const val = isLiquido ? d.valorLiquido : d.valorFaturado;
-        matrix[key].vals[d.Ciclo] = (matrix[key].vals[d.Ciclo] || 0) + val;
+        if (!matrix[key].vals[d.Ciclo]) matrix[key].vals[d.Ciclo] = { faturado: 0, liquido: 0, impostos: 0 };
+
+        matrix[key].vals[d.Ciclo].faturado += (d.valorFaturado || 0);
+        matrix[key].vals[d.Ciclo].liquido += (d.valorLiquido || 0);
+        matrix[key].vals[d.Ciclo].impostos += (d.impostos || 0);
     });
 
     tbody.innerHTML = '';
     Object.keys(matrix).sort().forEach(cont => {
         const tr = document.createElement('tr');
-        let totalLinha = 0;
+        let rowFat = 0, rowLiq = 0, rowImp = 0;
         let html = `<td class="contract-cell">${cont}<br><small class="text-white-50">${matrix[cont].empresa}</small></td>`;
 
         ciclos.forEach(c => {
-            const val = matrix[cont].vals[c] || 0;
-            totalLinha += val;
-            html += `<td class="val-cell privacy-mask ${val > 0 ? '' : 'text-muted'}">${val > 0 ? formatBRL(val) : '-'}</td>`;
+            const v = matrix[cont].vals[c] || { faturado: 0, liquido: 0, impostos: 0 };
+            rowFat += v.faturado;
+            rowLiq += v.liquido;
+            rowImp += v.impostos;
+
+            html += `
+                <td class="val-cell-mini border-start privacy-mask">${v.faturado > 0 ? formatBRL(v.faturado) : '-'}</td>
+                <td class="val-cell-mini privacy-mask text-info">${v.liquido > 0 ? formatBRL(v.liquido) : '-'}</td>
+                <td class="val-cell-mini privacy-mask text-muted">${v.impostos > 0 ? formatBRL(v.impostos) : '-'}</td>
+            `;
         });
 
-        html += `<td class="val-cell privacy-mask fw-bold text-warning">${formatBRL(totalLinha)}</td>`;
+        html += `
+            <td class="val-cell-mini border-start privacy-mask fw-bold text-warning">${formatBRL(rowFat)}</td>
+            <td class="val-cell-mini privacy-mask fw-bold text-info">${formatBRL(rowLiq)}</td>
+            <td class="val-cell-mini privacy-mask fw-bold text-muted">${formatBRL(rowImp)}</td>
+        `;
         tr.innerHTML = html;
         tbody.appendChild(tr);
     });
@@ -269,7 +303,6 @@ function renderMatrix() {
 
 function renderCharts() {
     const ciclos = [...new Set(state.filtered.map(d => d.Ciclo))].sort((a, b) => sortCiclo(a, b)).filter(Boolean);
-    const isLiquido = state.viewType === 'liquido';
 
     // Dados para o gráfico triplo (Evolução Cronológica)
     const dataFat = ciclos.map(c => state.filtered.filter(d => d.Ciclo === c).reduce((a, b) => a + b.valorFaturado, 0));
@@ -285,9 +318,9 @@ function renderCharts() {
         ]
     });
 
-    // Share por Empresa (Mantém dependência do viewSelector para foco)
+    // Share por Empresa (Faturado por padrão na v25.0)
     const emps = [...new Set(state.filtered.map(d => d.Empresa))];
-    const dataEmp = emps.map(e => state.filtered.filter(d => d.Empresa === e).reduce((a, b) => a + (isLiquido ? b.valorLiquido : b.valorFaturado), 0));
+    const dataEmp = emps.map(e => state.filtered.filter(d => d.Empresa === e).reduce((a, b) => a + b.valorFaturado, 0));
 
     renderChart('contractCompareChart', 'doughnut', {
         labels: emps,
@@ -307,9 +340,30 @@ function sortCiclo(a, b) {
 }
 
 function parseCurrency(val) {
-    if (!val || val === '-') return 0;
+    if (val === undefined || val === null || val === '-' || val === '') return 0;
     if (typeof val === 'number') return val;
-    return parseFloat(val.toString().replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+
+    let s = val.toString().replace('R$', '').trim();
+    if (!s) return 0;
+
+    // Lógica robusta para detectar formato BR (1.234,56) vs US (1,234.56)
+    const lastComma = s.lastIndexOf(',');
+    const lastDot = s.lastIndexOf('.');
+
+    if (lastComma > lastDot) {
+        // Formato Brasileiro: vírgula é decimal
+        s = s.replace(/\./g, '').replace(',', '.');
+    } else if (lastDot > lastComma) {
+        // Formato Americano: ponto é decimal, vírgula é milhar
+        s = s.replace(/,/g, '');
+    } else if (lastComma !== -1) {
+        // Apenas vírgula: 1234,56
+        s = s.replace(',', '.');
+    }
+    // Apenas ponto: 1234.56 (ParseFloat nativo lida bem)
+
+    const num = parseFloat(s);
+    return isNaN(num) ? 0 : num;
 }
 
 function formatBRL(val) {

@@ -542,3 +542,46 @@
         justify-content: space-between;
     }
 }
+
+/* ========================================
+   MATRIZ TRIPLA (v25.0) - REFINAMENTO
+   ======================================== */
+
+.table-matrix thead th {
+    padding: 0.5rem !important;
+    font-size: 0.7rem !important;
+}
+
+.val-cell-mini {
+    font-size: 0.72rem !important;
+    text-align: right;
+    padding: 0.4rem 0.5rem !important;
+    min-width: 85px;
+    border-right: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.table-matrix .border-start {
+    border-left: 2px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.table-matrix .contract-cell {
+    min-width: 220px;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background: #262223;
+    border-right: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.table-matrix tbody tr:hover .contract-cell {
+    background: #332f30 !important;
+}
+
+#matrixSubHeader th {
+    background: #1e1b1c !important;
+    color: #888;
+    font-size: 0.65rem !important;
+    text-transform: uppercase;
+    padding: 2px 5px !important;
+    border-bottom: 2px solid var(--primary-color) !important;
+}
