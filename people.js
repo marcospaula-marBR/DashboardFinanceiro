@@ -2,7 +2,11 @@
 const SUPABASE_URL = "https://ngtjhwswbbivqajtpjvg.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ndGpod3N3YmJpdnFhanRwanZnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTE4MjM2MCwiZXhwIjoyMDg0NzU4MzYwfQ.2TPnOfnAzeWG23Y-VuDKxxzQ9QdbHwrnHdVBhS9hU28";
 
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Redirecionar chamadas antigas para a nova constante
+const db = supabaseClient;
+
 
 let allEmployees = [];
 
@@ -12,26 +16,46 @@ let empModal, aiModal;
 document.addEventListener('DOMContentLoaded', () => {
     init();
     setupFilters();
+    setupLayout();
     empModal = new bootstrap.Modal(document.getElementById('employeeModal'));
-    aiModal = new bootstrap.Modal(document.getElementById('aiModal'));
+    // aiModal removido, agora usa BrisinhAI flutuante
 
     document.getElementById('btnAddEmployee').onclick = () => {
         resetForm();
-        document.getElementById('modalTitle').textContent = 'REGISTRAR NOVO OPERAÇÃO';
+        document.getElementById('modalTitle').textContent = 'REGISTRO DE PESSOAL';
         empModal.show();
     };
-
-    document.getElementById('btnAnalyzePerson').onclick = analyzeCurrentPerson;
 });
+
+function setupLayout() {
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+    const main = document.getElementById('mainContent');
+    const icon = toggle.querySelector('i');
+
+    toggle.onclick = () => {
+        sidebar.classList.toggle('collapsed');
+        main.classList.toggle('expanded');
+        icon.classList.toggle('bi-chevron-left');
+        icon.classList.toggle('bi-chevron-right');
+    };
+
+    document.getElementById('btnClearFilters').onclick = () => {
+        document.getElementById('filterName').value = '';
+        document.getElementById('filterCompany').value = '';
+        document.getElementById('filterType').value = '';
+        document.getElementById('filterDept').value = '';
+        renderList();
+    };
+}
 
 async function init() {
     await fetchEmployees();
     renderList();
-    updateBrisinhMini();
 }
 
 async function fetchEmployees() {
-    const { data, error } = await supabase
+    const { data, error } = await db
         .from('employees')
         .select('*')
         .order('full_name', { ascending: true });
@@ -121,9 +145,9 @@ async function saveEmployee() {
 
     let result;
     if (id) {
-        result = await supabase.from('employees').update(payload).eq('id', id);
+        result = await db.from('employees').update(payload).eq('id', id);
     } else {
-        result = await supabase.from('employees').insert([payload]);
+        result = await db.from('employees').insert([payload]);
     }
 
     if (result.error) {
@@ -197,7 +221,7 @@ async function openProfile(id) {
     document.getElementById('empId').value = id;
 
     // Fetch history
-    const { data: history } = await supabase
+    const { data: history } = await db
         .from('employee_history')
         .select('*')
         .eq('employee_id', id)
@@ -255,7 +279,7 @@ async function addHistory() {
         observations: obs || null
     };
 
-    const { error } = await supabase.from('employee_history').insert([payload]);
+    const { error } = await db.from('employee_history').insert([payload]);
     if (error) {
         alert('Erro ao registrar histórico: ' + error.message);
     } else {
@@ -264,44 +288,14 @@ async function addHistory() {
             const updateObj = {};
             if (payload.new_salary) updateObj.remuneration = payload.new_salary;
             if (payload.new_role) updateObj.job_role = payload.new_role;
-            await supabase.from('employees').update(updateObj).eq('id', currentProfileId);
+            await db.from('employees').update(updateObj).eq('id', currentProfileId);
         }
         await init();
         openProfile(currentProfileId);
     }
 }
 
-async function analyzeCurrentPerson() {
-    const emp = allEmployees.find(e => e.id === currentProfileId);
-    if (!emp) return;
-
-    aiModal.show();
-    const responseEl = document.getElementById('aiResponse');
-    responseEl.innerHTML = "Escaneando perfil analítico...<br>Cruzando dados com métricas da empresa...";
-
-    // Simulação de análise BrisinhAI - Em um cenário real, chamaria a API do Gemini
-    setTimeout(() => {
-        const tempoCasa = Math.floor((new Date() - new Date(emp.start_date)) / (1000 * 60 * 60 * 24 * 365));
-        const statusSalarial = emp.remuneration > 5000 ? "Acima da média setorial" : "Dentro da curva padrão";
-
-        responseEl.innerHTML = `
-            <div style="color: var(--secondary);">>>> PROTOCOLO DE ANÁLISE CONCLUÍDO</div>
-            <br>
-            <strong>ALVO:</strong> ${emp.full_name}<br>
-            <strong>TEMPO DE ATIVAÇÃO:</strong> ${tempoCasa} anos de serviço.<br>
-            <strong>MÉTRICA SALARIAL:</strong> ${statusSalarial}.<br>
-            <br>
-            <strong>INSIGHT ESTRATÉGICO:</strong><br>
-            - Colaborador possui estabilidade no setor ${emp.department}.<br>
-            - Recomendado verificar histórico de aditivos para avaliar curva de crescimento.<br>
-            - Perfil ${emp.employment_type} com documentação ${emp.document_id ? 'VALIDADA' : 'PENDENTE'}.
-            <br><br>
-            <span style="opacity: 0.5;">Fim da transmissão.</span>
-        `;
-    }, 1500);
-}
-
-// Utils
+// Utils (Fim do arquivo)
 function formatCurrency(val) {
     if (!val) return 'R$ 0,00';
     return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -332,20 +326,7 @@ function scrambleText(id, finalValue) {
     }, 30);
 }
 
-function updateBrisinhMini() {
-    const mini = document.getElementById('brisinhai-mini');
-    if (allEmployees.length === 0) return;
-
-    const oldest = allEmployees.reduce((prev, curr) => (new Date(prev.start_date) < new Date(curr.start_date) ? prev : curr));
-    const highest = allEmployees.reduce((prev, curr) => (prev.remuneration > curr.remuneration ? prev : curr));
-
-    mini.innerHTML = `
-        <i class="bi bi-robot me-2" style="color: var(--secondary);"></i>
-        <strong>RECONHECIMENTO ADM:</strong><br>
-        Antiguidade: ${oldest.full_name} (${formatDate(oldest.start_date)})<br>
-        Pico Salarial: ${highest.full_name} (${formatCurrency(highest.remuneration)})
-    `;
-}
+// Fim do arquivo
 
 // Exportações Globais para HTML
 window.saveEmployee = saveEmployee;
