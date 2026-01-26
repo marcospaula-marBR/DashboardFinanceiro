@@ -23,21 +23,29 @@ def main():
     
     Handler = MyHTTPRequestHandler
     
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        url = f"http://localhost:{PORT}"
-        print("=" * 60)
-        print(f"🚀 Servidor DRE Mar Brasil iniciado!")
-        print(f"📍 Acesse: {url}")
-        print(f"🛑 Pressione Ctrl+C para parar o servidor")
-        print("=" * 60)
-        
-        # Abre o navegador automaticamente
-        webbrowser.open(url)
-        
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\n\n✅ Servidor encerrado com sucesso!")
+    try:
+        with socketserver.TCPServer(("", PORT), Handler) as httpd:
+            url = f"http://localhost:{PORT}"
+            print("=" * 60)
+            print(f"🚀 Servidor DRE Mar Brasil v27.0 iniciado!")
+            print(f"📍 Acesse: {url}")
+            print(f"🛑 MANTENHA ESTA JANELA ABERTA!")
+            print("=" * 60)
+            
+            # Abre o navegador automaticamente
+            webbrowser.open(url)
+            
+            try:
+                httpd.serve_forever()
+            except KeyboardInterrupt:
+                print("\n\n✅ Servidor encerrado com sucesso!")
+    except OSError as e:
+        if e.errno == 98 or e.errno == 10048:
+            print(f"❌ ERRO: A porta {PORT} ja esta em uso.")
+            print(f"Tente fechar outras janelas pretas abertas ou reinicie o computador.")
+        else:
+            print(f"❌ ERRO AO INICIAR SERVIDOR: {e}")
+        input("\nPressione ENTER para fechar...")
 
 if __name__ == "__main__":
     main()

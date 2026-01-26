@@ -3,7 +3,7 @@
 // Last Update: 08/01/2026 - 14:15
 
 const CONFIG = {
-    VERSION: "16.0",
+    VERSION: "27.0",
     COLORS: {
         primary: '#F2911B', secondary: '#262223', success: '#2ecc71',
         danger: '#e74c3c', info: '#3498db', light: '#F2F2F2',

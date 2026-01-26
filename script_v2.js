@@ -2,7 +2,7 @@
 
 // Configuration
 const CONFIG = {
-    VERSION: "2.3.0",
+    VERSION: "27.0",
     LAST_UPDATE: "06/01/2026",
     COLORS: {
         primary: '#F2911B',

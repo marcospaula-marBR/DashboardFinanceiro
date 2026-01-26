@@ -5,6 +5,7 @@
 
 // Configuration - Sync with script_v2.js
 const CONFIG = {
+    VERSION: "26.8",
     MESES_ORDEM: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 };
 
@@ -179,6 +180,7 @@ function renderDashboard() {
     const allCards = [
         { label: "Margem Líquida", value: (m.totalEntradas ? (m.resultado / m.totalEntradas * 100) : 0), type: 'percent', icon: 'bi-gem', subtitle: 'Resultado / Rec. Bruta', class: 'kpi' },
         { label: "Margem EBITDA", value: (m.totalEntradas ? (m.ebitda / m.totalEntradas * 100) : 0), type: 'percent', icon: 'bi-activity', subtitle: 'EBITDA / Rec. Bruta', class: 'kpi' },
+        { label: "Margem Fluxo Caixa Livre", value: (m.totalEntradas ? (m.fcl / m.totalEntradas * 100) : 0), type: 'percent', icon: 'bi-wallet2', subtitle: 'FCL / Rec. Bruta', class: 'kpi' },
         { label: "Margem de Contribuição", value: (m.receitaLiquida ? (m.margemContribuicao / m.receitaLiquida * 100) : 0), type: 'percent', icon: 'bi-pie-chart', subtitle: 'MC / Rec. Líquida', class: 'kpi' },
         { label: "Eficiência Pessoal", value: (m.totalEntradas ? (m.pessoal / m.totalEntradas * 100) : 0), type: 'percent', icon: 'bi-people', subtitle: 'Pessoal / Rec. Bruta', class: 'kpi' },
         { label: "Carga Tributária", value: (m.totalEntradas ? (m.impostos / m.totalEntradas * 100) : 0), type: 'percent', icon: 'bi-bank', subtitle: 'Impostos / Rec. Bruta', class: 'kpi' }

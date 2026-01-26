@@ -1,5 +1,5 @@
 /**
- * DASHBOARD DE CONTRATOS - MAR BRASIL v22.0
+ * DASHBOARD DE CONTRATOS - MAR BRASIL v26.7
  * CASCADE & DYNAMIC VISION: Filtros em Cascata e Seleção Faturado/Líquido
  */
 
@@ -242,12 +242,16 @@ function renderMatrix() {
     const theadRow = document.getElementById('matrixHeader');
     if (!tbody || !theadRow) return;
 
-    const ciclos = [...new Set(state.filtered.map(d => d.Ciclo))].sort((a, b) => sortCiclo(a, b)).filter(Boolean);
+    // REVERSO: Mais recente na esquerda
+    const ciclos = [...new Set(state.filtered.map(d => d.Ciclo))].sort((a, b) => sortCiclo(a, b)).filter(Boolean).reverse();
 
     // Header Principal
     let headerHtml = `<th class="contract-cell" rowspan="2">Contrato / Empresa</th>`;
-    ciclos.forEach(c => {
-        headerHtml += `<th colspan="3" class="text-center border-start">${c}</th>`;
+    ciclos.forEach((c, idx) => {
+        // Estética degradê: colunas mais à esquerda (recentes) mais escuras
+        const opacity = Math.max(0.1, 1 - (idx * 0.15));
+        const bgStyle = `style="background: rgba(242, 145, 27, ${opacity}) !important; color: ${opacity > 0.5 ? '#fff' : 'var(--primary-color)'} !important;"`;
+        headerHtml += `<th colspan="3" class="text-center border-start" ${bgStyle}>${c}</th>`;
     });
     headerHtml += `<th colspan="3" class="text-center border-start fw-bold text-warning">TOTAL GERAL</th>`;
     theadRow.innerHTML = headerHtml;
@@ -286,7 +290,7 @@ function renderMatrix() {
     let totalsHtml = `<td class="contract-cell text-warning">TOTAIS DO PERÍODO</td>`;
     let grandFat = 0, grandLiq = 0, grandImp = 0;
 
-    ciclos.forEach(c => {
+    ciclos.forEach((c, idx) => {
         const cycleData = state.filtered.filter(d => d.Ciclo === c);
         const fat = cycleData.reduce((acc, d) => acc + d.valorFaturado, 0);
         const liq = cycleData.reduce((acc, d) => acc + d.valorLiquido, 0);
@@ -294,10 +298,13 @@ function renderMatrix() {
 
         grandFat += fat; grandLiq += liq; grandImp += imp;
 
+        const opacity = Math.max(0.1, 1 - (idx * 0.15));
+        const bgStyle = `style="background: rgba(242, 145, 27, ${opacity * 0.2}) !important;"`;
+
         totalsHtml += `
-            <td class="val-cell-mini border-start text-warning">${formatBRL(fat)}</td>
-            <td class="val-cell-mini text-warning">${formatBRL(liq)}</td>
-            <td class="val-cell-mini text-warning">${formatBRL(imp)}</td>
+            <td class="val-cell-mini border-start text-warning" ${bgStyle}>${formatBRL(fat)}</td>
+            <td class="val-cell-mini text-warning" ${bgStyle}>${formatBRL(liq)}</td>
+            <td class="val-cell-mini text-warning" ${bgStyle}>${formatBRL(imp)}</td>
         `;
     });
 

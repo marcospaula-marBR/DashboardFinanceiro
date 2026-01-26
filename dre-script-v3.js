@@ -2,7 +2,7 @@
 
 // Configuration
 const CONFIG = {
-    VERSION: "2.3.0",
+    VERSION: "27.0",
     LAST_UPDATE: "06/01/2026",
     COLORS: {
         primary: '#F2911B',
@@ -1209,7 +1209,9 @@ function updateCharts() {
     const ctxTop = document.getElementById('topExpensesChart').getContext('2d');
 
     // === DATA PREPARATION ===
-    const labels = state.validColumns.map(c => {
+    // REVERSO: Mais recente na esquerda
+    const validCols = [...state.validColumns].reverse();
+    const labels = validCols.map(c => {
         const [mes, ano] = c.split('/');
         return `${mes.charAt(0).toUpperCase() + mes.slice(1)}/${ano}`;
     });
@@ -1221,12 +1223,12 @@ function updateCharts() {
 
     // Series
     const monthlyReceitas = labels.map((_, i) => {
-        const col = state.validColumns[i];
+        const col = validCols[i];
         return Math.round(getRowValue('Receita Bruta de Vendas', col) + getRowValue('Receitas Indiretas', col));
     });
 
     const monthlySaidas = labels.map((_, i) => {
-        const col = state.validColumns[i];
+        const col = validCols[i];
         let total = 0;
         // Summing major groups manually to ensure consistency
         // Impostos
@@ -1244,7 +1246,7 @@ function updateCharts() {
     });
 
     const monthlyResult = labels.map((_, i) => {
-        const col = state.validColumns[i];
+        const col = validCols[i];
         const receitas = monthlyReceitas[i];
         const outras = getRowValue('Outras Receitas', col) + getRowValue('Receitas Financeiras', col) + getRowValue('Honorários', col) + getRowValue('Juros e Devoluções', col);
         const ativos = getRowValue('Ativos', col);
@@ -1253,7 +1255,7 @@ function updateCharts() {
     });
 
     const monthlyFCL = labels.map((_, i) => {
-        const col = state.validColumns[i];
+        const col = validCols[i];
         const ativos = getRowValue('Ativos', col);
         return Math.round(monthlyResult[i] - ativos);
     });
@@ -1339,7 +1341,7 @@ function updateCharts() {
                     borderWidth: 2,
                     tension: 0.3,
                     pointRadius: 3,
-                    order: 0,
+                    order: 1,
                     datalabels: {
                         display: 'auto',
                         anchor: 'end',
@@ -1347,6 +1349,25 @@ function updateCharts() {
                         formatter: val => Math.round(val).toLocaleString('pt-BR'),
                         font: { size: 10, weight: 'bold' },
                         color: CONFIG.COLORS.secondary
+                    }
+                },
+                {
+                    label: 'FCL (Caixa Livre)',
+                    data: monthlyFCL,
+                    type: 'line',
+                    borderColor: CONFIG.COLORS.success,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    tension: 0.3,
+                    pointRadius: 3,
+                    order: 0,
+                    datalabels: {
+                        display: 'auto',
+                        anchor: 'start',
+                        align: 'top',
+                        formatter: val => Math.round(val).toLocaleString('pt-BR'),
+                        font: { size: 10, weight: 'bold' },
+                        color: CONFIG.COLORS.success
                     }
                 },
                 {
@@ -1569,7 +1590,7 @@ function updateCharts() {
 function updateTable() {
     const thead = document.querySelector('#dreTable thead');
     const tbody = document.querySelector('#dreTable tbody');
-    const cols = state.validColumns;
+    const cols = [...state.validColumns].reverse();
 
     // Headers
     let headerHTML = '<tr><th style="width: 40px;"></th><th style="min-width: 210px;">Descrição</th>';
