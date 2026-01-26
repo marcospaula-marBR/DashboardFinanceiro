@@ -198,7 +198,9 @@ function renderDashboard() {
         { label: "Terceirização", value: m.terceirizacao / n, icon: 'bi-people-fill', color: 'warning', class: 'equip' },
         { label: "Corretiva", value: m.corretiva / n, icon: 'bi-tools', color: 'danger', class: 'equip' },
         // Preventiva including Credenciados Op (Request: Cred Op + Adiantamento Op + CLT + Preventiva)
-        { label: "Preventiva", value: (m.preventiva + m.credencialOp + m.clts) / n, icon: 'bi-shield-check', color: 'success', subtitle: 'Incl. Cred. e CLTs', class: 'equip' }
+        { label: "Preventiva", value: (m.preventiva + m.credencialOp + m.clts) / n, icon: 'bi-shield-check', color: 'success', subtitle: 'Incl. Cred. e CLTs', class: 'equip' },
+        // FCL per machine
+        { label: "Fluxo de Caixa Livre (FCL)", value: m.fcl / n, icon: 'bi-wallet2', color: 'success', class: 'equip' }
     ];
 
     allCards.push(...equipmentMetrics);

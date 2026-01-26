@@ -246,14 +246,19 @@ function renderMatrix() {
     const ciclos = [...new Set(state.filtered.map(d => d.Ciclo))].sort((a, b) => sortCiclo(a, b)).filter(Boolean).reverse();
 
     // Header Principal
-    let headerHtml = `<th class="contract-cell" rowspan="2">Contrato / Empresa</th>`;
+    let headerHtml = `<th class="contract-cell" rowspan="2" style="background: #1a1a1a !important; color: #fff !important; border-bottom: 2px solid var(--primary-color) !important;">Contrato / Empresa</th>`;
     ciclos.forEach((c, idx) => {
-        // Estética degradê: colunas mais à esquerda (recentes) mais escuras
-        const opacity = Math.max(0.1, 1 - (idx * 0.15));
-        const bgStyle = `style="background: rgba(242, 145, 27, ${opacity}) !important; color: ${opacity > 0.5 ? '#fff' : 'var(--primary-color)'} !important;"`;
+        // Estética degradê premium: do mais forte (recente) para o mais suave (antigo)
+        // Usamos HSL para um controle mais fino da saturação/brilho
+        const hue = 33; // Tom de laranja da Mar Brasil
+        const sat = 85;
+        const light = Math.min(45, 25 + (idx * 5)); // Escurece conforme index aumenta para manter contraste
+        const alpha = Math.max(0.2, 1 - (idx * 0.15));
+
+        const bgStyle = `style="background: linear-gradient(180deg, rgba(242, 145, 27, ${alpha}) 0%, rgba(242, 145, 27, ${alpha * 0.7}) 100%) !important; color: #fff !important; border-bottom: 2px solid rgba(255,255,255,0.1) !important;"`;
         headerHtml += `<th colspan="3" class="text-center border-start" ${bgStyle}>${c}</th>`;
     });
-    headerHtml += `<th colspan="3" class="text-center border-start fw-bold text-warning">TOTAL GERAL</th>`;
+    headerHtml += `<th colspan="3" class="text-center border-start fw-bold text-warning" style="background: rgba(242, 145, 27, 0.1) !important; border-bottom: 2px solid var(--primary-color) !important;">TOTAL GERAL</th>`;
     theadRow.innerHTML = headerHtml;
 
     // Sub-header (Sub-colunas)
@@ -298,8 +303,8 @@ function renderMatrix() {
 
         grandFat += fat; grandLiq += liq; grandImp += imp;
 
-        const opacity = Math.max(0.1, 1 - (idx * 0.15));
-        const bgStyle = `style="background: rgba(242, 145, 27, ${opacity * 0.2}) !important;"`;
+        const alpha = Math.max(0.05, 0.4 - (idx * 0.05));
+        const bgStyle = `style="background: rgba(242, 145, 27, ${alpha}) !important; border-bottom: 2px solid rgba(242, 145, 27, 0.2) !important;"`;
 
         totalsHtml += `
             <td class="val-cell-mini border-start text-warning" ${bgStyle}>${formatBRL(fat)}</td>
@@ -388,12 +393,12 @@ function sortCiclo(a, b) {
     const [mA, aA] = a.toLowerCase().split('-');
     const [mB, aB] = b.toLowerCase().split('-');
 
-    if (aA !== aB) return parseInt(aB) - parseInt(aA); // Inverso: mais novo primeiro
+    if (aA !== aB) return parseInt(aA) - parseInt(aB); // Ordem Cronológica (Antigo primeiro)
 
     const valA = map[mA] || mapEN[mA] || 0;
     const valB = map[mB] || mapEN[mB] || 0;
 
-    return valB - valA; // Inverso: mais novo primeiro
+    return valA - valB; // Ordem Cronológica (Antigo primeiro)
 }
 
 function parseCurrency(val) {

@@ -1601,7 +1601,14 @@ function updateCharts() {
                         tension: 0.3,
                         pointRadius: 3,
                         order: 1,
-                        hidden: true // Hide by default to reduce clutter
+                        datalabels: {
+                            display: 'auto',
+                            anchor: 'end',
+                            align: 'top',
+                            formatter: val => Math.round(val).toLocaleString('pt-BR'),
+                            font: { size: 10, weight: 'bold' },
+                            color: CONFIG.COLORS.success
+                        }
                     }
                 ]
             },
@@ -1822,7 +1829,7 @@ function updateTable() {
     const tbody = document.querySelector('#dreTable tbody');
     if (!thead || !tbody) return; // Prevent error if table is missing
 
-    const cols = state.validColumns;
+    const cols = [...state.validColumns].reverse();
 
     // Headers
     let headerHTML = '<tr><th style="width: 40px;"></th><th style="min-width: 210px;">Descrição</th>';
@@ -1866,8 +1873,10 @@ function updateTable() {
                 let varHtml = '';
 
                 // Calculate MoM Variation
-                if (index > 0) {
-                    const prevCol = cols[index - 1];
+                // Since cols are reversed (Newest -> Oldest),
+                // chronological previous is at index + 1
+                if (index < cols.length - 1) {
+                    const prevCol = cols[index + 1];
                     const prevVal = row.meses[prevCol] || 0;
                     varHtml = calculateVariationHtml(val, prevVal, isPositiveMetric(row.descricao));
                 }
@@ -1894,8 +1903,9 @@ function updateTable() {
                         const val = proj.meses[col] || 0;
                         let varHtml = '';
 
-                        if (index > 0) {
-                            const prevCol = cols[index - 1];
+                        // Chronological previous is at index + 1 in reversed array
+                        if (index < cols.length - 1) {
+                            const prevCol = cols[index + 1];
                             const prevVal = proj.meses[prevCol] || 0;
                             varHtml = calculateVariationHtml(val, prevVal, isPositiveMetric(row.descricao));
                         }
