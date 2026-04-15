@@ -25,9 +25,9 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-space), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --radius-xl: 12px;
   --radius-2xl: 16px;
@@ -44,13 +44,17 @@
   --background: #f5f5f5;
   --foreground: #262223;
 
+  /* Owner Typography Tokens */
+  --font-inter-size: 16px;
+  --font-space-tracking: 0.02em;
+
   /* Mar Brasil Brand Palette */
   --primary: #F2911B;
   --primary-foreground: #ffffff;
   --secondary: #262223;
   --secondary-foreground: #ffffff;
 
-  /* Semantic Colors for shadcn/ui */
+  /* Semantic Colors */
   --border: rgba(38, 34, 35, 0.1);
   --input: rgba(38, 34, 35, 0.1);
   --ring: var(--primary);
@@ -59,20 +63,14 @@
   --accent: #f1f5f9;
   --accent-foreground: #262223;
 
-  /* Functional Colors */
   --success: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
   --info: #3b82f6;
 
-  /* Spacing & Radius Tokens */
   --radius: 0.625rem;
   --sidebar-width: 16rem;
-  
-  --shadow-soft: 0 2px 12px rgba(38, 34, 35, 0.06);
-  --shadow-medium: 0 8px 24px rgba(38, 34, 35, 0.10);
 
-  /* Sidebar Premium Theme (Dark) */
   --sidebar-background: #1a1a1a;
   --sidebar-foreground: #f5f5f5;
   --sidebar-primary: var(--primary);
@@ -81,37 +79,31 @@
   --sidebar-border: rgba(255, 255, 255, 0.05);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #111111;
-    --foreground: #f5f5f5;
-  }
+/* === THEME: EMBER COCKPIT (Black Abyss) === */
+.theme-cockpit {
+  --background: #0A0A0A;
+  --foreground: #FFFFFF;
+  --card: #141414;
+  --primary: #F97316; /* Ignition */
+  --primary-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.05);
+  --muted: #1a1a1a;
+  --muted-foreground: #71717A;
+  --accent: #1a1a1a;
+  
+  --ember-gradient: linear-gradient(135deg, #C2410C 0%, #F97316 50%, #FB923C 100%);
+  --ember-glow: 0 0 20px rgba(249, 115, 22, 0.15);
 }
 
-html {
-  font-size: 17px; /* Aumento de 1px em relação ao padrão de 16px */
+.theme-cockpit h1, 
+.theme-cockpit h2, 
+.theme-cockpit h3 {
+  @apply font-heading font-bold uppercase tracking-[0.03em];
 }
 
-body {
-  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
-  color: var(--foreground);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.dark body {
-  background: linear-gradient(135deg, #111111 0%, #1a1a1a 100%);
-}
-
-/* Premium Card Style (Peopleboard Pattern) */
-.card-premium {
-  @apply bg-white dark:bg-zinc-900 border border-slate-200/60 dark:border-white/5 rounded-2xl transition-all duration-300;
-  box-shadow: var(--shadow-soft);
-}
-
-.card-premium:hover {
-  @apply border-primary/20 -translate-y-0.5;
-  box-shadow: var(--shadow-medium);
+.theme-cockpit .font-metric {
+  @apply font-mono font-bold tracking-tighter;
 }
 
 @layer base {
@@ -119,9 +111,16 @@ body {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-sans;
-  }
-  html {
-    @apply font-sans;
+    @apply bg-background text-foreground font-sans antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
+
+/* Utility Classes for Cockpit */
+.bg-ember { background: var(--ember-gradient); }
+.text-ember {
+  background: var(--ember-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.glow-ember { box-shadow: var(--ember-glow); }

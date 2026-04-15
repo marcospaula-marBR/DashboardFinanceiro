@@ -26,67 +26,76 @@ export function CompanyCard({ company, onClick }: CompanyCardProps) {
 
   return (
     <motion.div 
-      whileHover={{ y: -4 }}
-      transition={{ duration: 0.2 }}
-      className="card-premium group cursor-pointer border-l-4" 
-      style={{ borderLeftColor: primaryColor }}
+      whileHover={{ y: -6, scale: 1.01 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className="relative bg-[#111111] border border-white/5 rounded-[24px] overflow-hidden group cursor-pointer transition-all hover:border-orange-500/30 hover:shadow-2xl hover:shadow-orange-500/10" 
       onClick={onClick}
     >
-      <div className="p-6 flex flex-col h-full gap-5">
-        {/* Header with Icon and Badge */}
+      <div className="p-7 flex flex-col h-full gap-6">
+        {/* Superior: Logo e Status */}
         <div className="flex justify-between items-start">
           <div 
-            className="p-3 rounded-2xl transition-all group-hover:shadow-lg group-hover:shadow-primary/20 flex items-center justify-center min-h-[48px] min-w-[48px]"
-            style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}
+            className="p-3.5 rounded-2xl bg-white/5 flex items-center justify-center min-h-[52px] min-w-[52px] transition-all group-hover:bg-ember group-hover:text-white"
+            style={{ color: primaryColor }}
           >
             {branding.logo_url ? (
               <img src={branding.logo_url} alt={company.legal_name} className="h-8 w-8 object-contain" />
             ) : (
-              <Building2 size={24} />
+              <Building2 size={26} />
             )}
           </div>
           <Badge 
             className={cn(
-              "font-bold uppercase text-[10px] tracking-wider border-none px-2.5 py-1",
+              "font-black uppercase text-[9px] tracking-[0.1em] border-none px-3 py-1 bg-white/5",
               isActive 
-                ? "bg-emerald-100 text-emerald-700" 
-                : "bg-red-100 text-red-700"
+                ? "text-emerald-400" 
+                : "text-red-400"
             )}
           >
-            {isActive ? "Ativo" : "Inativo"}
+            <div className={cn("size-1.5 rounded-full mr-1.5", isActive ? "bg-emerald-400 animate-pulse" : "bg-red-400")} />
+            {isActive ? "Operante" : "Inativo"}
           </Badge>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 space-y-1.5">
-          <h3 className="font-bold text-slate-800 group-hover:text-primary transition-colors truncate leading-tight uppercase tracking-tight">
+        {/* Conteúdo: Tipografia Owner */}
+        <div className="flex-1 space-y-1">
+          <h3 className="font-heading font-bold text-white group-hover:text-ember transition-colors text-xl leading-tight uppercase tracking-[0.02em]">
             {company.trade_name || company.legal_name}
           </h3>
-          <p className="text-[11px] font-medium text-slate-400 truncate uppercase">
+          <p className="text-[10px] font-medium text-slate-500 truncate uppercase tracking-widest">
             {company.legal_name}
           </p>
-          <div className="flex items-center gap-1.5 mt-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-            <ShieldCheck size={14} className="text-primary/60" />
-            CNPJ: {company.tax_id}
+          
+          <div className="pt-4 mt-2">
+            <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-slate-400 uppercase tracking-tighter">
+                <span className="text-ember opacity-70">CNPJ</span>
+                <span className="text-white/80">{company.tax_id}</span>
+            </div>
           </div>
         </div>
 
-        {/* Footer Info */}
-        <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-            <MapPin size={14} className="text-slate-300" />
+        {/* Rodapé: Localização e Ação */}
+        <div className="pt-5 border-t border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+            <MapPin size={14} className="text-slate-600" />
             <span>{company.city || "S/ INF."}, {company.state || "--"}</span>
           </div>
           <Button 
             variant="ghost" 
             size="sm" 
-            className="h-8 px-3 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-primary/5 hover:text-primary transition-all group/btn"
+            className="h-9 px-4 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl bg-white/5 text-white hover:bg-ember hover:text-white transition-all border-none"
           >
-            Gerir
-            <Search size={14} className="ml-1.5 transition-transform group-hover/btn:scale-110" />
+            Acessar
+            <Search size={14} className="ml-2" />
           </Button>
         </div>
       </div>
+
+      {/* Marca de Cor da Empresa (Lado) */}
+      <div 
+        className="absolute bottom-0 left-0 w-full h-[3px] opacity-30 group-hover:opacity-100 transition-opacity"
+        style={{ backgroundColor: primaryColor }}
+      />
     </motion.div>
   );
 }

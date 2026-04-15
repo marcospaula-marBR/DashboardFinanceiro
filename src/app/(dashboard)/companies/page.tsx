@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, Building2, FileCheck, AlertCircle, Loader2 } from "lucide-react";
+import { 
+    Plus, 
+    Search, 
+    Building2, 
+    FileText, 
+    Users, 
+    CheckCircle2, 
+    Loader2 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,13 +33,13 @@ export default function CompaniesPage() {
   async function fetchCompanies() {
     if (!currentOrg) return;
 
-    // Buscando empresas e o branding associado (relacionamento 1:1)
     const { data, error } = await supabase
       .from("companies")
       .select(`
         *,
         branding:company_branding(*),
-        address:company_addresses(*)
+        address:company_addresses(*),
+        contacts:company_contacts(*)
       `)
       .eq("organization_id", currentOrg.id)
       .order("legal_name");
@@ -41,8 +49,6 @@ export default function CompaniesPage() {
     }
 
     if (data) {
-      // Como o relacionamento é 1:1 no schema, o Supabase traz branding como um objeto ou array de 1 item
-      // Vamos normalizar para facilitar o uso no frontend
       const normalizedData = data.map(company => ({
         ...company,
         branding: Array.isArray(company.branding) ? company.branding[0] : company.branding
@@ -91,67 +97,65 @@ export default function CompaniesPage() {
   }
 
   return (
-    <main className="min-h-screen pb-12">
-      <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-6 flex flex-col gap-8">
+    <div className="theme-cockpit min-h-screen bg-background transition-colors duration-500">
+      <div className="p-8 max-w-[1600px] mx-auto space-y-10">
         
         {/* Header Section */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-black text-foreground tracking-tight uppercase">
-              Hub de Empresas
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl md:text-5xl font-heading font-bold tracking-tight text-white">
+              Corporate <span className="text-ember">Profile Hub</span>
             </h1>
-            <p className="text-sm text-muted-foreground">
-              Gestão de perfis corporativos e documentos - {currentOrg?.name}
+            <p className="text-slate-400 font-medium max-w-2xl">
+              Gestão centralizada de fichas cadastrais, documentos e contatos estratégicos do grupo.
             </p>
           </div>
+          
           <Button 
-            className="font-bold rounded-xl shadow-md group border-none bg-primary hover:bg-primary/90"
+            className="rounded-2xl px-8 h-12 font-bold bg-ember hover:scale-105 transition-all shadow-lg shadow-orange-500/20 text-white border-none"
             onClick={() => {
               setSelectedCompany({ id: "new", legal_name: "", tax_id: "", organization_id: currentOrg?.id });
               setIsDrawerOpen(true);
             }}
           >
-            <Plus className="mr-2 h-4 w-4 transition-transform group-hover:rotate-90" />
-            Nova Empresa
+            <Plus className="mr-2 h-5 w-5" /> Nova Empresa
           </Button>
-        </header>
+        </div>
 
-        {/* Stats Section */}
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats Grid */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <StatCard 
             title="Total de Empresas" 
             value={companies.length.toString()} 
-            icon={<Building2 size={22} />}
+            icon={Building2}
             color="primary"
           />
           <StatCard 
-            title="Empresas Ativas" 
-            value={companies.filter(c => c.status === 'active').length.toString()} 
-            icon={<FileCheck size={22} />}
+            title="Documentos" 
+            value="0" 
+            icon={FileText}
+            color="info"
+          />
+          <StatCard 
+            title="Contatos" 
+            value="0" 
+            icon={Users}
+            color="warning"
+          />
+          <StatCard 
+            title="Status Ativo" 
+            value="100%" 
+            icon={CheckCircle2}
             color="success"
           />
-          <StatCard 
-            title="Pendências" 
-            value="0" 
-            icon={<AlertCircle size={22} />}
-            color="warning"
-            description="Documentos expirando"
-          />
-          <StatCard 
-            title="Sincronização" 
-            value="100%" 
-            icon={<Loader2 size={22} className="animate-spin-slow" />}
-            color="info"
-            description="Status Omie"
-          />
-        </section>
+        </div>
 
         {/* Filters and Search */}
         <div className="relative group max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors group-focus-within:text-ember" />
           <Input
             placeholder="Buscar empresa, CNPJ ou nome fantasia..."
-            className="pl-10 bg-white/50 backdrop-blur-sm border-slate-200 rounded-xl focus-visible:ring-primary/20 focus-visible:border-primary/40 transition-all shadow-sm"
+            className="pl-10 bg-white/5 border-white/10 text-white rounded-xl focus-visible:ring-ember/20 focus-visible:border-ember/40 transition-all shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -159,17 +163,17 @@ export default function CompaniesPage() {
 
         {/* Companies Grid */}
         {filteredCompanies.length === 0 ? (
-          <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 p-8 text-center card-premium bg-white/30 backdrop-blur-sm">
-            <div className="bg-amber-100/50 text-amber-600 p-4 rounded-full">
+          <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 p-8 text-center bg-white/5 rounded-3xl border border-white/5">
+            <div className="bg-amber-500/10 text-amber-500 p-4 rounded-full">
               <Search size={32} />
             </div>
             <div>
-              <h3 className="font-bold text-lg">Nenhuma empresa encontrada</h3>
-              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+              <h3 className="font-bold text-lg text-white font-heading">Nenhuma empresa encontrada</h3>
+              <p className="text-sm text-slate-500 max-w-xs mx-auto">
                 Não encontramos resultados para "{searchTerm}". Tente outro termo ou limpe os filtros.
               </p>
             </div>
-            <Button variant="outline" onClick={() => setSearchTerm("")} className="rounded-xl">
+            <Button variant="outline" onClick={() => setSearchTerm("")} className="rounded-xl border-white/10 text-white">
               Limpar Busca
             </Button>
           </div>
@@ -194,15 +198,15 @@ export default function CompaniesPage() {
             </AnimatePresence>
           </div>
         )}
-      </div>
 
-      {/* Cockpit Lateral */}
-      <CompanyDetailsModal
-        company={selectedCompany}
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        onUpdate={fetchCompanies}
-      />
-    </main>
+        {/* Cockpit Lateral */}
+        <CompanyDetailsModal
+            company={selectedCompany}
+            isOpen={isDrawerOpen}
+            onClose={() => setIsDrawerOpen(false)}
+            onUpdate={fetchCompanies}
+        />
+      </div>
+    </div>
   );
 }

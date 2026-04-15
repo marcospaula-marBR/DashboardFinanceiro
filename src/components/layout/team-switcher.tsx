@@ -19,6 +19,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useOrg } from "@/hooks/use-org";
+import { cn } from "@/lib/utils";
 
 export function TeamSwitcher() {
   const { isMobile } = useSidebar();
@@ -30,27 +31,33 @@ export function TeamSwitcher() {
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-2xl border border-white/5 bg-white/5 transition-all duration-300 hover:bg-white/10"
-            >
-              <div className="flex aspect-square size-10 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/20 text-primary-foreground transform transition-transform group-hover:scale-105">
-                <span className="text-base font-black italic tracking-tighter">
-                  {currentOrg.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight ml-2">
-                <span className="truncate font-black uppercase tracking-tight text-[11px] text-primary/80">
-                  Dashboard Financeiro
-                </span>
-                <span className="truncate font-bold text-white text-sm">
-                  {currentOrg.name}
-                </span>
-              </div>
-              <ChevronsUpDown className="ml-auto size-4 opacity-50" />
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={(props) => (
+              <SidebarMenuButton
+                {...props}
+                size="lg"
+                className={cn(
+                  "data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-2xl border border-white/5 bg-white/5 transition-all duration-300 hover:bg-white/10",
+                  props.className
+                )}
+              >
+                <div className="flex aspect-square size-10 items-center justify-center rounded-xl bg-orange-500 shadow-lg shadow-orange-500/20 text-white transform transition-transform group-hover:scale-105">
+                  <span className="text-base font-black italic tracking-tighter">
+                    {currentOrg.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight ml-2">
+                  <span className="truncate font-black uppercase tracking-tight text-[11px] text-orange-500/80">
+                    Dashboard Financeiro
+                  </span>
+                  <span className="truncate font-bold text-white text-sm">
+                    {currentOrg.name}
+                  </span>
+                </div>
+                <ChevronsUpDown className="ml-auto size-4 opacity-50" />
+              </SidebarMenuButton>
+            )}
+          />
           <DropdownMenuContent
             className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
             side={isMobile ? "bottom" : "right"}

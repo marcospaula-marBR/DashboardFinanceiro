@@ -30,7 +30,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 const data = {
-  version: "v1.3",
+  version: "v1.5",
   navMain: [
     {
       title: "Dashboard",

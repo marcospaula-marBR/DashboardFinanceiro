@@ -1,103 +1,84 @@
 "use client";
 
 import { ReactNode } from "react";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { LucideIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface StatCardProps {
   title: string;
   value: string;
-  icon: ReactNode;
-  trend?: string;
-  color?: "primary" | "secondary" | "success" | "danger" | "info" | "warning";
+  icon: LucideIcon | ReactNode;
   description?: string;
-  className?: string;
+  trend?: string;
+  color?: "primary" | "success" | "warning" | "danger" | "info";
 }
-
-const colorMap = {
-  primary: {
-    bg: "bg-primary/10",
-    text: "text-primary",
-    iconBg: "bg-primary",
-  },
-  secondary: {
-    bg: "bg-secondary/10",
-    text: "text-secondary",
-    iconBg: "bg-secondary",
-  },
-  success: {
-    bg: "bg-success/10",
-    text: "text-success",
-    iconBg: "bg-success",
-  },
-  danger: {
-    bg: "bg-danger/10",
-    text: "text-danger",
-    iconBg: "bg-danger",
-  },
-  info: {
-    bg: "bg-info/10",
-    text: "text-info",
-    iconBg: "bg-info",
-  },
-  warning: {
-    bg: "bg-warning/10",
-    text: "text-warning",
-    iconBg: "bg-warning",
-  },
-};
 
 export function StatCard({ 
   title, 
   value, 
-  icon, 
-  trend, 
-  color = "primary", 
+  icon: Icon, 
   description, 
-  className 
+  trend,
+  color = "primary"
 }: StatCardProps) {
-  const colors = colorMap[color];
   
+  const colorMap = {
+    primary: "text-orange-500 bg-orange-500/10 border-orange-500/20",
+    success: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
+    warning: "text-amber-500 bg-amber-500/10 border-amber-500/20",
+    danger: "text-red-500 bg-red-500/10 border-red-500/20",
+    info: "text-sky-500 bg-sky-500/10 border-sky-500/20",
+  };
+
+  const renderIcon = () => {
+    if (!Icon) return null;
+    
+    // Se for um componente (função ou ForwardRef object)
+    if (typeof Icon === "function" || (typeof Icon === "object" && "render" in Icon)) {
+      const IconComp = Icon as any;
+      return <IconComp className="size-6" />;
+    }
+    
+    // Se já for um elemento JSX
+    return Icon;
+  };
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -2 }}
-      className={cn(
-        "card-premium p-5 flex items-center gap-4",
-        className
-      )}
-    >
-      <div className={cn(
-        "p-3 rounded-xl text-white shrink-0 flex items-center justify-center",
-        colors.iconBg
-      )}>
-        {icon}
-      </div>
-      
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
-          {title}
-        </p>
-        <div className="flex items-baseline gap-2 mt-0.5">
-          <h3 className="font-black text-foreground tabular-nums text-xl md:text-2xl leading-none">
-            {value}
-          </h3>
+    <Card className="relative bg-[#111111] border-white/5 overflow-hidden group transition-all duration-300 hover:border-orange-500/30">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className={cn(
+            "p-3 rounded-2xl transition-all duration-300 group-hover:scale-110",
+            colorMap[color]
+          )}>
+            {renderIcon()}
+          </div>
           {trend && (
-            <span className={cn(
-              "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-              trend.startsWith("+") ? "bg-success/15 text-success" : "bg-danger/15 text-danger"
-            )}>
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">
               {trend}
             </span>
           )}
         </div>
-        {description && (
-          <p className="text-[10px] text-muted-foreground mt-1 truncate">
-            {description}
+        
+        <div className="mt-5 space-y-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 group-hover:text-slate-300 transition-colors">
+            {title}
           </p>
-        )}
-      </div>
-    </motion.div>
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-4xl font-mono font-bold tracking-tighter text-white group-hover:text-orange-500 transition-colors">
+              {value}
+            </h3>
+          </div>
+          {description && (
+            <p className="text-xs font-medium text-slate-500">
+              {description}
+            </p>
+          )}
+        </div>
+      </CardContent>
+      {/* Glow Effect */}
+      <div className="absolute -right-4 -bottom-4 size-24 bg-orange-500/5 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+    </Card>
   );
 }
