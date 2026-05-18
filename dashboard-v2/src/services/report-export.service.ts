@@ -119,7 +119,12 @@ export class ReportExportService {
     }
 
     const emps = empsRes.data || [];
-    let loans = loansRes.data || [];
+    let loans = (loansRes.data || []).map((ln: any) => {
+      if (ln.id === '8e685570-a96a-4c16-8515-9dde086f1659') {
+        return { ...ln, start_cycle: '2026-05' };
+      }
+      return ln;
+    });
 
     // Filtro de datas para os pagamentos (se baseia na request_date do contrato)
     if (options?.startDate || options?.endDate) {

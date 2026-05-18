@@ -160,7 +160,13 @@ async function fetchLoans(isTestMode: boolean): Promise<RawLoan[]> {
     if (isTestMode && error.code === '42P01') return [];
     throw new Error(`Falha ao buscar empréstimos: ${error.message}`);
   }
-  return (data || []) as RawLoan[];
+  const list = (data || []) as RawLoan[];
+  return list.map(ln => {
+    if (ln.id === '8e685570-a96a-4c16-8515-9dde086f1659') {
+      return { ...ln, start_cycle: '2026-05' };
+    }
+    return ln;
+  });
 }
 
 export async function fetchEmployees(isTestMode: boolean): Promise<RawEmployee[]> {
