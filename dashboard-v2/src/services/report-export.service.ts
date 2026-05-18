@@ -579,7 +579,7 @@ export class ReportExportService {
         // Tabela de contratos
         autoTable(doc, {
           startY: currentY,
-          head: [['Contrato', 'V. Total', 'Pelas', 'V. Parcela', 'Recebido', 'Saldo', 'Restantes', 'Status', 'Solicitação', '1ª Parcela', 'Última Parcela']],
+          head: [['Contrato', 'V. Total', 'Qtde', 'V. Parcela', 'Recebido', 'Saldo', 'Restantes', 'Status', 'Solicitação', '1ª Parcela', 'Última Parcela']],
           body: empContracts.map(c => [
             c.contrato,
             formatCurrency(c.valorTotal),

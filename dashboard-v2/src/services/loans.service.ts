@@ -480,7 +480,7 @@ export class LoansService {
         balance,
         installments: ln.installments || 0,
         installmentValue,
-        installmentsPaid: ln.paid_installments || 0,
+        installmentsPaid: installmentValue > 0 ? Math.round((amount - balance) / installmentValue) : 0,
         nextPaymentDate: loanNextPayment(ln),
         endDate: loanEndDate(ln),
         status: loanStatus(ln),
