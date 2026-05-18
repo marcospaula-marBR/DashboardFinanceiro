@@ -136,7 +136,6 @@ export default function DreCustomPage() {
       header: true,
       skipEmptyLines: true,
       encoding: "ISO-8859-1",
-      delimiter: ";",
       complete: (results) => {
         let parsed = results.data;
         if (parsed.length === 0 || (results.meta.fields && results.meta.fields.length < 3)) {
@@ -145,7 +144,6 @@ export default function DreCustomPage() {
             header: true,
             skipEmptyLines: true,
             encoding: "UTF-8",
-            delimiter: ";",
             complete: (utfResults) => processNormalizedData(utfResults.data),
             error: (err) => {
               alert("Erro ao ler arquivo: " + err.message);
@@ -202,6 +200,167 @@ export default function DreCustomPage() {
 
       return null;
     };
+
+    const parseVal = (valStr: string): number => {
+      if (!valStr) return 0;
+      let clean = valStr.trim().replace(/R\$\s?/i, '').replace(/\s/g, '');
+      let isNegative = false;
+      if (clean.startsWith('(') && clean.endsWith(')')) {
+        isNegative = true;
+        clean = clean.substring(1, clean.length - 1);
+      }
+      if (clean.startsWith('-')) {
+        isNegative = true;
+        clean = clean.substring(1);
+      }
+      if (clean.includes(',')) {
+        clean = clean.replace(/\./g, '').replace(',', '.');
+      }
+      let num = parseFloat(clean);
+      if (isNaN(num)) return 0;
+      return isNegative ? -Math.abs(num) : num;
+    };
+
+    // 1. Check if the CSV is a Transaction Log (Format B) or monthly pivoted DRE (Format A)
+    let dateKey = '';
+    let valorKey = '';
+
+    if (rawList[0]) {
+      Object.keys(rawList[0]).forEach(key => {
+        const lKey = key.trim().toLowerCase();
+        if (lKey === 'data' || lKey === 'data (completa)' || lKey === 'data completa') {
+          dateKey = key;
+        } else if (!dateKey && lKey.includes('data')) {
+          dateKey = key;
+        }
+
+        if (lKey === 'valor' || lKey === 'valor pago' || lKey === 'valor total') {
+          valorKey = key;
+        } else if (!valorKey && lKey.includes('valor')) {
+          valorKey = key;
+        }
+      });
+    }
+
+    const isTransactionLog = dateKey && valorKey;
+
+    if (isTransactionLog) {
+      const groups: Record<string, {
+        Empresa: string;
+        'Conta DRE': string;
+        Categoria: string;
+        Projeto: string;
+        Departamento: string;
+        valores: Record<string, number>;
+      }> = {};
+
+      const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+      rawList.forEach(row => {
+        const rawDate = (row[dateKey] || '').toString().trim();
+        if (!rawDate) return;
+
+        const dateParts = rawDate.split(/[\/\-]/);
+        if (dateParts.length !== 3) return;
+
+        let mes = '';
+        let ano = '';
+
+        if (dateParts[0].length === 4) {
+          // YYYY-MM-DD
+          mes = MONTHS_SHORT[parseInt(dateParts[1]) - 1];
+          ano = dateParts[0];
+        } else {
+          // MM/DD/YYYY or DD/MM/YYYY
+          const p0 = parseInt(dateParts[0]);
+          const p1 = parseInt(dateParts[1]);
+          const p2 = dateParts[2].length === 2 ? '20' + dateParts[2] : dateParts[2];
+
+          // Check US style vs BR style: standard Omie OLAP has MM/DD/YYYY if p0 <= 12 and p1 > 12
+          if (p0 <= 12 && p1 > 12) {
+            mes = MONTHS_SHORT[p0 - 1];
+          } else if (p0 > 12 && p1 <= 12) {
+            mes = MONTHS_SHORT[p1 - 1];
+          } else {
+            // Default to first part as month
+            mes = MONTHS_SHORT[p0 - 1];
+          }
+          ano = p2;
+        }
+
+        if (!mes) return;
+        const periodKey = `${mes}/${ano.slice(-2)}`;
+
+        const numVal = parseVal(row[valorKey]);
+
+        let empresa = '';
+        let contaDre = '';
+        let categoria = '';
+        let projeto = '';
+        let departamento = '';
+
+        Object.keys(row).forEach(key => {
+          const lKey = key.trim().toLowerCase();
+          const val = (row[key] || '').toString().trim();
+          if (lKey === 'minha empresa (razao social)' || lKey === 'minha empresa (razǜo social)' || lKey === 'empresa' || lKey === 'minha empresa') {
+            empresa = val;
+          } else if (!empresa && lKey.includes('empresa') && !lKey.includes('cnpj')) {
+            empresa = val;
+          }
+
+          if (lKey === 'conta do dre' || lKey === 'conta dre') {
+            contaDre = val;
+          }
+
+          if (lKey === 'categoria') {
+            categoria = val;
+          }
+
+          if (lKey === 'projeto') {
+            projeto = val;
+          }
+
+          if (lKey === 'departamento') {
+            departamento = val;
+          }
+        });
+
+        if (!empresa || empresa === 'N/D') empresa = 'Geral';
+        if (!contaDre || contaDre === 'N/D') contaDre = 'Sem Classificação';
+        if (!categoria || categoria === 'N/D') categoria = 'Sem Categoria';
+        if (!projeto || projeto === 'N/D') projeto = 'Sem Projeto';
+        if (!departamento || departamento === 'N/D') departamento = 'Sem Departamento';
+
+        const groupKey = `${empresa}|||${contaDre}|||${categoria}|||${projeto}|||${departamento}`;
+
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            Empresa: empresa,
+            'Conta DRE': contaDre,
+            Categoria: categoria,
+            Projeto: projeto,
+            Departamento: departamento,
+            valores: {}
+          };
+        }
+
+        groups[groupKey].valores[periodKey] = (groups[groupKey].valores[periodKey] || 0) + numVal;
+      });
+
+      rawList = Object.values(groups).map(g => {
+        const rowObj: any = {
+          Empresa: g.Empresa,
+          'Conta DRE': g['Conta DRE'],
+          Categoria: g.Categoria,
+          Projeto: g.Projeto,
+          Departamento: g.Departamento
+        };
+        Object.keys(g.valores).forEach(pk => {
+          rowObj[pk] = g.valores[pk].toString();
+        });
+        return rowObj;
+      });
+    }
 
     // Forward fill trackers
     let lastEmpresa = '';
