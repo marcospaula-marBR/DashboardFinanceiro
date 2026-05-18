@@ -232,13 +232,31 @@ export class LoansService {
       const filters = _filters as any;
       const showAll = filters?.mostrarTodos;
       
-      // Se não for "mostrar todos" e não tiver empréstimo, pula
-      if (!showAll && empLoans.length === 0) return;
+      // Filtro de data
+      let filteredEmpLoans = empLoans;
+      if (filters?.dateStart || filters?.dateEnd) {
+        filteredEmpLoans = empLoans.filter(ln => {
+          if (!ln.request_date) return false; // Se tiver filtro de data, e não tiver data, descarta
+          const reqDate = new Date(ln.request_date);
+          if (filters.dateStart) {
+            const start = new Date(filters.dateStart + 'T00:00:00');
+            if (reqDate < start) return false;
+          }
+          if (filters.dateEnd) {
+            const end = new Date(filters.dateEnd + 'T23:59:59');
+            if (reqDate > end) return false;
+          }
+          return true;
+        });
+      }
 
-      const totalTaken = empLoans.reduce((a, ln) => a + (parseFloat(String(ln.amount)) || 0), 0);
-      const balance = empLoans.reduce((a, ln) => a + calcDebtForLoan(ln), 0);
-      const totalReceived = empLoans.reduce((a, ln) => a + calcReceivedForLoan(ln), 0);
-      const monthInstallment = empLoans.reduce((a, ln) => a + calcInstallmentForMonth(ln, billingMonthStr), 0);
+      // Se não for "mostrar todos" e não tiver empréstimo, pula
+      if (!showAll && filteredEmpLoans.length === 0) return;
+
+      const totalTaken = filteredEmpLoans.reduce((a, ln) => a + (parseFloat(String(ln.amount)) || 0), 0);
+      const balance = filteredEmpLoans.reduce((a, ln) => a + calcDebtForLoan(ln), 0);
+      const totalReceived = filteredEmpLoans.reduce((a, ln) => a + calcReceivedForLoan(ln), 0);
+      const monthInstallment = filteredEmpLoans.reduce((a, ln) => a + calcInstallmentForMonth(ln, billingMonthStr), 0);
 
       // --- Lógica de Deduplicação de Aditivos ---
       const aditivoUrls = new Set<string>();
@@ -277,7 +295,7 @@ export class LoansService {
         totalReceived,
         balance,
         monthInstallment,
-        contractsCount: empLoans.length,
+        contractsCount: filteredEmpLoans.length,
         status: (emp.status || 'Ativo') as any, // Status de RH (Ativo/Inativo/Férias)
         loanStatus: balance > 0 ? 'Ativo' : (totalTaken > 0 ? 'Quitado' : 'Sem Empréstimo'),
         contract_expiry_date: emp.contract_expiry_date,
@@ -292,7 +310,7 @@ export class LoansService {
   }
 
   /** Estatísticas gerais calculadas dos dados reais */
-  static async getStats(isTestMode?: boolean): Promise<LoanStats> {
+  static async getStats(isTestMode?: boolean, dateFilters?: { dateStart?: string, dateEnd?: string }): Promise<LoanStats> {
     const safeTestMode = Boolean(isTestMode);
     const [emps, loans] = await Promise.all([fetchEmployees(safeTestMode), fetchLoans(safeTestMode)]);
 
@@ -309,6 +327,20 @@ export class LoansService {
     loans.forEach(ln => {
       const emp = empMap.get(ln.employee_id);
       if (!emp) return; // Pula empréstimos de funcionários que não existem (fantasmas)
+
+      // Filtro de data
+      if (dateFilters?.dateStart || dateFilters?.dateEnd) {
+        if (!ln.request_date) return;
+        const reqDate = new Date(ln.request_date);
+        if (dateFilters.dateStart) {
+          const start = new Date(dateFilters.dateStart + 'T00:00:00');
+          if (reqDate < start) return;
+        }
+        if (dateFilters.dateEnd) {
+          const end = new Date(dateFilters.dateEnd + 'T23:59:59');
+          if (reqDate > end) return;
+        }
+      }
 
       const amount = parseFloat(String(ln.amount)) || 0;
       const debt = calcDebtForLoan(ln);

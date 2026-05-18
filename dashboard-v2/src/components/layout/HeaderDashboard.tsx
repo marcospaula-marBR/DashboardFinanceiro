@@ -11,6 +11,7 @@ import { APP_VERSION } from "@/version";
 import { TestEmployeeService } from "@/services/test-employee.service";
 import { ReportExportService } from "@/services/report-export.service";
 import { FilterValues } from "@/components/loans/FilterBar";
+import { ExportModal, ExportOptions } from "@/components/loans/ExportModal";
 
 interface HeaderDashboardProps {
   activeFilters?: FilterValues;
@@ -26,6 +27,9 @@ export function HeaderDashboard({ activeFilters, isTestMode, onCreateEmployee, o
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [hasSuccess, setHasSuccess] = useState(false);
+  
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportDefaultFormat, setExportDefaultFormat] = useState<'csv' | 'pdf'>('pdf');
 
   const handleGoHome = () => {
     router.push("/");
@@ -74,30 +78,25 @@ export function HeaderDashboard({ activeFilters, isTestMode, onCreateEmployee, o
     }
   };
 
-  const handleExportReport = async () => {
+  const handleOpenExportModal = (format: 'csv' | 'pdf') => {
+    setExportDefaultFormat(format);
+    setIsExportModalOpen(true);
+  };
+
+  const handleExportSubmit = async (options: ExportOptions) => {
     setIsLoading(true);
     setMessage(null);
     try {
-      await ReportExportService.exportFullReport(activeFilters, isTestMode);
-      setMessage('Relatório CSV exportado!');
+      if (options.format === 'csv') {
+        await ReportExportService.exportFullReport(activeFilters, isTestMode, options);
+        setMessage('Relatório CSV exportado!');
+      } else {
+        await ReportExportService.exportFullReportPDF(activeFilters, isTestMode, options);
+        setMessage('Relatório PDF exportado!');
+      }
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       setMessage('Erro ao exportar: ' + (error as Error).message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleExportPDF = async () => {
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      // Passa os filtros ativos e o modo de teste para o serviço de exportação
-      await ReportExportService.exportFullReportPDF(activeFilters, isTestMode);
-      setMessage('Relatório PDF exportado!');
-      setTimeout(() => setMessage(null), 3000);
-    } catch (error) {
-      setMessage('Erro ao gerar PDF: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +150,7 @@ export function HeaderDashboard({ activeFilters, isTestMode, onCreateEmployee, o
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-2">
         <button 
-          onClick={handleExportReport}
+          onClick={() => handleOpenExportModal('csv')}
           disabled={isLoading}
           className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border border-blue-200 disabled:opacity-50"
           title="Exportar relatório completo para CSV"
@@ -161,7 +160,7 @@ export function HeaderDashboard({ activeFilters, isTestMode, onCreateEmployee, o
         </button>
 
         <button 
-          onClick={handleExportPDF}
+          onClick={() => handleOpenExportModal('pdf')}
           disabled={isLoading}
           className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-700 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border border-red-200 disabled:opacity-50"
           title="Exportar relatório completo para PDF (Paisagem)"
@@ -254,6 +253,12 @@ export function HeaderDashboard({ activeFilters, isTestMode, onCreateEmployee, o
         )}
       </div>
 
+      <ExportModal 
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={handleExportSubmit}
+        defaultFormat={exportDefaultFormat}
+      />
     </header>
   );
 }

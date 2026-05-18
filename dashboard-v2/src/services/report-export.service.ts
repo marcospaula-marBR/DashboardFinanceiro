@@ -4,6 +4,7 @@ import autoTable from 'jspdf-autotable';
 import { TIMBRADO_B64 } from '@/lib/timbrado_base64';
 import { FilterValues } from '@/components/loans/FilterBar';
 import { LoansService } from './loans.service';
+import { ExportOptions } from '@/components/loans/ExportModal';
 
 export interface LoansReportData {
   colaborador: string;
@@ -29,6 +30,7 @@ export interface ContractReportData {
   parcelasPagas: number;
   parcelasRestantes: number;
   status: string;
+  dataSolicitacao: string;
   dataInicio: string;
   dataTermino: string;
 }
@@ -46,8 +48,12 @@ export interface PaymentReportData {
 
 export class ReportExportService {
   // Buscar dados para relatório de colaboradores (usando lógica real do LoansService)
-  static async getEmployeeReport(isTestMode?: boolean): Promise<LoansReportData[]> {
-    const emps = await LoansService.getEmployees({ mostrarTodos: true }, isTestMode);
+  static async getEmployeeReport(isTestMode?: boolean, options?: ExportOptions): Promise<LoansReportData[]> {
+    const emps = await LoansService.getEmployees({ 
+      mostrarTodos: true, 
+      dateStart: options?.startDate, 
+      dateEnd: options?.endDate 
+    }, isTestMode);
     
     return emps.map(item => ({
       colaborador: item.name,
@@ -63,8 +69,12 @@ export class ReportExportService {
   }
 
   // Buscar dados para relatório de contratos (usando a lógica que já funciona no Dash)
-  static async getContractReport(isTestMode?: boolean): Promise<ContractReportData[]> {
-    const emps = await LoansService.getEmployees({ mostrarTodos: true }, isTestMode);
+  static async getContractReport(isTestMode?: boolean, options?: ExportOptions): Promise<ContractReportData[]> {
+    const emps = await LoansService.getEmployees({ 
+      mostrarTodos: true,
+      dateStart: options?.startDate,
+      dateEnd: options?.endDate 
+    }, isTestMode);
     let allContracts: ContractReportData[] = [];
 
     for (const emp of emps) {
@@ -82,6 +92,7 @@ export class ReportExportService {
           parcelasPagas: c.installmentsPaid || 0,
           parcelasRestantes: (c.installments || 0) - (c.installmentsPaid || 0),
           status: c.status,
+          dataSolicitacao: c.requestDate ? c.requestDate.split('T')[0] : '',
           dataInicio: c.startDate || '',
           dataTermino: c.endDate || ''
         });
@@ -92,13 +103,13 @@ export class ReportExportService {
   }
 
   // Buscar dados para relatório de parcelas (usando lógica algorítmica do LoansService/Sidebar)
-  static async getPaymentReport(isTestMode?: boolean): Promise<PaymentReportData[]> {
+  static async getPaymentReport(isTestMode?: boolean, options?: ExportOptions): Promise<PaymentReportData[]> {
     const safeTestMode = Boolean(isTestMode);
     const empsTable = safeTestMode ? 'employees_test' : 'employees';
     const loansTable = safeTestMode ? 'employee_loans_test' : 'employee_loans';
 
     const [empsRes, loansRes] = await Promise.all([
-      supabase.from(empsTable).select('id, full_name, corporate_name, company'),
+      supabase.from(empsTable).select('id, full_name, company'),
       supabase.from(loansTable).select('*')
     ]);
 
@@ -112,12 +123,29 @@ export class ReportExportService {
     }
 
     const emps = empsRes.data || [];
-    const loans = loansRes.data || [];
+    let loans = loansRes.data || [];
+
+    // Filtro de datas para os pagamentos (se baseia na request_date do contrato)
+    if (options?.startDate || options?.endDate) {
+      loans = loans.filter(ln => {
+        if (!ln.request_date) return false;
+        const reqDate = new Date(ln.request_date);
+        if (options.startDate) {
+          const start = new Date(options.startDate + 'T00:00:00');
+          if (reqDate < start) return false;
+        }
+        if (options.endDate) {
+          const end = new Date(options.endDate + 'T23:59:59');
+          if (reqDate > end) return false;
+        }
+        return true;
+      });
+    }
 
     const empMap = new Map();
     emps.forEach(e => {
       empMap.set(e.id, {
-        name: e.full_name || e.corporate_name || 'Desconhecido',
+        name: e.full_name || 'Desconhecido',
         company: e.company || '-'
       });
     });
@@ -249,12 +277,12 @@ export class ReportExportService {
   }
 
   // Exportar relatório completo
-  static async exportFullReport(filters?: FilterValues, isTestMode?: boolean): Promise<void> {
+  static async exportFullReport(filters?: FilterValues, isTestMode?: boolean, options?: ExportOptions): Promise<void> {
     try {
       let [employees, contracts, payments] = await Promise.all([
-        this.getEmployeeReport(isTestMode),
-        this.getContractReport(isTestMode),
-        this.getPaymentReport(isTestMode) // Usa a mesma lógica do dashboard
+        this.getEmployeeReport(isTestMode, options),
+        this.getContractReport(isTestMode, options),
+        this.getPaymentReport(isTestMode, options) // Usa a mesma lógica do dashboard
       ]);
 
       // Aplicar filtros se existirem
@@ -287,6 +315,20 @@ export class ReportExportService {
       // Criar CSV com múltiplas abas (separadas por linha em branco)
       let fullCSV = '';
       
+      const formatCur = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+      
+      if (options?.includeSummary) {
+        const stats = await LoansService.getStats(isTestMode, { dateStart: options.startDate, dateEnd: options.endDate });
+        fullCSV += 'RESUMO GERAL DO PERÍODO\n';
+        if (options.startDate || options.endDate) {
+          fullCSV += `Período Filtrado: ${options.startDate ? new Date(options.startDate+'T12:00:00').toLocaleDateString('pt-BR') : 'Início'} até ${options.endDate ? new Date(options.endDate+'T12:00:00').toLocaleDateString('pt-BR') : 'Hoje'}\n`;
+        }
+        fullCSV += `Qtd de Empréstimos Liberados: ${stats.contratosAtivos + stats.contratosLiquidados}\n`;
+        fullCSV += `Total Tomado: ${formatCur(stats.totalEmprestado)}\n`;
+        fullCSV += `Total Recebido: ${formatCur(stats.totalRecebido)}\n`;
+        fullCSV += `Saldo Devedor: ${formatCur(stats.saldoDevedor)}\n\n`;
+      }
+
       // Seção 1: Resumo por Colaborador
       fullCSV += 'RELATÓRIO DE EMPRÉSTIMOS - RESUMO POR COLABORADOR\n';
       fullCSV += 'Data: ' + new Date().toLocaleDateString('pt-BR') + '\n\n';
@@ -300,7 +342,7 @@ export class ReportExportService {
       fullCSV += this.convertToCSV(contracts, [
         'Colaborador', 'Empresa', 'Contrato', 'Valor Total (R$)',
         'Qtd Parcelas', 'Valor Parcela (R$)', 'Recebido (R$)', 'Saldo (R$)',
-        'Parcelas Pagas', 'Parcelas Restantes', 'Status', 'Data Início', 'Data Término'
+        'Parcelas Pagas', 'Parcelas Restantes', 'Status', 'Data Solicitacao', 'Data Inicio', 'Data Termino'
       ]);
       
       fullCSV += '\n\nRELATÓRIO DE EMPRÉSTIMOS - PARCELAS\n\n';
@@ -346,12 +388,12 @@ export class ReportExportService {
   /**
    * EXPORTAR RELATÓRIO COMPLETO EM PDF (PAISAGEM + LOGO)
    */
-  static async exportFullReportPDF(filters?: FilterValues, isTestMode?: boolean): Promise<void> {
+  static async exportFullReportPDF(filters?: FilterValues, isTestMode?: boolean, options?: ExportOptions): Promise<void> {
     try {
       let [employees, contracts, payments] = await Promise.all([
-        this.getEmployeeReport(isTestMode),
-        this.getContractReport(isTestMode),
-        this.getPaymentReport(isTestMode)
+        this.getEmployeeReport(isTestMode, options),
+        this.getContractReport(isTestMode, options),
+        this.getPaymentReport(isTestMode, options)
       ]);
 
       // Aplicar filtros para sincronizar com o que o usuário vê no Dashboard
@@ -407,22 +449,80 @@ export class ReportExportService {
       const formatDate = (dateStr: string | null) => {
         if (!dateStr) return '-';
         const d = new Date(dateStr);
+        // Corrige timezone se for apenas data sem hora (evita virar dia anterior)
+        if (dateStr.length <= 10) d.setUTCHours(12);
         return d.toLocaleDateString('pt-BR');
       };
+      
+      let currentY = 10;
 
-      // --- PÁGINA 1: RESUMO POR COLABORADOR ---
+      // --- PÁGINA 1: RESUMO DO PERÍODO (SE SOLICITADO) ---
+      if (options?.includeSummary) {
+        addBackground();
+        const stats = await LoansService.getStats(isTestMode, { dateStart: options.startDate, dateEnd: options.endDate });
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(20);
+        doc.setTextColor(5, 150, 105);
+        doc.text('RESUMO GERAL DO PERÍODO', 14, 20);
+        
+        doc.setFontSize(11);
+        doc.setTextColor(100, 116, 139);
+        let periodText = 'Período Completo (Todo o histórico)';
+        if (options?.startDate || options?.endDate) {
+           periodText = `Filtrado por Data de Solicitação: de ${options?.startDate ? formatDate(options.startDate) : 'Início'} até ${options?.endDate ? formatDate(options.endDate) : 'Hoje'}`;
+        }
+        doc.text(periodText, 14, 28);
+        doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 34);
+
+        // Cards de resumo
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42); // slate-900
+        
+        const startY = 45;
+        const boxW = 60;
+        const boxH = 25;
+        const gap = 10;
+
+        const drawCard = (x: number, y: number, title: string, value: string) => {
+          doc.setFillColor(248, 250, 252); // slate-50
+          doc.setDrawColor(226, 232, 240); // slate-200
+          doc.roundedRect(x, y, boxW, boxH, 3, 3, 'FD');
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(100, 116, 139);
+          doc.text(title, x + 5, y + 8);
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(15, 23, 42);
+          doc.text(value, x + 5, y + 18);
+        };
+
+        drawCard(14, startY, 'Total Tomado (R$)', formatCurrency(stats.totalEmprestado));
+        drawCard(14 + boxW + gap, startY, 'Total Recebido (R$)', formatCurrency(stats.totalRecebido));
+        drawCard(14 + (boxW + gap)*2, startY, 'Saldo Devedor (R$)', formatCurrency(stats.saldoDevedor));
+        drawCard(14 + (boxW + gap)*3, startY, 'Qtd Empréstimos Liberados', (stats.contratosAtivos + stats.contratosLiquidados).toString());
+
+        // Ir para próxima página para os relatórios tabulares
+        doc.addPage();
+        currentY = 2;
+      } else {
+        currentY = 2;
+      }
+
+      // --- TABELA 1: RESUMO POR COLABORADOR ---
       addBackground();
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(5, 150, 105); // Verde Emerald 600
-      doc.text('RELATÓRIO DE EMPRÉSTIMOS - RESUMO POR COLABORADOR', 5, 2);
+      doc.text('RELATÓRIO DE EMPRÉSTIMOS - RESUMO POR COLABORADOR', 5, currentY);
       
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139); // Slate 500
-      doc.text(`Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 5, 7);
+      doc.text(`Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 5, currentY + 5);
  
       autoTable(doc, {
-        startY: 10,
+        startY: currentY + 8,
         head: [['Colaborador', 'Empresa', 'Vínculo', 'Status', 'Total (R$)', 'Recebido (R$)', 'Saldo (R$)', 'Parcela (R$)']],
         body: employees.map(emp => [
           emp.colaborador,
@@ -450,7 +550,7 @@ export class ReportExportService {
 
       autoTable(doc, {
         startY: 8,
-        head: [['Colaborador', 'Contrato', 'Total', 'Pelas', 'V. Parcela', 'Recebido', 'Saldo', 'Pagas', 'Faltam', 'Status', 'Início']],
+        head: [['Colaborador', 'Contrato', 'Total', 'Pelas', 'V. Parcela', 'Recebido', 'Saldo', 'Faltam', 'Status', 'Solicitação', 'Data 1ª', 'Data Ú.']],
         body: contracts.map(c => [
           c.colaborador,
           c.contrato,
@@ -459,10 +559,11 @@ export class ReportExportService {
           formatCurrency(c.valorParcela),
           formatCurrency(c.recebido),
           formatCurrency(c.saldo),
-          c.parcelasPagas,
           c.parcelasRestantes,
           c.status,
-          formatDate(c.dataInicio)
+          formatDate(c.dataSolicitacao),
+          formatDate(c.dataInicio),
+          formatDate(c.dataTermino)
         ]),
         theme: 'striped',
         headStyles: { fillColor: [16, 185, 129] },
