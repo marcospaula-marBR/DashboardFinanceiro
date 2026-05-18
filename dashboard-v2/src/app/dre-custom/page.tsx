@@ -997,6 +997,43 @@ export default function DreCustomPage() {
                 <h4 className="font-bold text-slate-200 text-sm">Demonstrativo do Resultado do Exercício</h4>
                 <p className="text-[10px] text-slate-500 mt-0.5">Visão consolidada mensal estruturada de acordo com o mapeamento ativo.</p>
               </div>
+              <button
+                onClick={() => {
+                  const headers = ['Categoria Contabil (DRE)', 'Total Acumulado', ...calculated.validColumns];
+                  const csvRows = [headers.join(';')];
+                  const addCsvRow = (label: string, total: number, monthlyMap: Record<string, number>) => {
+                    const row = [
+                      label,
+                      total.toFixed(2).replace('.', ','),
+                      ...calculated.validColumns.map(col => (monthlyMap[col] || 0).toFixed(2).replace('.', ','))
+                    ];
+                    csvRows.push(row.join(';'));
+                  };
+
+                  addCsvRow('1. Faturamento Bruto (Entradas)', calculated.totalEntradas + calculated.outrasEntradas, calculated.monthlyEntradas);
+                  addCsvRow('   - Receitas Operacionais', calculated.totalEntradas, calculated.monthlyData.receitas_operacionais || {});
+                  addCsvRow('   - Outras Entradas', calculated.outrasEntradas, calculated.monthlyData.outras_entradas || {});
+                  addCsvRow('2. Deducoes e Saidas Operacionais', calculated.totalSaidas, calculated.monthlySaidas);
+                  addCsvRow('   - Custos Operacionais', calculated.totalCustos, calculated.monthlyData.custos_operacionais || {});
+                  addCsvRow('   - Despesas Rateadas', calculated.totalDespesas, calculated.monthlyData.despesas_rateadas || {});
+                  addCsvRow('   - Impostos Contratados', calculated.totalImpostos, calculated.monthlyData.impostos || {});
+                  addCsvRow('   - Investimentos e Ativos', calculated.totalInvestimentos, calculated.monthlyData.investimentos || {});
+                  addCsvRow('Fluxo de Caixa Livre (FCL)', calculated.fcl, calculated.monthlyFCL);
+                  addCsvRow('   - Distribuicao de Dividendos', calculated.dividendos, calculated.monthlyData.dividendos || {});
+
+                  const blob = new Blob(["\uFEFF" + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.setAttribute("href", url);
+                  link.setAttribute("download", `DRE_Consolidada_Limpa.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-100 font-extrabold text-[10px] uppercase tracking-wider py-2 px-4 rounded-full shadow-md transition-all active:scale-95"
+              >
+                Exportar DRE Limpa (CSV)
+              </button>
             </div>
 
             <div className="overflow-x-auto">
