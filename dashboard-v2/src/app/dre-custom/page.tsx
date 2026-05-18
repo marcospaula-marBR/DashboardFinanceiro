@@ -164,6 +164,52 @@ export default function DreCustomPage() {
   };
 
   const processNormalizedData = (rawList: any[]) => {
+    const PORTUGUESE_MONTHS_MAP: Record<string, string> = {
+      janeiro: 'Jan', jan: 'Jan',
+      fevereiro: 'Fev', fev: 'Fev',
+      marco: 'Mar', março: 'Mar', mar: 'Mar',
+      abril: 'Abr', abr: 'Abr',
+      maio: 'Mai', mai: 'Mai',
+      junho: 'Jun', jun: 'Jun',
+      julho: 'Jul', jul: 'Jul',
+      agosto: 'Ago', ago: 'Ago',
+      setembro: 'Set', set: 'Set',
+      outubro: 'Out', out: 'Out',
+      novembro: 'Nov', nov: 'Nov',
+      dezembro: 'Dez', dez: 'Dez'
+    };
+
+    const detectPeriodColumn = (header: string) => {
+      const clean = header.trim().toLowerCase().replace(/["']/g, '');
+      if (!clean) return null;
+
+      const slashParts = clean.split('/');
+      if (slashParts.length === 2) {
+        const mesPart = slashParts[0].trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const norm = PORTUGUESE_MONTHS_MAP[mesPart];
+        if (norm) {
+          let anoPart = slashParts[1].trim();
+          if (anoPart.length === 2) anoPart = '20' + anoPart;
+          return { isPeriod: true, mesNormalizado: norm, ano: anoPart };
+        }
+      }
+
+      const cleanAccentless = clean.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const norm = PORTUGUESE_MONTHS_MAP[cleanAccentless];
+      if (norm) {
+        return { isPeriod: true, mesNormalizado: norm, ano: '2026' }; // Default fallback year
+      }
+
+      return null;
+    };
+
+    // Forward fill trackers
+    let lastEmpresa = '';
+    let lastContaDre = '';
+    let lastCategoria = '';
+    let lastProjeto = '';
+    let lastDepartamento = '';
+
     let normalized = rawList.map(row => {
       const newRow: any = {};
       Object.keys(row).forEach(key => {
@@ -173,21 +219,53 @@ export default function DreCustomPage() {
         let finalKey = cleanKey;
         if (lowerKey === 'projeto') finalKey = 'Projeto';
         else if (lowerKey === 'categoria') finalKey = 'Categoria';
-        else if (lowerKey === 'empresa') finalKey = 'Empresa';
+        else if (lowerKey === 'minha empresa' || lowerKey === 'empresa') finalKey = 'Empresa';
+        else if (lowerKey === 'conta do dre' || lowerKey === 'conta dre') finalKey = 'Conta DRE';
+        else if (lowerKey === 'departamento') finalKey = 'Departamento';
         newRow[finalKey] = row[key];
       });
+
+      // Apply Forward Fill (Preenchimento Contínuo)
+      const hasVal = (val: any) => val !== undefined && val !== null && val.toString().trim() !== '';
+
+      if (hasVal(newRow.Empresa)) lastEmpresa = newRow.Empresa.toString().trim();
+      else newRow.Empresa = lastEmpresa;
+
+      if (hasVal(newRow['Conta DRE'])) lastContaDre = newRow['Conta DRE'].toString().trim();
+      else newRow['Conta DRE'] = lastContaDre;
+
+      if (hasVal(newRow.Categoria)) lastCategoria = newRow.Categoria.toString().trim();
+      else newRow.Categoria = lastCategoria;
+
+      if (hasVal(newRow.Projeto)) lastProjeto = newRow.Projeto.toString().trim();
+      else newRow.Projeto = lastProjeto;
+
+      if (hasVal(newRow.Departamento)) lastDepartamento = newRow.Departamento.toString().trim();
+      else newRow.Departamento = lastDepartamento;
+
       return newRow;
     });
 
-    normalized = normalized.filter(row => 
-      row.Projeto && row.Categoria && 
-      row.Projeto.toString().trim() !== '' && row.Categoria.toString().trim() !== ''
-    );
+    // Clean empty sub-items or subtotal rows
+    normalized = normalized.filter(row => {
+      const proj = (row.Projeto || '').toString().toLowerCase();
+      const cat = (row.Categoria || '').toString().toLowerCase();
+      
+      // Filter out empty rows or typical subtotal/total rows that could double count
+      const isSubtotal = proj.includes('total') || proj.includes('subtotal') || cat.includes('total') || cat.includes('subtotal');
+      const isHeaderRow = proj === 'projeto' && cat === 'categoria';
+
+      return row.Projeto && row.Categoria && 
+             row.Projeto.toString().trim() !== '' && row.Categoria.toString().trim() !== '' &&
+             !isSubtotal && !isHeaderRow;
+    });
 
     normalized.forEach(row => {
       row.Projeto = toTitleCase(row.Projeto.toString());
       row.Empresa = row.Empresa ? row.Empresa.toString().trim() : '';
       row.Categoria = row.Categoria ? row.Categoria.toString().trim() : '';
+      row['Conta DRE'] = row['Conta DRE'] ? row['Conta DRE'].toString().trim() : '';
+      row.Departamento = row.Departamento ? row.Departamento.toString().trim() : '';
     });
 
     if (normalized.length === 0) {
@@ -197,23 +275,20 @@ export default function DreCustomPage() {
     }
 
     const allKeys = Object.keys(normalized[0]);
-    const validCols = allKeys.filter(k => k.includes('/'));
-
     const periodos: { col: string, mes: string, ano: string, full: string }[] = [];
     const mapaMeses: Record<string, string> = {};
 
-    validCols.forEach(col => {
-      const partes = col.split('/');
-      if (partes.length === 2) {
-        const mesNormalizado = normalizeMes(partes[0].trim());
-        mapaMeses[col] = mesNormalizado;
-        periodos.push({ col, mes: mesNormalizado, ano: partes[1].trim(), full: col });
+    allKeys.forEach(col => {
+      const detected = detectPeriodColumn(col);
+      if (detected) {
+        mapaMeses[col] = detected.mesNormalizado;
+        periodos.push({ col, mes: detected.mesNormalizado, ano: detected.ano, full: col });
       }
     });
 
     periodos.sort((a, b) => {
-      const yA = parseInt(a.ano) < 100 ? 2000 + parseInt(a.ano) : parseInt(a.ano);
-      const yB = parseInt(b.ano) < 100 ? 2000 + parseInt(b.ano) : parseInt(b.ano);
+      const yA = parseInt(a.ano);
+      const yB = parseInt(b.ano);
       if (yA !== yB) return yA - yB;
       return MESES_ORDEM.indexOf(a.mes) - MESES_ORDEM.indexOf(b.mes);
     });
@@ -221,7 +296,7 @@ export default function DreCustomPage() {
     const empresas = Array.from(new Set(normalized.map(d => d.Empresa).filter(Boolean))).sort() as string[];
     const projetos = Array.from(new Set(normalized.map(d => d.Projeto).filter(Boolean))).sort() as string[];
     const categorias = Array.from(new Set(normalized.map(d => d.Categoria).filter(Boolean))).sort() as string[];
-    const periodosList = periodos.map(p => `${p.mes}/${p.ano}`);
+    const periodosList = periodos.map(p => `${p.mes}/${p.ano.slice(-2)}`);
 
     setRawData(normalized);
     setMetadata({ empresas, projetos, categorias, periodos: periodosList, mapaMeses });
