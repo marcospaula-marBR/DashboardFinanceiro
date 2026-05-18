@@ -31,6 +31,22 @@ interface RawLoan {
   contract_url?: string;
 }
 
+function overrideLoans<T extends { id?: string; start_cycle?: string }>(loans: T[]): T[] {
+  return loans.map(ln => {
+    if (ln.id === '8e685570-a96a-4c16-8515-9dde086f1659') {
+      return { ...ln, start_cycle: '2026-05' };
+    }
+    return ln;
+  });
+}
+
+function overrideLoan<T extends { id?: string; start_cycle?: string }>(ln: T): T {
+  if (ln && ln.id === '8e685570-a96a-4c16-8515-9dde086f1659') {
+    return { ...ln, start_cycle: '2026-05' };
+  }
+  return ln;
+}
+
 // ─── Calculation helpers (fixed mathematical engine) ─────────────
 
 function getElapsedMonths(ln: RawLoan): number {
@@ -161,12 +177,7 @@ async function fetchLoans(isTestMode: boolean): Promise<RawLoan[]> {
     throw new Error(`Falha ao buscar empréstimos: ${error.message}`);
   }
   const list = (data || []) as RawLoan[];
-  return list.map(ln => {
-    if (ln.id === '8e685570-a96a-4c16-8515-9dde086f1659') {
-      return { ...ln, start_cycle: '2026-05' };
-    }
-    return ln;
-  });
+  return overrideLoans(list);
 }
 
 export async function fetchEmployees(isTestMode: boolean): Promise<RawEmployee[]> {
@@ -454,7 +465,7 @@ export class LoansService {
       throw new Error('Falha ao carregar empréstimos');
     }
 
-    const loans = (data || []) as RawLoan[];
+    const loans = overrideLoans((data || []) as RawLoan[]);
 
     return loans.map((ln, idx) => {
       const amount = parseFloat(String(ln.amount)) || 0;
@@ -502,7 +513,7 @@ export class LoansService {
     }
 
     const emp = empRes.data as RawEmployee;
-    const loans = (loansRes.data || []) as RawLoan[];
+    const loans = overrideLoans((loansRes.data || []) as RawLoan[]);
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -689,8 +700,9 @@ export class LoansService {
 
   static async getContractTimeline(contractId: string, isTestMode?: boolean) {
     const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
-    const { data: loan, error } = await supabase.from(table).select('*').eq('id', contractId).single();
-    if (error || !loan) throw new Error('Contrato não encontrado');
+    const { data: rawLoan, error } = await supabase.from(table).select('*').eq('id', contractId).single();
+    if (error || !rawLoan) throw new Error('Contrato não encontrado');
+    const loan = overrideLoan(rawLoan);
     
     const amount = parseFloat(String(loan.amount)) || 0;
     const inst = parseInt(String(loan.installments)) || 1;
