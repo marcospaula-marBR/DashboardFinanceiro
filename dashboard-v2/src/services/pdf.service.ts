@@ -264,7 +264,7 @@ export class PDFService {
 
 CREDOR: MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA., pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 02.233.923/0001-19, com sede em Rua Tupi, nº 782, Vila Tupi, Praia Grande - SP, neste ato representada por sua sócia administradora, a Sra. Priscilla Coelho Monteiro, brasileira, casada, empresária, inscrita no CPF sob n.º 320.421.118-56.
 
-As partes acima qualificadas, por este instrumento particular e na melhor forma de direito, confessam e assumem como líquida e certa a dívida a seguir descrita, sujeitando-se às cláusulas e condições que se seguem:
+As partes acima qualificadas, por este instrumento particular e na melhor forma de direito, confessam e assumem como líquida, certa e exigível a dívida a seguir descrita, sujeitando-se às cláusulas e condições que se seguem:
 
 CLÁUSULA PRIMEIRA – DO OBJETO DA DÍVIDA
 1.1. O(A) DEVEDOR(A) confessa e declara dever ao(à) CREDOR(A) a importância líquida, certa e exigível de ${fmt(reqAmount)}, referente ao empréstimo concedido pela MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA. ao(à) DEVEDOR(A) em ${formatDate(reqDate)}.
@@ -276,10 +276,10 @@ CLÁUSULA SEGUNDA – DA FORMA DE PAGAMENTO
 
 CLÁUSULA TERCEIRA – DA INADIMPLÊNCIA
 3.1. O não pagamento de qualquer parcela na data estipulada, implicará no vencimento antecipado de todo o saldo devedor, que se tornará imediatamente exigível pela CREDORA.
-3.2. Em caso de inadimplência, sobre o saldo devedor vencido e não pago incidirão: a) Multa moratória de 2% (dois por cento) sobre o valor da parcela em atraso ou sobre o saldo devedor em caso de vencimento antecipado. b) Juros de mora de 1% (um por cento) ao mês, calculados pro rata die. c) Correção monetária pelo IGP-M ou outro índice que o substitua.
+3.2. Em caso de inadimplência, incidirão sobre o saldo devedor vencido e não pago : a) Multa moratória de 2% (dois por cento) sobre o saldo devedor em aberto; b) Juros de mora de 1% (um por cento) ao mês, calculados pro rata die. c) Correção monetária pelo IGP-M ou outro índice que o substitua.
 3.3. A CREDORA se reserva o direito de promover a execução judicial deste Termo, que é título executivo extrajudicial.
 3.4. A eventual tolerância não implicará em novação ou transação.
-3.5. O valor solicitado está vinculado exclusivamente à prestação do serviço. Com o término desta, as parcelas restantes serão automaticamente consideradas vencidas.
+3.5. O valor solicitado está vinculado exclusivamente ao contrato de prestação do serviço. Com o encerramento do contrato e cessação da prestação de serviço, as parcelas restantes serão automática e antecipadamente consideradas vencidas .
 
 CLÁUSULA QUARTA – DA QUITAÇÃO ANTECIPADA
 4.1. O(A) DEVEDOR(A) poderá solicitar a quitação antecipada total ou parcial do empréstimo a qualquer momento.
