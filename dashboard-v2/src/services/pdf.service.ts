@@ -260,7 +260,11 @@ export class PDFService {
 
       const reqDate = loanData.request_date || loanData.requestDate || loanData.created_at || today.toISOString();
       
-      const corpoTexto = `DEVEDOR: ${fullEmpDetails.employment_type === 'PJ' ? fullEmpDetails.corporate_name : fullEmpDetails.full_name}, ${fullEmpDetails.employment_type === 'PJ' ? 'pessoa jurídica de direito privado' : 'pessoa física'}, inscrito no ${fullEmpDetails.pj_type || 'CPF'} sob o n.º ${fullEmpDetails.document_id || ''}, estabelecido na ${fullAddress}, neste ato representada por ${fullEmpDetails.responsible_name || fullEmpDetails.full_name}, inscrito no CPF sob o n.º ${fullEmpDetails.responsible_cpf || fullEmpDetails.document_id || ''} e RG n.º ${fullEmpDetails.responsible_rg || fullEmpDetails.document_rg || '---'}.
+      const isPJ = fullEmpDetails.employment_type === 'PJ' || fullEmpDetails.linkType === 'PJ';
+      const razaoSocialOuNome = isPJ ? (fullEmpDetails.corporate_name || fullEmpDetails.full_name || '') : (fullEmpDetails.full_name || '');
+      const tipoPessoa = isPJ ? 'pessoa jurídica de direito privado' : 'pessoa física';
+
+      const corpoTexto = `DEVEDOR: ${razaoSocialOuNome}, ${tipoPessoa}, inscrito no ${fullEmpDetails.pj_type || 'CPF'} sob o n.º ${fullEmpDetails.document_id || ''}, estabelecido na ${fullAddress}, neste ato representada por ${fullEmpDetails.responsible_name || fullEmpDetails.full_name}, inscrito no CPF sob o n.º ${fullEmpDetails.responsible_cpf || fullEmpDetails.document_id || ''}.
 
 CREDOR: MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA., pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 02.233.923/0001-19, com sede em Rua Tupi, nº 782, Vila Tupi, Praia Grande - SP, neste ato representada por sua sócia administradora, a Sra. Priscilla Coelho Monteiro, brasileira, casada, empresária, inscrita no CPF sob n.º 320.421.118-56.
 
@@ -311,7 +315,7 @@ CLÁUSULA QUINTA – DAS DISPOSIÇÕES GERAIS
 
       doc.setFontSize(8);
       doc.text("DEVEDOR(A)", margin, cursorY + 4);
-      const debtorName = fullEmpDetails.employment_type === 'PJ' ? fullEmpDetails.corporate_name || '' : fullEmpDetails.full_name || '';
+      const debtorName = razaoSocialOuNome;
       doc.text(debtorName, margin, cursorY + 8);
       doc.text(`Rep: ${fullEmpDetails.responsible_name || fullEmpDetails.full_name || ''}`, margin, cursorY + 12);
       doc.text(`CNPJ/CPF: ${fullEmpDetails.document_id || ''}`, margin, cursorY + 16);
