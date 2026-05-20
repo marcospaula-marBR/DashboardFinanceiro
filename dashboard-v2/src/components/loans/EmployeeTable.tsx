@@ -62,7 +62,7 @@ export function EmployeeTable({ employees, onEmployeeClick }: EmployeeTableProps
               <th className="py-4 px-4 text-right">Saldo Devedor</th>
               <th className="py-4 px-4 text-right">
                 <div className="flex flex-col items-end">
-                  <span>Parcela Mês</span>
+                  <span>Mês Débito</span>
                   <span className="text-[9px] font-bold text-emerald-600 normal-case tracking-normal">{currentMonthLabel}</span>
                 </div>
               </th>

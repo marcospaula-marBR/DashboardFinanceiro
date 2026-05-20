@@ -58,9 +58,11 @@ function getElapsedMonths(ln: RawLoan): number {
   const now = new Date();
   const [y, m] = sc.split('-').map(Number);
   
-  // Meses absolutos passados. Se start=Março e hoje=Março, diff = 0.
-  // Somamos +1 para indicar a "Mensalidade 1", "Mensalidade 2".
-  let elapsed = (now.getFullYear() - y) * 12 + ((now.getMonth() + 1) - m) + 1;
+  // A primeira parcela é sempre devida no mês seguinte ao ciclo de referência.
+  const startAbs = y * 12 + m;
+  const nowAbs = now.getFullYear() * 12 + (now.getMonth() + 1);
+  
+  let elapsed = nowAbs - startAbs;
   
   // O pagamento só vira válido no sistema dia 10!
   if (now.getDate() < 10) elapsed--;
@@ -109,20 +111,21 @@ export function calcInstallmentForMonth(ln: RawLoan, monthStr: string): number {
 
   const [sy, sm] = ln.start_cycle.split('-').map(Number);
   const startAbs = sy * 12 + sm;
+  const startPaymentAbs = startAbs + 1; // Pagamento inicia 1 mês após o ciclo base
   const postponed = parseInt(String(ln.postponed_months)) || 0;
 
   // O contrato se estende pelos meses postergados
-  const endAbs = startAbs + inst - 1 + postponed;
+  const endAbs = startPaymentAbs + inst - 1 + postponed;
 
   // Fora do intervalo do contrato: sem valor
-  if (targetAbs < startAbs || targetAbs > endAbs) return 0;
+  if (targetAbs < startPaymentAbs || targetAbs > endAbs) return 0;
 
   // O "buraco" de cobrança está logo após o último mês pago:
   //   posições (elapsed+1) até (elapsed+postponed) contando a partir do início do contrato.
   // Isso exclui corretamente o mês postergado (ex: Março/26 postergado → pos elapsed+1 = 0).
   if (postponed > 0) {
     const elapsed = getElapsedMonths(ln);        // meses efetivamente pagos (já desconta postponed)
-    const posFromStart = targetAbs - startAbs + 1; // posição 1-indexada do mês alvo no contrato
+    const posFromStart = targetAbs - startPaymentAbs + 1; // posição 1-indexada do mês alvo no contrato
     if (posFromStart >= elapsed + 1 && posFromStart <= elapsed + postponed) return 0;
   }
 
@@ -138,7 +141,8 @@ function loanEndDate(ln: RawLoan): string {
   const postponed = parseInt(String(ln.postponed_months)) || 0;
   const [y, m] = ln.start_cycle.split('-').map(Number);
   
-  const endAbs = y * 12 + m + ln.installments - 1 + postponed;
+  // +1 para shiftar a data de início para o mês seguinte, -1 do período, totalizando = y*12 + m
+  const endAbs = y * 12 + m + ln.installments + postponed;
   const ey = Math.floor((endAbs - 1) / 12);
   const em = ((endAbs - 1) % 12) + 1;
   return `${ey}-${String(em).padStart(2, '0')}-10`;
@@ -155,8 +159,8 @@ function loanNextPayment(ln: RawLoan): string {
   const elapsed = getElapsedMonths(ln);
   const postponed = parseInt(String(ln.postponed_months)) || 0;
   
-  // A próxima parcela devida é a Parcela Atual + 1. Exemplo: se pagou 1 parcela, a proxima é a parcela 2 do tempo real.
-  const nextAbs = startAbs + elapsed + postponed;
+  // A próxima parcela devida é a Parcela Atual + 1 a partir da data do 1º pagamento (startAbs + 1)
+  const nextAbs = startAbs + 1 + elapsed + postponed;
   
   const ny = Math.floor((nextAbs - 1) / 12);
   const nm = ((nextAbs - 1) % 12) + 1;
@@ -373,7 +377,7 @@ export class LoansService {
           const [sy, sm] = (ln.start_cycle || "").split("-").map(Number);
           if (!isNaN(sy) && !isNaN(sm)) {
             const postponed = parseInt(String(ln.postponed_months)) || 0;
-            const endAbs = sy * 12 + sm + (parseInt(String(ln.installments)) || 0) - 1 + postponed;
+            const endAbs = sy * 12 + sm + (parseInt(String(ln.installments)) || 0) + postponed;
             if (endAbs < menorEndAbs) {
               menorEndAbs = endAbs;
               proximoEncerrarLoan = ln;
@@ -422,7 +426,7 @@ export class LoansService {
       if (isNaN(sy) || isNaN(sm)) return;
       
       const installments = parseInt(String(ln.installments)) || 0;
-      const endAbs = sy * 12 + sm + installments - 1;
+      const endAbs = sy * 12 + sm + installments;
       if (endAbs > maxMonthAbs) maxMonthAbs = endAbs;
     });
 
@@ -715,7 +719,7 @@ export class LoansService {
     const postponed = parseInt(String(loan.postponed_months)) || 0;
     
     const [y, m] = loan.start_cycle.split('-').map(Number);
-    let currentAbs = (y * 12) + m;
+    let currentAbs = (y * 12) + m + 1;
     
     const timeline = [];
     let physicalIndex = 1;
