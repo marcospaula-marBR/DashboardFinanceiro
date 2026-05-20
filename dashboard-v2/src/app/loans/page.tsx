@@ -54,8 +54,8 @@ export default function LoansPage() {
       saldoDevedor: list.reduce((s, e) => s + e.balance, 0),
       totalRecebido: list.reduce((s, e) => s + e.totalReceived, 0),
       recebivelMes: list.reduce((s, e) => s + e.monthInstallment, 0),
-      contratosAtivos: list.filter(e => e.status === 'Ativo').length,
-      contratosLiquidados: list.filter(e => e.status === 'Quitado').length,
+      contratosAtivos: list.filter(e => e.loanStatus === 'Ativo').length,
+      contratosLiquidados: list.filter(e => e.loanStatus === 'Quitado').length,
     };
   };
 
