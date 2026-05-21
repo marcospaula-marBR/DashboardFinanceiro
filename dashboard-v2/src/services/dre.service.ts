@@ -313,54 +313,37 @@ export class DreService {
       'adiantamento - credenciado ti'
     ]);
 
-    const getCatRowsLocal = (catName: string, col: string): DreRow[] => {
-      const key = Object.keys(catSourceRows).find(k => k.trim().toLowerCase() === catName.trim().toLowerCase());
-      return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
-    };
-
-    const invertRow = (row: DreRow, categoryName: string, targetCol: string): DreRow => {
-      const cloned = { ...row };
-      cloned.Categoria = categoryName;
-      const valStr = cloned[targetCol]?.toString().replace(',', '.') || '0';
-      const val = parseFloat(valStr) || 0;
-      cloned[targetCol] = -val;
-      return cloned;
-    };
-
     validColumns.forEach(col => {
       const credAdminMes = valoresMensal["Credenciado Administrativo"]?.[col] || 0;
       const credTiMes = valoresMensal["Credenciado TI"]?.[col] || 0;
+      
+      let cltBrutoMes = 0;
       if (valoresMensal["CLTs"]) {
-        valoresMensal["CLTs"][col] = (valoresMensal["CLTs"][col] || 0) - credAdminMes - credTiMes;
+        cltBrutoMes = valoresMensal["CLTs"][col] || 0;
+        valoresMensal["CLTs"][col] = cltBrutoMes - credAdminMes - credTiMes;
       }
+      
+      const cltLiquidoMes = valoresMensal["CLTs"]?.[col] || 0;
+      const factor = cltBrutoMes !== 0 ? cltLiquidoMes / cltBrutoMes : 0;
       
       if (sourceRows["CLTs"]) {
         if (!sourceRows["CLTs"][col]) {
           sourceRows["CLTs"][col] = [];
         }
 
-        // Primeiro, garantimos filtrar qualquer resíduo indevido
-        sourceRows["CLTs"][col] = sourceRows["CLTs"][col].filter(row => {
+        // Primeiro, filtramos apenas as linhas originais (que não são credenciados)
+        const originalRows = sourceRows["CLTs"][col].filter(row => {
           const catLower = (row.Categoria || "").trim().toLowerCase();
           return !excludedCategories.has(catLower);
         });
 
-        // Buscar as transações originais de Credenciado Administrativo e TI
-        const credAdminRows = [
-          ...getCatRowsLocal("Credenciado Administrativo", col),
-          ...getCatRowsLocal("Adiantamento - Credenciado Administrativo", col)
-        ];
-        const credTiRows = [
-          ...getCatRowsLocal("Credenciado TI", col),
-          ...getCatRowsLocal("Adiantamento - Credenciado TI", col)
-        ];
-
-        // Inserir clones invertidos (com sinal negativo) no sourceRows de CLTs
-        credAdminRows.forEach(row => {
-          sourceRows["CLTs"][col].push(invertRow(row, "(-) Credenciado Administrativo", col));
-        });
-        credTiRows.forEach(row => {
-          sourceRows["CLTs"][col].push(invertRow(row, "(-) Credenciado TI", col));
+        // Aplicamos a redução proporcional por fator nas transações originais de Despesas com Pessoal
+        sourceRows["CLTs"][col] = originalRows.map(row => {
+          const cloned = { ...row };
+          const valStr = cloned[col]?.toString().replace(',', '.') || '0';
+          const val = parseFloat(valStr) || 0;
+          cloned[col] = val * factor;
+          return cloned;
         });
       }
     });
