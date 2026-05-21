@@ -306,6 +306,13 @@ export class DreService {
     const credTiVal = valoresTotal["Credenciado TI"] || 0;
     valoresTotal["CLTs"] = (valoresTotal["CLTs"] || 0) - credAdminVal - credTiVal;
 
+    // Realizar a dedução de Credenciado Operacional, Corretiva, Preventiva e Terceirização em Custo dos Serviços Prestados
+    const credOpVal = valoresTotal["Credenciado Operacional"] || 0;
+    const corretivaVal = valoresTotal["Corretiva - B2G"] || 0;
+    const preventivaVal = valoresTotal["Preventiva - B2G"] || 0;
+    const terceirizacaoVal = valoresTotal["Terceirização de Mão de Obra"] || 0;
+    valoresTotal["Custo dos Serviços Prestados"] = (valoresTotal["Custo dos Serviços Prestados"] || 0) - credOpVal - corretivaVal - preventivaVal - terceirizacaoVal;
+
     const excludedCategories = new Set([
       'credenciado administrativo',
       'adiantamento - credenciado administrativo',
@@ -313,7 +320,18 @@ export class DreService {
       'adiantamento - credenciado ti'
     ]);
 
+    const excludedCustoCategories = new Set([
+      'credenciado operacional',
+      'adiantamento - credenciado operacional',
+      'corretiva - b2g',
+      'manutenção corretiva',
+      'preventiva - b2g',
+      'manutenção preventiva',
+      'terceirização de mão de obra'
+    ]);
+
     validColumns.forEach(col => {
+      // 1. Dedução e Escala de CLTs
       const credAdminMes = valoresMensal["Credenciado Administrativo"]?.[col] || 0;
       const credTiMes = valoresMensal["Credenciado TI"]?.[col] || 0;
       
@@ -343,6 +361,42 @@ export class DreService {
           const valStr = cloned[col]?.toString().replace(',', '.') || '0';
           const val = parseFloat(valStr) || 0;
           cloned[col] = val * factor;
+          return cloned;
+        });
+      }
+
+      // 2. Dedução e Escala de Custo dos Serviços Prestados
+      const credOpMes = valoresMensal["Credenciado Operacional"]?.[col] || 0;
+      const corretivaMes = valoresMensal["Corretiva - B2G"]?.[col] || 0;
+      const preventivaMes = valoresMensal["Preventiva - B2G"]?.[col] || 0;
+      const terceirizacaoMes = valoresMensal["Terceirização de Mão de Obra"]?.[col] || 0;
+
+      let custoBrutoMes = 0;
+      if (valoresMensal["Custo dos Serviços Prestados"]) {
+        custoBrutoMes = valoresMensal["Custo dos Serviços Prestados"][col] || 0;
+        valoresMensal["Custo dos Serviços Prestados"][col] = custoBrutoMes - credOpMes - corretivaMes - preventivaMes - terceirizacaoMes;
+      }
+
+      const custoLiquidoMes = valoresMensal["Custo dos Serviços Prestados"]?.[col] || 0;
+      const factorCusto = custoBrutoMes !== 0 ? custoLiquidoMes / custoBrutoMes : 0;
+
+      if (sourceRows["Custo dos Serviços Prestados"]) {
+        if (!sourceRows["Custo dos Serviços Prestados"][col]) {
+          sourceRows["Custo dos Serviços Prestados"][col] = [];
+        }
+
+        // Primeiro, filtramos apenas as linhas originais
+        const originalCustoRows = sourceRows["Custo dos Serviços Prestados"][col].filter(row => {
+          const catLower = (row.Categoria || "").trim().toLowerCase();
+          return !excludedCustoCategories.has(catLower);
+        });
+
+        // Aplicamos a redução proporcional por fator nas transações originais de Custo dos Serviços Prestados
+        sourceRows["Custo dos Serviços Prestados"][col] = originalCustoRows.map(row => {
+          const cloned = { ...row };
+          const valStr = cloned[col]?.toString().replace(',', '.') || '0';
+          const val = parseFloat(valStr) || 0;
+          cloned[col] = val * factorCusto;
           return cloned;
         });
       }

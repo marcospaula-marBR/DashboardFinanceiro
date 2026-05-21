@@ -1231,6 +1231,23 @@ function calculateDRE() {
         }
     });
 
+    // Realizar a dedução de Credenciado Operacional, Corretiva, Preventiva e Terceirização em Custo dos Serviços Prestados
+    const credOpVal = valoresTotal["Credenciado Operacional"] || 0;
+    const corretivaVal = valoresTotal["Corretiva - B2G"] || 0;
+    const preventivaVal = valoresTotal["Preventiva - B2G"] || 0;
+    const terceirizacaoVal = valoresTotal["Terceirização de Mão de Obra"] || 0;
+    valoresTotal["Custo dos Serviços Prestados"] = (valoresTotal["Custo dos Serviços Prestados"] || 0) - credOpVal - corretivaVal - preventivaVal - terceirizacaoVal;
+
+    cols.forEach(col => {
+        const credOpMes = valoresMensal["Credenciado Operacional"]?.[col] || 0;
+        const corretivaMes = valoresMensal["Corretiva - B2G"]?.[col] || 0;
+        const preventivaMes = valoresMensal["Preventiva - B2G"]?.[col] || 0;
+        const terceirizacaoMes = valoresMensal["Terceirização de Mão de Obra"]?.[col] || 0;
+        if (valoresMensal["Custo dos Serviços Prestados"]) {
+            valoresMensal["Custo dos Serviços Prestados"][col] = (valoresMensal["Custo dos Serviços Prestados"][col] || 0) - credOpMes - corretivaMes - preventivaMes - terceirizacaoMes;
+        }
+    });
+
     // --- Aggregators (Totais) ---
     const getVal = (key) => valoresTotal[key] || 0;
 
@@ -1319,6 +1336,13 @@ function calculateDRE() {
     const prevCredAdminVal = prevValoresTotal["Credenciado Administrativo"] || 0;
     const prevCredTiVal = prevValoresTotal["Credenciado TI"] || 0;
     prevValoresTotal["CLTs"] = (prevValoresTotal["CLTs"] || 0) - prevCredAdminVal - prevCredTiVal;
+
+    // Realizar a dedução de Credenciado Operacional, Corretiva, Preventiva e Terceirização em prevValoresTotal["Custo dos Serviços Prestados"]
+    const prevCredOpVal = prevValoresTotal["Credenciado Operacional"] || 0;
+    const prevCorretivaVal = prevValoresTotal["Corretiva - B2G"] || 0;
+    const prevPreventivaVal = prevValoresTotal["Preventiva - B2G"] || 0;
+    const prevTerceirizacaoVal = prevValoresTotal["Terceirização de Mão de Obra"] || 0;
+    prevValoresTotal["Custo dos Serviços Prestados"] = (prevValoresTotal["Custo dos Serviços Prestados"] || 0) - prevCredOpVal - prevCorretivaVal - prevPreventivaVal - prevTerceirizacaoVal;
 
     const getPrevVal = (key) => prevValoresTotal[key] || 0;
 
@@ -1534,6 +1558,38 @@ function calculateDRE() {
         
         // Re-filtrar e ordenar
         state.projectBreakdown["CLTs"] = state.projectBreakdown["CLTs"]
+            .filter(p => Math.abs(p.total) > 0.01)
+            .sort((a, b) => b.total - a.total);
+    }
+
+    // Ajustar o Project Breakdown para Custo dos Serviços Prestados deduzindo Credenciado Operacional, Corretiva, Preventiva e Terceirização
+    if (state.projectBreakdown["Custo dos Serviços Prestados"]) {
+        state.projectBreakdown["Custo dos Serviços Prestados"].forEach(projData => {
+            const projName = projData.nome;
+            const credOpProj = state.projectBreakdown["Credenciado Operacional"]?.find(p => p.nome === projName);
+            const corretivaProj = state.projectBreakdown["Corretiva - B2G"]?.find(p => p.nome === projName);
+            const preventivaProj = state.projectBreakdown["Preventiva - B2G"]?.find(p => p.nome === projName);
+            const terceirizacaoProj = state.projectBreakdown["Terceirização de Mão de Obra"]?.find(p => p.nome === projName);
+
+            const credOpProjTotal = credOpProj ? credOpProj.total : 0;
+            const corretivaProjTotal = corretivaProj ? corretivaProj.total : 0;
+            const preventivaProjTotal = preventivaProj ? preventivaProj.total : 0;
+            const terceirizacaoProjTotal = terceirizacaoProj ? terceirizacaoProj.total : 0;
+
+            projData.total -= (credOpProjTotal + corretivaProjTotal + preventivaProjTotal + terceirizacaoProjTotal);
+            projData.media = projData.total / (cols.length || 1);
+
+            cols.forEach(col => {
+                const credOpProjMes = credOpProj?.meses[col] || 0;
+                const corretivaProjMes = corretivaProj?.meses[col] || 0;
+                const preventivaProjMes = preventivaProj?.meses[col] || 0;
+                const terceirizacaoProjMes = terceirizacaoProj?.meses[col] || 0;
+                projData.meses[col] -= (credOpProjMes + corretivaProjMes + preventivaProjMes + terceirizacaoProjMes);
+            });
+        });
+
+        // Re-filtrar e ordenar
+        state.projectBreakdown["Custo dos Serviços Prestados"] = state.projectBreakdown["Custo dos Serviços Prestados"]
             .filter(p => Math.abs(p.total) > 0.01)
             .sort((a, b) => b.total - a.total);
     }
