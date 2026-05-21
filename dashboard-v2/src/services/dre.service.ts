@@ -301,6 +301,32 @@ export class DreService {
       }
     });
 
+    // Realizar a dedução de Credenciados em CLTs e filtrar sourceRows
+    const credAdminVal = valoresTotal["Credenciado Administrativo"] || 0;
+    const credTiVal = valoresTotal["Credenciado TI"] || 0;
+    valoresTotal["CLTs"] = (valoresTotal["CLTs"] || 0) - credAdminVal - credTiVal;
+
+    const excludedCategories = new Set([
+      'credenciado administrativo',
+      'adiantamento - credenciado administrativo',
+      'credenciado ti',
+      'adiantamento - credenciado ti'
+    ]);
+
+    validColumns.forEach(col => {
+      const credAdminMes = valoresMensal["Credenciado Administrativo"]?.[col] || 0;
+      const credTiMes = valoresMensal["Credenciado TI"]?.[col] || 0;
+      if (valoresMensal["CLTs"]) {
+        valoresMensal["CLTs"][col] = (valoresMensal["CLTs"][col] || 0) - credAdminMes - credTiMes;
+      }
+      if (sourceRows["CLTs"] && sourceRows["CLTs"][col]) {
+        sourceRows["CLTs"][col] = sourceRows["CLTs"][col].filter(row => {
+          const catLower = (row.Categoria || "").trim().toLowerCase();
+          return !excludedCategories.has(catLower);
+        });
+      }
+    });
+
     const getVal = (key: string) => valoresTotal[key] || 0;
 
     const receitaOperacional = getVal("Receita Bruta de Vendas");

@@ -1218,6 +1218,19 @@ function calculateDRE() {
         }
     });
 
+    // Realizar a dedução de Credenciados em CLTs
+    const credAdminVal = valoresTotal["Credenciado Administrativo"] || 0;
+    const credTiVal = valoresTotal["Credenciado TI"] || 0;
+    valoresTotal["CLTs"] = (valoresTotal["CLTs"] || 0) - credAdminVal - credTiVal;
+
+    cols.forEach(col => {
+        const credAdminMes = valoresMensal["Credenciado Administrativo"]?.[col] || 0;
+        const credTiMes = valoresMensal["Credenciado TI"]?.[col] || 0;
+        if (valoresMensal["CLTs"]) {
+            valoresMensal["CLTs"][col] = (valoresMensal["CLTs"][col] || 0) - credAdminMes - credTiMes;
+        }
+    });
+
     // --- Aggregators (Totais) ---
     const getVal = (key) => valoresTotal[key] || 0;
 
@@ -1268,8 +1281,8 @@ function calculateDRE() {
 
     const terceirizacao = sumCategories(["Terceirização de Mão de Obra"]);
 
-    // CLTs deve refletir exatamente "Despesas com Pessoal"
-    const clts = getCatTotal("Despesas com Pessoal");
+    // CLTs deve refletir a linha "CLTs" com as deduções
+    const clts = getVal("CLTs");
 
     // Pessoal Total = CLTs + Credenciados + Terceirização
     const pessoal = clts + credenciados + terceirizacao;
@@ -1301,6 +1314,12 @@ function calculateDRE() {
             prevValoresTotal[item.titulo] = (s >= c) ? s - c : 0;
         }
     });
+
+    // Realizar a dedução de Credenciados em prevValoresTotal["CLTs"]
+    const prevCredAdminVal = prevValoresTotal["Credenciado Administrativo"] || 0;
+    const prevCredTiVal = prevValoresTotal["Credenciado TI"] || 0;
+    prevValoresTotal["CLTs"] = (prevValoresTotal["CLTs"] || 0) - prevCredAdminVal - prevCredTiVal;
+
     const getPrevVal = (key) => prevValoresTotal[key] || 0;
 
     // Previous Key Metrics
@@ -1333,7 +1352,7 @@ function calculateDRE() {
         "Credenciado Operacional", "Adiantamento - Credenciado Operacional"
     ]);
     const prev_terceirizacao = sumPrevCategories(["Terceirização de Mão de Obra"]);
-    const prev_clts = getPrevCatTotal("Despesas com Pessoal");
+    const prev_clts = getPrevVal("CLTs");
     const prev_pessoal = prev_clts + prev_credenciados + prev_terceirizacao;
     const prev_corretiva = sumPrevCategories(["Corretiva - B2G", "Manutenção Corretiva"]);
     const prev_preventiva = sumPrevCategories(["Preventiva - B2G", "Manutenção Preventiva"]);
@@ -1492,6 +1511,32 @@ function calculateDRE() {
             state.projectBreakdown[rubricTitle] = projectList.sort((a, b) => b.total - a.total);
         }
     });
+
+    // Ajustar o Project Breakdown para CLTs deduzindo Credenciado Administrativo e TI
+    if (state.projectBreakdown["CLTs"]) {
+        state.projectBreakdown["CLTs"].forEach(projData => {
+            const projName = projData.nome;
+            const credAdminProj = state.projectBreakdown["Credenciado Administrativo"]?.find(p => p.nome === projName);
+            const credTiProj = state.projectBreakdown["Credenciado TI"]?.find(p => p.nome === projName);
+            
+            const credAdminProjTotal = credAdminProj ? credAdminProj.total : 0;
+            const credTiProjTotal = credTiProj ? credTiProj.total : 0;
+            
+            projData.total -= (credAdminProjTotal + credTiProjTotal);
+            projData.media = projData.total / (cols.length || 1);
+            
+            cols.forEach(col => {
+                const credAdminProjMes = credAdminProj?.meses[col] || 0;
+                const credTiProjMes = credTiProj?.meses[col] || 0;
+                projData.meses[col] -= (credAdminProjMes + credTiProjMes);
+            });
+        });
+        
+        // Re-filtrar e ordenar
+        state.projectBreakdown["CLTs"] = state.projectBreakdown["CLTs"]
+            .filter(p => Math.abs(p.total) > 0.01)
+            .sort((a, b) => b.total - a.total);
+    }
 }
 
 
@@ -2573,6 +2618,17 @@ function showCardDetails(key, title) {
         addDataset('Serviços (Líquido)', servicosAjustados, 1);
         addDataset('Ativos', getValuesSeries(['Ativos']), 2);
 
+    } else if (key === 'clts') {
+        const seriesCLTBase = getValuesSeries(['Despesas com Pessoal']);
+        const seriesCredAdmin = getValuesSeries(['Credenciado Administrativo']);
+        const seriesCredTi = getValuesSeries(['Credenciado TI']);
+
+        const invert = (arr) => arr.map(v => -Math.abs(v));
+
+        if (seriesCLTBase.some(v => v !== 0)) addDataset('Despesas com Pessoal (Bruto)', seriesCLTBase, 2);
+        if (seriesCredAdmin.some(v => v !== 0)) addDataset('(-) Credenciado Administrativo', invert(seriesCredAdmin), 9);
+        if (seriesCredTi.some(v => v !== 0)) addDataset('(-) Credenciado TI', invert(seriesCredTi), 16);
+
     } else if (metricMap[key]) {
         // Caso Padrão: Divide nas categorias individuais listadas no map
         // Ex: Custos Gerais -> Lista de todas as linhas de custo
@@ -2662,7 +2718,16 @@ function showCardDetails(key, title) {
         }
     });
 
-    if (targetCategories) {
+    if (key === 'clts') {
+        const cltBase = getCatSum('Despesas com Pessoal');
+        const credAdmin = getCatSum('Credenciado Administrativo');
+        const credTi = getCatSum('Credenciado TI');
+        contributingCategories = [
+            { category: 'Despesas com Pessoal (Bruto)', value: cltBase },
+            { category: '(-) Credenciado Administrativo', value: -credAdmin },
+            { category: '(-) Credenciado TI', value: -credTi }
+        ].filter(c => c.value !== 0);
+    } else if (targetCategories) {
         // Calculate totals for these categories from filtered data
         const catTotals = {};
         state.filteredData.forEach(row => {
