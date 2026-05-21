@@ -786,6 +786,17 @@ function calculateDRE() {
         }
     });
 
+    // Realizar a dedução de Provisão IRPJ e CSSL Trimestral em Impostos
+    const provisaoVal = valoresTotal["Provisão IRPJ e CSSL Trimestral"] || 0;
+    valoresTotal["Impostos"] = (valoresTotal["Impostos"] || 0) - provisaoVal;
+
+    cols.forEach(col => {
+        const provisaoMes = valoresMensal["Provisão IRPJ e CSSL Trimestral"]?.[col] || 0;
+        if (valoresMensal["Impostos"]) {
+            valoresMensal["Impostos"][col] = (valoresMensal["Impostos"][col] || 0) - provisaoMes;
+        }
+    });
+
     // --- Aggregators (Totais) ---
     const getVal = (key) => valoresTotal[key] || 0;
 
@@ -879,6 +890,10 @@ function calculateDRE() {
     const prevPreventivaVal = prevValoresTotal["Preventiva - B2G"] || 0;
     const prevTerceirizacaoVal = prevValoresTotal["Terceirização de Mão de Obra"] || 0;
     prevValoresTotal["Custo dos Serviços Prestados"] = (prevValoresTotal["Custo dos Serviços Prestados"] || 0) - prevCredOpVal - prevCorretivaVal - prevPreventivaVal - prevTerceirizacaoVal;
+
+    // Realizar a dedução de Provisão IRPJ e CSSL Trimestral em prevValoresTotal["Impostos"]
+    const prevProvisaoVal = prevValoresTotal["Provisão IRPJ e CSSL Trimestral"] || 0;
+    prevValoresTotal["Impostos"] = (prevValoresTotal["Impostos"] || 0) - prevProvisaoVal;
 
     const getPrevVal = (key) => prevValoresTotal[key] || 0;
 
@@ -1117,6 +1132,29 @@ function calculateDRE() {
 
         // Re-filtrar e ordenar
         state.projectBreakdown["Custo dos Serviços Prestados"] = state.projectBreakdown["Custo dos Serviços Prestados"]
+            .filter(p => Math.abs(p.total) > 0.01)
+            .sort((a, b) => b.total - a.total);
+    }
+
+    // Ajustar o Project Breakdown para Impostos deduzindo Provisão IRPJ e CSSL Trimestral
+    if (state.projectBreakdown["Impostos"]) {
+        state.projectBreakdown["Impostos"].forEach(projData => {
+            const projName = projData.nome;
+            const provisaoProj = state.projectBreakdown["Provisão IRPJ e CSSL Trimestral"]?.find(p => p.nome === projName);
+
+            const provisaoProjTotal = provisaoProj ? provisaoProj.total : 0;
+
+            projData.total -= provisaoProjTotal;
+            projData.media = projData.total / (cols.length || 1);
+
+            cols.forEach(col => {
+                const provisaoProjMes = provisaoProj?.meses[col] || 0;
+                projData.meses[col] -= provisaoProjMes;
+            });
+        });
+
+        // Re-filtrar e ordenar
+        state.projectBreakdown["Impostos"] = state.projectBreakdown["Impostos"]
             .filter(p => Math.abs(p.total) > 0.01)
             .sort((a, b) => b.total - a.total);
     }

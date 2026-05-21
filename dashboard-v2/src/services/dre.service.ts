@@ -313,6 +313,10 @@ export class DreService {
     const terceirizacaoVal = valoresTotal["Terceirização de Mão de Obra"] || 0;
     valoresTotal["Custo dos Serviços Prestados"] = (valoresTotal["Custo dos Serviços Prestados"] || 0) - credOpVal - corretivaVal - preventivaVal - terceirizacaoVal;
 
+    // Realizar a dedução de Provisão IRPJ e CSSL Trimestral em Impostos
+    const provisaoVal = valoresTotal["Provisão IRPJ e CSSL Trimestral"] || 0;
+    valoresTotal["Impostos"] = (valoresTotal["Impostos"] || 0) - provisaoVal;
+
     const excludedCategories = new Set([
       'credenciado administrativo',
       'adiantamento - credenciado administrativo',
@@ -328,6 +332,10 @@ export class DreService {
       'preventiva - b2g',
       'manutenção preventiva',
       'terceirização de mão de obra'
+    ]);
+
+    const excludedImpostosCategories = new Set([
+      'provisão - irpj e cssl trimestral'
     ]);
 
     validColumns.forEach(col => {
@@ -397,6 +405,39 @@ export class DreService {
           const valStr = cloned[col]?.toString().replace(',', '.') || '0';
           const val = parseFloat(valStr) || 0;
           cloned[col] = val * factorCusto;
+          return cloned;
+        });
+      }
+
+      // 3. Dedução e Escala de Impostos
+      const provisaoMes = valoresMensal["Provisão IRPJ e CSSL Trimestral"]?.[col] || 0;
+
+      let impostosBrutoMes = 0;
+      if (valoresMensal["Impostos"]) {
+        impostosBrutoMes = valoresMensal["Impostos"][col] || 0;
+        valoresMensal["Impostos"][col] = impostosBrutoMes - provisaoMes;
+      }
+
+      const impostosLiquidoMes = valoresMensal["Impostos"]?.[col] || 0;
+      const factorImpostos = impostosBrutoMes !== 0 ? impostosLiquidoMes / impostosBrutoMes : 0;
+
+      if (sourceRows["Impostos"]) {
+        if (!sourceRows["Impostos"][col]) {
+          sourceRows["Impostos"][col] = [];
+        }
+
+        // Primeiro, filtramos apenas as linhas originais
+        const originalImpostosRows = sourceRows["Impostos"][col].filter(row => {
+          const catLower = (row.Categoria || "").trim().toLowerCase();
+          return !excludedImpostosCategories.has(catLower);
+        });
+
+        // Aplicamos a redução proporcional por fator nas transações originais de Impostos
+        sourceRows["Impostos"][col] = originalImpostosRows.map(row => {
+          const cloned = { ...row };
+          const valStr = cloned[col]?.toString().replace(',', '.') || '0';
+          const val = parseFloat(valStr) || 0;
+          cloned[col] = val * factorImpostos;
           return cloned;
         });
       }
