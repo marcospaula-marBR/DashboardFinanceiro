@@ -72,7 +72,10 @@ export function LancamentosTable({ lancamentos, allocations, dimDRE, dimProjetos
               const catName = item.categoria_nome || catInfo?.descricao || item.categoria_codigo;
 
               // Row Data prep
-              const itemAllocs = allocations.filter(a => String(a.codigo_lancamento_omie) === String(item.omie_id));
+              const itemAllocs = allocations.filter(a => 
+                String(a.codigo_lancamento_omie) === String(item.omie_id) &&
+                String(a.empresa_nome || '').trim() === String(item.empresa_nome || '').trim()
+              );
               const hasAlloc = itemAllocs.length > 0;
               
               let dreText = 'Não vinculado';

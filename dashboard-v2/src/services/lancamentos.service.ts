@@ -1,11 +1,11 @@
 import { supabase } from '@/lib/supabase';
-import { Lancamento, LancamentoFilterValues, LancamentoStats } from '@/types/lancamentos';
+import { Lancamento } from '@/types/lancamentos';
 
 export class LancamentosService {
   private static async fetchAll(tableName: string, filterColumn: string | null, minDate: string | null) {
     let results: any[] = [];
     let from = 0;
-    let limit = 1000;
+    const limit = 1000;
     let hasMore = true;
 
     while (hasMore) {
@@ -62,11 +62,11 @@ export class LancamentosService {
     dimDRE: Map<string, string> 
   }> {
     
-    // 1. Buscar os dados brutos da nova tabela omie_raw
-    // Nota: Estamos buscando desde 2024 conforme a nova carga histórica
+    // 1. Buscar os dados brutos da nova tabela omie_financas_unificado
+    // Filtra categoria 0.01 (Transferências internas) para evitar duplicidade visual
     let rawData: any[] = [];
     let from = 0;
-    let limit = 1000;
+    const limit = 1000;
     let hasMore = true;
 
     while (hasMore) {
@@ -75,11 +75,12 @@ export class LancamentosService {
         .select('*')
         .gte('data_registro', startDate)
         .neq('status', 'CANCELADO')
+        .neq('categoria_codigo', '0.01') // Ocultar Transferências internas
         .order('data_registro', { ascending: false })
         .range(from, from + limit - 1);
 
       if (error) {
-        console.error('Erro ao buscar omie_raw:', error);
+        console.error('Erro ao buscar omie_financas_unificado:', error);
         break;
       }
 
@@ -128,33 +129,82 @@ export class LancamentosService {
       if (nome) fornMap.set(key, nome);
     });
 
-    // 3. Processar Lançamentos (Agrupando por omie_id para a tabela principal)
-    const groupedMap = new Map<number, Lancamento>();
+    // 3. Pré-processar: construir mapa de rateio dos títulos CP/CR
+    // Para herdar departamentos nos MOVIMENTO via raw_data.detalhes.nCodTitulo
+    // Estrutura: titleDeptMap["${empresa_nome}-${omie_id}"] = [{dept, valor, dre_conta}]
+    const titleDeptMap = new Map<string, { dept: string; valor: number; dre_conta_nome: string }[]>();
+    rawData.forEach(item => {
+      if (item.tipo_registro === 'PAGAR' || item.tipo_registro === 'RECEBER') {
+        const omieId = Number(item.omie_id);
+        if (!omieId) return;
+        const key = `${String(item.empresa_nome || '').trim()}-${omieId}`;
+        if (!titleDeptMap.has(key)) titleDeptMap.set(key, []);
+        const dept = item.departamento_nome || 'Principal';
+        if (dept !== 'Sem Departamento' && dept !== 'Principal') {
+          titleDeptMap.get(key)!.push({
+            dept,
+            valor: Number(item.valor_alocado) || 0,
+            dre_conta_nome: item.dre_conta_nome || ''
+          });
+        }
+      }
+    });
+
+    // 4. Processar Lançamentos (Agrupando por empresa + omie_id para a tabela principal)
+    const groupedMap = new Map<string, Lancamento>();
     const allocations: any[] = [];
 
     rawData.forEach(item => {
-      // Alimentar lista de allocations para o modal de detalhes
-      allocations.push({
-        codigo_lancamento_omie: item.omie_id,
-        descricao_departamento: item.departamento_nome,
-        codigo_departamento: item.departamento_codigo,
-        valor_alocado: item.valor_alocado,
-        percentual_departamento: item.valor_total > 0 ? ((item.valor_alocado / item.valor_total) * 100).toFixed(2) : 0,
-        descricao_categoria: item.categoria_nome,
-        descricao_projeto: item.projeto_nome,
-        codigo_projeto: item.projeto_codigo, // Importante para o De-Para
-        descricao_conta_dre: item.dre_conta_nome
-      });
+      const raw = item.raw_data || {};
+      const rawDet = raw.detalhes || {};
 
-      // Agrupar para a linha principal da tabela
-      if (!groupedMap.has(item.omie_id)) {
+      // Para MOVIMENTO: tentar herdar departamentos do título CP/CR vinculado
+      const nCodTitulo = rawDet.nCodTitulo ? Number(rawDet.nCodTitulo) : null;
+      const inheritedDepts = (item.tipo_registro === 'MOVIMENTO' && nCodTitulo)
+        ? (titleDeptMap.get(`${String(item.empresa_nome || '').trim()}-${nCodTitulo}`) || [])
+        : [];
+
+      if (inheritedDepts.length > 0) {
+        // Gerar alocações herdadas do CP/CR vinculado
+        inheritedDepts.forEach(d => {
+          allocations.push({
+            codigo_lancamento_omie: item.omie_id,
+            empresa_nome: item.empresa_nome,
+            descricao_departamento: d.dept,
+            codigo_departamento: null,
+            valor_alocado: item.valor_alocado,
+            percentual_departamento: inheritedDepts.length > 1 
+              ? ((Math.abs(d.valor) / Math.abs(Number(item.valor_total))) * 100).toFixed(2)
+              : '100.00',
+            descricao_categoria: item.categoria_nome,
+            descricao_projeto: item.projeto_nome,
+            codigo_projeto: item.projeto_codigo,
+            descricao_conta_dre: d.dre_conta_nome
+          });
+        });
+      } else {
+        // Alocação padrão (PAGAR/RECEBER com distribuição própria, ou MOVIMENTO sem vínculo)
+        allocations.push({
+          codigo_lancamento_omie: item.omie_id,
+          empresa_nome: item.empresa_nome,
+          descricao_departamento: item.departamento_nome,
+          codigo_departamento: item.departamento_codigo,
+          valor_alocado: item.valor_alocado,
+          percentual_departamento: item.valor_total > 0 ? ((item.valor_alocado / item.valor_total) * 100).toFixed(2) : 0,
+          descricao_categoria: item.categoria_nome,
+          descricao_projeto: item.projeto_nome,
+          codigo_projeto: item.projeto_codigo,
+          descricao_conta_dre: item.dre_conta_nome
+        });
+      }
+
+      // Agrupar para a linha principal da tabela usando chave composta
+      const groupKey = `${String(item.empresa_nome || '').trim()}-${item.omie_id}`;
+      if (!groupedMap.has(groupKey)) {
         // Busca robusta de fornecedor - prioridade:
         // 1. omie_dim_fornecedores (via codigo_cliente_fornecedor no raw_data) ← fonte oficial
         // 2. cliente_fornecedor (coluna direta da tabela, quando preenchido)
-        // 3. fornecedor_nome_transferencia (campo do omie_supabase_ingest)
-        // 4. Campos do raw_data (CP: nm_cliente / MOV: detalhes.cNomeCliente)
-        const raw = item.raw_data || {};
-        const rawDet = raw.detalhes || {};
+        // 3. Campos do raw_data (CP: nm_cliente / MOV: detalhes.cNomeCliente)
         const codigoCF = String(raw.codigo_cliente_fornecedor || rawDet.nCodCliente || '');
         const key = `${String(item.empresa_nome || '').trim()}-${codigoCF}`;
         const nomeFromDim = codigoCF ? fornMap.get(key) : undefined;
@@ -173,8 +223,11 @@ export class LancamentosService {
                                item.fornecedor_nome ||
                                '---';
 
+        const deptsList = inheritedDepts.length > 0 
+          ? inheritedDepts.map(d => d.dept)
+          : [item.departamento_nome].filter(Boolean);
 
-        groupedMap.set(item.omie_id, {
+        groupedMap.set(groupKey, {
           ...item,
           // Garante que fornecedor_nome (campo do tipo Lancamento) é preenchido
           fornecedor_nome: fornecedorNome,
@@ -187,13 +240,19 @@ export class LancamentosService {
           
           // Computed
           _dataLabel: item.data_registro,
-          _departamentos: [item.departamento_nome].filter(Boolean),
+          _departamentos: deptsList,
           _projetos: [item.projeto_nome].filter(Boolean)
         } as Lancamento);
       } else {
-        const existing = groupedMap.get(item.omie_id);
+        const existing = groupedMap.get(groupKey);
         if (existing) {
-          if (!existing._departamentos?.includes(item.departamento_nome)) {
+          if (inheritedDepts.length > 0) {
+            inheritedDepts.forEach(d => {
+              if (!existing._departamentos?.includes(d.dept)) {
+                existing._departamentos?.push(d.dept);
+              }
+            });
+          } else if (!existing._departamentos?.includes(item.departamento_nome)) {
             existing._departamentos?.push(item.departamento_nome);
           }
           if (!existing._projetos?.includes(item.projeto_nome)) {
@@ -212,6 +271,7 @@ export class LancamentosService {
     };
   }
 }
+
 
 export const parseDate = (dateStr?: string | null): Date => {
   if (!dateStr || dateStr === '---' || dateStr.trim() === '') return new Date(0);
