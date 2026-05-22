@@ -8,8 +8,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 # Configuração de Ambiente
-env_path = Path("d:/DRE-V30 - LANÇAMENTOS FALHOS/.env")
-load_dotenv(dotenv_path=env_path)
+load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
@@ -79,20 +78,50 @@ class OmieSync:
 
     def sync_dimensions(self):
         log(f"Carregando dimensões para {self.empresa_nome}...")
-        # Categorias
-        res = self.call_api(f"{URL_GERAL}categorias/", "ListarCategorias", {"pagina": 1, "registros_por_pagina": 500})
-        for c in res.get("categoria_cadastro", []):
-            self.cat_map[str(c["codigo"])] = c["descricao"]
         
-        # Projetos
-        res = self.call_api(f"{URL_GERAL}projetos/", "ListarProjetos", {"pagina": 1, "registros_por_pagina": 500})
-        for p in res.get("cadastro", []):
-            self.proj_map[str(p["codigo"])] = p["nome"]
+        # Categorias (Paginado - Limite de 100 da Omie)
+        pagina = 1
+        while True:
+            res = self.call_api(f"{URL_GERAL}categorias/", "ListarCategorias", {"pagina": pagina, "registros_por_pagina": 100})
+            cats = res.get("categoria_cadastro", [])
+            if not cats: break
+            for c in cats:
+                self.cat_map[str(c["codigo"])] = {
+                    "descricao": c.get("descricao"),
+                    "codigo_conta_dre": c.get("codigo_dre")
+                }
+            if pagina >= res.get("total_de_paginas", 0): break
+            pagina += 1
+        log(f"  [OK] {len(self.cat_map)} categorias memorizadas.")
         
-        # Clientes/Fornecedores
-        res = self.call_api(f"{URL_GERAL}clientes/", "ListarClientes", {"pagina": 1, "registros_por_pagina": 500})
-        for f in res.get("clientes_cadastro", []):
-            self.forn_map[str(f["codigo_cliente_omie"])] = f["nome_fantasia"] or f["razao_social"]
+        # Projetos (Paginado - Limite de 100 da Omie)
+        pagina = 1
+        while True:
+            res = self.call_api(f"{URL_GERAL}projetos/", "ListarProjetos", {"pagina": pagina, "registros_por_pagina": 100})
+            projs = res.get("cadastro", [])
+            if not projs: break
+            for p in projs:
+                self.proj_map[str(p["codigo"])] = p.get("nome")
+            if pagina >= res.get("total_de_paginas", 0): break
+            pagina += 1
+        log(f"  [OK] {len(self.proj_map)} projetos memorizados.")
+        
+        # Clientes/Fornecedores (Paginado - Limite de 100 da Omie)
+        pagina = 1
+        while True:
+            res = self.call_api(f"{URL_GERAL}clientes/", "ListarClientes", {"pagina": pagina, "registros_por_pagina": 100})
+            clients = res.get("clientes_cadastro", [])
+            if not clients: break
+            for f in clients:
+                self.forn_map[str(f["codigo_cliente_omie"])] = {
+                    "nome_fantasia": f.get("nome_fantasia"),
+                    "razao_social": f.get("razao_social"),
+                    "cnpj_cpf": f.get("cnpj_cpf"),
+                    "codigo_cliente_integracao": f.get("codigo_cliente_integracao")
+                }
+            if pagina >= res.get("total_de_paginas", 0): break
+            pagina += 1
+        log(f"  [OK] {len(self.forn_map)} fornecedores/clientes memorizados.")
 
     def fetch_records(self, url, call, list_key, start_date):
         records = []
@@ -133,15 +162,21 @@ class OmieSync:
                 raw_dist = [{"cDesDep": "Sem Departamento", "nValDep": r.get("valor_documento")}]
             
             # Cliente/Fornecedor Fallback
-            cliente_forn = self.forn_map.get(str(r.get("codigo_cliente_fornecedor")))
+            cliente_forn = None
+            f_info = self.forn_map.get(str(r.get("codigo_cliente_fornecedor")))
+            if f_info:
+                cliente_forn = f_info.get("nome_fantasia") or f_info.get("razao_social")
             if not cliente_forn:
                 cliente_forn = r.get("nm_cliente") or r.get("cnab_integracao_bancaria", {}).get("nome_transferencia") or "N/D"
 
             dt_emissao = format_date_iso_to_iso(r.get("data_emissao"))
             dt_entrada = format_date_iso_to_iso(r.get("data_entrada"))
+            dt_registro_raw = format_date_iso_to_iso(r.get("data_registro"))
+            dt_vencimento = format_date_iso_to_iso(r.get("data_vencimento"))
+            dt_inc = format_date_iso_to_iso(r.get("info", {}).get("dInc"))
             
-            # Data de Registro (Competência): Entrada (conforme imagem) > Emissão
-            data_registro = dt_entrada or dt_emissao
+            # Cadeia unificada de competência: entrada -> registro -> emissao -> vencimento -> log de inclusão
+            data_registro = dt_entrada or dt_registro_raw or dt_emissao or dt_vencimento or dt_inc
 
             for d in raw_dist:
                 rows.append({
@@ -157,7 +192,7 @@ class OmieSync:
                     "data_previsao": dt_previsao,
                     "data_pagamento": data_pagamento,
                     "categoria_codigo": r.get("codigo_categoria"),
-                    "categoria_nome": self.cat_map.get(str(r.get("codigo_categoria")), r.get("descricao_categoria")),
+                    "categoria_nome": self.cat_map.get(str(r.get("codigo_categoria")), {}).get("descricao") or r.get("descricao_categoria"),
                     "projeto_nome": self.proj_map.get(str(r.get("codigo_projeto")), r.get("nome_projeto") or "Sem Projeto"),
                     "departamento_nome": d.get("cDesDep"),
                     "cliente_fornecedor": cliente_forn,
@@ -191,10 +226,26 @@ class OmieSync:
             det = r.get("detalhes", {})
             res = r.get("resumo", {})
             
-            valor = float(res.get("nValLiquido") or 0)
+            # Extração robusta do valor do movimento: nValorMovCC -> nValPago -> nValLiquido
+            valor = float(det.get("nValorMovCC") or res.get("nValPago") or res.get("nValLiquido") or 0)
             sign = 1 if det.get("cTipo") == "E" else -1
             
-            # Mesmo que tenha título, vamos incluir como MOVIMENTO para garantir a visão do extrato
+            # Extração robusta de datas
+            dt_registro_mov = format_date_iso_to_iso(det.get("dDtRegistro"))
+            dt_pagto_mov = format_date_iso_to_iso(det.get("dDtPagto") or det.get("dDtPagamento") or det.get("dDataPagamento"))
+            dt_venc_mov = format_date_iso_to_iso(det.get("dDtVenc"))
+            dt_inc_mov = format_date_iso_to_iso(det.get("dDtInc") or r.get("info", {}).get("dInc"))
+            
+            # Cadeia unificada para extratos bancários (MOVIMENTO)
+            data_registro = dt_registro_mov or dt_pagto_mov or dt_venc_mov or dt_inc_mov
+            
+            cat_key = str(det.get("cCodCateg") or "")
+            cat_info = self.cat_map.get(cat_key)
+            if isinstance(cat_info, dict):
+                cat_nome = cat_info.get("descricao") or "Sem Categoria"
+            else:
+                cat_nome = cat_info or "Sem Categoria"
+            
             rows.append({
                 "empresa_nome": self.empresa_nome,
                 "omie_id": det.get("nCodMovCC"),
@@ -203,12 +254,12 @@ class OmieSync:
                 "valor_total": valor * sign,
                 "valor_alocado": valor * sign,
                 "data_emissao": format_date_iso_to_iso(det.get("dDtEmissao")),
-                "data_registro": format_date_iso_to_iso(r.get("info", {}).get("dInc")),
-                "data_vencimento": format_date_iso_to_iso(det.get("dDtVenc")),
-                "data_previsao": format_date_iso_to_iso(det.get("dDtPagto")),
-                "data_pagamento": format_date_iso_to_iso(det.get("dDtPagto")),
+                "data_registro": data_registro,
+                "data_vencimento": dt_venc_mov,
+                "data_previsao": dt_pagto_mov,
+                "data_pagamento": dt_pagto_mov,
                 "categoria_codigo": det.get("cCodCateg"),
-                "categoria_nome": self.cat_map.get(str(det.get("cCodCateg")), "Sem Categoria"),
+                "categoria_nome": cat_nome,
                 "projeto_nome": self.proj_map.get(str(det.get("nCodProjeto")), "Sem Projeto"),
                 "departamento_nome": "Principal",
                 "cliente_fornecedor": det.get("cNomeCliente") or "N/D",
@@ -232,7 +283,7 @@ def push_to_supabase(rows):
             log(f"Erro Supabase: {resp.text}")
 
 def main():
-    start_date = "01/01/2025"
+    start_date = "01/05/2025"
     apps = [
         {"key": os.getenv("OMIE_APP_KEY_MARBRASIL"), "sec": os.getenv("OMIE_APP_SECRET_MARBRASIL"), "name": "Mar Brasil"},
         {"key": os.getenv("OMIE_APP_KEY_DZM"), "sec": os.getenv("OMIE_APP_SECRET_DZM"), "name": "DZM"}

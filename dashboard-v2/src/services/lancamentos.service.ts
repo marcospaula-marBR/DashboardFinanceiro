@@ -97,7 +97,7 @@ export class LancamentosService {
       supabase.from('omie_dim_categorias').select('*'),
       supabase.from('omie_dim_projetos').select('*'),
       supabase.from('omie_dim_dre').select('*'),
-      supabase.from('omie_dim_fornecedores').select('codigo_cliente_omie,nome_fantasia,razao_social')
+      supabase.from('omie_dim_fornecedores').select('codigo_cliente_omie,nome_fantasia,razao_social,empresa_nome')
     ]);
 
     const dimCategorias = new Map<string, any>();
@@ -120,11 +120,12 @@ export class LancamentosService {
       dimDRE.set(String(d.codigo_conta_dre), d.descricao_conta_dre);
     });
 
-    // Mapa de fornecedores: codigo_cliente_omie -> nome
+    // Mapa de fornecedores: ${empresa_nome}-${codigo_cliente_omie} -> nome
     const fornMap = new Map<string, string>();
     (fornData.data || []).forEach(f => {
       const nome = f.nome_fantasia || f.razao_social || '';
-      if (nome) fornMap.set(String(f.codigo_cliente_omie), nome);
+      const key = `${String(f.empresa_nome || '').trim()}-${String(f.codigo_cliente_omie)}`;
+      if (nome) fornMap.set(key, nome);
     });
 
     // 3. Processar Lançamentos (Agrupando por omie_id para a tabela principal)
@@ -155,7 +156,8 @@ export class LancamentosService {
         const raw = item.raw_data || {};
         const rawDet = raw.detalhes || {};
         const codigoCF = String(raw.codigo_cliente_fornecedor || rawDet.nCodCliente || '');
-        const nomeFromDim = codigoCF ? fornMap.get(codigoCF) : undefined;
+        const key = `${String(item.empresa_nome || '').trim()}-${codigoCF}`;
+        const nomeFromDim = codigoCF ? fornMap.get(key) : undefined;
         
         const clienteFornDB = item.cliente_fornecedor === 'N/D' ? undefined : item.cliente_fornecedor;
         
