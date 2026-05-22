@@ -106,11 +106,11 @@ export async function POST() {
           const status = c.status_titulo;
           const dataVenc = c.data_vencimento;
           const dataBaixa = c.data_baixa;
-          const dataReg = c.data_entrada || c.info?.dInc; // Preferência por data_entrada para permitir correção manual
+          const dataReg = c.data_entrada || c.data_registro || c.data_emissao || c.data_vencimento || c.info?.dInc;
 
-          const isoReg = dataReg ? dataReg.split('/').reverse().join('-') : null;
-          const isoVenc = dataVenc ? dataVenc.split('/').reverse().join('-') : null;
-          const isoBaixa = dataBaixa ? dataBaixa.split('/').reverse().join('-') : null;
+          const isoReg = dataReg ? (dataReg.includes('/') ? dataReg.split('/').reverse().join('-') : dataReg) : null;
+          const isoVenc = dataVenc ? (dataVenc.includes('/') ? dataVenc.split('/').reverse().join('-') : dataVenc) : null;
+          const isoBaixa = dataBaixa ? (dataBaixa.includes('/') ? dataBaixa.split('/').reverse().join('-') : dataBaixa) : null;
 
           // A. Atualizar Tabela Legada (compatibilidade)
           await supabase

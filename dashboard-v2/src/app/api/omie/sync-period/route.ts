@@ -136,9 +136,10 @@ export async function POST(req: Request) {
                     const projeto = projMap.get(projId) || r.nome_projeto || 'Sem Projeto';
                     const fornecedor = supplierCache.get(r.codigo_cliente_fornecedor) || r.nm_cliente || 'Fornecedor';
 
-                    const isoReg = r.data_entrada ? r.data_entrada.split('/').reverse().join('-') : null;
-                    const isoVenc = r.data_vencimento ? r.data_vencimento.split('/').reverse().join('-') : null;
-                    const isoBaixa = r.data_previsao ? r.data_previsao.split('/').reverse().join('-') : null;
+                    const rawReg = r.data_entrada || r.data_registro || r.data_emissao || r.data_vencimento || r.info?.dInc;
+                    const isoReg = rawReg ? (rawReg.includes('/') ? rawReg.split('/').reverse().join('-') : rawReg) : null;
+                    const isoVenc = r.data_vencimento ? (r.data_vencimento.includes('/') ? r.data_vencimento.split('/').reverse().join('-') : r.data_vencimento) : null;
+                    const isoBaixa = r.data_previsao ? (r.data_previsao.includes('/') ? r.data_previsao.split('/').reverse().join('-') : r.data_previsao) : null;
 
                     const dist = r.distribuicao || [{ cDesDep: 'Sem Departamento', nValDep: r.valor_documento }];
 
@@ -202,9 +203,10 @@ export async function POST(req: Request) {
                 .map((m: any) => {
                   const catId = String(m.detalhes.cCodCateg || '').trim();
                   const categoria = catMap.get(catId) || `Auditar: ${catId} (${m.detalhes.cDesCateg || 'Sem Nome'})`;
-                  const isoReg = m.detalhes.dDtRegistro ? m.detalhes.dDtRegistro.split('/').reverse().join('-') : null;
-                  const isoVenc = m.detalhes.dDtVenc ? m.detalhes.dDtVenc.split('/').reverse().join('-') : null;
-                  const isoPgto = m.detalhes.dDtPagamento ? m.detalhes.dDtPagamento.split('/').reverse().join('-') : null;
+                  const rawReg = m.detalhes.dDtRegistro || m.detalhes.dDtPagamento || m.detalhes.dDtVenc || m.info?.dInc;
+                  const isoReg = rawReg ? (rawReg.includes('/') ? rawReg.split('/').reverse().join('-') : rawReg) : null;
+                  const isoVenc = m.detalhes.dDtVenc ? (m.detalhes.dDtVenc.includes('/') ? m.detalhes.dDtVenc.split('/').reverse().join('-') : m.detalhes.dDtVenc) : null;
+                  const isoPgto = m.detalhes.dDtPagamento ? (m.detalhes.dDtPagamento.includes('/') ? m.detalhes.dDtPagamento.split('/').reverse().join('-') : m.detalhes.dDtPagamento) : null;
                   
                   return {
                     empresa_nome: companyName,

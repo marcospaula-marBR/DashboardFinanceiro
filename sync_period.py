@@ -196,7 +196,7 @@ def sync_period(month, year, target_company=None):
                         "status": r.get("status_titulo"),
                         "valor_total": r.get("valor_documento"),
                         "valor_alocado": d.get("nValDep"),
-                        "data_registro": format_date(r.get("data_entrada") or r.get("info", {}).get("dInc")),
+                        "data_registro": format_date(r.get("data_entrada") or r.get("data_registro") or r.get("data_emissao") or r.get("data_vencimento") or r.get("info", {}).get("dInc")),
                         "data_vencimento": format_date(r.get("data_vencimento")),
                         "data_pagamento": dt_pagamento_final,
                         "categoria_codigo": cat_id,

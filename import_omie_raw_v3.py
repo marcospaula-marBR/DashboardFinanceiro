@@ -65,7 +65,7 @@ def sync_to_supabase(records, empresa_nome, dim_maps):
                 "status": r.get("status_titulo"),
                 "valor_total": r.get("valor_documento"),
                 "valor_alocado": d.get("nValDep"),
-                "data_registro": format_date(r.get("info", {}).get("dInc")), # DATA DE REGISTRO NF
+                "data_registro": format_date(r.get("data_entrada") or r.get("data_registro") or r.get("data_emissao") or r.get("data_vencimento") or r.get("info", {}).get("dInc")),
                 "data_vencimento": format_date(r.get("data_vencimento")),
                 "data_pagamento": format_date(r.get("data_baixa")),
                 "categoria_codigo": cat_cod,
