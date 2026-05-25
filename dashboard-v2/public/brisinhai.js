@@ -310,8 +310,9 @@ function initBrisinhAI() {
         // Cancel previous speech
         window.speechSynthesis.cancel();
 
+        const safeText = String(text || '');
         // Strip HTML tags for clean reading
-        const cleanText = text.replace(/<[^>]*>/g, '').replace(/[*_#]/g, ''); // Simple strip
+        const cleanText = safeText.replace(/<[^>]*>/g, '').replace(/[*_#]/g, ''); // Simple strip
 
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = 'pt-BR';
@@ -358,12 +359,13 @@ function initBrisinhAI() {
 
     // Helper: Add Message
     window.addMessage = function (type, text) {
-        if (type === 'bot') lastBotMessage = text; // Armazena para retomada de áudio
+        const safeText = String(text || '');
+        if (type === 'bot') lastBotMessage = safeText; // Armazena para retomada de áudio
         const div = document.createElement('div');
         div.className = `message ${type}`;
 
         // Simple Markdown parsing
-        let html = text
+        let html = safeText
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\n/g, '<br>')
             .replace(/- (.*?)(<br>|$)/g, '<ul><li>$1</li></ul>');

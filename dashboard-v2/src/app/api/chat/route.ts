@@ -25,7 +25,24 @@ export async function POST(req: Request) {
 
     // Gerar conteúdo via API do Google
     const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    
+    // Garantir extração robusta de texto
+    let text = "";
+    try {
+      text = result.response.text();
+    } catch (e: any) {
+      console.warn("Falha ao extrair texto direto do response.text():", e);
+      text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+
+    if (!text) {
+      const candidate = result.response.candidates?.[0];
+      if (candidate?.finishReason && candidate.finishReason !== "STOP") {
+        text = `⚠️ A resposta foi interrompida ou bloqueada pela IA. Motivo de bloqueio: ${candidate.finishReason}`;
+      } else {
+        text = "Não foi possível obter uma resposta em formato de texto da Inteligência Artificial.";
+      }
+    }
 
     // O ai.service.v2.js antigo espera uma resposta no formato da API direta do Google, 
     // ou seja: { candidates: [ { content: { parts: [ { text: "..." } ] } } ] }

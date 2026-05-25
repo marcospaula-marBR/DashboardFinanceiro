@@ -90,7 +90,15 @@ class GeminiService {
                 }
 
                 const data = await response.json();
-                return data.candidates[0].content.parts[0].text;
+                const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text === undefined) {
+                    const finishReason = data?.candidates?.[0]?.finishReason;
+                    if (finishReason && finishReason !== "STOP") {
+                        return `⚠️ A resposta foi bloqueada ou interrompida pela IA. Motivo: ${finishReason}`;
+                    }
+                    return "Desculpe, não consegui obter uma resposta válida da Inteligência Artificial. Por favor, tente novamente.";
+                }
+                return text;
 
             } catch (error) {
                 // Se esgotou as tentativas ou é outro erro, lança
