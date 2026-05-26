@@ -5,7 +5,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { prompt } = body;
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Suporte flexível para variações de maiúsculas/minúsculas de escrita (ex: GEMINI_API_KEY ou Gemini_API_Key)
+    const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.gemini_api_key;
     if (!apiKey) {
       return NextResponse.json(
         { error: { message: "A chave de API do Gemini não está configurada no servidor (Vercel). Por favor, configure a variável GEMINI_API_KEY nas configurações do projeto no Vercel." } },
