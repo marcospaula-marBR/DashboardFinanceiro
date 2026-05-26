@@ -243,6 +243,21 @@ export default function DrePage() {
     setFilters(newFilters);
   }, []);
 
+  const allowedDeptsForEquipments = useMemo(() => {
+    return [
+      "Santos Sts Seduc 36693/2022 12/2024",
+      "São Paulo Cmsp Csp 274/2024 03/2025",
+      "São Paulo Cref4 Psp 2325/2025 93/2025",
+      "São Paulo Crsn Psp 6018/2025",
+      "São Paulo Smartsampa Smsu Psp 6029/2025 055/2025",
+      "Bertioga Seduc 3151/2025 135/2025",
+      "Bertioga Seduc 378/2024 54/2024",
+      "Bertioga Sesap 1390/2024 71/2024"
+    ].map(d => {
+      return d.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+    });
+  }, []);
+
   // Base Calculation (No Simulation)
   const originalResults: DreCalculatedResult | null = useMemo(() => {
     if (rawData.length === 0 || !metadata || !estrutura) return null;
@@ -573,7 +588,7 @@ export default function DrePage() {
         isOpen={isEquipmentsModalOpen}
         onClose={() => setIsEquipmentsModalOpen(false)}
         validColumns={results?.validColumns || []}
-        departamentos={metadata?.departamentos || []}
+        departamentos={allowedDeptsForEquipments}
         initialCounts={equipamentoCounts}
         onSave={handleSaveEquipamentoCounts}
       />
