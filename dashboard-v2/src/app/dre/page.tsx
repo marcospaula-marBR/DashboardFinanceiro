@@ -44,7 +44,7 @@ export default function DrePage() {
   // Simulator state
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [showTable, setShowTable] = useState(false);
-  const [equipamentoCounts, setEquipamentoCounts] = useState<Record<string, number>>({});
+  const [equipamentoCounts, setEquipamentoCounts] = useState<Record<string, Record<string, number>>>({});
   const [isEquipmentsModalOpen, setIsEquipmentsModalOpen] = useState(false);
   const [simParams, setSimParams] = useState<DreSimulationParams>({
     revenueMultiplier: 1.0,
@@ -136,9 +136,10 @@ export default function DrePage() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const dbCounts: Record<string, number> = {};
+        const dbCounts: Record<string, Record<string, number>> = {};
         data.forEach((row: any) => {
-          dbCounts[row.periodo] = row.quantidade;
+          if (!dbCounts[row.periodo]) dbCounts[row.periodo] = {};
+          dbCounts[row.periodo][row.departamento] = row.quantidade;
         });
         setEquipamentoCounts(dbCounts);
         localStorage.setItem('marbrasil_dre_equipamento_counts', JSON.stringify(dbCounts));
@@ -148,19 +149,25 @@ export default function DrePage() {
     }
   };
 
-  const handleSaveEquipamentoCounts = async (newCounts: Record<string, number>) => {
+  const handleSaveEquipamentoCounts = async (newCounts: Record<string, Record<string, number>>) => {
     setEquipamentoCounts(newCounts);
     localStorage.setItem('marbrasil_dre_equipamento_counts', JSON.stringify(newCounts));
 
     try {
-      const upsertData = Object.entries(newCounts).map(([periodo, quantidade]) => ({
-        periodo,
-        quantidade
-      }));
+      const upsertData: any[] = [];
+      Object.entries(newCounts).forEach(([periodo, depts]) => {
+        Object.entries(depts).forEach(([departamento, quantidade]) => {
+          upsertData.push({
+            periodo,
+            departamento,
+            quantidade
+          });
+        });
+      });
 
       const { error } = await supabase
         .from('dre_equipamento_counts')
-        .upsert(upsertData, { onConflict: 'periodo' });
+        .upsert(upsertData, { onConflict: 'periodo,departamento' });
 
       if (error) throw error;
       alert("Quantidade de equipamentos salva com sucesso na nuvem!");
@@ -566,6 +573,7 @@ export default function DrePage() {
         isOpen={isEquipmentsModalOpen}
         onClose={() => setIsEquipmentsModalOpen(false)}
         validColumns={results?.validColumns || []}
+        departamentos={metadata?.departamentos || []}
         initialCounts={equipamentoCounts}
         onSave={handleSaveEquipamentoCounts}
       />

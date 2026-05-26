@@ -390,7 +390,7 @@ export class DreService {
     estrutura: DreStructureItem[],
     filters: DreFilters,
     simulationParams?: DreSimulationParams,
-    equipamentoCounts?: Record<string, number>
+    equipamentoCounts?: Record<string, Record<string, number>>
   ): DreCalculatedResult {
     let df = [...data];
 
@@ -697,7 +697,18 @@ export class DreService {
       sourceRows["Equipamentos"][col] = getCatSourceRowsSafe("Equipamentos", col);
     });
 
-    const activeMachinesList = validColumns.map(col => equipamentoCounts?.[col] || 0);
+    const activeMachinesList = validColumns.map(col => {
+      const monthCounts = equipamentoCounts?.[col] || {};
+      const activeDepts = filters.departamentos.length > 0 
+        ? filters.departamentos 
+        : Object.keys(monthCounts);
+
+      let sum = 0;
+      activeDepts.forEach(dept => {
+        sum += monthCounts[dept] || 0;
+      });
+      return sum;
+    });
     const machinesSum = activeMachinesList.reduce((a, b) => a + b, 0);
     const averageMachines = validColumns.length > 0 ? (machinesSum / validColumns.length) : 0;
 
