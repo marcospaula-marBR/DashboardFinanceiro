@@ -389,7 +389,8 @@ export class DreService {
     metadata: DreMetadata,
     estrutura: DreStructureItem[],
     filters: DreFilters,
-    simulationParams?: DreSimulationParams
+    simulationParams?: DreSimulationParams,
+    equipamentoCounts?: Record<string, number>
   ): DreCalculatedResult {
     let df = [...data];
 
@@ -696,6 +697,10 @@ export class DreService {
       sourceRows["Equipamentos"][col] = getCatSourceRowsSafe("Equipamentos", col);
     });
 
+    const activeMachinesList = validColumns.map(col => equipamentoCounts?.[col] || 0);
+    const machinesSum = activeMachinesList.reduce((a, b) => a + b, 0);
+    const averageMachines = validColumns.length > 0 ? (machinesSum / validColumns.length) : 0;
+
     return {
       totais: valoresTotal,
       mensal: valoresMensal,
@@ -716,7 +721,8 @@ export class DreService {
         fcl,
         percLucro,
         percFcl,
-        totalEquipamentos
+        totalEquipamentos,
+        averageMachines
       }
     };
   }
