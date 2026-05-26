@@ -22,16 +22,24 @@ export async function POST(req: Request) {
     // Isso garante compatibilidade total mesmo se a chave do usuário for antiga ou restrita a certos modelos.
     const endpoints = [
       {
+        url: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+        name: "Gemini 1.5 Pro (v1)"
+      },
+      {
         url: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         name: "Gemini 1.5 Flash (v1)"
       },
       {
-        url: `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`,
-        name: "Gemini Pro 1.0 (v1)"
+        url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+        name: "Gemini 1.5 Pro (v1beta)"
       },
       {
         url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         name: "Gemini 1.5 Flash (v1beta)"
+      },
+      {
+        url: `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`,
+        name: "Gemini Pro 1.0 (v1)"
       },
       {
         url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
