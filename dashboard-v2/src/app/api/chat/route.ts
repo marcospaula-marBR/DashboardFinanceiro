@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// Instanciar o SDK do Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { prompt } = body;
 
-    if (!process.env.GEMINI_API_KEY) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       return NextResponse.json(
-        { error: { message: "A chave de API do Gemini não está configurada no servidor (Vercel). Por favor, configure a variável GEMINI_API_KEY." } },
+        { error: { message: "A chave de API do Gemini não está configurada no servidor (Vercel). Por favor, configure a variável GEMINI_API_KEY nas configurações do projeto no Vercel." } },
         { status: 500 }
       );
     }
@@ -20,32 +17,55 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { message: "Prompt não fornecido." } }, { status: 400 });
     }
 
-    // Preparar o modelo
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Chamada direta à API REST do Gemini - Mais leve, rápida e estável em ambientes serverless (Vercel)
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    // Gerar conteúdo via API do Google
-    const result = await model.generateContent(prompt);
-    
-    // Garantir extração robusta de texto
-    let text = "";
-    try {
-      text = result.response.text();
-    } catch (e: any) {
-      console.warn("Falha ao extrair texto direto do response.text():", e);
-      text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorDesc = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorDesc = errorJson.error?.message || errorText;
+      } catch {
+        // Fallback
+      }
+      return NextResponse.json(
+        { error: { message: `Erro na API do Gemini: ${errorDesc}` } },
+        { status: response.status }
+      );
     }
 
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
     if (!text) {
-      const candidate = result.response.candidates?.[0];
+      const candidate = data?.candidates?.[0];
       if (candidate?.finishReason && candidate.finishReason !== "STOP") {
-        text = `⚠️ A resposta foi interrompida ou bloqueada pela IA. Motivo de bloqueio: ${candidate.finishReason}`;
-      } else {
-        text = "Não foi possível obter uma resposta em formato de texto da Inteligência Artificial.";
+        return NextResponse.json({
+          candidates: [{ content: { parts: [{ text: `⚠️ A resposta foi interrompida ou bloqueada pela IA. Motivo: ${candidate.finishReason}` }] } }]
+        });
       }
     }
 
-    // O ai.service.v2.js antigo espera uma resposta no formato da API direta do Google, 
-    // ou seja: { candidates: [ { content: { parts: [ { text: "..." } ] } } ] }
+    // Mantém compatibilidade com o formato esperado pelo ai.service.v2.js
     return NextResponse.json({
       candidates: [
         {
@@ -57,7 +77,7 @@ export async function POST(req: Request) {
     });
     
   } catch (error: any) {
-    console.error("Erro na API de Chat (BrisinhAI Legacy):", error);
+    console.error("Erro na API de Chat (BrisinhAI):", error);
     return NextResponse.json(
       { error: { message: error.message || "Falha na comunicação com a Inteligência Artificial." } },
       { status: 500 }
