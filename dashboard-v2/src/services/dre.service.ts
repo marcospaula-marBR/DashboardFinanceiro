@@ -81,8 +81,8 @@ export class DreService {
         delimiter: ";",
         complete: (results) => {
           const headerCount = results.meta.fields ? results.meta.fields.length : 0;
-          // Verifica se há caracteres corrompidos óbvios (como o caractere de substituição do unicode)
-          const hasCorrupted = results.meta.fields?.some(f => f.includes('')) || false;
+          // Verifica se há caracteres corrompidos óbvios (como o caractere de substituição do unicode ou Ã do Windows-1252)
+          const hasCorrupted = results.meta.fields?.some(f => f.includes('\uFFFD') || f.includes('\u00C3')) || false;
           
           if (headerCount >= 3 && !hasCorrupted) {
             resolve(results.data);
@@ -97,7 +97,7 @@ export class DreService {
             delimiter: ",",
             complete: (commaResults) => {
               const commaHeaderCount = commaResults.meta.fields ? commaResults.meta.fields.length : 0;
-              const commaHasCorrupted = commaResults.meta.fields?.some(f => f.includes('')) || false;
+              const commaHasCorrupted = commaResults.meta.fields?.some(f => f.includes('\uFFFD') || f.includes('\u00C3')) || false;
               if (commaHeaderCount >= 3 && !commaHasCorrupted) {
                 resolve(commaResults.data);
                 return;
@@ -404,8 +404,24 @@ export class DreService {
     const catMonthly: Record<string, Record<string, number>> = {};
     const catSourceRows: Record<string, Record<string, DreRow[]>> = {};
 
+    const subCategoriasEspecificas = [
+      'Terceirização de Mão de Obra', 'Credenciado Operacional', 'Adiantamento - Credenciado Operacional',
+      'Despesas com Pessoal', 'Manutenção Preventiva', 'Preventiva - B2G', 'Manutenção Corretiva',
+      'Corretiva - B2G', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
+      'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
+      'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas', 'Equipamentos',
+      'Jurídico', 'Intermediação de Negócios'
+    ];
+
     df.forEach(row => {
-      const cat = row.ContaDRE; // Usar ContaDRE para a agregação das linhas do DRE
+      let cat = row.ContaDRE;
+      
+      // Se a subcategoria da linha do CSV estiver na lista de classificações específicas da estrutura do DRE,
+      // nós priorizamos a Categoria para que ela apareça na linha e no card correto do dashboard!
+      if (row.Categoria && subCategoriasEspecificas.some(sub => sub.toLowerCase() === row.Categoria.toString().trim().toLowerCase())) {
+        cat = subCategoriasEspecificas.find(sub => sub.toLowerCase() === row.Categoria.toString().trim().toLowerCase()) || row.Categoria;
+      }
+
       if (!cat) return;
       if (!catTotals[cat]) {
         catTotals[cat] = 0;
