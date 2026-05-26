@@ -201,6 +201,13 @@ export default function DrePage() {
     return DreAlertsService.generateAlerts(results);
   }, [results]);
 
+  // Expor resultados calculados para a BrisinhAI globalmente (evita sobrecarga do payload da API)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).DRE_RESULTS = results;
+    }
+  }, [results]);
+
   const handleOpenExportModal = () => {
     setIsExportModalOpen(true);
   };

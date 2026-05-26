@@ -478,121 +478,34 @@ function initBrisinhAI() {
         const update = document.getElementById('lastUpdate')?.innerText;
         if (update) context.update = update;
 
-        if (update) context.update = update;
-
-        // 6. Global CSV Data (Added for deeper analysis)
-        if (typeof window.FULL_CSV_DATA !== 'undefined' && window.FULL_CSV_DATA.length > 0) {
-            context.csvData = window.FULL_CSV_DATA;
-            context.dataSummary = `Total de registros carregados: ${window.FULL_CSV_DATA.length}.`;
-        }
-
-        // 7. CSV Data Summary (Legacy/Fallback)
-        if (typeof state !== 'undefined' && state && state.filteredData) {
-            // Provide a summary of the data instead of raw rows if possible
-            context.dataSummary = `Total de registros filtrados: ${state.filteredData.length}.`;
-            icon.classList.remove('bi-volume-mute-fill');
-            icon.classList.add('bi-volume-up-fill');
-            voiceToggleBtn.title = "Desativar Voz";
-        } else {
-            icon.classList.remove('bi-volume-up-fill');
-            icon.classList.add('bi-volume-mute-fill');
-            voiceToggleBtn.title = "Ativar Voz";
-        }
-    }
-
-
-
-    // Helper: Gather Context
-    function getDashboardContext() {
-        const context = {
-            url: window.location.pathname,
-            pageType: 'unknown',
-            filtros: {},
-            indicadores: [],
-            resumo: {}
-        };
-
-        // CORREÇÃO: Prioriza o contexto específico da página (ex: PeopleBoard)
-        if (typeof window.getPageContext === 'function') {
-            const pageCtx = window.getPageContext();
-            Object.assign(context, pageCtx);
-            return context;
-        }
-
-        // 1. Detect Page Type
-        if (document.getElementById('dreTable')) context.pageType = 'DRE';
-        else if (document.getElementById('indicatorsContainer')) context.pageType = 'INDICADORES';
-        else if (document.getElementById('segurosGrid')) context.pageType = 'SEGUROS';
-        else if (document.getElementById('parcelasTable')) context.pageType = 'PARCELAMENTOS';
-        else if (document.getElementById('dataTable') && document.querySelector('h1')?.innerText.includes('Setorial')) context.pageType = 'SETORIAL';
-
-        // 2. Get Filters (Common to all)
-        context.filtros.periodo = getSelectedValues('filterPeriodo');
-        context.filtros.empresa = getSelectedValues('filterEmpresa');
-
-        // Other filters based on page
-        if (document.getElementById('filterCategoria')) context.filtros.categoria = getSelectedValues('filterCategoria');
-        if (document.getElementById('filterProjeto')) context.filtros.projeto = getSelectedValues('filterProjeto');
-
-        // 3. Gather Page-Specific Data
-        gatherPageSpecificData(context);
-
-        // 4. Get Cards Data (Generic Fallback + Specifics)
-        document.querySelectorAll('.indicator-card, .metric-card, #kpiRow .card, .kpi-card').forEach(card => {
-            let title, value, subtitle;
-
-            if (card.classList.contains('indicator-card')) {
-                title = card.querySelector('.card-title')?.innerText;
-                value = card.querySelector('.display-5')?.innerText;
-                subtitle = card.querySelector('.text-muted:not(.card-title)')?.innerText;
+        // 6. Optimized payload based on Page Type
+        if (context.pageType === 'DRE' && typeof window.DRE_RESULTS !== 'undefined' && window.DRE_RESULTS) {
+            // Prune huge sourceRows to ensure low payload size
+            const prunedResults = {
+                totais: window.DRE_RESULTS.totais,
+                mensal: window.DRE_RESULTS.mensal,
+                kpis: window.DRE_RESULTS.kpis,
+                estrutura: window.DRE_RESULTS.estrutura,
+                validColumns: window.DRE_RESULTS.validColumns
+            };
+            context.dreSummary = prunedResults;
+            context.dataSummary = "Dados consolidados do DRE carregados com sucesso.";
+            context.csvData = null; // Omit huge raw data
+        } else if (typeof window.FULL_CSV_DATA !== 'undefined' && window.FULL_CSV_DATA.length > 0) {
+            // Avoid huge CSV payload limit on other screens
+            if (window.FULL_CSV_DATA.length > 1000) {
+                context.dataSummary = `Total de registros carregados: ${window.FULL_CSV_DATA.length}. (Dados de transações omitidos do prompt por limite de tamanho)`;
             } else {
-                title = card.querySelector('.title')?.innerText;
-                value = card.querySelector('.value')?.innerText;
-                subtitle = card.querySelector('.small.text-muted, .sub')?.innerText;
-
-                // Extra info in breakdown items
-                const breakdownItems = card.querySelectorAll('.breakdown-item');
-                if (breakdownItems.length > 0) {
-                    const details = [];
-                    breakdownItems.forEach(item => {
-                        const l = item.querySelector('.breakdown-label')?.innerText;
-                        const v = item.querySelector('.breakdown-value')?.innerText;
-                        if (l && v) details.push(`${l}: ${v}`);
-                    });
-                    if (details.length > 0) subtitle = (subtitle ? subtitle + ". " : "") + details.join(", ");
-                }
+                context.csvData = window.FULL_CSV_DATA;
+                context.dataSummary = `Total de registros carregados: ${window.FULL_CSV_DATA.length}.`;
             }
-
-            if (title || value) {
-                context.indicadores.push({
-                    indicador: title?.trim() || "Sem Título",
-                    valor: value?.trim() || "-",
-                    detalhe: subtitle?.trim() || ""
-                });
-            }
-        });
-
-        // 5. Get Last Update
-        const update = document.getElementById('lastUpdate')?.innerText;
-        if (update) context.update = update;
-
-        if (update) context.update = update;
-
-        // 6. Global CSV Data (Added for deeper analysis)
-        if (typeof window.FULL_CSV_DATA !== 'undefined' && window.FULL_CSV_DATA.length > 0) {
-            context.csvData = window.FULL_CSV_DATA;
-            context.dataSummary = `Total de registros carregados: ${window.FULL_CSV_DATA.length}.`;
         }
 
         // 7. CSV Data Summary (Legacy/Fallback)
         if (typeof state !== 'undefined' && state && state.filteredData) {
-            // Provide a summary of the data instead of raw rows if possible
             context.dataSummary = `Total de registros filtrados: ${state.filteredData.length}.`;
-            // For DRE, maybe send the calculated DRE structure instead of raw CSV
-            if (context.pageType === 'DRE' && state.dreData) {
-                // dreData usually sits in UI, let's grab from table if state isn't populated with final DRE rows
-            }
         }
+
         return context;
     }
 
