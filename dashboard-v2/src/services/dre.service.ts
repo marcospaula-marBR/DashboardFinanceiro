@@ -203,16 +203,15 @@ export class DreService {
         const valor = Math.abs(parseFloat(valorStr.replace(/\./g, '').replace(',', '.')));
         if (isNaN(valor)) return;
 
-        // Parse da data (DD/MM/YYYY padrão brasileiro de exportações Omie, ou MM/DD/YYYY)
+        // Parse da data (Suporta MM/DD/YYYY padrão Omie ou DD/MM/YYYY padrão brasileiro)
         let mesLabel = '';
         const partes = dataStr.split('/');
         if (partes.length === 3) {
-          // Por padrão no Brasil, o primeiro elemento é o dia e o segundo é o mês.
-          let dia = parseInt(partes[0]);
-          let mes = parseInt(partes[1]);
-          let ano = partes[2].trim();
+          let mes = parseInt(partes[0]);
+          let dia = parseInt(partes[1]);
+          let anoCompleto = partes[2].trim().split(' ')[0]; // Remove qualquer componente de hora (ex: "2026 00:00" -> "2026")
           
-          // Caso as posições estejam invertidas (ex: formato americano MM/DD/YYYY) e o mês (segundo elemento) seja maior que 12, trocamos
+          // Se o primeiro elemento for maior que 12, significa que é o dia (formato DD/MM/YYYY), então invertemos
           if (mes > 12) {
             const temp = mes;
             mes = dia;
@@ -221,7 +220,8 @@ export class DreService {
           
           if (mes >= 1 && mes <= 12) {
             const mesNome = MESES_ORDEM[mes - 1];
-            const anoCurto = ano.slice(-2);
+            // Garante ano de 2 dígitos (ex: "2026" -> "26", ou se já for "26", mantém "26")
+            const anoCurto = anoCompleto.length === 4 ? anoCompleto.slice(-2) : anoCompleto;
             mesLabel = `${mesNome}/${anoCurto}`;
           }
         } else {
