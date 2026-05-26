@@ -17,39 +17,79 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { message: "Prompt não fornecido." } }, { status: 400 });
     }
 
-    // Chamada direta à API REST do Gemini - Mais leve, rápida e estável em ambientes serverless (Vercel)
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    // Lista de endpoints e modelos para tentar em cascata (Fallback)
+    // Isso garante compatibilidade total mesmo se a chave do usuário for antiga ou restrita a certos modelos.
+    const endpoints = [
+      {
+        url: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        name: "Gemini 1.5 Flash (v1)"
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorDesc = errorText;
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorDesc = errorJson.error?.message || errorText;
-      } catch {
-        // Fallback
+      {
+        url: `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`,
+        name: "Gemini Pro 1.0 (v1)"
+      },
+      {
+        url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        name: "Gemini 1.5 Flash (v1beta)"
+      },
+      {
+        url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+        name: "Gemini Pro 1.0 (v1beta)"
       }
+    ];
+
+    let lastErrorMsg = "";
+    let response = null;
+    let selectedEndpointName = "";
+
+    for (const ep of endpoints) {
+      try {
+        console.log(`Tentando conectar via: ${ep.name}`);
+        response = await fetch(ep.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: prompt }]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 2048
+            }
+          })
+        });
+
+        if (response.ok) {
+          selectedEndpointName = ep.name;
+          break; // Sucesso! Sai do loop de fallback
+        } else {
+          const errorText = await response.text();
+          let errorDesc = errorText;
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorDesc = errorJson.error?.message || errorText;
+          } catch {
+            // ignore
+          }
+          lastErrorMsg = `[${ep.name}] ${errorDesc}`;
+          console.warn(`Falha no endpoint ${ep.name}: ${errorDesc}`);
+          response = null;
+        }
+      } catch (err: any) {
+        lastErrorMsg = `[${ep.name}] ${err.message}`;
+        console.warn(`Erro de conexão no endpoint ${ep.name}: ${err.message}`);
+        response = null;
+      }
+    }
+
+    if (!response) {
       return NextResponse.json(
-        { error: { message: `Erro na API do Gemini: ${errorDesc}` } },
-        { status: response.status }
+        { error: { message: `Não foi possível conectar a nenhum modelo do Gemini com a chave fornecida. Último erro: ${lastErrorMsg}` } },
+        { status: 500 }
       );
     }
 
@@ -60,7 +100,7 @@ export async function POST(req: Request) {
       const candidate = data?.candidates?.[0];
       if (candidate?.finishReason && candidate.finishReason !== "STOP") {
         return NextResponse.json({
-          candidates: [{ content: { parts: [{ text: `⚠️ A resposta foi interrompida ou bloqueada pela IA. Motivo: ${candidate.finishReason}` }] } }]
+          candidates: [{ content: { parts: [{ text: `⚠️ A resposta foi interrompida pela IA (${selectedEndpointName}). Motivo: ${candidate.finishReason}` }] } }]
         });
       }
     }
