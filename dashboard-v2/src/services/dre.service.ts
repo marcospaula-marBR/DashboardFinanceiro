@@ -140,22 +140,21 @@ export class DreService {
       }
 
       // Preenchimento de valores padrões caso venham nulos
-      if (!row.Empresa) row.Empresa = '';
+      if (!row.Empresa) row.Empresa = 'Geral';
       if (!row.Departamento) row.Departamento = 'Sem Departamento';
       if (!row.ContaDRE) row.ContaDRE = 'Sem Conta DRE';
       if (!row.Projeto) row.Projeto = 'Sem Projeto';
       if (!row.Categoria) row.Categoria = 'Sem Categoria';
     });
 
-    // Filtrar apenas linhas que possuem dados válidos de Empresa, Departamento e ContaDRE
+    // Filtrar apenas linhas que possuem dados válidos de Departamento e ContaDRE (Empresa é opcional)
     data = data.filter(row =>
-      row['Empresa'].toString().trim() !== '' && 
-      row['Departamento'].toString().trim() !== '' && 
-      row['ContaDRE'].toString().trim() !== ''
+      row['Departamento'] && row['Departamento'].toString().trim() !== '' && 
+      row['ContaDRE'] && row['ContaDRE'].toString().trim() !== ''
     );
 
     data.forEach(row => {
-      row['Empresa'] = row['Empresa'].toString().trim();
+      row['Empresa'] = row['Empresa'] ? row['Empresa'].toString().trim() : 'Geral';
       row['Departamento'] = toTitleCase(row['Departamento'].toString().trim());
       row['ContaDRE'] = row['ContaDRE'].toString().trim();
       row['Projeto'] = toTitleCase(row['Projeto'].toString().trim());
