@@ -203,14 +203,16 @@ export class DreService {
         const valor = Math.abs(parseFloat(valorStr.replace(/\./g, '').replace(',', '.')));
         if (isNaN(valor)) return;
 
-        // Parse da data (DD/MM/YYYY ou MM/DD/YYYY)
+        // Parse da data (DD/MM/YYYY padrão brasileiro de exportações Omie, ou MM/DD/YYYY)
         let mesLabel = '';
         const partes = dataStr.split('/');
         if (partes.length === 3) {
-          let mes = parseInt(partes[0]);
-          let dia = parseInt(partes[1]);
+          // Por padrão no Brasil, o primeiro elemento é o dia e o segundo é o mês.
+          let dia = parseInt(partes[0]);
+          let mes = parseInt(partes[1]);
           let ano = partes[2].trim();
           
+          // Caso as posições estejam invertidas (ex: formato americano MM/DD/YYYY) e o mês (segundo elemento) seja maior que 12, trocamos
           if (mes > 12) {
             const temp = mes;
             mes = dia;
