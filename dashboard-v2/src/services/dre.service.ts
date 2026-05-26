@@ -399,7 +399,23 @@ export class DreService {
     if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
     if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
 
-    const allCols = Object.keys(metadata.mapaMeses);
+    const sortColumns = (cols: string[]) => {
+      return [...cols].sort((a, b) => {
+        const partesA = a.split('/');
+        const partesB = b.split('/');
+        if (partesA.length !== 2 || partesB.length !== 2) return 0;
+        const mesA = partesA[0].trim().charAt(0).toUpperCase() + partesA[0].trim().slice(1).toLowerCase();
+        const mesB = partesB[0].trim().charAt(0).toUpperCase() + partesB[0].trim().slice(1).toLowerCase();
+        const anoA = parseInt(partesA[1].trim());
+        const anoB = parseInt(partesB[1].trim());
+        const yA = anoA < 100 ? 2000 + anoA : anoA;
+        const yB = anoB < 100 ? 2000 + anoB : anoB;
+        if (yA !== yB) return yA - yB;
+        return MESES_ORDEM.indexOf(mesA) - MESES_ORDEM.indexOf(mesB);
+      });
+    };
+
+    const allCols = sortColumns(Object.keys(metadata.mapaMeses));
     let validColumns = allCols;
 
     if (filters.periodos.length > 0) {

@@ -33,18 +33,23 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
         <h3 className="font-bold text-slate-800">Detalhamento Financeiro</h3>
       </div>
       
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left whitespace-nowrap">
-          <thead className="bg-slate-100 text-slate-600 font-semibold text-xs uppercase tracking-wider">
+      <div className="overflow-auto max-h-[68vh] relative">
+        <table className="w-full text-sm text-left whitespace-nowrap border-separate border-spacing-0">
+          <thead className="bg-slate-100 text-slate-600 font-semibold text-xs uppercase tracking-wider sticky top-0 z-30">
             <tr>
-              <th className="px-4 py-3 sticky left-0 bg-slate-100 z-10 border-r border-slate-200">
+              <th className="px-4 py-3 sticky top-0 left-0 bg-slate-100 z-30 border-r border-b border-slate-200 min-w-[220px] w-[220px] max-w-[220px]">
                 Descrição
               </th>
-              <th className="px-4 py-3 text-right bg-slate-200 font-bold border-r border-slate-300">
+              <th className="px-4 py-3 text-right sticky top-0 left-[220px] bg-slate-200 font-bold border-r border-b border-slate-300 z-30 min-w-[120px] w-[120px]">
                 Total
               </th>
+              <th className="px-4 py-3 text-right sticky top-0 left-[340px] bg-slate-100 font-bold border-r border-b border-slate-200 z-30 min-w-[100px] w-[100px]">
+                Média
+              </th>
               {reversedColumns.map(col => (
-                <th key={col} className="px-4 py-3 text-right">{col}</th>
+                <th key={col} className="px-4 py-3 text-right sticky top-0 bg-slate-100 border-b border-slate-200 z-20">
+                  {col}
+                </th>
               ))}
             </tr>
           </thead>
@@ -55,39 +60,47 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
               if (item.tipo === 'divisor') {
                 return (
                   <tr key={`div-${idx}`} className="bg-slate-50">
-                    <td colSpan={reversedColumns.length + 2} className="h-2"></td>
+                    <td colSpan={reversedColumns.length + 3} className="h-2 border-b border-slate-100"></td>
                   </tr>
                 );
               }
 
               const isCard = item.tipo === 'card' || item.tipo === 'card_percentual';
-              const isCalc = item.tipo === 'linha_calc';
               const isPercent = item.tipo === 'card_percentual';
 
               const totalVal = totais[item.titulo] || 0;
+              const avgVal = reversedColumns.length > 0 ? (totalVal / reversedColumns.length) : 0;
 
               return (
                 <tr 
                   key={idx} 
                   onClick={() => onRowClick && onRowClick(item.titulo)}
-                  className={`transition-colors ${onRowClick ? 'cursor-pointer hover:bg-amber-50/50' : ''} ${
+                  className={`transition-colors group ${onRowClick ? 'cursor-pointer' : ''} ${
                     isCard ? 'bg-slate-50 font-bold text-slate-800' : 'text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  <td className={`px-4 py-2.5 sticky left-0 border-r border-slate-200 ${
+                  <td className={`px-4 py-2.5 sticky left-0 border-r border-b border-slate-200 min-w-[220px] w-[220px] max-w-[220px] truncate transition-colors group-hover:bg-slate-100 ${
                     isCard ? 'bg-slate-50 z-10' : 'bg-white z-10'
                   }`}>
                     {item.titulo}
                   </td>
                   
-                  <td className="px-4 py-2.5 text-right font-mono font-bold text-[13px] bg-slate-50 border-r border-slate-200">
+                  <td className={`px-4 py-2.5 text-right font-mono font-bold text-[13px] sticky left-[220px] border-r border-b border-slate-300 transition-colors group-hover:bg-slate-100 ${
+                    isCard ? 'bg-slate-100 z-10' : 'bg-slate-50 z-10'
+                  }`}>
                     {displayValue(totalVal, isPercent)}
+                  </td>
+
+                  <td className={`px-4 py-2.5 text-right font-mono text-[13px] sticky left-[340px] border-r border-b border-slate-200 transition-colors group-hover:bg-slate-100 ${
+                    isCard ? 'bg-slate-50 font-bold z-10' : 'bg-white z-10'
+                  }`}>
+                    {displayValue(avgVal, isPercent)}
                   </td>
 
                   {reversedColumns.map(col => {
                     const monthVal = mensal[item.titulo]?.[col] || 0;
                     return (
-                      <td key={col} className="px-4 py-2.5 text-right font-mono text-[13px]">
+                      <td key={col} className="px-4 py-2.5 text-right font-mono text-[13px] border-b border-slate-100 transition-colors group-hover:bg-slate-50">
                         {displayValue(monthVal, isPercent)}
                       </td>
                     );
