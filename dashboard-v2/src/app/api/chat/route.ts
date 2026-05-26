@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Modelos em ordem de prioridade (mais moderno → mais antigo)
+// Modelos em ordem de prioridade — apenas compatíveis com generateContent
+// Referência: https://ai.google.dev/gemini-api/docs/models
 const MODEL_CASCADE = [
-  'gemini-2.5-pro',
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
+  'gemini-2.5-flash',     // Mais moderno, melhor custo-benefício
+  'gemini-2.5-pro',       // Mais poderoso (pode ter menor quota gratuita)
+  'gemini-2.0-flash',     // Estável e rápido
   'gemini-2.0-flash-lite',
-  'gemini-1.5-pro',
-  'gemini-1.5-flash',
-  'gemini-1.0-pro',
+  'gemini-1.5-flash',     // Legado estável
+  'gemini-1.5-pro',       // Legado robusto
+  // REMOVIDOS: gemini-pro, gemini-1.0-pro (descontinuados, não suportam generateContent)
 ];
 
 export async function POST(req: Request) {
