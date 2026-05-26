@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { DreSidebar } from '@/components/dre/DreSidebar';
 import { DreHeader } from '@/components/dre/DreHeader';
 import { DreKpiCards } from '@/components/dre/DreKpiCards';
@@ -13,16 +13,23 @@ import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
 import { BrisinhaiService } from '@/services/brisinhai.service';
+import { supabase } from '@/lib/supabase';
 import { DreFilters, DreMetadata, DreCalculatedResult, DreRow, DreSimulationParams, DreStructureItem, DreTemplateDefinition } from '@/types/dre';
 import { DreExportModal, ExportSelections } from '@/components/dre/DreExportModal';
 import { DrePrintCharts } from '@/components/dre/DrePrintCharts';
-import { TableIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles } from 'lucide-react';
 
 export default function DrePage() {
   const [isUploading, setIsUploading] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
+  
+  // Security Passcode Shield
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [passcode, setPasscode] = useState("");
+  const [authError, setAuthError] = useState(false);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,12 +55,27 @@ export default function DrePage() {
   const [filters, setFilters] = useState<DreFilters>({
     empresas: [],
     periodos: [],
+    departamentos: [],
+    contasDre: [],
     projetos: [],
     categorias: []
   });
 
-  // Tenta sobrescrever com template remoto (se disponível), mas não bloqueia o cálculo
-  React.useEffect(() => {
+  // 1. Verificação de Sessão (Password Screen Gate)
+  useEffect(() => {
+    const isAuth = sessionStorage.getItem('marbrasil_dre_auth') === 'true';
+    setIsAuthenticated(isAuth);
+  }, []);
+
+  // 2. Tenta carregar do Supabase automaticamente ao abrir se autenticado
+  useEffect(() => {
+    if (isAuthenticated === true) {
+      loadLatestSnapshotFromDb();
+    }
+  }, [isAuthenticated]);
+
+  // 3. Tenta carregar template customizado
+  useEffect(() => {
     fetch('/templates/dre-padrao.json')
       .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then((data: DreTemplateDefinition) => {
@@ -61,6 +83,61 @@ export default function DrePage() {
       })
       .catch(err => console.warn("Template remoto indisponível, usando padrão embutido:", err));
   }, []);
+
+  // Função para carregar do banco de dados remoto
+  const loadLatestSnapshotFromDb = async () => {
+    setIsUploading(true);
+    try {
+      const { data, error } = await supabase
+        .from('dre_snapshots')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        const snapshot = data[0];
+        setRawData(snapshot.raw_data);
+        setMetadata(snapshot.metadata);
+        setFileName(snapshot.filename || 'Banco de Dados Nuvem');
+        
+        const timestamp = new Date(snapshot.created_at);
+        setLastUpdate(timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString());
+      }
+    } catch (err: any) {
+      console.warn("Erro ao buscar dados remotos:", err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Enviar a DRE para o Supabase (Cloud Sync)
+  const handlePublishSnapshot = async () => {
+    if (rawData.length === 0 || !metadata) return;
+    setIsPublishing(true);
+    try {
+      const { error } = await supabase
+        .from('dre_snapshots')
+        .insert({
+          filename: fileName || 'Upload Manual',
+          raw_data: rawData,
+          metadata: metadata
+        });
+
+      if (error) throw error;
+      
+      const newTimestamp = new Date();
+      setLastUpdate(newTimestamp.toLocaleDateString() + ' ' + newTimestamp.toLocaleTimeString());
+      alert("Snapshot DRE publicado no Supabase com sucesso! A partir de agora, ao carregar a página ela será carregada automaticamente com essa base.");
+    } catch (err: any) {
+      alert("Falha ao salvar dados no Supabase: " + err.message);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
@@ -85,11 +162,13 @@ export default function DrePage() {
       setFilters({
         empresas: [],
         periodos: [],
+        departamentos: [],
+        contasDre: [],
         projetos: [],
         categorias: []
       });
 
-      setLastUpdate(new Date().toLocaleTimeString());
+      setLastUpdate(new Date().toLocaleTimeString() + ' (Local)');
     } catch (error: any) {
       alert("Erro ao processar arquivo: " + error.message);
     } finally {
@@ -149,7 +228,6 @@ export default function DrePage() {
     try {
       // Chamada para o NOVO gerador nativo
       await ExportPdfService.buildNativePdf(results!, selections, empresa, periodo, aiText);
-
       setIsExportModalOpen(false);
     } catch (error: any) {
       alert("Falha ao gerar o PDF. Erro: " + (error?.message || String(error)));
@@ -168,6 +246,77 @@ export default function DrePage() {
     setModalSourceRows(itemSource);
     setIsModalOpen(true);
   };
+
+  // Validação de senha
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passcode === "marbrasildre2026") {
+      sessionStorage.setItem('marbrasil_dre_auth', 'true');
+      setIsAuthenticated(true);
+      setAuthError(false);
+    } else {
+      setAuthError(true);
+      setPasscode("");
+    }
+  };
+
+  // Loading Session State
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
+  // Password Shield UI
+  if (isAuthenticated === false) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 select-none relative overflow-hidden">
+        {/* Background ambient lighting (No purple gradient - Orange/Amber Theme) */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-550/10 rounded-full blur-[100px] pointer-events-none" />
+        
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-none p-8 md:p-10 shadow-2xl relative z-10">
+          <div className="flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-500 mb-6 rounded-none">
+              <Lock size={28} />
+            </div>
+            
+            <h1 className="text-xl font-black text-white tracking-tight mb-2">Painel DRE Mar Brasil</h1>
+            <p className="text-xs text-slate-400 font-medium mb-8 max-w-xs">
+              Acesso restrito para conselho e diretoria executiva. Digite o código de acesso para prosseguir.
+            </p>
+
+            <form onSubmit={handleAuthSubmit} className="w-full space-y-4">
+              <div>
+                <input 
+                  type="password"
+                  placeholder="Código de Acesso"
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  className={`w-full bg-slate-950 border text-center text-lg tracking-[0.2em] font-semibold text-white px-4 py-3 rounded-none focus:outline-none focus:ring-1 focus:ring-amber-500 transition-all ${
+                    authError ? 'border-red-500/50 animate-shake' : 'border-slate-800'
+                  }`}
+                  autoFocus
+                />
+                {authError && (
+                  <p className="text-[11px] text-red-400 font-semibold mt-2">Código inválido. Tente novamente.</p>
+                )}
+              </div>
+
+              <button 
+                type="submit"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-4 rounded-none transition-all duration-200 flex items-center justify-center gap-2 active:scale-98 shadow-lg shadow-orange-500/10"
+              >
+                <span>Acessar Dashboard</span>
+                <ArrowRight size={16} />
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-50 flex">
@@ -194,6 +343,9 @@ export default function DrePage() {
               onTogglePrivacy={() => setIsPrivacyMode(!isPrivacyMode)}
               isPrivacyMode={isPrivacyMode}
               onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
+              hasData={rawData.length > 0}
+              isPublishing={isPublishing}
+              onPublish={handlePublishSnapshot}
             />
 
             <div className="space-y-8 mt-8">
@@ -244,7 +396,7 @@ export default function DrePage() {
               {!results && !isUploading && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center flex flex-col items-center justify-center min-h-[400px]">
                   <p className="text-slate-500 font-medium mb-2">Aguardando dados</p>
-                  <p className="text-sm text-slate-400">Envie um arquivo CSV pelo menu lateral para visualizar o DRE.</p>
+                  <p className="text-sm text-slate-450">Envie um arquivo CSV pelo menu lateral ou aguarde o sincronismo com a nuvem.</p>
                 </div>
               )}
             </div>

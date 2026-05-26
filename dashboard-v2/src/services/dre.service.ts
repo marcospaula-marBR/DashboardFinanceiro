@@ -115,24 +115,51 @@ export class DreService {
         const lowerKey = cleanKey.toLowerCase();
         let finalKey = cleanKey;
 
-        if (lowerKey === 'projeto') finalKey = 'Projeto';
+        // Mapeamento flexível com prioridade
+        if (lowerKey === 'empresa') finalKey = 'Empresa';
+        else if (lowerKey === 'departamento' || lowerKey === 'departamento_dre' || lowerKey === 'departamento dre') finalKey = 'Departamento';
+        else if (lowerKey === 'contadre' || lowerKey === 'conta_dre' || lowerKey === 'conta dre') finalKey = 'ContaDRE';
+        else if (lowerKey === 'projeto') finalKey = 'Projeto';
         else if (lowerKey === 'categoria') finalKey = 'Categoria';
-        else if (lowerKey === 'empresa') finalKey = 'Empresa';
 
         newRow[finalKey] = row[key];
       });
       return newRow;
     });
 
+    // Retrocompatibilidade: Se vier planilha antiga com 'Projeto' e 'Categoria' originais,
+    // nós os movemos para 'Departamento' e 'ContaDRE' para não quebrar.
+    data.forEach(row => {
+      if (!row.Departamento && row.Projeto) {
+        row.Departamento = row.Projeto;
+        row.Projeto = 'Sem Projeto';
+      }
+      if (!row.ContaDRE && row.Categoria) {
+        row.ContaDRE = row.Categoria;
+        row.Categoria = 'Sem Categoria';
+      }
+
+      // Preenchimento de valores padrões caso venham nulos
+      if (!row.Empresa) row.Empresa = '';
+      if (!row.Departamento) row.Departamento = 'Sem Departamento';
+      if (!row.ContaDRE) row.ContaDRE = 'Sem Conta DRE';
+      if (!row.Projeto) row.Projeto = 'Sem Projeto';
+      if (!row.Categoria) row.Categoria = 'Sem Categoria';
+    });
+
+    // Filtrar apenas linhas que possuem dados válidos de Empresa, Departamento e ContaDRE
     data = data.filter(row =>
-      row['Projeto'] && row['Categoria'] &&
-      row['Projeto'].toString().trim() !== '' && row['Categoria'].toString().trim() !== ''
+      row['Empresa'].toString().trim() !== '' && 
+      row['Departamento'].toString().trim() !== '' && 
+      row['ContaDRE'].toString().trim() !== ''
     );
 
     data.forEach(row => {
-      row['Projeto'] = toTitleCase(row['Projeto'].toString());
-      row['Empresa'] = row['Empresa'] ? row['Empresa'].toString().trim() : '';
-      row['Categoria'] = row['Categoria'] ? row['Categoria'].toString().trim() : '';
+      row['Empresa'] = row['Empresa'].toString().trim();
+      row['Departamento'] = toTitleCase(row['Departamento'].toString().trim());
+      row['ContaDRE'] = row['ContaDRE'].toString().trim();
+      row['Projeto'] = toTitleCase(row['Projeto'].toString().trim());
+      row['Categoria'] = row['Categoria'].toString().trim();
     });
 
     const allKeys = Object.keys(data[0] || {});
@@ -158,13 +185,15 @@ export class DreService {
     });
 
     const empresas = Array.from(new Set(data.map(d => d.Empresa).filter(Boolean))).sort() as string[];
+    const departamentos = Array.from(new Set(data.map(d => d.Departamento).filter(Boolean))).sort() as string[];
+    const contasDre = Array.from(new Set(data.map(d => d.ContaDRE).filter(Boolean))).sort() as string[];
     const projetos = Array.from(new Set(data.map(d => d.Projeto).filter(Boolean))).sort() as string[];
     const categorias = Array.from(new Set(data.map(d => d.Categoria).filter(Boolean))).sort() as string[];
     const periodosList = periodos.map(p => `${p.mes}/${p.ano}`);
 
     return {
       data: data as DreRow[],
-      metadata: { empresas, projetos, categorias, periodos: periodosList, mapaMeses }
+      metadata: { empresas, departamentos, contasDre, projetos, categorias, periodos: periodosList, mapaMeses }
     };
   }
 
@@ -182,6 +211,8 @@ export class DreService {
     let df = [...data];
 
     if (filters.empresas.length > 0) df = df.filter(row => filters.empresas.includes(row.Empresa));
+    if (filters.departamentos.length > 0) df = df.filter(row => filters.departamentos.includes(row.Departamento));
+    if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
     if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
     if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
 
@@ -201,7 +232,8 @@ export class DreService {
     const catSourceRows: Record<string, Record<string, DreRow[]>> = {};
 
     df.forEach(row => {
-      const cat = row.Categoria;
+      const cat = row.ContaDRE; // Usar ContaDRE para a agregação das linhas do DRE
+      if (!cat) return;
       if (!catTotals[cat]) {
         catTotals[cat] = 0;
         catMonthly[cat] = {};

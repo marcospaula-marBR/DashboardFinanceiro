@@ -1,8 +1,10 @@
 export interface DreFilters {
   empresas: string[];
   periodos: string[];
-  projetos: string[];
-  categorias: string[];
+  departamentos: string[]; // Rebatizado do antigo 'projetos'
+  contasDre: string[];     // Rebatizado do antigo 'categorias'
+  projetos: string[];      // Novo filtro
+  categorias: string[];    // Novo filtro
 }
 
 export interface DreSimulationParams {
@@ -12,9 +14,11 @@ export interface DreSimulationParams {
 }
 
 export interface DreRow {
-  Projeto: string;
   Empresa: string;
-  Categoria: string;
+  Departamento: string;    // Rebatizado de 'Projeto'
+  ContaDRE: string;        // Rebatizado de 'Categoria'
+  Projeto: string;         // Novo campo bruto
+  Categoria: string;       // Novo campo bruto
   [key: string]: string | number; // dynamic month columns, like "Jan/24"
 }
 
@@ -78,8 +82,10 @@ export interface DreCalculatedResult {
 
 export interface DreMetadata {
   empresas: string[];
+  periodos: string[];
+  departamentos: string[];
+  contasDre: string[];
   projetos: string[];
   categorias: string[];
-  periodos: string[];
   mapaMeses: Record<string, string>;
 }

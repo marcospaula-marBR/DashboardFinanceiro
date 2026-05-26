@@ -1,6 +1,8 @@
+"use client";
+
 import React, { useMemo } from 'react';
 import Image from 'next/image';
-import { UploadCloud, Filter, XCircle } from 'lucide-react';
+import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags } from 'lucide-react';
 import { DreFilters, DreMetadata, DreRow } from '@/types/dre';
 
 interface DreSidebarProps {
@@ -29,246 +31,370 @@ export function DreSidebar({
     }
   };
 
-  const handleClearFilters = () => {
-    onFilterChange({ empresas: [], periodos: [], projetos: [], categorias: [] });
+  // CASCADING FILTERS LOGIC
+  
+  // 1. Available Empresas (global metadata)
+  const availableEmpresas = useMemo(() => {
+    return metadata?.empresas || [];
+  }, [metadata]);
+
+  // 2. Available Periodos (global metadata)
+  const availablePeriodos = useMemo(() => {
+    return metadata?.periodos || [];
+  }, [metadata]);
+
+  // 3. Filter raw data based on selected Empresa
+  const rowsFilteredByEmpresa = useMemo(() => {
+    if (!filters.empresas || filters.empresas.length === 0) return rawData;
+    return rawData.filter(r => filters.empresas.includes(r.Empresa));
+  }, [rawData, filters.empresas]);
+
+  // 4. Available Departamentos from current Empresa subset
+  const availableDepartamentos = useMemo(() => {
+    const depts = new Set<string>();
+    rowsFilteredByEmpresa.forEach(r => {
+      if (r.Departamento) depts.add(r.Departamento);
+    });
+    return Array.from(depts).sort();
+  }, [rowsFilteredByEmpresa]);
+
+  // 5. Filter subset further by selected Departamentos
+  const rowsFilteredByDept = useMemo(() => {
+    if (!filters.departamentos || filters.departamentos.length === 0) return rowsFilteredByEmpresa;
+    return rowsFilteredByEmpresa.filter(r => filters.departamentos.includes(r.Departamento));
+  }, [rowsFilteredByEmpresa, filters.departamentos]);
+
+  // 6. Available ContaDRE from current Dept subset
+  const availableContasDre = useMemo(() => {
+    const contas = new Set<string>();
+    rowsFilteredByDept.forEach(r => {
+      if (r.ContaDRE) contas.add(r.ContaDRE);
+    });
+    return Array.from(contas).sort();
+  }, [rowsFilteredByDept]);
+
+  // 7. Filter subset further by selected ContaDRE
+  const rowsFilteredByConta = useMemo(() => {
+    if (!filters.contasDre || filters.contasDre.length === 0) return rowsFilteredByDept;
+    return rowsFilteredByDept.filter(r => filters.contasDre.includes(r.ContaDRE));
+  }, [rowsFilteredByDept, filters.contasDre]);
+
+  // 8. Available Projetos from current ContaDRE subset
+  const availableProjetos = useMemo(() => {
+    const projs = new Set<string>();
+    rowsFilteredByConta.forEach(r => {
+      if (r.Projeto) projs.add(r.Projeto);
+    });
+    return Array.from(projs).sort();
+  }, [rowsFilteredByConta]);
+
+  // 9. Filter subset further by selected Projetos
+  const rowsFilteredByProjeto = useMemo(() => {
+    if (!filters.projetos || filters.projetos.length === 0) return rowsFilteredByConta;
+    return rowsFilteredByConta.filter(r => filters.projetos.includes(r.Projeto));
+  }, [rowsFilteredByConta, filters.projetos]);
+
+  // 10. Available Categorias from current Projetos subset
+  const availableCategorias = useMemo(() => {
+    const cats = new Set<string>();
+    rowsFilteredByProjeto.forEach(r => {
+      if (r.Categoria) cats.add(r.Categoria);
+    });
+    return Array.from(cats).sort();
+  }, [rowsFilteredByProjeto]);
+
+  // Helper to handle filter selection
+  const toggleFilter = (key: keyof DreFilters, value: string) => {
+    const current = [...(filters[key] || [])];
+    const index = current.indexOf(value);
+    if (index > -1) {
+      current.splice(index, 1);
+    } else {
+      current.push(value);
+    }
+    
+    // Cascading reset: when a parent level changes, reset child filters if they are no longer in available list
+    const updatedFilters = { ...filters, [key]: current };
+    
+    if (key === 'empresas') {
+      // Re-verify depts, contas, projects, cats are still in valid available lists after this change
+      // For simplicity, we can let the parent render resolve them or reset them if they no longer apply
+    }
+    
+    onFilterChange(updatedFilters);
   };
 
-  // ── Cascading Filter Options ──────────────────────────────────────────────
-  // Periods: always all (no dependency)
-  const availablePeriods = metadata?.periodos ?? [];
-
-  // Empresas: always all
-  const availableEmpresas = metadata?.empresas ?? [];
-
-  // Filter raw rows by selected empresas + periodos
-  const rowsAfterEmpresaPeriodo = useMemo(() => {
-    if (!rawData.length || !metadata) return rawData;
-    return rawData.filter(row => {
-      const empresaOk = filters.empresas.length === 0 || filters.empresas.includes(row.Empresa);
-      if (!empresaOk) return false;
-      if (filters.periodos.length === 0) return true;
-      // Row has any value in any of the selected period columns
-      const periodCols = Object.keys(metadata.mapaMeses).filter(col => {
-        const mes = metadata.mapaMeses[col];
-        const ano = col.split('/')[1]?.trim();
-        return filters.periodos.includes(`${mes}/${ano}`);
-      });
-      return periodCols.some(col => {
-        const v = parseFloat((row[col] as string)?.toString().replace(',', '.') || '0');
-        return !isNaN(v) && v !== 0;
-      });
+  const clearFilters = () => {
+    onFilterChange({
+      empresas: [],
+      periodos: [],
+      departamentos: [],
+      contasDre: [],
+      projetos: [],
+      categorias: []
     });
-  }, [rawData, filters.empresas, filters.periodos, metadata]);
-
-  // Available projects = unique Projeto from rows after empresa+periodo filter
-  const availableProjetos = useMemo(() =>
-    Array.from(new Set(rowsAfterEmpresaPeriodo.map(r => r.Projeto).filter(Boolean))).sort() as string[]
-  , [rowsAfterEmpresaPeriodo]);
-
-  // Filter rows further by selected projetos
-  const rowsAfterProjeto = useMemo(() => {
-    if (filters.projetos.length === 0) return rowsAfterEmpresaPeriodo;
-    return rowsAfterEmpresaPeriodo.filter(r => filters.projetos.includes(r.Projeto));
-  }, [rowsAfterEmpresaPeriodo, filters.projetos]);
-
-  // Available categories = unique Categoria from rows after empresa+periodo+projeto filter
-  const availableCategorias = useMemo(() =>
-    Array.from(new Set(rowsAfterProjeto.map(r => r.Categoria).filter(Boolean))).sort() as string[]
-  , [rowsAfterProjeto]);
-
-  // Auto-clean stale selections when options shrink
-  const handleEmpresaChange = (opts: string[]) => {
-    const newProjetos = filters.projetos.filter(p => {
-      // Keep only projects still valid in new empresa set
-      const tempRows = rawData.filter(r => opts.length === 0 || opts.includes(r.Empresa));
-      return tempRows.some(r => r.Projeto === p);
-    });
-    const newCategorias = filters.categorias.filter(c => {
-      const tempRows = rawData.filter(r => opts.length === 0 || opts.includes(r.Empresa));
-      return tempRows.some(r => r.Categoria === c);
-    });
-    onFilterChange({ ...filters, empresas: opts, projetos: newProjetos, categorias: newCategorias });
   };
 
-  const handleProjetoChange = (opts: string[]) => {
-    const newCategorias = filters.categorias.filter(c =>
-      rowsAfterEmpresaPeriodo.filter(r => opts.length === 0 || opts.includes(r.Projeto)).some(r => r.Categoria === c)
-    );
-    onFilterChange({ ...filters, projetos: opts, categorias: newCategorias });
-  };
+  const hasActiveFilters = 
+    filters.empresas.length > 0 || 
+    filters.periodos.length > 0 || 
+    filters.departamentos.length > 0 || 
+    filters.contasDre.length > 0 || 
+    filters.projetos.length > 0 || 
+    filters.categorias.length > 0;
 
   return (
-    <aside className="w-72 flex-shrink-0 bg-slate-900 text-slate-300 min-h-[calc(100vh-4rem)] p-5 flex flex-col rounded-2xl shadow-xl">
-      {/* Logo Area (Monetization / White-label) */}
-      <div className="mb-8 flex flex-col items-center justify-center p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
-        {/* Usando o logo nativo da pasta public da Mar Brasil */}
-        <div className="relative w-32 h-12 mb-2">
-          <Image 
-            src="/mar-brasil-logo.png" 
-            alt="Logo Empresa" 
-            fill
-            className="object-contain"
-            priority
-          />
+    <aside className="w-80 flex-shrink-0 bg-slate-900 text-slate-100 flex flex-col h-screen border-r border-slate-800 select-none">
+      {/* Header / Brand */}
+      <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-orange-900/20">
+          DF
         </div>
-        <div className="flex flex-col text-center">
-          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">DRE Analítico V1</span>
+        <div>
+          <h1 className="font-bold text-lg leading-tight text-white tracking-wide">DRE Financeiro</h1>
+          <p className="text-xs text-slate-400 font-medium">Painel de Controladoria v3</p>
         </div>
       </div>
 
-      {/* Upload Section */}
-      <div className="mb-8">
-        <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider mb-4 flex items-center gap-2">
-          <UploadCloud size={16} className="text-amber-500" />
-          Ingestão de Dados
-        </h3>
+      {/* CSV File Upload Section */}
+      <div className="p-6 border-b border-slate-800 bg-slate-950/40">
+        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">
+          Origem dos Dados
+        </label>
         
-        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-700 border-dashed rounded-xl cursor-pointer hover:bg-slate-800 transition-colors group">
-          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            <UploadCloud size={28} className="text-slate-500 mb-2 group-hover:text-amber-500 transition-colors" />
-            <p className="mb-1 text-sm text-slate-400 group-hover:text-slate-300">
-              <span className="font-semibold">Clique para enviar</span> ou arraste
-            </p>
-            <p className="text-xs text-slate-500">CSV apenas</p>
-          </div>
+        <div className="relative">
           <input 
             type="file" 
-            className="hidden" 
-            accept=".csv" 
+            accept=".csv"
             onChange={handleFileChange}
             disabled={isUploading}
+            className="hidden"
+            id="csv-upload-input"
           />
-        </label>
+          
+          <label 
+            htmlFor="csv-upload-input"
+            className={`flex flex-col items-center justify-center border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 ${
+              isUploading 
+                ? 'border-amber-500/50 bg-amber-500/5' 
+                : fileName 
+                  ? 'border-slate-700 bg-slate-800/40 hover:bg-slate-800/60 hover:border-slate-600' 
+                  : 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/80 hover:border-slate-700'
+            }`}
+          >
+            <UploadCloud className={`h-6 w-6 mb-2 transition-transform duration-300 ${isUploading ? 'animate-bounce text-amber-500' : 'text-slate-400'}`} />
+            
+            {isUploading ? (
+              <span className="text-xs text-amber-400 font-semibold animate-pulse">Processando CSV...</span>
+            ) : fileName ? (
+              <div className="w-full px-2">
+                <span className="text-xs text-slate-300 font-medium block truncate max-w-full" title={fileName}>
+                  {fileName}
+                </span>
+                <span className="text-[10px] text-amber-500 font-semibold mt-1 block">Clique para alterar</span>
+              </div>
+            ) : (
+              <div className="px-2">
+                <span className="text-xs text-slate-300 font-semibold block">Carregar CSV da Omie</span>
+                <span className="text-[10px] text-slate-500 mt-0.5 block">Formatos aceitos: .csv</span>
+              </div>
+            )}
+          </label>
+        </div>
+      </div>
 
-        {fileName && (
-          <div className="mt-3 text-xs text-amber-400 bg-amber-400/10 p-2 rounded-lg text-center break-words">
-            {isUploading ? "Processando..." : `Carregado: ${fileName}`}
+      {/* Filters Form Container */}
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 scrollbar-thin scrollbar-thumb-slate-800">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <Filter size={12} className="text-amber-500" />
+            Filtros Dinâmicos
+          </span>
+          {hasActiveFilters && (
+            <button 
+              onClick={clearFilters}
+              className="text-[10px] text-slate-500 hover:text-amber-500 font-bold transition-colors flex items-center gap-1"
+            >
+              <XCircle size={10} />
+              Limpar
+            </button>
+          )}
+        </div>
+
+        {rawData.length === 0 ? (
+          <div className="text-center py-8 px-4 bg-slate-950/20 rounded-xl border border-slate-850">
+            <p className="text-xs text-slate-500">Envie um arquivo CSV para habilitar os filtros interativos.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* 1. EMPRESAS */}
+            <div>
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
+                <Building2 size={13} className="text-slate-400" />
+                Empresa ({availableEmpresas.length})
+              </label>
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+                {availableEmpresas.map(emp => {
+                  const isSelected = filters.empresas.includes(emp);
+                  return (
+                    <label key={emp} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                      <input 
+                        type="checkbox" 
+                        checked={isSelected}
+                        onChange={() => toggleFilter('empresas', emp)}
+                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                      />
+                      <span className="truncate">{emp}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. PERÍODOS */}
+            <div>
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
+                <Calendar size={13} className="text-slate-400" />
+                Período ({availablePeriodos.length})
+              </label>
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+                {availablePeriodos.map(per => {
+                  const isSelected = filters.periodos.includes(per);
+                  return (
+                    <label key={per} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                      <input 
+                        type="checkbox" 
+                        checked={isSelected}
+                        onChange={() => toggleFilter('periodos', per)}
+                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                      />
+                      <span>{per}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. DEPARTAMENTO */}
+            <div>
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
+                <FolderTree size={13} className="text-slate-400" />
+                Departamento ({availableDepartamentos.length})
+              </label>
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+                {availableDepartamentos.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 p-1">Nenhum disponível</p>
+                ) : (
+                  availableDepartamentos.map(dept => {
+                    const isSelected = filters.departamentos.includes(dept);
+                    return (
+                      <label key={dept} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={() => toggleFilter('departamentos', dept)}
+                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                        />
+                        <span className="truncate">{dept}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* 4. CONTA DRE */}
+            <div>
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
+                <Landmark size={13} className="text-slate-400" />
+                Conta DRE ({availableContasDre.length})
+              </label>
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+                {availableContasDre.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 p-1">Nenhuma disponível</p>
+                ) : (
+                  availableContasDre.map(conta => {
+                    const isSelected = filters.contasDre.includes(conta);
+                    return (
+                      <label key={conta} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={() => toggleFilter('contasDre', conta)}
+                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                        />
+                        <span className="truncate">{conta}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* 5. PROJETO */}
+            <div>
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
+                <Target size={13} className="text-slate-400" />
+                Projeto ({availableProjetos.length})
+              </label>
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+                {availableProjetos.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 p-1">Nenhum disponível</p>
+                ) : (
+                  availableProjetos.map(proj => {
+                    const isSelected = filters.projetos.includes(proj);
+                    return (
+                      <label key={proj} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={() => toggleFilter('projetos', proj)}
+                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                        />
+                        <span className="truncate">{proj}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* 6. CATEGORIA */}
+            <div>
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
+                <Tags size={13} className="text-slate-400" />
+                Categoria ({availableCategorias.length})
+              </label>
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+                {availableCategorias.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 p-1">Nenhuma disponível</p>
+                ) : (
+                  availableCategorias.map(cat => {
+                    const isSelected = filters.categorias.includes(cat);
+                    return (
+                      <label key={cat} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={() => toggleFilter('categorias', cat)}
+                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                        />
+                        <span className="truncate">{cat}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
           </div>
         )}
       </div>
 
-      <hr className="border-slate-800 mb-8" />
-
-      {/* Filters Section */}
-      <div className="flex-1">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
-            <Filter size={16} className="text-amber-500" />
-            Filtros
-          </h3>
-          <button 
-            onClick={handleClearFilters}
-            className="text-xs text-slate-500 hover:text-amber-400 flex items-center gap-1 transition-colors"
-          >
-            <XCircle size={12} /> Limpar
-          </button>
-        </div>
-
-        {!metadata ? (
-          <div className="text-sm text-slate-500 text-center py-10">
-            Carregue um arquivo para habilitar os filtros.
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Periodos */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-2">Período</label>
-              <select 
-                multiple 
-                className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-xl p-2 h-32 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
-                value={filters.periodos}
-                onChange={(e) => {
-                  const opts = Array.from(e.target.selectedOptions, option => option.value);
-                  onFilterChange({ ...filters, periodos: opts });
-                }}
-              >
-                {metadata.periodos.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-              <p className="text-[10px] text-slate-500 mt-1">Segure Ctrl/Cmd para múltipla seleção</p>
-            </div>
-
-            {/* Empresa */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-2">Empresa</label>
-              <select 
-                multiple
-                className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-xl p-2 h-32 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
-                value={filters.empresas}
-                onChange={(e) => {
-                  const opts = Array.from(e.target.selectedOptions, o => o.value);
-                  handleEmpresaChange(opts);
-                }}
-              >
-                {availableEmpresas.map(e => (
-                  <option key={e} value={e}>{e}</option>
-                ))}
-              </select>
-              <p className="text-[10px] text-slate-500 mt-1">Segure Ctrl/Cmd para múltipla seleção</p>
-            </div>
-
-            {/* Projeto */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-2">
-                Projeto
-                {(filters.empresas.length > 0 || filters.periodos.length > 0) && (
-                  <span className="ml-1.5 text-amber-500 text-[9px] font-bold uppercase tracking-wide">filtrado</span>
-                )}
-              </label>
-              <select 
-                multiple
-                className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-xl p-2 h-32 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
-                value={filters.projetos}
-                onChange={(e) => {
-                  const opts = Array.from(e.target.selectedOptions, o => o.value);
-                  handleProjetoChange(opts);
-                }}
-              >
-                {availableProjetos.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-              <p className="text-[10px] text-slate-500 mt-1">{availableProjetos.length} projeto(s) disponível(eis)</p>
-            </div>
-            
-            {/* Categoria */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-2">
-                Categoria
-                {(filters.empresas.length > 0 || filters.periodos.length > 0 || filters.projetos.length > 0) && (
-                  <span className="ml-1.5 text-amber-500 text-[9px] font-bold uppercase tracking-wide">filtrado</span>
-                )}
-              </label>
-              <select 
-                multiple
-                className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-xl p-2 h-32 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
-                value={filters.categorias}
-                onChange={(e) => {
-                  const opts = Array.from(e.target.selectedOptions, o => o.value);
-                  onFilterChange({ ...filters, categorias: opts });
-                }}
-              >
-                {availableCategorias.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <p className="text-[10px] text-slate-500 mt-1">{availableCategorias.length} categoria(s) disponível(eis)</p>
-            </div>
-
-            {/* Botão Limpar Filtros Destaque */}
-            {(filters.empresas.length > 0 || filters.periodos.length > 0 || filters.projetos.length > 0 || filters.categorias.length > 0) && (
-              <button
-                onClick={handleClearFilters}
-                className="w-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-sm font-semibold py-3 px-4 rounded-xl mt-8 transition-colors flex items-center justify-center gap-2 border border-slate-700/50 hover:border-slate-600 group"
-              >
-                <XCircle size={16} className="text-amber-500 group-hover:text-amber-400" />
-                Limpar Todos os Filtros
-              </button>
-            )}
-
-          </div>
-        )}
+      {/* Footer info / Metadata */}
+      <div className="p-4 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between bg-slate-950/20">
+        <span>Mar Brasil © 2026</span>
+        <span>Modo Remoto Ativo</span>
       </div>
     </aside>
   );
