@@ -69,6 +69,7 @@ export interface DreKpis {
   percLucro: number;
   percFcl: number;
   totalEquipamentos: number;
+  averageMachines: number;
 }
 
 export interface DreCalculatedResult {

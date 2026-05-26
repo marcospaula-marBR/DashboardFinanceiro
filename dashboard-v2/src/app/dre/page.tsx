@@ -9,6 +9,7 @@ import { DreTable } from '@/components/dre/DreTable';
 import { DreDetailsModal } from '@/components/dre/DreDetailsModal';
 import { SmartAlerts } from '@/components/dre/SmartAlerts';
 import { DreSimulator } from '@/components/dre/DreSimulator';
+import { DreEquipmentsModal } from '@/components/dre/DreEquipmentsModal';
 import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
@@ -43,6 +44,8 @@ export default function DrePage() {
   // Simulator state
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [showTable, setShowTable] = useState(false);
+  const [equipamentoCounts, setEquipamentoCounts] = useState<Record<string, number>>({});
+  const [isEquipmentsModalOpen, setIsEquipmentsModalOpen] = useState(false);
   const [simParams, setSimParams] = useState<DreSimulationParams>({
     revenueMultiplier: 1.0,
     costsMultiplier: 1.0,
@@ -71,6 +74,7 @@ export default function DrePage() {
   useEffect(() => {
     if (isAuthenticated === true) {
       loadLatestSnapshotFromDb();
+      loadEquipamentoCounts();
     }
   }, [isAuthenticated]);
 
@@ -111,6 +115,58 @@ export default function DrePage() {
       console.warn("Erro ao buscar dados remotos:", err.message);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const loadEquipamentoCounts = async () => {
+    const local = localStorage.getItem('marbrasil_dre_equipamento_counts');
+    if (local) {
+      try {
+        setEquipamentoCounts(JSON.parse(local));
+      } catch (e) {
+        console.warn("LocalStorage parse error:", e);
+      }
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('dre_equipamento_counts')
+        .select('*');
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const dbCounts: Record<string, number> = {};
+        data.forEach((row: any) => {
+          dbCounts[row.periodo] = row.quantidade;
+        });
+        setEquipamentoCounts(dbCounts);
+        localStorage.setItem('marbrasil_dre_equipamento_counts', JSON.stringify(dbCounts));
+      }
+    } catch (err: any) {
+      console.warn("Tabela 'dre_equipamento_counts' nao encontrada ou inacessivel. Usando armazenamento local.", err.message);
+    }
+  };
+
+  const handleSaveEquipamentoCounts = async (newCounts: Record<string, number>) => {
+    setEquipamentoCounts(newCounts);
+    localStorage.setItem('marbrasil_dre_equipamento_counts', JSON.stringify(newCounts));
+
+    try {
+      const upsertData = Object.entries(newCounts).map(([periodo, quantidade]) => ({
+        periodo,
+        quantidade
+      }));
+
+      const { error } = await supabase
+        .from('dre_equipamento_counts')
+        .upsert(upsertData, { onConflict: 'periodo' });
+
+      if (error) throw error;
+      alert("Quantidade de equipamentos salva com sucesso na nuvem!");
+    } catch (err: any) {
+      console.warn("Erro ao salvar no Supabase (mantido no armazenamento local):", err.message);
+      alert("Quantidade salva com sucesso no navegador! Nota: Salvar na nuvem indisponivel temporariamente.");
     }
   };
 
@@ -183,8 +239,8 @@ export default function DrePage() {
   // Base Calculation (No Simulation)
   const originalResults: DreCalculatedResult | null = useMemo(() => {
     if (rawData.length === 0 || !metadata || !estrutura) return null;
-    return DreService.calculate(rawData, metadata, estrutura, filters);
-  }, [rawData, metadata, estrutura, filters]);
+    return DreService.calculate(rawData, metadata, estrutura, filters, undefined, equipamentoCounts);
+  }, [rawData, metadata, estrutura, filters, equipamentoCounts]);
 
   // Simulated Calculation
   const results: DreCalculatedResult | null = useMemo(() => {
@@ -192,8 +248,8 @@ export default function DrePage() {
     if (simParams.revenueMultiplier === 1 && simParams.costsMultiplier === 1 && simParams.expensesMultiplier === 1) {
       return originalResults;
     }
-    return DreService.calculate(rawData, metadata!, estrutura, filters, simParams);
-  }, [rawData, metadata, estrutura, filters, simParams, originalResults]);
+    return DreService.calculate(rawData, metadata!, estrutura, filters, simParams, equipamentoCounts);
+  }, [rawData, metadata, estrutura, filters, simParams, originalResults, equipamentoCounts]);
 
   // Alertas Inteligentes
   const alerts = useMemo(() => {
@@ -411,6 +467,7 @@ export default function DrePage() {
               onTogglePrivacy={() => setIsPrivacyMode(!isPrivacyMode)}
               isPrivacyMode={isPrivacyMode}
               onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
+              onOpenEquipmentsManager={() => setIsEquipmentsModalOpen(true)}
               hasData={rawData.length > 0}
               isPublishing={isPublishing}
               onPublish={handlePublishSnapshot}
@@ -503,6 +560,14 @@ export default function DrePage() {
         onExport={handleConfirmExport}
         isExporting={isExportingPdf}
         isAiAnalyzing={isAiAnalyzing}
+      />
+
+      <DreEquipmentsModal
+        isOpen={isEquipmentsModalOpen}
+        onClose={() => setIsEquipmentsModalOpen(false)}
+        validColumns={results?.validColumns || []}
+        initialCounts={equipamentoCounts}
+        onSave={handleSaveEquipamentoCounts}
       />
 
       {/* Off-screen renderer for high-quality PDF charts */}

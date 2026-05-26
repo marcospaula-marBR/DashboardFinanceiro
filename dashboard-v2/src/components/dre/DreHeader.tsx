@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Eye, FileText, SlidersHorizontal, CloudLightning, Loader2 } from 'lucide-react';
+import { ChevronLeft, Eye, FileText, SlidersHorizontal, CloudLightning, Loader2, MonitorSmartphone } from 'lucide-react';
 import { APP_VERSION } from '@/version';
 
 interface DreHeaderProps {
@@ -9,6 +9,7 @@ interface DreHeaderProps {
   onTogglePrivacy: () => void;
   isPrivacyMode: boolean;
   onToggleSimulator: () => void;
+  onOpenEquipmentsManager: () => void;
   // Supabase publishing properties
   hasData: boolean;
   isPublishing: boolean;
@@ -21,6 +22,7 @@ export function DreHeader({
   onTogglePrivacy, 
   isPrivacyMode, 
   onToggleSimulator,
+  onOpenEquipmentsManager,
   hasData,
   isPublishing,
   onPublish
@@ -53,7 +55,7 @@ export function DreHeader({
           onClick={onTogglePrivacy}
           className={`p-2.5 rounded-xl border transition-all duration-200 shadow-sm active:scale-95 ${
             isPrivacyMode 
-              ? "bg-slate-800 border-slate-800 text-amber-400" 
+          ? "bg-slate-800 border-slate-800 text-amber-400" 
               : "bg-white border-slate-200 text-slate-600 hover:border-slate-350 hover:bg-slate-50"
           }`}
           title="Ocultar Valores"
@@ -61,6 +63,15 @@ export function DreHeader({
           <Eye size={18} />
         </button>
         
+        <button
+          onClick={onOpenEquipmentsManager}
+          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all duration-200 shadow-sm active:scale-95"
+          title="Gerenciar Parque de Máquinas"
+        >
+          <MonitorSmartphone size={16} className="text-amber-500" />
+          <span>Máquinas</span>
+        </button>
+
         <Link 
           href="/indicadores_v2.html" 
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all duration-200 shadow-sm active:scale-95"
