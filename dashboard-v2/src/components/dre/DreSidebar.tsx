@@ -135,6 +135,13 @@ export function DreSidebar({
     });
   };
 
+  const clearGroup = (key: keyof DreFilters) => {
+    onFilterChange({
+      ...filters,
+      [key]: []
+    });
+  };
+
   const hasActiveFilters = 
     filters.empresas.length > 0 || 
     filters.periodos.length > 0 || 
@@ -216,7 +223,7 @@ export function DreSidebar({
               className="text-[10px] text-slate-500 hover:text-amber-500 font-bold transition-colors flex items-center gap-1"
             >
               <XCircle size={10} />
-              Limpar
+              Limpar Todos
             </button>
           )}
         </div>
@@ -229,9 +236,19 @@ export function DreSidebar({
           <div className="space-y-4">
             {/* 1. EMPRESAS */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
-                <Building2 size={13} className="text-slate-400" />
-                Empresa ({availableEmpresas.length})
+              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+                <span className="flex items-center gap-1.5">
+                  <Building2 size={13} className="text-slate-400" />
+                  Empresa ({availableEmpresas.length})
+                </span>
+                {filters.empresas.length > 0 && (
+                  <button 
+                    onClick={() => clearGroup('empresas')}
+                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
+                  >
+                    Limpar
+                  </button>
+                )}
               </label>
               <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
                 {availableEmpresas.map(emp => {
@@ -253,9 +270,19 @@ export function DreSidebar({
 
             {/* 2. PERÍODOS */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
-                <Calendar size={13} className="text-slate-400" />
-                Período ({availablePeriodos.length})
+              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+                <span className="flex items-center gap-1.5">
+                  <Calendar size={13} className="text-slate-400" />
+                  Período ({availablePeriodos.length})
+                </span>
+                {filters.periodos.length > 0 && (
+                  <button 
+                    onClick={() => clearGroup('periodos')}
+                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
+                  >
+                    Limpar
+                  </button>
+                )}
               </label>
               <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
                 {availablePeriodos.map(per => {
@@ -277,9 +304,19 @@ export function DreSidebar({
 
             {/* 3. DEPARTAMENTO */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
-                <FolderTree size={13} className="text-slate-400" />
-                Departamento ({availableDepartamentos.length})
+              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+                <span className="flex items-center gap-1.5">
+                  <FolderTree size={13} className="text-slate-400" />
+                  Departamento ({availableDepartamentos.length})
+                </span>
+                {filters.departamentos.length > 0 && (
+                  <button 
+                    onClick={() => clearGroup('departamentos')}
+                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
+                  >
+                    Limpar
+                  </button>
+                )}
               </label>
               <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
                 {availableDepartamentos.length === 0 ? (
@@ -305,9 +342,19 @@ export function DreSidebar({
 
             {/* 4. CONTA DRE */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
-                <Landmark size={13} className="text-slate-400" />
-                Conta DRE ({availableContasDre.length})
+              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+                <span className="flex items-center gap-1.5">
+                  <Landmark size={13} className="text-slate-400" />
+                  Conta DRE ({availableContasDre.length})
+                </span>
+                {filters.contasDre.length > 0 && (
+                  <button 
+                    onClick={() => clearGroup('contasDre')}
+                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
+                  >
+                    Limpar
+                  </button>
+                )}
               </label>
               <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
                 {availableContasDre.length === 0 ? (
@@ -333,9 +380,19 @@ export function DreSidebar({
 
             {/* 5. PROJETO */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
-                <Target size={13} className="text-slate-400" />
-                Projeto ({availableProjetos.length})
+              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+                <span className="flex items-center gap-1.5">
+                  <Target size={13} className="text-slate-400" />
+                  Projeto ({availableProjetos.length})
+                </span>
+                {filters.projetos.length > 0 && (
+                  <button 
+                    onClick={() => clearGroup('projetos')}
+                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
+                  >
+                    Limpar
+                  </button>
+                )}
               </label>
               <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
                 {availableProjetos.length === 0 ? (
@@ -361,9 +418,19 @@ export function DreSidebar({
 
             {/* 6. CATEGORIA */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
-                <Tags size={13} className="text-slate-400" />
-                Categoria ({availableCategorias.length})
+              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+                <span className="flex items-center gap-1.5">
+                  <Tags size={13} className="text-slate-400" />
+                  Categoria ({availableCategorias.length})
+                </span>
+                {filters.categorias.length > 0 && (
+                  <button 
+                    onClick={() => clearGroup('categorias')}
+                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
+                  >
+                    Limpar
+                  </button>
+                )}
               </label>
               <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
                 {availableCategorias.length === 0 ? (
