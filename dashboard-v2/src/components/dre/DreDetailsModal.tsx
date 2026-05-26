@@ -39,6 +39,7 @@ export function DreDetailsModal({
   }));
 
   const total = data.reduce((acc, curr) => acc + curr.valor, 0);
+  const average = data.length > 0 ? total / data.length : 0;
 
   const formatValue = (value: number) => {
     if (isPrivacyMode) return 'R$ ****';
@@ -64,7 +65,7 @@ export function DreDetailsModal({
               <div>
                 <h2 className="text-xl font-black text-slate-800">{title}</h2>
                 <p className="text-sm font-medium text-slate-500">
-                  Evolução Detalhada • Total: <span className="font-bold text-slate-700">{formatValue(total)}</span>
+                  Evolução Detalhada • Total: <span className="font-bold text-slate-700">{formatValue(total)}</span> • Média: <span className="font-bold text-slate-700">{formatValue(average)}</span>
                 </p>
               </div>
             </div>
@@ -160,11 +161,12 @@ export function DreDetailsModal({
                 <span className="font-bold text-slate-700 text-sm">Consolidado de Origem</span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left whitespace-nowrap">
+                <table className="w-full text-xs text-left whitespace-nowrap border-separate border-spacing-0">
                   <thead className="bg-slate-100/50 text-slate-500 font-semibold uppercase tracking-wider">
                     <tr>
                       <th className="px-4 py-3 border-b border-slate-200 sticky left-0 min-w-[280px] max-w-[280px] bg-slate-50 z-20 border-r">Categoria / Projeto</th>
                       <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[280px] min-w-[120px] max-w-[120px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Total</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[400px] min-w-[100px] max-w-[100px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Média</th>
                       {data.map(item => (
                         <th key={item.name} className="px-4 py-3 border-b border-slate-200 text-right">{item.name}</th>
                       ))}
@@ -217,7 +219,7 @@ export function DreDetailsModal({
                       if (!hasRows) {
                         return (
                           <tr>
-                            <td colSpan={data.length + 2} className="text-center py-10 text-slate-400">
+                            <td colSpan={data.length + 3} className="text-center py-10 text-slate-400">
                               <ListTree size={32} className="mx-auto mb-3 opacity-50" />
                               <p>Nenhuma transação individual vinculada a esta linha.</p>
                             </td>
@@ -227,6 +229,7 @@ export function DreDetailsModal({
 
                       return Object.entries(grouped).map(([cat, catData]) => {
                         const isExpanded = expandedCats[`global-${cat}`];
+                        const catAvg = data.length > 0 ? catData.totalGlobal / data.length : 0;
                         return (
                           <React.Fragment key={cat}>
                             {/* Linha Categoria */}
@@ -246,6 +249,9 @@ export function DreDetailsModal({
                               <td className="px-4 py-3 text-right font-mono font-bold text-slate-700 bg-slate-50 border-r border-slate-200 sticky left-[280px] min-w-[120px] max-w-[120px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                 {formatValue(catData.totalGlobal)}
                               </td>
+                              <td className="px-4 py-3 text-right font-mono font-bold text-slate-700 bg-slate-50 border-r border-slate-200 sticky left-[400px] min-w-[100px] max-w-[100px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                {formatValue(catAvg)}
+                              </td>
                               {data.map(item => (
                                 <td key={item.name} className="px-4 py-3 text-right font-mono text-slate-600">
                                   {formatValue(catData.totaisMensais[item.name] || 0)}
@@ -254,22 +260,28 @@ export function DreDetailsModal({
                             </tr>
 
                             {/* Linhas Projetos */}
-                            {isExpanded && Object.values(catData.projetos).map((p, pIdx) => (
-                              <tr key={`${cat}-${pIdx}`} className="bg-amber-50/20 border-l-2 border-l-amber-300">
-                                <td className="px-4 py-2.5 pl-10 flex flex-col gap-0.5 sticky left-0 min-w-[280px] max-w-[280px] whitespace-normal bg-amber-50/95 z-10 border-r border-amber-100/50">
-                                  <span className="text-slate-700 font-semibold text-[11px] uppercase tracking-wider leading-tight">{p.projeto}</span>
-                                  {p.empresa !== '-' && <span className="text-slate-400 text-[10px] truncate">{p.empresa}</span>}
-                                </td>
-                                <td className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600 bg-amber-50/95 border-r border-amber-200/50 font-semibold sticky left-[280px] min-w-[120px] max-w-[120px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                  {formatValue(p.totalProjGlobal)}
-                                </td>
-                                {data.map(item => (
-                                  <td key={item.name} className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600">
-                                    {formatValue(p.mensalProj[item.name] || 0)}
+                            {isExpanded && Object.values(catData.projetos).map((p, pIdx) => {
+                              const projAvg = data.length > 0 ? p.totalProjGlobal / data.length : 0;
+                              return (
+                                <tr key={`${cat}-${pIdx}`} className="bg-amber-50/20 border-l-2 border-l-amber-300">
+                                  <td className="px-4 py-2.5 pl-10 flex flex-col gap-0.5 sticky left-0 min-w-[280px] max-w-[280px] whitespace-normal bg-amber-50/95 z-10 border-r border-amber-100/50">
+                                    <span className="text-slate-700 font-semibold text-[11px] uppercase tracking-wider leading-tight">{p.projeto}</span>
+                                    {p.empresa !== '-' && <span className="text-slate-400 text-[10px] truncate">{p.empresa}</span>}
                                   </td>
-                                ))}
-                              </tr>
-                            ))}
+                                  <td className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600 bg-amber-50/95 border-r border-amber-200/50 font-semibold sticky left-[280px] min-w-[120px] max-w-[120px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                    {formatValue(p.totalProjGlobal)}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600 bg-amber-50/95 border-r border-amber-200/50 font-semibold sticky left-[400px] min-w-[100px] max-w-[100px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                    {formatValue(projAvg)}
+                                  </td>
+                                  {data.map(item => (
+                                    <td key={item.name} className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600">
+                                      {formatValue(p.mensalProj[item.name] || 0)}
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
                           </React.Fragment>
                         );
                       });
