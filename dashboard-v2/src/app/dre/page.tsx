@@ -201,12 +201,73 @@ export default function DrePage() {
     return DreAlertsService.generateAlerts(results);
   }, [results]);
 
-  // Expor resultados calculados para a BrisinhAI globalmente (evita sobrecarga do payload da API)
+  // Expor resultados e contexto para a BrisinhAI globalmente
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).DRE_RESULTS = results;
-    }
-  }, [results]);
+    if (typeof window === 'undefined') return;
+
+    // Dados brutos para fallback
+    (window as any).DRE_RESULTS = results;
+
+    // Contexto rico lido diretamente do estado React — evita depender de IDs no DOM
+    (window as any).getPageContext = () => {
+      const empresa =
+        filters.empresas.length === 0
+          ? 'Todas'
+          : filters.empresas.join(', ');
+      const periodo =
+        filters.periodos.length === 0
+          ? 'Todos'
+          : filters.periodos.join(', ');
+
+      const indicadores: { indicador: string; valor: string; detalhe: string }[] = [];
+
+      if (results?.kpis) {
+        const fmt = (n: number) =>
+          n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+        indicadores.push(
+          { indicador: 'Receita Operacional', valor: fmt(results.kpis.receitaOperacional ?? 0), detalhe: '' },
+          { indicador: 'Total de Entradas', valor: fmt(results.kpis.totalEntradas ?? 0), detalhe: '' },
+          { indicador: 'Total de Saídas', valor: fmt(results.kpis.totalSaidas ?? 0), detalhe: `Custos: ${fmt(results.kpis.totalCustos ?? 0)} | Despesas: ${fmt(results.kpis.totalDespesas ?? 0)}` },
+          { indicador: 'Resultado (Lucro/Prejuízo)', valor: fmt(results.kpis.resultado ?? 0), detalhe: `Margem: ${(results.kpis.percLucro ?? 0).toFixed(1)}%` },
+          { indicador: 'FCL (Fluxo de Caixa Livre)', valor: fmt(results.kpis.fcl ?? 0), detalhe: `${(results.kpis.percFcl ?? 0).toFixed(1)}% da receita` },
+          { indicador: 'Total Impostos', valor: fmt(results.kpis.totalImpostos ?? 0), detalhe: '' },
+          { indicador: 'Investimentos', valor: fmt(results.kpis.totalInvestimentos ?? 0), detalhe: '' },
+        );
+      }
+
+      // Resumo da tabela DRE (totais por linha)
+      const resumoDre: Record<string, string> = {};
+      if (results?.totais) {
+        const fmt = (n: number) =>
+          n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+        Object.entries(results.totais).forEach(([titulo, valor]) => {
+          resumoDre[titulo] = fmt(valor as number);
+        });
+      }
+
+      return {
+        pageType: 'DRE',
+        url: window.location.pathname,
+        filtros: { empresa, periodo },
+        indicadores,
+        resumo: { dre: resumoDre },
+        dataSummary: results
+          ? `DRE calculado com ${(results as any).sourceRowCount ?? '?'} lançamentos. Empresa: ${empresa}. Período: ${periodo}.`
+          : 'Nenhum dado carregado ainda.',
+        // Dados estruturados completos (sem sourceRows para manter payload leve)
+        dreSummary: results
+          ? {
+              totais: results.totais,
+              mensal: results.mensal,
+              kpis: results.kpis,
+              validColumns: results.validColumns,
+            }
+          : null,
+      };
+    };
+  }, [results, filters]);
+
 
   const handleOpenExportModal = () => {
     setIsExportModalOpen(true);
