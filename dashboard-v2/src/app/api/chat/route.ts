@@ -87,8 +87,9 @@ export async function POST(req: Request) {
     }
 
     if (!response) {
+      const maskedKey = apiKey ? `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 6)}` : 'Nenhuma';
       return NextResponse.json(
-        { error: { message: `Não foi possível conectar a nenhum modelo do Gemini com a chave fornecida. Último erro: ${lastErrorMsg}` } },
+        { error: { message: `Não foi possível conectar a nenhum modelo do Gemini (Chave ativa no Vercel: ${maskedKey}). Último erro: ${lastErrorMsg}` } },
         { status: 500 }
       );
     }
