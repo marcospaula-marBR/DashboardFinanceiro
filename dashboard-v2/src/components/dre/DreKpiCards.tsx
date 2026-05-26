@@ -164,17 +164,25 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
           </div>
 
           {/* Análise de Equipamentos */}
-          <div className="bg-indigo-50 border border-indigo-200 border-dashed rounded-2xl p-4 transition-transform flex flex-col justify-between relative overflow-hidden">
+          <div 
+            className={`bg-indigo-50 border border-indigo-200 border-dashed rounded-2xl p-4 transition-transform flex flex-col justify-between relative overflow-hidden ${onCardClick ? 'cursor-pointer hover:bg-indigo-100/80 hover:scale-[1.02]' : ''}`}
+            onClick={() => onCardClick && onCardClick("Equipamentos")}
+          >
             <MonitorSmartphone className="absolute -right-4 -bottom-4 text-indigo-100 opacity-50" size={80} />
             <div className="relative z-10">
-              <h3 className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1">Análise de Equipamentos</h3>
+              <h3 className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1">Investimento em Equipamentos</h3>
               <p className="text-xl font-black text-indigo-900">
-                {kpis.totalEquipamentos.toLocaleString('pt-BR')} <span className="text-sm font-medium text-indigo-600 tracking-normal">ativos</span>
+                {displayValue(kpis.totalEquipamentos)}
               </p>
             </div>
-            <div className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-100/50 w-fit px-2 py-1 rounded relative z-10">
-              <Activity size={12} className="text-indigo-600" />
-              <span>{displayValue(fclPorEquipamento)} de FCL/Máquina</span>
+            <div className="mt-2 flex flex-wrap gap-1.5 relative z-10">
+              <div className="flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
+                <Activity size={10} className="text-indigo-600" />
+                <span>{displayValue(fclPorEquipamento)} de FCL/Máquina</span>
+              </div>
+              <div className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
+                Média: {displayValue(results.validColumns.length > 0 ? kpis.totalEquipamentos / results.validColumns.length : 0)}
+              </div>
             </div>
           </div>
 

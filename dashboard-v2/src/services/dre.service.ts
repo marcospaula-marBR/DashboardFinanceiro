@@ -576,6 +576,7 @@ export class DreService {
 
     // Novo: Equipamentos
     const totalEquipamentos = getCatTotal("Equipamentos");
+    valoresTotal["Equipamentos"] = totalEquipamentos;
 
     valoresTotal["Total Entradas Operacionais"] = totalEntradas;
     valoresTotal["Outras Entradas"] = outrasEntradas;
@@ -611,6 +612,7 @@ export class DreService {
     valoresMensal["Fluxo de Caixa Livre FCL"] = {};
     valoresMensal["Lucro s/ Receita Operacional"] = {};
     valoresMensal["FCL s/ Receita Operacional"] = {};
+    valoresMensal["Equipamentos"] = {};
 
     sourceRows["Total Entradas Operacionais"] = {};
     sourceRows["Outras Entradas"] = {};
@@ -620,6 +622,7 @@ export class DreService {
     sourceRows["Total Investimentos"] = {};
     sourceRows["Total Saídas"] = {};
     sourceRows["Fluxo de Caixa Livre FCL"] = {};
+    sourceRows["Equipamentos"] = {};
 
     validColumns.forEach(col => {
       const recOp = getValMensal("Receita Bruta de Vendas", col);
@@ -688,6 +691,9 @@ export class DreService {
 
       valoresMensal["Lucro s/ Receita Operacional"][col] = totEnt !== 0 ? (resCol / totEnt * 100) : 0;
       valoresMensal["FCL s/ Receita Operacional"][col] = totEnt !== 0 ? (fclCol / totEnt * 100) : 0;
+      
+      valoresMensal["Equipamentos"][col] = getCatMonthly("Equipamentos", col);
+      sourceRows["Equipamentos"][col] = getCatSourceRowsSafe("Equipamentos", col);
     });
 
     return {
