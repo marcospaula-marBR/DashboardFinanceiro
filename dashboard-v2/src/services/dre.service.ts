@@ -337,8 +337,16 @@ export class DreService {
       row['Categoria'] = row['Categoria'].toString().trim();
     });
 
-    const allKeys = Object.keys(data[0] || {});
-    const validCols = allKeys.filter(k => k.includes('/'));
+    // Coleta todas as chaves de meses únicas existentes em todas as linhas da tabela
+    const allKeysSet = new Set<string>();
+    data.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (key.includes('/')) {
+          allKeysSet.add(key);
+        }
+      });
+    });
+    const validCols = Array.from(allKeysSet);
 
     const periodos: { col: string, mes: string, ano: string, full: string }[] = [];
     const mapaMeses: Record<string, string> = {};
