@@ -73,28 +73,64 @@ export class DreService {
    */
   static parseCSV(file: File): Promise<any[]> {
     return new Promise((resolve, reject) => {
-      // Try ISO-8859-1 with semicolon delimiter first (standard Brazilian CSV export format)
+      // 1. Tentar ler como UTF-8 primeiro (padrão de arquivos modernos)
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        encoding: "ISO-8859-1",
+        encoding: "UTF-8",
         delimiter: ";",
         complete: (results) => {
           const headerCount = results.meta.fields ? results.meta.fields.length : 0;
-          // A valid DRE CSV must have at least 3 columns (Empresa, Projeto, Categoria)
-          if ((results.errors.length > 0 && results.data.length === 0) || headerCount < 3) {
-            // Fallback: try UTF-8 with semicolon
-            Papa.parse(file, {
-              header: true,
-              skipEmptyLines: true,
-              encoding: "UTF-8",
-              delimiter: ";",
-              complete: (utfResults) => resolve(utfResults.data),
-              error: (err) => reject(err)
-            });
-          } else {
+          // Verifica se há caracteres corrompidos óbvios (como o caractere de substituição do unicode)
+          const hasCorrupted = results.meta.fields?.some(f => f.includes('')) || false;
+          
+          if (headerCount >= 3 && !hasCorrupted) {
             resolve(results.data);
+            return;
           }
+          
+          // Fallback 1: Tentar UTF-8 com vírgula
+          Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            encoding: "UTF-8",
+            delimiter: ",",
+            complete: (commaResults) => {
+              const commaHeaderCount = commaResults.meta.fields ? commaResults.meta.fields.length : 0;
+              const commaHasCorrupted = commaResults.meta.fields?.some(f => f.includes('')) || false;
+              if (commaHeaderCount >= 3 && !commaHasCorrupted) {
+                resolve(commaResults.data);
+                return;
+              }
+              
+              // Fallback 2: Tentar ISO-8859-1 com ponto e vírgula
+              Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                encoding: "ISO-8859-1",
+                delimiter: ";",
+                complete: (isoResults) => {
+                  const isoHeaderCount = isoResults.meta.fields ? isoResults.meta.fields.length : 0;
+                  if (isoHeaderCount >= 3) {
+                    resolve(isoResults.data);
+                    return;
+                  }
+                  
+                  // Fallback 3: Tentar ISO-8859-1 com vírgula
+                  Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    encoding: "ISO-8859-1",
+                    delimiter: ",",
+                    complete: (isoCommaResults) => resolve(isoCommaResults.data),
+                    error: (err) => reject(err)
+                  });
+                },
+                error: (err) => reject(err)
+              });
+            },
+            error: (err) => reject(err)
+          });
         },
         error: (err) => reject(err)
       });
@@ -292,7 +328,7 @@ export class DreService {
     data.forEach(row => {
       row['Empresa'] = row['Empresa'] ? row['Empresa'].toString().trim() : 'Geral';
       row['Departamento'] = toTitleCase(row['Departamento'].toString().trim());
-      row['ContaDRE'] = row['ContaDRE'].toString().trim();
+      row['ContaDRE'] = row['ContaDRE'].toString().trim().replace(/^\d+\.\s*/, '');
       row['Projeto'] = toTitleCase(row['Projeto'].toString().trim());
       row['Categoria'] = row['Categoria'].toString().trim();
     });
