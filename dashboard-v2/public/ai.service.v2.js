@@ -79,7 +79,7 @@ class GeminiService {
                         throw new Error(`Erro HTTP ${response.status}: ${errorText.substring(0, 200)}`);
                     }
 
-                    if (response.status === 503 || response.status === 500) {
+                    if (response.status === 503) {
                         console.warn(`Tentativa ${attempt + 1} falhou: ${response.statusText}. Tentando novamente...`);
                         attempt++;
                         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -111,6 +111,7 @@ class GeminiService {
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
+        throw new Error("Não foi possível obter resposta do servidor da IA após várias tentativas.");
     }
 
     async logAvailableModels() {
