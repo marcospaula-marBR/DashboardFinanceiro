@@ -106,6 +106,136 @@ export class DreService {
    * Padroniza colunas, filtra linhas vazias e extrai metadados estruturais
    */
   static normalizeData(rawData: any[]): { data: DreRow[], metadata: DreMetadata } {
+    // 1. Detectar se o arquivo é transacional bruto (possui colunas de Data e Valor)
+    const firstRow = rawData[0] || {};
+    const keys = Object.keys(firstRow).map(k => k.trim().toLowerCase());
+    const isTransactional = keys.includes('data') && keys.includes('valor');
+
+    if (isTransactional) {
+      let colEmpresa = '';
+      let colDept = '';
+      let colContaDRE = '';
+      let colProjeto = '';
+      let colCategoria = '';
+      let colData = '';
+      let colValor = '';
+
+      Object.keys(firstRow).forEach(key => {
+        const cleanKey = key.trim().replace(/["']/g, '');
+        const lowerKey = cleanKey.toLowerCase();
+        
+        // Mapeamento flexível das colunas transacionais
+        if (lowerKey.includes('empresa') || lowerKey.includes('fantasia') || lowerKey.includes('razão') || lowerKey === 'empresa') {
+          if (!colEmpresa || lowerKey.includes('fantasia')) {
+            colEmpresa = key;
+          }
+        } else if (lowerKey === 'departamento' || lowerKey === 'departamento_dre' || lowerKey === 'departamento dre') {
+          colDept = key;
+        } else if (lowerKey === 'conta do dre' || lowerKey === 'conta dre' || lowerKey === 'contadre' || lowerKey === 'conta_dre') {
+          colContaDRE = key;
+        } else if (lowerKey === 'projeto') {
+          colProjeto = key;
+        } else if (lowerKey === 'categoria') {
+          colCategoria = key;
+        } else if (lowerKey === 'data' || lowerKey === 'data (completa)') {
+          if (!colData || lowerKey === 'data') colData = key;
+        } else if (lowerKey === 'valor') {
+          colValor = key;
+        }
+      });
+
+      // Agrupar as transações e pivotear
+      const pivotMap = new Map<string, {
+        Empresa: string;
+        Departamento: string;
+        ContaDRE: string;
+        Projeto: string;
+        Categoria: string;
+        valores: Record<string, number>;
+      }>();
+
+      const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+      rawData.forEach(row => {
+        const dataStr = colData ? row[colData]?.toString().trim() : '';
+        const valorStr = colValor ? row[colValor]?.toString().trim() : '0';
+        if (!dataStr) return;
+
+        // Parse do valor (converte formato brasileiro ex: -1065,5 ou -1.065,50 para float)
+        const valor = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
+        if (isNaN(valor)) return;
+
+        // Parse da data (DD/MM/YYYY ou MM/DD/YYYY)
+        let mesLabel = '';
+        const partes = dataStr.split('/');
+        if (partes.length === 3) {
+          let mes = parseInt(partes[0]);
+          let dia = parseInt(partes[1]);
+          let ano = partes[2].trim();
+          
+          if (mes > 12) {
+            const temp = mes;
+            mes = dia;
+            dia = temp;
+          }
+          
+          if (mes >= 1 && mes <= 12) {
+            const mesNome = MESES_ORDEM[mes - 1];
+            const anoCurto = ano.slice(-2);
+            mesLabel = `${mesNome}/${anoCurto}`;
+          }
+        } else {
+          const d = new Date(dataStr);
+          if (!isNaN(d.getTime())) {
+            const mesNome = MESES_ORDEM[d.getMonth()];
+            const anoCurto = d.getFullYear().toString().slice(-2);
+            mesLabel = `${mesNome}/${anoCurto}`;
+          }
+        }
+
+        if (!mesLabel) return;
+
+        const emp = colEmpresa ? row[colEmpresa]?.toString().trim() : 'Geral';
+        const dep = colDept ? row[colDept]?.toString().trim() : 'Sem Departamento';
+        const cDre = colContaDRE ? row[colContaDRE]?.toString().trim() : 'Sem Conta DRE';
+        const proj = colProjeto ? row[colProjeto]?.toString().trim() : 'Sem Projeto';
+        const cat = colCategoria ? row[colCategoria]?.toString().trim() : 'Sem Categoria';
+
+        const groupKey = `${emp || 'Geral'}|${dep || 'Sem Departamento'}|${cDre || 'Sem Conta DRE'}|${proj || 'Sem Projeto'}|${cat || 'Sem Categoria'}`;
+
+        if (!pivotMap.has(groupKey)) {
+          pivotMap.set(groupKey, {
+            Empresa: emp || 'Geral',
+            Departamento: dep || 'Sem Departamento',
+            ContaDRE: cDre || 'Sem Conta DRE',
+            Projeto: proj || 'Sem Projeto',
+            Categoria: cat || 'Sem Categoria',
+            valores: {}
+          });
+        }
+
+        const item = pivotMap.get(groupKey)!;
+        item.valores[mesLabel] = (item.valores[mesLabel] || 0) + valor;
+      });
+
+      const dataPivoteada: any[] = [];
+      pivotMap.forEach(item => {
+        const rowObj: any = {
+          Empresa: item.Empresa,
+          Departamento: item.Departamento,
+          ContaDRE: item.ContaDRE,
+          Projeto: item.Projeto,
+          Categoria: item.Categoria
+        };
+        Object.keys(item.valores).forEach(mes => {
+          rowObj[mes] = Math.round(item.valores[mes] * 100) / 100;
+        });
+        dataPivoteada.push(rowObj);
+      });
+
+      rawData = dataPivoteada;
+    }
+
     let data = rawData.map(row => {
       const newRow: any = {};
       Object.keys(row).forEach(key => {
@@ -116,11 +246,17 @@ export class DreService {
         let finalKey = cleanKey;
 
         // Mapeamento flexível com prioridade
-        if (lowerKey === 'empresa') finalKey = 'Empresa';
-        else if (lowerKey === 'departamento' || lowerKey === 'departamento_dre' || lowerKey === 'departamento dre') finalKey = 'Departamento';
-        else if (lowerKey === 'contadre' || lowerKey === 'conta_dre' || lowerKey === 'conta dre') finalKey = 'ContaDRE';
-        else if (lowerKey === 'projeto') finalKey = 'Projeto';
-        else if (lowerKey === 'categoria') finalKey = 'Categoria';
+        if (lowerKey === 'empresa' || lowerKey.includes('minha empresa (nome fantasia)') || lowerKey.includes('minha empresa (razão social)')) {
+          finalKey = 'Empresa';
+        } else if (lowerKey === 'departamento' || lowerKey === 'departamento_dre' || lowerKey === 'departamento dre') {
+          finalKey = 'Departamento';
+        } else if (lowerKey === 'conta do dre' || lowerKey === 'conta dre' || lowerKey === 'contadre' || lowerKey === 'conta_dre') {
+          finalKey = 'ContaDRE';
+        } else if (lowerKey === 'projeto') {
+          finalKey = 'Projeto';
+        } else if (lowerKey === 'categoria') {
+          finalKey = 'Categoria';
+        }
 
         newRow[finalKey] = row[key];
       });
