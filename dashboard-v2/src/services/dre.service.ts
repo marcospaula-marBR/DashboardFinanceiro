@@ -198,7 +198,9 @@ export class DreService {
         if (!dataStr) return;
 
         // Parse do valor (converte formato brasileiro ex: -1065,5 ou -1.065,50 para float)
-        const valor = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
+        // Usamos Math.abs para forçar valores positivos absolutos (as saídas vêm negativas no CSV bruto),
+        // mantendo a compatibilidade com a estrutura de cálculos e KPIs do dashboard que realiza as subtrações.
+        const valor = Math.abs(parseFloat(valorStr.replace(/\./g, '').replace(',', '.')));
         if (isNaN(valor)) return;
 
         // Parse da data (DD/MM/YYYY ou MM/DD/YYYY)
