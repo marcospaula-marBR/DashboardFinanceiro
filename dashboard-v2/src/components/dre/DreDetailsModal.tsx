@@ -190,11 +190,13 @@ export function DreDetailsModal({
                         const monthRows = sourceRows ? sourceRows[monthName] || [] : [];
                         
                         monthRows.forEach(r => {
+                          const val = parseFloat(r[monthName]?.toString().replace(',', '.') || '0');
+                          if (val === 0) return; // Skip zero values
+                          
                           hasRows = true;
                           const cat = r.Categoria || 'Sem Categoria';
                           const proj = r.Projeto || '-';
                           const emp = r.Empresa || '-';
-                          const val = parseFloat(r[monthName]?.toString().replace(',', '.') || '0');
                           
                           if (!grouped[cat]) {
                             grouped[cat] = { totalGlobal: 0, totaisMensais: {}, projetos: {} };
