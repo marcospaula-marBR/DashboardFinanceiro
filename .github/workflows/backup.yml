@@ -1,4 +1,5 @@
 name: Supabase Daily Backup to Google Drive
+# Versao 1.0.1 - Configurado para criptografia segura GPG
 
 on:
   schedule:
