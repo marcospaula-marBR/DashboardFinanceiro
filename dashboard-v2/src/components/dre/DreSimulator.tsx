@@ -72,7 +72,9 @@ export function DreSimulator({ isOpen, onClose, params, onChange, onReset, origi
     onChange({
       revenueMultiplier: record.revenue_multiplier,
       costsMultiplier: record.costs_multiplier,
-      expensesMultiplier: record.expenses_multiplier
+      expensesMultiplier: record.expenses_multiplier,
+      taxesMultiplier: 1.0,
+      investmentsMultiplier: 1.0
     });
     
     if (record.fcl_target) {
@@ -131,17 +133,19 @@ export function DreSimulator({ isOpen, onClose, params, onChange, onReset, origi
   const applyGoalSeek = (type: 'revenue' | 'costs' | 'expenses' | 'equilibrated') => {
     if (!goalSeek) return;
     if (type === 'revenue') {
-      onChange({ revenueMultiplier: 1 + (goalSeek.reqRevenuePcts / 100), costsMultiplier: 1, expensesMultiplier: 1 });
+      onChange({ revenueMultiplier: 1 + (goalSeek.reqRevenuePcts / 100), costsMultiplier: 1, expensesMultiplier: 1, taxesMultiplier: 1, investmentsMultiplier: 1 });
     } else if (type === 'costs') {
-      onChange({ revenueMultiplier: 1, costsMultiplier: 1 - (goalSeek.reqCostsReduction / 100), expensesMultiplier: 1 });
+      onChange({ revenueMultiplier: 1, costsMultiplier: 1 - (goalSeek.reqCostsReduction / 100), expensesMultiplier: 1, taxesMultiplier: 1, investmentsMultiplier: 1 });
     } else if (type === 'expenses') {
-      onChange({ revenueMultiplier: 1, costsMultiplier: 1, expensesMultiplier: 1 - (goalSeek.reqExpensesReduction / 100) });
+      onChange({ revenueMultiplier: 1, costsMultiplier: 1, expensesMultiplier: 1 - (goalSeek.reqExpensesReduction / 100), taxesMultiplier: 1, investmentsMultiplier: 1 });
     } else if (type === 'equilibrated') {
       // Metade aumento de receita, metade corte de despesas
       onChange({ 
         revenueMultiplier: 1 + ((goalSeek.reqRevenuePcts / 2) / 100), 
         costsMultiplier: 1, 
-        expensesMultiplier: 1 - ((goalSeek.reqExpensesReduction / 2) / 100) 
+        expensesMultiplier: 1 - ((goalSeek.reqExpensesReduction / 2) / 100),
+        taxesMultiplier: 1,
+        investmentsMultiplier: 1
       });
     }
   };
@@ -452,6 +456,12 @@ export function DreSimulator({ isOpen, onClose, params, onChange, onReset, origi
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           {renderSlider('Despesas Administrativas', 'expensesMultiplier', 0.5, 1.5, 0.01, 'bg-rose-100 text-rose-700')}
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          {renderSlider('Impostos e Taxas', 'taxesMultiplier', 0.5, 1.5, 0.01, 'bg-rose-100 text-rose-700')}
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          {renderSlider('Investimentos', 'investmentsMultiplier', 0.5, 1.5, 0.01, 'bg-indigo-100 text-indigo-700')}
         </div>
       </div>
 

@@ -11,6 +11,8 @@ export interface DreSimulationParams {
   revenueMultiplier: number; // 1.0 = normal, 1.05 = +5%
   costsMultiplier: number;
   expensesMultiplier: number;
+  taxesMultiplier: number;
+  investmentsMultiplier: number;
 }
 
 export interface DreRow {

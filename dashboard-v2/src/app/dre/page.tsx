@@ -49,7 +49,9 @@ export default function DrePage() {
   const [simParams, setSimParams] = useState<DreSimulationParams>({
     revenueMultiplier: 1.0,
     costsMultiplier: 1.0,
-    expensesMultiplier: 1.0
+    expensesMultiplier: 1.0,
+    taxesMultiplier: 1.0,
+    investmentsMultiplier: 1.0
   });
 
   const [rawData, setRawData] = useState<DreRow[]>([]);
@@ -267,7 +269,7 @@ export default function DrePage() {
   // Simulated Calculation
   const results: DreCalculatedResult | null = useMemo(() => {
     if (!originalResults || !estrutura) return null;
-    if (simParams.revenueMultiplier === 1 && simParams.costsMultiplier === 1 && simParams.expensesMultiplier === 1) {
+    if (simParams.revenueMultiplier === 1 && simParams.costsMultiplier === 1 && simParams.expensesMultiplier === 1 && simParams.taxesMultiplier === 1 && simParams.investmentsMultiplier === 1) {
       return originalResults;
     }
     return DreService.calculate(rawData, metadata!, estrutura, filters, simParams, equipamentoCounts);
@@ -595,7 +597,7 @@ export default function DrePage() {
               onClose={() => setIsSimulatorOpen(false)}
               params={simParams}
               onChange={setSimParams}
-              onReset={() => setSimParams({ revenueMultiplier: 1, costsMultiplier: 1, expensesMultiplier: 1 })}
+              onReset={() => setSimParams({ revenueMultiplier: 1, costsMultiplier: 1, expensesMultiplier: 1, taxesMultiplier: 1, investmentsMultiplier: 1 })}
               originalResults={originalResults}
               simulatedFcl={results?.kpis.fcl || 0}
               empresaContext={filters.empresas.length === 1 ? filters.empresas[0] : (filters.empresas.length > 1 ? "Múltiplas" : "Todas as Empresas")}

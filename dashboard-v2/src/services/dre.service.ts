@@ -468,6 +468,10 @@ export class DreService {
           multiplier = simulationParams.costsMultiplier;
         } else if (['Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo', 'Credenciado TI', 'Adiantamento - Credenciado TI', 'Despesas Administrativas', 'Despesas de Vendas e Marketing', 'Despesas Financeiras', 'Outros Tributos', 'Jurídico', 'Despesas Variáveis', 'Intermediação de Negócios'].includes(cat)) {
           multiplier = simulationParams.expensesMultiplier;
+        } else if (['Impostos', 'Provisão IRPJ e CSSL Trimestral'].includes(cat)) {
+          multiplier = simulationParams.taxesMultiplier ?? 1.0;
+        } else if (['Consórcios - a contemplar', 'Serviços', 'Ativos'].includes(cat)) {
+          multiplier = simulationParams.investmentsMultiplier ?? 1.0;
         }
       }
 
