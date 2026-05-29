@@ -94,12 +94,22 @@ export function DreCustomCardModal({
             />
           </div>
           <div className="flex justify-between items-center text-xs">
-            <button
-              onClick={handleSelectAll}
-              className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1"
-            >
-              {filteredCategories.every(cat => tempSelected.includes(cat)) ? 'Desmarcar Todos' : 'Selecionar Todos'}
-            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={handleSelectAll}
+                className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1"
+              >
+                {filteredCategories.every(cat => tempSelected.includes(cat)) ? 'Desmarcar Todos' : 'Selecionar Todos'}
+              </button>
+              {tempSelected.length > 0 && (
+                <button
+                  onClick={() => setTempSelected([])}
+                  className="font-bold text-rose-600 hover:text-rose-750 transition-colors flex items-center gap-1"
+                >
+                  Limpar Seleções
+                </button>
+              )}
+            </div>
             <span className="font-semibold text-slate-400">
               {tempSelected.length} selecionadas de {availableCategories.length}
             </span>
