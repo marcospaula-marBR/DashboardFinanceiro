@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Eye, FileText, SlidersHorizontal, CloudLightning, Loader2, MonitorSmartphone } from 'lucide-react';
+import { ChevronLeft, Eye, FileText, SlidersHorizontal, CloudLightning, Loader2, MonitorSmartphone, Filter } from 'lucide-react';
 import { APP_VERSION } from '@/version';
 
 interface DreHeaderProps {
@@ -14,6 +14,9 @@ interface DreHeaderProps {
   hasData: boolean;
   isPublishing: boolean;
   onPublish: () => void;
+  // Sidebar toggle
+  isSidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }
 
 export function DreHeader({ 
@@ -25,18 +28,33 @@ export function DreHeader({
   onOpenEquipmentsManager,
   hasData,
   isPublishing,
-  onPublish
+  onPublish,
+  isSidebarCollapsed,
+  onToggleSidebar
 }: DreHeaderProps) {
   return (
     <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4 select-none">
       <div className="flex items-center gap-4">
-        <Link 
-          href="/" 
-          className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-450 hover:bg-amber-50 text-slate-500 hover:text-amber-600 transition-all shadow-sm duration-200 active:scale-95"
-          title="Voltar ao Início"
-        >
-          <ChevronLeft size={20} />
-        </Link>
+        <div className="flex gap-2">
+          <Link 
+            href="/" 
+            className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-450 hover:bg-amber-50 text-slate-500 hover:text-amber-600 transition-all shadow-sm duration-200 active:scale-95"
+            title="Voltar ao Início"
+          >
+            <ChevronLeft size={20} />
+          </Link>
+          <button 
+            onClick={onToggleSidebar}
+            className={`p-2 rounded-xl border transition-all shadow-sm duration-200 active:scale-95 flex items-center justify-center ${
+              isSidebarCollapsed 
+                ? "bg-slate-250 border-slate-300 text-slate-400" 
+                : "bg-white border-slate-200 text-amber-500 hover:border-amber-450 hover:bg-amber-50"
+            }`}
+            title={isSidebarCollapsed ? "Expandir Filtros" : "Recolher Filtros"}
+          >
+            <Filter size={20} />
+          </button>
+        </div>
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Demonstração do Resultado (DRE)</h1>

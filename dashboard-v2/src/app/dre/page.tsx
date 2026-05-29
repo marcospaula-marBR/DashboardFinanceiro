@@ -56,6 +56,7 @@ export default function DrePage() {
   });
   const [customCardCategories, setCustomCardCategories] = useState<string[]>([]);
   const [isCustomCardModalOpen, setIsCustomCardModalOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const [rawData, setRawData] = useState<DreRow[]>([]);
   const [metadata, setMetadata] = useState<DreMetadata | null>(null);
@@ -541,24 +542,28 @@ export default function DrePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar - Fixa */}
-      <DreSidebar
-        metadata={metadata}
-        rawData={rawData}
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        onFileUpload={handleFileUpload}
-        isUploading={isUploading}
-        fileName={fileName}
-      />
+    <main className="min-h-screen bg-slate-50 flex overflow-hidden">
+      {/* Sidebar colapsável com transição suave */}
+      <div className={`transition-all duration-300 ease-in-out border-r border-slate-800 ${
+        isSidebarCollapsed ? 'w-0 opacity-0 -translate-x-full overflow-hidden' : 'w-80 opacity-100 translate-x-0'
+      }`}>
+        <DreSidebar
+          metadata={metadata}
+          rawData={rawData}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onFileUpload={handleFileUpload}
+          isUploading={isUploading}
+          fileName={fileName}
+        />
+      </div>
 
       {/* Conteúdo Principal + Painel Direito */}
       <div className="flex-1 flex overflow-hidden">
 
         {/* Coluna Central: Dashboard */}
-        <div id="dre-dashboard-content" className={`flex-1 overflow-y-auto p-6 md:p-8 transition-all duration-300 ${isExportingPdf ? 'opacity-50' : ''}`}>
-          <div className="max-w-7xl mx-auto">
+        <div id="dre-dashboard-content" className={`flex-1 overflow-y-auto p-6 md:p-8 transition-all duration-305 ${isExportingPdf ? 'opacity-50' : ''}`}>
+          <div className="w-full max-w-[1600px] mx-auto">
             <DreHeader
               lastUpdate={lastUpdate}
               onExportPDF={handleOpenExportModal}
@@ -569,6 +574,8 @@ export default function DrePage() {
               hasData={rawData.length > 0}
               isPublishing={isPublishing}
               onPublish={handlePublishSnapshot}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             />
 
             <div className="space-y-8 mt-8">

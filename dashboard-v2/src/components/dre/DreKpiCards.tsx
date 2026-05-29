@@ -54,12 +54,12 @@ export function DreKpiCards({
         onClick={() => onCardClick && onCardClick("Total Entradas Operacionais")}
       >
         <div>
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Entradas Operacionais</h3>
-          <p className="text-2xl font-black text-slate-800">
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Entradas Operacionais</h3>
+          <p className="text-3xl font-black text-slate-900 tracking-tight">
             {displayValue(kpis.totalEntradas)}
           </p>
         </div>
-        <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-md">
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-100/70 w-fit px-2.5 py-1.5 rounded-md">
           <span>Média: {displayValue(getAverageVal(kpis.totalEntradas))}</span>
         </div>
       </div>
@@ -70,12 +70,12 @@ export function DreKpiCards({
         onClick={() => onCardClick && onCardClick("Total Custos Operacionais")}
       >
         <div>
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Custos Operacionais</h3>
-          <p className="text-2xl font-black text-rose-600">
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Custos Operacionais</h3>
+          <p className="text-3xl font-black text-rose-600 tracking-tight">
             {displayValue(kpis.totalCustos)}
           </p>
         </div>
-        <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-md">
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-100/70 w-fit px-2.5 py-1.5 rounded-md">
           <Wallet size={12} className="text-emerald-500" />
           <span>{calcPercent(kpis.totalCustos)} da Receita • Média: {displayValue(getAverageVal(kpis.totalCustos))}</span>
         </div>
@@ -87,12 +87,12 @@ export function DreKpiCards({
         onClick={() => onCardClick && onCardClick("Total Despesas Rateadas")}
       >
         <div>
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Despesas Rateadas</h3>
-          <p className="text-2xl font-black text-rose-600">
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Despesas Rateadas</h3>
+          <p className="text-3xl font-black text-rose-600 tracking-tight">
             {displayValue(kpis.totalDespesas)}
           </p>
         </div>
-        <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-md">
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-100/70 w-fit px-2.5 py-1.5 rounded-md">
           <Wallet size={12} className="text-emerald-500" />
           <span>{calcPercent(kpis.totalDespesas)} da Receita • Média: {displayValue(getAverageVal(kpis.totalDespesas))}</span>
         </div>
@@ -104,12 +104,12 @@ export function DreKpiCards({
         onClick={() => onCardClick && onCardClick("Fluxo de Caixa Livre FCL")}
       >
         <div>
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Fluxo de Caixa Livre</h3>
-          <p className={`text-2xl font-black ${kpis.fcl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Fluxo de Caixa Livre</h3>
+          <p className={`text-3xl font-black tracking-tight ${kpis.fcl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {displayValue(kpis.fcl)}
           </p>
         </div>
-        <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-800/80 w-fit px-2 py-1 rounded-md">
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-slate-300 bg-slate-800/90 w-fit px-2.5 py-1.5 rounded-md">
           <span>Margem: {displayValue(kpis.percFcl, true)} • Média: {displayValue(getAverageVal(kpis.fcl))}</span>
         </div>
       </div>
@@ -139,12 +139,12 @@ export function DreKpiCards({
             onClick={() => onCardClick && onCardClick("Outras Entradas")}
           >
             <div>
-              <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Outras Entradas</h3>
-              <p className="text-xl font-bold text-slate-700">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Outras Entradas</h3>
+              <p className="text-2xl font-black text-slate-800 tracking-tight">
                 {displayValue(kpis.outrasEntradas)}
               </p>
             </div>
-            <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
+            <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
               <ArrowUpRight size={12} className="text-emerald-500" />
               <span>{calcPercent(kpis.outrasEntradas)} vs Operacional • Média: {displayValue(getAverageVal(kpis.outrasEntradas))}</span>
             </div>
@@ -156,12 +156,12 @@ export function DreKpiCards({
             onClick={() => onCardClick && onCardClick("Total de Impostos")}
           >
             <div>
-              <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total de Impostos</h3>
-              <p className="text-xl font-bold text-slate-700">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total de Impostos</h3>
+              <p className="text-2xl font-black text-slate-800 tracking-tight">
                 {displayValue(kpis.totalImpostos)}
               </p>
             </div>
-            <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
+            <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
               <ArrowDownRight size={12} className="text-rose-500" />
               <span>{calcPercent(kpis.totalImpostos)} da Receita • Média: {displayValue(getAverageVal(kpis.totalImpostos))}</span>
             </div>
@@ -173,12 +173,12 @@ export function DreKpiCards({
             onClick={() => onCardClick && onCardClick("Total Investimentos")}
           >
             <div>
-              <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total de Investimentos</h3>
-              <p className="text-xl font-bold text-slate-700">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total de Investimentos</h3>
+              <p className="text-2xl font-black text-slate-800 tracking-tight">
                 {displayValue(kpis.totalInvestimentos)}
               </p>
             </div>
-            <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
+            <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
               <Wallet size={12} className="text-emerald-500" />
               <span>{calcPercent(kpis.totalInvestimentos)} da Receita • Média: {displayValue(getAverageVal(kpis.totalInvestimentos))}</span>
             </div>
@@ -191,10 +191,10 @@ export function DreKpiCards({
           >
             <MonitorSmartphone className="absolute -right-4 -bottom-4 text-indigo-100 opacity-50" size={80} />
             <div className="relative z-10">
-              <h3 className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1 flex items-center gap-1">
+              <h3 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-1 flex items-center gap-1">
                 ⚙️ {customCardTitle || 'Monte seu Card'}
               </h3>
-              <p className="text-xl font-black text-indigo-900 mt-1">
+              <p className="text-2xl font-black text-indigo-900 tracking-tight mt-1">
                 {customCardCategoriesCount && customCardCategoriesCount > 0 
                   ? displayValue(customCardTotal || 0) 
                   : 'R$ 0,00'}
@@ -203,15 +203,15 @@ export function DreKpiCards({
             <div className="mt-2 flex flex-col gap-1.5 relative z-10 w-full">
               {customCardCategoriesCount && customCardCategoriesCount > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
-                  <div className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
+                  <div className="text-xs font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
                     Média: {displayValue(getAverageVal(customCardTotal || 0))}
                   </div>
-                  <div className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
+                  <div className="text-xs font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
                     {calcPercent(customCardTotal || 0)} da Receita
                   </div>
                 </div>
               ) : (
-                <div className="text-[10px] font-semibold text-indigo-650/80 bg-indigo-100/60 px-2.5 py-1 rounded-md border border-indigo-200/20">
+                <div className="text-xs font-semibold text-indigo-650/80 bg-indigo-100/60 px-2.5 py-1 rounded-md border border-indigo-200/20">
                   Nenhuma rubrica ativa
                 </div>
               )}
