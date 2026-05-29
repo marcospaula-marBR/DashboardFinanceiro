@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import Image from 'next/image';
-import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags } from 'lucide-react';
+import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft } from 'lucide-react';
 import { DreFilters, DreMetadata, DreRow } from '@/types/dre';
 
 interface DreSidebarProps {
@@ -13,6 +13,8 @@ interface DreSidebarProps {
   onFileUpload: (file: File) => void;
   isUploading: boolean;
   fileName: string | null;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export function DreSidebar({ 
@@ -22,7 +24,9 @@ export function DreSidebar({
   onFilterChange, 
   onFileUpload, 
   isUploading,
-  fileName
+  fileName,
+  isSidebarCollapsed,
+  onToggleSidebar
 }: DreSidebarProps) {
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,14 +157,25 @@ export function DreSidebar({
   return (
     <aside className="w-80 flex-shrink-0 bg-slate-900 text-slate-100 flex flex-col h-screen border-r border-slate-800 select-none">
       {/* Header / Brand */}
-      <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-orange-900/20">
-          DF
+      <div className="p-6 border-b border-slate-800 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-orange-900/20">
+            DF
+          </div>
+          <div>
+            <h1 className="font-bold text-lg leading-tight text-white tracking-wide">DRE Financeiro</h1>
+            <p className="text-xs text-slate-400 font-medium">Painel de Controladoria v3</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-bold text-lg leading-tight text-white tracking-wide">DRE Financeiro</h1>
-          <p className="text-xs text-slate-400 font-medium">Painel de Controladoria v3</p>
-        </div>
+        {onToggleSidebar && (
+          <button 
+            onClick={onToggleSidebar}
+            className="p-1.5 rounded-xl border border-slate-850 bg-slate-950/40 hover:bg-slate-850 hover:border-slate-700 text-slate-450 hover:text-white transition-all duration-200 active:scale-95 flex items-center justify-center shadow-sm"
+            title="Recolher Filtros"
+          >
+            <ChevronLeft size={16} />
+          </button>
+        )}
       </div>
 
       {/* CSV File Upload Section */}

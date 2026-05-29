@@ -555,6 +555,8 @@ export default function DrePage() {
           onFileUpload={handleFileUpload}
           isUploading={isUploading}
           fileName={fileName}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
       </div>
 
