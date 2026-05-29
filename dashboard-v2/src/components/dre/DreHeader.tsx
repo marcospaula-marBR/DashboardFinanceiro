@@ -63,6 +63,7 @@ export function DreHeader({
           <Eye size={18} />
         </button>
         
+        {/* Botão Máquinas Ocultado 
         <button
           onClick={onOpenEquipmentsManager}
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all duration-200 shadow-sm active:scale-95"
@@ -71,13 +72,16 @@ export function DreHeader({
           <MonitorSmartphone size={16} className="text-amber-500" />
           <span>Máquinas</span>
         </button>
+        */}
 
+        {/* Link Gestor Ocultado 
         <Link 
           href="/indicadores_v2.html" 
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all duration-200 shadow-sm active:scale-95"
         >
           Gestor
         </Link>
+        */}
 
         {/* Compliant with the Purple Ban: changed from indigo to high-end amber-50 border/slate-800 accent */}
         <button 
@@ -113,12 +117,14 @@ export function DreHeader({
           </button>
         )}
 
+        {/* Botão Exportar PDF Ocultado 
         <button 
           onClick={onExportPDF}
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-bold transition-all duration-200 shadow-md shadow-orange-500/10 active:scale-95 min-w-[140px]"
         >
           <FileText size={16} /> <span className="hidden sm:inline">Exportar PDF</span>
         </button>
+        */}
       </div>
     </header>
   );

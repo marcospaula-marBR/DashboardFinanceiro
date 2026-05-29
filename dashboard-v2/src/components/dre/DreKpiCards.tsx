@@ -29,6 +29,9 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
     return `${((value / kpis.totalEntradas) * 100).toFixed(1).replace('.', ',')}%`;
   };
 
+  const monthsCount = results.validColumns.length || 1;
+  const getAverageVal = (totalVal: number) => totalVal / monthsCount;
+
   const fclPorEquipamento = kpis.totalEquipamentos > 0 ? (kpis.fcl / kpis.totalEquipamentos) : 0;
 
   return (
@@ -36,13 +39,18 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative z-20">
       {/* Total Entradas */}
       <div 
-        className={`bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-transform ${onCardClick ? 'cursor-pointer hover:scale-105' : ''}`}
+        className={`bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-transform flex flex-col justify-between ${onCardClick ? 'cursor-pointer hover:scale-105' : ''}`}
         onClick={() => onCardClick && onCardClick("Total Entradas Operacionais")}
       >
-        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Entradas Operacionais</h3>
-        <p className="text-2xl font-black text-slate-800">
-          {displayValue(kpis.totalEntradas)}
-        </p>
+        <div>
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Entradas Operacionais</h3>
+          <p className="text-2xl font-black text-slate-800">
+            {displayValue(kpis.totalEntradas)}
+          </p>
+        </div>
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-md">
+          <span>Média: {displayValue(getAverageVal(kpis.totalEntradas))}</span>
+        </div>
       </div>
 
       {/* Custos Operacionais */}
@@ -58,7 +66,7 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
         </div>
         <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-md">
           <Wallet size={12} className="text-emerald-500" />
-          <span>{calcPercent(kpis.totalCustos)} da Receita</span>
+          <span>{calcPercent(kpis.totalCustos)} da Receita • Média: {displayValue(getAverageVal(kpis.totalCustos))}</span>
         </div>
       </div>
 
@@ -75,22 +83,24 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
         </div>
         <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-md">
           <Wallet size={12} className="text-emerald-500" />
-          <span>{calcPercent(kpis.totalDespesas)} da Receita</span>
+          <span>{calcPercent(kpis.totalDespesas)} da Receita • Média: {displayValue(getAverageVal(kpis.totalDespesas))}</span>
         </div>
       </div>
 
       {/* Fluxo de Caixa Livre */}
       <div 
-        className={`bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md transition-transform ${onCardClick ? 'cursor-pointer hover:scale-105' : ''}`}
+        className={`bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md transition-transform flex flex-col justify-between ${onCardClick ? 'cursor-pointer hover:scale-105' : ''}`}
         onClick={() => onCardClick && onCardClick("Fluxo de Caixa Livre FCL")}
       >
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Fluxo de Caixa Livre</h3>
-        <p className={`text-2xl font-black ${kpis.fcl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {displayValue(kpis.fcl)}
-        </p>
-        <p className="text-xs font-medium text-slate-500 mt-1">
-          Margem: {displayValue(kpis.percFcl, true)}
-        </p>
+        <div>
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Fluxo de Caixa Livre</h3>
+          <p className={`text-2xl font-black ${kpis.fcl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {displayValue(kpis.fcl)}
+          </p>
+        </div>
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-800/80 w-fit px-2 py-1 rounded-md">
+          <span>Margem: {displayValue(kpis.percFcl, true)} • Média: {displayValue(getAverageVal(kpis.fcl))}</span>
+        </div>
       </div>
       </div>
 
@@ -125,7 +135,7 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
             </div>
             <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
               <ArrowUpRight size={12} className="text-emerald-500" />
-              <span>{calcPercent(kpis.outrasEntradas)} vs Operacional</span>
+              <span>{calcPercent(kpis.outrasEntradas)} vs Operacional • Média: {displayValue(getAverageVal(kpis.outrasEntradas))}</span>
             </div>
           </div>
 
@@ -142,7 +152,7 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
             </div>
             <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
               <ArrowDownRight size={12} className="text-rose-500" />
-              <span>{calcPercent(kpis.totalImpostos)} da Receita</span>
+              <span>{calcPercent(kpis.totalImpostos)} da Receita • Média: {displayValue(getAverageVal(kpis.totalImpostos))}</span>
             </div>
           </div>
 
@@ -159,7 +169,7 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
             </div>
             <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
               <Wallet size={12} className="text-emerald-500" />
-              <span>{calcPercent(kpis.totalInvestimentos)} da Receita</span>
+              <span>{calcPercent(kpis.totalInvestimentos)} da Receita • Média: {displayValue(getAverageVal(kpis.totalInvestimentos))}</span>
             </div>
           </div>
 
