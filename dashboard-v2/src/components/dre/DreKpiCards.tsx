@@ -7,9 +7,20 @@ interface DreKpiCardsProps {
   results: DreCalculatedResult | null;
   isPrivacyMode: boolean;
   onCardClick?: (title: string) => void;
+  // Custom Card Props
+  customCardTitle?: string;
+  customCardTotal?: number;
+  onCustomCardClick?: () => void;
 }
 
-export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCardsProps) {
+export function DreKpiCards({ 
+  results, 
+  isPrivacyMode, 
+  onCardClick,
+  customCardTitle,
+  customCardTotal,
+  onCustomCardClick
+}: DreKpiCardsProps) {
   const [showExtra, setShowExtra] = useState(false);
 
   if (!results) return null;
@@ -31,8 +42,6 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
 
   const monthsCount = results.validColumns.length || 1;
   const getAverageVal = (totalVal: number) => totalVal / monthsCount;
-
-  const fclPorEquipamento = kpis.totalEquipamentos > 0 ? (kpis.fcl / kpis.totalEquipamentos) : 0;
 
   return (
     <div className="mb-8">
@@ -173,25 +182,26 @@ export function DreKpiCards({ results, isPrivacyMode, onCardClick }: DreKpiCards
             </div>
           </div>
 
-          {/* Análise de Equipamentos */}
+          {/* Custom Card (Card Livre) */}
           <div 
-            className={`bg-indigo-50 border border-indigo-200 border-dashed rounded-2xl p-4 transition-transform flex flex-col justify-between relative overflow-hidden ${onCardClick ? 'cursor-pointer hover:bg-indigo-100/80 hover:scale-[1.02]' : ''}`}
-            onClick={() => onCardClick && onCardClick("Equipamentos")}
+            className="bg-indigo-50 border border-indigo-200 border-dashed rounded-2xl p-4 transition-transform flex flex-col justify-between relative overflow-hidden cursor-pointer hover:bg-indigo-100/80 hover:scale-[1.02]"
+            onClick={() => onCustomCardClick && onCustomCardClick()}
           >
             <MonitorSmartphone className="absolute -right-4 -bottom-4 text-indigo-100 opacity-50" size={80} />
             <div className="relative z-10">
-              <h3 className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1">Investimento em Equipamentos</h3>
-              <p className="text-xl font-black text-indigo-900">
-                {displayValue(kpis.totalEquipamentos)}
+              <h3 className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1 flex items-center gap-1">
+                ⚙️ {customCardTitle || 'Investimento em Equipamentos'}
+              </h3>
+              <p className="text-xl font-black text-indigo-900 mt-1">
+                {displayValue(customCardTotal !== undefined ? customCardTotal : kpis.totalEquipamentos)}
               </p>
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5 relative z-10">
-              <div className="flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
-                <Activity size={10} className="text-indigo-600" />
-                <span>{displayValue(fclPorEquipamento)} de FCL/Máquina</span>
-              </div>
               <div className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
-                Média: {displayValue(results.validColumns.length > 0 ? kpis.totalEquipamentos / results.validColumns.length : 0)}
+                Média: {displayValue(getAverageVal(customCardTotal !== undefined ? customCardTotal : kpis.totalEquipamentos))}
+              </div>
+              <div className="text-[9px] font-bold text-indigo-800 bg-indigo-100/70 px-2 py-0.5 rounded animate-pulse">
+                Clique para Personalizar
               </div>
             </div>
           </div>

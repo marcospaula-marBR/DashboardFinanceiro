@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { DreFilters, DreMetadata, DreCalculatedResult, DreRow, DreSimulationParams, DreStructureItem, DreTemplateDefinition } from '@/types/dre';
 import { DreExportModal, ExportSelections } from '@/components/dre/DreExportModal';
 import { DrePrintCharts } from '@/components/dre/DrePrintCharts';
+import { DreCustomCardModal } from '@/components/dre/DreCustomCardModal';
 import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles } from 'lucide-react';
 
 export default function DrePage() {
@@ -53,6 +54,8 @@ export default function DrePage() {
     taxesMultiplier: 1.0,
     investmentsMultiplier: 1.0
   });
+  const [customCardCategories, setCustomCardCategories] = useState<string[]>(['Equipamentos']);
+  const [isCustomCardModalOpen, setIsCustomCardModalOpen] = useState(false);
 
   const [rawData, setRawData] = useState<DreRow[]>([]);
   const [metadata, setMetadata] = useState<DreMetadata | null>(null);
@@ -280,6 +283,40 @@ export default function DrePage() {
     if (!results) return [];
     return DreAlertsService.generateAlerts(results);
   }, [results]);
+
+  // Categoria Customizada Livre (Soma dinâmica com base nos filtros)
+  const customCardTotal = useMemo(() => {
+    if (rawData.length === 0 || customCardCategories.length === 0 || !results) return 0;
+    
+    let df = rawData;
+    if (filters.empresas.length > 0) df = df.filter(row => filters.empresas.includes(row.Empresa));
+    if (filters.departamentos.length > 0) df = df.filter(row => filters.departamentos.includes(row.Departamento));
+    if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
+    if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
+    if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
+    
+    // Filtra apenas pelas categorias selecionadas pelo usuário no Card Livre
+    df = df.filter(row => customCardCategories.includes(row.Categoria) || customCardCategories.includes(row.ContaDRE));
+
+    let total = 0;
+    df.forEach(row => {
+      results.validColumns.forEach(col => {
+        const val = parseFloat(row[col]?.toString().replace(',', '.') || '0');
+        if (!isNaN(val)) {
+          total += val;
+        }
+      });
+    });
+    return total;
+  }, [rawData, customCardCategories, filters, results]);
+
+  const customCardTitle = useMemo(() => {
+    if (customCardCategories.length === 0) return "Card Personalizado";
+    if (customCardCategories.length === 1) {
+      return customCardCategories[0].replace(/^\d+[\d.]*\s*-\s*/, '');
+    }
+    return `Personalizado (${customCardCategories.length} cats)`;
+  }, [customCardCategories]);
 
   // Expor resultados e contexto para a BrisinhAI globalmente
   useEffect(() => {
@@ -543,6 +580,9 @@ export default function DrePage() {
                 results={results}
                 isPrivacyMode={isPrivacyMode}
                 onCardClick={handleOpenDetails}
+                customCardTitle={customCardTitle}
+                customCardTotal={customCardTotal}
+                onCustomCardClick={() => setIsCustomCardModalOpen(true)}
               />
 
               {/* Análise Visual (Gráficos) */}
@@ -630,6 +670,14 @@ export default function DrePage() {
         departamentos={allowedDeptsForEquipments}
         initialCounts={equipamentoCounts}
         onSave={handleSaveEquipamentoCounts}
+      />
+
+      <DreCustomCardModal
+        isOpen={isCustomCardModalOpen}
+        onClose={() => setIsCustomCardModalOpen(false)}
+        availableCategories={metadata?.categorias || []}
+        selectedCategories={customCardCategories}
+        onSave={setCustomCardCategories}
       />
 
       {/* Off-screen renderer for high-quality PDF charts */}
