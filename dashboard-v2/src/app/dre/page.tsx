@@ -54,7 +54,7 @@ export default function DrePage() {
     taxesMultiplier: 1.0,
     investmentsMultiplier: 1.0
   });
-  const [customCardCategories, setCustomCardCategories] = useState<string[]>(['Equipamentos']);
+  const [customCardCategories, setCustomCardCategories] = useState<string[]>([]);
   const [isCustomCardModalOpen, setIsCustomCardModalOpen] = useState(false);
 
   const [rawData, setRawData] = useState<DreRow[]>([]);
@@ -582,6 +582,7 @@ export default function DrePage() {
                 onCardClick={handleOpenDetails}
                 customCardTitle={customCardTitle}
                 customCardTotal={customCardTotal}
+                customCardCategoriesCount={customCardCategories.length}
                 onCustomCardClick={() => setIsCustomCardModalOpen(true)}
               />
 

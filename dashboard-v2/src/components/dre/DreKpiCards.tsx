@@ -10,6 +10,7 @@ interface DreKpiCardsProps {
   // Custom Card Props
   customCardTitle?: string;
   customCardTotal?: number;
+  customCardCategoriesCount?: number;
   onCustomCardClick?: () => void;
 }
 
@@ -19,6 +20,7 @@ export function DreKpiCards({
   onCardClick,
   customCardTitle,
   customCardTotal,
+  customCardCategoriesCount,
   onCustomCardClick
 }: DreKpiCardsProps) {
   const [showExtra, setShowExtra] = useState(false);
@@ -190,17 +192,30 @@ export function DreKpiCards({
             <MonitorSmartphone className="absolute -right-4 -bottom-4 text-indigo-100 opacity-50" size={80} />
             <div className="relative z-10">
               <h3 className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1 flex items-center gap-1">
-                ⚙️ {customCardTitle || 'Investimento em Equipamentos'}
+                ⚙️ {customCardTitle || 'Monte seu Card'}
               </h3>
               <p className="text-xl font-black text-indigo-900 mt-1">
-                {displayValue(customCardTotal !== undefined ? customCardTotal : kpis.totalEquipamentos)}
+                {customCardCategoriesCount && customCardCategoriesCount > 0 
+                  ? displayValue(customCardTotal || 0) 
+                  : 'R$ 0,00'}
               </p>
             </div>
-            <div className="mt-2 flex flex-wrap gap-1.5 relative z-10">
-              <div className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
-                Média: {displayValue(getAverageVal(customCardTotal !== undefined ? customCardTotal : kpis.totalEquipamentos))}
-              </div>
-              <div className="text-[9px] font-bold text-indigo-800 bg-indigo-100/70 px-2 py-0.5 rounded animate-pulse">
+            <div className="mt-2 flex flex-col gap-1.5 relative z-10 w-full">
+              {customCardCategoriesCount && customCardCategoriesCount > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  <div className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
+                    Média: {displayValue(getAverageVal(customCardTotal || 0))}
+                  </div>
+                  <div className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
+                    {calcPercent(customCardTotal || 0)} da Receita
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[10px] font-semibold text-indigo-650/80 bg-indigo-100/60 px-2.5 py-1 rounded-md border border-indigo-200/20">
+                  Nenhuma rubrica ativa
+                </div>
+              )}
+              <div className="text-[9px] font-bold text-indigo-800 bg-indigo-100/70 px-2 py-0.5 rounded animate-pulse w-fit">
                 Clique para Personalizar
               </div>
             </div>
