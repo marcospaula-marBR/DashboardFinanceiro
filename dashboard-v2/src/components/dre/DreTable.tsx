@@ -21,6 +21,9 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
   // Inverter a ordem das colunas para mostrar o mês mais recente primeiro
   const reversedColumns = [...validColumns].reverse();
 
+  // Total da Receita para base do cálculo percentual (Análise Vertical)
+  const totalReceita = totais['Receita Bruta de Vendas'] || totais['Total Entradas Operacionais'] || 1;
+
   const displayValue = (val: number, isPercent = false) => {
     if (isPrivacyMode) return '****';
     if (isPercent) return `${val.toFixed(2).replace('.', ',')}%`;
@@ -70,6 +73,7 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
 
               const totalVal = totais[item.titulo] || 0;
               const avgVal = reversedColumns.length > 0 ? (totalVal / reversedColumns.length) : 0;
+              const pct = totalReceita > 0 ? (totalVal / totalReceita) * 100 : 0;
 
               return (
                 <tr 
@@ -79,10 +83,21 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
                     isCard ? 'bg-slate-50 font-bold text-slate-800' : 'text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  <td className={`px-4 py-2.5 sticky left-0 border-r border-b border-slate-200 min-w-[220px] w-[220px] max-w-[220px] truncate transition-colors group-hover:bg-slate-100 ${
+                  <td className={`px-4 py-2.5 sticky left-0 border-r border-b border-slate-200 min-w-[220px] w-[220px] max-w-[220px] transition-colors group-hover:bg-slate-100 ${
                     isCard ? 'bg-slate-50 z-10' : 'bg-white z-10'
                   }`}>
-                    {item.titulo}
+                    <div className="flex items-center justify-between w-full">
+                      <span className="truncate">{item.titulo}</span>
+                      {!isPercent && totalVal !== 0 && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ml-2 shrink-0 ${
+                          isCard 
+                            ? 'text-amber-700 bg-amber-100/80 border border-amber-250/20' 
+                            : 'text-slate-500 bg-slate-100 group-hover:bg-slate-200/50'
+                        }`}>
+                          {pct.toFixed(1).replace('.', ',')}%
+                        </span>
+                      )}
+                    </div>
                   </td>
                   
                   <td className={`px-4 py-2.5 text-right font-mono font-bold text-[13px] sticky left-[220px] border-r border-b border-slate-300 transition-colors group-hover:bg-slate-100 ${
