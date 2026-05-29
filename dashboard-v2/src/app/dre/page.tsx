@@ -19,7 +19,7 @@ import { DreFilters, DreMetadata, DreCalculatedResult, DreRow, DreSimulationPara
 import { DreExportModal, ExportSelections } from '@/components/dre/DreExportModal';
 import { DrePrintCharts } from '@/components/dre/DrePrintCharts';
 import { DreCustomCardModal } from '@/components/dre/DreCustomCardModal';
-import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles, Filter } from 'lucide-react';
 
 export default function DrePage() {
   const [isUploading, setIsUploading] = useState(false);
@@ -542,7 +542,21 @@ export default function DrePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 flex overflow-hidden">
+    <main className="min-h-screen bg-slate-50 flex overflow-hidden relative">
+      {/* Aba Flutuante Premium para Reabrir Filtros quando recolhido */}
+      {isSidebarCollapsed && (
+        <button
+          onClick={() => setIsSidebarCollapsed(false)}
+          className="fixed left-0 top-1/2 -translate-y-1/2 bg-slate-900 border border-l-0 border-slate-800 text-amber-500 hover:text-amber-400 p-3.5 rounded-r-2xl shadow-2xl hover:bg-slate-855 transition-all z-50 flex items-center justify-center gap-2 group animate-in slide-in-from-left duration-300 active:scale-95 border-y border-r"
+          title="Abrir Filtros"
+        >
+          <Filter size={18} className="group-hover:rotate-12 transition-transform duration-200" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-100 max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap">
+            Abrir Filtros
+          </span>
+        </button>
+      )}
+
       {/* Sidebar colapsável com transição suave */}
       <div className={`transition-all duration-300 ease-in-out border-r border-slate-800 ${
         isSidebarCollapsed ? 'w-0 opacity-0 -translate-x-full overflow-hidden' : 'w-80 opacity-100 translate-x-0'

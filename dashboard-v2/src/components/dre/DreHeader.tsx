@@ -47,7 +47,7 @@ export function DreHeader({
             onClick={onToggleSidebar}
             className={`p-2 rounded-xl border transition-all shadow-sm duration-200 active:scale-95 flex items-center justify-center ${
               isSidebarCollapsed 
-                ? "bg-slate-250 border-slate-300 text-slate-400" 
+                ? "bg-slate-100 border-slate-350 text-slate-500" 
                 : "bg-white border-slate-200 text-amber-500 hover:border-amber-450 hover:bg-amber-50"
             }`}
             title={isSidebarCollapsed ? "Expandir Filtros" : "Recolher Filtros"}
