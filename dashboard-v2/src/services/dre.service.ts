@@ -56,7 +56,7 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Fluxo de Caixa Livre FCL', tipo: 'card', var: 'fcl' },
   { titulo: 'Lucro s/ Receita Operacional', tipo: 'card_percentual', var: 'perc_lucro' },
   { titulo: 'FCL s/ Receita Operacional', tipo: 'card_percentual', var: 'perc_fcl' },
-  { titulo: 'Distribuição de Dividendos', tipo: 'card', var: 'dividendos', categorias: ['Distribuição de Dividendos', 'Dividendos'] },
+  { titulo: 'Distribuição de Dividendos', tipo: 'hidden', var: 'dividendos', categorias: ['Distribuição de Dividendos', 'Dividendos'] },
   { titulo: 'Pessoal', tipo: 'card', var: 'pessoal', categorias: ['Despesas com Pessoal', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo', 'Credenciado TI', 'Adiantamento - Credenciado TI', 'Credenciado Operacional', 'Adiantamento - Credenciado Operacional'] },
   { titulo: 'Corretiva', tipo: 'card', var: 'corretiva', categorias: ['Corretiva - B2G', 'Manutenção Corretiva'] },
   { titulo: 'Preventiva', tipo: 'card', var: 'preventiva', categorias: ['Preventiva - B2G', 'Manutenção Preventiva'] },

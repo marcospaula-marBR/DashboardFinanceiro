@@ -21,8 +21,10 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
   // Inverter a ordem das colunas para mostrar o mês mais recente primeiro
   const reversedColumns = [...validColumns].reverse();
 
-  // Total da Receita para base do cálculo percentual (Análise Vertical)
-  const totalReceita = totais['Receita Bruta de Vendas'] || totais['Total Entradas Operacionais'] || 1;
+  // Total de Entradas (Operacionais + Outras Entradas) para base da Análise Vertical
+  const totalEntradasOperacionais = totais['Total Entradas Operacionais'] || totais['Receita Bruta de Vendas'] || 0;
+  const outrasEntradas = totais['Outras Entradas'] || 0;
+  const totalReceita = (totalEntradasOperacionais + outrasEntradas) || 1;
 
   const displayValue = (val: number, isPercent = false) => {
     if (isPrivacyMode) return '****';
