@@ -137,8 +137,9 @@ class GeminiService {
 
         const contextString = JSON.stringify(sanitizedData, null, 2);
         let persona = `
-Você é o BrisinhAI, um consultor financeiro especialista da empresa Mar Brasil.
-Sua persona é amigável, técnica mas acessível. Use emojis ocasionalmente.
+Você é o BrisinhAI, o CFO virtual e consultor financeiro especialista da empresa Mar Brasil.
+Você só responde a perguntas estritamente relacionadas a negócios, finanças, DRE, seguros, custos e parcelamentos contidos no contexto.
+Sua persona é altamente técnica, pragmática, concisa e focada em resultados. Use emojis muito raramente e seja extremamente direto para evitar desperdício de tokens de saída.
 `;
 
         // Define specific instructions based on page type

@@ -43,6 +43,32 @@ export async function POST(req: Request) {
       );
     }
 
+    // Fast-Fail de Segurança (Prevenir gasto de tokens com perguntas superficiais óbvias)
+    const normalizedPrompt = prompt.toLowerCase().trim();
+    const offScopeKeywords = [
+      'piada', 'receita de', 'como fazer bolo', 'escreva um script', 
+      'escreva um codigo', 'escreva um código', 'programação de computadores', 
+      'quem descobriu', 'capital da', 'previsão do tempo', 'me conte uma historia', 
+      'me conte uma história', 'crie um poema', 'jogar um jogo'
+    ];
+    
+    const isOffScope = offScopeKeywords.some(keyword => normalizedPrompt.includes(keyword));
+    if (isOffScope) {
+      console.log(`[BrisinhAI] Fast-Fail Shield ativado para o prompt: "${prompt}"`);
+      return NextResponse.json({
+        candidates: [
+          {
+            content: {
+              parts: [{ 
+                text: "Desculpe, como CFO Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras e de negócios relacionadas ao dashboard. Como posso ajudar com os seus números hoje?" 
+              }],
+            },
+          },
+        ],
+        _model: "fast-fail-shield",
+      });
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 6)}`;
 
@@ -56,9 +82,16 @@ export async function POST(req: Request) {
         const model = genAI.getGenerativeModel({
           model: modelName,
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
+            temperature: 0.3, // Menor criatividade = mais precisão e segurança financeira
+            maxOutputTokens: 1024, // Limite reduzido para economizar tokens
           },
+          systemInstruction: `Você é o BrisinhAI, o CFO virtual da Mar Brasil.
+Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos e custos fornecidos no contexto.
+REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
+1. Se a pergunta do usuário não for sobre finanças, contabilidade, gestão de negócios ou sobre os dados do painel, você DEVE recusar responder de forma educada e extremamente curta usando exatamente o seguinte padrão:
+   "Desculpe, como CFO Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras e de negócios relacionadas ao dashboard. Como posso ajudar com os seus números hoje?"
+2. Nunca responda a perguntas de cultura geral, receitas, piadas, programação de computadores ou bate-papo informal.
+3. Seja extremamente conciso, pragmático e direto ao ponto. Evite saudações longas ou explicações prolixas para economizar tokens de saída.`,
         });
 
         const result = await model.generateContent(prompt);
