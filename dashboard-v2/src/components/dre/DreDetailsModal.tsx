@@ -262,10 +262,16 @@ export function DreDetailsModal({
                             {/* Linhas Projetos */}
                             {isExpanded && Object.values(catData.projetos).map((p, pIdx) => {
                               const projAvg = data.length > 0 ? p.totalProjGlobal / data.length : 0;
+                              const pct = catData.totalGlobal > 0 ? (p.totalProjGlobal / catData.totalGlobal) * 100 : 0;
                               return (
                                 <tr key={`${cat}-${pIdx}`} className="bg-amber-50/20 border-l-2 border-l-amber-300">
                                   <td className="px-4 py-2.5 pl-10 flex flex-col gap-0.5 sticky left-0 min-w-[280px] max-w-[280px] whitespace-normal bg-amber-50/95 z-10 border-r border-amber-100/50">
-                                    <span className="text-slate-700 font-semibold text-[11px] uppercase tracking-wider leading-tight">{p.projeto}</span>
+                                    <div className="flex items-center justify-between w-full">
+                                      <span className="text-slate-700 font-semibold text-[11px] uppercase tracking-wider leading-tight">{p.projeto}</span>
+                                      <span className="text-[10px] font-bold text-amber-600 bg-amber-100/80 px-1.5 py-0.5 rounded ml-2 shrink-0">
+                                        {pct.toFixed(1).replace('.', ',')}%
+                                      </span>
+                                    </div>
                                     {p.empresa !== '-' && <span className="text-slate-400 text-[10px] truncate">{p.empresa}</span>}
                                   </td>
                                   <td className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600 bg-amber-50/95 border-r border-amber-200/50 font-semibold sticky left-[280px] min-w-[120px] max-w-[120px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
