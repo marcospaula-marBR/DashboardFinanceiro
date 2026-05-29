@@ -151,6 +151,7 @@ FOCO DA ANÁLISE (DRE):
 2. Identifique variações significativas nos custos e despesas.
 3. Compare o realizado com métricas ideais de mercado se possível.
 4. Sugira ações para redução de custos ou aumento de receita.
+5. Você agora tem acesso aos dados detalhados/granulares de cada linha do DRE (com o agrupamento de projetos/departamentos e empresas) através da propriedade 'detalhamentoConsolidado' no contexto recebido. Use esta propriedade para explicar exatamente o que compõe as maiores despesas ou receitas quando o usuário fizer perguntas detalhadas ou pedir mais profundidade.
 `;
                 break;
             case 'PARCELAMENTOS':

@@ -324,12 +324,48 @@ export default function DrePage() {
         });
       }
 
+      // Consolidação de dados detalhados (projetos/empresas/categorias) para cada linha do DRE
+      const detalhamentoConsolidado: Record<string, { projeto: string; empresa: string; total: number }[]> = {};
+      if (results?.sourceRows) {
+        Object.entries(results.sourceRows).forEach(([tituloLinha, mesesData]) => {
+          const agrupado: Record<string, { projeto: string; empresa: string; total: number }> = {};
+          
+          Object.entries(mesesData).forEach(([mesNome, rows]) => {
+            if (!Array.isArray(rows)) return;
+            rows.forEach((r) => {
+              const val = parseFloat(r[mesNome]?.toString().replace(',', '.') || '0');
+              if (isNaN(val) || val === 0) return;
+
+              const proj = r.Projeto || '-';
+              const emp = r.Empresa || '-';
+              const cat = r.Categoria || 'Sem Categoria';
+              const label = proj !== '-' && proj !== '' ? `${cat} (${proj})` : cat;
+
+              const key = `${label}|${emp}`;
+              if (!agrupado[key]) {
+                agrupado[key] = { projeto: label, empresa: emp, total: 0 };
+              }
+              agrupado[key].total += val;
+            });
+          });
+
+          const itens = Object.values(agrupado)
+            .filter(item => Math.abs(item.total) > 0.01)
+            .sort((a, b) => b.total - a.total);
+
+          if (itens.length > 0) {
+            detalhamentoConsolidado[tituloLinha] = itens;
+          }
+        });
+      }
+
       return {
         pageType: 'DRE',
         url: window.location.pathname,
         filtros: { empresa, periodo },
         indicadores,
         resumo: { dre: resumoDre },
+        detalhamentoConsolidado,
         dataSummary: results
           ? `DRE calculado com ${(results as any).sourceRowCount ?? '?'} lançamentos. Empresa: ${empresa}. Período: ${periodo}.`
           : 'Nenhum dado carregado ainda.',
@@ -340,6 +376,7 @@ export default function DrePage() {
               mensal: results.mensal,
               kpis: results.kpis,
               validColumns: results.validColumns,
+              detalhamentoConsolidado,
             }
           : null,
       };
