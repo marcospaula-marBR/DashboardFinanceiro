@@ -27,7 +27,7 @@ export default function LandingPage() {
       { href: "/dre", icon: TrendingUp, title: "DRE Gerencial", sub: "Visão Financeira" },
       { href: "/analise-setorial.html", icon: PieChart, title: "Análise Setorial", sub: "Custos por Área" },
     { href: "/parcelamentos.html", icon: CreditCard, title: "Parcelamentos", sub: "Controle de Dívidas" },
-    { href: "/peopleboard", icon: Users, title: "PeopleBoard", sub: "Gestão Cockpit RH" },
+    { href: "/people", icon: Users, title: "People", sub: "Gestão Cockpit RH" },
     { href: "/seguros.html", icon: ShieldCheck, title: "Seguros", sub: "Gestão de Apólices" },
     { href: "/indicadores_v2.html", icon: Gauge, title: "Indicadores", sub: "KPIs Estratégicos" },
     { href: "/contratos.html", icon: FileText, title: "Contratos", sub: "Vínculo Faturamento" },

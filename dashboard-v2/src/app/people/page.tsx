@@ -28,7 +28,7 @@ import {
   CreditCard
 } from "lucide-react";
 
-export default function PeopleboardPage() {
+export default function PeoplePage() {
   const { isTestMode } = useDataMode();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
@@ -410,7 +410,7 @@ export default function PeopleboardPage() {
 
         <footer className="mt-12 pt-6 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs text-slate-400">
-            © 2026 Mar Brasil - Peopleboard Cockpit
+            © 2026 Mar Brasil - People Cockpit
           </p>
           <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 px-3 py-1 rounded-full text-slate-500">
             Versão {APP_VERSION}

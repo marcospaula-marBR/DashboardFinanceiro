@@ -139,7 +139,7 @@ export function HeaderDashboard({ activeFilters, isTestMode, onCreateEmployee, o
         {/* Title */}
         <div className="hidden md:block ml-4 pl-4 border-l border-slate-200">
           <h1 className="text-xl font-bold text-slate-800 leading-tight">
-            Peopleboard
+            People
           </h1>
           <p className="text-xs text-slate-500">
             Gestão Integrada de Pessoal e Empréstimos
