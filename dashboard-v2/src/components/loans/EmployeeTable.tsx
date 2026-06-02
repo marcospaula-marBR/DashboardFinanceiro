@@ -221,9 +221,13 @@ function EmployeeRow({
 
         <td className="py-4 px-6 text-center">
           <div className="flex items-center justify-center gap-2">
-            <button className="p-2 hover:bg-emerald-500 hover:text-white rounded-lg transition-all text-slate-400 shadow-sm border border-transparent hover:border-emerald-600">
+            <a 
+              href={`/people?employeeId=${employee.id}`}
+              className="p-2 hover:bg-emerald-500 hover:text-white rounded-lg transition-all text-slate-400 shadow-sm border border-transparent hover:border-emerald-600 flex items-center justify-center"
+              title="Ir para Ficha de RH (People)"
+            >
               <ExternalLink size={16} />
-            </button>
+            </a>
             <button className={`p-2 rounded-lg transition-all border ${isExpanded ? 'bg-slate-800 text-white border-slate-900' : 'hover:bg-slate-100 text-slate-400 border-transparent'}`}>
               {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>

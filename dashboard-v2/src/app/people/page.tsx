@@ -55,6 +55,17 @@ export default function PeoplePage() {
     fetchData(); 
   }, [isTestMode]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const empId = params.get('employeeId');
+      if (empId && employees.some(e => e.id === empId)) {
+        setSelectedEmployee(empId);
+        setIsProfileDrawerOpen(true);
+      }
+    }
+  }, [employees]);
+
   // ----- People KPI computed values -----
   const hrKpis = useMemo(() => {
     const ativos = employees.filter(e => e.status === 'Ativo');

@@ -161,6 +161,8 @@ export class PeopleService {
       remuneration_fixed: raw.remuneration_fixed ? parseFloat(String(raw.remuneration_fixed)) : 0,
       remuneration_bonus: raw.remuneration_bonus ? parseFloat(String(raw.remuneration_bonus)) : 0,
       remuneration_commission: raw.remuneration_commission ? parseFloat(String(raw.remuneration_commission)) : 0,
+      totalTaken: raw.loan_amount ? parseFloat(String(raw.loan_amount)) : 0,
+      balance: raw.loan_amount ? parseFloat(String(raw.loan_amount)) : 0,
       status: raw.status || (raw.active ? 'Ativo' : 'Inativo'),
       created_at: raw.created_at,
       
