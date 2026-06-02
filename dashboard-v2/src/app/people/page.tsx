@@ -14,7 +14,7 @@ import { PeopleTable } from "@/components/people/PeopleTable";
 import { LoansService, formatCurrency } from "@/services/loans.service";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { PDFService } from "@/services/pdf.service";
-import { Employee, LoanStats, ProjectionData } from "@/types/loans";
+import { Employee, LoanStats, ProjectionData, AuditIssue } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { APP_VERSION } from "@/version";
 import {
@@ -53,6 +53,7 @@ export default function PeoplePage() {
   const [stats, setStats] = useState<LoanStats | null>(null);
   const [projections, setProjections] = useState<ProjectionData[]>([]);
   const [expiringEmployees, setExpiringEmployees] = useState<Employee[]>([]);
+  const [allAuditIssues, setAllAuditIssues] = useState<Record<string, AuditIssue[]>>({});
 
   // Loading / error states
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
@@ -190,6 +191,11 @@ export default function PeoplePage() {
     finally { 
       setIsLoadingProjections(false); 
     }
+
+    try {
+      const auditData = await PeopleHRService.getAuditInconsistencies();
+      setAllAuditIssues(auditData);
+    } catch (err) { /* non-critical */ }
   };
 
   const handleEmployeeClick = (employeeId: string) => {
@@ -568,6 +574,7 @@ export default function PeoplePage() {
             onDelete={(emp) => setDeleteTarget(emp)}
             onEmployeeClick={handleEmployeeClick}
             showValues={showValues}
+            auditIssues={allAuditIssues}
           />
         )}
 

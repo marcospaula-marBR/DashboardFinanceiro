@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Trash2, UserCog, FileText, AlertCircle } from "lucide-react";
-import { Employee } from "@/types/loans";
+import { Employee, AuditIssue } from "@/types/loans";
 import { getRemunerationLabel } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
 import { PeopleMobileCard } from "./PeopleMobileCard";
@@ -13,6 +13,7 @@ interface PeopleTableProps {
   onDelete: (employee: Employee) => void;
   onEmployeeClick: (id: string) => void;
   showValues: boolean;
+  auditIssues?: Record<string, AuditIssue[]>;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -30,7 +31,7 @@ const VINCULO_STYLES: Record<string, string> = {
   Estagiário: 'bg-purple-50 text-purple-700 border-purple-100',
 };
 
-export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, showValues }: PeopleTableProps) {
+export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, showValues, auditIssues = {} }: PeopleTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
@@ -111,6 +112,8 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                   return diffDays >= 0 && diffDays <= 10;
                 })() : false;
+                
+                const empIssues = auditIssues[emp.id] || [];
 
                 return (
                   <tr 
@@ -125,10 +128,20 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                           alt={emp.name}
                           className="w-10 h-10 rounded-xl object-cover border border-slate-100 shrink-0"
                         />
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-slate-800 truncate group-hover:text-emerald-600 transition-colors">
-                            {emp.name}
-                          </p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-bold text-slate-800 truncate group-hover:text-emerald-600 transition-colors">
+                              {emp.name}
+                            </p>
+                            {empIssues.length > 0 && (
+                              <span 
+                                className="inline-flex items-center justify-center text-amber-500 hover:text-amber-600 transition-colors shrink-0" 
+                                title={`Auditoria: Encontrada(s) ${empIssues.length} inconsistência(s) de dados. Abra a Ficha RH para detalhes e correção.`}
+                              >
+                                <AlertCircle size={13} className="fill-amber-50" />
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold uppercase tracking-wider ${statusStyle}`}>
                               {emp.status}
@@ -214,33 +227,37 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
             Nenhum colaborador encontrado para os filtros selecionados.
           </p>
         ) : (
-          paginatedEmployees.map((emp) => (
-            <div key={emp.id} className="relative group" onClick={() => onEmployeeClick(emp.id)}>
-              <PeopleMobileCard 
-                employee={emp}
-                onClick={onEmployeeClick}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                showValues={showValues}
-              />
-              <div className="absolute top-4 right-14 flex gap-1" onClick={e => e.stopPropagation()}>
-                <button 
-                  onClick={() => onEdit(emp.id)}
-                  className="p-2 bg-white/90 backdrop-blur border border-slate-200 text-slate-500 hover:text-slate-800 rounded-xl shadow-sm active:scale-90 transition-transform"
-                  title="Editar"
-                >
-                  <UserCog size={14} />
-                </button>
-                <button 
-                  onClick={() => onDelete(emp)}
-                  className="p-2 bg-white/90 backdrop-blur border border-slate-200 text-slate-400 hover:text-red-600 rounded-xl shadow-sm active:scale-90 transition-transform"
-                  title="Excluir"
-                >
-                  <Trash2 size={14} />
-                </button>
+          paginatedEmployees.map((emp) => {
+            const empIssues = auditIssues[emp.id] || [];
+            return (
+              <div key={emp.id} className="relative group" onClick={() => onEmployeeClick(emp.id)}>
+                <PeopleMobileCard 
+                  employee={emp}
+                  onClick={onEmployeeClick}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  showValues={showValues}
+                  hasAuditIssues={empIssues.length > 0}
+                />
+                <div className="absolute top-4 right-14 flex gap-1" onClick={e => e.stopPropagation()}>
+                  <button 
+                    onClick={() => onEdit(emp.id)}
+                    className="p-2 bg-white/90 backdrop-blur border border-slate-200 text-slate-500 hover:text-slate-800 rounded-xl shadow-sm active:scale-90 transition-transform"
+                    title="Editar"
+                  >
+                    <UserCog size={14} />
+                  </button>
+                  <button 
+                    onClick={() => onDelete(emp)}
+                    className="p-2 bg-white/90 backdrop-blur border border-slate-200 text-slate-400 hover:text-red-600 rounded-xl shadow-sm active:scale-90 transition-transform"
+                    title="Excluir"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Employee, EmploymentBond, MonthlyCost, getRemunerationLabel } from "@/types/loans";
+import { Employee, EmploymentBond, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
@@ -36,12 +36,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Abas: 'pessoal', 'endereco', 'complementar', 'trajetoria', 'custo'
-  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'trajetoria' | 'custo'>('pessoal');
+  // Abas: 'pessoal', 'endereco', 'complementar', 'trajetoria', 'custo', 'auditoria'
+  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'trajetoria' | 'custo' | 'auditoria'>('pessoal');
   const [isEditMode, setIsEditMode] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [bonds, setBonds] = useState<EmploymentBond[]>([]);
   const [costs, setCosts] = useState<MonthlyCost[]>([]);
+  const [auditIssues, setAuditIssues] = useState<AuditIssue[]>([]);
+
+  // Auditoria quick cost editor state
+  const [editingCost, setEditingCost] = useState<MonthlyCost | null>(null);
+  const [editingCostCompetencia, setEditingCostCompetencia] = useState('');
+  const [editingCostValue, setEditingCostValue] = useState(0);
+  const [editingCostType, setEditingCostType] = useState<'CLT' | 'MEI'>('CLT');
+  const [saveCostError, setSaveCostError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -216,6 +224,70 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const inputClass = `w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none transition-all ${isEditMode ? 'focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500' : 'bg-transparent border-transparent px-0 font-medium'}`;
   const labelClass = "text-[10px] font-bold text-slate-500 uppercase mb-1 block";
 
+  const formatMonthCompetenciaBR = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    return `${months[monthIdx]}/${parts[0]}`;
+  };
+
+  const formatDateBR = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
+  useEffect(() => {
+    if (profile.id) {
+      const issues = PeopleHRService.auditEmployee(profile.id, bonds, costs, profile.start_date || undefined);
+      setAuditIssues(issues);
+    } else {
+      setAuditIssues([]);
+    }
+  }, [profile.id, profile.start_date, bonds, costs]);
+
+  const handleSaveCost = async () => {
+    if (!editingCost) return;
+    setSaveCostError(null);
+    try {
+      if (!profile.start_date) {
+        throw new Error('A data de admissão original do colaborador precisa estar preenchida.');
+      }
+      
+      const startVal = new Date(profile.start_date + 'T00:00:00').getTime();
+      const newCostVal = new Date(editingCostCompetencia + 'T00:00:00').getTime();
+      
+      if (newCostVal < startVal) {
+        throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior à data de admissão (${formatDateBR(profile.start_date)}).`);
+      }
+      
+      await PeopleHRService.updateMonthlyCost(editingCost.id, {
+        competencia: editingCostCompetencia,
+        valor_liquido: editingCostValue,
+        vinculo_tipo: editingCostType,
+      });
+      
+      setCosts(prev => prev.map(c => c.id === editingCost.id ? { ...c, competencia: editingCostCompetencia, valor_liquido: editingCostValue, vinculo_tipo: editingCostType } : c));
+      setEditingCost(null);
+      if (onDataChanged) onDataChanged();
+    } catch (err: unknown) {
+      const error = err as Error;
+      setSaveCostError(error.message);
+    }
+  };
+
+  const handleDeleteCost = async (costId: string) => {
+    if (!confirm('Deseja realmente excluir permanentemente este lançamento de custo para corrigir a inconsistência?')) return;
+    try {
+      await PeopleHRService.deleteMonthlyCost(costId);
+      setCosts(prev => prev.filter(c => c.id !== costId));
+      setEditingCost(null);
+      if (onDataChanged) onDataChanged();
+    } catch (err: unknown) {
+      const error = err as Error;
+      alert(error.message || 'Erro ao excluir lançamento.');
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -303,6 +375,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                   className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'custo' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
                   Custo Histórico
+                </button>
+                <button 
+                  onClick={() => setActiveTab('auditoria')}
+                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                    activeTab === 'auditoria' 
+                      ? 'border-emerald-600 text-emerald-600 font-extrabold' 
+                      : auditIssues.length > 0 
+                        ? 'border-transparent text-amber-500 hover:text-amber-600' 
+                        : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <span>Auditoria</span>
+                  {auditIssues.length > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">
+                      {auditIssues.length}
+                    </span>
+                  )}
                 </button>
               </>
             )}
@@ -412,14 +501,18 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           <input type="text" value={profile.phone || ''} onChange={e => handleChange('phone', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                         </div>
 
-                         <div>
-                          <label className={labelClass}>Chave PIX</label>
-                          <input type="text" value={profile.pix_key || ''} onChange={e => handleChange('pix_key', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
                         <div>
-                          <label className={labelClass}>Vencimento Contrato/Aditivo</label>
-                          <input type="date" value={profile.contract_expiry_date || ''} onChange={e => handleChange('contract_expiry_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
+                           <label className={labelClass}>Chave PIX</label>
+                           <input type="text" value={profile.pix_key || ''} onChange={e => handleChange('pix_key', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                         </div>
+                         <div>
+                           <label className={labelClass}>Data de Admissão</label>
+                           <input type="date" name="start_date" value={profile.start_date || ''} onChange={e => handleChange('start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                         </div>
+                         <div>
+                           <label className={labelClass}>Vencimento Contrato/Aditivo</label>
+                           <input type="date" value={profile.contract_expiry_date || ''} onChange={e => handleChange('contract_expiry_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                         </div>
                         
                         <div className="col-span-2 mt-4">
                            <div className="flex justify-between items-center mb-2">
@@ -788,10 +881,173 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                       })()}
                     </motion.div>
                   )}
+
+                  {/* ------------- ABA AUDITORIA ------------- */}
+                  {activeTab === 'auditoria' && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                      <div className="flex justify-between items-center border-b pb-2">
+                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                          <AlertCircle size={14} className="text-amber-500" /> Relatório de Inconsistências
+                        </h4>
+                        <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded uppercase">Auditoria Ativa</span>
+                      </div>
+
+                      {auditIssues.length === 0 ? (
+                        <div className="text-center py-10 bg-emerald-50/50 border border-emerald-100 rounded-2xl p-6">
+                          <CheckCircle2 className="mx-auto mb-2 text-emerald-500" size={32} />
+                          <p className="text-xs font-bold text-emerald-800">Dados 100% Íntegros!</p>
+                          <p className="text-[10px] text-emerald-600 mt-0.5">Nenhuma inconsistência de competência ou regime de vínculo detectada.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                            Foram encontradas <strong className="text-slate-800">{auditIssues.length} inconsistência(s)</strong> no prontuário deste colaborador. Use os botões rápidos abaixo para efetuar as correções imediatas:
+                          </p>
+
+                          <div className="space-y-3">
+                            {auditIssues.map((issue) => {
+                              const isError = issue.severity === 'error';
+                              return (
+                                <div key={issue.id} className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${
+                                  isError ? 'bg-red-50/50 border-red-100 text-red-900' : 'bg-amber-50/50 border-amber-100 text-amber-900'
+                                }`}>
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded leading-none ${
+                                        isError ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                      }`}>
+                                        {issue.type === 'regime_mismatch' ? 'Vínculo Divergente' : 'Competência Inválida'}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs font-semibold leading-relaxed">{issue.message}</p>
+                                  </div>
+
+                                  <div className="flex gap-2 shrink-0 flex-wrap">
+                                    {(issue.type === 'date_before_admission' || issue.type === 'missing_start_date') && (
+                                      <button 
+                                        onClick={() => {
+                                          setActiveTab('pessoal');
+                                          setIsEditMode(true);
+                                          setTimeout(() => {
+                                            const el = document.getElementsByName('start_date')[0] || document.querySelector('input[type="date"]');
+                                            if (el) (el as HTMLElement).focus();
+                                          }, 200);
+                                        }}
+                                        className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm active:scale-95 transition-transform"
+                                      >
+                                        <PenBox size={11} /> Ajustar Admissão
+                                      </button>
+                                    )}
+
+                                    {issue.details?.costId && (
+                                      <button 
+                                        onClick={() => {
+                                          const cost = costs.find(c => c.id === issue.details?.costId);
+                                          if (cost) {
+                                            setEditingCost(cost);
+                                            setEditingCostCompetencia(cost.competencia);
+                                            setEditingCostValue(cost.valor_liquido);
+                                            setEditingCostType(cost.vinculo_tipo);
+                                            setSaveCostError(null);
+                                          }
+                                        }}
+                                        className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm active:scale-95 transition-transform"
+                                      >
+                                        <Coins size={11} className="text-emerald-600" /> Ajustar Custo
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
                </div>
             )}
           </div>
         </motion.div>
+      )}
+
+      {/* Dynamic Inline cost editor modal */}
+      {editingCost && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-emerald-600 p-4 text-white flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-sm">Ajustar Lançamento de Custo</h4>
+                <p className="text-[10px] text-emerald-100 uppercase mt-0.5">Correção rápida de inconsistência</p>
+              </div>
+              <button onClick={() => setEditingCost(null)} className="text-white/80 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              {saveCostError && (
+                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200 leading-relaxed font-semibold">
+                  {saveCostError}
+                </div>
+              )}
+
+              <div>
+                <label className={labelClass}>Competência Mensal</label>
+                <input 
+                  type="date" 
+                  value={editingCostCompetencia} 
+                  onChange={e => setEditingCostCompetencia(e.target.value)} 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Regime / Tipo de Vínculo</label>
+                <select 
+                  value={editingCostType} 
+                  onChange={e => setEditingCostType(e.target.value as 'CLT' | 'MEI')} 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                >
+                  <option value="CLT">CLT</option>
+                  <option value="MEI">MEI / PJ</option>
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClass}>Valor Líquido Recebido</label>
+                <input 
+                  type="number" 
+                  value={editingCostValue} 
+                  onChange={e => setEditingCostValue(parseFloat(e.target.value) || 0)} 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => handleDeleteCost(editingCost.id)}
+                  className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                >
+                  <Trash2 size={13} /> Excluir Custo
+                </button>
+                <button
+                  onClick={() => setEditingCost(null)}
+                  className="ml-auto px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveCost}
+                  className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-bold transition-all shadow-sm"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </AnimatePresence>
   );

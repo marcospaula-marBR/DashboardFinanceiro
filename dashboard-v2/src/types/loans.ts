@@ -186,3 +186,18 @@ export function getRemunerationLabel(linkType: string): { short: string; full: s
     ? { short: 'Valor Contratual', full: 'Valor do Contrato', bruto: 'Valor Contratual' }
     : { short: 'Salário', full: 'Remuneração', bruto: 'Salário Bruto' };
 }
+
+export interface AuditIssue {
+  id: string;
+  employee_id: string;
+  type: 'date_before_admission' | 'missing_start_date' | 'regime_mismatch';
+  severity: 'error' | 'warning';
+  message: string;
+  details?: {
+    costId?: string;
+    competencia?: string;
+    admissionDate?: string;
+    vinculo?: string;
+    regimeAtivo?: string;
+  };
+}

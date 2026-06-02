@@ -1,6 +1,6 @@
 "use client";
 import { Employee, getRemunerationLabel } from "@/types/loans";
-import { Building2, Clock } from "lucide-react";
+import { Building2, Clock, AlertCircle } from "lucide-react";
 
 interface PeopleMobileCardProps {
   employee: Employee;
@@ -8,6 +8,7 @@ interface PeopleMobileCardProps {
   onEdit: (id: string) => void;
   onDelete: (employee: Employee) => void;
   showValues: boolean;
+  hasAuditIssues?: boolean;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -35,6 +36,7 @@ export function PeopleMobileCard({
   onClick,
   onDelete,
   showValues,
+  hasAuditIssues = false,
 }: PeopleMobileCardProps) {
   const statusStyle =
     STATUS_STYLES[employee.status] ?? "bg-slate-100 text-slate-600";
@@ -70,9 +72,16 @@ export function PeopleMobileCard({
           className="w-12 h-12 rounded-xl object-cover border-2 border-white shadow-sm shrink-0"
         />
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm text-slate-900 truncate">
-            {employee.name}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-bold text-sm text-slate-900 truncate">
+              {employee.name}
+            </p>
+            {hasAuditIssues && (
+              <span className="text-amber-500 shrink-0">
+                <AlertCircle size={13} className="fill-amber-50" />
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <span
               className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${vincStyle}`}
