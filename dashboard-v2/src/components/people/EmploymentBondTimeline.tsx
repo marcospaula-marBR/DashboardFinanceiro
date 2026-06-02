@@ -122,10 +122,10 @@ export function EmploymentBondTimeline({
     return (
       <div className="text-center py-10">
         <Briefcase className="mx-auto mb-3 text-slate-300" size={32} />
-        <p className="text-sm text-slate-400">
+        <p className="text-base text-slate-500">
           Nenhum vínculo registrado ainda.
         </p>
-        <p className="text-xs text-slate-300 mt-1">
+        <p className="text-sm text-slate-400 mt-1">
           Adicione um vínculo para construir a trajetória.
         </p>
       </div>
@@ -146,9 +146,9 @@ export function EmploymentBondTimeline({
       {totalTenure && (
         <div className="flex items-center gap-2 mb-5 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
           <UserCheck className="text-emerald-600" size={16} />
-          <p className="text-xs font-bold text-emerald-800">
+          <p className="text-sm font-bold text-emerald-800">
             Tempo total na empresa:{" "}
-            <span className="text-emerald-600">{totalTenure}</span>
+            <span className="text-emerald-600 font-black">{totalTenure}</span>
           </p>
         </div>
       )}
@@ -179,23 +179,23 @@ export function EmploymentBondTimeline({
               <div className="flex-1 pb-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-xs font-bold text-slate-800">
+                    <p className="text-sm font-black text-slate-900">
                       {ev.label}
                     </p>
                     {ev.sub && (
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
                         {ev.sub}
                       </p>
                     )}
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400 shrink-0 whitespace-nowrap">
+                  <span className="text-xs font-bold text-slate-500 shrink-0 whitespace-nowrap">
                     {ev.type === "current" ? "Hoje" : formatDate(ev.date)}
                   </span>
                 </div>
 
                 {ev.vinculo && ev.type !== "additive" && (
                   <span
-                    className={`inline-flex items-center mt-1.5 px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+                    className={`inline-flex items-center mt-1.5 px-2.5 py-0.5 text-xs font-bold rounded-full border ${
                       VINCULO_COLORS[ev.vinculo] ||
                       "bg-slate-100 text-slate-600 border-slate-200"
                     }`}

@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.45.5";
+export const APP_VERSION = "v.02.45.6";
 export const VERSION_DATE = "2026-06-02";
 export const VERSION_CHANGELOG = [
+  "v.02.45.6 - Feat: Ampliação das fontes, cabeçalhos, crachás e detalhes em todas as demais abas da Ficha do Colaborador (Dados Auxiliares, Trajetória, Custos, Auditoria).",
   "v.02.45.5 - Fix: Refatoração do dynamic require do pdf.service para import() dinâmico assíncrono eliminando alertas do linter.",
   "v.02.45.4 - Feat: Centralização da Ficha do Colaborador (Modal) com fontes e paddings ampliados para melhor legibilidade.",
   "v.02.45.3 - Feat: Geração da planilha unificada Dados_Consolidados_RH.xlsx contendo dados do Supabase e da planilha Dianna para limpeza.",

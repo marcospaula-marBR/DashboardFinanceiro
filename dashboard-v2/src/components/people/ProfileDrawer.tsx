@@ -656,177 +656,177 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
 
                  {/* ------------- ABA COMPLEMENTAR ------------- */}
                  {activeTab === 'complementar' && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                      
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 border-b pb-2 mb-4 flex items-center gap-2"><MapPin size={14}/> Contato de Emergência</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={labelClass}>Nome</label>
-                            <input type="text" value={profile.emergency_contact_name || ''} onChange={e => handleChange('emergency_contact_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                          </div>
-                          <div>
-                            <label className={labelClass}>Telefone</label>
-                            <input type="text" value={profile.emergency_contact_phone || ''} onChange={e => handleChange('emergency_contact_phone', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                          </div>
-                        </div>
-                      </div>
+                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                       
+                       <div>
+                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5 flex items-center gap-2"><MapPin size={16}/> Contato de Emergência</h4>
+                         <div className="grid grid-cols-2 gap-4">
+                           <div>
+                             <label className={labelClass}>Nome</label>
+                             <input type="text" value={profile.emergency_contact_name || ''} onChange={e => handleChange('emergency_contact_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Telefone</label>
+                             <input type="text" value={profile.emergency_contact_phone || ''} onChange={e => handleChange('emergency_contact_phone', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                         </div>
+                       </div>
 
-                      {/* PJ Data (if applicable) */}
-                      {profile.linkType === 'PJ' && (
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900 border-b pb-2 mb-4">Dados da Empresa (PJ)</h4>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2">
-                              <label className={labelClass}>Razão Social</label>
-                              <input type="text" value={profile.corporate_name || ''} onChange={e => handleChange('corporate_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                            </div>
-                            <div>
-                              <label className={labelClass}>Representante Legal</label>
-                              <input type="text" value={profile.responsible_name || ''} onChange={e => handleChange('responsible_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                            </div>
-                            <div>
-                              <label className={labelClass}>CPF do Responsável</label>
-                              <input type="text" value={profile.responsible_cpf || ''} onChange={e => handleChange('responsible_cpf', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                       {/* PJ Data (if applicable) */}
+                       {profile.linkType === 'PJ' && (
+                         <div>
+                           <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5">Dados da Empresa (PJ)</h4>
+                           <div className="grid grid-cols-2 gap-4">
+                             <div className="col-span-2">
+                               <label className={labelClass}>Razão Social</label>
+                               <input type="text" value={profile.corporate_name || ''} onChange={e => handleChange('corporate_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+                             <div>
+                               <label className={labelClass}>Representante Legal</label>
+                               <input type="text" value={profile.responsible_name || ''} onChange={e => handleChange('responsible_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+                             <div>
+                               <label className={labelClass}>CPF do Responsável</label>
+                               <input type="text" value={profile.responsible_cpf || ''} onChange={e => handleChange('responsible_cpf', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+                           </div>
+                         </div>
+                       )}
 
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 border-b pb-2 mb-4 flex items-center gap-2"><GraduationCap size={14}/> Background Institucional</h4>
-                        <div className="grid grid-cols-1 gap-4">
-                          <div>
-                            <label className={labelClass}>Histórico de Formação (Grau / Curso / Instituição)</label>
-                            <textarea 
-                              value={profile.education_data && Array.isArray(profile.education_data) 
-                                ? profile.education_data.map(e => `${e.level} em ${e.area}`).join('\n') 
-                                : typeof profile.education_data === 'string' 
-                                  ? profile.education_data 
-                                  : ''} 
-                              onChange={e => {
-                                const lines = e.target.value.split('\n');
-                                const parsed = lines.map(line => {
-                                  const parts = line.split(' em ');
-                                  return {
-                                    level: parts[0] || line,
-                                    area: parts[1] || ''
-                                  };
-                                });
-                                handleChange('education_data', parsed);
-                              }}
-                              readOnly={!isEditMode} 
-                              className={`${inputClass} min-h-[60px] resize-y`}
-                              placeholder="Tecnólogo em Análise de Sistemas - Fatec..."
-                            />
-                          </div>
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-slate-500 uppercase block">Meus Aditivos (Links ou Observações)</label>
-                              {profile.id && (
-                                <label className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded cursor-pointer hover:bg-emerald-100 flex items-center gap-1 transition-all">
-                                  <Upload size={12} />
-                                  Anexar Arquivo
-                                  <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
-                                </label>
-                              )}
-                            </div>
-                            <textarea 
-                              value={profile.links_aditivos || ''} 
-                              onChange={e => handleChange('links_aditivos', e.target.value)} 
-                              readOnly={!isEditMode} 
-                              className={`${inputClass} min-h-[60px] resize-y`}
-                              placeholder="Insira os links para os PDFs de aditivos ou clique em Anexar Arquivo..."
-                            />
-                          </div>
-                        </div>
-                      </div>
+                       <div>
+                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5 flex items-center gap-2"><GraduationCap size={16}/> Background Institucional</h4>
+                         <div className="grid grid-cols-1 gap-4">
+                           <div>
+                             <label className={labelClass}>Histórico de Formação (Grau / Curso / Instituição)</label>
+                             <textarea 
+                               value={profile.education_data && Array.isArray(profile.education_data) 
+                                 ? profile.education_data.map(e => `${e.level} em ${e.area}`).join('\n') 
+                                 : typeof profile.education_data === 'string' 
+                                   ? profile.education_data 
+                                   : ''} 
+                               onChange={e => {
+                                 const lines = e.target.value.split('\n');
+                                 const parsed = lines.map(line => {
+                                   const parts = line.split(' em ');
+                                   return {
+                                     level: parts[0] || line,
+                                     area: parts[1] || ''
+                                   };
+                                 });
+                                 handleChange('education_data', parsed);
+                               }}
+                               readOnly={!isEditMode} 
+                               className={`${inputClass} min-h-[60px] resize-y`}
+                               placeholder="Tecnólogo em Análise de Sistemas - Fatec..."
+                             />
+                           </div>
+                           <div>
+                             <div className="flex justify-between items-center mb-2">
+                               <label className="text-xs font-black text-slate-500 uppercase block">Meus Aditivos (Links ou Observações)</label>
+                               {profile.id && (
+                                 <label className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded cursor-pointer hover:bg-emerald-100 flex items-center gap-1 transition-all">
+                                   <Upload size={14} />
+                                   Anexar Arquivo
+                                   <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
+                                 </label>
+                               )}
+                             </div>
+                             <textarea 
+                               value={profile.links_aditivos || ''} 
+                               onChange={e => handleChange('links_aditivos', e.target.value)} 
+                               readOnly={!isEditMode} 
+                               className={`${inputClass} min-h-[60px] resize-y`}
+                               placeholder="Insira os links para os PDFs de aditivos ou clique em Anexar Arquivo..."
+                             />
+                           </div>
+                         </div>
+                       </div>
 
-                      {/* Histórico de Aditivos (Legacy) */}
-                      {(() => {
-                        const filteredHistory = history.filter(h => 
-                          h.event_type?.toLowerCase().includes('aditivo') || 
-                          h.event_type?.toLowerCase().includes('novo empréstimo') ||
-                          h.event_type?.toLowerCase().includes('empréstimo')
-                        ).filter(h => !h.observations?.toLowerCase().includes('parcela'));
+                       {/* Histórico de Aditivos (Legacy) */}
+                       {(() => {
+                         const filteredHistory = history.filter(h => 
+                           h.event_type?.toLowerCase().includes('aditivo') || 
+                           h.event_type?.toLowerCase().includes('novo empréstimo') ||
+                           h.event_type?.toLowerCase().includes('empréstimo')
+                         ).filter(h => !h.observations?.toLowerCase().includes('parcela'));
 
-                        if (filteredHistory.length === 0) return null;
+                         if (filteredHistory.length === 0) return null;
 
-                        return (
-                          <div className="mt-8">
-                            <h4 className="text-xs font-bold text-slate-900 border-b pb-2 mb-4 flex items-center gap-2">
-                              <CheckCircle2 size={14} className="text-blue-500" /> Histórico de Aditivos & Movimentações
-                            </h4>
-                            <div className="space-y-3">
-                              {filteredHistory.map((h, i) => {
-                                const urlMatch = h.observations?.match(/\((https?:\/\/.*?)\)/);
-                                const observationText = h.observations?.replace(/\[(.*?)\]\(.*?\)/g, '').trim();
+                         return (
+                           <div className="mt-8">
+                             <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5 flex items-center gap-2">
+                               <CheckCircle2 size={16} className="text-blue-500" /> Histórico de Aditivos & Movimentações
+                             </h4>
+                             <div className="space-y-3">
+                               {filteredHistory.map((h, i) => {
+                                 const urlMatch = h.observations?.match(/\((https?:\/\/.*?)\)/);
+                                 const observationText = h.observations?.replace(/\[(.*?)\]\(.*?\)/g, '').trim();
 
-                                return (
-                                  <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-xl relative group">
-                                    <div className="flex justify-between items-start mb-1">
-                                      <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded leading-none">
-                                        {h.event_type}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                        {profile.id && (
-                                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                            <label className="p-1 px-2 bg-white border border-slate-200 rounded text-[9px] font-bold text-emerald-600 cursor-pointer hover:bg-emerald-50">
-                                              <Upload size={10} /> Anexar
-                                              <input type="file" className="hidden" onChange={(e) => handleAdditiveUpload(e, h.id)} />
-                                            </label>
-                                            <button 
-                                              onClick={async () => {
-                                                if (confirm('Deseja excluir este registro do histórico?')) {
-                                                  try {
-                                                    await PeopleService.deleteHistoryItem(h.id, isTestMode);
-                                                    setHistory(prev => prev.filter(item => item.id !== h.id));
-                                                    if (onDataChanged) onDataChanged();
-                                                  } catch (err: unknown) {
-                                                    const error = err as Error;
-                                                    alert(error.message);
-                                                  }
-                                                }
-                                              }}
-                                              className="p-1 px-2 bg-white border border-slate-200 rounded text-red-500 hover:bg-red-50"
-                                              title="Excluir Registro"
-                                            >
-                                              <Trash2 size={10} />
-                                            </button>
-                                          </div>
-                                        )}
-                                        <span className="text-[10px] font-bold text-slate-400">
-                                          {new Date(h.change_date).toLocaleDateString('pt-BR')}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="text-xs text-slate-600 leading-relaxed italic flex-1">
-                                        {observationText || 'Registro de sistema.'}
-                                      </p>
-                                      {urlMatch && (
-                                        <a href={urlMatch[1]} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-blue-100 text-blue-700 rounded-lg text-[10px] font-bold flex items-center gap-1 shrink-0 hover:bg-blue-200 transition-all">
-                                           <ExternalLink size={12} /> Ver Arquivo
-                                        </a>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })()}
+                                 return (
+                                   <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-xl relative group">
+                                     <div className="flex justify-between items-start mb-1">
+                                       <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded leading-none">
+                                         {h.event_type}
+                                       </span>
+                                       <div className="flex items-center gap-2">
+                                         {profile.id && (
+                                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                             <label className="p-1 px-2 bg-white border border-slate-200 rounded text-xs font-bold text-emerald-600 cursor-pointer hover:bg-emerald-50">
+                                               <Upload size={12} /> Anexar
+                                               <input type="file" className="hidden" onChange={(e) => handleAdditiveUpload(e, h.id)} />
+                                             </label>
+                                             <button 
+                                               onClick={async () => {
+                                                 if (confirm('Deseja excluir este registro do histórico?')) {
+                                                   try {
+                                                     await PeopleService.deleteHistoryItem(h.id, isTestMode);
+                                                     setHistory(prev => prev.filter(item => item.id !== h.id));
+                                                     if (onDataChanged) onDataChanged();
+                                                   } catch (err: unknown) {
+                                                     const error = err as Error;
+                                                     alert(error.message);
+                                                   }
+                                                 }
+                                               }}
+                                               className="p-1 px-2 bg-white border border-slate-200 rounded text-red-500 hover:bg-red-50"
+                                               title="Excluir Registro"
+                                             >
+                                               <Trash2 size={12} />
+                                             </button>
+                                           </div>
+                                         )}
+                                         <span className="text-xs font-bold text-slate-400">
+                                           {new Date(h.change_date).toLocaleDateString('pt-BR')}
+                                         </span>
+                                       </div>
+                                     </div>
+                                     <div className="flex items-center justify-between gap-2">
+                                       <p className="text-sm text-slate-600 leading-relaxed italic flex-1">
+                                         {observationText || 'Registro de sistema.'}
+                                       </p>
+                                       {urlMatch && (
+                                         <a href={urlMatch[1]} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 hover:bg-blue-200 transition-all">
+                                            <ExternalLink size={14} /> Ver Arquivo
+                                         </a>
+                                       )}
+                                     </div>
+                                   </div>
+                                 );
+                               })}
+                             </div>
+                           </div>
+                         );
+                       })()}
 
-                    </motion.div>
-                 )}
+                     </motion.div>
+                  )}
 
                  {/* ------------- ABA TRAJETÓRIA ------------- */}
                  {activeTab === 'trajetoria' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                       <div className="flex justify-between items-center border-b pb-2">
-                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                          <Briefcase size={14} className="text-emerald-600" /> Trajetória Profissional
+                        <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                          <Briefcase size={16} className="text-emerald-600" /> Trajetória Profissional
                         </h4>
                       </div>
                       <EmploymentBondTimeline 
@@ -841,10 +841,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                   {activeTab === 'custo' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                       <div className="flex justify-between items-center border-b pb-2">
-                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                          <Coins size={14} className="text-emerald-600" /> Histórico Mensal de Custos
+                        <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                          <Coins size={16} className="text-emerald-600" /> Histórico Mensal de Custos
                         </h4>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Fase 2 (Dianna Import)</span>
+                        <span className="text-xs font-black text-slate-400 uppercase">Fase 2 (Dianna Import)</span>
                       </div>
 
                       {(() => {
@@ -855,8 +855,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           return (
                             <div className="text-center py-10 bg-slate-50 border border-dashed rounded-2xl">
                               <Coins className="mx-auto mb-2 text-slate-300" size={32} />
-                              <p className="text-xs text-slate-400 font-semibold">Sem dados de custos para este colaborador.</p>
-                              <p className="text-[10px] text-slate-300 mt-0.5">Os dados serão importados da planilha Dianna na Fase 2.</p>
+                              <p className="text-sm text-slate-500 font-bold">Sem dados de custos para este colaborador.</p>
+                              <p className="text-xs text-slate-400 mt-1">Os dados serão importados da planilha Dianna na Fase 2.</p>
                             </div>
                           );
                         }
@@ -865,43 +865,43 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           <div className="space-y-6">
                             <div className="grid grid-cols-2 gap-4">
                               <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
-                                <p className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider">Total Recebido</p>
-                                <p className="text-lg font-black text-emerald-700 mt-1 tabular-nums">
+                                <p className="text-xs font-black text-emerald-800 uppercase tracking-wider">Total Recebido</p>
+                                <p className="text-xl font-black text-emerald-700 mt-1 tabular-nums">
                                   {formatCurrency(stats.total)}
                                 </p>
                               </div>
                               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Média Mensal</p>
-                                <p className="text-lg font-black text-slate-700 mt-1 tabular-nums">
+                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Média Mensal</p>
+                                <p className="text-xl font-black text-slate-700 mt-1 tabular-nums">
                                   {formatCurrency(stats.average)}
                                 </p>
                               </div>
                               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Menor {remLabel.short}</p>
-                                <p className="text-sm font-bold text-slate-700 mt-1 tabular-nums">
+                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Menor {remLabel.short}</p>
+                                <p className="text-base font-black text-slate-700 mt-1 tabular-nums">
                                   {formatCurrency(stats.min)}
                                 </p>
                               </div>
                               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Maior {remLabel.short}</p>
-                                <p className="text-sm font-bold text-slate-700 mt-1 tabular-nums">
+                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Maior {remLabel.short}</p>
+                                <p className="text-base font-black text-slate-700 mt-1 tabular-nums">
                                   {formatCurrency(stats.max)}
                                 </p>
                               </div>
                             </div>
 
                             <div className="space-y-2">
-                              <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lançamentos Recentes ({stats.count})</h5>
+                              <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider">Lançamentos Recentes ({stats.count})</h5>
                               <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-white max-h-[250px] overflow-y-auto">
                                 {costs.map((c, i) => (
                                   <div key={i} className="flex justify-between items-center p-3 hover:bg-slate-50/50">
                                     <div>
-                                      <p className="text-xs font-bold text-slate-800 uppercase">
+                                      <p className="text-sm font-black text-slate-800 uppercase">
                                         {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                                       </p>
-                                      <p className="text-[9px] text-slate-400 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
+                                      <p className="text-xs text-slate-500 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
                                     </div>
-                                    <span className="text-sm font-bold text-emerald-600 tabular-nums">
+                                    <span className="text-base font-black text-emerald-600 tabular-nums">
                                       {formatCurrency(c.valor_liquido)}
                                     </span>
                                   </div>
@@ -918,21 +918,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                   {activeTab === 'auditoria' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                       <div className="flex justify-between items-center border-b pb-2">
-                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                          <AlertCircle size={14} className="text-amber-500" /> Relatório de Inconsistências
+                        <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                          <AlertCircle size={16} className="text-amber-500" /> Relatório de Inconsistências
                         </h4>
-                        <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded uppercase">Auditoria Ativa</span>
+                        <span className="text-xs font-black bg-amber-100 text-amber-800 px-2.5 py-1 rounded uppercase">Auditoria Ativa</span>
                       </div>
 
                       {auditIssues.length === 0 ? (
                         <div className="text-center py-10 bg-emerald-50/50 border border-emerald-100 rounded-2xl p-6">
                           <CheckCircle2 className="mx-auto mb-2 text-emerald-500" size={32} />
-                          <p className="text-xs font-bold text-emerald-800">Dados 100% Íntegros!</p>
-                          <p className="text-[10px] text-emerald-600 mt-0.5">Nenhuma inconsistência de competência ou regime de vínculo detectada.</p>
+                          <p className="text-sm font-bold text-emerald-800">Dados 100% Íntegros!</p>
+                          <p className="text-xs text-emerald-600 mt-1">Nenhuma inconsistência de competência ou regime de vínculo detectada.</p>
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                          <p className="text-sm text-slate-500 leading-relaxed">
                             Foram encontradas <strong className="text-slate-800">{auditIssues.length} inconsistência(s)</strong> no prontuário deste colaborador. Use os botões rápidos abaixo para efetuar as correções imediatas:
                           </p>
 
@@ -945,13 +945,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                 }`}>
                                   <div className="space-y-1">
                                     <div className="flex items-center gap-2">
-                                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded leading-none ${
+                                      <span className={`text-xs font-black px-2 py-1 rounded leading-none ${
                                         isError ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
                                       }`}>
                                         {issue.type === 'regime_mismatch' ? 'Vínculo Divergente' : 'Competência Inválida'}
                                       </span>
                                     </div>
-                                    <p className="text-xs font-semibold leading-relaxed">{issue.message}</p>
+                                    <p className="text-sm font-bold leading-relaxed">{issue.message}</p>
                                   </div>
 
                                   <div className="flex gap-2 shrink-0 flex-wrap">
@@ -965,9 +965,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                             if (el) (el as HTMLElement).focus();
                                           }, 200);
                                         }}
-                                        className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm active:scale-95 transition-transform"
+                                        className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
                                       >
-                                        <PenBox size={11} /> Ajustar Admissão
+                                        <PenBox size={13} /> Ajustar Admissão
                                       </button>
                                     )}
 
@@ -983,9 +983,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                             setSaveCostError(null);
                                           }
                                         }}
-                                        className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm active:scale-95 transition-transform"
+                                        className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
                                       >
-                                        <Coins size={11} className="text-emerald-600" /> Ajustar Custo
+                                        <Coins size={13} className="text-emerald-600" /> Ajustar Custo
                                       </button>
                                     )}
                                   </div>
