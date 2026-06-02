@@ -221,8 +221,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   };
 
   // Helper ui classes
-  const inputClass = `w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none transition-all ${isEditMode ? 'focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500' : 'bg-transparent border-transparent px-0 font-medium'}`;
-  const labelClass = "text-[10px] font-bold text-slate-500 uppercase mb-1 block";
+  const inputClass = `w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-base text-slate-700 dark:text-slate-200 outline-none transition-all ${isEditMode ? 'focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500' : 'bg-transparent border-transparent px-0 font-semibold text-slate-900 dark:text-white'}`;
+  const labelClass = "text-xs font-black tracking-wider text-slate-400 dark:text-slate-500 uppercase mb-1.5 block";
 
   const formatMonthCompetenciaBR = (dateStr: string) => {
     const parts = dateStr.split('-');
@@ -291,14 +291,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div 
-          initial={{ x: "-100%" }}
-          animate={{ x: 0 }}
-          exit={{ x: "-100%" }}
-          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          // Alinhado à ESQUERDA (left-0), sombra para a DIREITA (shadow-[20px_...])
-          className="fixed left-0 top-0 h-full w-full max-w-xl bg-white dark:bg-slate-950 shadow-[20px_0_40px_rgba(0,0,0,0.1)] z-50 flex flex-col"
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 overflow-hidden"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
         >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ type: "spring", damping: 30, stiffness: 250 }}
+            className="bg-white dark:bg-slate-950 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden"
+          >
           {/* Menu Fixo Topo */}
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0">
             <div className="flex items-center gap-3">
@@ -346,19 +351,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           <div className="flex border-b border-slate-100 px-6 shrink-0 bg-slate-50/50 overflow-x-auto whitespace-nowrap scrollbar-none">
             <button 
               onClick={() => setActiveTab('pessoal')}
-              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'pessoal' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'pessoal' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
               Info Pessoal
             </button>
             <button 
               onClick={() => setActiveTab('endereco')}
-              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'endereco' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'endereco' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
               Endereço
             </button>
             <button 
               onClick={() => setActiveTab('complementar')}
-              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'complementar' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'complementar' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
               Dados Auxiliares
             </button>
@@ -366,19 +371,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
               <>
                 <button 
                   onClick={() => setActiveTab('trajetoria')}
-                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'trajetoria' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'trajetoria' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
                   Trajetória
                 </button>
                 <button 
                   onClick={() => setActiveTab('custo')}
-                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'custo' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'custo' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
                   Custo Histórico
                 </button>
                 <button 
                   onClick={() => setActiveTab('auditoria')}
-                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
                     activeTab === 'auditoria' 
                       ? 'border-emerald-600 text-emerald-600 font-extrabold' 
                       : auditIssues.length > 0 
@@ -440,7 +445,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                               value={profile.name || ''} 
                               onChange={e => handleChange('name', e.target.value)} 
                               readOnly={!isEditMode}
-                              className={`text-lg font-bold w-full outline-none bg-transparent ${isEditMode ? 'border-b border-slate-300 border-dashed focus:border-blue-500' : ''}`}
+                              className={`text-2xl font-black w-full outline-none bg-transparent ${isEditMode ? 'border-b border-slate-300 border-dashed focus:border-emerald-500 py-1' : 'text-slate-900 dark:text-white'}`}
                               placeholder="Maria José..."
                             />
                           </div>
@@ -995,7 +1000,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                </div>
             )}
           </div>
-        </motion.div>
+          </motion.div>
+        </div>
       )}
 
       {/* Dynamic Inline cost editor modal */}
