@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
-import { Employee, ChildData, EducationData } from '@/types/loans';
+import { Employee } from '@/types/loans';
 
 export class PeopleService {
   /**
@@ -186,6 +187,10 @@ export class PeopleService {
       
       photo_url: raw.photo_url || raw.avatar_url,
       contract_expiry_date: raw.contract_expiry_date || '',
+      start_date: raw.start_date || '',
+      resignation_date: raw.resignation_date || '',
+      status_start_date: raw.status_start_date || '',
+      status_end_date: raw.status_end_date || '',
       links_contratos: raw.links_contratos,
       links_aditivos: raw.links_aditivos,
       links_emprestimos: raw.links_emprestimos
@@ -230,7 +235,11 @@ export class PeopleService {
       education_data: profile.education_data,
       
       photo_url: profile.photo_url,
-      contract_expiry_date: profile.contract_expiry_date,
+      contract_expiry_date: profile.contract_expiry_date && profile.contract_expiry_date.trim() !== '' ? profile.contract_expiry_date : null,
+      start_date: profile.start_date && profile.start_date.trim() !== '' ? profile.start_date : null,
+      resignation_date: profile.resignation_date && profile.resignation_date.trim() !== '' ? profile.resignation_date : null,
+      status_start_date: profile.status_start_date && profile.status_start_date.trim() !== '' ? profile.status_start_date : null,
+      status_end_date: profile.status_end_date && profile.status_end_date.trim() !== '' ? profile.status_end_date : null,
       links_contratos: profile.links_contratos,
       links_aditivos: profile.links_aditivos,
       links_emprestimos: profile.links_emprestimos

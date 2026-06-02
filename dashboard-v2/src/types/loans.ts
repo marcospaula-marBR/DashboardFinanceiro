@@ -50,6 +50,7 @@ export interface Employee {
   department?: string;
   job_role?: string;
   start_date?: string;
+  resignation_date?: string;
   status_start_date?: string;
   status_end_date?: string;
   
