@@ -60,7 +60,7 @@ export async function POST(req: Request) {
           {
             content: {
               parts: [{ 
-                text: "Desculpe, como CFO Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras e de negócios relacionadas ao dashboard. Como posso ajudar com os seus números hoje?" 
+                text: "Desculpe, como CFO/RH Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras, de negócios e gestão de pessoas (RH) relacionadas ao dashboard. Como posso ajudar com os seus dados hoje?" 
               }],
             },
           },
@@ -85,11 +85,11 @@ export async function POST(req: Request) {
             temperature: 0.3, // Menor criatividade = mais precisão e segurança financeira
             maxOutputTokens: 1024, // Limite reduzido para economizar tokens
           },
-          systemInstruction: `Você é o BrisinhAI, o CFO virtual da Mar Brasil.
-Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos e custos fornecidos no contexto.
+          systemInstruction: `Você é o BrisinhAI, o CFO e Consultor de Negócios/RH virtual da Mar Brasil.
+Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos, custos, colaboradores, recursos humanos (RH), folha de pagamento e headcount fornecidos no contexto.
 REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
-1. Se a pergunta do usuário não for sobre finanças, contabilidade, gestão de negócios ou sobre os dados do painel, você DEVE recusar responder de forma educada e extremamente curta usando exatamente o seguinte padrão:
-   "Desculpe, como CFO Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras e de negócios relacionadas ao dashboard. Como posso ajudar com os seus números hoje?"
+1. Se a pergunta do usuário não for sobre finanças, contabilidade, gestão de negócios, custos, colaboradores/RH ou sobre os dados do painel fornecidos, você DEVE recusar responder de forma educada e extremamente curta usando exatamente o seguinte padrão:
+   "Desculpe, como CFO/RH Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras, de negócios e gestão de pessoas (RH) relacionadas ao dashboard. Como posso ajudar com os seus dados hoje?"
 2. Nunca responda a perguntas de cultura geral, receitas, piadas, programação de computadores ou bate-papo informal.
 3. Seja extremamente conciso, pragmático e direto ao ponto. Evite saudações longas ou explicações prolixas para economizar tokens de saída.`,
         });
@@ -103,10 +103,10 @@ REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
           console.log(`[BrisinhAI] Sucesso com modelo: ${modelName}`);
           break;
         }
-      } catch (err: any) {
-        const msg = err?.message || String(err);
-        lastError = `[${modelName}] ${msg}`;
-        console.warn(`[BrisinhAI] Falha no modelo ${modelName}: ${msg}`);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        lastError = `[${modelName}] ${errorMsg}`;
+        console.warn(`[BrisinhAI] Falha no modelo ${modelName}: ${errorMsg}`);
       }
     }
 
@@ -132,13 +132,13 @@ REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
       ],
       _model: usedModel,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[BrisinhAI] Erro inesperado na API de Chat:', error);
+    const errorMsg = error instanceof Error ? error.message : 'Falha na comunicação com a Inteligência Artificial.';
     return NextResponse.json(
       {
         error: {
-          message:
-            error.message || 'Falha na comunicação com a Inteligência Artificial.',
+          message: errorMsg,
         },
       },
       { status: 500 }

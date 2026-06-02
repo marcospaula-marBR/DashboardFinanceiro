@@ -66,6 +66,47 @@ export default function PeoplePage() {
     }
   }, [employees]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).getPageContext = () => {
+        return {
+          pageType: 'PEOPLE_HR',
+          dataSummary: `Informações de Recursos Humanos da Mar Brasil. Total de colaboradores na base: ${employees.length}.`,
+          employees: employees.map(e => ({
+            id: e.id,
+            name: e.name,
+            company: e.company,
+            linkType: e.linkType,
+            status: e.status,
+            job_role: e.job_role,
+            department: e.department,
+            start_date: e.start_date,
+            remuneration: showValues ? e.remuneration : '••••••',
+            remuneration_fixed: showValues ? e.remuneration_fixed : '••••••',
+            remuneration_bonus: showValues ? e.remuneration_bonus : '••••••',
+            remuneration_commission: showValues ? e.remuneration_commission : '••••••',
+            balance: showValues ? e.balance : '••••••'
+          })),
+          monthlyCostsSummary: monthlyCosts.slice(0, 100).map(c => ({
+            competencia: c.competencia,
+            vinculo_tipo: c.vinculo_tipo,
+            valor_liquido: showValues ? c.valor_liquido : '••••••',
+            valor_fixo: showValues ? c.valor_fixo : '••••••',
+            valor_bonus: showValues ? c.valor_bonus : '••••••',
+            valor_comissao: showValues ? c.valor_comissao : '••••••'
+          }))
+        };
+      };
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        delete (window as any).getPageContext;
+      }
+    };
+  }, [employees, monthlyCosts, showValues]);
+
   // ----- People KPI computed values -----
   const hrKpis = useMemo(() => {
     const ativos = employees.filter(e => e.status === 'Ativo');

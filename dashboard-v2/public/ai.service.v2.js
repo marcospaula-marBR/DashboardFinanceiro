@@ -181,6 +181,16 @@ FOCO DA ANÁLISE (SETORIAL):
 3. Aponte anomalias ou gastos fora do padrão (outliers).
 `;
                 break;
+            case 'PEOPLE':
+            case 'PEOPLE_HR':
+                focusArea = `
+FOCO DA ANÁLISE (COLABORADORES & RECURSOS HUMANOS - RH):
+1. Analise a distribuição do headcount e custos de folha por empresa, setor, regime de vínculo (CLT, MEI, PJ, Estagiário).
+2. Avalie salários médios, custos com bônus e comissões alocados.
+3. Se houver inconsistências de auditoria de dados de RH, aponte-as.
+4. Forneça recomendações sobre alocação de pessoal e eficiência da folha de pagamento.
+`;
+                break;
             default:
                 focusArea = `
 FOCO DA ANÁLISE (GERAL):
