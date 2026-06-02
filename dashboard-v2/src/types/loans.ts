@@ -128,3 +128,61 @@ export interface FilterParams {
   incluirExColaboradores?: boolean;
   incluirLiquidados?: boolean;
 }
+
+export interface EmploymentBond {
+  id: string;
+  employee_id: string;
+  vinculo: 'CLT' | 'MEI' | 'Estagiário' | 'PJ';
+  empresa: string;
+  centro_custo?: string;
+  setor?: string;
+  cargo?: string;
+  start_date: string;
+  end_date?: string;
+  motivo_fim?: string;
+  created_at?: string;
+}
+
+export interface MonthlyCost {
+  id: string;
+  employee_id: string;
+  competencia: string; // YYYY-MM-01
+  vinculo_tipo: 'CLT' | 'MEI';
+  valor_holerite?: number;
+  valor_adiantamento?: number;
+  valor_hora_extra?: number;
+  valor_adicional_not?: number;
+  valor_vr?: number;
+  valor_vt?: number;
+  valor_ajuda_custo?: number;
+  valor_cesta?: number;
+  valor_ferias?: number;
+  valor_rescisao?: number;
+  valor_decimo_terceiro?: number;
+  valor_descontos?: number;
+  valor_liquido: number;
+  origem: 'csv' | 'manual' | 'dianna_import';
+  observacao?: string;
+  created_at?: string;
+}
+
+export interface PeopleFilters {
+  search?: string;
+  empresa?: string;
+  status?: string;
+  vinculo?: string;
+  setor?: string;
+  centroCusto?: string;
+  competencia?: string;
+  temEmprestimo?: string;
+  temAditivo?: string;
+  mostrarInativos?: boolean;
+}
+
+// Helper: returns the correct remuneration label based on employment type
+export function getRemunerationLabel(linkType: string): { short: string; full: string; bruto: string } {
+  const isPJ = linkType === 'MEI' || linkType === 'PJ';
+  return isPJ
+    ? { short: 'Valor Contratual', full: 'Valor do Contrato', bruto: 'Valor Contratual' }
+    : { short: 'Salário', full: 'Remuneração', bruto: 'Salário Bruto' };
+}

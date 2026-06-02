@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Employee } from "@/types/loans";
+import { Employee, EmploymentBond, MonthlyCost, getRemunerationLabel } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
+import { PeopleHRService } from "@/services/people-hr.service";
+import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
+import { formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
 
 interface ProfileDrawerProps {
@@ -22,10 +25,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Abas: 'pessoal', 'endereco', 'complementar'
-  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar'>('pessoal');
+  // Abas: 'pessoal', 'endereco', 'complementar', 'trajetoria', 'custo'
+  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'trajetoria' | 'custo'>('pessoal');
   const [isEditMode, setIsEditMode] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+  const [bonds, setBonds] = useState<EmploymentBond[]>([]);
+  const [costs, setCosts] = useState<MonthlyCost[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -40,6 +45,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           status: 'Ativo',
           remuneration: 0
         });
+        setBonds([]);
+        setCosts([]);
         setIsEditMode(true);
       }
       setActiveTab('pessoal');
@@ -54,12 +61,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     setIsLoading(true);
     setError(null);
     try {
-      const [data, hist] = await Promise.all([
+      const [data, hist, bondsData, costsData] = await Promise.all([
         PeopleService.getEmployeeProfile(id, isTestMode),
-        PeopleService.getEmployeeHistory(id, isTestMode)
+        PeopleService.getEmployeeHistory(id, isTestMode),
+        PeopleHRService.getEmploymentBonds(id),
+        PeopleHRService.getMonthlyCosts(id)
       ]);
       setProfile(data || {});
       setHistory(hist || []);
+      setBonds(bondsData || []);
+      setCosts(costsData || []);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar Ficha RH');
     } finally {
@@ -202,7 +213,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           {/* Menu Fixo Topo */}
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0">
             <div className="flex items-center gap-3">
-               <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+               <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-600">
                   <UserRound size={20} />
                </div>
                <div>
@@ -243,25 +254,41 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           </div>
 
           {/* Abas */}
-          <div className="flex border-b border-slate-100 px-6 shrink-0 bg-slate-50/50">
+          <div className="flex border-b border-slate-100 px-6 shrink-0 bg-slate-50/50 overflow-x-auto whitespace-nowrap scrollbar-none">
             <button 
               onClick={() => setActiveTab('pessoal')}
-              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'pessoal' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'pessoal' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
               Info Pessoal
             </button>
             <button 
               onClick={() => setActiveTab('endereco')}
-              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'endereco' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'endereco' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
               Endereço
             </button>
             <button 
               onClick={() => setActiveTab('complementar')}
-              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'complementar' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'complementar' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
               Dados Auxiliares
             </button>
+            {employeeId && (
+              <>
+                <button 
+                  onClick={() => setActiveTab('trajetoria')}
+                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'trajetoria' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                >
+                  Trajetória
+                </button>
+                <button 
+                  onClick={() => setActiveTab('custo')}
+                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${activeTab === 'custo' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                >
+                  Custo Histórico
+                </button>
+              </>
+            )}
           </div>
 
            {/* Corpo Escrolável */}
@@ -346,7 +373,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           <input type="text" value={profile.document_id || ''} onChange={e => handleChange('document_id', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="000.000.000-00"/>
                         </div>
                         <div>
-                          <label className={labelClass}>Remuneração Bruta</label>
+                          <label className={labelClass}>{getRemunerationLabel(profile.linkType || 'CLT').bruto}</label>
                           <input type="number" step="0.01" value={profile.remuneration || ''} onChange={e => handleChange('remuneration', parseFloat(e.target.value))} readOnly={!isEditMode} className={inputClass} placeholder="5000.00"/>
                         </div>
 
@@ -640,6 +667,99 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
 
                     </motion.div>
                  )}
+
+                 {/* ------------- ABA TRAJETÓRIA ------------- */}
+                 {activeTab === 'trajetoria' && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                      <div className="flex justify-between items-center border-b pb-2">
+                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                          <Briefcase size={14} className="text-emerald-600" /> Trajetória Profissional
+                        </h4>
+                      </div>
+                      <EmploymentBondTimeline 
+                        bonds={bonds} 
+                        startDate={profile.start_date} 
+                        additives={history}
+                      />
+                    </motion.div>
+                  )}
+
+                  {/* ------------- ABA CUSTO HISTÓRICO ------------- */}
+                  {activeTab === 'custo' && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                      <div className="flex justify-between items-center border-b pb-2">
+                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                          <Coins size={14} className="text-emerald-600" /> Histórico Mensal de Custos
+                        </h4>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Fase 2 (Dianna Import)</span>
+                      </div>
+
+                      {(() => {
+                        const stats = PeopleHRService.computeCostStats(costs);
+                        const remLabel = getRemunerationLabel(profile.linkType || 'CLT');
+                        
+                        if (!stats) {
+                          return (
+                            <div className="text-center py-10 bg-slate-50 border border-dashed rounded-2xl">
+                              <Coins className="mx-auto mb-2 text-slate-300" size={32} />
+                              <p className="text-xs text-slate-400 font-semibold">Sem dados de custos para este colaborador.</p>
+                              <p className="text-[10px] text-slate-300 mt-0.5">Os dados serão importados da planilha Dianna na Fase 2.</p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                                <p className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider">Total Recebido</p>
+                                <p className="text-lg font-black text-emerald-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.total)}
+                                </p>
+                              </div>
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Média Mensal</p>
+                                <p className="text-lg font-black text-slate-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.average)}
+                                </p>
+                              </div>
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Menor {remLabel.short}</p>
+                                <p className="text-sm font-bold text-slate-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.min)}
+                                </p>
+                              </div>
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Maior {remLabel.short}</p>
+                                <p className="text-sm font-bold text-slate-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.max)}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lançamentos Recentes ({stats.count})</h5>
+                              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-white max-h-[250px] overflow-y-auto">
+                                {costs.map((c, i) => (
+                                  <div key={i} className="flex justify-between items-center p-3 hover:bg-slate-50/50">
+                                    <div>
+                                      <p className="text-xs font-bold text-slate-800 uppercase">
+                                        {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                      </p>
+                                      <p className="text-[9px] text-slate-400 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
+                                    </div>
+                                    <span className="text-sm font-bold text-emerald-600 tabular-nums">
+                                      {formatCurrency(c.valor_liquido)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </motion.div>
+                  )}
                </div>
             )}
           </div>
