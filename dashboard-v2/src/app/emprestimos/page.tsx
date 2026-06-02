@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { HeaderDashboard } from "@/components/layout/HeaderDashboard";
 import { FilterBar, FilterValues } from "@/components/loans/FilterBar";
 import { StatCard } from "@/components/loans/StatCard";
 import { ProjectionChart } from "@/components/loans/ProjectionChart";
 import { EmployeeTable } from "@/components/loans/EmployeeTable";
 import { SideDrawer } from "@/components/loans/SideDrawer";
-import { ProfileDrawer } from "@/components/people/ProfileDrawer";
 import { PaymentProcessingModal } from "@/components/loans/PaymentProcessingModal";
 import { NewLoanModal } from "@/components/loans/NewLoanModal";
-import { LoansService, formatCurrency, getBillingMonthStr } from "@/services/loans.service";
+import { LoansService, formatCurrency } from "@/services/loans.service";
 import { Employee, LoanStats, ProjectionData } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { APP_VERSION } from "@/version";
@@ -30,8 +30,8 @@ import {
 
 export default function EmprestimosPage() {
   const { isTestMode } = useDataMode();
+  const router = useRouter();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isNewLoanOpen, setIsNewLoanOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
@@ -141,12 +141,10 @@ export default function EmprestimosPage() {
   const handleEmployeeClick = (employeeId: string) => {
     setSelectedEmployee(employeeId);
     setIsDrawerOpen(true);
-    setIsProfileDrawerOpen(true);
   };
 
   const handleCreateEmployeeClick = () => {
-    setSelectedEmployee(undefined);
-    setIsProfileDrawerOpen(true);
+    router.push('/people');
   };
 
   const handleFilterChange = (filters: FilterValues) => {
@@ -422,23 +420,11 @@ export default function EmprestimosPage() {
         isOpen={isDrawerOpen} 
         onClose={() => {
           setIsDrawerOpen(false);
-          setIsProfileDrawerOpen(false);
           setSelectedEmployee(undefined);
         }} 
         employeeId={selectedEmployee}
         onDataChanged={fetchData}
         onAddNewLoan={() => setIsNewLoanOpen(true)}
-      />
-
-      <ProfileDrawer 
-        isOpen={isProfileDrawerOpen} 
-        onClose={() => {
-          setIsDrawerOpen(false);
-          setIsProfileDrawerOpen(false);
-          setSelectedEmployee(undefined);
-        }} 
-        employeeId={selectedEmployee}
-        onDataChanged={fetchData}
       />
 
       <PaymentProcessingModal
@@ -450,8 +436,8 @@ export default function EmprestimosPage() {
         isOpen={isNewLoanOpen} 
         onClose={() => setIsNewLoanOpen(false)} 
         onSuccess={() => fetchData(activeFilters)}
-        onGenerateTerm={(loanData) => {
-          const { PDFService } = require('@/services/pdf.service');
+        onGenerateTerm={async (loanData) => {
+          const { PDFService } = await import('@/services/pdf.service');
           PDFService.generateDebtTermPDF(loanData, {}, isTestMode);
         }}
       />

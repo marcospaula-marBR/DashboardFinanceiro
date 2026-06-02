@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.45.4";
+export const APP_VERSION = "v.02.45.5";
 export const VERSION_DATE = "2026-06-02";
 export const VERSION_CHANGELOG = [
+  "v.02.45.5 - Fix: Refatoração do dynamic require do pdf.service para import() dinâmico assíncrono eliminando alertas do linter.",
   "v.02.45.4 - Feat: Centralização da Ficha do Colaborador (Modal) com fontes e paddings ampliados para melhor legibilidade.",
   "v.02.45.3 - Feat: Geração da planilha unificada Dados_Consolidados_RH.xlsx contendo dados do Supabase e da planilha Dianna para limpeza.",
   "v.02.45.2 - Fix: Mapeamento de datas de admissão e desligamento e tratamento de data vazia (convertendo string vazia para null) ao salvar.",
