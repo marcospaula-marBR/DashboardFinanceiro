@@ -13,6 +13,7 @@ import { DeleteConfirmDialog } from "@/components/people/DeleteConfirmDialog";
 import { PeopleTable } from "@/components/people/PeopleTable";
 import { LoansService, formatCurrency } from "@/services/loans.service";
 import { PeopleHRService } from "@/services/people-hr.service";
+import { PDFService } from "@/services/pdf.service";
 import { Employee, LoanStats, ProjectionData } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { APP_VERSION } from "@/version";
@@ -208,8 +209,9 @@ export default function PeoplePage() {
       await PeopleHRService.deleteEmployee(deleteTarget.id);
       setDeleteTarget(null);
       await fetchData();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao excluir colaborador');
+    } catch (err: unknown) {
+      const error = err as Error;
+      alert(error.message || 'Erro ao excluir colaborador');
     }
   };
 
@@ -614,7 +616,6 @@ export default function PeoplePage() {
         onClose={() => setIsNewLoanOpen(false)}
         onSuccess={fetchData}
         onGenerateTerm={(loanData) => {
-          const { PDFService } = require('@/services/pdf.service');
           PDFService.generateDebtTermPDF(loanData, {}, isTestMode);
         }}
       />

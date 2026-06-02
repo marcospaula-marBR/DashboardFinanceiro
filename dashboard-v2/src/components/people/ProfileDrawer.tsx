@@ -10,6 +10,17 @@ import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
 import { formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
 
+interface HistoryItem {
+  id: string;
+  employee_id?: string;
+  event_type: string;
+  change_date: string;
+  previous_value?: string;
+  new_value?: string;
+  observations?: string;
+  created_at?: string;
+}
+
 interface ProfileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -28,7 +39,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   // Abas: 'pessoal', 'endereco', 'complementar', 'trajetoria', 'custo'
   const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'trajetoria' | 'custo'>('pessoal');
   const [isEditMode, setIsEditMode] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [bonds, setBonds] = useState<EmploymentBond[]>([]);
   const [costs, setCosts] = useState<MonthlyCost[]>([]);
 
@@ -71,8 +82,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       setHistory(hist || []);
       setBonds(bondsData || []);
       setCosts(costsData || []);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao carregar Ficha RH');
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || 'Erro ao carregar Ficha RH');
     } finally {
       setIsLoading(false);
     }
@@ -96,14 +108,15 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       setIsEditMode(false);
       if (onDataChanged) onDataChanged();
       
-    } catch (err: any) {
-      setError(err.message || 'Erro ao salvar os dados.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || 'Erro ao salvar os dados.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleChange = (field: keyof Employee, value: any) => {
+  const handleChange = <K extends keyof Employee>(field: K, value: Employee[K]) => {
     setProfile(prev => ({ ...prev, [field]: value }));
   };
 
@@ -118,8 +131,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       // Se não der erro, salva o resto tbm pra persistir a URL
       await PeopleService.saveEmployeeProfile({ ...profile, photo_url: url }, isTestMode);
       if (onDataChanged) onDataChanged();
-    } catch (err: any) {
-       setError(err.message);
+    } catch (err: unknown) {
+       const error = err as Error;
+       setError(error.message);
     } finally {
       setIsSaving(false);
     }
@@ -150,8 +164,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         await PeopleService.saveEmployeeProfile({ ...profile, links_aditivos: newText }, isTestMode);
       }
       if (onDataChanged) onDataChanged();
-    } catch (err: any) {
-       setError(err.message);
+    } catch (err: unknown) {
+       const error = err as Error;
+       setError(error.message);
     } finally {
       setIsSaving(false);
     }
@@ -170,8 +185,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       handleChange('links_contratos', newText);
       await PeopleService.saveEmployeeProfile({ ...profile, links_contratos: newText }, isTestMode);
       if (onDataChanged) onDataChanged();
-    } catch (err: any) {
-       setError(err.message);
+    } catch (err: unknown) {
+       const error = err as Error;
+       setError(error.message);
     } finally {
       setIsSaving(false);
     }
@@ -188,8 +204,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       handleChange(field, newText);
       await PeopleService.saveEmployeeProfile({ ...profile, [field]: newText }, isTestMode);
       if (onDataChanged) onDataChanged();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message);
     } finally {
       setIsSaving(false);
     }
@@ -448,7 +465,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                         <div>
                           <label className={labelClass}>Status</label>
                            {isEditMode ? (
-                                <select value={profile.status || 'Ativo'} onChange={e => handleChange('status', e.target.value as any)} className={inputClass}>
+                                <select value={profile.status || 'Ativo'} onChange={e => handleChange('status', e.target.value as Employee['status'])} className={inputClass}>
                                   <option value="Ativo">Ativo</option>
                                   <option value="Férias">Férias</option>
                                   <option value="Inativo">Inativo</option>
@@ -562,7 +579,17 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                 : typeof profile.education_data === 'string' 
                                   ? profile.education_data 
                                   : ''} 
-                              onChange={e => handleChange('education_data', e.target.value)} 
+                              onChange={e => {
+                                const lines = e.target.value.split('\n');
+                                const parsed = lines.map(line => {
+                                  const parts = line.split(' em ');
+                                  return {
+                                    level: parts[0] || line,
+                                    area: parts[1] || ''
+                                  };
+                                });
+                                handleChange('education_data', parsed);
+                              }}
                               readOnly={!isEditMode} 
                               className={`${inputClass} min-h-[60px] resize-y`}
                               placeholder="Tecnólogo em Análise de Sistemas - Fatec..."
@@ -630,8 +657,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                                     await PeopleService.deleteHistoryItem(h.id, isTestMode);
                                                     setHistory(prev => prev.filter(item => item.id !== h.id));
                                                     if (onDataChanged) onDataChanged();
-                                                  } catch (err: any) {
-                                                    alert(err.message);
+                                                  } catch (err: unknown) {
+                                                    const error = err as Error;
+                                                    alert(error.message);
                                                   }
                                                 }
                                               }}
