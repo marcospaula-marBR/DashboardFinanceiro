@@ -472,6 +472,33 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                         </div>
                       </div>
 
+                      {/* Loans Indicator & Redirect */}
+                      {profile.id && (profile.totalTaken || 0) > 0 && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3 shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                              <Coins size={16} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">
+                                Registro de Empréstimos Consignados
+                              </p>
+                              <p className="text-[10px] text-slate-500 font-medium">
+                                {profile.balance && profile.balance > 0 
+                                  ? `Possui saldo devedor ativo de ${formatCurrency(profile.balance)}`
+                                  : 'Já realizou empréstimo(s) no passado (atualmente quitado)'}
+                              </p>
+                            </div>
+                          </div>
+                          <a 
+                            href="/emprestimos" 
+                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-1 shrink-0 shadow-sm transition-all active:scale-95"
+                          >
+                            <ExternalLink size={10} /> Detalhes
+                          </a>
+                        </div>
+                      )}
+
                       {/* Fields */}
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         <div>

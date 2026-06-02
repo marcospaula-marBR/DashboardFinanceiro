@@ -23,6 +23,16 @@ export const PeopleHRService = {
     return data || [];
   },
 
+  async getAllMonthlyCosts(limit = 2000): Promise<MonthlyCost[]> {
+    const { data, error } = await supabase
+      .from('people_monthly_costs')
+      .select('*')
+      .order('competencia', { ascending: true })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  },
+
   computeCostStats(costs: MonthlyCost[]) {
     if (!costs.length) return null;
     const values = costs.map(c => c.valor_liquido).filter(v => v > 0);

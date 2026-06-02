@@ -1,38 +1,31 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { HeaderDashboard } from "@/components/layout/HeaderDashboard";
-import { StatCard } from "@/components/loans/StatCard";
-import { ProjectionChart } from "@/components/loans/ProjectionChart";
-import { SideDrawer } from "@/components/loans/SideDrawer";
+import Link from "next/link";
 import { ProfileDrawer } from "@/components/people/ProfileDrawer";
-import { PaymentProcessingModal } from "@/components/loans/PaymentProcessingModal";
-import { NewLoanModal } from "@/components/loans/NewLoanModal";
 import { PeopleKpiCard } from "@/components/people/PeopleKpiCard";
 import { DeleteConfirmDialog } from "@/components/people/DeleteConfirmDialog";
 import { PeopleTable } from "@/components/people/PeopleTable";
-import { LoansService, formatCurrency } from "@/services/loans.service";
+import { PayrollCostChart } from "@/components/people/PayrollCostChart";
 import { PeopleHRService } from "@/services/people-hr.service";
-import { PDFService } from "@/services/pdf.service";
-import { Employee, LoanStats, ProjectionData, AuditIssue } from "@/types/loans";
+import { Employee, MonthlyCost, AuditIssue } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { APP_VERSION } from "@/version";
+import { formatCurrency } from "@/services/loans.service";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  Receipt, PiggyBank, HandCoins, CalendarClock, FileCheck, Files,
-  TrendingUp, Timer, Loader2, AlertCircle, CreditCard, Users,
-  UserX, Clock, Eye, EyeOff, Search, Filter, X, ChevronDown, UserCog
+  Loader2, AlertCircle, Users, UserX, Clock, Eye, EyeOff, Search, Filter, X, 
+  UserCog, Plus, HandCoins, Coins, TrendingUp
 } from "lucide-react";
 
 export default function PeoplePage() {
   const { isTestMode } = useDataMode();
   
   // Drawer / modal states
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [isNewLoanOpen, setIsNewLoanOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // UI states
   const [showValues, setShowValues] = useState(true);
@@ -45,20 +38,16 @@ export default function PeoplePage() {
   const [filterVinculo, setFilterVinculo] = useState('');
   const [filterSetor, setFilterSetor] = useState('');
   const [showInativos, setShowInativos] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Data states
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
-  const [stats, setStats] = useState<LoanStats | null>(null);
-  const [projections, setProjections] = useState<ProjectionData[]>([]);
-  const [expiringEmployees, setExpiringEmployees] = useState<Employee[]>([]);
+  const [monthlyCosts, setMonthlyCosts] = useState<MonthlyCost[]>([]);
   const [allAuditIssues, setAllAuditIssues] = useState<Record<string, AuditIssue[]>>({});
 
   // Loading / error states
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
-  const [isLoadingProjections, setIsLoadingProjections] = useState(true);
+  const [isLoadingCosts, setIsLoadingCosts] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -106,6 +95,27 @@ export default function PeoplePage() {
     };
   }, [employees]);
 
+  // Sum of total payroll cost for the latest competency month from seeded Dianna data
+  const latestPayrollCost = useMemo(() => {
+    if (monthlyCosts.length === 0) return 0;
+    const sorted = [...monthlyCosts].sort((a, b) => b.competencia.localeCompare(a.competencia));
+    const latestMonth = sorted[0].competencia;
+    const latestCosts = monthlyCosts.filter(c => c.competencia === latestMonth);
+    return latestCosts.reduce((sum, c) => sum + (c.valor_liquido || 0), 0);
+  }, [monthlyCosts]);
+
+  // Average active employee remuneration
+  const avgRemuneration = useMemo(() => {
+    const activeEmps = employees.filter(e => e.status === 'Ativo' && e.remuneration > 0);
+    if (activeEmps.length === 0) return 0;
+    return Math.round(activeEmps.reduce((sum, e) => sum + e.remuneration, 0) / activeEmps.length);
+  }, [employees]);
+
+  // Count total audit inconsistencies found in the cockpit
+  const totalAuditIssuesCount = useMemo(() => {
+    return Object.values(allAuditIssues).reduce((sum, issues) => sum + issues.length, 0);
+  }, [allAuditIssues]);
+
   // ----- Unique filter options from data -----
   const setores = useMemo(() => {
     const s = new Set(employees.map(e => e.department).filter(Boolean) as string[]);
@@ -131,37 +141,12 @@ export default function PeoplePage() {
     setFilteredEmployees(result);
   }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, showInativos]);
 
-  const computeStats = (list: Employee[], base: LoanStats | null): LoanStats | null => {
-    if (!base) return null;
-    if (list.length === 0) return { ...base, totalEmprestado: 0, saldoDevedor: 0, totalRecebido: 0, recebivelMes: 0, contratosAtivos: 0, contratosLiquidados: 0 };
-    return {
-      ...base,
-      totalEmprestado: list.reduce((s, e) => s + (e.totalTaken || 0), 0),
-      saldoDevedor: list.reduce((s, e) => s + (e.balance || 0), 0),
-      totalRecebido: list.reduce((s, e) => s + (e.totalReceived || 0), 0),
-      recebivelMes: list.reduce((s, e) => s + (e.monthInstallment || 0), 0),
-      contratosAtivos: list.filter(e => e.loanStatus === 'Ativo').length,
-      contratosLiquidados: list.filter(e => e.loanStatus === 'Quitado').length,
-    };
-  };
-
-  const filteredStats = computeStats(filteredEmployees, stats);
-
   const fetchData = async () => {
     setError(null);
-    try {
-      setIsLoadingStats(true);
-      const statsData = await LoansService.getStats(isTestMode);
-      setStats(statsData);
-    } catch (err) { 
-      setError('Falha ao carregar estatísticas'); 
-    } finally { 
-      setIsLoadingStats(false); 
-    }
-
+    
     try {
       setIsLoadingEmployees(true);
-      const employeesData = await LoansService.getEmployees({ mostrarTodos: true }, isTestMode);
+      const employeesData = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true });
       setEmployees(employeesData);
     } catch (err) { 
       setError('Falha ao carregar colaboradores'); 
@@ -170,37 +155,25 @@ export default function PeoplePage() {
     }
 
     try {
-      const allEmps = await LoansService.getEmployees({ mostrarTodos: true }, isTestMode);
-      const now = new Date();
-      const threshold = new Date();
-      threshold.setDate(now.getDate() + 10);
-      setExpiringEmployees(
-        allEmps.filter(e => {
-          if (!e.contract_expiry_date) return false;
-          const exp = new Date(e.contract_expiry_date + 'T12:00:00');
-          return exp >= now && exp <= threshold;
-        })
-      );
-    } catch (err) { /* non-critical */ }
-
-    try {
-      setIsLoadingProjections(true);
-      const proj = await LoansService.getProjections(isTestMode);
-      setProjections(proj);
-    } catch (err) { /* non-critical */ }
-    finally { 
-      setIsLoadingProjections(false); 
+      setIsLoadingCosts(true);
+      const costsData = await PeopleHRService.getAllMonthlyCosts();
+      setMonthlyCosts(costsData);
+    } catch (err) {
+      console.error('Erro ao carregar custos históricos:', err);
+    } finally {
+      setIsLoadingCosts(false);
     }
 
     try {
       const auditData = await PeopleHRService.getAuditInconsistencies();
       setAllAuditIssues(auditData);
-    } catch (err) { /* non-critical */ }
+    } catch (err) { 
+      console.error('Erro ao auditar base de dados:', err);
+    }
   };
 
   const handleEmployeeClick = (employeeId: string) => {
     setSelectedEmployee(employeeId);
-    setIsDrawerOpen(true);
     setIsProfileDrawerOpen(true);
   };
 
@@ -221,78 +194,71 @@ export default function PeoplePage() {
     }
   };
 
-  const clearFilters = () => {
-    setFilterSearch('');
-    setFilterEmpresa('');
-    setFilterStatus('');
-    setFilterVinculo('');
-    setFilterSetor('');
-    setShowInativos(false);
-  };
-
-  const hasActiveFilters = filterSearch || filterEmpresa || filterStatus || filterVinculo || filterSetor || showInativos;
-
-  const StatCardSkeleton = () => (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 animate-pulse">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-slate-200 rounded-xl" />
-        <div className="flex-1 space-y-2">
-          <div className="h-3 bg-slate-200 rounded w-24" />
-          <div className="h-6 bg-slate-200 rounded w-32" />
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <main className="min-h-screen bg-slate-50 pb-12">
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
+      {/* ── LEFT SIDEBAR (Dark Navy) ── */}
+      <aside className="w-[280px] bg-slate-900 text-slate-100 flex flex-col border-r border-slate-800 shrink-0 hidden md:flex">
+        {/* Sidebar Header */}
+        <div className="p-6 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md">
+              <Users size={18} />
+            </div>
+            <div>
+              <h2 className="text-sm font-black tracking-wider uppercase leading-tight">People HR</h2>
+              <p className="text-[9px] font-bold text-slate-500 uppercase leading-none mt-0.5">Executive Cockpit</p>
+            </div>
+          </div>
+        </div>
 
-        <HeaderDashboard
-          activeFilters={undefined}
-          isTestMode={isTestMode}
-          onCreateEmployee={handleCreateEmployeeClick}
-          onOpenNewLoan={() => setIsNewLoanOpen(true)}
-        />
-
-        {/* ── People Filter Bar ── */}
-        <div className="mb-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex flex-wrap items-center gap-3 p-4">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+        {/* Sidebar Filters */}
+        <div className="flex-1 p-6 space-y-5 overflow-y-auto">
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Busca Rápida</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
               <input
                 value={filterSearch}
                 onChange={e => setFilterSearch(e.target.value)}
-                placeholder="Buscar por nome, cargo, CPF..."
-                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all"
+                placeholder="Nome, cargo, CPF..."
+                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white placeholder-slate-500 transition-all"
               />
             </div>
+          </div>
 
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Empresa</label>
             <select
               value={filterEmpresa}
               onChange={e => setFilterEmpresa(e.target.value)}
-              className="text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white"
+              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
             >
               <option value="">Todas as Empresas</option>
               <option value="MarBR">MarBR</option>
               <option value="DZM">DZM</option>
             </select>
+          </div>
 
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Status</label>
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
-              className="text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white"
+              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
             >
               <option value="">Todos os Status</option>
               <option value="Ativo">Ativo</option>
               <option value="Férias">Férias</option>
               <option value="Inativo">Inativo</option>
             </select>
+          </div>
 
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Vínculo</label>
             <select
               value={filterVinculo}
               onChange={e => setFilterVinculo(e.target.value)}
-              className="text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white"
+              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
             >
               <option value="">Todos os Vínculos</option>
               <option value="CLT">CLT</option>
@@ -300,286 +266,299 @@ export default function PeoplePage() {
               <option value="PJ">PJ</option>
               <option value="Estagiário">Estagiário</option>
             </select>
+          </div>
 
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Setor</label>
+            <select
+              value={filterSetor}
+              onChange={e => setFilterSetor(e.target.value)}
+              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
+            >
+              <option value="">Todos os Setores</option>
+              {setores.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          <div className="pt-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400 hover:text-slate-200">
+              <input
+                type="checkbox"
+                checked={showInativos}
+                onChange={e => setShowInativos(e.target.checked)}
+                className="rounded text-emerald-600 focus:ring-emerald-500 border-slate-700 bg-slate-800 w-4 h-4"
+              />
+              <span>Incluir Inativos</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Sidebar Footer with Branding */}
+        <div className="p-6 border-t border-slate-800 bg-slate-950/40 text-center">
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Mar Brasil</p>
+          <p className="text-[8px] text-slate-600 font-semibold uppercase leading-none mt-1">HR Intelligence © 2026</p>
+        </div>
+      </aside>
+
+      {/* ── MOBILE SIDEBAR OVERLAY ── */}
+      <AnimatePresence>
+        {isMobileSidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+              onClick={() => setIsMobileSidebarOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed left-0 top-0 bottom-0 w-[280px] bg-slate-900 text-slate-100 z-50 p-6 flex flex-col gap-5 border-r border-slate-800 md:hidden"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white">
+                    <Users size={16} />
+                  </div>
+                  <div>
+                    <h2 className="text-xs font-black uppercase">Filtros HR</h2>
+                  </div>
+                </div>
+                <button onClick={() => setIsMobileSidebarOpen(false)} className="text-slate-400 hover:text-white">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 space-y-5 overflow-y-auto pr-1">
+                {/* Search */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Busca Rápida</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                    <input
+                      value={filterSearch}
+                      onChange={e => setFilterSearch(e.target.value)}
+                      placeholder="Nome, cargo, CPF..."
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white placeholder-slate-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Company select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Empresa</label>
+                  <select
+                    value={filterEmpresa}
+                    onChange={e => setFilterEmpresa(e.target.value)}
+                    className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
+                  >
+                    <option value="">Todas as Empresas</option>
+                    <option value="MarBR">MarBR</option>
+                    <option value="DZM">DZM</option>
+                  </select>
+                </div>
+
+                {/* Status select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Status</label>
+                  <select
+                    value={filterStatus}
+                    onChange={e => setFilterStatus(e.target.value)}
+                    className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
+                  >
+                    <option value="">Todos os Status</option>
+                    <option value="Ativo">Ativo</option>
+                    <option value="Férias">Férias</option>
+                    <option value="Inativo">Inativo</option>
+                  </select>
+                </div>
+
+                {/* Vínculo select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Vínculo</label>
+                  <select
+                    value={filterVinculo}
+                    onChange={e => setFilterVinculo(e.target.value)}
+                    className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
+                  >
+                    <option value="">Todos os Vínculos</option>
+                    <option value="CLT">CLT</option>
+                    <option value="MEI">MEI</option>
+                    <option value="PJ">PJ</option>
+                    <option value="Estagiário">Estagiário</option>
+                  </select>
+                </div>
+
+                {/* Sector select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Setor</label>
+                  <select
+                    value={filterSetor}
+                    onChange={e => setFilterSetor(e.target.value)}
+                    className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
+                  >
+                    <option value="">Todos os Setores</option>
+                    {setores.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400 hover:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={showInativos}
+                      onChange={e => setShowInativos(e.target.checked)}
+                      className="rounded text-emerald-600 focus:ring-emerald-500 border-slate-700 bg-slate-800 w-4 h-4"
+                    />
+                    <span>Incluir Inativos</span>
+                  </label>
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── MAIN CONTENT AREA (Scrollable) ── */}
+      <main className="flex-1 overflow-y-auto flex flex-col bg-slate-50">
+        
+        {/* Header bar */}
+        <header className="bg-white border-b border-slate-200 py-4 px-6 shrink-0 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            {/* Mobile Sidebar Toggle */}
+            <button className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl" onClick={() => setIsMobileSidebarOpen(true)}>
+              <Filter size={18} />
+            </button>
+            <div>
+              <h1 className="text-base font-black text-slate-800 tracking-tight uppercase leading-none">Dashboard Executivo</h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mt-1">Bússola de Decisão de RH</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Privacy toggle */}
             <button
               onClick={() => setShowValues(v => !v)}
-              title={showValues ? 'Ocultar valores' : 'Mostrar valores'}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
+              className={`flex items-center justify-center w-9 h-9 rounded-xl border transition-all ${
                 showValues
-                  ? 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                  : 'border-amber-300 bg-amber-50 text-amber-700'
+                  ? 'border-slate-200 text-slate-400 hover:bg-slate-100'
+                  : 'border-amber-300 bg-amber-50 text-amber-600 ring-2 ring-amber-100'
               }`}
+              title={showValues ? 'Ocultar valores sensíveis' : 'Exibir valores sensíveis'}
             >
-              {showValues ? <Eye size={15} /> : <EyeOff size={15} />}
-              <span className="hidden sm:inline">{showValues ? 'Ocultar' : 'Visível'}</span>
+              {showValues ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
 
+            {/* Redirect button to the separate Consignado Loans Page */}
+            <Link
+              href="/emprestimos"
+              className="flex items-center gap-1.5 px-4 py-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase"
+              title="Ir para a página de Empréstimos Consignados"
+            >
+              <HandCoins size={14} /> Empréstimos
+            </Link>
+
+            {/* Create new employee button */}
             <button
-              onClick={() => setShowAdvanced(v => !v)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50 transition-all"
+              onClick={handleCreateEmployeeClick}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md transition-all active:scale-95 shrink-0 uppercase"
             >
-              <Filter size={14} />
-              <span className="hidden sm:inline">Mais Filtros</span>
-              <ChevronDown size={13} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+              <Plus size={14} /> Adicionar
             </button>
-
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition-all"
-              >
-                <X size={14} /> Limpar
-              </button>
-            )}
           </div>
+        </header>
 
-          {showAdvanced && (
-            <div className="flex flex-wrap items-center gap-3 px-4 pb-4 pt-0 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200">
-              <select
-                value={filterSetor}
-                onChange={e => setFilterSetor(e.target.value)}
-                className="text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white"
+        {/* Content Body */}
+        <div className="p-6 max-w-[1400px] w-full mx-auto space-y-6 flex-1">
+          
+          {/* Error notifications */}
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700 animate-in fade-in duration-200 shadow-sm">
+              <AlertCircle size={20} className="shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-wider">{error}</span>
+              <button 
+                onClick={fetchData}
+                className="ml-auto text-[10px] font-black uppercase underline hover:no-underline bg-white border border-red-200 rounded-lg px-3 py-1 text-red-600 hover:bg-red-50"
               >
-                <option value="">Todos os Setores</option>
-                {setores.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={showInativos}
-                  onChange={e => setShowInativos(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-sm text-slate-600">Incluir inativos (histórico)</span>
-              </label>
+                Recarregar
+              </button>
             </div>
           )}
-        </div>
 
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
-            <AlertCircle size={20} />
-            <span className="text-sm font-medium">{error}</span>
-            <button onClick={fetchData} className="ml-auto text-xs font-semibold underline hover:no-underline">
-              Tentar novamente
-            </button>
+          {/* ── 5 HR KPI Cards (Dianna Focused) ── */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <PeopleKpiCard
+              title="Headcount Ativo"
+              value={hrKpis.headcount}
+              icon={<Users size={20} />}
+              color="emerald"
+              breakdown={[
+                { label: 'MarBR', value: hrKpis.marBR.toString() },
+                { label: 'DZM', value: hrKpis.dzm.toString() },
+              ]}
+            />
+            <PeopleKpiCard
+              title="Custo da Folha"
+              value={showValues ? formatCurrency(latestPayrollCost) : '••••••'}
+              icon={<Coins size={20} />}
+              color="blue"
+              sub="Consolidado do último mês"
+            />
+            <PeopleKpiCard
+              title="Salário Médio"
+              value={showValues ? formatCurrency(avgRemuneration) : '••••••'}
+              icon={<TrendingUp size={20} />}
+              color="slate"
+              sub="Média geral da equipe ativa"
+            />
+            <PeopleKpiCard
+              title="Alertas Auditoria"
+              value={totalAuditIssuesCount}
+              icon={<AlertCircle size={20} />}
+              color={totalAuditIssuesCount > 0 ? "red" : "emerald"}
+              sub={totalAuditIssuesCount > 0 ? "Incoerências de data/regime" : "Todos os prontuários limpos"}
+            />
+            <PeopleKpiCard
+              title="Vínculos Ativos"
+              value={hrKpis.headcount}
+              icon={<UserCog size={20} />}
+              color="slate"
+              breakdown={[
+                { label: 'CLT', value: hrKpis.clt.toString() },
+                { label: 'MEI/PJ', value: hrKpis.mei.toString() },
+                { label: 'EST', value: hrKpis.est.toString() },
+              ]}
+            />
           </div>
-        )}
 
-        {/* Expiring Alert */}
-        {expiringEmployees.length > 0 && (
-          <div className="mb-6 p-1 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent rounded-2xl border border-amber-200/50 shadow-sm">
-            <div className="bg-white/80 backdrop-blur-sm p-4 rounded-[14px] flex items-start gap-4">
-              <div className="relative">
-                <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0 shadow-inner">
-                  <CalendarClock className="text-amber-600" size={24} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border-2 border-white animate-pulse" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Alerta de Vencimento</h4>
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full uppercase">Prazo Curto</span>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed mb-3">
-                  Contratos ou aditivos com vencimento nos próximos 10 dias:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {expiringEmployees.map(e => {
-                    const expiry = new Date(e.contract_expiry_date! + 'T12:00:00');
-                    const diffDays = Math.ceil((expiry.getTime() - new Date().getTime()) / 86400000);
-                    return (
-                      <button
-                        key={e.id}
-                        onClick={() => handleEmployeeClick(e.id)}
-                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl hover:border-amber-400 hover:shadow-md transition-all flex items-center gap-3"
-                      >
-                        <div className="w-1.5 h-8 bg-amber-500 rounded-full" />
-                        <div className="text-left">
-                          <div className="text-[11px] font-bold text-slate-900 uppercase leading-none mb-1">{e.name}</div>
-                          <div className="text-[9px] font-medium text-slate-500 flex items-center gap-1">
-                            <Timer size={10} />
-                            Vence em {diffDays} {diffDays === 1 ? 'dia' : 'dias'}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+          {/* ── Real Payroll Cost History Chart ── */}
+          {!isLoadingCosts && (
+            <PayrollCostChart costs={monthlyCosts} />
+          )}
+
+          {/* ── Main HR / Employee Table ── */}
+          {isLoadingEmployees ? (
+            <div className="p-12 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm mt-6">
+              <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
             </div>
-          </div>
-        )}
+          ) : (
+            <PeopleTable
+              employees={filteredEmployees}
+              onEdit={handleEmployeeClick}
+              onDelete={(emp) => setDeleteTarget(emp)}
+              onEmployeeClick={handleEmployeeClick}
+              showValues={showValues}
+              auditIssues={allAuditIssues}
+            />
+          )}
 
-        {/* ── HR KPI Cards ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-          <PeopleKpiCard
-            title="Headcount Ativo"
-            value={hrKpis.headcount}
-            icon={<Users size={20} />}
-            color="emerald"
-            breakdown={[
-              { label: 'MarBR', value: hrKpis.marBR.toString() },
-              { label: 'DZM', value: hrKpis.dzm.toString() },
-            ]}
-          />
-          <PeopleKpiCard
-            title="Em Férias"
-            value={hrKpis.ferias}
-            icon={<CalendarClock size={20} />}
-            color="amber"
-          />
-          <PeopleKpiCard
-            title="Inativos (Histórico)"
-            value={hrKpis.inativos}
-            icon={<UserX size={20} />}
-            color="red"
-            onClick={() => setShowInativos(true)}
-          />
-          <PeopleKpiCard
-            title="Tempo Médio"
-            value={hrKpis.avgTenure}
-            icon={<Clock size={20} />}
-            color="blue"
-          />
-          <PeopleKpiCard
-            title="Vínculos Ativos"
-            value={hrKpis.headcount}
-            icon={<UserCog size={20} />}
-            color="slate"
-            breakdown={[
-              { label: 'CLT', value: hrKpis.clt.toString() },
-              { label: 'MEI/PJ', value: hrKpis.mei.toString() },
-              { label: 'EST', value: hrKpis.est.toString() },
-            ]}
-          />
         </div>
-
-        {/* ── Finance / Loans Actions and KPIs ── */}
-        <div className="mt-8 pt-8 border-t border-slate-200">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-              Painel Financeiro & Empréstimos
-            </h3>
-            <button
-              onClick={() => setIsPaymentModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-md text-xs active:scale-95"
-            >
-              <CreditCard size={15} />
-              Processar Parcelas
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            {isLoadingStats ? (
-              <>
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-              </>
-            ) : filteredStats && (
-              <>
-                <StatCard
-                  title="Total Emprestado"
-                  value={showValues ? formatCurrency(filteredStats.totalEmprestado) : '••••••'}
-                  icon={<Receipt size={22} />}
-                  color="blue"
-                />
-                <StatCard
-                  title="Saldo Devedor"
-                  value={showValues ? formatCurrency(filteredStats.saldoDevedor) : '••••••'}
-                  icon={<PiggyBank size={22} />}
-                  color="red"
-                />
-                <StatCard
-                  title="Total Recebido"
-                  value={showValues ? formatCurrency(filteredStats.totalRecebido) : '••••••'}
-                  icon={<HandCoins size={22} />}
-                  color="green"
-                />
-                <StatCard
-                  title="Recebível Mês"
-                  value={showValues ? formatCurrency(filteredStats.recebivelMes) : '••••••'}
-                  icon={<CalendarClock size={22} />}
-                  color="emerald"
-                />
-              </>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {isLoadingStats ? (
-              <>
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-              </>
-            ) : filteredStats && (
-              <>
-                <StatCard
-                  title="Contratos Ativos"
-                  value={filteredStats.contratosAtivos.toString()}
-                  icon={<FileCheck size={22} />}
-                  color="purple"
-                />
-                <StatCard
-                  title="Totalmente Quitados"
-                  value={filteredStats.contratosLiquidados.toString()}
-                  icon={<Files size={22} />}
-                  color="amber"
-                />
-                <StatCard
-                  title="Maior Empréstimo"
-                  value={showValues ? formatCurrency(stats?.maiorEmprestimo ?? 0) : '••••••'}
-                  icon={<TrendingUp size={22} />}
-                  color="sky"
-                  description={stats?.maiorEmprestimoRef ? `Ref: ${stats.maiorEmprestimoRef}` : undefined}
-                />
-                <StatCard
-                  title="Próximo a Encerrar"
-                  value={stats?.proximoEncerrar ?? '—'}
-                  icon={<Timer size={22} />}
-                  color="slate"
-                  description={stats?.parcelasRestantes ? `${stats.parcelasRestantes} parcelas restantes` : undefined}
-                />
-              </>
-            )}
-          </div>
-
-          {/* Projections Chart */}
-          <div className="mb-6">
-            {isLoadingProjections ? (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 h-[350px] flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-              </div>
-            ) : (
-              <ProjectionChart data={projections} />
-            )}
-          </div>
-        </div>
-
-        {/* ── Main HR / Employee Table ── */}
-        {isLoadingEmployees ? (
-          <div className="p-12 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-          </div>
-        ) : (
-          <PeopleTable
-            employees={filteredEmployees}
-            onEdit={handleEmployeeClick}
-            onDelete={(emp) => setDeleteTarget(emp)}
-            onEmployeeClick={handleEmployeeClick}
-            showValues={showValues}
-            auditIssues={allAuditIssues}
-          />
-        )}
 
         {/* Footer */}
-        <footer className="mt-12 pt-6 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+        <footer className="mt-auto py-6 px-6 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4 bg-white shrink-0">
           <p className="text-xs text-slate-400">
             © 2026 Mar Brasil - People Cockpit
           </p>
@@ -588,43 +567,17 @@ export default function PeoplePage() {
           </span>
         </footer>
 
-      </div>
+      </main>
 
-      {/* Side drawers & modals */}
-      <SideDrawer
-        isOpen={isDrawerOpen && !isProfileDrawerOpen}
-        onClose={() => {
-          setIsDrawerOpen(false);
-          setSelectedEmployee(undefined);
-        }}
-        employeeId={selectedEmployee}
-        onDataChanged={fetchData}
-        onAddNewLoan={() => setIsNewLoanOpen(true)}
-      />
-
+      {/* ── DRAWERS AND MODALS ── */}
       <ProfileDrawer
         isOpen={isProfileDrawerOpen}
         onClose={() => {
-          setIsDrawerOpen(false);
           setIsProfileDrawerOpen(false);
           setSelectedEmployee(undefined);
         }}
         employeeId={selectedEmployee}
         onDataChanged={fetchData}
-      />
-
-      <PaymentProcessingModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-      />
-
-      <NewLoanModal
-        isOpen={isNewLoanOpen}
-        onClose={() => setIsNewLoanOpen(false)}
-        onSuccess={fetchData}
-        onGenerateTerm={(loanData) => {
-          PDFService.generateDebtTermPDF(loanData, {}, isTestMode);
-        }}
       />
 
       <DeleteConfirmDialog
@@ -633,6 +586,6 @@ export default function PeoplePage() {
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
       />
-    </main>
+    </div>
   );
 }
