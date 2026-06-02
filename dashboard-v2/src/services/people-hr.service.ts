@@ -1,6 +1,43 @@
 import { supabase } from '@/lib/supabase';
 import { Employee, EmploymentBond, MonthlyCost, AuditIssue } from '@/types/loans';
 
+interface RawEmployeeDb {
+  id: string;
+  full_name: string;
+  company?: string;
+  employment_type?: string;
+  remuneration?: number;
+  loan_amount?: number;
+  status?: string;
+  pj_type?: string;
+  corporate_name?: string;
+  document_id?: string;
+  document_rg?: string;
+  phone?: string;
+  email?: string;
+  phone_professional?: string;
+  email_professional?: string;
+  pix_key?: string;
+  zip_code?: string;
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  department?: string;
+  job_role?: string;
+  start_date?: string;
+  status_start_date?: string;
+  status_end_date?: string;
+  linkedin_url?: string;
+  instagram_url?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+  photo_url?: string;
+}
+
 export const PeopleHRService = {
   async getEmploymentBonds(employeeId: string): Promise<EmploymentBond[]> {
     const { data, error } = await supabase
@@ -57,20 +94,60 @@ export const PeopleHRService = {
     let query = supabase
       .from('employees')
       .select('*')
-      .order('name', { ascending: true });
+      .order('full_name', { ascending: true });
 
     if (!filters?.mostrarInativos) {
       query = query.neq('status', 'Inativo');
     }
     if (filters?.empresa) query = query.eq('company', filters.empresa);
     if (filters?.status) query = query.eq('status', filters.status);
-    if (filters?.vinculo) query = query.eq('link_type', filters.vinculo);
+    if (filters?.vinculo) query = query.eq('employment_type', filters.vinculo);
     if (filters?.setor) query = query.ilike('department', `%${filters.setor}%`);
-    if (filters?.search) query = query.ilike('name', `%${filters.search}%`);
+    if (filters?.search) query = query.ilike('full_name', `%${filters.search}%`);
 
     const { data, error } = await query;
     if (error) throw error;
-    return (data || []) as Employee[];
+
+    return (data || []).map((emp: RawEmployeeDb) => ({
+      id: emp.id,
+      name: emp.full_name,
+      company: emp.company || 'MarBR',
+      linkType: emp.employment_type || 'CLT',
+      remuneration: parseFloat(String(emp.remuneration)) || 0,
+      totalTaken: parseFloat(String(emp.loan_amount)) || 0,
+      totalReceived: 0,
+      balance: parseFloat(String(emp.loan_amount)) || 0,
+      monthInstallment: 0,
+      contractsCount: 0,
+      status: emp.status || 'Ativo',
+      pj_type: emp.pj_type,
+      corporate_name: emp.corporate_name,
+      document_id: emp.document_id,
+      document_rg: emp.document_rg,
+      phone: emp.phone,
+      email: emp.email,
+      phone_professional: emp.phone_professional,
+      email_professional: emp.email_professional,
+      pix_key: emp.pix_key,
+      zip_code: emp.zip_code,
+      street: emp.street,
+      number: emp.number,
+      complement: emp.complement,
+      neighborhood: emp.neighborhood,
+      city: emp.city,
+      state: emp.state,
+      department: emp.department,
+      job_role: emp.job_role,
+      start_date: emp.start_date,
+      status_start_date: emp.status_start_date,
+      status_end_date: emp.status_end_date,
+      linkedin_url: emp.linkedin_url,
+      instagram_url: emp.instagram_url,
+      emergency_contact_name: emp.emergency_contact_name,
+      emergency_contact_phone: emp.emergency_contact_phone,
+      emergency_contact_relation: emp.emergency_contact_relation,
+      avatar: emp.photo_url
+    })) as Employee[];
   },
 
   async deleteEmployee(employeeId: string): Promise<void> {

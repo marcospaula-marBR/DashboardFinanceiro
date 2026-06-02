@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.45.0";
+export const APP_VERSION = "v.02.45.1";
 export const VERSION_DATE = "2026-06-02";
 export const VERSION_CHANGELOG = [
+  "v.02.45.1 - Fix: Correção crítica de colunas SQL e mapeamento de dados dos colaboradores no cockpit.",
   "v.02.45.0 - Feat: Nova versão renomeada para forçar atualização de cache e verificação do deploy.",
   "v.02.44.0 - Feat: Segregação completa de empréstimos na página People e criação do gráfico de folha Dianna.",
   "v.02.43.0 - Fix: Resolvido erro de compilação no Vercel adicionando o export faltante DEFAULT_DRE_ESTRUTURA no dre.service.ts.",
