@@ -80,6 +80,9 @@ export interface Employee {
   links_contratos?: string;
   links_aditivos?: string; // string JSON[]
   links_emprestimos?: string; // string JSON[]
+  remuneration_fixed?: number;
+  remuneration_bonus?: number;
+  remuneration_commission?: number;
 }
 
 export interface Contract {
@@ -162,6 +165,9 @@ export interface MonthlyCost {
   valor_decimo_terceiro?: number;
   valor_descontos?: number;
   valor_liquido: number;
+  valor_fixo?: number;
+  valor_bonus?: number;
+  valor_comissao?: number;
   origem: 'csv' | 'manual' | 'dianna_import';
   observacao?: string;
   created_at?: string;

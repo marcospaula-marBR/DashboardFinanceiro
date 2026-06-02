@@ -36,6 +36,9 @@ interface RawEmployeeDb {
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
   photo_url?: string;
+  remuneration_fixed?: number;
+  remuneration_bonus?: number;
+  remuneration_commission?: number;
 }
 
 export const PeopleHRService = {
@@ -74,12 +77,25 @@ export const PeopleHRService = {
     if (!costs.length) return null;
     const values = costs.map(c => c.valor_liquido).filter(v => v > 0);
     if (!values.length) return null;
+    
+    const fixedTotal = costs.reduce((sum, c) => {
+      const fixed = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
+        ? c.valor_fixo 
+        : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
+      return sum + fixed;
+    }, 0);
+    const bonusTotal = costs.reduce((sum, c) => sum + (c.valor_bonus || 0), 0);
+    const commissionTotal = costs.reduce((sum, c) => sum + (c.valor_comissao || 0), 0);
+
     return {
       total: values.reduce((a, b) => a + b, 0),
       average: values.reduce((a, b) => a + b, 0) / values.length,
       min: Math.min(...values),
       max: Math.max(...values),
       count: values.length,
+      fixedTotal,
+      bonusTotal,
+      commissionTotal,
     };
   },
 
@@ -146,7 +162,10 @@ export const PeopleHRService = {
       emergency_contact_name: emp.emergency_contact_name,
       emergency_contact_phone: emp.emergency_contact_phone,
       emergency_contact_relation: emp.emergency_contact_relation,
-      avatar: emp.photo_url
+      avatar: emp.photo_url,
+      remuneration_fixed: emp.remuneration_fixed ? parseFloat(String(emp.remuneration_fixed)) : 0,
+      remuneration_bonus: emp.remuneration_bonus ? parseFloat(String(emp.remuneration_bonus)) : 0,
+      remuneration_commission: emp.remuneration_commission ? parseFloat(String(emp.remuneration_commission)) : 0,
     })) as Employee[];
   },
 

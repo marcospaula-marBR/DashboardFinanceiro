@@ -47,8 +47,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   // Auditoria quick cost editor state
   const [editingCost, setEditingCost] = useState<MonthlyCost | null>(null);
   const [editingCostCompetencia, setEditingCostCompetencia] = useState('');
-  const [editingCostValue, setEditingCostValue] = useState(0);
   const [editingCostType, setEditingCostType] = useState<'CLT' | 'MEI'>('CLT');
+  const [editingCostFixo, setEditingCostFixo] = useState(0);
+  const [editingCostBonus, setEditingCostBonus] = useState(0);
+  const [editingCostComissao, setEditingCostComissao] = useState(0);
   const [saveCostError, setSaveCostError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -260,13 +262,26 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior à data de admissão (${formatDateBR(profile.start_date)}).`);
       }
       
+      const computedLiquido = editingCostFixo + editingCostBonus + editingCostComissao;
+
       await PeopleHRService.updateMonthlyCost(editingCost.id, {
         competencia: editingCostCompetencia,
-        valor_liquido: editingCostValue,
+        valor_liquido: computedLiquido,
+        valor_fixo: editingCostFixo,
+        valor_bonus: editingCostBonus,
+        valor_comissao: editingCostComissao,
         vinculo_tipo: editingCostType,
       });
       
-      setCosts(prev => prev.map(c => c.id === editingCost.id ? { ...c, competencia: editingCostCompetencia, valor_liquido: editingCostValue, vinculo_tipo: editingCostType } : c));
+      setCosts(prev => prev.map(c => c.id === editingCost.id ? { 
+        ...c, 
+        competencia: editingCostCompetencia, 
+        valor_liquido: computedLiquido, 
+        valor_fixo: editingCostFixo,
+        valor_bonus: editingCostBonus,
+        valor_comissao: editingCostComissao,
+        vinculo_tipo: editingCostType 
+      } : c));
       setEditingCost(null);
       if (onDataChanged) onDataChanged();
     } catch (err: unknown) {
@@ -511,8 +526,61 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           <input type="text" value={profile.document_id || ''} onChange={e => handleChange('document_id', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="000.000.000-00"/>
                         </div>
                         <div>
-                          <label className={labelClass}>{getRemunerationLabel(profile.linkType || 'CLT').bruto}</label>
-                          <input type="number" step="0.01" value={profile.remuneration || ''} onChange={e => handleChange('remuneration', parseFloat(e.target.value))} readOnly={!isEditMode} className={inputClass} placeholder="5000.00"/>
+                          <label className={labelClass}>Valor Fixo / Salário Base</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={profile.remuneration_fixed ?? ''} 
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              handleChange('remuneration_fixed', val);
+                              const tot = val + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0);
+                              handleChange('remuneration', tot);
+                            }} 
+                            readOnly={!isEditMode} 
+                            className={inputClass} 
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Bônus</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={profile.remuneration_bonus ?? ''} 
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              handleChange('remuneration_bonus', val);
+                              const tot = (profile.remuneration_fixed || 0) + val + (profile.remuneration_commission || 0);
+                              handleChange('remuneration', tot);
+                            }} 
+                            readOnly={!isEditMode} 
+                            className={inputClass} 
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Comissões</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={profile.remuneration_commission ?? ''} 
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              handleChange('remuneration_commission', val);
+                              const tot = (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + val;
+                              handleChange('remuneration', tot);
+                            }} 
+                            readOnly={!isEditMode} 
+                            className={inputClass} 
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>{getRemunerationLabel(profile.linkType || 'CLT').bruto} (Total Geral)</label>
+                          <div className={`py-3 text-base text-slate-900 dark:text-white font-extrabold`}>
+                            {formatCurrency((profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0))}
+                          </div>
                         </div>
 
                         <div>
@@ -849,7 +917,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
 
                       {(() => {
                         const stats = PeopleHRService.computeCostStats(costs);
-                        const remLabel = getRemunerationLabel(profile.linkType || 'CLT');
                         
                         if (!stats) {
                           return (
@@ -864,28 +931,28 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                         return (
                           <div className="space-y-6">
                             <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Fixo</p>
+                                <p className="text-lg font-black text-slate-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.fixedTotal || 0)}
+                                </p>
+                              </div>
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Bônus</p>
+                                <p className="text-lg font-black text-slate-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.bonusTotal || 0)}
+                                </p>
+                              </div>
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Comissões</p>
+                                <p className="text-lg font-black text-slate-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.commissionTotal || 0)}
+                                </p>
+                              </div>
                               <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
-                                <p className="text-xs font-black text-emerald-800 uppercase tracking-wider">Total Recebido</p>
-                                <p className="text-xl font-black text-emerald-700 mt-1 tabular-nums">
+                                <p className="text-xs font-black text-emerald-800 uppercase tracking-wider">Total Geral</p>
+                                <p className="text-lg font-black text-emerald-700 mt-1 tabular-nums">
                                   {formatCurrency(stats.total)}
-                                </p>
-                              </div>
-                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Média Mensal</p>
-                                <p className="text-xl font-black text-slate-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.average)}
-                                </p>
-                              </div>
-                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Menor {remLabel.short}</p>
-                                <p className="text-base font-black text-slate-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.min)}
-                                </p>
-                              </div>
-                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Maior {remLabel.short}</p>
-                                <p className="text-base font-black text-slate-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.max)}
                                 </p>
                               </div>
                             </div>
@@ -893,19 +960,65 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                             <div className="space-y-2">
                               <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider">Lançamentos Recentes ({stats.count})</h5>
                               <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-white max-h-[250px] overflow-y-auto">
-                                {costs.map((c, i) => (
-                                  <div key={i} className="flex justify-between items-center p-3 hover:bg-slate-50/50">
-                                    <div>
-                                      <p className="text-sm font-black text-slate-800 uppercase">
-                                        {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                                      </p>
-                                      <p className="text-xs text-slate-500 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
+                                {costs.map((c, i) => {
+                                  const fixedVal = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
+                                    ? c.valor_fixo 
+                                    : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
+                                  return (
+                                    <div key={i} className="p-3 hover:bg-slate-50/50 flex flex-col gap-2">
+                                      <div className="flex justify-between items-center">
+                                        <div>
+                                          <p className="text-sm font-black text-slate-800 uppercase">
+                                            {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                          </p>
+                                          <p className="text-[10px] text-slate-400 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Total:</span>
+                                            <span className="text-sm font-extrabold text-emerald-600 tabular-nums">
+                                              {formatCurrency(c.valor_liquido)}
+                                            </span>
+                                          </div>
+                                          <button
+                                            onClick={() => {
+                                              setEditingCost(c);
+                                              setEditingCostCompetencia(c.competencia);
+                                              setEditingCostType(c.vinculo_tipo);
+                                              setEditingCostFixo(fixedVal || 0);
+                                              setEditingCostBonus(c.valor_bonus || 0);
+                                              setEditingCostComissao(c.valor_comissao || 0);
+                                              setSaveCostError(null);
+                                            }}
+                                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-emerald-600 transition-colors"
+                                            title="Editar lançamento"
+                                          >
+                                            <PenBox size={13} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-slate-100/50 text-[10px]">
+                                        <div>
+                                          <span className="text-slate-400 font-bold block uppercase text-[8px]">Fixo</span>
+                                          <span className="text-slate-700 font-bold tabular-nums">{formatCurrency(fixedVal || 0)}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-slate-400 font-bold block uppercase text-[8px]">Bônus</span>
+                                          <span className={`font-bold tabular-nums ${c.valor_bonus ? 'text-blue-600' : 'text-slate-400'}`}>
+                                            {formatCurrency(c.valor_bonus || 0)}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-slate-400 font-bold block uppercase text-[8px]">Comissão</span>
+                                          <span className={`font-bold tabular-nums ${c.valor_comissao ? 'text-amber-600' : 'text-slate-400'}`}>
+                                            {formatCurrency(c.valor_comissao || 0)}
+                                          </span>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <span className="text-base font-black text-emerald-600 tabular-nums">
-                                      {formatCurrency(c.valor_liquido)}
-                                    </span>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           </div>
@@ -978,8 +1091,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                           if (cost) {
                                             setEditingCost(cost);
                                             setEditingCostCompetencia(cost.competencia);
-                                            setEditingCostValue(cost.valor_liquido);
                                             setEditingCostType(cost.vinculo_tipo);
+                                            setEditingCostFixo(cost.valor_fixo || 0);
+                                            setEditingCostBonus(cost.valor_bonus || 0);
+                                            setEditingCostComissao(cost.valor_comissao || 0);
                                             setSaveCostError(null);
                                           }
                                         }}
@@ -1047,15 +1162,44 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                 </select>
               </div>
 
-              <div>
-                <label className={labelClass}>Valor Líquido Recebido</label>
-                <input 
-                  type="number" 
-                  value={editingCostValue} 
-                  onChange={e => setEditingCostValue(parseFloat(e.target.value) || 0)} 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  placeholder="0.00"
-                />
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={labelClass}>Valor Fixo</label>
+                  <input 
+                    type="number" 
+                    value={editingCostFixo} 
+                    onChange={e => setEditingCostFixo(parseFloat(e.target.value) || 0)} 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Bônus</label>
+                  <input 
+                    type="number" 
+                    value={editingCostBonus} 
+                    onChange={e => setEditingCostBonus(parseFloat(e.target.value) || 0)} 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Comissão</label>
+                  <input 
+                    type="number" 
+                    value={editingCostComissao} 
+                    onChange={e => setEditingCostComissao(parseFloat(e.target.value) || 0)} 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Geral Calculado</span>
+                <span className="text-sm font-extrabold text-emerald-600 tabular-nums">
+                  {formatCurrency(editingCostFixo + editingCostBonus + editingCostComissao)}
+                </span>
               </div>
 
               <div className="flex gap-3 pt-2">

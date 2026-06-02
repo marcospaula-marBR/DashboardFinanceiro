@@ -158,6 +158,9 @@ export class PeopleService {
       linkType: (raw.employment_type || raw.link_type) as any,
       company: raw.company,
       remuneration: parseFloat(String(raw.remuneration)) || 0,
+      remuneration_fixed: raw.remuneration_fixed ? parseFloat(String(raw.remuneration_fixed)) : 0,
+      remuneration_bonus: raw.remuneration_bonus ? parseFloat(String(raw.remuneration_bonus)) : 0,
+      remuneration_commission: raw.remuneration_commission ? parseFloat(String(raw.remuneration_commission)) : 0,
       status: raw.status || (raw.active ? 'Ativo' : 'Inativo'),
       created_at: raw.created_at,
       
@@ -210,7 +213,10 @@ export class PeopleService {
       pj_type: profile.pj_type,
       employment_type: profile.linkType,
       company: profile.company,
-      remuneration: profile.remuneration,
+      remuneration: (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0),
+      remuneration_fixed: profile.remuneration_fixed || 0,
+      remuneration_bonus: profile.remuneration_bonus || 0,
+      remuneration_commission: profile.remuneration_commission || 0,
       status: profile.status,
       
       // Novos campos RH

@@ -14,7 +14,7 @@ import { APP_VERSION } from "@/version";
 import { formatCurrency } from "@/services/loans.service";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Loader2, AlertCircle, Users, UserX, Clock, Eye, EyeOff, Search, Filter, X, 
+  Loader2, AlertCircle, Users, Eye, EyeOff, Search, Filter, X, 
   UserCog, Plus, HandCoins, Coins, TrendingUp
 } from "lucide-react";
 
@@ -29,7 +29,6 @@ export default function PeoplePage() {
 
   // UI states
   const [showValues, setShowValues] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
   
   // Filters state
   const [filterSearch, setFilterSearch] = useState('');
@@ -50,12 +49,7 @@ export default function PeoplePage() {
   const [isLoadingCosts, setIsLoadingCosts] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
+
 
   useEffect(() => { 
     fetchData(); 
@@ -148,7 +142,7 @@ export default function PeoplePage() {
       setIsLoadingEmployees(true);
       const employeesData = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true });
       setEmployees(employeesData);
-    } catch (err) { 
+    } catch { 
       setError('Falha ao carregar colaboradores'); 
     } finally { 
       setIsLoadingEmployees(false); 
@@ -170,6 +164,15 @@ export default function PeoplePage() {
     } catch (err) { 
       console.error('Erro ao auditar base de dados:', err);
     }
+  };
+
+  const handleClearFilters = () => {
+    setFilterSearch('');
+    setFilterEmpresa('');
+    setFilterStatus('');
+    setFilterVinculo('');
+    setFilterSetor('');
+    setShowInativos(false);
   };
 
   const handleEmployeeClick = (employeeId: string) => {
@@ -290,6 +293,15 @@ export default function PeoplePage() {
               />
               <span>Incluir Inativos</span>
             </label>
+          </div>
+
+          <div className="pt-4 border-t border-slate-800">
+            <button
+              onClick={handleClearFilters}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 uppercase"
+            >
+              <X size={13} /> Limpar Filtros
+            </button>
           </div>
         </div>
 
@@ -415,6 +427,18 @@ export default function PeoplePage() {
                     />
                     <span>Incluir Inativos</span>
                   </label>
+                </div>
+
+                <div className="pt-4 border-t border-slate-800">
+                  <button
+                    onClick={() => {
+                      handleClearFilters();
+                      setIsMobileSidebarOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 uppercase"
+                  >
+                    <X size={13} /> Limpar Filtros
+                  </button>
                 </div>
               </div>
             </motion.aside>
