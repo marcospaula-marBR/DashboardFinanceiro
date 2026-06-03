@@ -7,15 +7,16 @@ import { PeopleKpiCard } from "@/components/people/PeopleKpiCard";
 import { DeleteConfirmDialog } from "@/components/people/DeleteConfirmDialog";
 import { PeopleTable } from "@/components/people/PeopleTable";
 import { PayrollCostChart } from "@/components/people/PayrollCostChart";
+import { KPIStatsDrawer } from "@/components/people/KPIStatsDrawer";
 import { PeopleHRService } from "@/services/people-hr.service";
-import { Employee, MonthlyCost, AuditIssue } from "@/types/loans";
+import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { APP_VERSION } from "@/version";
-import { formatCurrency } from "@/services/loans.service";
+import { LoansService, formatCurrency } from "@/services/loans.service";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, AlertCircle, Users, Eye, EyeOff, Search, Filter, X, 
-  UserCog, Plus, HandCoins, Coins, TrendingUp
+  UserCog, Plus, HandCoins, Coins, TrendingUp, Landmark
 } from "lucide-react";
 
 export default function PeoplePage() {
@@ -26,6 +27,11 @@ export default function PeoplePage() {
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  
+  // C-Level Executive Drawer States
+  const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "payroll" | "loans" | null>(null);
+  const [isKpiDrawerOpen, setIsKpiDrawerOpen] = useState(false);
+  const [loanStats, setLoanStats] = useState<LoanStats | null>(null);
 
   // UI states
   const [showValues, setShowValues] = useState(true);
@@ -215,6 +221,13 @@ export default function PeoplePage() {
       setAllAuditIssues(auditData);
     } catch (err) { 
       console.error('Erro ao auditar base de dados:', err);
+    }
+
+    try {
+      const statsData = await LoansService.getStats(isTestMode);
+      setLoanStats(statsData);
+    } catch (err) {
+      console.error('Erro ao carregar estatísticas de empréstimos:', err);
     }
   };
 
@@ -571,6 +584,7 @@ export default function PeoplePage() {
               value={hrKpis.headcount}
               icon={<Users size={20} />}
               color="emerald"
+              onClick={() => { setActiveKpiMode('headcount'); setIsKpiDrawerOpen(true); }}
               breakdown={[
                 { label: 'MarBR', value: hrKpis.marBR.toString() },
                 { label: 'DZM', value: hrKpis.dzm.toString() },
@@ -581,14 +595,16 @@ export default function PeoplePage() {
               value={showValues ? formatCurrency(latestPayrollCost) : '••••••'}
               icon={<Coins size={20} />}
               color="blue"
+              onClick={() => { setActiveKpiMode('payroll'); setIsKpiDrawerOpen(true); }}
               sub="Consolidado do último mês"
             />
             <PeopleKpiCard
-              title="Salário Médio"
-              value={showValues ? formatCurrency(avgRemuneration) : '••••••'}
-              icon={<TrendingUp size={20} />}
-              color="slate"
-              sub="Média geral da equipe ativa"
+              title="Saldo Devedor Ativo"
+              value={showValues ? (loanStats ? formatCurrency(loanStats.saldoDevedor) : 'R$ 0') : '••••••'}
+              icon={<Landmark size={20} />}
+              color="amber"
+              onClick={() => { setActiveKpiMode('loans'); setIsKpiDrawerOpen(true); }}
+              sub="Capital sob risco em empréstimos"
             />
             <PeopleKpiCard
               title="Alertas Auditoria"
@@ -661,6 +677,18 @@ export default function PeoplePage() {
         employeeName={deleteTarget?.name || ""}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <KPIStatsDrawer
+        isOpen={isKpiDrawerOpen}
+        onClose={() => {
+          setIsKpiDrawerOpen(false);
+          setActiveKpiMode(null);
+        }}
+        mode={activeKpiMode}
+        employees={employees}
+        monthlyCosts={monthlyCosts}
+        loanStats={loanStats}
       />
     </div>
   );
