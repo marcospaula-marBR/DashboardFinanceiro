@@ -45,6 +45,7 @@ export interface Employee {
   neighborhood?: string;
   city?: string;
   state?: string;
+  endereco_completo?: string; // NOVO: DB V2
   
   // HR Role
   department?: string;
@@ -60,6 +61,9 @@ export interface Employee {
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
+  pessoa_referencia_nome?: string; // NOVO: DB V2
+  pessoa_referencia_telefone?: string; // NOVO: DB V2
+  metadata?: any; // JSONB do DB V2
   
   // External Responsible (PJ normally)
   responsible_name?: string;
@@ -133,17 +137,48 @@ export interface FilterParams {
   incluirLiquidados?: boolean;
 }
 
-export interface EmploymentBond {
+export interface EmploymentContract {
   id: string;
   employee_id: string;
-  vinculo: 'CLT' | 'MEI' | 'Estagiário' | 'PJ';
-  empresa: string;
-  centro_custo?: string;
-  setor?: string;
-  cargo?: string;
+  regime: 'CLT' | 'MEI' | 'Estagiário' | 'PJ';
+  contracting_company?: string;
+  pj_cnpj?: string;
+  pj_razao_social?: string;
+  pj_nome_fantasia?: string;
+  pj_endereco_completo?: string;
+  remuneration_base: number;
+  remuneration_bonus: number;
+  remuneration_incentives: number;
+  remuneration_allowances: number;
+  remuneration_commissions: number;
+  start_date: string;
+  expiration_date?: string;
+  end_date?: string;
+  trigger_reason?: string;
+  status: 'Ativo' | 'Vencido' | 'Encerrado';
+  metadata?: any;
+  created_at?: string;
+}
+
+export interface ContractAllocation {
+  id: string;
+  contract_id: string;
+  department?: string;
+  project?: string;
   start_date: string;
   end_date?: string;
-  motivo_fim?: string;
+  created_at?: string;
+}
+
+export interface EmployeeEvent {
+  id: string;
+  employee_id: string;
+  contract_id?: string;
+  event_type: string;
+  event_date: string;
+  amount?: number;
+  description?: string;
+  metadata?: any;
   created_at?: string;
 }
 

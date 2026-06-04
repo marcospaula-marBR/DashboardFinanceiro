@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Employee, EmploymentBond, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
+import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
@@ -40,7 +40,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'trajetoria' | 'custo' | 'auditoria'>('pessoal');
   const [isEditMode, setIsEditMode] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [bonds, setBonds] = useState<EmploymentBond[]>([]);
+  const [bonds, setBonds] = useState<EmploymentContract[]>([]);
   const [costs, setCosts] = useState<MonthlyCost[]>([]);
   const [auditIssues, setAuditIssues] = useState<AuditIssue[]>([]);
 
@@ -85,7 +85,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       const [data, hist, bondsData, costsData] = await Promise.all([
         PeopleService.getEmployeeProfile(id, isTestMode),
         PeopleService.getEmployeeHistory(id, isTestMode),
-        PeopleHRService.getEmploymentBonds(id),
+        PeopleHRService.getEmploymentContracts(id),
         PeopleHRService.getMonthlyCosts(id)
       ]);
       setProfile(data || {});
@@ -246,6 +246,27 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       setAuditIssues([]);
     }
   }, [profile.id, profile.start_date, bonds, costs]);
+
+  const handleBuscarCEP = async () => {
+    const cepLimpo = profile.zip_code?.replace(/\D/g, '');
+    if (!cepLimpo || cepLimpo.length !== 8) return;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setProfile(prev => ({
+          ...prev,
+          street: data.logradouro,
+          neighborhood: data.bairro,
+          city: data.localidade,
+          state: data.uf,
+          endereco_completo: `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}, CEP: ${data.cep}`
+        }));
+      }
+    } catch (e) {
+      console.error('Erro ao buscar CEP', e);
+    }
+  };
 
   const handleSaveCost = async () => {
     if (!editingCost) return;
@@ -526,6 +547,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           <input type="text" value={profile.document_id || ''} onChange={e => handleChange('document_id', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="000.000.000-00"/>
                         </div>
                         <div>
+                          <label className={labelClass}>RG / Inscrição Estadual</label>
+                          <input type="text" value={profile.document_rg || ''} onChange={e => handleChange('document_rg', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="00.000.000-0"/>
+                        </div>
+                        <div>
                           <label className={labelClass}>Valor Fixo / Salário Base</label>
                           <input 
                             type="number" 
@@ -689,8 +714,15 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                       <div className="grid grid-cols-12 gap-4">
                         <div className="col-span-12 md:col-span-4">
-                           <label className={labelClass}>CEP</label>
-                           <input type="text" value={profile.zip_code || ''} onChange={e => handleChange('zip_code', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           <div className="flex justify-between items-center">
+                             <label className={labelClass}>CEP</label>
+                             {isEditMode && (
+                               <button type="button" onClick={handleBuscarCEP} className="text-[10px] text-emerald-600 font-bold hover:underline mb-1">
+                                 Buscar
+                               </button>
+                             )}
+                           </div>
+                           <input type="text" value={profile.zip_code || ''} onChange={e => handleChange('zip_code', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="00000-000"/>
                         </div>
                         <div className="col-span-12 md:col-span-8">
                            <label className={labelClass}>Logradouro</label>
@@ -727,15 +759,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                        
                        <div>
-                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5 flex items-center gap-2"><MapPin size={16}/> Contato de Emergência</h4>
+                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5 flex items-center gap-2"><MapPin size={16}/> Contatos de Referência / Emergência</h4>
                          <div className="grid grid-cols-2 gap-4">
                            <div>
-                             <label className={labelClass}>Nome</label>
+                             <label className={labelClass}>Nome (Emergência)</label>
                              <input type="text" value={profile.emergency_contact_name || ''} onChange={e => handleChange('emergency_contact_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                            </div>
                            <div>
-                             <label className={labelClass}>Telefone</label>
+                             <label className={labelClass}>Telefone (Emergência)</label>
                              <input type="text" value={profile.emergency_contact_phone || ''} onChange={e => handleChange('emergency_contact_phone', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Nome (Referência Pessoal)</label>
+                             <input type="text" value={profile.pessoa_referencia_nome || ''} onChange={e => handleChange('pessoa_referencia_nome', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Telefone (Referência Pessoal)</label>
+                             <input type="text" value={profile.pessoa_referencia_telefone || ''} onChange={e => handleChange('pessoa_referencia_telefone', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                            </div>
                          </div>
                        </div>

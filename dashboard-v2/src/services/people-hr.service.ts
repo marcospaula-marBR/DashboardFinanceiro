@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { Employee, EmploymentBond, MonthlyCost, AuditIssue } from '@/types/loans';
+import { Employee, EmploymentContract, ContractAllocation, EmployeeEvent, MonthlyCost, AuditIssue } from '@/types/loans';
 
 interface RawEmployeeDb {
   id: string;
@@ -42,12 +42,32 @@ interface RawEmployeeDb {
 }
 
 export const PeopleHRService = {
-  async getEmploymentBonds(employeeId: string): Promise<EmploymentBond[]> {
+  async getEmploymentContracts(employeeId: string): Promise<EmploymentContract[]> {
     const { data, error } = await supabase
-      .from('people_employment_bonds')
+      .from('employment_contracts')
       .select('*')
       .eq('employee_id', employeeId)
       .order('start_date', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getContractAllocations(contractId: string): Promise<ContractAllocation[]> {
+    const { data, error } = await supabase
+      .from('contract_allocations')
+      .select('*')
+      .eq('contract_id', contractId)
+      .order('start_date', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getEmployeeEvents(employeeId: string): Promise<EmployeeEvent[]> {
+    const { data, error } = await supabase
+      .from('employee_events')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .order('event_date', { ascending: false });
     if (error) throw error;
     return data || [];
   },
@@ -177,8 +197,8 @@ export const PeopleHRService = {
     if (error) throw error;
   },
 
-  computeTenure(bonds: EmploymentBond[], startDate?: string): string {
-    const dates = bonds.map(b => new Date(b.start_date));
+  computeTenure(contracts: EmploymentContract[], startDate?: string): string {
+    const dates = contracts.map(c => new Date(c.start_date));
     if (startDate) dates.push(new Date(startDate));
     if (!dates.length) return '—';
     const earliest = new Date(Math.min(...dates.map(d => d.getTime())));
@@ -193,7 +213,7 @@ export const PeopleHRService = {
     return `${years}a ${remainingMonths}m`;
   },
 
-  auditEmployee(employeeId: string, bonds: EmploymentBond[], costs: MonthlyCost[], startDate?: string): AuditIssue[] {
+  auditEmployee(employeeId: string, contracts: EmploymentContract[], costs: MonthlyCost[], startDate?: string): AuditIssue[] {
     const issues: AuditIssue[] = [];
     
     if (costs.length > 0 && !startDate) {
@@ -244,30 +264,30 @@ export const PeopleHRService = {
         });
       }
 
-      // 2. Regime mismatch: Check which EmploymentBond was active during cost.competencia
+      // 2. Regime mismatch: Check which EmploymentContract was active during cost.competencia
       const costDate = new Date(cost.competencia + 'T00:00:00');
-      const activeBond = bonds.find(bond => {
-        const bondStart = new Date(bond.start_date + 'T00:00:00');
-        const bondEnd = bond.end_date ? new Date(bond.end_date + 'T00:00:00') : null;
-        return bondStart <= costDate && (bondEnd === null || bondEnd >= costDate);
+      const activeContract = contracts.find(contract => {
+        const contractStart = new Date(contract.start_date + 'T00:00:00');
+        const contractEnd = contract.end_date ? new Date(contract.end_date + 'T00:00:00') : null;
+        return contractStart <= costDate && (contractEnd === null || contractEnd >= costDate);
       });
 
-      if (activeBond) {
+      if (activeContract) {
         const costIsPJ = cost.vinculo_tipo === 'MEI';
-        const bondIsPJ = activeBond.vinculo === 'MEI' || activeBond.vinculo === 'PJ';
+        const contractIsPJ = activeContract.regime === 'MEI' || activeContract.regime === 'PJ';
         
-        if (costIsPJ !== bondIsPJ) {
+        if (costIsPJ !== contractIsPJ) {
           issues.push({
             id: `${cost.id}-mismatch`,
             employee_id: employeeId,
             type: 'regime_mismatch',
             severity: 'warning',
-            message: `Custo lançado como ${cost.vinculo_tipo} em ${formatMonthCompetencia(cost.competencia)}, mas o regime ativo no período era ${activeBond.vinculo}.`,
+            message: `Custo lançado como ${cost.vinculo_tipo} em ${formatMonthCompetencia(cost.competencia)}, mas o regime ativo no período era ${activeContract.regime}.`,
             details: {
               costId: cost.id,
               competencia: cost.competencia,
               vinculo: cost.vinculo_tipo,
-              regimeAtivo: activeBond.vinculo
+              regimeAtivo: activeContract.regime
             }
           });
         }
@@ -284,11 +304,11 @@ export const PeopleHRService = {
       .select('id, start_date');
     if (errEmps) throw errEmps;
 
-    // 2. Fetch all bonds
-    const { data: bonds, error: errBonds } = await supabase
-      .from('people_employment_bonds')
+    // 2. Fetch all contracts
+    const { data: contracts, error: errContracts } = await supabase
+      .from('employment_contracts')
       .select('*');
-    if (errBonds) throw errBonds;
+    if (errContracts) throw errContracts;
 
     // 3. Fetch all monthly costs
     const { data: costs, error: errCosts } = await supabase
@@ -298,10 +318,10 @@ export const PeopleHRService = {
 
     const result: Record<string, AuditIssue[]> = {};
 
-    // Group bonds and costs by employee_id
-    const bondsMap = (bonds || []).reduce((acc: Record<string, EmploymentBond[]>, b: EmploymentBond) => {
-      if (!acc[b.employee_id]) acc[b.employee_id] = [];
-      acc[b.employee_id].push(b);
+    // Group contracts and costs by employee_id
+    const contractsMap = (contracts || []).reduce((acc: Record<string, EmploymentContract[]>, c: EmploymentContract) => {
+      if (!acc[c.employee_id]) acc[c.employee_id] = [];
+      acc[c.employee_id].push(c);
       return acc;
     }, {});
 
@@ -312,9 +332,9 @@ export const PeopleHRService = {
     }, {});
 
     for (const emp of emps || []) {
-      const empBonds = bondsMap[emp.id] || [];
+      const empContracts = contractsMap[emp.id] || [];
       const empCosts = costsMap[emp.id] || [];
-      const issues = this.auditEmployee(emp.id, empBonds, empCosts, emp.start_date || undefined);
+      const issues = this.auditEmployee(emp.id, empContracts, empCosts, emp.start_date || undefined);
       if (issues.length > 0) {
         result[emp.id] = issues;
       }

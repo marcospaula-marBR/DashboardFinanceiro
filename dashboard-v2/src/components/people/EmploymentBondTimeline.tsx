@@ -1,5 +1,5 @@
 "use client";
-import { EmploymentBond } from "@/types/loans";
+import { EmploymentContract } from "@/types/loans";
 import { Building2, ArrowRight, Briefcase, UserCheck } from "lucide-react";
 
 interface AdditiveEvent {
@@ -9,7 +9,7 @@ interface AdditiveEvent {
 }
 
 interface EmploymentBondTimelineProps {
-  bonds: EmploymentBond[];
+  bonds: EmploymentContract[];
   startDate?: string;
   additives?: AdditiveEvent[];
 }
@@ -72,9 +72,9 @@ export function EmploymentBondTimeline({
       type: "admission",
       label: "Admissão",
       sub: firstBond
-        ? `${firstBond.vinculo} • ${firstBond.cargo || firstBond.setor || ""} • ${firstBond.empresa}`
+        ? `${firstBond.regime} • ${firstBond.contracting_company || "MarBR"}`
         : "",
-      vinculo: firstBond?.vinculo,
+      vinculo: firstBond?.regime,
     });
   }
 
@@ -82,11 +82,11 @@ export function EmploymentBondTimeline({
     events.push({
       date: bond.start_date,
       type: "bond",
-      label: bond.motivo_fim
-        ? `Transição: ${bond.motivo_fim}`
+      label: bond.trigger_reason
+        ? `Transição: ${bond.trigger_reason}`
         : "Mudança de Vínculo",
-      sub: `${bond.vinculo} • ${bond.cargo || ""} • ${bond.empresa}`,
-      vinculo: bond.vinculo,
+      sub: `${bond.regime} • ${bond.contracting_company || "MarBR"}`,
+      vinculo: bond.regime,
     });
   });
 
@@ -111,8 +111,8 @@ export function EmploymentBondTimeline({
       date: new Date().toISOString().slice(0, 10),
       type: "current",
       label: "Situação Atual",
-      sub: `${currentBond.vinculo} • ${currentBond.cargo || currentBond.setor || ""} • ${currentBond.empresa}`,
-      vinculo: currentBond.vinculo,
+      sub: `${currentBond.regime} • ${currentBond.contracting_company || "MarBR"}`,
+      vinculo: currentBond.regime,
     });
   }
 
