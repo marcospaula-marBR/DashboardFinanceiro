@@ -50,6 +50,8 @@ export interface Employee {
   // HR Role
   department?: string;
   job_role?: string;
+  nivel?: string; // Estratégico | Tático | Operacional
+  department_start_date?: string; // YYYY-MM-DD - data de início no setor/função atual
   start_date?: string;
   resignation_date?: string;
   status_start_date?: string;
@@ -101,6 +103,7 @@ export interface Employee {
   cnpj_state?: string;
   executive_summary?: string;
   executive_link?: string;
+  commission_plan?: string; // plano de comissão (selecionável por produto)
 }
 
 export interface Contract {

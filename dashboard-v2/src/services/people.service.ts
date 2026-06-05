@@ -134,20 +134,35 @@ export class PeopleService {
       }
     }
 
-    // 3. Comparar Nome (campo full_name)
+    // 3. Comparar Nome (campos full_name e name)
     if (keys.name) {
       const cleanName = keys.name.trim();
       if (cleanName) {
         const { data } = await supabase
           .from(table)
           .select('id, full_name, document_id, pj_type')
-          .ilike('full_name', cleanName);
+          .or(`full_name.ilike.${cleanName},name.ilike.${cleanName}`);
         
         if (data && data.length > 0) return data[0];
       }
     }
 
     return null;
+  }
+
+  /**
+   * Retorna valores distintos de uma coluna (para autocomplete)
+   */
+  static async getDistinctValues(column: string, isTestMode?: boolean): Promise<string[]> {
+    const table = isTestMode ? 'employees_test' : 'employees';
+    const { data } = await supabase
+      .from(table)
+      .select(column)
+      .not(column, 'is', null)
+      .neq(column, '');
+    if (!data) return [];
+    const unique = [...new Set(data.map((r: any) => r[column]).filter(Boolean))] as string[];
+    return unique.sort();
   }
 
   /**
@@ -224,6 +239,9 @@ export class PeopleService {
       // Novos campos RH
       job_role: raw.job_role,
       department: raw.department,
+      nivel: raw.nivel,
+      department_start_date: raw.department_start_date || '',
+      commission_plan: raw.commission_plan || '',
       
       // Endereço
       zip_code: raw.zip_code,
@@ -295,6 +313,9 @@ export class PeopleService {
       // Novos campos RH
       job_role: profile.job_role,
       department: profile.department,
+      nivel: profile.nivel,
+      department_start_date: profile.department_start_date && profile.department_start_date.trim() !== '' ? profile.department_start_date : null,
+      commission_plan: profile.commission_plan || '',
       
       zip_code: profile.zip_code,
       street: profile.street,

@@ -57,6 +57,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [isSearchingCNPJCEP, setIsSearchingCNPJCEP] = useState(false);
   const [cnpjCepError, setCnpjCepError] = useState<string | null>(null);
   const [isParsingContract, setIsParsingContract] = useState(false);
+  const [serviceLocations, setServiceLocations] = useState<string[]>([]);
 
 
   useEffect(() => {
@@ -83,6 +84,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       setError(null);
     }
   }, [isOpen, employeeId, isTestMode]);
+
+  // Fetch distinct service locations for autocomplete
+  useEffect(() => {
+    if (isOpen) {
+      PeopleService.getDistinctValues('service_location', isTestMode).then(setServiceLocations).catch(() => {});
+    }
+  }, [isOpen, isTestMode]);
 
   const fetchProfile = async (id: string) => {
     setIsLoading(true);
@@ -1114,6 +1122,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.company || '-'}</span>
                               )}
                              </div>
+                             <div className="flex-1">
+                              <label className={labelClass}>Nível</label>
+                              {isEditMode ? (
+                                <select value={profile.nivel || ''} onChange={e => handleChange('nivel', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                  <option value="">Selecione...</option>
+                                  <option value="Estratégico">Estratégico</option>
+                                  <option value="Tático">Tático</option>
+                                  <option value="Operacional">Operacional</option>
+                                </select>
+                              ) : (
+                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.nivel || '-'}</span>
+                              )}
+                             </div>
                           </div>
                         </div>
                       </div>
@@ -1212,21 +1233,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           />
                         </div>
                         <div>
-                          <label className={labelClass}>Comissões</label>
-                          <input 
-                            type="number" 
-                            step="0.01" 
-                            value={profile.remuneration_commission ?? ''} 
-                            onChange={e => {
-                              const val = parseFloat(e.target.value) || 0;
-                              handleChange('remuneration_commission', val);
-                              const tot = (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + val;
-                              handleChange('remuneration', tot);
-                            }} 
-                            readOnly={!isEditMode} 
-                            className={inputClass} 
-                            placeholder="0.00"
-                          />
+                          <label className={labelClass}>Plano de Comissão</label>
+                          <select
+                              value={profile.commission_plan || ''}
+                              onChange={e => handleChange('commission_plan', e.target.value)}
+                              disabled={!isEditMode}
+                              className={inputClass}
+                            >
+                              <option value="">Sem Comissão</option>
+                              <option value="Consultoria">Consultoria</option>
+                              <option value="Vendas Diretas">Vendas Diretas</option>
+                              <option value="Produto A">Produto A</option>
+                              <option value="Produto B">Produto B</option>
+                              <option value="Produto C">Produto C</option>
+                              <option value="Projetos Especiais">Projetos Especiais</option>
+                              <option value="Recorrência">Recorrência</option>
+                              <option value="Híbrido">Híbrido</option>
+                            </select>
                         </div>
                         <div>
                           <label className={labelClass}>{getRemunerationLabel(profile.linkType || 'CLT').bruto} (Total Geral)</label>
@@ -1235,14 +1258,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           </div>
                         </div>
 
-                        <div>
-                          <label className={labelClass}>Setor</label>
-                          <input type="text" value={profile.department || ''} onChange={e => handleChange('department', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
-                        <div>
-                          <label className={labelClass}>Função / Cargo</label>
-                          <input type="text" value={profile.job_role || ''} onChange={e => handleChange('job_role', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
+
 
                         <div>
                            <label className={labelClass}>Chave PIX</label>
@@ -1314,14 +1330,34 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                            )}
                         </div>
 
-                        <div className="col-span-2 md:col-span-1">
-                          <label className={labelClass}>Função / Cargo</label>
-                          <input type="text" value={profile.job_role || ''} onChange={e => handleChange('job_role', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="Ex: Analista Financeiro" />
-                        </div>
-
-                        <div className="col-span-2 md:col-span-1">
-                          <label className={labelClass}>Departamento</label>
-                          <input type="text" value={profile.department || ''} onChange={e => handleChange('department', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="Ex: Administrativo" />
+                        <div className="col-span-2 pt-4 border-t border-dashed border-slate-200">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-2 mb-3">
+                            <Briefcase size={11}/> Posição Atual — Histórico de Setor/Função
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <label className={labelClass}>Setor</label>
+                              <input type="text" value={profile.department || ''} onChange={e => handleChange('department', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="Ex: Administrativo"/>
+                            </div>
+                            <div>
+                              <label className={labelClass}>Função / Cargo</label>
+                              <input type="text" value={profile.job_role || ''} onChange={e => handleChange('job_role', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="Ex: Analista Financeiro"/>
+                            </div>
+                            <div>
+                              <label className={labelClass}>Início neste Setor/Função</label>
+                              <input type="date" value={profile.department_start_date || ''} onChange={e => handleChange('department_start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                            </div>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase">Histórico de Mudanças</p>
+                              {history.filter(h => h.event_type?.toLowerCase().includes('setor') || h.event_type?.toLowerCase().includes('cargo') || h.event_type?.toLowerCase().includes('função')).map((h, i) => (
+                                <div key={i} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-100">
+                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{h.event_type}</span>
+                                  <span className="text-[10px] text-slate-500">{h.change_date}</span>
+                                  {h.observations && <span className="text-[10px] text-slate-600 truncate">{h.observations}</span>}
+                                </div>
+                              ))}
+                            </div>
                         </div>
                       </div>
                     </motion.div>
@@ -1546,17 +1582,24 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                             <div>
                               <label className={labelClass}>Local de Prestação do Serviço</label>
                               {isEditMode ? (
-                                <select 
-                                  value={profile.service_location || ''} 
-                                  onChange={e => handleChange('service_location', e.target.value)} 
-                                  className={inputClass}
-                                >
-                                  <option value="">Selecione o local...</option>
-                                  <option value="Escritório">Escritório</option>
-                                  <option value="Home Office">Home Office</option>
-                                  <option value="Cliente">Cliente</option>
-                                  <option value="Híbrido">Híbrido</option>
-                                </select>
+                                <>
+                                  <input
+                                    list="service-locations-list"
+                                    value={profile.service_location || ''}
+                                    onChange={e => handleChange('service_location', e.target.value)}
+                                    className={inputClass}
+                                    placeholder="Digite ou selecione um local..."
+                                  />
+                                  <datalist id="service-locations-list">
+                                    {serviceLocations.map((loc, i) => (
+                                      <option key={i} value={loc} />
+                                    ))}
+                                    <option value="Escritório" />
+                                    <option value="Home Office" />
+                                    <option value="Cliente" />
+                                    <option value="Híbrido" />
+                                  </datalist>
+                                </>
                               ) : (
                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
                                   {profile.service_location || 'Não Definido'}
