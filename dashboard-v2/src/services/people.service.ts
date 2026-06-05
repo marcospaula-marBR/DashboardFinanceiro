@@ -96,6 +96,75 @@ export class PeopleService {
   }
 
   /**
+   * Busca um colaborador existente por CNPJ, CPF ou Nome (em ordem de prioridade)
+   */
+  static async findEmployeeByUniqueKeys(
+    keys: { cnpj?: string; cpf?: string; name?: string },
+    isTestMode?: boolean
+  ): Promise<any | null> {
+    const table = isTestMode ? 'employees_test' : 'employees';
+    
+    // 1. Comparar CNPJ (campo pj_type)
+    if (keys.cnpj) {
+      const cleanCnpj = keys.cnpj.replace(/\D/g, '');
+      if (cleanCnpj) {
+        // Busca exata
+        const { data } = await supabase
+          .from(table)
+          .select('id, full_name, document_id, pj_type')
+          .eq('pj_type', keys.cnpj);
+        
+        if (data && data.length > 0) return data[0];
+
+        // Tentar também sem formatação
+        const { data: dataRaw } = await supabase
+          .from(table)
+          .select('id, full_name, document_id, pj_type')
+          .ilike('pj_type', `%${cleanCnpj}%`);
+        
+        if (dataRaw && dataRaw.length > 0) return dataRaw[0];
+      }
+    }
+
+    // 2. Comparar CPF (campo document_id)
+    if (keys.cpf) {
+      const cleanCpf = keys.cpf.replace(/\D/g, '');
+      if (cleanCpf) {
+        // Busca exata
+        const { data } = await supabase
+          .from(table)
+          .select('id, full_name, document_id, pj_type')
+          .eq('document_id', keys.cpf);
+        
+        if (data && data.length > 0) return data[0];
+
+        // Tentar também sem formatação
+        const { data: dataRaw } = await supabase
+          .from(table)
+          .select('id, full_name, document_id, pj_type')
+          .ilike('document_id', `%${cleanCpf}%`);
+        
+        if (dataRaw && dataRaw.length > 0) return dataRaw[0];
+      }
+    }
+
+    // 3. Comparar Nome (campo full_name)
+    if (keys.name) {
+      const cleanName = keys.name.trim();
+      if (cleanName) {
+        const { data } = await supabase
+          .from(table)
+          .select('id, full_name, document_id, pj_type')
+          .ilike('full_name', cleanName);
+        
+        if (data && data.length > 0) return data[0];
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Salva o upload de um arquivo para o Storage (ex: foto de perfil)
    */
   static async uploadProfilePhoto(employeeId: string, file: File, isTestMode?: boolean): Promise<string> {
@@ -196,6 +265,8 @@ export class PeopleService {
       // Contato
       email: raw.email,
       phone: raw.phone,
+      phone_professional: raw.phone_professional,
+      email_professional: raw.email_professional,
       pix_key: raw.pix_key,
       emergency_contact_name: raw.emergency_contact_name,
       emergency_contact_phone: raw.emergency_contact_phone,
@@ -249,6 +320,8 @@ export class PeopleService {
       
       email: profile.email,
       phone: profile.phone,
+      phone_professional: profile.phone_professional,
+      email_professional: profile.email_professional,
       pix_key: profile.pix_key,
       emergency_contact_name: profile.emergency_contact_name,
       emergency_contact_phone: profile.emergency_contact_phone,

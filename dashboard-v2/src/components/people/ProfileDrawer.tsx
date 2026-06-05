@@ -114,6 +114,66 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       if (!profile.name || !profile.company) {
         throw new Error('Nome e Empresa são obrigatórios.');
       }
+
+      // Validação de e-mails com regex simples
+      if (profile.email && !validateEmail(profile.email)) {
+        throw new Error('E-mail pessoal inválido.');
+      }
+      if (profile.email_professional && !validateEmail(profile.email_professional)) {
+        throw new Error('E-mail profissional inválido.');
+      }
+
+      // Validação de telefones (com DDD)
+      if (profile.phone) {
+        const cleanPhone = profile.phone.replace(/\D/g, '');
+        if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+          throw new Error('Telefone pessoal deve conter exatamente 10 ou 11 dígitos (com DDD).');
+        }
+      }
+      if (profile.phone_professional) {
+        const cleanPhone = profile.phone_professional.replace(/\D/g, '');
+        if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+          throw new Error('Telefone profissional deve conter exatamente 10 ou 11 dígitos (com DDD).');
+        }
+      }
+
+      // Validação de CPF
+      if (profile.document_id) {
+        const cleanCpf = profile.document_id.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+          throw new Error('CPF deve conter exatamente 11 dígitos.');
+        }
+        if (!isValidCPF(profile.document_id)) {
+          throw new Error('CPF inválido (dígitos verificadores incorretos).');
+        }
+      }
+
+      // Validação de CPF do responsável legal
+      if (profile.responsible_cpf) {
+        const cleanRespCpf = profile.responsible_cpf.replace(/\D/g, '');
+        if (cleanRespCpf.length > 0) {
+          if (cleanRespCpf.length !== 11) {
+            throw new Error('CPF do responsável deve conter exatamente 11 dígitos.');
+          }
+          if (!isValidCPF(profile.responsible_cpf)) {
+            throw new Error('CPF do responsável inválido (dígitos verificadores incorretos).');
+          }
+        }
+      }
+
+      // Validação de CNPJ (se for PJ)
+      if (profile.linkType === 'PJ') {
+        if (!profile.pj_type) {
+          throw new Error('CNPJ é obrigatório para colaboradores com vínculo PJ.');
+        }
+        const cleanCnpj = profile.pj_type.replace(/\D/g, '');
+        if (cleanCnpj.length !== 14) {
+          throw new Error('CNPJ da empresa deve conter exatamente 14 dígitos.');
+        }
+        if (!isValidCNPJ(profile.pj_type)) {
+          throw new Error('CNPJ da empresa inválido (dígitos verificadores incorretos).');
+        }
+      }
       
       const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode);
       const newId = profile.id || saved.id;
@@ -139,8 +199,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           // Atualiza localmente
           setProfile(prev => ({ ...prev, links_contratos: newText }));
           setPendingContractFile(null);
-        } catch (uploadErr: any) {
-          console.error('Erro ao subir PDF de contrato pendente:', uploadErr);
+        } catch (uploadErr: unknown) {
+          const error = uploadErr as Error;
+          console.error('Erro ao subir PDF de contrato pendente:', error);
         }
       }
       
@@ -259,6 +320,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Proteção contra erro 413 (Payload Too Large) limitando a 4.5MB
+    if (file.size > 4.5 * 1024 * 1024) {
+      alert("O arquivo PDF do contrato é muito grande (máximo de 4.5MB permitido para processamento por IA). Por favor, use um arquivo menor ou PDF comprimido.");
+      return;
+    }
+
     setIsParsingContract(true);
     setError(null);
     try {
@@ -270,19 +337,153 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         body: formData,
       });
 
+      const responseText = await res.text();
+      
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Falha ao processar PDF do contrato.');
+        let errMsg = 'Falha ao processar PDF do contrato.';
+        try {
+          const parsed = JSON.parse(responseText);
+          errMsg = parsed.error || errMsg;
+        } catch {
+          if (responseText.trim().startsWith('<') || responseText.includes('Request Entity Too Large')) {
+            if (responseText.includes('Payload Too Large') || responseText.includes('Request Entity Too Large') || res.status === 413) {
+              errMsg = 'O arquivo do contrato é muito grande para o processador de IA. Por favor, tente um arquivo menor ou comprimido (limite de 4.5MB).';
+            } else {
+              errMsg = `Erro no servidor (${res.status}). O arquivo pode ser muito grande ou a API do Gemini falhou.`;
+            }
+          } else {
+            errMsg = responseText.slice(0, 200) || errMsg;
+          }
+        }
+        throw new Error(errMsg);
       }
 
-      const data = await res.json();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        if (responseText.trim().startsWith('<') || responseText.includes('Request Entity Too Large')) {
+          if (responseText.includes('Payload Too Large') || responseText.includes('Request Entity Too Large') || res.status === 413) {
+            throw new Error('O arquivo do contrato é muito grande para o processador de IA. Por favor, tente um arquivo menor ou comprimido (limite de 4.5MB).');
+          } else {
+            throw new Error(`Erro no processamento (${res.status}). A resposta do servidor não pôde ser lida.`);
+          }
+        }
+        throw new Error(responseText.slice(0, 200) || 'A resposta do servidor não é um JSON válido.');
+      }
+      
+      // Buscar se o colaborador já existe na base (Ordem: CNPJ -> CPF -> Nome)
+      const existing = await PeopleService.findEmployeeByUniqueKeys({
+        cnpj: data.cnpj || data.pj_type,
+        cpf: data.document_id,
+        name: data.name
+      }, isTestMode);
+
+      if (existing && existing.id !== profile.id) {
+        const msg = `Colaborador já existente encontrado no banco de dados:\n\n` +
+          `Nome: ${existing.full_name}\n` +
+          `CPF: ${existing.document_id || 'Não informado'}\n` +
+          `CNPJ: ${existing.pj_type || 'Não informado'}\n\n` +
+          `Deseja carregar a ficha cadastral dele para atualizar os dados com as informações do contrato?`;
+        
+        if (confirm(msg)) {
+          setIsLoading(true);
+          try {
+            const [existingProfile, hist, bondsData, costsData] = await Promise.all([
+              PeopleService.getEmployeeProfile(existing.id, isTestMode),
+              PeopleService.getEmployeeHistory(existing.id, isTestMode),
+              PeopleHRService.getEmploymentContracts(existing.id),
+              PeopleHRService.getMonthlyCosts(existing.id)
+            ]);
+            
+            setHistory(hist || []);
+            setBonds(bondsData || []);
+            setCosts(costsData || []);
+            
+            // Fazer upload do PDF do contrato para o colaborador existente
+            let contractUrl = '';
+            try {
+              contractUrl = await PeopleService.uploadAdditiveFile(existing.id, file, isTestMode);
+            } catch (uploadErr) {
+              console.error('Erro ao subir PDF de contrato do existente:', uploadErr);
+            }
+            
+            setProfile(() => {
+              const next = { ...existingProfile };
+              
+              if (data.name) next.name = data.name;
+              if (data.document_id) next.document_id = formatCPF(data.document_id);
+              if (data.document_rg) next.document_rg = data.document_rg;
+              if (data.corporate_name) next.corporate_name = data.corporate_name;
+              if (data.linkType) next.linkType = data.linkType;
+              if (data.remuneration_fixed) {
+                next.remuneration_fixed = data.remuneration_fixed;
+                next.remuneration = data.remuneration_fixed + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
+              }
+              if (data.email) next.email = data.email;
+              if (data.phone) next.phone = formatPhone(data.phone);
+              if (data.zip_code) next.zip_code = formatCEP(data.zip_code);
+              if (data.street) next.street = data.street;
+              if (data.number) next.number = data.number;
+              if (data.neighborhood) next.neighborhood = data.neighborhood;
+              if (data.city) next.city = data.city;
+              if (data.state) next.state = data.state;
+              if (data.cnpj_zip_code) next.cnpj_zip_code = formatCEP(data.cnpj_zip_code);
+              if (data.cnpj_street) next.cnpj_street = data.cnpj_street;
+              if (data.cnpj_number) next.cnpj_number = data.cnpj_number;
+              if (data.cnpj_neighborhood) next.cnpj_neighborhood = data.cnpj_neighborhood;
+              if (data.cnpj_city) next.cnpj_city = data.cnpj_city;
+              if (data.cnpj_state) next.cnpj_state = data.cnpj_state;
+              if (data.responsible_name) next.responsible_name = data.responsible_name;
+              if (data.responsible_cpf) next.responsible_cpf = formatCPF(data.responsible_cpf);
+              
+              // Novos campos profissional
+              if (data.phone_professional) next.phone_professional = formatPhone(data.phone_professional);
+              if (data.email_professional) next.email_professional = data.email_professional;
+
+              if (next.linkType === 'PJ') {
+                if (!next.responsible_name) next.responsible_name = next.name || '';
+                if (!next.responsible_cpf) next.responsible_cpf = next.document_id || '';
+                if (data.cnpj || data.pj_type) next.pj_type = formatCNPJ(data.cnpj || data.pj_type);
+              }
+
+              if (next.corporate_name) {
+                const name = (next.corporate_name || '').toUpperCase();
+                const isMei = !name.includes('LTDA') && !name.includes('S.A.') && !name.includes('S/A') && !name.includes('LIMITADA') || name.includes('MEI') || name.includes('MICROEMPREENDEDOR INDIVIDUAL');
+                next.tax_regime = isMei ? 'MEI' : 'Simples Nacional';
+              }
+
+              if (contractUrl) {
+                const dateStr = new Date().toLocaleDateString('pt-BR');
+                const markdownLink = `[Contrato ${dateStr}](${contractUrl})`;
+                const currentText = next.links_contratos ? next.links_contratos + '\n' : '';
+                next.links_contratos = currentText + markdownLink;
+              }
+              
+              return next;
+            });
+            
+            setIsEditMode(true);
+            alert('Ficha do colaborador existente carregada e mesclada com as informações do contrato com sucesso!');
+          } catch (loadErr: unknown) {
+            const error = loadErr as Error;
+            console.error('Erro ao carregar dados do colaborador existente:', error);
+            setError('Falha ao carregar colaborador existente.');
+          } finally {
+            setIsLoading(false);
+            setIsParsingContract(false);
+          }
+          return;
+        }
+      }
       
       let contractUrl = '';
       if (profile.id) {
         try {
           contractUrl = await PeopleService.uploadAdditiveFile(profile.id, file, isTestMode);
-        } catch (uploadErr: any) {
-          console.error('Erro ao fazer upload do PDF para o storage:', uploadErr);
+        } catch (uploadErr: unknown) {
+          const error = uploadErr as Error;
+          console.error('Erro ao fazer upload do PDF para o storage:', error);
         }
       } else {
         setPendingContractFile(file);
@@ -302,7 +503,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           next.remuneration = data.remuneration_fixed + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
         }
         if (data.email) next.email = data.email;
-        if (data.phone) next.phone = data.phone;
+        if (data.phone) next.phone = formatPhone(data.phone);
         if (data.zip_code) next.zip_code = formatCEP(data.zip_code);
         if (data.street) next.street = data.street;
         if (data.number) next.number = data.number;
@@ -317,11 +518,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         if (data.cnpj_state) next.cnpj_state = data.cnpj_state;
         if (data.responsible_name) next.responsible_name = data.responsible_name;
         if (data.responsible_cpf) next.responsible_cpf = formatCPF(data.responsible_cpf);
+        
+        // Novos campos profissional
+        if (data.phone_professional) next.phone_professional = formatPhone(data.phone_professional);
+        if (data.email_professional) next.email_professional = data.email_professional;
 
         // Se for PJ e não houver responsável_name ou responsável_cpf, sincronizar reativamente
         if (next.linkType === 'PJ') {
           if (!next.responsible_name) next.responsible_name = next.name || '';
           if (!next.responsible_cpf) next.responsible_cpf = next.document_id || '';
+          if (data.cnpj || data.pj_type) next.pj_type = formatCNPJ(data.cnpj || data.pj_type);
         }
 
         // Se o corporate_name estiver presente, auto-identificar regime tributário
@@ -345,9 +551,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         ? 'Contrato importado, salvo no storage e analisado por IA com sucesso! Os campos foram auto-preenchidos.'
         : 'Contrato importado e analisado por IA! Os campos foram auto-preenchidos e o PDF será salvo no storage ao salvar a ficha.'
       );
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Erro ao analisar o contrato.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error(error);
+      setError(error.message || 'Erro ao analisar o contrato.');
     } finally {
       setIsParsingContract(false);
     }
@@ -414,9 +621,108 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     return `${truncated.slice(0, 3)}.${truncated.slice(3, 6)}.${truncated.slice(6, 9)}-${truncated.slice(9)}`;
   };
 
+  const formatCNPJ = (value: string) => {
+    const clean = value.replace(/\D/g, '');
+    const truncated = clean.slice(0, 14);
+    if (truncated.length <= 2) return truncated;
+    if (truncated.length <= 5) return `${truncated.slice(0, 2)}.${truncated.slice(2)}`;
+    if (truncated.length <= 8) return `${truncated.slice(0, 2)}.${truncated.slice(2, 5)}.${truncated.slice(5)}`;
+    if (truncated.length <= 12) return `${truncated.slice(0, 2)}.${truncated.slice(2, 5)}.${truncated.slice(5, 8)}/${truncated.slice(8)}`;
+    return `${truncated.slice(0, 2)}.${truncated.slice(2, 5)}.${truncated.slice(5, 8)}/${truncated.slice(8, 12)}-${truncated.slice(12)}`;
+  };
+
+  const formatPhone = (value: string) => {
+    const clean = value.replace(/\D/g, '');
+    const truncated = clean.slice(0, 11);
+    if (truncated.length <= 2) return truncated;
+    if (truncated.length <= 6) return `(${truncated.slice(0, 2)}) ${truncated.slice(2)}`;
+    if (truncated.length <= 10) return `(${truncated.slice(0, 2)}) ${truncated.slice(2, 6)}-${truncated.slice(6)}`;
+    return `(${truncated.slice(0, 2)}) ${truncated.slice(2, 7)}-${truncated.slice(7)}`;
+  };
+
   const handleCPFChange = (val: string) => {
     const formatted = formatCPF(val);
     handleChange('document_id', formatted);
+  };
+
+  const handleCNPJChange = (val: string) => {
+    const formatted = formatCNPJ(val);
+    handleChange('pj_type', formatted);
+  };
+
+  const handlePhoneChange = (val: string) => {
+    const formatted = formatPhone(val);
+    handleChange('phone', formatted);
+  };
+
+  const handleProfessionalPhoneChange = (val: string) => {
+    const formatted = formatPhone(val);
+    handleChange('phone_professional', formatted);
+  };
+
+  const isValidCPF = (cpf: string) => {
+    const clean = cpf.replace(/\D/g, '');
+    if (clean.length !== 11) return false;
+    if (/^(\d)\1{10}$/.test(clean)) return false;
+    
+    let sum = 0;
+    let remainder;
+    
+    for (let i = 1; i <= 9; i++) {
+      sum += parseInt(clean.substring(i - 1, i)) * (11 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(clean.substring(9, 10))) return false;
+    
+    sum = 0;
+    for (let i = 1; i <= 10; i++) {
+      sum += parseInt(clean.substring(i - 1, i)) * (12 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(clean.substring(10, 11))) return false;
+    
+    return true;
+  };
+
+  const isValidCNPJ = (cnpj: string) => {
+    const clean = cnpj.replace(/\D/g, '');
+    if (clean.length !== 14) return false;
+    if (/^(\d)\1{13}$/.test(clean)) return false;
+    
+    let size = clean.length - 2;
+    let numbers = clean.substring(0, size);
+    const digits = clean.substring(size);
+    let sum = 0;
+    let pos = size - 7;
+    
+    for (let i = size; i >= 1; i--) {
+      sum += parseInt(numbers.charAt(size - i)) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    
+    let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+    if (result !== parseInt(digits.charAt(0))) return false;
+    
+    size = size + 1;
+    numbers = clean.substring(0, size);
+    sum = 0;
+    pos = size - 7;
+    
+    for (let i = size; i >= 1; i--) {
+      sum += parseInt(numbers.charAt(size - i)) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    
+    result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+    if (result !== parseInt(digits.charAt(1))) return false;
+    
+    return true;
+  };
+
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,10}$/.test(email);
   };
 
   const handleCEPChange = (val: string) => {
@@ -846,6 +1152,28 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                           <input type="text" value={profile.document_rg || ''} onChange={e => handleChange('document_rg', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="00.000.000-0"/>
                         </div>
                         <div>
+                          <label className={labelClass}>E-mail Profissional</label>
+                          <input 
+                            type="email" 
+                            value={profile.email_professional || ''} 
+                            onChange={e => handleChange('email_professional', e.target.value)} 
+                            readOnly={!isEditMode} 
+                            className={inputClass} 
+                            placeholder="usuario@empresa.com"
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Telefone Profissional</label>
+                          <input 
+                            type="text" 
+                            value={profile.phone_professional || ''} 
+                            onChange={e => handleProfessionalPhoneChange(e.target.value)} 
+                            readOnly={!isEditMode} 
+                            className={inputClass} 
+                            placeholder="(00) 00000-0000"
+                          />
+                        </div>
+                        <div>
                           <label className={labelClass}>Valor Fixo / Salário Base</label>
                           <input 
                             type="number" 
@@ -1011,7 +1339,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                            </div>
                            <div>
                              <label className={labelClass}>Telefone Pessoal</label>
-                             <input type="text" value={profile.phone || ''} onChange={e => handleChange('phone', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="(00) 00000-0000"/>
+                             <input type="text" value={profile.phone || ''} onChange={e => handlePhoneChange(e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="(00) 00000-0000"/>
                            </div>
                          </div>
                        </div>
@@ -1244,7 +1572,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                 <input 
                                   type="text" 
                                   value={profile.pj_type || ''} 
-                                  onChange={e => handleChange('pj_type', e.target.value)} 
+                                  onChange={e => handleCNPJChange(e.target.value)} 
                                   readOnly={!isEditMode} 
                                   className={inputClass} 
                                   placeholder="00.000.000/0000-00"
