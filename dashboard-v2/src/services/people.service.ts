@@ -107,44 +107,30 @@ export class PeopleService {
     // 1. Comparar CNPJ (campo pj_type)
     if (keys.cnpj) {
       const cleanCnpj = keys.cnpj.replace(/\D/g, '');
-      if (cleanCnpj) {
-        // Busca exata
+      if (cleanCnpj && cleanCnpj.length === 14) {
+        const formattedCnpj = `${cleanCnpj.substring(0, 2)}.${cleanCnpj.substring(2, 5)}.${cleanCnpj.substring(5, 8)}/${cleanCnpj.substring(8, 12)}-${cleanCnpj.substring(12, 14)}`;
+        
         const { data } = await supabase
           .from(table)
           .select('id, full_name, document_id, pj_type')
-          .eq('pj_type', keys.cnpj);
+          .or(`pj_type.eq."${cleanCnpj}",pj_type.eq."${formattedCnpj}"`);
         
         if (data && data.length > 0) return data[0];
-
-        // Tentar também sem formatação
-        const { data: dataRaw } = await supabase
-          .from(table)
-          .select('id, full_name, document_id, pj_type')
-          .ilike('pj_type', `%${cleanCnpj}%`);
-        
-        if (dataRaw && dataRaw.length > 0) return dataRaw[0];
       }
     }
 
     // 2. Comparar CPF (campo document_id)
     if (keys.cpf) {
       const cleanCpf = keys.cpf.replace(/\D/g, '');
-      if (cleanCpf) {
-        // Busca exata
+      if (cleanCpf && cleanCpf.length === 11) {
+        const formattedCpf = `${cleanCpf.substring(0, 3)}.${cleanCpf.substring(3, 6)}.${cleanCpf.substring(6, 9)}-${cleanCpf.substring(9, 11)}`;
+        
         const { data } = await supabase
           .from(table)
           .select('id, full_name, document_id, pj_type')
-          .eq('document_id', keys.cpf);
+          .or(`document_id.eq."${cleanCpf}",document_id.eq."${formattedCpf}"`);
         
         if (data && data.length > 0) return data[0];
-
-        // Tentar também sem formatação
-        const { data: dataRaw } = await supabase
-          .from(table)
-          .select('id, full_name, document_id, pj_type')
-          .ilike('document_id', `%${cleanCpf}%`);
-        
-        if (dataRaw && dataRaw.length > 0) return dataRaw[0];
       }
     }
 

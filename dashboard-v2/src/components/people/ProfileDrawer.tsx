@@ -367,6 +367,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
               PeopleHRService.getMonthlyCosts(existing.id)
             ]);
             
+            if (!existingProfile) {
+              throw new Error('Não foi possível carregar a ficha cadastral do colaborador existente.');
+            }
+            
             setHistory(hist || []);
             setBonds(bondsData || []);
             setCosts(costsData || []);
@@ -403,6 +407,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
               // Novos campos profissional
               if (data.phone_professional) next.phone_professional = formatPhone(data.phone_professional);
               if (data.email_professional) next.email_professional = data.email_professional;
+
+              // Empresa Contratante
+              if (data.contracting_company) {
+                const resolved = resolveCompany(data.contracting_company);
+                if (resolved) next.company = resolved;
+              }
+
+              // Datas: Admissão (Mais antiga) e Vencimento (Maior/Mais recente)
+              if (data.start_date) {
+                next.start_date = getOldestDate(existingProfile.start_date, data.start_date);
+              }
+              if (data.contract_expiry_date) {
+                next.contract_expiry_date = getLatestDate(existingProfile.contract_expiry_date, data.contract_expiry_date);
+              }
 
               if (next.linkType === 'PJ') {
                 if (!next.responsible_name) next.responsible_name = next.name || '';
@@ -471,6 +489,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         // Novos campos profissional
         if (data.phone_professional) next.phone_professional = formatPhone(data.phone_professional);
         if (data.email_professional) next.email_professional = data.email_professional;
+
+        // Empresa Contratante
+        if (data.contracting_company) {
+          const resolved = resolveCompany(data.contracting_company);
+          if (resolved) next.company = resolved;
+        }
+
+        // Datas: Admissão (Mais antiga) e Vencimento (Maior/Mais recente)
+        if (data.start_date) {
+          next.start_date = getOldestDate(prev.start_date, data.start_date);
+        }
+        if (data.contract_expiry_date) {
+          next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
+        }
 
         // Se for PJ e não houver responsável_name ou responsável_cpf, sincronizar reativamente
         if (next.linkType === 'PJ') {
@@ -550,6 +582,30 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       setAuditIssues([]);
     }
   }, [profile.id, profile.start_date, bonds, costs]);
+
+  const resolveCompany = (companyStr: string): string => {
+    const norm = (companyStr || '').toUpperCase();
+    if (norm.includes('G2')) return 'G2';
+    if (norm.includes('MAR BRASIL') || norm.includes('MARBR') || norm.includes('MAR BR')) return 'MarBR';
+    if (norm.includes('DZM') || norm.includes('D.Z.M') || norm.includes('D Z M') || norm.includes('DIANNA')) return 'DZM';
+    return '';
+  };
+
+  const getOldestDate = (d1?: string | null, d2?: string | null): string => {
+    if (!d1 && !d2) return '';
+    if (!d1) return d2 || '';
+    if (!d2) return d1 || '';
+    // Comparação de string YYYY-MM-DD
+    return d1 < d2 ? d1 : d2;
+  };
+
+  const getLatestDate = (d1?: string | null, d2?: string | null): string => {
+    if (!d1 && !d2) return '';
+    if (!d1) return d2 || '';
+    if (!d2) return d1 || '';
+    // Comparação de string YYYY-MM-DD
+    return d1 > d2 ? d1 : d2;
+  };
 
   const formatCEP = (value: string) => {
     const clean = value.replace(/\D/g, '');
@@ -1052,6 +1108,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                 <select value={profile.company || 'MarBR'} onChange={e => handleChange('company', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
                                   <option value="MarBR">MarBR</option>
                                   <option value="DZM">DZM</option>
+                                  <option value="G2">G2</option>
                                 </select>
                               ) : (
                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.company || '-'}</span>

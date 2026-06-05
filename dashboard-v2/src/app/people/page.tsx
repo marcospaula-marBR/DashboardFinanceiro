@@ -123,6 +123,7 @@ export default function PeoplePage() {
     const ferias = employees.filter(e => e.status === 'Férias');
     const marBR = ativos.filter(e => e.company === 'MarBR').length;
     const dzm = ativos.filter(e => e.company === 'DZM').length;
+    const g2 = ativos.filter(e => e.company === 'G2').length;
     
     // Average tenure for actives
     const tenures = ativos
@@ -143,6 +144,7 @@ export default function PeoplePage() {
       ferias: ferias.length,
       marBR,
       dzm,
+      g2,
       avgTenure: avgMonths > 0 ? avgTenure : '—',
       clt: ativos.filter(e => e.linkType === 'CLT').length,
       mei: ativos.filter(e => e.linkType === 'MEI' || e.linkType === 'PJ').length,
@@ -325,6 +327,7 @@ export default function PeoplePage() {
               <option value="">Todas as Empresas</option>
               <option value="MarBR">MarBR</option>
               <option value="DZM">DZM</option>
+              <option value="G2">G2</option>
             </select>
           </div>
 
@@ -499,6 +502,7 @@ export default function PeoplePage() {
                     <option value="">Todas as Empresas</option>
                     <option value="MarBR">MarBR</option>
                     <option value="DZM">DZM</option>
+                    <option value="G2">G2</option>
                   </select>
                 </div>
 
@@ -652,6 +656,7 @@ export default function PeoplePage() {
               breakdown={[
                 { label: 'MarBR', value: hrKpis.marBR.toString() },
                 { label: 'DZM', value: hrKpis.dzm.toString() },
+                { label: 'G2', value: hrKpis.g2.toString() },
               ]}
             />
             <PeopleKpiCard

@@ -26,6 +26,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     const est = activeEmployees.filter(e => e.linkType === "Estagiário").length;
     const marBR = activeEmployees.filter(e => e.company === "MarBR").length;
     const dzm = activeEmployees.filter(e => e.company === "DZM").length;
+    const g2 = activeEmployees.filter(e => e.company === "G2").length;
     const ferias = employees.filter(e => e.status === "Férias").length;
     
     // Average Tenure
@@ -41,7 +42,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     const avgRemMonths = avgMonths % 12;
     const avgTenure = avgYears > 0 ? `${avgYears}a ${avgRemMonths > 0 ? avgRemMonths + "m" : ""}` : `${avgMonths}m`;
 
-    return { clt, mei, est, marBR, dzm, ferias, avgTenure };
+    return { clt, mei, est, marBR, dzm, g2, ferias, avgTenure };
   })();
 
   // --- Calculations for Payroll ---
@@ -190,13 +191,15 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                   {/* Distribuição por Empresa */}
                   <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-5">
                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Divisão de Headcount por Empresa</h3>
-                    <div className="flex justify-between items-center text-sm font-bold text-slate-200">
+                    <div className="flex justify-between items-center text-sm font-bold text-slate-200 flex-wrap gap-2">
                       <span>MarBR: {headcountStats.marBR} ({Math.round((headcountStats.marBR / (activeEmployees.length || 1)) * 100)}%)</span>
                       <span>DZM: {headcountStats.dzm} ({Math.round((headcountStats.dzm / (activeEmployees.length || 1)) * 100)}%)</span>
+                      <span>G2: {headcountStats.g2} ({Math.round((headcountStats.g2 / (activeEmployees.length || 1)) * 100)}%)</span>
                     </div>
                     <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex">
                       <div className="h-full bg-emerald-600" style={{ width: `${(headcountStats.marBR / (activeEmployees.length || 1)) * 100}%` }} />
                       <div className="h-full bg-sky-500" style={{ width: `${(headcountStats.dzm / (activeEmployees.length || 1)) * 100}%` }} />
+                      <div className="h-full bg-amber-500" style={{ width: `${(headcountStats.g2 / (activeEmployees.length || 1)) * 100}%` }} />
                     </div>
                   </div>
 

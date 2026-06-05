@@ -117,6 +117,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
               <option value="">Todas as Empresas</option>
               <option value="MarBR">MarBR</option>
               <option value="DZM">DZM</option>
+              <option value="G2">G2</option>
             </select>
           </div>
 

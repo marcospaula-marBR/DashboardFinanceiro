@@ -1,7 +1,7 @@
-export const APP_VERSION = "v.02.45.14";
+export const APP_VERSION = "v.02.45.15";
 export const VERSION_DATE = "2026-06-05";
 export const VERSION_CHANGELOG = [
-  "v.02.45.14 - Fix: Atualização do modelo do Gemini de gemini-1.5-flash para gemini-2.5-flash nas APIs de análise e parsing de contrato devido à descontinuação/indisponibilidade da versão antiga em 2026.",
+  "v.02.45.15 - Feat: Detecção automática de datas de admissão/vencimento (mais antiga e mais recente) e empresa contratante (G2/MarBR/DZM) nos contratos; varredura robusta de colaboradores existentes (CNPJ/CPF formatado e sem formatação via OR); empresa G2 adicionada nos filtros e KPIs; G2 agora reconhecida como empresa do sistema.",
   "v.02.45.13 - Feat: Máscaras de telefone pessoal e CNPJ, campos profissionais (telefone/email) no Info Pessoal com máscaras, validações matemáticas de CPF/CNPJ (dígitos verificadores), tratamento de erros e suporte a contratos de qualquer tamanho (>4.5MB) utilizando upload prévio para o storage e posterior leitura por IA.",
   "v.02.45.12 - Fix: Confirmação ao fechar ficha em modo de edição, bloqueio de fechar com clique fora e upload automático do PDF do contrato para o Supabase Storage com vínculo de aditivo.",
   "v.02.45.11 - Feat: Habilitação de importação de dados por upload de PDF de contrato (utilizando IA Gemini 1.5 Flash para auto-preenchimento) e desativação de clique-fora para fechar o modal em modo de edição.",

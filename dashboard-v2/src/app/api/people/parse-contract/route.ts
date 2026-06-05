@@ -51,7 +51,9 @@ export async function POST(req: Request) {
     });
 
     const prompt = `
-Analise este contrato de prestação de serviços (ou contrato de trabalho) e extraia o máximo de informações estruturadas possíveis.
+Analise este contrato de prestação de serviços (ou contrato de trabalho) e extraia o máximo de informações estruturadas possíveis. 
+Procure também em qualquer página de "checklist", resumo, folha de conferência ou anexos de validação que possam estar incluídos no documento, pois estes costumam conter o resumo das datas de início, validade e outras informações importantes do contrato.
+
 Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia se não encontrar):
 
 {
@@ -79,7 +81,10 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "cnpj_city": "Cidade do CNPJ se houver",
   "cnpj_state": "UF do CNPJ se houver",
   "responsible_name": "Nome do responsável legal (geralmente igual ao Name em contratos MEI/PJ)",
-  "responsible_cpf": "CPF do responsável legal (formato 000.000.000-00, geralmente igual ao CPF do prestador)"
+  "responsible_cpf": "CPF do responsável legal (formato 000.000.000-00, geralmente igual ao CPF do prestador)",
+  "start_date": "Data de início do contrato/admissão/início da prestação (formato YYYY-MM-DD)",
+  "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato se houver (formato YYYY-MM-DD)",
+  "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)"
 }
 
 Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser obrigatoriamente 'PJ' ou 'MEI'.
