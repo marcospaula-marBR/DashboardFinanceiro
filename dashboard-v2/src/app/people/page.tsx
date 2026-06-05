@@ -273,8 +273,11 @@ export default function PeoplePage() {
               <Users size={18} />
             </div>
             <div>
-              <h2 className="text-sm font-black tracking-wider uppercase leading-tight">People HR</h2>
-              <p className="text-[9px] font-bold text-slate-500 uppercase leading-none mt-0.5">Executive Cockpit</p>
+              <h2 className="text-sm font-black tracking-wider leading-tight">PeopleBoard</h2>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[9px] font-bold text-slate-500 uppercase leading-none">Executive Cockpit</span>
+                <span className="text-[9px] font-mono text-slate-400 bg-slate-800/80 px-1 py-0.5 rounded-sm">{APP_VERSION}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -649,14 +652,10 @@ export default function PeoplePage() {
 
         </div>
 
-        {/* Footer */}
         <footer className="mt-auto py-6 px-6 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4 bg-white shrink-0">
           <p className="text-xs text-slate-400">
             © 2026 Mar Brasil - People Cockpit
           </p>
-          <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 px-3 py-1 rounded-full text-slate-500">
-            Versão {APP_VERSION}
-          </span>
         </footer>
 
       </main>
