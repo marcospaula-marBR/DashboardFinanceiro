@@ -12,17 +12,38 @@ export async function POST(req: Request) {
       );
     }
 
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
+    let base64Data = '';
+    const contentType = req.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
+      const { fileUrl } = await req.json();
+      if (!fileUrl) {
+        return NextResponse.json({ error: 'Nenhum fileUrl informado.' }, { status: 400 });
+      }
+      
+      const fileRes = await fetch(fileUrl);
+      if (!fileRes.ok) {
+        return NextResponse.json(
+          { error: `Falha ao baixar o arquivo do storage (${fileRes.status}).` }, 
+          { status: 400 }
+        );
+      }
+      
+      const bytes = await fileRes.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      base64Data = buffer.toString('base64');
+    } else {
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
 
-    if (!file) {
-      return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
+      if (!file) {
+        return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
+      }
+
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      base64Data = buffer.toString('base64');
     }
-
-    // Converter arquivo para buffer e depois base64
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const base64Data = buffer.toString('base64');
 
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-1.5-flash',
@@ -88,7 +109,7 @@ Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos
       }, { status: 422 });
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erro ao processar contrato por IA:', error);
     return NextResponse.json(
       { error: 'Erro interno durante o processamento do contrato.' },

@@ -57,7 +57,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [isSearchingCNPJCEP, setIsSearchingCNPJCEP] = useState(false);
   const [cnpjCepError, setCnpjCepError] = useState<string | null>(null);
   const [isParsingContract, setIsParsingContract] = useState(false);
-  const [pendingContractFile, setPendingContractFile] = useState<File | null>(null);
+
 
   useEffect(() => {
     if (isOpen) {
@@ -81,7 +81,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       // Limpar estado qnd fecha
       setProfile({});
       setError(null);
-      setPendingContractFile(null);
     }
   }, [isOpen, employeeId, isTestMode]);
 
@@ -176,39 +175,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       }
       
       const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode);
-      const newId = profile.id || saved.id;
       
       // Se era criação (sem id), vamos definir o ID agora
       if (!profile.id && saved.id) {
         setProfile(prev => ({ ...prev, id: saved.id }));
       }
       
-      // Se houver um arquivo de contrato pendente para fazer upload (no caso de criação de novo colaborador)
-      if (pendingContractFile && newId) {
-        try {
-          const url = await PeopleService.uploadAdditiveFile(newId, pendingContractFile, isTestMode);
-          const dateStr = new Date().toLocaleDateString('pt-BR');
-          const markdownLink = `[Contrato ${dateStr}](${url})`;
-          
-          // Limpa qualquer placeholder anterior e monta a lista de links limpa
-          const cleanText = (profile.links_contratos || '')
-            .split('\n')
-            .filter(line => !line.startsWith('[Contrato Pendente'))
-            .join('\n');
-          const currentText = cleanText ? cleanText + '\n' : '';
-          const newText = currentText + markdownLink;
-          
-          // Salva novamente para persistir o link do contrato no banco de dados
-          await PeopleService.saveEmployeeProfile({ ...profile, id: newId, links_contratos: newText }, isTestMode);
-          
-          // Atualiza localmente
-          setProfile(prev => ({ ...prev, links_contratos: newText }));
-          setPendingContractFile(null);
-        } catch (uploadErr: unknown) {
-          const error = uploadErr as Error;
-          console.error('Erro ao subir PDF de contrato pendente:', error);
-        }
-      }
+
       
       setIsEditMode(false);
       if (onDataChanged) onDataChanged();
@@ -325,55 +298,25 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Proteção contra erro 413 (Payload Too Large) limitando a 4.5MB para a IA.
-    // Se o arquivo for maior que 4.5MB, permitimos que o usuário anexe diretamente sem processamento por IA.
-    if (file.size > 4.5 * 1024 * 1024) {
-      const msg = "Este arquivo de contrato é muito grande (maior que 4.5MB) para ser processado automaticamente por Inteligência Artificial.\n\n" +
-        "Deseja anexar o contrato diretamente ao cadastro do colaborador, realizando o preenchimento manual dos campos?";
-      if (confirm(msg)) {
-        setIsSaving(true);
-        setError(null);
-        try {
-          if (profile.id) {
-            const contractUrl = await PeopleService.uploadAdditiveFile(profile.id, file, isTestMode);
-            const dateStr = new Date().toLocaleDateString('pt-BR');
-            const markdownLink = `[Contrato ${dateStr}](${contractUrl})`;
-            
-            const currentText = profile.links_contratos ? profile.links_contratos + '\n' : '';
-            const newText = currentText + markdownLink;
-            
-            handleChange('links_contratos', newText);
-            await PeopleService.saveEmployeeProfile({ ...profile, links_contratos: newText }, isTestMode);
-            if (onDataChanged) onDataChanged();
-            alert("Contrato anexado diretamente com sucesso! Preencha os campos cadastrais manualmente.");
-          } else {
-            setPendingContractFile(file);
-            const dateStr = new Date().toLocaleDateString('pt-BR');
-            const currentText = profile.links_contratos ? profile.links_contratos + '\n' : '';
-            const newText = currentText + `[Contrato Pendente ${dateStr}] (Será carregado ao salvar)`;
-            handleChange('links_contratos', newText);
-            alert("Contrato pré-anexado! Ao salvar o cadastro do colaborador, o arquivo será enviado para o storage e vinculado. Preencha os campos cadastrais manualmente.");
-          }
-        } catch (uploadErr: unknown) {
-          const error = uploadErr as Error;
-          console.error("Erro ao subir arquivo grande diretamente:", error);
-          setError("Erro ao anexar contrato: " + error.message);
-        } finally {
-          setIsSaving(false);
-        }
-      }
-      return;
-    }
-
     setIsParsingContract(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      // 1. Upload do PDF do contrato para o Supabase Storage primeiro.
+      // Se não houver ID (novo colaborador), geramos um ID temporário seguro para a pasta de upload.
+      const uploadId = profile.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11));
+      
+      const contractUrl = await PeopleService.uploadAdditiveFile(uploadId, file, isTestMode);
+      const dateStr = new Date().toLocaleDateString('pt-BR');
+      const markdownLink = `[Contrato ${dateStr}](${contractUrl})`;
 
+      // 2. Chamar a API de parsing enviando a URL do arquivo no corpo JSON.
+      // Isso consome poucos bytes do cliente para o Vercel, contornando a restrição de tamanho.
       const res = await fetch('/api/people/parse-contract', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fileUrl: contractUrl }),
       });
 
       const responseText = await res.text();
@@ -384,12 +327,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           const parsed = JSON.parse(responseText);
           errMsg = parsed.error || errMsg;
         } catch {
-          if (responseText.trim().startsWith('<') || responseText.includes('Request Entity Too Large')) {
-            if (responseText.includes('Payload Too Large') || responseText.includes('Request Entity Too Large') || res.status === 413) {
-              errMsg = 'O arquivo do contrato é muito grande para o processador de IA. Por favor, tente um arquivo menor ou comprimido (limite de 4.5MB).';
-            } else {
-              errMsg = `Erro no servidor (${res.status}). O arquivo pode ser muito grande ou a API do Gemini falhou.`;
-            }
+          if (responseText.trim().startsWith('<')) {
+            errMsg = `Erro no servidor (${res.status}). A API do Gemini falhou ou o tempo limite foi excedido.`;
           } else {
             errMsg = responseText.slice(0, 200) || errMsg;
           }
@@ -401,13 +340,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       try {
         data = JSON.parse(responseText);
       } catch {
-        if (responseText.trim().startsWith('<') || responseText.includes('Request Entity Too Large')) {
-          if (responseText.includes('Payload Too Large') || responseText.includes('Request Entity Too Large') || res.status === 413) {
-            throw new Error('O arquivo do contrato é muito grande para o processador de IA. Por favor, tente um arquivo menor ou comprimido (limite de 4.5MB).');
-          } else {
-            throw new Error(`Erro no processamento (${res.status}). A resposta do servidor não pôde ser lida.`);
-          }
-        }
         throw new Error(responseText.slice(0, 200) || 'A resposta do servidor não é um JSON válido.');
       }
       
@@ -438,14 +370,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
             setHistory(hist || []);
             setBonds(bondsData || []);
             setCosts(costsData || []);
-            
-            // Fazer upload do PDF do contrato para o colaborador existente
-            let contractUrl = '';
-            try {
-              contractUrl = await PeopleService.uploadAdditiveFile(existing.id, file, isTestMode);
-            } catch (uploadErr) {
-              console.error('Erro ao subir PDF de contrato do existente:', uploadErr);
-            }
             
             setProfile(() => {
               const next = { ...existingProfile };
@@ -493,8 +417,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
               }
 
               if (contractUrl) {
-                const dateStr = new Date().toLocaleDateString('pt-BR');
-                const markdownLink = `[Contrato ${dateStr}](${contractUrl})`;
                 const currentText = next.links_contratos ? next.links_contratos + '\n' : '';
                 next.links_contratos = currentText + markdownLink;
               }
@@ -514,18 +436,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           }
           return;
         }
-      }
-      
-      let contractUrl = '';
-      if (profile.id) {
-        try {
-          contractUrl = await PeopleService.uploadAdditiveFile(profile.id, file, isTestMode);
-        } catch (uploadErr: unknown) {
-          const error = uploadErr as Error;
-          console.error('Erro ao fazer upload do PDF para o storage:', error);
-        }
-      } else {
-        setPendingContractFile(file);
       }
       
       // Mesclar os dados extraídos no profile
@@ -577,8 +487,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         }
 
         if (contractUrl) {
-          const dateStr = new Date().toLocaleDateString('pt-BR');
-          const markdownLink = `[Contrato ${dateStr}](${contractUrl})`;
           const currentText = next.links_contratos ? next.links_contratos + '\n' : '';
           next.links_contratos = currentText + markdownLink;
         }
@@ -588,7 +496,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
 
       alert(profile.id 
         ? 'Contrato importado, salvo no storage e analisado por IA com sucesso! Os campos foram auto-preenchidos.'
-        : 'Contrato importado e analisado por IA! Os campos foram auto-preenchidos e o PDF será salvo no storage ao salvar a ficha.'
+        : 'Contrato importado e analisado por IA com sucesso! Os campos foram auto-preenchidos.'
       );
     } catch (err: unknown) {
       const error = err as Error;

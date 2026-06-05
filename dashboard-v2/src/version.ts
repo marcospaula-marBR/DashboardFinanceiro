@@ -1,7 +1,7 @@
 export const APP_VERSION = "v.02.45.13";
 export const VERSION_DATE = "2026-06-05";
 export const VERSION_CHANGELOG = [
-  "v.02.45.13 - Feat: Máscaras de telefone pessoal e CNPJ, campos profissionais (telefone/email) no Info Pessoal com máscaras, validações matemáticas de CPF/CNPJ (dígitos verificadores), tratamento de erros e suporte a anexar contratos de grande porte (>4.5MB) ignorando a IA de preenchimento.",
+  "v.02.45.13 - Feat: Máscaras de telefone pessoal e CNPJ, campos profissionais (telefone/email) no Info Pessoal com máscaras, validações matemáticas de CPF/CNPJ (dígitos verificadores), tratamento de erros e suporte a contratos de qualquer tamanho (>4.5MB) utilizando upload prévio para o storage e posterior leitura por IA.",
   "v.02.45.12 - Fix: Confirmação ao fechar ficha em modo de edição, bloqueio de fechar com clique fora e upload automático do PDF do contrato para o Supabase Storage com vínculo de aditivo.",
   "v.02.45.11 - Feat: Habilitação de importação de dados por upload de PDF de contrato (utilizando IA Gemini 1.5 Flash para auto-preenchimento) e desativação de clique-fora para fechar o modal em modo de edição.",
   "v.02.45.10 - Fix: Máscara e validação no campo CPF (máximo 11 dígitos, bloqueando CNPJ) e prevenção de fechamento automático do modal (ProfileDrawer) por propagação de clique.",
