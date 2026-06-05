@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.45.7";
+export const APP_VERSION = "v.02.45.8";
 export const VERSION_DATE = "2026-06-05";
 export const VERSION_CHANGELOG = [
+  "v.02.45.8 - Fix: Busca automática de CEP ao digitar, máscara e loader visual de progresso.",
   "v.02.45.7 - Feat: Mudar título para PeopleBoard e mover a exibição da versão abaixo do título da barra lateral.",
   "v.02.45.6 - Feat: Ampliação das fontes, cabeçalhos, crachás e detalhes em todas as demais abas da Ficha do Colaborador (Dados Auxiliares, Trajetória, Custos, Auditoria).",
   "v.02.45.5 - Fix: Refatoração do dynamic require do pdf.service para import() dinâmico assíncrono eliminando alertas do linter.",
