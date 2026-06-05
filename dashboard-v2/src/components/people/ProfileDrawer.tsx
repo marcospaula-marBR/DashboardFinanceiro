@@ -190,7 +190,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           const dateStr = new Date().toLocaleDateString('pt-BR');
           const markdownLink = `[Contrato ${dateStr}](${url})`;
           
-          const currentText = profile.links_contratos ? profile.links_contratos + '\n' : '';
+          // Limpa qualquer placeholder anterior e monta a lista de links limpa
+          const cleanText = (profile.links_contratos || '')
+            .split('\n')
+            .filter(line => !line.startsWith('[Contrato Pendente'))
+            .join('\n');
+          const currentText = cleanText ? cleanText + '\n' : '';
           const newText = currentText + markdownLink;
           
           // Salva novamente para persistir o link do contrato no banco de dados
@@ -320,9 +325,43 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Proteção contra erro 413 (Payload Too Large) limitando a 4.5MB
+    // Proteção contra erro 413 (Payload Too Large) limitando a 4.5MB para a IA.
+    // Se o arquivo for maior que 4.5MB, permitimos que o usuário anexe diretamente sem processamento por IA.
     if (file.size > 4.5 * 1024 * 1024) {
-      alert("O arquivo PDF do contrato é muito grande (máximo de 4.5MB permitido para processamento por IA). Por favor, use um arquivo menor ou PDF comprimido.");
+      const msg = "Este arquivo de contrato é muito grande (maior que 4.5MB) para ser processado automaticamente por Inteligência Artificial.\n\n" +
+        "Deseja anexar o contrato diretamente ao cadastro do colaborador, realizando o preenchimento manual dos campos?";
+      if (confirm(msg)) {
+        setIsSaving(true);
+        setError(null);
+        try {
+          if (profile.id) {
+            const contractUrl = await PeopleService.uploadAdditiveFile(profile.id, file, isTestMode);
+            const dateStr = new Date().toLocaleDateString('pt-BR');
+            const markdownLink = `[Contrato ${dateStr}](${contractUrl})`;
+            
+            const currentText = profile.links_contratos ? profile.links_contratos + '\n' : '';
+            const newText = currentText + markdownLink;
+            
+            handleChange('links_contratos', newText);
+            await PeopleService.saveEmployeeProfile({ ...profile, links_contratos: newText }, isTestMode);
+            if (onDataChanged) onDataChanged();
+            alert("Contrato anexado diretamente com sucesso! Preencha os campos cadastrais manualmente.");
+          } else {
+            setPendingContractFile(file);
+            const dateStr = new Date().toLocaleDateString('pt-BR');
+            const currentText = profile.links_contratos ? profile.links_contratos + '\n' : '';
+            const newText = currentText + `[Contrato Pendente ${dateStr}] (Será carregado ao salvar)`;
+            handleChange('links_contratos', newText);
+            alert("Contrato pré-anexado! Ao salvar o cadastro do colaborador, o arquivo será enviado para o storage e vinculado. Preencha os campos cadastrais manualmente.");
+          }
+        } catch (uploadErr: unknown) {
+          const error = uploadErr as Error;
+          console.error("Erro ao subir arquivo grande diretamente:", error);
+          setError("Erro ao anexar contrato: " + error.message);
+        } finally {
+          setIsSaving(false);
+        }
+      }
       return;
     }
 
