@@ -52,6 +52,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [editingCostBonus, setEditingCostBonus] = useState(0);
   const [editingCostComissao, setEditingCostComissao] = useState(0);
   const [saveCostError, setSaveCostError] = useState<string | null>(null);
+  const [isSearchingCEP, setIsSearchingCEP] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -247,24 +249,55 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     }
   }, [profile.id, profile.start_date, bonds, costs]);
 
-  const handleBuscarCEP = async () => {
-    const cepLimpo = profile.zip_code?.replace(/\D/g, '');
-    if (!cepLimpo || cepLimpo.length !== 8) return;
+  const formatCEP = (value: string) => {
+    const clean = value.replace(/\D/g, '');
+    if (clean.length > 5) {
+      return `${clean.slice(0, 5)}-${clean.slice(5, 8)}`;
+    }
+    return clean;
+  };
+
+  const handleCEPChange = (val: string) => {
+    const formatted = formatCEP(val);
+    handleChange('zip_code', formatted);
+    
+    const clean = formatted.replace(/\D/g, '');
+    if (clean.length === 8) {
+      handleBuscarCEP(clean);
+    }
+  };
+
+  const handleBuscarCEP = async (cepParaBuscar?: string) => {
+    const rawCep = cepParaBuscar || profile.zip_code || '';
+    const cepLimpo = rawCep.replace(/\D/g, '');
+    if (!cepLimpo || cepLimpo.length !== 8) {
+      setCepError('CEP inválido');
+      return;
+    }
+    
+    setIsSearchingCEP(true);
+    setCepError(null);
+    
     try {
       const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
       const data = await res.json();
-      if (!data.erro) {
+      if (data.erro) {
+        setCepError('CEP não encontrado');
+      } else {
         setProfile(prev => ({
           ...prev,
-          street: data.logradouro,
-          neighborhood: data.bairro,
-          city: data.localidade,
-          state: data.uf,
-          endereco_completo: `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}, CEP: ${data.cep}`
+          street: data.logradouro || '',
+          neighborhood: data.bairro || '',
+          city: data.localidade || '',
+          state: data.uf || '',
+          endereco_completo: `${data.logradouro || ''}, ${data.bairro || ''}, ${data.localidade || ''} - ${data.uf || ''}, CEP: ${data.cep || ''}`
         }));
       }
     } catch (e) {
       console.error('Erro ao buscar CEP', e);
+      setCepError('Erro de conexão');
+    } finally {
+      setIsSearchingCEP(false);
     }
   };
 
@@ -716,13 +749,29 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                         <div className="col-span-12 md:col-span-4">
                            <div className="flex justify-between items-center">
                              <label className={labelClass}>CEP</label>
-                             {isEditMode && (
-                               <button type="button" onClick={handleBuscarCEP} className="text-[10px] text-emerald-600 font-bold hover:underline mb-1">
-                                 Buscar
-                               </button>
-                             )}
+                             <div className="flex items-center gap-1.5 mb-1">
+                               {isSearchingCEP && (
+                                 <span className="text-[10px] text-blue-500 animate-pulse font-medium">Buscando...</span>
+                               )}
+                               {cepError && (
+                                 <span className="text-[10px] text-red-500 font-medium">{cepError}</span>
+                               )}
+                               {!isSearchingCEP && !cepError && isEditMode && (
+                                 <button type="button" onClick={() => handleBuscarCEP()} className="text-[10px] text-emerald-600 font-bold hover:underline">
+                                   Buscar
+                                 </button>
+                               )}
+                             </div>
                            </div>
-                           <input type="text" value={profile.zip_code || ''} onChange={e => handleChange('zip_code', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="00000-000"/>
+                           <input 
+                             type="text" 
+                             value={profile.zip_code || ''} 
+                             onChange={e => handleCEPChange(e.target.value)} 
+                             maxLength={9}
+                             readOnly={!isEditMode} 
+                             className={inputClass} 
+                             placeholder="00000-000"
+                           />
                         </div>
                         <div className="col-span-12 md:col-span-8">
                            <label className={labelClass}>Logradouro</label>
