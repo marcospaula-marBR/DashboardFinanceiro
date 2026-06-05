@@ -178,6 +178,20 @@ export class PeopleService {
       city: raw.city,
       state: raw.state,
       complement: raw.complement,
+
+      // Novos campos RH v3
+      is_outsourced: raw.is_outsourced,
+      service_location: raw.service_location,
+      tax_regime: raw.tax_regime,
+      cnpj_zip_code: raw.cnpj_zip_code,
+      cnpj_street: raw.cnpj_street,
+      cnpj_number: raw.cnpj_number,
+      cnpj_complement: raw.cnpj_complement,
+      cnpj_neighborhood: raw.cnpj_neighborhood,
+      cnpj_city: raw.cnpj_city,
+      cnpj_state: raw.cnpj_state,
+      executive_summary: raw.executive_summary,
+      executive_link: raw.executive_link,
       
       // Contato
       email: raw.email,
@@ -250,7 +264,21 @@ export class PeopleService {
       status_end_date: profile.status_end_date && profile.status_end_date.trim() !== '' ? profile.status_end_date : null,
       links_contratos: profile.links_contratos,
       links_aditivos: profile.links_aditivos,
-      links_emprestimos: profile.links_emprestimos
+      links_emprestimos: profile.links_emprestimos,
+
+      // Novos campos RH v3
+      is_outsourced: profile.is_outsourced || false,
+      service_location: profile.service_location || '',
+      tax_regime: profile.tax_regime || '',
+      cnpj_zip_code: profile.cnpj_zip_code || '',
+      cnpj_street: profile.cnpj_street || '',
+      cnpj_number: profile.cnpj_number || '',
+      cnpj_complement: profile.cnpj_complement || '',
+      cnpj_neighborhood: profile.cnpj_neighborhood || '',
+      cnpj_city: profile.cnpj_city || '',
+      cnpj_state: profile.cnpj_state || '',
+      executive_summary: profile.executive_summary || '',
+      executive_link: profile.executive_link || ''
     };
   }
 }

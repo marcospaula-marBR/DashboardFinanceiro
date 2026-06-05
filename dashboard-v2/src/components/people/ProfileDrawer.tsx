@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
@@ -36,8 +36,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Abas: 'pessoal', 'endereco', 'complementar', 'trajetoria', 'custo', 'auditoria'
-  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'trajetoria' | 'custo' | 'auditoria'>('pessoal');
+  // Abas: 'pessoal', 'endereco', 'complementar', 'fichaExecutiva', 'trajetoria', 'custo', 'auditoria'
+  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria'>('pessoal');
   const [isEditMode, setIsEditMode] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [bonds, setBonds] = useState<EmploymentContract[]>([]);
@@ -54,6 +54,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [saveCostError, setSaveCostError] = useState<string | null>(null);
   const [isSearchingCEP, setIsSearchingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
+  const [isSearchingCNPJCEP, setIsSearchingCNPJCEP] = useState(false);
+  const [cnpjCepError, setCnpjCepError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -129,7 +131,30 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   };
 
   const handleChange = <K extends keyof Employee>(field: K, value: Employee[K]) => {
-    setProfile(prev => ({ ...prev, [field]: value }));
+    setProfile(prev => {
+      const next = { ...prev, [field]: value };
+      
+      // Se o vínculo for ou mudar para PJ, sincronizar de forma reativa os dados do responsável legal
+      if (next.linkType === 'PJ') {
+        if (field === 'name' || field === 'linkType') {
+          next.responsible_name = next.name || '';
+        }
+        if (field === 'document_id' || field === 'linkType') {
+          next.responsible_cpf = next.document_id || '';
+        }
+      }
+      
+      // Auto-identificação do regime tributário baseado na Razão Social
+      if (field === 'corporate_name') {
+        const name = (value as string || '').toUpperCase();
+        if (name) {
+          const isMei = !name.includes('LTDA') && !name.includes('S.A.') && !name.includes('S/A') && !name.includes('LIMITADA') || name.includes('MEI') || name.includes('MICROEMPREENDEDOR INDIVIDUAL');
+          next.tax_regime = isMei ? 'MEI' : 'Simples Nacional';
+        }
+      }
+      
+      return next;
+    });
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -301,6 +326,75 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     }
   };
 
+  const handleCNPJCEPChange = (val: string) => {
+    const formatted = formatCEP(val);
+    handleChange('cnpj_zip_code', formatted);
+    
+    const clean = formatted.replace(/\D/g, '');
+    if (clean.length === 8) {
+      handleBuscarCNPJCEP(clean);
+    }
+  };
+
+  const handleBuscarCNPJCEP = async (cepParaBuscar?: string) => {
+    const rawCep = cepParaBuscar || profile.cnpj_zip_code || '';
+    const cepLimpo = rawCep.replace(/\D/g, '');
+    if (!cepLimpo || cepLimpo.length !== 8) {
+      setCnpjCepError('CEP inválido');
+      return;
+    }
+    
+    setIsSearchingCNPJCEP(true);
+    setCnpjCepError(null);
+    
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCnpjCepError('CEP não encontrado');
+      } else {
+        setProfile(prev => ({
+          ...prev,
+          cnpj_street: data.logradouro || '',
+          cnpj_neighborhood: data.bairro || '',
+          cnpj_city: data.localidade || '',
+          cnpj_state: data.uf || ''
+        }));
+      }
+    } catch (e) {
+      console.error('Erro ao buscar CEP da empresa', e);
+      setCnpjCepError('Erro de conexão');
+    } finally {
+      setIsSearchingCNPJCEP(false);
+    }
+  };
+
+  const handleCopyAddress = (checked: boolean) => {
+    if (checked) {
+      setProfile(prev => ({
+        ...prev,
+        cnpj_zip_code: prev.zip_code || '',
+        cnpj_street: prev.street || '',
+        cnpj_number: prev.number || '',
+        cnpj_complement: prev.complement || '',
+        cnpj_neighborhood: prev.neighborhood || '',
+        cnpj_city: prev.city || '',
+        cnpj_state: prev.state || ''
+      }));
+    } else {
+      setProfile(prev => ({
+        ...prev,
+        cnpj_zip_code: '',
+        cnpj_street: '',
+        cnpj_number: '',
+        cnpj_complement: '',
+        cnpj_neighborhood: '',
+        cnpj_city: '',
+        cnpj_state: ''
+      }));
+    }
+  };
+
   const handleSaveCost = async () => {
     if (!editingCost) return;
     setSaveCostError(null);
@@ -428,13 +522,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
               onClick={() => setActiveTab('endereco')}
               className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'endereco' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
-              Endereço
+              Contato & Endereço
             </button>
             <button 
               onClick={() => setActiveTab('complementar')}
               className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'complementar' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
               Dados Auxiliares
+            </button>
+            <button 
+              onClick={() => setActiveTab('fichaExecutiva')}
+              className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'fichaExecutiva' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+            >
+              Ficha Executiva
             </button>
             {employeeId && (
               <>
@@ -576,11 +676,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                       {/* Fields */}
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         <div>
-                          <label className={labelClass}>CPF / CNPJ</label>
+                          <label className={labelClass}>CPF</label>
                           <input type="text" value={profile.document_id || ''} onChange={e => handleChange('document_id', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="000.000.000-00"/>
                         </div>
                         <div>
-                          <label className={labelClass}>RG / Inscrição Estadual</label>
+                          <label className={labelClass}>RG</label>
                           <input type="text" value={profile.document_rg || ''} onChange={e => handleChange('document_rg', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="00.000.000-0"/>
                         </div>
                         <div>
@@ -648,15 +748,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                         <div>
                           <label className={labelClass}>Função / Cargo</label>
                           <input type="text" value={profile.job_role || ''} onChange={e => handleChange('job_role', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
-
-                        <div>
-                          <label className={labelClass}>E-mail Pessoal</label>
-                          <input type="email" value={profile.email || ''} onChange={e => handleChange('email', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="usuario@gmail.com"/>
-                        </div>
-                        <div>
-                          <label className={labelClass}>Telefone Pessoal</label>
-                          <input type="text" value={profile.phone || ''} onChange={e => handleChange('phone', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                         </div>
 
                         <div>
@@ -742,73 +833,172 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                     </motion.div>
                  )}
 
-                 {/* ------------- ABA ENDERECO ------------- */}
+                 {/* ------------- ABA CONTATO & ENDEREÇO ------------- */}
                  {activeTab === 'endereco' && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                      <div className="grid grid-cols-12 gap-4">
-                        <div className="col-span-12 md:col-span-4">
-                           <div className="flex justify-between items-center">
-                             <label className={labelClass}>CEP</label>
-                             <div className="flex items-center gap-1.5 mb-1">
-                               {isSearchingCEP && (
-                                 <span className="text-[10px] text-blue-500 animate-pulse font-medium">Buscando...</span>
-                               )}
-                               {cepError && (
-                                 <span className="text-[10px] text-red-500 font-medium">{cepError}</span>
-                               )}
-                               {!isSearchingCEP && !cepError && isEditMode && (
-                                 <button type="button" onClick={() => handleBuscarCEP()} className="text-[10px] text-emerald-600 font-bold hover:underline">
-                                   Buscar
-                                 </button>
-                               )}
-                             </div>
-                           </div>
-                           <input 
-                             type="text" 
-                             value={profile.zip_code || ''} 
-                             onChange={e => handleCEPChange(e.target.value)} 
-                             maxLength={9}
-                             readOnly={!isEditMode} 
-                             className={inputClass} 
-                             placeholder="00000-000"
-                           />
-                        </div>
-                        <div className="col-span-12 md:col-span-8">
-                           <label className={labelClass}>Logradouro</label>
-                           <input type="text" value={profile.street || ''} onChange={e => handleChange('street', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
-                        
-                        <div className="col-span-4">
-                           <label className={labelClass}>Número</label>
-                           <input type="text" value={profile.number || ''} onChange={e => handleChange('number', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
-                        <div className="col-span-8">
-                           <label className={labelClass}>Complemento</label>
-                           <input type="text" value={profile.complement || ''} onChange={e => handleChange('complement', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
-
-                        <div className="col-span-12 md:col-span-6">
-                           <label className={labelClass}>Bairro</label>
-                           <input type="text" value={profile.neighborhood || ''} onChange={e => handleChange('neighborhood', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
-                        <div className="col-span-9 md:col-span-4">
-                           <label className={labelClass}>Cidade</label>
-                           <input type="text" value={profile.city || ''} onChange={e => handleChange('city', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
-                        <div className="col-span-3 md:col-span-2">
-                           <label className={labelClass}>UF</label>
-                           <input type="text" value={profile.state || ''} onChange={e => handleChange('state', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                        </div>
-                      </div>
-                    </motion.div>
-                 )}
-
-                 {/* ------------- ABA COMPLEMENTAR ------------- */}
-                 {activeTab === 'complementar' && (
                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                        
+                       {/* Seção 1: Contatos Pessoais */}
                        <div>
-                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5 flex items-center gap-2"><MapPin size={16}/> Contatos de Referência / Emergência</h4>
+                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-4 flex items-center gap-2">
+                           <Phone size={16}/> Contatos Pessoais
+                         </h4>
+                         <div className="grid grid-cols-2 gap-4">
+                           <div>
+                             <label className={labelClass}>E-mail Pessoal</label>
+                             <input type="email" value={profile.email || ''} onChange={e => handleChange('email', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="usuario@gmail.com"/>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Telefone Pessoal</label>
+                             <input type="text" value={profile.phone || ''} onChange={e => handleChange('phone', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="(00) 00000-0000"/>
+                           </div>
+                         </div>
+                       </div>
+
+                       {/* Seção 2: Endereço Residencial */}
+                       <div>
+                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-4 flex items-center gap-2">
+                           <Home size={16}/> Endereço Residencial
+                         </h4>
+                         <div className="grid grid-cols-12 gap-4">
+                           <div className="col-span-12 md:col-span-4">
+                              <div className="flex justify-between items-center">
+                                <label className={labelClass}>CEP</label>
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  {isSearchingCEP && (
+                                    <span className="text-[10px] text-blue-500 animate-pulse font-medium">Buscando...</span>
+                                  )}
+                                  {cepError && (
+                                    <span className="text-[10px] text-red-500 font-medium">{cepError}</span>
+                                  )}
+                                  {!isSearchingCEP && !cepError && isEditMode && (
+                                    <button type="button" onClick={() => handleBuscarCEP()} className="text-[10px] text-emerald-600 font-bold hover:underline">
+                                      Buscar
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <input 
+                                type="text" 
+                                value={profile.zip_code || ''} 
+                                onChange={e => handleCEPChange(e.target.value)} 
+                                maxLength={9}
+                                readOnly={!isEditMode} 
+                                className={inputClass} 
+                                placeholder="00000-000"
+                              />
+                           </div>
+                           <div className="col-span-12 md:col-span-8">
+                              <label className={labelClass}>Logradouro</label>
+                              <input type="text" value={profile.street || ''} onChange={e => handleChange('street', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                           
+                           <div className="col-span-4">
+                              <label className={labelClass}>Número</label>
+                              <input type="text" value={profile.number || ''} onChange={e => handleChange('number', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                           <div className="col-span-8">
+                              <label className={labelClass}>Complemento</label>
+                              <input type="text" value={profile.complement || ''} onChange={e => handleChange('complement', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+
+                           <div className="col-span-12 md:col-span-6">
+                              <label className={labelClass}>Bairro</label>
+                              <input type="text" value={profile.neighborhood || ''} onChange={e => handleChange('neighborhood', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                           <div className="col-span-9 md:col-span-4">
+                              <label className={labelClass}>Cidade</label>
+                              <input type="text" value={profile.city || ''} onChange={e => handleChange('city', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                           <div className="col-span-3 md:col-span-2">
+                              <label className={labelClass}>UF</label>
+                              <input type="text" value={profile.state || ''} onChange={e => handleChange('state', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                         </div>
+                       </div>
+
+                       {/* Seção 3: Endereço da Empresa (CNPJ) - se for PJ */}
+                       {profile.linkType === 'PJ' && (
+                         <div>
+                           <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-4 flex items-center gap-2">
+                             <Building2 size={16}/> Endereço da Empresa (CNPJ)
+                           </h4>
+                           <div className="grid grid-cols-12 gap-4">
+                             {isEditMode && (
+                               <div className="col-span-12 flex items-center gap-2 mb-2">
+                                 <input 
+                                   type="checkbox" 
+                                   id="copiarEndereco" 
+                                   onChange={e => handleCopyAddress(e.target.checked)}
+                                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                                 />
+                                 <label htmlFor="copiarEndereco" className="text-xs font-bold text-slate-600 cursor-pointer">
+                                   Endereço da empresa é o mesmo do endereço pessoal
+                                 </label>
+                               </div>
+                             )}
+
+                             <div className="col-span-12 md:col-span-4">
+                                <div className="flex justify-between items-center">
+                                  <label className={labelClass}>CEP da Empresa</label>
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    {isSearchingCNPJCEP && (
+                                      <span className="text-[10px] text-blue-500 animate-pulse font-medium">Buscando...</span>
+                                    )}
+                                    {cnpjCepError && (
+                                      <span className="text-[10px] text-red-500 font-medium">{cnpjCepError}</span>
+                                    )}
+                                    {!isSearchingCNPJCEP && !cnpjCepError && isEditMode && (
+                                      <button type="button" onClick={() => handleBuscarCNPJCEP()} className="text-[10px] text-emerald-600 font-bold hover:underline">
+                                        Buscar
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <input 
+                                  type="text" 
+                                  value={profile.cnpj_zip_code || ''} 
+                                  onChange={e => handleCNPJCEPChange(e.target.value)} 
+                                  maxLength={9}
+                                  readOnly={!isEditMode} 
+                                  className={inputClass} 
+                                  placeholder="00000-000"
+                                />
+                             </div>
+                             <div className="col-span-12 md:col-span-8">
+                                <label className={labelClass}>Logradouro da Empresa</label>
+                                <input type="text" value={profile.cnpj_street || ''} onChange={e => handleChange('cnpj_street', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+                             
+                             <div className="col-span-4">
+                                <label className={labelClass}>Número</label>
+                                <input type="text" value={profile.cnpj_number || ''} onChange={e => handleChange('cnpj_number', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+                             <div className="col-span-8">
+                                <label className={labelClass}>Complemento</label>
+                                <input type="text" value={profile.cnpj_complement || ''} onChange={e => handleChange('cnpj_complement', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+
+                             <div className="col-span-12 md:col-span-6">
+                                <label className={labelClass}>Bairro</label>
+                                <input type="text" value={profile.cnpj_neighborhood || ''} onChange={e => handleChange('cnpj_neighborhood', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+                             <div className="col-span-9 md:col-span-4">
+                                <label className={labelClass}>Cidade</label>
+                                <input type="text" value={profile.cnpj_city || ''} onChange={e => handleChange('cnpj_city', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+                             <div className="col-span-3 md:col-span-2">
+                                <label className={labelClass}>UF</label>
+                                <input type="text" value={profile.cnpj_state || ''} onChange={e => handleChange('cnpj_state', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             </div>
+                           </div>
+                         </div>
+                       )}
+
+                       {/* Seção 4: Contatos de Referência & Emergência */}
+                       <div>
+                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-4 flex items-center gap-2">
+                           <MapPin size={16}/> Contatos de Referência & Emergência
+                         </h4>
                          <div className="grid grid-cols-2 gap-4">
                            <div>
                              <label className={labelClass}>Nome (Emergência)</label>
@@ -829,26 +1019,110 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                          </div>
                        </div>
 
-                       {/* PJ Data (if applicable) */}
-                       {profile.linkType === 'PJ' && (
-                         <div>
-                           <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5">Dados da Empresa (PJ)</h4>
-                           <div className="grid grid-cols-2 gap-4">
-                             <div className="col-span-2">
-                               <label className={labelClass}>Razão Social</label>
-                               <input type="text" value={profile.corporate_name || ''} onChange={e => handleChange('corporate_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                             </div>
-                             <div>
-                               <label className={labelClass}>Representante Legal</label>
-                               <input type="text" value={profile.responsible_name || ''} onChange={e => handleChange('responsible_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                             </div>
-                             <div>
-                               <label className={labelClass}>CPF do Responsável</label>
-                               <input type="text" value={profile.responsible_cpf || ''} onChange={e => handleChange('responsible_cpf', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                             </div>
-                           </div>
-                         </div>
-                       )}
+                     </motion.div>
+                  )}
+
+                 {/* ------------- ABA COMPLEMENTAR ------------- */}
+                 {activeTab === 'complementar' && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                        
+                        {/* Seção 1: Controle Trabalhista & Localidade */}
+                        <div>
+                          <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-4 flex items-center gap-2">
+                            <Briefcase size={16}/> Controle & Localidade
+                          </h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className={labelClass}>Faz parte de Terceirização?</label>
+                              {isEditMode ? (
+                                <select 
+                                  value={profile.is_outsourced ? 'true' : 'false'} 
+                                  onChange={e => handleChange('is_outsourced', e.target.value === 'true')} 
+                                  className={inputClass}
+                                >
+                                  <option value="false">Não (Contratação Direta)</option>
+                                  <option value="true">Sim (Terceirizado)</option>
+                                </select>
+                              ) : (
+                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
+                                  {profile.is_outsourced ? 'Sim (Terceirizado)' : 'Não'}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <label className={labelClass}>Local de Prestação do Serviço</label>
+                              {isEditMode ? (
+                                <select 
+                                  value={profile.service_location || ''} 
+                                  onChange={e => handleChange('service_location', e.target.value)} 
+                                  className={inputClass}
+                                >
+                                  <option value="">Selecione o local...</option>
+                                  <option value="Escritório">Escritório</option>
+                                  <option value="Home Office">Home Office</option>
+                                  <option value="Cliente">Cliente</option>
+                                  <option value="Híbrido">Híbrido</option>
+                                </select>
+                              ) : (
+                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
+                                  {profile.service_location || 'Não Definido'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* PJ Data (if applicable) */}
+                        {profile.linkType === 'PJ' && (
+                          <div>
+                            <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-4">Dados da Empresa (PJ)</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="col-span-2 md:col-span-1">
+                                <label className={labelClass}>CNPJ</label>
+                                <input 
+                                  type="text" 
+                                  value={profile.pj_type || ''} 
+                                  onChange={e => handleChange('pj_type', e.target.value)} 
+                                  readOnly={!isEditMode} 
+                                  className={inputClass} 
+                                  placeholder="00.000.000/0000-00"
+                                />
+                              </div>
+                              <div className="col-span-2 md:col-span-1">
+                                <label className={labelClass}>Regime Tributário</label>
+                                {isEditMode ? (
+                                  <select 
+                                    value={profile.tax_regime || ''} 
+                                    onChange={e => handleChange('tax_regime', e.target.value)} 
+                                    className={inputClass}
+                                  >
+                                    <option value="">Selecione o regime...</option>
+                                    <option value="MEI">MEI (Microempreendedor Individual)</option>
+                                    <option value="Simples Nacional">Simples Nacional</option>
+                                    <option value="Lucro Presumido">Lucro Presumido</option>
+                                    <option value="Lucro Real">Lucro Real</option>
+                                  </select>
+                                ) : (
+                                  <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
+                                    {profile.tax_regime || 'Não Identificado'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="col-span-2">
+                                <label className={labelClass}>Razão Social</label>
+                                <input type="text" value={profile.corporate_name || ''} onChange={e => handleChange('corporate_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                              </div>
+                              <div>
+                                <label className={labelClass}>Representante Legal (Sincronizado)</label>
+                                <input type="text" value={profile.responsible_name || ''} readOnly className={`${inputClass} bg-slate-50 cursor-not-allowed`} placeholder="Auto-preenchido pelo nome pessoal"/>
+                              </div>
+                              <div>
+                                <label className={labelClass}>CPF do Responsável (Sincronizado)</label>
+                                <input type="text" value={profile.responsible_cpf || ''} readOnly className={`${inputClass} bg-slate-50 cursor-not-allowed`} placeholder="Auto-preenchido pelo CPF pessoal"/>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                        <div>
                          <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-5 flex items-center gap-2"><GraduationCap size={16}/> Background Institucional</h4>
@@ -974,6 +1248,55 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                            </div>
                          );
                        })()}
+
+                     </motion.div>
+                  )}
+
+                  {/* ------------- ABA FICHA EXECUTIVA ------------- */}
+                  {activeTab === 'fichaExecutiva' && (
+                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                       
+                       <div className="border-b pb-2">
+                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                           <UserRound size={16} className="text-emerald-600" /> Ficha Executiva
+                         </h4>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-4">
+                         <div className="col-span-2 md:col-span-1">
+                           <label className={labelClass}>Função / Cargo (Sincronizado)</label>
+                           <input 
+                             type="text" 
+                             value={profile.job_role || ''} 
+                             readOnly 
+                             className={`${inputClass} bg-slate-50 cursor-not-allowed`} 
+                             placeholder="Preencha na aba Info Pessoal" 
+                           />
+                         </div>
+
+                         <div className="col-span-2 md:col-span-1">
+                           <label className={labelClass}>Link / Anexo da Ficha Executiva Completa</label>
+                           <input 
+                             type="text" 
+                             value={profile.executive_link || ''} 
+                             onChange={e => handleChange('executive_link', e.target.value)} 
+                             readOnly={!isEditMode} 
+                             className={inputClass} 
+                             placeholder="Ex: https://drive.google.com/..." 
+                           />
+                         </div>
+
+                         <div className="col-span-2">
+                           <label className={labelClass}>Resumo das Atividades</label>
+                           <textarea 
+                             value={profile.executive_summary || ''} 
+                             onChange={e => handleChange('executive_summary', e.target.value)} 
+                             readOnly={!isEditMode} 
+                             className={`${inputClass} min-h-[140px] resize-y`} 
+                             placeholder="Descreva detalhadamente o escopo e as principais responsabilidades desempenhadas pelo colaborador..." 
+                           />
+                         </div>
+                       </div>
 
                      </motion.div>
                   )}

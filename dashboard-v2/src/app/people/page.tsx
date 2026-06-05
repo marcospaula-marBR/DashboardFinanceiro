@@ -42,6 +42,9 @@ export default function PeoplePage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterVinculo, setFilterVinculo] = useState('');
   const [filterSetor, setFilterSetor] = useState('');
+  const [filterTerceirizado, setFilterTerceirizado] = useState('');
+  const [filterLocalPrestacao, setFilterLocalPrestacao] = useState('');
+  const [filterRegimeTributario, setFilterRegimeTributario] = useState('');
   const [showInativos, setShowInativos] = useState(false);
 
   // Data states
@@ -190,8 +193,20 @@ export default function PeoplePage() {
     if (filterStatus) result = result.filter(e => e.status === filterStatus);
     if (filterVinculo) result = result.filter(e => e.linkType === filterVinculo);
     if (filterSetor) result = result.filter(e => (e.department || '') === filterSetor);
+    
+    if (filterTerceirizado) {
+      const isOutsourced = filterTerceirizado === 'true';
+      result = result.filter(e => !!e.is_outsourced === isOutsourced);
+    }
+    if (filterLocalPrestacao) {
+      result = result.filter(e => e.service_location === filterLocalPrestacao);
+    }
+    if (filterRegimeTributario) {
+      result = result.filter(e => e.tax_regime === filterRegimeTributario);
+    }
+    
     setFilteredEmployees(result);
-  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, showInativos]);
+  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, showInativos]);
 
   const fetchData = async () => {
     setError(null);
@@ -237,6 +252,9 @@ export default function PeoplePage() {
     setFilterStatus('');
     setFilterVinculo('');
     setFilterSetor('');
+    setFilterTerceirizado('');
+    setFilterLocalPrestacao('');
+    setFilterRegimeTributario('');
     setShowInativos(false);
   };
 
@@ -336,6 +354,49 @@ export default function PeoplePage() {
               <option value="MEI">MEI</option>
               <option value="PJ">PJ</option>
               <option value="Estagiário">Estagiário</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Terceirização</label>
+            <select
+              value={filterTerceirizado}
+              onChange={e => setFilterTerceirizado(e.target.value)}
+              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
+            >
+              <option value="">Todos (Direto & Terceirizado)</option>
+              <option value="false">Contratação Direta (Interno)</option>
+              <option value="true">Terceirizado (Prestador)</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Local de Prestação</label>
+            <select
+              value={filterLocalPrestacao}
+              onChange={e => setFilterLocalPrestacao(e.target.value)}
+              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
+            >
+              <option value="">Todos os Locais</option>
+              <option value="Escritório">Escritório</option>
+              <option value="Home Office">Home Office</option>
+              <option value="Cliente">Cliente</option>
+              <option value="Híbrido">Híbrido</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Regime Tributário</label>
+            <select
+              value={filterRegimeTributario}
+              onChange={e => setFilterRegimeTributario(e.target.value)}
+              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
+            >
+              <option value="">Todos os Regimes (PJ)</option>
+              <option value="MEI">MEI</option>
+              <option value="Simples Nacional">Simples Nacional</option>
+              <option value="Lucro Presumido">Lucro Presumido</option>
+              <option value="Lucro Real">Lucro Real</option>
             </select>
           </div>
 

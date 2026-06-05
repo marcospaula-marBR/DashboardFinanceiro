@@ -87,6 +87,20 @@ export interface Employee {
   remuneration_fixed?: number;
   remuneration_bonus?: number;
   remuneration_commission?: number;
+
+  // Novos campos adicionados na migração v3
+  is_outsourced?: boolean;
+  service_location?: string;
+  tax_regime?: string;
+  cnpj_zip_code?: string;
+  cnpj_street?: string;
+  cnpj_number?: string;
+  cnpj_complement?: string;
+  cnpj_neighborhood?: string;
+  cnpj_city?: string;
+  cnpj_state?: string;
+  executive_summary?: string;
+  executive_link?: string;
 }
 
 export interface Contract {
