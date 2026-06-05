@@ -56,6 +56,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [cepError, setCepError] = useState<string | null>(null);
   const [isSearchingCNPJCEP, setIsSearchingCNPJCEP] = useState(false);
   const [cnpjCepError, setCnpjCepError] = useState<string | null>(null);
+  const [isParsingContract, setIsParsingContract] = useState(false);
+  const [pendingContractFile, setPendingContractFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -79,6 +81,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       // Limpar estado qnd fecha
       setProfile({});
       setError(null);
+      setPendingContractFile(null);
     }
   }, [isOpen, employeeId, isTestMode]);
 
@@ -113,10 +116,32 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       }
       
       const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode);
+      const newId = profile.id || saved.id;
       
       // Se era criação (sem id), vamos definir o ID agora
       if (!profile.id && saved.id) {
-        setProfile({ ...profile, id: saved.id });
+        setProfile(prev => ({ ...prev, id: saved.id }));
+      }
+      
+      // Se houver um arquivo de contrato pendente para fazer upload (no caso de criação de novo colaborador)
+      if (pendingContractFile && newId) {
+        try {
+          const url = await PeopleService.uploadAdditiveFile(newId, pendingContractFile, isTestMode);
+          const dateStr = new Date().toLocaleDateString('pt-BR');
+          const markdownLink = `[Contrato ${dateStr}](${url})`;
+          
+          const currentText = profile.links_contratos ? profile.links_contratos + '\n' : '';
+          const newText = currentText + markdownLink;
+          
+          // Salva novamente para persistir o link do contrato no banco de dados
+          await PeopleService.saveEmployeeProfile({ ...profile, id: newId, links_contratos: newText }, isTestMode);
+          
+          // Atualiza localmente
+          setProfile(prev => ({ ...prev, links_contratos: newText }));
+          setPendingContractFile(null);
+        } catch (uploadErr: any) {
+          console.error('Erro ao subir PDF de contrato pendente:', uploadErr);
+        }
       }
       
       setIsEditMode(false);
@@ -227,6 +252,104 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
        setError(error.message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleParseContractPDF = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsParsingContract(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/people/parse-contract', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Falha ao processar PDF do contrato.');
+      }
+
+      const data = await res.json();
+      
+      let contractUrl = '';
+      if (profile.id) {
+        try {
+          contractUrl = await PeopleService.uploadAdditiveFile(profile.id, file, isTestMode);
+        } catch (uploadErr: any) {
+          console.error('Erro ao fazer upload do PDF para o storage:', uploadErr);
+        }
+      } else {
+        setPendingContractFile(file);
+      }
+      
+      // Mesclar os dados extraídos no profile
+      setProfile(prev => {
+        const next = { ...prev };
+        
+        if (data.name) next.name = data.name;
+        if (data.document_id) next.document_id = formatCPF(data.document_id);
+        if (data.document_rg) next.document_rg = data.document_rg;
+        if (data.corporate_name) next.corporate_name = data.corporate_name;
+        if (data.linkType) next.linkType = data.linkType;
+        if (data.remuneration_fixed) {
+          next.remuneration_fixed = data.remuneration_fixed;
+          next.remuneration = data.remuneration_fixed + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
+        }
+        if (data.email) next.email = data.email;
+        if (data.phone) next.phone = data.phone;
+        if (data.zip_code) next.zip_code = formatCEP(data.zip_code);
+        if (data.street) next.street = data.street;
+        if (data.number) next.number = data.number;
+        if (data.neighborhood) next.neighborhood = data.neighborhood;
+        if (data.city) next.city = data.city;
+        if (data.state) next.state = data.state;
+        if (data.cnpj_zip_code) next.cnpj_zip_code = formatCEP(data.cnpj_zip_code);
+        if (data.cnpj_street) next.cnpj_street = data.cnpj_street;
+        if (data.cnpj_number) next.cnpj_number = data.cnpj_number;
+        if (data.cnpj_neighborhood) next.cnpj_neighborhood = data.cnpj_neighborhood;
+        if (data.cnpj_city) next.cnpj_city = data.cnpj_city;
+        if (data.cnpj_state) next.cnpj_state = data.cnpj_state;
+        if (data.responsible_name) next.responsible_name = data.responsible_name;
+        if (data.responsible_cpf) next.responsible_cpf = formatCPF(data.responsible_cpf);
+
+        // Se for PJ e não houver responsável_name ou responsável_cpf, sincronizar reativamente
+        if (next.linkType === 'PJ') {
+          if (!next.responsible_name) next.responsible_name = next.name || '';
+          if (!next.responsible_cpf) next.responsible_cpf = next.document_id || '';
+        }
+
+        // Se o corporate_name estiver presente, auto-identificar regime tributário
+        if (next.corporate_name) {
+          const name = (next.corporate_name || '').toUpperCase();
+          const isMei = !name.includes('LTDA') && !name.includes('S.A.') && !name.includes('S/A') && !name.includes('LIMITADA') || name.includes('MEI') || name.includes('MICROEMPREENDEDOR INDIVIDUAL');
+          next.tax_regime = isMei ? 'MEI' : 'Simples Nacional';
+        }
+
+        if (contractUrl) {
+          const dateStr = new Date().toLocaleDateString('pt-BR');
+          const markdownLink = `[Contrato ${dateStr}](${contractUrl})`;
+          const currentText = next.links_contratos ? next.links_contratos + '\n' : '';
+          next.links_contratos = currentText + markdownLink;
+        }
+
+        return next;
+      });
+
+      alert(profile.id 
+        ? 'Contrato importado, salvo no storage e analisado por IA com sucesso! Os campos foram auto-preenchidos.'
+        : 'Contrato importado e analisado por IA! Os campos foram auto-preenchidos e o PDF será salvo no storage ao salvar a ficha.'
+      );
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Erro ao analisar o contrato.');
+    } finally {
+      setIsParsingContract(false);
     }
   };
 
@@ -465,13 +588,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     }
   };
 
+  const handleClose = () => {
+    if (isEditMode) {
+      if (confirm("Você possui alterações não salvas. Deseja realmente sair e descartar as alterações?")) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 overflow-hidden"
           onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
+            if (!isEditMode && e.target === e.currentTarget) onClose();
           }}
         >
           <motion.div 
@@ -507,17 +640,31 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                 </button>
               )}
               {isEditMode && (
-                <button 
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 p-2 px-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-all text-white font-semibold text-xs"
-                >
-                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  Salvar
-                </button>
+                <>
+                  <label className={`flex items-center gap-2 p-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-all text-white font-semibold text-xs cursor-pointer select-none ${isParsingContract ? 'opacity-70 pointer-events-none' : ''}`}>
+                    {isParsingContract ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                    <span>Importar Contrato (PDF)</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept=".pdf" 
+                      onChange={handleParseContractPDF} 
+                      disabled={isParsingContract} 
+                    />
+                  </label>
+                  
+                  <button 
+                    onClick={handleSave}
+                    disabled={isSaving || isParsingContract}
+                    className="flex items-center gap-2 p-2 px-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-all text-white font-semibold text-xs"
+                  >
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    Salvar
+                  </button>
+                </>
               )}
               <button 
-                onClick={onClose}
+                onClick={handleClose}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-400 hover:text-red-500"
               >
                 <X size={20} />
