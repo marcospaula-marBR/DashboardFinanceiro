@@ -215,9 +215,9 @@ export class PeopleService {
 
     if (uploadError) throw new Error(`Falha no upload da foto: ${uploadError.message}`);
 
-    const { data: { publicUrl } } = supabase.storage.from('contracts').getPublicUrl(storagePath);
+    const { data } = await supabase.storage.from('contracts').createSignedUrl(storagePath, 315360000); // 10 years
     
-    return publicUrl;
+    return data?.signedUrl || '';
   }
 
   /**
