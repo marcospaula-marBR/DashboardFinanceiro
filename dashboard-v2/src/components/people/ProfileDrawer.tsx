@@ -21,6 +21,34 @@ interface HistoryItem {
   created_at?: string;
 }
 
+const MERGE_FIELDS = [
+  { key: 'name', label: 'Nome Completo' },
+  { key: 'document_id', label: 'CPF' },
+  { key: 'document_rg', label: 'RG' },
+  { key: 'corporate_name', label: 'Razão Social' },
+  { key: 'pj_type', label: 'CNPJ' },
+  { key: 'linkType', label: 'Vínculo' },
+  { key: 'company', label: 'Empresa' },
+  { key: 'remuneration_fixed', label: 'Salário / Valor Fixo', isCurrency: true },
+  { key: 'remuneration_bonus', label: 'Bônus', isCurrency: true },
+  { key: 'email', label: 'E-mail Pessoal' },
+  { key: 'phone', label: 'Telefone Pessoal' },
+  { key: 'email_professional', label: 'E-mail Profissional' },
+  { key: 'phone_professional', label: 'Telefone Profissional' },
+  { key: 'zip_code', label: 'CEP Residencial' },
+  { key: 'street', label: 'Logradouro' },
+  { key: 'number', label: 'Número' },
+  { key: 'neighborhood', label: 'Bairro' },
+  { key: 'city', label: 'Cidade' },
+  { key: 'state', label: 'UF' },
+  { key: 'start_date', label: 'Data de Admissão', isDate: true },
+  { key: 'contract_expiry_date', label: 'Vencimento Contrato', isDate: true },
+  { key: 'job_role', label: 'Cargo / Função' },
+  { key: 'department', label: 'Setor / Departamento' },
+  { key: 'responsible_name', label: 'Nome do Responsável' },
+  { key: 'responsible_cpf', label: 'CPF do Responsável' },
+];
+
 interface ProfileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -65,6 +93,17 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchingExisting, setIsSearchingExisting] = useState(false);
 
+  // Estados para mesclagem de dados (PDF vs Banco)
+  const [pendingMerge, setPendingMerge] = useState<{
+    existingProfile: Partial<Employee>;
+    incomingData: Partial<Employee>;
+    existingHistory: HistoryItem[];
+    existingBonds: EmploymentContract[];
+    existingCosts: MonthlyCost[];
+    fileLink?: string;
+  } | null>(null);
+  const [selectedMergeFields, setSelectedMergeFields] = useState<Record<string, 'existing' | 'incoming'>>({});
+  const [pendingHistoryItems, setPendingHistoryItems] = useState<any[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -118,6 +157,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         PeopleHRService.getMonthlyCosts(id)
       ]);
       if (!data) throw new Error("Colaborador não encontrado");
+
+      // Se for um novo cadastro e já houver dados preenchidos (ex: PDF importado), abre a mesclagem
+      if (!profile.id && (profile.name || profile.document_id || profile.corporate_name)) {
+        initializeMerge(data, profile as Employee, hist || [], bondsData || [], costsData || [], undefined);
+        setIsSearchExistingOpen(false);
+        return;
+      }
+
       setProfile(data);
       setHistory(hist || []);
       setBonds(bondsData || []);
@@ -252,12 +299,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       
       const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode);
       
+      // Se houver itens de histórico pendentes do merge, salvamos agora
+      if (pendingHistoryItems.length > 0 && saved.id) {
+        await Promise.all(
+          pendingHistoryItems.map(item => 
+            PeopleService.insertHistoryItem({ ...item, employee_id: saved.id }, isTestMode)
+          )
+        );
+        // Atualiza a lista local de histórico
+        const updatedHist = await PeopleService.getEmployeeHistory(saved.id, isTestMode);
+        setHistory(updatedHist || []);
+        setPendingHistoryItems([]);
+      }
+
       // Se era criação (sem id), vamos definir o ID agora
       if (!profile.id && saved.id) {
         setProfile(prev => ({ ...prev, id: saved.id }));
       }
-      
-
       
       setIsEditMode(false);
       if (onDataChanged) onDataChanged();
@@ -370,6 +428,196 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     }
   };
 
+  const mapParsedDataToEmployee = (data: any, prev: Partial<Employee>, contractUrl?: string, markdownLink?: string): Partial<Employee> => {
+    const next = { ...prev };
+    
+    if (data.name) next.name = data.name;
+    if (data.document_id) next.document_id = formatCPF(data.document_id);
+    if (data.document_rg) next.document_rg = data.document_rg;
+    if (data.corporate_name) next.corporate_name = data.corporate_name;
+    if (data.linkType) next.linkType = data.linkType;
+    if (data.remuneration_bonus !== undefined && data.remuneration_bonus !== null) {
+      const currentBonus = prev.remuneration_bonus || 0;
+      const newBonus = parseFloat(String(data.remuneration_bonus)) || 0;
+      next.remuneration_bonus = Math.max(currentBonus, newBonus);
+    }
+    if (data.remuneration_fixed) {
+      next.remuneration_fixed = data.remuneration_fixed;
+    }
+    next.remuneration = (next.remuneration_fixed || 0) + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
+    if (data.email) next.email = data.email;
+    if (data.phone) next.phone = formatPhone(data.phone);
+    if (data.zip_code) next.zip_code = formatCEP(data.zip_code);
+    if (data.street) next.street = data.street;
+    if (data.number) next.number = data.number;
+    if (data.neighborhood) next.neighborhood = data.neighborhood;
+    if (data.city) next.city = data.city;
+    if (data.state) next.state = data.state;
+    if (data.cnpj_zip_code) next.cnpj_zip_code = formatCEP(data.cnpj_zip_code);
+    if (data.cnpj_street) next.cnpj_street = data.cnpj_street;
+    if (data.cnpj_number) next.cnpj_number = data.cnpj_number;
+    if (data.cnpj_complement) next.cnpj_complement = data.cnpj_complement;
+    if (data.cnpj_neighborhood) next.cnpj_neighborhood = data.cnpj_neighborhood;
+    if (data.cnpj_city) next.cnpj_city = data.cnpj_city;
+    if (data.cnpj_state) next.cnpj_state = data.cnpj_state;
+    if (data.responsible_name) next.responsible_name = data.responsible_name;
+    if (data.responsible_cpf) next.responsible_cpf = formatCPF(data.responsible_cpf);
+    
+    if (data.phone_professional) next.phone_professional = formatPhone(data.phone_professional);
+    if (data.email_professional) next.email_professional = data.email_professional;
+
+    if (data.contracting_company) {
+      const resolved = resolveCompany(data.contracting_company);
+      if (resolved) next.company = resolved;
+    }
+
+    if (data.start_date) {
+      next.start_date = getOldestDate(prev.start_date, data.start_date);
+    }
+    if (data.contract_expiry_date) {
+      next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
+    }
+
+    if (next.linkType === 'PJ') {
+      if (!next.responsible_name) next.responsible_name = next.name || '';
+      if (!next.responsible_cpf) next.responsible_cpf = next.document_id || '';
+      if (data.cnpj || data.pj_type) next.pj_type = formatCNPJ(data.cnpj || data.pj_type);
+    }
+
+    if (next.corporate_name) {
+      const name = (next.corporate_name || '').toUpperCase();
+      const isMei = !name.includes('LTDA') && !name.includes('S.A.') && !name.includes('S/A') && !name.includes('LIMITADA') || name.includes('MEI') || name.includes('MICROEMPREENDEDOR INDIVIDUAL');
+      next.tax_regime = isMei ? 'MEI' : 'Simples Nacional';
+    }
+
+    if (contractUrl && markdownLink) {
+      const currentText = next.links_contratos ? next.links_contratos + '\n' : '';
+      next.links_contratos = currentText + markdownLink;
+    }
+
+    return next;
+  };
+
+  const initializeMerge = (
+    existing: Partial<Employee>,
+    incoming: Partial<Employee>,
+    hist: HistoryItem[],
+    bondsData: EmploymentContract[],
+    costsData: MonthlyCost[],
+    fileLink?: string
+  ) => {
+    const cleanVal = (val: any) => {
+      if (val === undefined || val === null) return '';
+      return String(val).replace(/\D/g, '').trim();
+    };
+    
+    const cleanStr = (val: any) => {
+      if (val === undefined || val === null) return '';
+      return String(val).trim().toLowerCase();
+    };
+
+    const isDifferent = (key: string, existingVal: any, incomingVal: any) => {
+      if (incomingVal === undefined || incomingVal === null || incomingVal === '') return false;
+      if (existingVal === undefined || existingVal === null || existingVal === '') return true;
+      
+      if (['document_id', 'pj_type', 'zip_code', 'phone', 'phone_professional', 'cnpj_zip_code', 'responsible_cpf'].includes(key)) {
+        return cleanVal(existingVal) !== cleanVal(incomingVal);
+      }
+      if (['remuneration_fixed', 'remuneration_bonus'].includes(key)) {
+        return Number(existingVal || 0) !== Number(incomingVal || 0);
+      }
+      return cleanStr(existingVal) !== cleanStr(incomingVal);
+    };
+
+    const defaults: Record<string, 'existing' | 'incoming'> = {};
+    
+    MERGE_FIELDS.forEach(field => {
+      const existingVal = existing[field.key as keyof Employee];
+      const incomingVal = incoming[field.key as keyof Employee];
+      
+      if (isDifferent(field.key, existingVal, incomingVal)) {
+        if (!existingVal && incomingVal) {
+          defaults[field.key] = 'incoming';
+        } else if (field.key === 'start_date') {
+          const d1 = existing.start_date;
+          const d2 = incoming.start_date;
+          if (d1 && d2) {
+            defaults[field.key] = d1 <= d2 ? 'existing' : 'incoming';
+          } else {
+            defaults[field.key] = d1 ? 'existing' : 'incoming';
+          }
+        } else {
+          defaults[field.key] = 'existing';
+        }
+      }
+    });
+
+    setPendingMerge({
+      existingProfile: existing,
+      incomingData: incoming,
+      existingHistory: hist,
+      existingBonds: bondsData,
+      existingCosts: costsData,
+      fileLink
+    });
+    setSelectedMergeFields(defaults);
+  };
+
+  const handleConfirmMerge = async () => {
+    if (!pendingMerge) return;
+
+    const { existingProfile, incomingData, existingHistory, existingBonds, existingCosts, fileLink } = pendingMerge;
+    const mergedProfile = { ...existingProfile };
+    const historyChanges: string[] = [];
+    const changeDate = new Date().toISOString().split('T')[0];
+
+    MERGE_FIELDS.forEach(field => {
+      const selection = selectedMergeFields[field.key];
+      const incomingVal = incomingData[field.key as keyof Employee];
+      const existingVal = existingProfile[field.key as keyof Employee];
+
+      if (selection === 'incoming') {
+        (mergedProfile as any)[field.key] = incomingVal;
+        
+        if (field.key === 'job_role' && existingVal !== incomingVal) {
+          historyChanges.push(`Cargo alterado de '${existingVal || '-'}' para '${incomingVal}'`);
+        } else if (field.key === 'department' && existingVal !== incomingVal) {
+          historyChanges.push(`Setor/Departamento alterado de '${existingVal || '-'}' para '${incomingVal}'`);
+        } else if (field.key === 'remuneration_fixed' && Number(existingVal || 0) !== Number(incomingVal || 0)) {
+          historyChanges.push(`Remuneração alterada de ${formatCurrency(Number(existingVal || 0))} para ${formatCurrency(Number(incomingVal || 0))}`);
+        }
+      } else {
+        (mergedProfile as any)[field.key] = existingVal !== undefined ? existingVal : incomingVal;
+      }
+    });
+
+    if (fileLink) {
+      const currentText = mergedProfile.links_contratos ? mergedProfile.links_contratos + '\n' : '';
+      if (!currentText.includes(fileLink)) {
+        mergedProfile.links_contratos = currentText + fileLink;
+      }
+    }
+
+    const newHistoryItems = historyChanges.map(changeText => ({
+      employee_id: mergedProfile.id || '',
+      event_type: 'Aditivo',
+      change_date: changeDate,
+      observations: `${changeText} (via importação de contrato PDF)`
+    }));
+    
+    setPendingHistoryItems(prev => [...prev, ...newHistoryItems]);
+
+    setProfile(mergedProfile);
+    setHistory(existingHistory);
+    setBonds(existingBonds);
+    setCosts(existingCosts);
+    setIsEditMode(true);
+    setPendingMerge(null);
+    setSelectedMergeFields({});
+
+    alert('Mesclagem aplicada temporariamente! Revise os dados na ficha e clique em "Salvar" para gravar definitivamente no banco.');
+  };
+
   const handleParseContractPDF = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -427,114 +675,30 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       }, isTestMode);
 
       if (existing && existing.id !== profile.id) {
-        const msg = `Colaborador já existente encontrado no banco de dados:\n\n` +
-          `Nome: ${existing.full_name}\n` +
-          `CPF: ${existing.document_id || 'Não informado'}\n` +
-          `CNPJ: ${existing.pj_type || 'Não informado'}\n\n` +
-          `Deseja carregar a ficha cadastral dele para atualizar os dados com as informações do contrato?`;
-        
-        if (confirm(msg)) {
-          setIsLoading(true);
-          try {
-            const [existingProfile, hist, bondsData, costsData] = await Promise.all([
-              PeopleService.getEmployeeProfile(existing.id, isTestMode),
-              PeopleService.getEmployeeHistory(existing.id, isTestMode),
-              PeopleHRService.getEmploymentContracts(existing.id),
-              PeopleHRService.getMonthlyCosts(existing.id)
-            ]);
-            
-            if (!existingProfile) {
-              throw new Error('Não foi possível carregar a ficha cadastral do colaborador existente.');
-            }
-            
-            setHistory(hist || []);
-            setBonds(bondsData || []);
-            setCosts(costsData || []);
-            
-            setProfile(() => {
-              const next = { ...existingProfile };
-              
-              if (data.name) next.name = data.name;
-              if (data.document_id) next.document_id = formatCPF(data.document_id);
-              if (data.document_rg) next.document_rg = data.document_rg;
-              if (data.corporate_name) next.corporate_name = data.corporate_name;
-              if (data.linkType) next.linkType = data.linkType;
-              if (data.remuneration_bonus !== undefined && data.remuneration_bonus !== null) {
-                const currentBonus = next.remuneration_bonus || 0;
-                const newBonus = parseFloat(String(data.remuneration_bonus)) || 0;
-                next.remuneration_bonus = Math.max(currentBonus, newBonus);
-              }
-              if (data.remuneration_fixed) {
-                next.remuneration_fixed = data.remuneration_fixed;
-              }
-              next.remuneration = (next.remuneration_fixed || 0) + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
-              if (data.email) next.email = data.email;
-              if (data.phone) next.phone = formatPhone(data.phone);
-              if (data.zip_code) next.zip_code = formatCEP(data.zip_code);
-              if (data.street) next.street = data.street;
-              if (data.number) next.number = data.number;
-              if (data.neighborhood) next.neighborhood = data.neighborhood;
-              if (data.city) next.city = data.city;
-              if (data.state) next.state = data.state;
-              if (data.cnpj_zip_code) next.cnpj_zip_code = formatCEP(data.cnpj_zip_code);
-              if (data.cnpj_street) next.cnpj_street = data.cnpj_street;
-              if (data.cnpj_number) next.cnpj_number = data.cnpj_number;
-              if (data.cnpj_neighborhood) next.cnpj_neighborhood = data.cnpj_neighborhood;
-              if (data.cnpj_city) next.cnpj_city = data.cnpj_city;
-              if (data.cnpj_state) next.cnpj_state = data.cnpj_state;
-              if (data.responsible_name) next.responsible_name = data.responsible_name;
-              if (data.responsible_cpf) next.responsible_cpf = formatCPF(data.responsible_cpf);
-              
-              // Novos campos profissional
-              if (data.phone_professional) next.phone_professional = formatPhone(data.phone_professional);
-              if (data.email_professional) next.email_professional = data.email_professional;
-
-              // Empresa Contratante
-              if (data.contracting_company) {
-                const resolved = resolveCompany(data.contracting_company);
-                if (resolved) next.company = resolved;
-              }
-
-              // Datas: Admissão (Mais antiga) e Vencimento (Maior/Mais recente)
-              if (data.start_date) {
-                next.start_date = getOldestDate(existingProfile.start_date, data.start_date);
-              }
-              if (data.contract_expiry_date) {
-                next.contract_expiry_date = getLatestDate(existingProfile.contract_expiry_date, data.contract_expiry_date);
-              }
-
-              if (next.linkType === 'PJ') {
-                if (!next.responsible_name) next.responsible_name = next.name || '';
-                if (!next.responsible_cpf) next.responsible_cpf = next.document_id || '';
-                if (data.cnpj || data.pj_type) next.pj_type = formatCNPJ(data.cnpj || data.pj_type);
-              }
-
-              if (next.corporate_name) {
-                const name = (next.corporate_name || '').toUpperCase();
-                const isMei = !name.includes('LTDA') && !name.includes('S.A.') && !name.includes('S/A') && !name.includes('LIMITADA') || name.includes('MEI') || name.includes('MICROEMPREENDEDOR INDIVIDUAL');
-                next.tax_regime = isMei ? 'MEI' : 'Simples Nacional';
-              }
-
-              if (contractUrl) {
-                const currentText = next.links_contratos ? next.links_contratos + '\n' : '';
-                next.links_contratos = currentText + markdownLink;
-              }
-              
-              return next;
-            });
-            
-            setIsEditMode(true);
-            alert('Ficha do colaborador existente carregada e mesclada com as informações do contrato com sucesso!');
-          } catch (loadErr: unknown) {
-            const error = loadErr as Error;
-            console.error('Erro ao carregar dados do colaborador existente:', error);
-            setError('Falha ao carregar colaborador existente.');
-          } finally {
-            setIsLoading(false);
-            setIsParsingContract(false);
+        setIsLoading(true);
+        try {
+          const [existingProfile, hist, bondsData, costsData] = await Promise.all([
+            PeopleService.getEmployeeProfile(existing.id, isTestMode),
+            PeopleService.getEmployeeHistory(existing.id, isTestMode),
+            PeopleHRService.getEmploymentContracts(existing.id),
+            PeopleHRService.getMonthlyCosts(existing.id)
+          ]);
+          
+          if (!existingProfile) {
+            throw new Error('Não foi possível carregar a ficha cadastral do colaborador existente.');
           }
-          return;
+
+          const incomingMapped = mapParsedDataToEmployee(data, profile);
+          initializeMerge(existingProfile, incomingMapped, hist || [], bondsData || [], costsData || [], markdownLink);
+        } catch (loadErr: unknown) {
+          const error = loadErr as Error;
+          console.error('Erro ao carregar dados do colaborador existente:', error);
+          setError('Falha ao carregar colaborador existente.');
+        } finally {
+          setIsLoading(false);
+          setIsParsingContract(false);
         }
+        return;
       }
       
       // Mesclar os dados extraídos no profile
@@ -2328,6 +2492,173 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
           </div>
         </div>
       )}
+
+      {/* ──── MODAL DE MESCLAGEM SELETIVA DE DADOS ──── */}
+      {pendingMerge && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-t-[28px]">
+              <div>
+                <h3 className="text-base font-black text-white tracking-tight flex items-center gap-2">
+                  <AlertCircle size={18} className="text-blue-200" />
+                  Colaborador Já Cadastrado — Revisar Mesclagem
+                </h3>
+                <p className="text-[11px] text-blue-200 font-medium mt-0.5">
+                  Escolha quais dados devem ser atualizados na ficha. Os empréstimos nunca serão afetados.
+                </p>
+              </div>
+              <button
+                onClick={() => { setPendingMerge(null); setSelectedMergeFields({}); }}
+                className="p-2 hover:bg-white/20 rounded-xl text-white/70 hover:text-white transition-all"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Legenda */}
+            <div className="flex items-center gap-6 px-6 py-3 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40 text-[10px] font-bold uppercase tracking-wider shrink-0">
+              <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                <span className="w-3 h-3 rounded-full bg-slate-300 inline-block"></span>
+                Campo
+              </span>
+              <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span>
+                Banco de Dados (Atual)
+              </span>
+              <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+                <span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>
+                Contrato PDF (Novo)
+              </span>
+            </div>
+
+            {/* Tabela de diferenças */}
+            <div className="flex-1 overflow-y-auto">
+              {(() => {
+                const diffFields = MERGE_FIELDS.filter(field => {
+                  return selectedMergeFields[field.key] !== undefined;
+                });
+
+                if (diffFields.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                      <CheckCircle2 size={40} className="text-emerald-400 mb-3" />
+                      <p className="text-sm font-bold">Nenhuma divergência encontrada!</p>
+                      <p className="text-xs mt-1">Todos os campos do PDF coincidem com o banco de dados.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {diffFields.map(field => {
+                      const existingVal = pendingMerge.existingProfile[field.key as keyof Employee];
+                      const incomingVal = pendingMerge.incomingData[field.key as keyof Employee];
+                      const selection = selectedMergeFields[field.key];
+
+                      const displayVal = (val: any) => {
+                        if (val === undefined || val === null || val === '') return <span className="italic text-slate-300">—</span>;
+                        if ((field as any).isCurrency) return formatCurrency(Number(val));
+                        if ((field as any).isDate && typeof val === 'string' && val.includes('-')) {
+                          const [y, m, d] = val.split('-');
+                          return d ? `${d}/${m}/${y}` : val;
+                        }
+                        return String(val);
+                      };
+
+                      return (
+                        <div key={field.key} className="grid grid-cols-[1fr_1fr_1fr] items-center gap-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                          {/* Field label */}
+                          <div className="px-6 py-3.5 border-r border-slate-100 dark:border-slate-800">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">{field.label}</span>
+                          </div>
+
+                          {/* Existing value */}
+                          <div
+                            onClick={() => setSelectedMergeFields(prev => ({ ...prev, [field.key]: 'existing' }))}
+                            className={`px-5 py-3.5 border-r border-slate-100 dark:border-slate-800 cursor-pointer transition-all ${selection === 'existing' ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${selection === 'existing' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                {selection === 'existing' && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
+                              </div>
+                              <span className={`text-xs font-semibold break-all ${selection === 'existing' ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-300'}`}>
+                                {displayVal(existingVal)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Incoming value */}
+                          <div
+                            onClick={() => setSelectedMergeFields(prev => ({ ...prev, [field.key]: 'incoming' }))}
+                            className={`px-5 py-3.5 cursor-pointer transition-all ${selection === 'incoming' ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${selection === 'incoming' ? 'border-blue-500 bg-blue-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                {selection === 'incoming' && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
+                              </div>
+                              <span className={`text-xs font-semibold break-all ${selection === 'incoming' ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300'}`}>
+                                {displayVal(incomingVal)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Rodapé */}
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                <Coins size={13} className="text-amber-500 shrink-0" />
+                <span>Os dados de empréstimos vinculados a este colaborador não serão afetados.</span>
+              </div>
+              <div className="flex gap-2.5 shrink-0">
+                <button
+                  onClick={() => { setPendingMerge(null); setSelectedMergeFields({}); }}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    const allExisting = Object.fromEntries(
+                      Object.keys(selectedMergeFields).map(k => [k, 'existing' as const])
+                    );
+                    setSelectedMergeFields(allExisting);
+                  }}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                >
+                  ← Manter Tudo Atual
+                </button>
+                <button
+                  onClick={() => {
+                    const allIncoming = Object.fromEntries(
+                      Object.keys(selectedMergeFields).map(k => [k, 'incoming' as const])
+                    );
+                    setSelectedMergeFields(allIncoming);
+                  }}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all"
+                >
+                  Aceitar Tudo do PDF →
+                </button>
+                <button
+                  onClick={handleConfirmMerge}
+                  className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-1.5"
+                >
+                  <CheckCircle2 size={14} />
+                  Aplicar Mesclagem
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </AnimatePresence>
   );
 }

@@ -61,6 +61,29 @@ export class PeopleService {
   }
 
   /**
+   * Insere um novo item no histórico do colaborador.
+   */
+  static async insertHistoryItem(
+    item: { 
+      employee_id: string; 
+      event_type: string; 
+      change_date: string; 
+      observations?: string;
+    }, 
+    isTestMode?: boolean
+  ): Promise<any> {
+    const table = isTestMode ? 'employee_history_test' : 'employee_history';
+    const { data, error } = await supabase
+      .from(table)
+      .insert([item])
+      .select()
+      .single();
+
+    if (error) throw new Error(`Falha ao registrar histórico: ${error.message}`);
+    return data;
+  }
+
+  /**
    * Salva ou Atualiza um Colaborador no banco de dados.
    */
   static async saveEmployeeProfile(payload: Partial<Employee>, isTestMode?: boolean): Promise<any> {
