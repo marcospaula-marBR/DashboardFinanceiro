@@ -9,6 +9,12 @@ interface PeopleMobileCardProps {
   onDelete: (employee: Employee) => void;
   showValues: boolean;
   hasAuditIssues?: boolean;
+  hasGlosa?: boolean;
+  hasLoan?: boolean;
+  hasNoRaise?: boolean;
+  hasNoPromo?: boolean;
+  noRaiseMonths?: number;
+  noPromoMonths?: number;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -37,6 +43,12 @@ export function PeopleMobileCard({
   onDelete,
   showValues,
   hasAuditIssues = false,
+  hasGlosa,
+  hasLoan,
+  hasNoRaise,
+  hasNoPromo,
+  noRaiseMonths,
+  noPromoMonths,
 }: PeopleMobileCardProps) {
   const statusStyle =
     STATUS_STYLES[employee.status] ?? "bg-slate-100 text-slate-600";
@@ -81,6 +93,12 @@ export function PeopleMobileCard({
                 <AlertCircle size={13} className="fill-amber-50" />
               </span>
             )}
+            <div className="flex items-center gap-0.5 ml-1">
+              {hasGlosa && <span title="Houve Glosa na NF" className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⚠️</span>}
+              {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">💸</span>}
+              {hasNoRaise && <span title={`Sem Aumento há mais de ${noRaiseMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⏳</span>}
+              {hasNoPromo && <span title={`Sem Promoção há mais de ${noPromoMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">🎯</span>}
+            </div>
           </div>
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <span

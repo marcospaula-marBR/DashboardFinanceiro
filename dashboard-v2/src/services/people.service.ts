@@ -320,7 +320,9 @@ export class PeopleService {
       status_end_date: raw.status_end_date || '',
       links_contratos: raw.links_contratos,
       links_aditivos: raw.links_aditivos,
-      links_emprestimos: raw.links_emprestimos
+      links_emprestimos: raw.links_emprestimos,
+      has_invoice_glosa: raw.metadata?.has_invoice_glosa || false,
+      last_raise_date: raw.metadata?.last_raise_date || null
     };
   }
 
@@ -391,7 +393,12 @@ export class PeopleService {
       cnpj_city: profile.cnpj_city || '',
       cnpj_state: profile.cnpj_state || '',
       executive_summary: profile.executive_summary || '',
-      executive_link: profile.executive_link || ''
+      executive_link: profile.executive_link || '',
+      metadata: {
+        ...(profile.metadata || {}),
+        has_invoice_glosa: profile.has_invoice_glosa || false,
+        last_raise_date: profile.last_raise_date || null
+      }
     };
   }
 

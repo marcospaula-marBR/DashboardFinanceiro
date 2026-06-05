@@ -14,6 +14,8 @@ interface PeopleTableProps {
   onEmployeeClick: (id: string) => void;
   showValues: boolean;
   auditIssues?: Record<string, AuditIssue[]>;
+  noRaiseMonths?: number;
+  noPromoMonths?: number;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -31,7 +33,7 @@ const VINCULO_STYLES: Record<string, string> = {
   Estagiário: 'bg-purple-50 text-purple-700 border-purple-100',
 };
 
-export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, showValues, auditIssues = {} }: PeopleTableProps) {
+export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, showValues, auditIssues = {}, noRaiseMonths, noPromoMonths }: PeopleTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
@@ -114,6 +116,28 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                 })() : false;
                 
                 const empIssues = auditIssues[emp.id] || [];
+                
+                const now = new Date();
+                const hasGlosa = !!emp.has_invoice_glosa;
+                const hasLoan = (emp.balance || 0) > 0;
+                let hasNoRaise = false;
+                let hasNoPromo = false;
+
+                if (noRaiseMonths) {
+                  const dRaise = new Date((emp.last_raise_date || emp.start_date || '') + 'T00:00:00');
+                  if (!isNaN(dRaise.getTime())) {
+                    const diffMonths = (now.getFullYear() - dRaise.getFullYear()) * 12 + (now.getMonth() - dRaise.getMonth());
+                    hasNoRaise = diffMonths >= noRaiseMonths;
+                  }
+                }
+                
+                if (noPromoMonths) {
+                  const dPromo = new Date((emp.department_start_date || emp.start_date || '') + 'T00:00:00');
+                  if (!isNaN(dPromo.getTime())) {
+                    const diffMonths = (now.getFullYear() - dPromo.getFullYear()) * 12 + (now.getMonth() - dPromo.getMonth());
+                    hasNoPromo = diffMonths >= noPromoMonths;
+                  }
+                }
 
                 return (
                   <tr 
@@ -141,6 +165,12 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                                 <AlertCircle size={13} className="fill-amber-50" />
                               </span>
                             )}
+                            <div className="flex items-center gap-0.5 ml-1">
+                              {hasGlosa && <span title="Houve Glosa na NF" className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⚠️</span>}
+                              {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">💸</span>}
+                              {hasNoRaise && <span title={`Sem Aumento há mais de ${noRaiseMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⏳</span>}
+                              {hasNoPromo && <span title={`Sem Promoção há mais de ${noPromoMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">🎯</span>}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold uppercase tracking-wider ${statusStyle}`}>
@@ -229,6 +259,29 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
         ) : (
           paginatedEmployees.map((emp) => {
             const empIssues = auditIssues[emp.id] || [];
+            
+            const now = new Date();
+            const hasGlosa = !!emp.has_invoice_glosa;
+            const hasLoan = (emp.balance || 0) > 0;
+            let hasNoRaise = false;
+            let hasNoPromo = false;
+
+            if (noRaiseMonths) {
+              const dRaise = new Date((emp.last_raise_date || emp.start_date || '') + 'T00:00:00');
+              if (!isNaN(dRaise.getTime())) {
+                const diffMonths = (now.getFullYear() - dRaise.getFullYear()) * 12 + (now.getMonth() - dRaise.getMonth());
+                hasNoRaise = diffMonths >= noRaiseMonths;
+              }
+            }
+            
+            if (noPromoMonths) {
+              const dPromo = new Date((emp.department_start_date || emp.start_date || '') + 'T00:00:00');
+              if (!isNaN(dPromo.getTime())) {
+                const diffMonths = (now.getFullYear() - dPromo.getFullYear()) * 12 + (now.getMonth() - dPromo.getMonth());
+                hasNoPromo = diffMonths >= noPromoMonths;
+              }
+            }
+
             return (
               <div key={emp.id} className="relative group" onClick={() => onEmployeeClick(emp.id)}>
                 <PeopleMobileCard 
@@ -238,6 +291,12 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                   onDelete={onDelete}
                   showValues={showValues}
                   hasAuditIssues={empIssues.length > 0}
+                  hasGlosa={hasGlosa}
+                  hasLoan={hasLoan}
+                  hasNoRaise={hasNoRaise}
+                  hasNoPromo={hasNoPromo}
+                  noRaiseMonths={noRaiseMonths}
+                  noPromoMonths={noPromoMonths}
                 />
                 <div className="absolute top-4 right-14 flex gap-1" onClick={e => e.stopPropagation()}>
                   <button 

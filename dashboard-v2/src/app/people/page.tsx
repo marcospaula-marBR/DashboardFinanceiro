@@ -16,7 +16,7 @@ import { LoansService, formatCurrency } from "@/services/loans.service";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, AlertCircle, Users, Eye, EyeOff, Search, Filter, X, 
-  UserCog, Plus, HandCoins, Coins, TrendingUp, Landmark
+  UserCog, Plus, HandCoins, Coins, TrendingUp, Landmark, Target
 } from "lucide-react";
 
 // Custom MultiSelect Dropdown Component
@@ -96,6 +96,11 @@ export default function PeoplePage() {
   const [filterLocalPrestacao, setFilterLocalPrestacao] = useState<string[]>([]);
   const [filterRegimeTributario, setFilterRegimeTributario] = useState<string[]>([]);
   const [showInativos, setShowInativos] = useState(false);
+  
+  // Insights & Alerts states
+  const [noRaiseMonths, setNoRaiseMonths] = useState(6);
+  const [noPromoMonths, setNoPromoMonths] = useState(6);
+  const [filterInsight, setFilterInsight] = useState<string | null>(null);
 
   // Data states
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -257,8 +262,31 @@ export default function PeoplePage() {
       result = result.filter(e => filterRegimeTributario.includes(e.tax_regime || ''));
     }
     
+    // Filtro de Insights
+    if (filterInsight) {
+      const now = new Date();
+      result = result.filter(e => {
+        if (filterInsight === 'glosa') return !!e.has_invoice_glosa;
+        if (filterInsight === 'emprestimo') return (e.balance || 0) > 0;
+        
+        if (filterInsight === 'aumento') {
+          const d = new Date((e.last_raise_date || e.start_date || '') + 'T00:00:00');
+          if (isNaN(d.getTime())) return false;
+          const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+          return diffMonths >= noRaiseMonths;
+        }
+        if (filterInsight === 'promocao') {
+          const d = new Date((e.department_start_date || e.start_date || '') + 'T00:00:00');
+          if (isNaN(d.getTime())) return false;
+          const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+          return diffMonths >= noPromoMonths;
+        }
+        return true;
+      });
+    }
+    
     setFilteredEmployees(result);
-  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, showInativos]);
+  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, showInativos, filterInsight, noRaiseMonths, noPromoMonths]);
 
   const fetchData = async () => {
     setError(null);
@@ -278,7 +306,7 @@ export default function PeoplePage() {
       const costsData = await PeopleHRService.getAllMonthlyCosts();
       setMonthlyCosts(costsData);
     } catch (err) {
-      console.error('Erro ao carregar custos históricos:', err);
+      console.error(err);
     } finally {
       setIsLoadingCosts(false);
     }
@@ -309,6 +337,32 @@ export default function PeoplePage() {
     setFilterRegimeTributario([]);
     setShowInativos(false);
   };
+
+  const insightCounts = useMemo(() => {
+    const now = new Date();
+    let glosa = 0;
+    let emprestimo = 0;
+    let aumento = 0;
+    let promocao = 0;
+
+    employees.forEach(e => {
+      if (e.has_invoice_glosa) glosa++;
+      if ((e.balance || 0) > 0) emprestimo++;
+      
+      const dRaise = new Date((e.last_raise_date || e.start_date || '') + 'T00:00:00');
+      if (!isNaN(dRaise.getTime())) {
+        const diffMonths = (now.getFullYear() - dRaise.getFullYear()) * 12 + (now.getMonth() - dRaise.getMonth());
+        if (diffMonths >= noRaiseMonths) aumento++;
+      }
+
+      const dPromo = new Date((e.department_start_date || e.start_date || '') + 'T00:00:00');
+      if (!isNaN(dPromo.getTime())) {
+        const diffMonths = (now.getFullYear() - dPromo.getFullYear()) * 12 + (now.getMonth() - dPromo.getMonth());
+        if (diffMonths >= noPromoMonths) promocao++;
+      }
+    });
+    return { glosa, emprestimo, aumento, promocao };
+  }, [employees, noRaiseMonths, noPromoMonths]);
 
   const handleEmployeeClick = (employeeId: string) => {
     setSelectedEmployee(employeeId);
@@ -740,6 +794,69 @@ export default function PeoplePage() {
             />
           </div>
 
+          {/* ── Insights & Alertas (Legend) ── */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col lg:flex-row items-center justify-between gap-4 mt-6">
+            <div className="flex items-center gap-2 shrink-0">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                <Target size={16} className="text-purple-600"/> Alertas & Filtros
+              </h3>
+              
+              {filterInsight && (
+                <button onClick={() => setFilterInsight(null)} className="ml-2 text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full hover:bg-red-100 transition-colors">
+                  Limpar
+                </button>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2 flex-wrap flex-1 justify-center lg:justify-start">
+              <button 
+                onClick={() => setFilterInsight(filterInsight === 'glosa' ? null : 'glosa')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'glosa' ? 'bg-amber-100 text-amber-800 ring-2 ring-amber-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+              >
+                ⚠️ Glosa na NF <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.glosa}</span>
+              </button>
+              <button 
+                onClick={() => setFilterInsight(filterInsight === 'emprestimo' ? null : 'emprestimo')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'emprestimo' ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+              >
+                💸 Empréstimo <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.emprestimo}</span>
+              </button>
+              <button 
+                onClick={() => setFilterInsight(filterInsight === 'aumento' ? null : 'aumento')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'aumento' ? 'bg-rose-100 text-rose-800 ring-2 ring-rose-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+              >
+                ⏳ Sem Aumento (&gt;{noRaiseMonths}m) <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.aumento}</span>
+              </button>
+              <button 
+                onClick={() => setFilterInsight(filterInsight === 'promocao' ? null : 'promocao')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'promocao' ? 'bg-indigo-100 text-indigo-800 ring-2 ring-indigo-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+              >
+                🎯 Sem Promoção (&gt;{noPromoMonths}m) <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.promocao}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-4 lg:border-l lg:pl-4 shrink-0">
+              <div className="flex flex-col">
+                 <label className="text-[9px] font-bold text-slate-500 uppercase">Janela de Aumento</label>
+                 <select value={noRaiseMonths} onChange={e => setNoRaiseMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
+                    <option value={3}>3 meses</option>
+                    <option value={6}>6 meses</option>
+                    <option value={12}>12 meses</option>
+                    <option value={24}>24 meses</option>
+                 </select>
+              </div>
+              <div className="flex flex-col">
+                 <label className="text-[9px] font-bold text-slate-500 uppercase">Janela de Promoção</label>
+                 <select value={noPromoMonths} onChange={e => setNoPromoMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
+                    <option value={3}>3 meses</option>
+                    <option value={6}>6 meses</option>
+                    <option value={12}>12 meses</option>
+                    <option value={24}>24 meses</option>
+                 </select>
+              </div>
+            </div>
+          </div>
+
           {/* ── Real Payroll Cost History Chart ── */}
           {!isLoadingCosts && (
             <PayrollCostChart costs={monthlyCosts} />
@@ -758,6 +875,8 @@ export default function PeoplePage() {
               onEmployeeClick={handleEmployeeClick}
               showValues={showValues}
               auditIssues={allAuditIssues}
+              noRaiseMonths={noRaiseMonths}
+              noPromoMonths={noPromoMonths}
             />
           )}
 

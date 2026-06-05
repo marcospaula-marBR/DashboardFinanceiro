@@ -66,6 +66,8 @@ export interface Employee {
   pessoa_referencia_nome?: string; // NOVO: DB V2
   pessoa_referencia_telefone?: string; // NOVO: DB V2
   metadata?: any; // JSONB do DB V2
+  has_invoice_glosa?: boolean; // INSIGHTS
+  last_raise_date?: string; // INSIGHTS
   
   // External Responsible (PJ normally)
   responsible_name?: string;

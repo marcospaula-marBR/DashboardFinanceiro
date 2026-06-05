@@ -1541,6 +1541,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                            <input type="date" name="start_date" value={profile.start_date || ''} onChange={e => handleChange('start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                          </div>
                          <div>
+                           <label className={labelClass}>Data do Último Aumento</label>
+                           <input type="date" name="last_raise_date" value={profile.last_raise_date || ''} onChange={e => handleChange('last_raise_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
+                         </div>
+                         <div>
                            <label className={labelClass}>Vencimento Contrato/Aditivo</label>
                            <input type="date" value={profile.contract_expiry_date || ''} onChange={e => handleChange('contract_expiry_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                          </div>
@@ -1877,6 +1882,18 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                   {profile.service_location || 'Não Definido'}
                                 </span>
                               )}
+                            </div>
+                            <div className="col-span-2">
+                              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded-xl hover:bg-amber-100 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={profile.has_invoice_glosa || false}
+                                  onChange={e => isEditMode && handleChange('has_invoice_glosa', e.target.checked)}
+                                  disabled={!isEditMode}
+                                  className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
+                                />
+                                <span className="flex items-center gap-1.5"><AlertCircle size={14}/> Houve Glosa na última NF deste prestador</span>
+                              </label>
                             </div>
                           </div>
                         </div>
