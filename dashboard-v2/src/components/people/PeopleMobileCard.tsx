@@ -56,10 +56,12 @@ export function PeopleMobileCard({
     VINCULO_STYLES[employee.linkType] ?? "bg-slate-100 text-slate-600";
   const remLabel = getRemunerationLabel(employee.linkType);
 
+  const displayName = (employee.linkType === "PJ" || employee.linkType === "MEI") && employee.corporate_name ? employee.corporate_name : employee.name;
+
   const avatarSrc =
     employee.photo_url ||
     employee.avatar ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.name)}&background=e2e8f0&color=475569&bold=true`;
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e2e8f0&color=475569&bold=true`;
 
   const startFormatted = employee.start_date
     ? new Date(employee.start_date + "T12:00:00").toLocaleDateString("pt-BR", {
@@ -75,18 +77,18 @@ export function PeopleMobileCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick(employee.id)}
-      aria-label={`Abrir perfil de ${employee.name}`}
+      aria-label={`Abrir perfil de ${displayName}`}
     >
       <div className="flex items-center gap-3">
         <img
           src={avatarSrc}
-          alt={employee.name}
+          alt={displayName}
           className="w-12 h-12 rounded-xl object-cover border-2 border-white shadow-sm shrink-0"
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="font-bold text-sm text-slate-900 truncate">
-              {employee.name}
+              {displayName}
             </p>
             {hasAuditIssues && (
               <span className="text-amber-500 shrink-0">
@@ -96,8 +98,8 @@ export function PeopleMobileCard({
             <div className="flex items-center gap-0.5 ml-1">
               {hasGlosa && <span title="Houve Glosa na NF" className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⚠️</span>}
               {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">💸</span>}
-              {hasNoRaise && <span title={`Sem Aumento há mais de ${noRaiseMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⏳</span>}
-              {hasNoPromo && <span title={`Sem Promoção há mais de ${noPromoMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">🎯</span>}
+              {hasNoRaise && <span title={`Sem Revisão Valor Base há mais de ${noRaiseMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⏳</span>}
+              {hasNoPromo && <span title={`Sem Nível/Função há mais de ${noPromoMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">🎯</span>}
             </div>
           </div>
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -151,7 +153,7 @@ export function PeopleMobileCard({
             onDelete(employee);
           }}
           className="text-[10px] text-red-400 hover:text-red-600 font-semibold transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
-          aria-label={`Excluir ${employee.name}`}
+          aria-label={`Excluir ${displayName}`}
         >
           Excluir
         </button>

@@ -139,6 +139,8 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                   }
                 }
 
+                const displayName = (emp.linkType === 'PJ' || emp.linkType === 'MEI') && emp.corporate_name ? emp.corporate_name : emp.name;
+
                 return (
                   <tr 
                     key={emp.id} 
@@ -148,14 +150,14 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
                         <img 
-                          src={emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=e2e8f0&color=475569&bold=true`}
-                          alt={emp.name}
+                          src={emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e2e8f0&color=475569&bold=true`}
+                          alt={displayName}
                           className="w-10 h-10 rounded-xl object-cover border border-slate-100 shrink-0"
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <p className="text-sm font-bold text-slate-800 truncate group-hover:text-emerald-600 transition-colors">
-                              {emp.name}
+                              {displayName}
                             </p>
                             {empIssues.length > 0 && (
                               <span 
@@ -168,8 +170,8 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                             <div className="flex items-center gap-0.5 ml-1">
                               {hasGlosa && <span title="Houve Glosa na NF" className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⚠️</span>}
                               {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">💸</span>}
-                              {hasNoRaise && <span title={`Sem Aumento há mais de ${noRaiseMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⏳</span>}
-                              {hasNoPromo && <span title={`Sem Promoção há mais de ${noPromoMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">🎯</span>}
+                              {hasNoRaise && <span title={`Sem Revisão Valor Base há mais de ${noRaiseMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">⏳</span>}
+                              {hasNoPromo && <span title={`Sem Nível/Função há mais de ${noPromoMonths} meses`} className="text-[13px] shrink-0 cursor-help opacity-90 hover:opacity-100 transition-opacity">🎯</span>}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">

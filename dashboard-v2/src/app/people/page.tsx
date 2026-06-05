@@ -243,6 +243,7 @@ export default function PeoplePage() {
       const t = filterSearch.toLowerCase();
       result = result.filter(e =>
         e.name.toLowerCase().includes(t) ||
+        (e.corporate_name || '').toLowerCase().includes(t) ||
         (e.document_id || '').toLowerCase().includes(t) ||
         (e.job_role || '').toLowerCase().includes(t)
       );
@@ -825,19 +826,19 @@ export default function PeoplePage() {
                 onClick={() => setFilterInsight(filterInsight === 'aumento' ? null : 'aumento')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'aumento' ? 'bg-rose-100 text-rose-800 ring-2 ring-rose-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
               >
-                ⏳ Sem Aumento (&gt;{noRaiseMonths}m) <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.aumento}</span>
+                ⏳ Sem Revisão Valor Base (&gt;{noRaiseMonths}m) <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.aumento}</span>
               </button>
               <button 
                 onClick={() => setFilterInsight(filterInsight === 'promocao' ? null : 'promocao')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'promocao' ? 'bg-indigo-100 text-indigo-800 ring-2 ring-indigo-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
               >
-                🎯 Sem Promoção (&gt;{noPromoMonths}m) <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.promocao}</span>
+                🎯 Sem Nível/Função (&gt;{noPromoMonths}m) <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.promocao}</span>
               </button>
             </div>
 
             <div className="flex items-center gap-4 lg:border-l lg:pl-4 shrink-0">
               <div className="flex flex-col">
-                 <label className="text-[9px] font-bold text-slate-500 uppercase">Janela de Aumento</label>
+                 <label className="text-[9px] font-bold text-slate-500 uppercase">Janela Revisão Base</label>
                  <select value={noRaiseMonths} onChange={e => setNoRaiseMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
                     <option value={3}>3 meses</option>
                     <option value={6}>6 meses</option>
@@ -846,7 +847,7 @@ export default function PeoplePage() {
                  </select>
               </div>
               <div className="flex flex-col">
-                 <label className="text-[9px] font-bold text-slate-500 uppercase">Janela de Promoção</label>
+                 <label className="text-[9px] font-bold text-slate-500 uppercase">Janela Nível/Função</label>
                  <select value={noPromoMonths} onChange={e => setNoPromoMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
                     <option value={3}>3 meses</option>
                     <option value={6}>6 meses</option>
