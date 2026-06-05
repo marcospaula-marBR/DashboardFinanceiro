@@ -19,6 +19,56 @@ import {
   UserCog, Plus, HandCoins, Coins, TrendingUp, Landmark
 } from "lucide-react";
 
+// Custom MultiSelect Dropdown Component
+const MultiSelectDropdown = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder 
+}: { 
+  options: { label: string; value: string }[], 
+  value: string[], 
+  onChange: (val: string[]) => void, 
+  placeholder: string 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  return (
+    <div className="relative">
+      <div 
+        className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 cursor-pointer text-white flex justify-between items-center transition-all hover:bg-slate-700"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="truncate text-slate-300">
+          {value.length === 0 ? placeholder : `${value.length} selecionado(s)`}
+        </span>
+        <span className="text-[10px] text-slate-500">▼</span>
+      </div>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute top-full mt-1 w-full bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-slate-600">
+            {options.map(opt => (
+              <label key={opt.value} className="flex items-center gap-2 px-2 py-2 hover:bg-slate-700 rounded-lg cursor-pointer text-xs text-slate-200 transition-colors">
+                <input 
+                  type="checkbox" 
+                  className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500/20 w-3.5 h-3.5"
+                  checked={value.includes(opt.value)}
+                  onChange={(e) => {
+                    if (e.target.checked) onChange([...value, opt.value]);
+                    else onChange(value.filter(v => v !== opt.value));
+                  }}
+                />
+                <span className="truncate">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 export default function PeoplePage() {
   const { isTestMode } = useDataMode();
   
@@ -38,13 +88,13 @@ export default function PeoplePage() {
   
   // Filters state
   const [filterSearch, setFilterSearch] = useState('');
-  const [filterEmpresa, setFilterEmpresa] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterVinculo, setFilterVinculo] = useState('');
-  const [filterSetor, setFilterSetor] = useState('');
-  const [filterTerceirizado, setFilterTerceirizado] = useState('');
-  const [filterLocalPrestacao, setFilterLocalPrestacao] = useState('');
-  const [filterRegimeTributario, setFilterRegimeTributario] = useState('');
+  const [filterEmpresa, setFilterEmpresa] = useState<string[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
+  const [filterVinculo, setFilterVinculo] = useState<string[]>([]);
+  const [filterSetor, setFilterSetor] = useState<string[]>([]);
+  const [filterTerceirizado, setFilterTerceirizado] = useState<string[]>([]);
+  const [filterLocalPrestacao, setFilterLocalPrestacao] = useState<string[]>([]);
+  const [filterRegimeTributario, setFilterRegimeTributario] = useState<string[]>([]);
   const [showInativos, setShowInativos] = useState(false);
 
   // Data states
@@ -149,8 +199,9 @@ export default function PeoplePage() {
       clt: ativos.filter(e => e.linkType === 'CLT').length,
       mei: ativos.filter(e => e.linkType === 'MEI' || e.linkType === 'PJ').length,
       est: ativos.filter(e => e.linkType === 'Estagiário').length,
+      saldoDevedorTotal: filteredEmployees.reduce((sum, e) => sum + (e.balance || 0), 0)
     };
-  }, [filteredEmployees]);
+  }, [filteredEmployees, loanStats]);
 
   // Sum of total payroll cost for the current active employees (Remuneration total)
   const latestPayrollCost = useMemo(() => {
@@ -191,20 +242,19 @@ export default function PeoplePage() {
         (e.job_role || '').toLowerCase().includes(t)
       );
     }
-    if (filterEmpresa) result = result.filter(e => e.company === filterEmpresa);
-    if (filterStatus) result = result.filter(e => e.status === filterStatus);
-    if (filterVinculo) result = result.filter(e => e.linkType === filterVinculo);
-    if (filterSetor) result = result.filter(e => (e.department || '') === filterSetor);
+    if (filterEmpresa.length > 0) result = result.filter(e => filterEmpresa.includes(e.company || ''));
+    if (filterStatus.length > 0) result = result.filter(e => filterStatus.includes(e.status || ''));
+    if (filterVinculo.length > 0) result = result.filter(e => filterVinculo.includes(e.linkType || ''));
+    if (filterSetor.length > 0) result = result.filter(e => filterSetor.includes(e.department || ''));
     
-    if (filterTerceirizado) {
-      const isOutsourced = filterTerceirizado === 'true';
-      result = result.filter(e => !!e.is_outsourced === isOutsourced);
+    if (filterTerceirizado.length > 0) {
+      result = result.filter(e => filterTerceirizado.includes(e.is_outsourced ? 'true' : 'false'));
     }
-    if (filterLocalPrestacao) {
-      result = result.filter(e => e.service_location === filterLocalPrestacao);
+    if (filterLocalPrestacao.length > 0) {
+      result = result.filter(e => filterLocalPrestacao.includes(e.service_location || ''));
     }
-    if (filterRegimeTributario) {
-      result = result.filter(e => e.tax_regime === filterRegimeTributario);
+    if (filterRegimeTributario.length > 0) {
+      result = result.filter(e => filterRegimeTributario.includes(e.tax_regime || ''));
     }
     
     setFilteredEmployees(result);
@@ -250,13 +300,13 @@ export default function PeoplePage() {
 
   const handleClearFilters = () => {
     setFilterSearch('');
-    setFilterEmpresa('');
-    setFilterStatus('');
-    setFilterVinculo('');
-    setFilterSetor('');
-    setFilterTerceirizado('');
-    setFilterLocalPrestacao('');
-    setFilterRegimeTributario('');
+    setFilterEmpresa([]);
+    setFilterStatus([]);
+    setFilterVinculo([]);
+    setFilterSetor([]);
+    setFilterTerceirizado([]);
+    setFilterLocalPrestacao([]);
+    setFilterRegimeTributario([]);
     setShowInativos(false);
   };
 
@@ -319,100 +369,97 @@ export default function PeoplePage() {
 
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Empresa</label>
-            <select
+            <MultiSelectDropdown
               value={filterEmpresa}
-              onChange={e => setFilterEmpresa(e.target.value)}
-              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-            >
-              <option value="">Todas as Empresas</option>
-              <option value="MarBR">MarBR</option>
-              <option value="DZM">DZM</option>
-              <option value="G2">G2</option>
-            </select>
+              onChange={setFilterEmpresa}
+              placeholder="Todas as Empresas"
+              options={[
+                { label: 'MarBR', value: 'MarBR' },
+                { label: 'DZM', value: 'DZM' },
+                { label: 'G2', value: 'G2' }
+              ]}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Status</label>
-            <select
+            <MultiSelectDropdown
               value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-            >
-              <option value="">Todos os Status</option>
-              <option value="Ativo">Ativo</option>
-              <option value="Férias">Férias</option>
-              <option value="Inativo">Inativo</option>
-            </select>
+              onChange={setFilterStatus}
+              placeholder="Todos os Status"
+              options={[
+                { label: 'Ativo', value: 'Ativo' },
+                { label: 'Férias', value: 'Férias' },
+                { label: 'Inativo', value: 'Inativo' }
+              ]}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Vínculo</label>
-            <select
+            <MultiSelectDropdown
               value={filterVinculo}
-              onChange={e => setFilterVinculo(e.target.value)}
-              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-            >
-              <option value="">Todos os Vínculos</option>
-              <option value="CLT">CLT</option>
-              <option value="MEI">MEI</option>
-              <option value="PJ">PJ</option>
-              <option value="Estagiário">Estagiário</option>
-            </select>
+              onChange={setFilterVinculo}
+              placeholder="Todos os Vínculos"
+              options={[
+                { label: 'CLT', value: 'CLT' },
+                { label: 'PJ', value: 'PJ' },
+                { label: 'Estagiário', value: 'Estagiário' }
+              ]}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Terceirização</label>
-            <select
+            <MultiSelectDropdown
               value={filterTerceirizado}
-              onChange={e => setFilterTerceirizado(e.target.value)}
-              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-            >
-              <option value="">Todos (Direto & Terceirizado)</option>
-              <option value="false">Contratação Direta (Interno)</option>
-              <option value="true">Terceirizado (Prestador)</option>
-            </select>
+              onChange={setFilterTerceirizado}
+              placeholder="Todos (Direto & Terceirizado)"
+              options={[
+                { label: 'Contratação Direta (Interno)', value: 'false' },
+                { label: 'Terceirizado (Prestador)', value: 'true' }
+              ]}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Local de Prestação</label>
-            <select
+            <MultiSelectDropdown
               value={filterLocalPrestacao}
-              onChange={e => setFilterLocalPrestacao(e.target.value)}
-              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-            >
-              <option value="">Todos os Locais</option>
-              <option value="Escritório">Escritório</option>
-              <option value="Home Office">Home Office</option>
-              <option value="Cliente">Cliente</option>
-              <option value="Híbrido">Híbrido</option>
-            </select>
+              onChange={setFilterLocalPrestacao}
+              placeholder="Todos os Locais"
+              options={[
+                { label: 'Escritório', value: 'Escritório' },
+                { label: 'Home Office', value: 'Home Office' },
+                { label: 'Cliente', value: 'Cliente' },
+                { label: 'Híbrido', value: 'Híbrido' }
+              ]}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Regime Tributário</label>
-            <select
+            <MultiSelectDropdown
               value={filterRegimeTributario}
-              onChange={e => setFilterRegimeTributario(e.target.value)}
-              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-            >
-              <option value="">Todos os Regimes (PJ)</option>
-              <option value="MEI">MEI</option>
-              <option value="Simples Nacional">Simples Nacional</option>
-              <option value="Lucro Presumido">Lucro Presumido</option>
-              <option value="Lucro Real">Lucro Real</option>
-            </select>
+              onChange={setFilterRegimeTributario}
+              placeholder="Todos os Regimes (PJ)"
+              options={[
+                { label: 'MEI', value: 'MEI' },
+                { label: 'Simples Nacional', value: 'Simples Nacional' },
+                { label: 'Lucro Presumido', value: 'Lucro Presumido' },
+                { label: 'Lucro Real', value: 'Lucro Real' }
+              ]}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Setor</label>
-            <select
+            <MultiSelectDropdown
               value={filterSetor}
-              onChange={e => setFilterSetor(e.target.value)}
-              className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-            >
-              <option value="">Todos os Setores</option>
-              {setores.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              onChange={setFilterSetor}
+              placeholder="Todos os Setores"
+              options={setores.map(s => ({ label: s, value: s }))}
+            />
           </div>
 
           <div className="pt-2">
@@ -494,60 +541,57 @@ export default function PeoplePage() {
                 {/* Company select */}
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Empresa</label>
-                  <select
+                  <MultiSelectDropdown
                     value={filterEmpresa}
-                    onChange={e => setFilterEmpresa(e.target.value)}
-                    className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-                  >
-                    <option value="">Todas as Empresas</option>
-                    <option value="MarBR">MarBR</option>
-                    <option value="DZM">DZM</option>
-                    <option value="G2">G2</option>
-                  </select>
+                    onChange={setFilterEmpresa}
+                    placeholder="Todas as Empresas"
+                    options={[
+                      { label: 'MarBR', value: 'MarBR' },
+                      { label: 'DZM', value: 'DZM' },
+                      { label: 'G2', value: 'G2' }
+                    ]}
+                  />
                 </div>
 
                 {/* Status select */}
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Status</label>
-                  <select
+                  <MultiSelectDropdown
                     value={filterStatus}
-                    onChange={e => setFilterStatus(e.target.value)}
-                    className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-                  >
-                    <option value="">Todos os Status</option>
-                    <option value="Ativo">Ativo</option>
-                    <option value="Férias">Férias</option>
-                    <option value="Inativo">Inativo</option>
-                  </select>
+                    onChange={setFilterStatus}
+                    placeholder="Todos os Status"
+                    options={[
+                      { label: 'Ativo', value: 'Ativo' },
+                      { label: 'Férias', value: 'Férias' },
+                      { label: 'Inativo', value: 'Inativo' }
+                    ]}
+                  />
                 </div>
 
                 {/* Vínculo select */}
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Vínculo</label>
-                  <select
+                  <MultiSelectDropdown
                     value={filterVinculo}
-                    onChange={e => setFilterVinculo(e.target.value)}
-                    className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-                  >
-                    <option value="">Todos os Vínculos</option>
-                    <option value="CLT">CLT</option>
-                    <option value="MEI">MEI</option>
-                    <option value="PJ">PJ</option>
-                    <option value="Estagiário">Estagiário</option>
-                  </select>
+                    onChange={setFilterVinculo}
+                    placeholder="Todos os Vínculos"
+                    options={[
+                      { label: 'CLT', value: 'CLT' },
+                      { label: 'PJ', value: 'PJ' },
+                      { label: 'Estagiário', value: 'Estagiário' }
+                    ]}
+                  />
                 </div>
 
                 {/* Sector select */}
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Setor</label>
-                  <select
+                  <MultiSelectDropdown
                     value={filterSetor}
-                    onChange={e => setFilterSetor(e.target.value)}
-                    className="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white transition-all"
-                  >
-                    <option value="">Todos os Setores</option>
-                    {setores.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                    onChange={setFilterSetor}
+                    placeholder="Todos os Setores"
+                    options={setores.map(s => ({ label: s, value: s }))}
+                  />
                 </div>
 
                 <div className="pt-2">
@@ -669,7 +713,7 @@ export default function PeoplePage() {
             />
             <PeopleKpiCard
               title="Saldo Devedor Ativo"
-              value={showValues ? (loanStats ? formatCurrency(loanStats.saldoDevedor) : 'R$ 0') : '••••••'}
+              value={showValues ? formatCurrency(hrKpis.saldoDevedorTotal) : '••••••'}
               icon={<Landmark size={20} />}
               color="amber"
               onClick={() => { setActiveKpiMode('loans'); setIsKpiDrawerOpen(true); }}

@@ -204,18 +204,18 @@ export class PeopleService {
   static async uploadProfilePhoto(employeeId: string, file: File, isTestMode?: boolean): Promise<string> {
     const folder = isTestMode ? 'test' : 'production';
     const ext = file.name.split('.').pop() || 'jpg';
-    const storagePath = `profiles/${folder}/${employeeId}.${ext}`;
+    const storagePath = `avatars/${folder}/${employeeId}.${ext}`;
 
     // Remove versão anterior
-    await supabase.storage.from('avatars').remove([storagePath]);
+    await supabase.storage.from('contracts').remove([storagePath]);
 
     const { error: uploadError } = await supabase.storage
-      .from('avatars')
+      .from('contracts')
       .upload(storagePath, file, { upsert: true, contentType: file.type });
 
     if (uploadError) throw new Error(`Falha no upload da foto: ${uploadError.message}`);
 
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(storagePath);
+    const { data: { publicUrl } } = supabase.storage.from('contracts').getPublicUrl(storagePath);
     
     return publicUrl;
   }

@@ -89,7 +89,7 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)"
 }
 
-Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser obrigatoriamente 'PJ' ou 'MEI'.
+Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser EXCLUSIVAMENTE 'PJ'. O termo MEI diz respeito apenas a regime tributário e nunca deve ser listado como linkType.
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
 `;
 
