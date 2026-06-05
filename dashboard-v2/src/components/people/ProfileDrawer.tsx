@@ -357,7 +357,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !profile.id) return;
+    if (!file) return;
+    
+    if (!profile.id) {
+      setError("Por favor, salve a ficha do colaborador pela primeira vez antes de fazer o upload da foto.");
+      return;
+    }
     
     setIsSaving(true);
     try {
@@ -1190,13 +1195,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
             
             <div className="flex gap-2">
               {employeeId && !isEditMode && (
-                <button 
-                  onClick={() => setIsEditMode(true)}
-                  className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all text-slate-600"
-                  title="Editar Ficha"
-                >
-                  <PenBox size={18} />
-                </button>
+                <>
+                  <a 
+                    href={`/emprestimos?employeeId=${employeeId}`}
+                    className="flex items-center gap-1.5 p-2 px-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg transition-all text-amber-700 dark:text-amber-500 font-semibold text-xs border border-amber-200 dark:border-amber-900/50"
+                    title="Gerenciar Empréstimos deste Colaborador"
+                  >
+                    <Coins size={14} />
+                    <span>Empréstimos</span>
+                  </a>
+                  <button 
+                    onClick={() => setIsEditMode(true)}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all text-slate-600"
+                    title="Editar Ficha"
+                  >
+                    <PenBox size={18} />
+                  </button>
+                </>
               )}
               {isEditMode && (
                 <>
@@ -1328,7 +1343,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                             alt="Avatar" 
                             className="w-20 h-20 rounded-2xl object-cover border-4 border-white shadow-sm"
                           />
-                          {isEditMode && profile.id && (
+                          {isEditMode && (
                             <label className="absolute inset-0 bg-black/50 text-white rounded-2xl flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
                               <Upload size={18} className="mb-1" />
                               <span className="text-[10px] font-bold">Trocar</span>
@@ -1338,6 +1353,17 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                         </div>
                         
                         <div className="flex-1 space-y-2">
+                          {isEditMode && (
+                            <div className="mb-2">
+                              <input 
+                                type="text" 
+                                value={profile.photo_url || profile.avatar || ''} 
+                                onChange={e => handleChange('photo_url', e.target.value)} 
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-3 outline-none focus:border-emerald-500"
+                                placeholder="Ou cole a URL da foto aqui..."
+                              />
+                            </div>
+                          )}
                           <div>
                             <label className={labelClass}>Nome Completo</label>
                             <input 
@@ -1493,14 +1519,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                               className={inputClass}
                             >
                               <option value="">Sem Comissão</option>
-                              <option value="Consultoria">Consultoria</option>
-                              <option value="Vendas Diretas">Vendas Diretas</option>
-                              <option value="Produto A">Produto A</option>
-                              <option value="Produto B">Produto B</option>
-                              <option value="Produto C">Produto C</option>
-                              <option value="Projetos Especiais">Projetos Especiais</option>
-                              <option value="Recorrência">Recorrência</option>
-                              <option value="Híbrido">Híbrido</option>
+                              <option value="Sim">Sim</option>
+                              <option value="Não">Não</option>
                             </select>
                         </div>
                         <div>

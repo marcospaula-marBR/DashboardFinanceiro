@@ -29,7 +29,7 @@ export default function PeoplePage() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
   // C-Level Executive Drawer States
-  const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "payroll" | "loans" | null>(null);
+  const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "payroll" | "loans" | "audit" | null>(null);
   const [isKpiDrawerOpen, setIsKpiDrawerOpen] = useState(false);
   const [loanStats, setLoanStats] = useState<LoanStats | null>(null);
 
@@ -118,9 +118,9 @@ export default function PeoplePage() {
 
   // ----- People KPI computed values -----
   const hrKpis = useMemo(() => {
-    const ativos = employees.filter(e => e.status === 'Ativo');
-    const inativos = employees.filter(e => e.status === 'Inativo');
-    const ferias = employees.filter(e => e.status === 'Férias');
+    const ativos = filteredEmployees.filter(e => e.status === 'Ativo');
+    const inativos = filteredEmployees.filter(e => e.status === 'Inativo');
+    const ferias = filteredEmployees.filter(e => e.status === 'Férias');
     const marBR = ativos.filter(e => e.company === 'MarBR').length;
     const dzm = ativos.filter(e => e.company === 'DZM').length;
     const g2 = ativos.filter(e => e.company === 'G2').length;
@@ -150,28 +150,28 @@ export default function PeoplePage() {
       mei: ativos.filter(e => e.linkType === 'MEI' || e.linkType === 'PJ').length,
       est: ativos.filter(e => e.linkType === 'Estagiário').length,
     };
-  }, [employees]);
+  }, [filteredEmployees]);
 
-  // Sum of total payroll cost for the latest competency month from seeded Dianna data
+  // Sum of total payroll cost for the current active employees (Remuneration total)
   const latestPayrollCost = useMemo(() => {
-    if (monthlyCosts.length === 0) return 0;
-    const sorted = [...monthlyCosts].sort((a, b) => b.competencia.localeCompare(a.competencia));
-    const latestMonth = sorted[0].competencia;
-    const latestCosts = monthlyCosts.filter(c => c.competencia === latestMonth);
-    return latestCosts.reduce((sum, c) => sum + (c.valor_liquido || 0), 0);
-  }, [monthlyCosts]);
+    const activeEmps = filteredEmployees.filter(e => e.status === 'Ativo' || e.status === 'Férias' || e.status === 'Provisão');
+    return activeEmps.reduce((sum, e) => sum + (e.remuneration || 0), 0);
+  }, [filteredEmployees]);
 
   // Average active employee remuneration
   const avgRemuneration = useMemo(() => {
-    const activeEmps = employees.filter(e => e.status === 'Ativo' && e.remuneration > 0);
+    const activeEmps = filteredEmployees.filter(e => e.status === 'Ativo' && e.remuneration > 0);
     if (activeEmps.length === 0) return 0;
     return Math.round(activeEmps.reduce((sum, e) => sum + e.remuneration, 0) / activeEmps.length);
-  }, [employees]);
+  }, [filteredEmployees]);
 
   // Count total audit inconsistencies found in the cockpit
   const totalAuditIssuesCount = useMemo(() => {
-    return Object.values(allAuditIssues).reduce((sum, issues) => sum + issues.length, 0);
-  }, [allAuditIssues]);
+    return filteredEmployees.reduce((sum, emp) => {
+      const issues = allAuditIssues[emp.id];
+      return sum + (issues ? issues.length : 0);
+    }, 0);
+  }, [allAuditIssues, filteredEmployees]);
 
   // ----- Unique filter options from data -----
   const setores = useMemo(() => {
@@ -680,6 +680,7 @@ export default function PeoplePage() {
               value={totalAuditIssuesCount}
               icon={<AlertCircle size={20} />}
               color={totalAuditIssuesCount > 0 ? "red" : "emerald"}
+              onClick={() => { setActiveKpiMode('audit' as any); setIsKpiDrawerOpen(true); }}
               sub={totalAuditIssuesCount > 0 ? "Incoerências de data/regime" : "Todos os prontuários limpos"}
             />
             <PeopleKpiCard
@@ -751,9 +752,10 @@ export default function PeoplePage() {
           setActiveKpiMode(null);
         }}
         mode={activeKpiMode}
-        employees={employees}
+        employees={filteredEmployees}
         monthlyCosts={monthlyCosts}
         loanStats={loanStats}
+        auditIssues={Object.fromEntries(Object.entries(allAuditIssues).filter(([id]) => filteredEmployees.some(e => e.id === id)))}
       />
     </div>
   );

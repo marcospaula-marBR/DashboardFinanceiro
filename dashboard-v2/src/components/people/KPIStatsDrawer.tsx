@@ -2,19 +2,20 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Users, Coins, AlertCircle, Building2, UserCheck, Calendar, ShieldAlert, Award, Landmark, Percent } from "lucide-react";
-import { Employee, MonthlyCost, LoanStats } from "@/types/loans";
+import { Employee, MonthlyCost, LoanStats, AuditIssue } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
 
 interface KPIStatsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  mode: "headcount" | "payroll" | "loans" | null;
+  mode: "headcount" | "payroll" | "loans" | "audit" | null;
   employees: Employee[];
   monthlyCosts: MonthlyCost[];
   loanStats: LoanStats | null;
+  auditIssues?: Record<string, AuditIssue[]>;
 }
 
-export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts, loanStats }: KPIStatsDrawerProps) {
+export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts, loanStats, auditIssues = {} }: KPIStatsDrawerProps) {
   if (!mode) return null;
 
   const activeEmployees = employees.filter(e => e.status === "Ativo" || e.status === "Férias" || e.status === "Provisão");
@@ -99,14 +100,17 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
       return (installment / rem) > 0.3;
     });
 
-    return { totalBalance, totalTaken, monthlyReceivable, expiringSoonWithLoans, highCommitment };
+    const activeDebtors = employees.filter(e => (e.balance || 0) > 0).sort((a, b) => (b.balance || 0) - (a.balance || 0));
+
+    return { totalBalance, totalTaken, monthlyReceivable, expiringSoonWithLoans, highCommitment, activeDebtors };
   })();
 
   // Render variables depending on mode
   const titleMap = {
     headcount: { text: "Força de Trabalho & Headcount", icon: <Users className="text-emerald-500" size={24} /> },
     payroll: { text: "Custo de Folha & Verbas", icon: <Coins className="text-emerald-500" size={24} /> },
-    loans: { text: "Exposição de Empréstimos", icon: <Landmark className="text-amber-500" size={24} /> }
+    loans: { text: "Exposição de Empréstimos", icon: <Landmark className="text-amber-500" size={24} /> },
+    audit: { text: "Auditoria & Incoerências", icon: <AlertCircle className="text-red-500" size={24} /> }
   };
 
   const { text: drawerTitle, icon: drawerIcon } = titleMap[mode];
@@ -335,6 +339,75 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                               <span className="px-3 py-1 bg-red-950 border border-red-800 text-red-400 font-bold rounded-lg text-xs">
                                 {pct}% de Renda
                               </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {/* List of all active debtors */}
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-500">
+                        <Landmark size={16} />
+                        <span>Detalhamento do Saldo Devedor</span>
+                      </div>
+                      <span className="text-sm font-black text-slate-200">{formatCurrency(loansStats.totalBalance)}</span>
+                    </div>
+
+                    {loansStats.activeDebtors.length === 0 ? (
+                      <p className="text-sm text-slate-500 italic">Nenhum saldo devedor em aberto.</p>
+                    ) : (
+                      <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-2">
+                        {loansStats.activeDebtors.map((emp, i) => (
+                          <div key={i} className="py-3 flex justify-between items-center text-sm">
+                            <div>
+                              <p className="font-bold text-slate-200">{emp.name}</p>
+                              <p className="text-xs text-slate-500">{emp.company} • {emp.linkType}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-black text-emerald-400">{formatCurrency(emp.balance)}</p>
+                              <p className="text-[10px] text-slate-500 font-bold uppercase">SALDO ATUAL</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* --- AUDIT MODE --- */}
+              {mode === "audit" && (
+                <>
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-red-500 border-b border-slate-800 pb-2">
+                      <ShieldAlert size={16} />
+                      <span>Incoerências Encontradas ({Object.values(auditIssues).reduce((acc, curr) => acc + curr.length, 0)})</span>
+                    </div>
+
+                    {Object.values(auditIssues).every(issues => issues.length === 0) ? (
+                      <div className="py-8 flex flex-col items-center justify-center text-emerald-500">
+                        <UserCheck size={32} className="mb-2" />
+                        <p className="text-sm font-bold">Base de Dados Saudável</p>
+                        <p className="text-xs text-slate-400">Nenhuma incoerência encontrada nos prontuários ativos.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-800">
+                        {Object.entries(auditIssues).map(([empId, issues]) => {
+                          if (issues.length === 0) return null;
+                          const emp = employees.find(e => e.id === empId);
+                          return (
+                            <div key={empId} className="py-4 space-y-2">
+                              <p className="font-bold text-slate-200">{emp?.name || "Desconhecido"}</p>
+                              <ul className="space-y-1.5 pl-4 border-l-2 border-red-900/50">
+                                {issues.map((issue, idx) => (
+                                  <li key={idx} className="text-xs text-slate-400">
+                                    <span className="font-bold text-red-400 uppercase mr-1">{issue.type}:</span>
+                                    {issue.message}
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           );
                         })}
