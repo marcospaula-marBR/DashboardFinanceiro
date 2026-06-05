@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.45.16";
+export const APP_VERSION = "v.02.45.17";
 export const VERSION_DATE = "2026-06-05";
 export const VERSION_CHANGELOG = [
+  "v.02.45.17 - Feat: Mapeamento de vencimento de contratos e aditivoCount na listagem principal de People Board; normalização e prevenção de duplicidades fonéticas/ortográficas em locais de prestação (trim e capitalize); botão de busca e vinculação de colaboradores cadastrados na criação para evitar cadastros duplicados; extração automática de bônus por IA do contrato priorizando o maior valor.",
   "v.02.45.16 - Fix: constraint employees_company_check agora inclui G2; busca de colaborador existente agora verifica coluna 'name' além de 'full_name'; campo Nível (Estratégico/Tático/Operacional) adicionado; Comissão alterada para selecionável por plano; Setor/Função com data de início e histórico; Local de Prestação com autocomplete do DB; novos campos nivel/commission_plan/department_start_date adicionados ao Employee type e mappers.",
   "v.02.45.13 - Feat: Máscaras de telefone pessoal e CNPJ, campos profissionais (telefone/email) no Info Pessoal com máscaras, validações matemáticas de CPF/CNPJ (dígitos verificadores), tratamento de erros e suporte a contratos de qualquer tamanho (>4.5MB) utilizando upload prévio para o storage e posterior leitura por IA.",
   "v.02.45.12 - Fix: Confirmação ao fechar ficha em modo de edição, bloqueio de fechar com clique fora e upload automático do PDF do contrato para o Supabase Storage com vínculo de aditivo.",

@@ -66,6 +66,10 @@ export class PeopleService {
   static async saveEmployeeProfile(payload: Partial<Employee>, isTestMode?: boolean): Promise<any> {
     const table = isTestMode ? 'employees_test' : 'employees';
     
+    if (payload.service_location) {
+      payload.service_location = this.capitalizeWords(payload.service_location);
+    }
+    
     // Mapeamento inverso para as colunas do DB
     const dbPayload = this.mapProfileToRaw(payload);
     
@@ -161,7 +165,13 @@ export class PeopleService {
       .not(column, 'is', null)
       .neq(column, '');
     if (!data) return [];
-    const unique = [...new Set(data.map((r: any) => r[column]).filter(Boolean))] as string[];
+    
+    const unique = [...new Set(data.map((r: any) => {
+      const val = r[column];
+      if (typeof val !== 'string') return val;
+      return this.capitalizeWords(val);
+    }).filter(Boolean))] as string[];
+    
     return unique.sort();
   }
 
@@ -360,5 +370,13 @@ export class PeopleService {
       executive_summary: profile.executive_summary || '',
       executive_link: profile.executive_link || ''
     };
+  }
+
+  static capitalizeWords(str: string): string {
+    return str
+      .trim()
+      .split(/\s+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   }
 }

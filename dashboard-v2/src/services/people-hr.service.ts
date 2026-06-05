@@ -39,6 +39,21 @@ interface RawEmployeeDb {
   remuneration_fixed?: number;
   remuneration_bonus?: number;
   remuneration_commission?: number;
+  contract_expiry_date?: string;
+  links_aditivos?: string;
+  is_outsourced?: boolean;
+  service_location?: string;
+  tax_regime?: string;
+  cnpj_zip_code?: string;
+  cnpj_street?: string;
+  cnpj_number?: string;
+  cnpj_complement?: string;
+  cnpj_neighborhood?: string;
+  cnpj_city?: string;
+  cnpj_state?: string;
+  executive_summary?: string;
+  executive_link?: string;
+  commission_plan?: string;
 }
 
 export const PeopleHRService = {
@@ -144,49 +159,67 @@ export const PeopleHRService = {
     const { data, error } = await query;
     if (error) throw error;
 
-    return (data || []).map((emp: RawEmployeeDb) => ({
-      id: emp.id,
-      name: emp.full_name,
-      company: emp.company || 'MarBR',
-      linkType: emp.employment_type || 'CLT',
-      remuneration: parseFloat(String(emp.remuneration)) || 0,
-      totalTaken: parseFloat(String(emp.loan_amount)) || 0,
-      totalReceived: 0,
-      balance: parseFloat(String(emp.loan_amount)) || 0,
-      monthInstallment: 0,
-      contractsCount: 0,
-      status: emp.status || 'Ativo',
-      pj_type: emp.pj_type,
-      corporate_name: emp.corporate_name,
-      document_id: emp.document_id,
-      document_rg: emp.document_rg,
-      phone: emp.phone,
-      email: emp.email,
-      phone_professional: emp.phone_professional,
-      email_professional: emp.email_professional,
-      pix_key: emp.pix_key,
-      zip_code: emp.zip_code,
-      street: emp.street,
-      number: emp.number,
-      complement: emp.complement,
-      neighborhood: emp.neighborhood,
-      city: emp.city,
-      state: emp.state,
-      department: emp.department,
-      job_role: emp.job_role,
-      start_date: emp.start_date,
-      status_start_date: emp.status_start_date,
-      status_end_date: emp.status_end_date,
-      linkedin_url: emp.linkedin_url,
-      instagram_url: emp.instagram_url,
-      emergency_contact_name: emp.emergency_contact_name,
-      emergency_contact_phone: emp.emergency_contact_phone,
-      emergency_contact_relation: emp.emergency_contact_relation,
-      avatar: emp.photo_url,
-      remuneration_fixed: emp.remuneration_fixed ? parseFloat(String(emp.remuneration_fixed)) : 0,
-      remuneration_bonus: emp.remuneration_bonus ? parseFloat(String(emp.remuneration_bonus)) : 0,
-      remuneration_commission: emp.remuneration_commission ? parseFloat(String(emp.remuneration_commission)) : 0,
-    })) as Employee[];
+    return (data || []).map((emp: RawEmployeeDb) => {
+      const aditivos = emp.links_aditivos ? emp.links_aditivos.split('\n').filter(Boolean) : [];
+      return {
+        id: emp.id,
+        name: emp.full_name,
+        company: emp.company || 'MarBR',
+        linkType: emp.employment_type || 'CLT',
+        remuneration: parseFloat(String(emp.remuneration)) || 0,
+        totalTaken: parseFloat(String(emp.loan_amount)) || 0,
+        totalReceived: 0,
+        balance: parseFloat(String(emp.loan_amount)) || 0,
+        monthInstallment: 0,
+        contractsCount: 0,
+        status: emp.status || 'Ativo',
+        pj_type: emp.pj_type,
+        corporate_name: emp.corporate_name,
+        document_id: emp.document_id,
+        document_rg: emp.document_rg,
+        phone: emp.phone,
+        email: emp.email,
+        phone_professional: emp.phone_professional,
+        email_professional: emp.email_professional,
+        pix_key: emp.pix_key,
+        zip_code: emp.zip_code,
+        street: emp.street,
+        number: emp.number,
+        complement: emp.complement,
+        neighborhood: emp.neighborhood,
+        city: emp.city,
+        state: emp.state,
+        department: emp.department,
+        job_role: emp.job_role,
+        start_date: emp.start_date,
+        status_start_date: emp.status_start_date,
+        status_end_date: emp.status_end_date,
+        linkedin_url: emp.linkedin_url,
+        instagram_url: emp.instagram_url,
+        emergency_contact_name: emp.emergency_contact_name,
+        emergency_contact_phone: emp.emergency_contact_phone,
+        emergency_contact_relation: emp.emergency_contact_relation,
+        avatar: emp.photo_url,
+        remuneration_fixed: emp.remuneration_fixed ? parseFloat(String(emp.remuneration_fixed)) : 0,
+        remuneration_bonus: emp.remuneration_bonus ? parseFloat(String(emp.remuneration_bonus)) : 0,
+        remuneration_commission: emp.remuneration_commission ? parseFloat(String(emp.remuneration_commission)) : 0,
+        contract_expiry_date: emp.contract_expiry_date,
+        aditivoCount: aditivos.length,
+        is_outsourced: emp.is_outsourced,
+        service_location: emp.service_location,
+        tax_regime: emp.tax_regime,
+        cnpj_zip_code: emp.cnpj_zip_code,
+        cnpj_street: emp.cnpj_street,
+        cnpj_number: emp.cnpj_number,
+        cnpj_complement: emp.cnpj_complement,
+        cnpj_neighborhood: emp.cnpj_neighborhood,
+        cnpj_city: emp.cnpj_city,
+        cnpj_state: emp.cnpj_state,
+        executive_summary: emp.executive_summary,
+        executive_link: emp.executive_link,
+        commission_plan: emp.commission_plan,
+      };
+    }) as Employee[];
   },
 
   async deleteEmployee(employeeId: string): Promise<void> {

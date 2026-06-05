@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2 } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
@@ -59,6 +59,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
   const [isParsingContract, setIsParsingContract] = useState(false);
   const [serviceLocations, setServiceLocations] = useState<string[]>([]);
 
+  // Estados para busca de colaboradores cadastrados
+  const [isSearchExistingOpen, setIsSearchExistingOpen] = useState(false);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchingExisting, setIsSearchingExisting] = useState(false);
+
 
   useEffect(() => {
     if (isOpen) {
@@ -92,6 +98,48 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     }
   }, [isOpen, isTestMode]);
 
+  useEffect(() => {
+    if (isSearchExistingOpen) {
+      setIsSearchingExisting(true);
+      PeopleHRService.getEmployeesForPeople({ mostrarInativos: true })
+        .then(setAllEmployees)
+        .catch(err => console.error("Erro ao buscar colaboradores para pesquisa", err))
+        .finally(() => setIsSearchingExisting(false));
+    }
+  }, [isSearchExistingOpen]);
+
+  const handleLoadExistingEmployee = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const [data, hist, bondsData, costsData] = await Promise.all([
+        PeopleService.getEmployeeProfile(id, isTestMode),
+        PeopleService.getEmployeeHistory(id, isTestMode),
+        PeopleHRService.getEmploymentContracts(id),
+        PeopleHRService.getMonthlyCosts(id)
+      ]);
+      if (!data) throw new Error("Colaborador não encontrado");
+      setProfile(data);
+      setHistory(hist || []);
+      setBonds(bondsData || []);
+      setCosts(costsData || []);
+      setIsEditMode(true);
+      setIsSearchExistingOpen(false);
+    } catch (err: any) {
+      alert(err.message || "Erro ao carregar colaborador");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredEmployees = allEmployees.filter(emp => {
+    const term = searchQuery.toLowerCase();
+    const nameMatch = emp.name?.toLowerCase().includes(term);
+    const roleMatch = emp.job_role?.toLowerCase().includes(term);
+    const cpfMatch = emp.document_id?.replace(/\D/g, '').includes(term);
+    const cnpjMatch = emp.pj_type?.replace(/\D/g, '').includes(term);
+    return nameMatch || roleMatch || cpfMatch || cnpjMatch;
+  });
+
   const fetchProfile = async (id: string) => {
     setIsLoading(true);
     setError(null);
@@ -120,6 +168,26 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     try {
       if (!profile.name || !profile.company) {
         throw new Error('Nome e Empresa são obrigatórios.');
+      }
+
+      // Validação de similaridade do local de prestação de serviços (Bug 1)
+      let currentServiceLocation = profile.service_location;
+      if (currentServiceLocation && currentServiceLocation.trim() !== '') {
+        const cleanString = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim();
+        const cleanLoc = cleanString(currentServiceLocation);
+        
+        const similar = serviceLocations.find(loc => {
+          const cleanExisting = cleanString(loc);
+          return cleanExisting === cleanLoc && loc !== currentServiceLocation;
+        });
+
+        if (similar) {
+          const confirmMsg = `O local de prestação '${currentServiceLocation}' é muito similar a '${similar}', que já existe no sistema.\n\nDeseja utilizar '${similar}' para manter a padronização dos dados?`;
+          if (confirm(confirmMsg)) {
+            currentServiceLocation = similar;
+            profile.service_location = similar;
+          }
+        }
       }
 
       // Validação de e-mails com regex simples
@@ -391,10 +459,15 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
               if (data.document_rg) next.document_rg = data.document_rg;
               if (data.corporate_name) next.corporate_name = data.corporate_name;
               if (data.linkType) next.linkType = data.linkType;
+              if (data.remuneration_bonus !== undefined && data.remuneration_bonus !== null) {
+                const currentBonus = next.remuneration_bonus || 0;
+                const newBonus = parseFloat(String(data.remuneration_bonus)) || 0;
+                next.remuneration_bonus = Math.max(currentBonus, newBonus);
+              }
               if (data.remuneration_fixed) {
                 next.remuneration_fixed = data.remuneration_fixed;
-                next.remuneration = data.remuneration_fixed + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
               }
+              next.remuneration = (next.remuneration_fixed || 0) + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
               if (data.email) next.email = data.email;
               if (data.phone) next.phone = formatPhone(data.phone);
               if (data.zip_code) next.zip_code = formatCEP(data.zip_code);
@@ -473,10 +546,15 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
         if (data.document_rg) next.document_rg = data.document_rg;
         if (data.corporate_name) next.corporate_name = data.corporate_name;
         if (data.linkType) next.linkType = data.linkType;
+        if (data.remuneration_bonus !== undefined && data.remuneration_bonus !== null) {
+          const currentBonus = prev.remuneration_bonus || 0;
+          const newBonus = parseFloat(String(data.remuneration_bonus)) || 0;
+          next.remuneration_bonus = Math.max(currentBonus, newBonus);
+        }
         if (data.remuneration_fixed) {
           next.remuneration_fixed = data.remuneration_fixed;
-          next.remuneration = data.remuneration_fixed + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
         }
+        next.remuneration = (next.remuneration_fixed || 0) + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
         if (data.email) next.email = data.email;
         if (data.phone) next.phone = formatPhone(data.phone);
         if (data.zip_code) next.zip_code = formatCEP(data.zip_code);
@@ -958,6 +1036,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
               )}
               {isEditMode && (
                 <>
+                  {!employeeId && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchExistingOpen(true)}
+                      className="flex items-center gap-1.5 p-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-all text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-slate-700"
+                    >
+                      <Search size={14} />
+                      <span>Já é cadastrado?</span>
+                    </button>
+                  )}
                   <label className={`flex items-center gap-2 p-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-all text-white font-semibold text-xs cursor-pointer select-none ${isParsingContract ? 'opacity-70 pointer-events-none' : ''}`}>
                     {isParsingContract ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                     <span>Importar Contrato (PDF)</span>
@@ -2171,6 +2259,71 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                   Salvar Alterações
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isSearchExistingOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[70vh]">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Buscar Colaborador Cadastrado</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Vincular ficha existente</p>
+              </div>
+              <button 
+                onClick={() => setIsSearchExistingOpen(false)}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <input 
+                type="text"
+                placeholder="Pesquisar por nome, CPF, CNPJ ou cargo..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50/30 dark:bg-slate-900/10 min-h-[200px]">
+              {isSearchingExisting ? (
+                <div className="h-full flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+                </div>
+              ) : filteredEmployees.length === 0 ? (
+                <p className="text-xs text-slate-400 italic text-center py-10">Nenhum colaborador encontrado.</p>
+              ) : (
+                filteredEmployees.map(emp => (
+                  <div 
+                    key={emp.id}
+                    onClick={() => {
+                      if (confirm(`Deseja carregar a ficha de ${emp.name}?`)) {
+                        handleLoadExistingEmployee(emp.id);
+                      }
+                    }}
+                    className="p-3 bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl hover:border-emerald-500/30 hover:bg-slate-50/30 cursor-pointer flex items-center gap-3 transition-all group"
+                  >
+                    <img 
+                      src={emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=e2e8f0&color=475569&bold=true`}
+                      alt={emp.name}
+                      className="w-8 h-8 rounded-lg object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-emerald-600 transition-colors">{emp.name}</p>
+                      <div className="flex gap-2 text-[10px] text-slate-400 font-medium mt-0.5">
+                        <span className="bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded text-[9px] uppercase font-bold text-slate-500">{emp.linkType}</span>
+                        {emp.job_role && <span className="truncate">{emp.job_role}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

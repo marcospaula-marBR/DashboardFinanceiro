@@ -64,6 +64,8 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "cnpj": "CNPJ da empresa contratada (formato 00.000.000/0000-00, se for PJ)",
   "linkType": "PJ" se houver CNPJ ou menção a prestação de serviço por pessoa jurídica, caso contrário "CLT",
   "remuneration_fixed": Valor monetário base mensal da remuneração/salário/honorário (apenas número decimal),
+  "remuneration_bonus": Valor monetário base mensal de bônus/premiação/variável se houver (apenas número decimal). Analise todo o contrato por cláusulas de bônus, remuneração variável ou metas e extraia o maior valor de bônus encontrado,
+  "bonus_description": "Breve descrição do bônus/remuneração variável (ex: Bônus por meta de X, ou Bônus mensal de assiduidade)",
   "email": "E-mail de contato pessoal",
   "phone": "Telefone de contato pessoal (DDD + Número)",
   "email_professional": "E-mail de contato profissional/corporativo (trabalho)",
