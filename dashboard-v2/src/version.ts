@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.45.9";
+export const APP_VERSION = "v.02.45.10";
 export const VERSION_DATE = "2026-06-05";
 export const VERSION_CHANGELOG = [
+  "v.02.45.10 - Fix: Máscara e validação no campo CPF (máximo 11 dígitos, bloqueando CNPJ) e prevenção de fechamento automático do modal (ProfileDrawer) por propagação de clique.",
   "v.02.45.9 - Feat: Reestruturação do Cadastro Único (PeopleBoard) com novos campos, abas, filtros (Terceirização, Local, Regime Tributário) e limpeza do DB.",
   "v.02.45.8 - Fix: Busca automática de CEP ao digitar, máscara e loader visual de progresso.",
   "v.02.45.7 - Feat: Mudar título para PeopleBoard e mover a exibição da versão abaixo do título da barra lateral.",

@@ -282,6 +282,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     return clean;
   };
 
+  const formatCPF = (value: string) => {
+    const clean = value.replace(/\D/g, '');
+    const truncated = clean.slice(0, 11);
+    if (truncated.length <= 3) return truncated;
+    if (truncated.length <= 6) return `${truncated.slice(0, 3)}.${truncated.slice(3)}`;
+    if (truncated.length <= 9) return `${truncated.slice(0, 3)}.${truncated.slice(3, 6)}.${truncated.slice(6)}`;
+    return `${truncated.slice(0, 3)}.${truncated.slice(3, 6)}.${truncated.slice(6, 9)}-${truncated.slice(9)}`;
+  };
+
+  const handleCPFChange = (val: string) => {
+    const formatted = formatCPF(val);
+    handleChange('document_id', formatted);
+  };
+
   const handleCEPChange = (val: string) => {
     const formatted = formatCEP(val);
     handleChange('zip_code', formatted);
@@ -466,6 +480,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: "spring", damping: 30, stiffness: 250 }}
             className="bg-white dark:bg-slate-950 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
           >
           {/* Menu Fixo Topo */}
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0">
@@ -677,7 +692,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         <div>
                           <label className={labelClass}>CPF</label>
-                          <input type="text" value={profile.document_id || ''} onChange={e => handleChange('document_id', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="000.000.000-00"/>
+                          <input type="text" value={profile.document_id || ''} onChange={e => handleCPFChange(e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="000.000.000-00"/>
                         </div>
                         <div>
                           <label className={labelClass}>RG</label>
