@@ -899,7 +899,12 @@ export default function PeoplePage() {
           setSelectedEmployee(undefined);
         }}
         employeeId={selectedEmployee}
-        onDataChanged={fetchData}
+        onDataChanged={(newId) => {
+          fetchData();
+          if (newId && selectedEmployee !== newId) {
+            setSelectedEmployee(newId);
+          }
+        }}
       />
 
       <DeleteConfirmDialog

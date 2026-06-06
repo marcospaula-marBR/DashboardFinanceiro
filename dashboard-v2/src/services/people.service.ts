@@ -322,7 +322,8 @@ export class PeopleService {
       links_aditivos: raw.links_aditivos,
       links_emprestimos: raw.links_emprestimos,
       has_invoice_glosa: raw.metadata?.has_invoice_glosa || false,
-      last_raise_date: raw.metadata?.last_raise_date || null
+      last_raise_date: raw.metadata?.last_raise_date || null,
+      grau: raw.metadata?.grau || ''
     };
   }
 
@@ -397,7 +398,8 @@ export class PeopleService {
       metadata: {
         ...(profile.metadata || {}),
         has_invoice_glosa: profile.has_invoice_glosa || false,
-        last_raise_date: profile.last_raise_date || null
+        last_raise_date: profile.last_raise_date || null,
+        grau: profile.grau || ''
       }
     };
   }

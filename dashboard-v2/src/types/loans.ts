@@ -51,6 +51,7 @@ export interface Employee {
   department?: string;
   job_role?: string;
   nivel?: string; // Estratégico | Tático | Operacional
+  grau?: string; // I | II | III
   department_start_date?: string; // YYYY-MM-DD - data de início no setor/função atual
   start_date?: string;
   resignation_date?: string;

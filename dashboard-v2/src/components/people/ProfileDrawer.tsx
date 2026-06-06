@@ -47,17 +47,20 @@ const MERGE_FIELDS = [
   { key: 'department', label: 'Setor / Departamento' },
   { key: 'responsible_name', label: 'Nome do Responsável' },
   { key: 'responsible_cpf', label: 'CPF do Responsável' },
+  { key: 'degree', label: 'Grau de Instrução' },
 ];
 
 interface ProfileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   employeeId?: string; // Se undef, é modo Criação
-  onDataChanged?: () => void;
+  onDataChanged?: (id?: string) => void;
+  isTestMode?: boolean;
 }
 
-export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: ProfileDrawerProps) {
-  const { isTestMode } = useDataMode();
+export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode }: ProfileDrawerProps) {
+  const { isTestMode: contextIsTestMode } = useDataMode();
+  const isTestMode = propIsTestMode ?? contextIsTestMode;
   
   const [profile, setProfile] = useState<Partial<Employee>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -318,7 +321,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
       }
       
       setIsEditMode(false);
-      if (onDataChanged) onDataChanged();
+      if (onDataChanged) onDataChanged(saved.id);
       
     } catch (err: unknown) {
       const error = err as Error;
@@ -359,18 +362,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
     const file = e.target.files?.[0];
     if (!file) return;
     
-    if (!profile.id) {
-      setError("Por favor, salve a ficha do colaborador pela primeira vez antes de fazer o upload da foto.");
-      return;
+    let targetId = profile.id;
+    if (!targetId) {
+      targetId = crypto.randomUUID();
+      handleChange('id', targetId);
     }
     
     setIsSaving(true);
     try {
-      const url = await PeopleService.uploadProfilePhoto(profile.id, file, isTestMode);
+      const url = await PeopleService.uploadProfilePhoto(targetId, file, isTestMode);
       handleChange('photo_url', url);
-      // Se não der erro, salva o resto tbm pra persistir a URL
-      await PeopleService.saveEmployeeProfile({ ...profile, photo_url: url }, isTestMode);
-      if (onDataChanged) onDataChanged();
+      // Se já estava no DB, atualiza a foto lá também
+      if (profile.id) {
+        await PeopleService.saveEmployeeProfile({ ...profile, photo_url: url }, isTestMode);
+      }
+      if (onDataChanged) onDataChanged(targetId);
     } catch (err: unknown) {
        const error = err as Error;
        setError(error.message);
@@ -1411,6 +1417,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged }: Pr
                                 </select>
                               ) : (
                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.nivel || '-'}</span>
+                              )}
+                             </div>
+                             <div className="flex-1">
+                              <label className={labelClass}>Grau</label>
+                              {isEditMode ? (
+                                <select value={profile.grau || ''} onChange={e => handleChange('grau', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                  <option value="">Selecione...</option>
+                                  <option value="I">I</option>
+                                  <option value="II">II</option>
+                                  <option value="III">III</option>
+                                </select>
+                              ) : (
+                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.grau || '-'}</span>
                               )}
                              </div>
                           </div>
