@@ -1,4 +1,4 @@
-export const APP_VERSION = "v.02.46.01";
+export const APP_VERSION = "v.02.46.02";
 export const VERSION_DATE = "2026-06-08";
 export const VERSION_CHANGELOG = [
   "v.02.46.01 - Feat: Nomenclatura dinâmica e inteligente para documentos processados por IA. Agora o sistema extrai o título exato do documento (ex: 'CONTRATO PRESTAÇÃO DE SERVIÇO'), identifica sobre o que é o aditivo (ex: 'Aditivo (Mudança de Função)') e usa a data da assinatura ao invés da data de upload.",
