@@ -219,6 +219,10 @@ export interface MonthlyCost {
   valor_rescisao?: number;
   valor_decimo_terceiro?: number;
   valor_descontos?: number;
+  valor_incentivos?: number;
+  valor_glosa_base?: number;
+  valor_glosa_bonus?: number;
+  valor_deducoes?: number;
   valor_liquido: number;
   valor_fixo?: number;
   valor_bonus?: number;

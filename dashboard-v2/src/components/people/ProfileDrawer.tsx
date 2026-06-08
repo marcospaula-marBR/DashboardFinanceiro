@@ -83,6 +83,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [editingCostFixo, setEditingCostFixo] = useState(0);
   const [editingCostBonus, setEditingCostBonus] = useState(0);
   const [editingCostComissao, setEditingCostComissao] = useState(0);
+  const [editingCostIncentivos, setEditingCostIncentivos] = useState(0);
+  const [editingCostGlosaBase, setEditingCostGlosaBase] = useState(0);
+  const [editingCostGlosaBonus, setEditingCostGlosaBonus] = useState(0);
+  const [editingCostDeducoes, setEditingCostDeducoes] = useState(0);
   const [saveCostError, setSaveCostError] = useState<string | null>(null);
   const [isSearchingCEP, setIsSearchingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
@@ -1174,7 +1178,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior à data de admissão (${formatDateBR(profile.start_date)}).`);
       }
       
-      const computedLiquido = editingCostFixo + editingCostBonus + editingCostComissao;
+      const computedLiquido = (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos) - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
 
       const payload = {
         competencia: editingCostCompetencia,
@@ -1182,6 +1186,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         valor_fixo: editingCostFixo,
         valor_bonus: editingCostBonus,
         valor_comissao: editingCostComissao,
+        valor_incentivos: editingCostIncentivos,
+        valor_glosa_base: editingCostGlosaBase,
+        valor_glosa_bonus: editingCostGlosaBonus,
+        valor_deducoes: editingCostDeducoes,
         vinculo_tipo: editingCostType,
         origem: editingCost.id ? editingCost.origem : 'manual'
       };
@@ -2258,6 +2266,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 setEditingCostFixo(lastCost.valor_fixo !== undefined ? lastCost.valor_fixo : (lastCost.valor_liquido - ((lastCost.valor_bonus || 0) + (lastCost.valor_comissao || 0))));
                                 setEditingCostBonus(lastCost.valor_bonus || 0);
                                 setEditingCostComissao(lastCost.valor_comissao || 0);
+                                setEditingCostIncentivos(lastCost.valor_incentivos || 0);
+                                setEditingCostGlosaBase(lastCost.valor_glosa_base || 0);
+                                setEditingCostGlosaBonus(lastCost.valor_glosa_bonus || 0);
+                                setEditingCostDeducoes(lastCost.valor_deducoes || 0);
                                 setSaveCostError(null);
                               }}
                               className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
@@ -2275,6 +2287,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               setEditingCostFixo(profile?.remuneration_fixed || profile?.remuneration || 0);
                               setEditingCostBonus(profile?.remuneration_bonus || 0);
                               setEditingCostComissao(profile?.remuneration_commission || 0);
+                              setEditingCostIncentivos(0);
+                              setEditingCostGlosaBase(0);
+                              setEditingCostGlosaBonus(0);
+                              setEditingCostDeducoes(0);
                               setSaveCostError(null);
                             }}
                             className="px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
@@ -2299,28 +2315,53 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                         return (
                           <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-4 gap-4">
                               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Fixo</p>
-                                <p className="text-lg font-black text-slate-700 mt-1 tabular-nums">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total Fixo</p>
+                                <p className="text-sm font-black text-slate-700 mt-1 tabular-nums">
                                   {formatCurrency(stats.fixedTotal || 0)}
                                 </p>
                               </div>
                               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Bônus</p>
-                                <p className="text-lg font-black text-slate-700 mt-1 tabular-nums">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total Bônus</p>
+                                <p className="text-sm font-black text-slate-700 mt-1 tabular-nums">
                                   {formatCurrency(stats.bonusTotal || 0)}
                                 </p>
                               </div>
                               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Comissões</p>
-                                <p className="text-lg font-black text-slate-700 mt-1 tabular-nums">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total Comissões</p>
+                                <p className="text-sm font-black text-slate-700 mt-1 tabular-nums">
                                   {formatCurrency(stats.commissionTotal || 0)}
                                 </p>
                               </div>
-                              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
-                                <p className="text-xs font-black text-emerald-800 uppercase tracking-wider">Total Geral</p>
-                                <p className="text-lg font-black text-emerald-700 mt-1 tabular-nums">
+                              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                                <p className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">Total Incentivos</p>
+                                <p className="text-sm font-black text-emerald-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.incentivosTotal || 0)}
+                                </p>
+                              </div>
+
+                              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                                <p className="text-[10px] font-black text-red-800 uppercase tracking-wider">Total Glosa Base</p>
+                                <p className="text-sm font-black text-red-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.glosaBaseTotal || 0)}
+                                </p>
+                              </div>
+                              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                                <p className="text-[10px] font-black text-red-800 uppercase tracking-wider">Total Glosa Bônus</p>
+                                <p className="text-sm font-black text-red-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.glosaBonusTotal || 0)}
+                                </p>
+                              </div>
+                              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                                <p className="text-[10px] font-black text-red-800 uppercase tracking-wider">Total Deduções</p>
+                                <p className="text-sm font-black text-red-700 mt-1 tabular-nums">
+                                  {formatCurrency(stats.deducoesTotal || 0)}
+                                </p>
+                              </div>
+                              <div className="bg-emerald-100 border border-emerald-300 rounded-xl p-3">
+                                <p className="text-[10px] font-black text-emerald-900 uppercase tracking-wider">Total Geral</p>
+                                <p className="text-sm font-black text-emerald-800 mt-1 tabular-nums">
                                   {formatCurrency(stats.total)}
                                 </p>
                               </div>
@@ -2357,6 +2398,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                               setEditingCostFixo(fixedVal || 0);
                                               setEditingCostBonus(c.valor_bonus || 0);
                                               setEditingCostComissao(c.valor_comissao || 0);
+                                              setEditingCostIncentivos(c.valor_incentivos || 0);
+                                              setEditingCostGlosaBase(c.valor_glosa_base || 0);
+                                              setEditingCostGlosaBonus(c.valor_glosa_bonus || 0);
+                                              setEditingCostDeducoes(c.valor_deducoes || 0);
                                               setSaveCostError(null);
                                             }}
                                             className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-emerald-600 transition-colors"
@@ -2367,7 +2412,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         </div>
                                       </div>
                                       
-                                      <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-slate-100/50 text-[10px]">
+                                      <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1.5 border-t border-slate-100/50 text-[10px]">
                                         <div>
                                           <span className="text-slate-400 font-bold block uppercase text-[8px]">Fixo</span>
                                           <span className="text-slate-700 font-bold tabular-nums">{formatCurrency(fixedVal || 0)}</span>
@@ -2384,6 +2429,30 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             {formatCurrency(c.valor_comissao || 0)}
                                           </span>
                                         </div>
+                                        {!!c.valor_incentivos && (
+                                          <div>
+                                            <span className="text-emerald-400 font-bold block uppercase text-[8px]">Incentivos</span>
+                                            <span className="font-bold tabular-nums text-emerald-600">{formatCurrency(c.valor_incentivos)}</span>
+                                          </div>
+                                        )}
+                                        {!!c.valor_glosa_base && (
+                                          <div>
+                                            <span className="text-red-400 font-bold block uppercase text-[8px]">Glosa Base</span>
+                                            <span className="font-bold tabular-nums text-red-600">{formatCurrency(c.valor_glosa_base)}</span>
+                                          </div>
+                                        )}
+                                        {!!c.valor_glosa_bonus && (
+                                          <div>
+                                            <span className="text-red-400 font-bold block uppercase text-[8px]">Glosa Bônus</span>
+                                            <span className="font-bold tabular-nums text-red-600">{formatCurrency(c.valor_glosa_bonus)}</span>
+                                          </div>
+                                        )}
+                                        {!!c.valor_deducoes && (
+                                          <div>
+                                            <span className="text-red-400 font-bold block uppercase text-[8px]">Deduções</span>
+                                            <span className="font-bold tabular-nums text-red-600">{formatCurrency(c.valor_deducoes)}</span>
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   );
@@ -2464,6 +2533,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             setEditingCostFixo(cost.valor_fixo || 0);
                                             setEditingCostBonus(cost.valor_bonus || 0);
                                             setEditingCostComissao(cost.valor_comissao || 0);
+                                            setEditingCostIncentivos(cost.valor_incentivos || 0);
+                                            setEditingCostGlosaBase(cost.valor_glosa_base || 0);
+                                            setEditingCostGlosaBonus(cost.valor_glosa_bonus || 0);
+                                            setEditingCostDeducoes(cost.valor_deducoes || 0);
                                             setSaveCostError(null);
                                           }
                                         }}
@@ -2531,7 +2604,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 </select>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
                 <div>
                   <label className={labelClass}>Valor Fixo</label>
                   <input 
@@ -2562,12 +2635,55 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                     placeholder="0.00"
                   />
                 </div>
+                <div>
+                  <label className={labelClass}>Incentivos</label>
+                  <input 
+                    type="number" 
+                    value={editingCostIncentivos} 
+                    onChange={e => setEditingCostIncentivos(parseFloat(e.target.value) || 0)} 
+                    className="w-full bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={labelClass}>Glosa Valor Base</label>
+                  <input 
+                    type="number" 
+                    value={editingCostGlosaBase} 
+                    onChange={e => setEditingCostGlosaBase(parseFloat(e.target.value) || 0)} 
+                    className="w-full bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Glosa Bônus</label>
+                  <input 
+                    type="number" 
+                    value={editingCostGlosaBonus} 
+                    onChange={e => setEditingCostGlosaBonus(parseFloat(e.target.value) || 0)} 
+                    className="w-full bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Deduções</label>
+                  <input 
+                    type="number" 
+                    value={editingCostDeducoes} 
+                    onChange={e => setEditingCostDeducoes(parseFloat(e.target.value) || 0)} 
+                    className="w-full bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Geral Calculado</span>
                 <span className="text-sm font-extrabold text-emerald-600 tabular-nums">
-                  {formatCurrency(editingCostFixo + editingCostBonus + editingCostComissao)}
+                  {formatCurrency((editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos) - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes))}
                 </span>
               </div>
 

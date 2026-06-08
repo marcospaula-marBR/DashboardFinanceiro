@@ -123,16 +123,25 @@ export const PeopleHRService = {
     }, 0);
     const bonusTotal = costs.reduce((sum, c) => sum + (c.valor_bonus || 0), 0);
     const commissionTotal = costs.reduce((sum, c) => sum + (c.valor_comissao || 0), 0);
+    const incentivosTotal = costs.reduce((sum, c) => sum + (c.valor_incentivos || 0), 0);
+    const glosaBaseTotal = costs.reduce((sum, c) => sum + (c.valor_glosa_base || 0), 0);
+    const glosaBonusTotal = costs.reduce((sum, c) => sum + (c.valor_glosa_bonus || 0), 0);
+    const deducoesTotal = costs.reduce((sum, c) => sum + (c.valor_deducoes || 0), 0);
 
     return {
       total: values.reduce((a, b) => a + b, 0),
       average: values.reduce((a, b) => a + b, 0) / values.length,
       min: Math.min(...values),
       max: Math.max(...values),
-      count: values.length,
+      count: costs.length,
       fixedTotal,
       bonusTotal,
       commissionTotal,
+      incentivosTotal,
+      glosaBaseTotal,
+      glosaBonusTotal,
+      deducoesTotal,
+      history: values
     };
   },
 
