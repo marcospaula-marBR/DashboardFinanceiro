@@ -12,6 +12,21 @@ interface EmploymentBondTimelineProps {
   bonds: EmploymentContract[];
   startDate?: string;
   additives?: AdditiveEvent[];
+  links_contratos?: string;
+  links_aditivos?: string;
+  status_end_date?: string;
+}
+
+// Function to parse markdown links like [Doc Name](https://url...)
+function parseMarkdownLinks(text?: string): { name: string; url: string }[] {
+  if (!text) return [];
+  const regex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const links: { name: string; url: string }[] = [];
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    links.push({ name: match[1], url: match[2] });
+  }
+  return links;
 }
 
 const VINCULO_COLORS: Record<string, string> = {
@@ -47,7 +62,7 @@ function computeTenure(start: string, end?: string): string {
   return `${years}a ${rem}m`;
 }
 
-type EventType = "admission" | "bond" | "additive" | "current";
+type EventType = "admission" | "bond" | "additive" | "current" | "termination";
 
 interface TimelineEvent {
   date: string;
@@ -55,14 +70,20 @@ interface TimelineEvent {
   label: string;
   sub?: string;
   vinculo?: string;
+  documentLinks?: { name: string; url: string }[];
 }
 
 export function EmploymentBondTimeline({
   bonds,
   startDate,
   additives = [],
+  links_contratos,
+  links_aditivos,
+  status_end_date,
 }: EmploymentBondTimelineProps) {
   const events: TimelineEvent[] = [];
+  const parsedContratos = parseMarkdownLinks(links_contratos);
+  const parsedAditivos = parseMarkdownLinks(links_aditivos);
 
   const admissionDate = startDate || bonds[0]?.start_date;
   if (admissionDate) {
@@ -75,6 +96,7 @@ export function EmploymentBondTimeline({
         ? `${firstBond.regime} • ${firstBond.contracting_company || "MarBR"}`
         : "",
       vinculo: firstBond?.regime,
+      documentLinks: parsedContratos.filter(l => l.name.includes("Contrato")),
     });
   }
 
@@ -93,20 +115,33 @@ export function EmploymentBondTimeline({
   additives
     .filter((a) => ["Cargo", "Remuneração", "Setor"].includes(a.event_type))
     .forEach((a) => {
+      // Find matching aditivo document roughly by year/month if possible, or just attach the most recent one.
+      // For simplicity, we attach all "Aditivo" links to additive events, or try to match.
       events.push({
         date: a.change_date,
         type: "additive",
-        label: `Aditivo — ${a.event_type}`,
+        label: `Aditivo – ${a.event_type}`,
         sub: a.observations || "",
+        documentLinks: parsedAditivos, // Will show all aditivos for now
       });
     });
+
+  if (status_end_date) {
+    events.push({
+      date: status_end_date,
+      type: "termination",
+      label: "Desligamento / Distrato",
+      sub: "Encerramento do contrato",
+      documentLinks: parsedContratos.filter(l => l.name.includes("Distrato")),
+    });
+  }
 
   events.sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
   const currentBond = bonds.find((b) => !b.end_date);
-  if (currentBond) {
+  if (currentBond && !status_end_date) {
     events.push({
       date: new Date().toISOString().slice(0, 10),
       type: "current",
@@ -116,7 +151,7 @@ export function EmploymentBondTimeline({
     });
   }
 
-  const totalTenure = admissionDate ? computeTenure(admissionDate) : null;
+  const totalTenure = admissionDate ? computeTenure(admissionDate, status_end_date) : null;
 
   if (events.length === 0) {
     return (
@@ -136,6 +171,7 @@ export function EmploymentBondTimeline({
     if (type === "admission") return "bg-emerald-500";
     if (type === "current")
       return "bg-emerald-400 ring-4 ring-emerald-100 animate-pulse";
+    if (type === "termination") return "bg-rose-500 ring-4 ring-rose-100";
     if (type === "bond" && vinculo)
       return VINCULO_DOT[vinculo] || "bg-slate-400";
     return "bg-blue-400";
@@ -193,7 +229,7 @@ export function EmploymentBondTimeline({
                   </span>
                 </div>
 
-                {ev.vinculo && ev.type !== "additive" && (
+                {ev.vinculo && ev.type !== "additive" && ev.type !== "termination" && (
                   <span
                     className={`inline-flex items-center mt-1.5 px-2.5 py-0.5 text-xs font-bold rounded-full border ${
                       VINCULO_COLORS[ev.vinculo] ||
@@ -202,6 +238,22 @@ export function EmploymentBondTimeline({
                   >
                     {ev.vinculo}
                   </span>
+                )}
+                
+                {ev.documentLinks && ev.documentLinks.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {ev.documentLinks.map((doc, idx) => (
+                      <a
+                        key={idx}
+                        href={doc.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold border border-slate-200 transition-colors"
+                      >
+                        <Briefcase size={10} /> {doc.name}
+                      </a>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>

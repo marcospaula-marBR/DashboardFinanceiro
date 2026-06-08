@@ -642,7 +642,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       
       const contractUrl = await PeopleService.uploadAdditiveFile(uploadId, file, isTestMode);
       const dateStr = new Date().toLocaleDateString('pt-BR');
-      const markdownLink = `[Contrato ${dateStr}](${contractUrl})`;
+      let markdownLink = `[Documento ${dateStr}](${contractUrl})`;
 
       // 2. Chamar a API de parsing enviando a URL do arquivo no corpo JSON.
       // Isso consome poucos bytes do cliente para o Vercel, contornando a restrição de tamanho.
@@ -700,7 +700,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           }
 
           const incomingMapped = mapParsedDataToEmployee(data, profile);
-          initializeMerge(existingProfile, incomingMapped, hist || [], bondsData || [], costsData || [], markdownLink);
+          
+          let updatedMarkdownLink = markdownLink;
+          if (data.document_type) {
+            updatedMarkdownLink = `[${data.document_type} ${dateStr}](${contractUrl})`;
+          }
+
+          initializeMerge(existingProfile, incomingMapped, hist || [], bondsData || [], costsData || [], updatedMarkdownLink);
         } catch (loadErr: unknown) {
           const error = loadErr as Error;
           console.error('Erro ao carregar dados do colaborador existente:', error);
@@ -758,11 +764,25 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
 
         // Datas: Admissão (Mais antiga) e Vencimento (Maior/Mais recente)
-        if (data.start_date) {
+        if (data.start_date && data.document_type !== 'Distrato') {
           next.start_date = getOldestDate(prev.start_date, data.start_date);
         }
-        if (data.contract_expiry_date) {
+        if (data.contract_expiry_date && data.document_type !== 'Distrato') {
           next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
+        }
+
+        // Se for distrato
+        if (data.document_type === 'Distrato' && data.termination_date) {
+          next.status_end_date = data.termination_date;
+          // Se a data já passou ou é hoje, inativar
+          const termDate = new Date(data.termination_date);
+          const now = new Date();
+          // zera a hora para comparar só as datas
+          termDate.setHours(0,0,0,0);
+          now.setHours(0,0,0,0);
+          if (termDate <= now) {
+            next.status = 'Inativo';
+          }
         }
 
         // Se for PJ e não houver responsável_name ou responsável_cpf, sincronizar reativamente
@@ -780,8 +800,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
 
         if (contractUrl) {
-          const currentText = next.links_contratos ? next.links_contratos + '\n' : '';
-          next.links_contratos = currentText + markdownLink;
+          const docTypeStr = data.document_type ? data.document_type : 'Contrato';
+          const linkStr = `[${docTypeStr} ${dateStr}](${contractUrl})`;
+          
+          if (data.document_type === 'Aditivo') {
+             const currentAditivos = next.links_aditivos ? next.links_aditivos + '\n' : '';
+             next.links_aditivos = currentAditivos + linkStr;
+          } else {
+             const currentText = next.links_contratos ? next.links_contratos + '\n' : '';
+             next.links_contratos = currentText + linkStr;
+          }
         }
 
         return next;
@@ -2158,6 +2186,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                         bonds={bonds} 
                         startDate={profile.start_date} 
                         additives={history}
+                        links_contratos={profile.links_contratos}
+                        links_aditivos={profile.links_aditivos}
+                        status_end_date={profile.status_end_date}
                       />
                     </motion.div>
                   )}

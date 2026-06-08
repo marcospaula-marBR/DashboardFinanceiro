@@ -57,12 +57,13 @@ Procure também em qualquer página de "checklist", resumo, folha de conferênci
 Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia se não encontrar):
 
 {
+  "document_type": "Qualifique este documento como 'Contrato', 'Aditivo' ou 'Distrato' (Termo de Rescisão)",
   "name": "Nome do contratado/colaborador (Pessoa Física representante/prestador)",
   "document_id": "CPF do contratado (formato 000.000.000-00)",
   "document_rg": "RG do contratado se houver",
   "corporate_name": "Razão Social / Nome da Empresa contratada (se for contrato de PJ/MEI)",
   "cnpj": "CNPJ da empresa contratada (formato 00.000.000/0000-00, se for PJ)",
-  "linkType": "PJ" se houver CNPJ ou menção a prestação de serviço por pessoa jurídica, caso contrário "CLT",
+  "linkType": "\"PJ\" se houver CNPJ ou menção a prestação de serviço por pessoa jurídica, caso contrário \"CLT\"",
   "remuneration_fixed": Valor monetário base mensal da remuneração/salário/honorário (apenas número decimal),
   "remuneration_bonus": Valor monetário base mensal de bônus/premiação/variável se houver (apenas número decimal). Analise todo o contrato por cláusulas de bônus, remuneração variável ou metas e extraia o maior valor de bônus encontrado,
   "bonus_description": "Breve descrição do bônus/remuneração variável (ex: Bônus por meta de X, ou Bônus mensal de assiduidade)",
@@ -86,10 +87,12 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "responsible_cpf": "CPF do responsável legal (formato 000.000.000-00, geralmente igual ao CPF do prestador)",
   "start_date": "Data de início do contrato/admissão/início da prestação (formato YYYY-MM-DD)",
   "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato se houver (formato YYYY-MM-DD)",
+  "termination_date": "Data EXATA de desligamento/encerramento/rescisão. OBRIGATÓRIO se document_type for 'Distrato' (formato YYYY-MM-DD)",
   "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)"
 }
 
 Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser EXCLUSIVAMENTE 'PJ'. O termo MEI diz respeito apenas a regime tributário e nunca deve ser listado como linkType.
+Se document_type for 'Distrato', a termination_date é a data em que a rescisão entra em vigor.
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
 `;
 
