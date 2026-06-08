@@ -452,6 +452,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     if (data.document_rg) next.document_rg = data.document_rg;
     if (data.corporate_name) next.corporate_name = data.corporate_name;
     if (data.linkType) next.linkType = data.linkType;
+    if (data.job_role) next.job_role = data.job_role;
     if (data.remuneration_bonus !== undefined && data.remuneration_bonus !== null) {
       const currentBonus = prev.remuneration_bonus || 0;
       const newBonus = parseFloat(String(data.remuneration_bonus)) || 0;
@@ -728,10 +729,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         return;
       }
       
+      // Histórico de Mudança Automático para Aditivos
+      if (data.job_role && data.job_role !== profile.job_role) {
+        setPendingHistoryItems(h => [...h, {
+          employee_id: profile.id || '',
+          event_type: 'Aditivo',
+          event_date: new Date().toISOString().split('T')[0],
+          description: `Cargo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (Via IA)`
+        }]);
+      }
+
       // Mesclar os dados extraídos no profile
       setProfile(prev => {
         const next = { ...prev };
         
+        if (data.job_role) next.job_role = data.job_role;
         if (data.name) next.name = data.name;
         if (data.document_id) next.document_id = formatCPF(data.document_id);
         if (data.document_rg) next.document_rg = data.document_rg;
