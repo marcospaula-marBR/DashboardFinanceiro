@@ -90,12 +90,12 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "responsible_cpf": "CPF do responsável legal (formato 000.000.000-00, geralmente igual ao CPF do prestador)",
   "start_date": "Data de início do contrato/admissão/início da prestação (formato YYYY-MM-DD)",
   "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato se houver (formato YYYY-MM-DD)",
-  "termination_date": "Data EXATA de desligamento/encerramento/rescisão. OBRIGATÓRIO se document_type for 'Distrato' (formato YYYY-MM-DD)",
+  "termination_date": "Se for Distrato, busque a DATA EFETIVA DO ÚLTIMO DIA TRABALHADO ou data real do encerramento da prestação de serviços. Atenção: pode não ser a data de assinatura! Procure por frases como 'tendo seu término no dia X' ou 'o último dia de serviço será Y' (formato YYYY-MM-DD)",
   "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)"
 }
 
 Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser EXCLUSIVAMENTE 'PJ'. O termo MEI diz respeito apenas a regime tributário e nunca deve ser listado como linkType.
-Se document_type for 'Distrato', a termination_date é a data em que a rescisão entra em vigor.
+Se document_type for 'Distrato', a termination_date deve refletir o último dia real de vínculo/serviço, e não necessariamente o dia em que o distrato foi assinado. Se o documento mencionar que os serviços encerram no dia X, X será a termination_date.
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
 `;
 

@@ -142,9 +142,11 @@ export const PeopleHRService = {
     setor?: string;
     search?: string;
     mostrarInativos?: boolean;
+    isTestMode?: boolean;
   }): Promise<Employee[]> {
+    const table = filters?.isTestMode ? 'employees_test' : 'employees';
     let query = supabase
-      .from('employees')
+      .from(table)
       .select('*')
       .order('full_name', { ascending: true });
 
@@ -162,7 +164,7 @@ export const PeopleHRService = {
 
     return (data || []).map((emp: RawEmployeeDb) => {
       const aditivos = emp.links_aditivos ? emp.links_aditivos.split('\n').filter(Boolean) : [];
-      return {
+      const employee = {
         id: emp.id,
         name: emp.full_name,
         company: emp.company || 'MarBR',
@@ -223,6 +225,15 @@ export const PeopleHRService = {
         last_raise_date: emp.metadata?.last_raise_date || null,
         grau: emp.metadata?.grau || ''
       };
+      
+      if (employee.status === 'Ativo' && employee.status_end_date) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (employee.status_end_date <= todayStr) {
+          employee.status = 'Inativo';
+        }
+      }
+      
+      return employee;
     }) as Employee[];
   },
 
