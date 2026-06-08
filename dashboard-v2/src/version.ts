@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.45.20";
+export const APP_VERSION = "v.02.45.21";
 export const VERSION_DATE = "2026-06-08";
 export const VERSION_CHANGELOG = [
+  "v.02.45.21 - Fix: Mapeamento de metadata (grau, glosa, e last_raise_date) na listagem principal do dashboard que estava sendo ignorado.",
   "v.02.45.20 - Feat: Adição do campo Grau, opções de filtro de Grau (I, II, III padronizados), e upload simplificado na criação.",
   "v.02.45.19 - Fix: Removido vínculo MEI (mantido apenas em Regime Tributário), adição de checkboxes com seleção múltipla para todos os filtros do dashboard, correção do card Saldo Devedor para reagir em tempo real aos filtros, e bypass do bucket de fotos para usar o diretório /avatars do bucket contracts.",
   "v.02.45.18 - Feat: Upload de foto de perfil via Supabase Storage, atalho de empréstimos na ficha, painel de auditoria clicável com detalhes de ocorrências, listagem detalhada de devedores no painel de KPIs, cards executivos reativos aos filtros da tabela e remoção do código de país (+55) na extração da IA.",

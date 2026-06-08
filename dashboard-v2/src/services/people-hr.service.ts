@@ -27,6 +27,7 @@ interface RawEmployeeDb {
   state?: string;
   department?: string;
   job_role?: string;
+  metadata?: any;
   start_date?: string;
   status_start_date?: string;
   status_end_date?: string;
@@ -218,6 +219,9 @@ export const PeopleHRService = {
         executive_summary: emp.executive_summary,
         executive_link: emp.executive_link,
         commission_plan: emp.commission_plan,
+        has_invoice_glosa: emp.metadata?.has_invoice_glosa || false,
+        last_raise_date: emp.metadata?.last_raise_date || null,
+        grau: emp.metadata?.grau || ''
       };
     }) as Employee[];
   },
