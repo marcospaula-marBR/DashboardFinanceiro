@@ -322,7 +322,7 @@ export default function PeoplePage() {
     
     try {
       setIsLoadingEmployees(true);
-      const employeesData = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true });
+      const employeesData = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true, isTestMode });
       setEmployees(employeesData);
     } catch { 
       setError('Falha ao carregar colaboradores'); 
