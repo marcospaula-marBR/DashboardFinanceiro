@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { Employee, EmploymentContract, ContractAllocation, EmployeeEvent, MonthlyCost, AuditIssue } from '@/types/loans';
+import { LoansService } from './loans.service';
 
 interface RawEmployeeDb {
   id: string;
@@ -162,19 +163,24 @@ export const PeopleHRService = {
     const { data, error } = await query;
     if (error) throw error;
 
+    const loansData = await LoansService.getEmployees({ showAll: true }, filters?.isTestMode);
+    const loansMap = new Map(loansData.map(e => [e.id, e]));
+
     return (data || []).map((emp: RawEmployeeDb) => {
       const aditivos = emp.links_aditivos ? emp.links_aditivos.split('\n').filter(Boolean) : [];
+      const l = loansMap.get(emp.id);
+      
       const employee = {
         id: emp.id,
         name: emp.full_name,
         company: emp.company || 'MarBR',
         linkType: emp.employment_type || 'CLT',
         remuneration: parseFloat(String(emp.remuneration)) || 0,
-        totalTaken: parseFloat(String(emp.loan_amount)) || 0,
-        totalReceived: 0,
-        balance: parseFloat(String(emp.loan_amount)) || 0,
-        monthInstallment: 0,
-        contractsCount: 0,
+        totalTaken: l ? l.totalTaken : (parseFloat(String(emp.loan_amount)) || 0),
+        totalReceived: l ? l.totalReceived : 0,
+        balance: l ? l.balance : (parseFloat(String(emp.loan_amount)) || 0),
+        monthInstallment: l ? l.monthInstallment : 0,
+        contractsCount: l ? l.contractsCount : 0,
         status: emp.status || 'Ativo',
         pj_type: emp.pj_type,
         corporate_name: emp.corporate_name,
