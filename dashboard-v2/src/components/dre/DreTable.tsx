@@ -22,9 +22,7 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
   const reversedColumns = [...validColumns].reverse();
 
   // Total de Entradas (Operacionais + Outras Entradas) para base da Análise Vertical
-  const totalEntradasOperacionais = totais['Total Entradas Operacionais'] || totais['Receita Bruta de Vendas'] || 0;
-  const outrasEntradas = totais['Outras Entradas'] || 0;
-  const totalReceita = (totalEntradasOperacionais + outrasEntradas) || 1;
+  const totalReceita = results.kpis.totalEntradas || 1;
 
   const displayValue = (val: number, isPercent = false) => {
     if (isPrivacyMode) return '****';
