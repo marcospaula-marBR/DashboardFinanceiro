@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.46.02";
+export const APP_VERSION = "v.02.46.04";
 export const VERSION_DATE = "2026-06-08";
 export const VERSION_CHANGELOG = [
+  "v.02.46.04 - Feat: Novo visual para os alertas de auditoria (transformados em Cards KPI) com navegação fluída, e melhoria na regra de alertas de admissão vs custo de folha (não gera alerta no mês da admissão).",
+  "v.02.46.03 - Feat: Separação do Valor Base e Bônus na listagem e também dentro do detalhamento de Custo de Folha, com a remoção da coluna Aditivos.",
   "v.02.46.01 - Feat: Nomenclatura dinâmica e inteligente para documentos processados por IA. Agora o sistema extrai o título exato do documento (ex: 'CONTRATO PRESTAÇÃO DE SERVIÇO'), identifica sobre o que é o aditivo (ex: 'Aditivo (Mudança de Função)') e usa a data da assinatura ao invés da data de upload.",
   "v.02.46.00 - Feat: Trajetória Profissional aprimorada como um Dossiê Dinâmico. Agora a IA detecta Distratos automaticamente, encerra o contrato e altera o status. A linha do tempo exibe Contratos, Aditivos e Rescisões com botões para abrir os respectivos documentos atrelados a cada evento.",
   "v.02.45.23 - Fix: Reversão da exclusão em cascata. Históricos financeiros e de contratos serão sempre mantidos. Exclusão agora restrita apenas a cadastros sem histórico.",
