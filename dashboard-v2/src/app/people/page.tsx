@@ -232,8 +232,17 @@ export default function PeoplePage() {
 
   // ----- Unique filter options from data -----
   const setores = useMemo(() => {
-    const s = new Set(employees.map(e => e.department).filter(Boolean) as string[]);
-    return Array.from(s).sort();
+    // Normalize to proper case and remove duplicates
+    const s = new Set(
+      employees
+        .map(e => e.department)
+        .filter(Boolean)
+        .map(d => {
+           const str = String(d).trim();
+           return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+        })
+    );
+    return Array.from(s).sort() as string[];
   }, [employees]);
 
   const graus = useMemo(() => {
@@ -245,7 +254,11 @@ export default function PeoplePage() {
   // ----- Apply people filters -----
   useEffect(() => {
     let result = [...employees];
-    if (!showInativos) result = result.filter(e => e.status !== 'Inativo');
+    const explicitlyShowingInativos = filterStatus.includes('Inativo');
+    if (!showInativos && !explicitlyShowingInativos) {
+       result = result.filter(e => e.status !== 'Inativo');
+    }
+
     if (filterSearch) {
       const t = filterSearch.toLowerCase();
       result = result.filter(e =>
@@ -258,7 +271,14 @@ export default function PeoplePage() {
     if (filterEmpresa.length > 0) result = result.filter(e => filterEmpresa.includes(e.company || ''));
     if (filterStatus.length > 0) result = result.filter(e => filterStatus.includes(e.status || ''));
     if (filterVinculo.length > 0) result = result.filter(e => filterVinculo.includes(e.linkType || ''));
-    if (filterSetor.length > 0) result = result.filter(e => filterSetor.includes(e.department || ''));
+    if (filterSetor.length > 0) {
+      // Case insensitive compare for setor filter
+      const lowerFilterSetor = filterSetor.map(s => s.toLowerCase());
+      result = result.filter(e => {
+         const dept = (e.department || '').trim().toLowerCase();
+         return lowerFilterSetor.includes(dept) || filterSetor.includes(e.department || '');
+      });
+    }
     if (filterGrau.length > 0) result = result.filter(e => filterGrau.includes(e.grau || ''));
     
     if (filterTerceirizado.length > 0) {
@@ -921,6 +941,7 @@ export default function PeoplePage() {
       {/* ── DRAWERS AND MODALS ── */}
       <ProfileDrawer
         isOpen={isProfileDrawerOpen}
+        setores={setores}
         onClose={() => {
           setIsProfileDrawerOpen(false);
           setSelectedEmployee(undefined);

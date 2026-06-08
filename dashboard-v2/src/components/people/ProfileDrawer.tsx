@@ -56,9 +56,10 @@ interface ProfileDrawerProps {
   employeeId?: string; // Se undef, é modo Criação
   onDataChanged?: (id?: string) => void;
   isTestMode?: boolean;
+  setores?: string[];
 }
 
-export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode }: ProfileDrawerProps) {
+export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [] }: ProfileDrawerProps) {
   const { isTestMode: contextIsTestMode } = useDataMode();
   const isTestMode = propIsTestMode ?? contextIsTestMode;
   
@@ -1673,7 +1674,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                               <label className={labelClass}>Setor</label>
-                              <input type="text" value={profile.department || ''} onChange={e => handleChange('department', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="Ex: Administrativo"/>
+                              <input 
+                                type="text" 
+                                value={profile.department || ''} 
+                                onChange={e => {
+                                  // Capitalize first letter logic applied dynamically to standardise on type
+                                  const val = e.target.value;
+                                  const normalized = val ? val.charAt(0).toUpperCase() + val.slice(1) : val;
+                                  handleChange('department', normalized);
+                                }} 
+                                readOnly={!isEditMode} 
+                                className={inputClass} 
+                                placeholder="Ex: Administrativo"
+                                list="setores-list"
+                              />
+                              <datalist id="setores-list">
+                                {setores.map(s => <option key={s} value={s} />)}
+                              </datalist>
                             </div>
                             <div>
                               <label className={labelClass}>Função / Cargo</label>
