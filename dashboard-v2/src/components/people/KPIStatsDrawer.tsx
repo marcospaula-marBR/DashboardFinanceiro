@@ -29,7 +29,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     const dzm = activeEmployees.filter(e => e.company === "DZM").length;
     const g2 = activeEmployees.filter(e => e.company === "G2").length;
     const ferias = employees.filter(e => e.status === "Férias").length;
-    
+
     // Average Tenure
     const tenures = activeEmployees
       .filter(e => e.start_date)
@@ -82,7 +82,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     const totalBalance = employees.reduce((sum, e) => sum + (e.balance || 0), 0);
     const totalTaken = employees.reduce((sum, e) => sum + (e.totalTaken || 0), 0);
     const monthlyReceivable = loanStats?.recebivelMes || employees.reduce((sum, e) => sum + (e.monthInstallment || 0), 0);
-    
+
     // High exposure risk (active loan and contract expiring within 60 days)
     const expiringSoonWithLoans = employees.filter(e => {
       if (!e.balance || e.balance <= 0 || !e.contract_expiry_date) return false;
@@ -118,7 +118,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
   return (
     <AnimatePresence>
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 overflow-hidden"
           onClick={(e) => {
             if (e.target === e.currentTarget) onClose();
@@ -172,12 +172,12 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                   {/* Vínculos / CLT vs PJ Gauge */}
                   <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-5">
                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Composição de Regime de Trabalho</h3>
-                    
+
                     <div className="flex justify-between items-center text-sm font-bold text-slate-200">
                       <span>CLT: {headcountStats.clt} ({Math.round((headcountStats.clt / (activeEmployees.length || 1)) * 100)}%)</span>
                       <span>PJ/MEI: {headcountStats.mei} ({Math.round((headcountStats.mei / (activeEmployees.length || 1)) * 100)}%)</span>
                     </div>
-                    
+
                     {/* Visual Progress Bar */}
                     <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex">
                       <div className="h-full bg-emerald-500" style={{ width: `${(headcountStats.clt / (activeEmployees.length || 1)) * 100}%` }} />
@@ -220,7 +220,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                   {/* Detailed Verbas Grid */}
                   <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-5">
                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Composição de Gastos Corrente</h3>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <div className="flex justify-between text-sm font-bold text-slate-200">
@@ -257,7 +257,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                   {/* Sectors Expenditure ranking */}
                   <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-5">
                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Gastos por Setor (Remunerações Consolidadas)</h3>
-                    
+
                     <div className="space-y-4">
                       {payrollStats.sectorsSorted.slice(0, 5).map((sec, i) => (
                         <div key={i} className="space-y-2">

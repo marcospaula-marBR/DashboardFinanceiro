@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.00";
+export const APP_VERSION = "v.02.46.01";
 export const VERSION_DATE = "2026-06-08";
 export const VERSION_CHANGELOG = [
+  "v.02.46.01 - Feat: Nomenclatura dinâmica e inteligente para documentos processados por IA. Agora o sistema extrai o título exato do documento (ex: 'CONTRATO PRESTAÇÃO DE SERVIÇO'), identifica sobre o que é o aditivo (ex: 'Aditivo (Mudança de Função)') e usa a data da assinatura ao invés da data de upload.",
   "v.02.46.00 - Feat: Trajetória Profissional aprimorada como um Dossiê Dinâmico. Agora a IA detecta Distratos automaticamente, encerra o contrato e altera o status. A linha do tempo exibe Contratos, Aditivos e Rescisões com botões para abrir os respectivos documentos atrelados a cada evento.",
   "v.02.45.23 - Fix: Reversão da exclusão em cascata. Históricos financeiros e de contratos serão sempre mantidos. Exclusão agora restrita apenas a cadastros sem histórico.",
   "v.02.45.22 - Fix: Exclusão de colaboradores agora limpa manualmente todas as tabelas dependentes (empréstimos, aditivos, custos e histórico) contornando a falta de ON DELETE CASCADE no banco de dados.",

@@ -701,10 +701,15 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
           const incomingMapped = mapParsedDataToEmployee(data, profile);
           
-          let updatedMarkdownLink = markdownLink;
-          if (data.document_type) {
-            updatedMarkdownLink = `[${data.document_type} ${dateStr}](${contractUrl})`;
+          let docTitle = data.document_title || data.document_type || 'Documento';
+          if (data.document_type === 'Aditivo' && data.additive_changes) {
+            docTitle = `Aditivo (${data.additive_changes})`;
           }
+          const signDateStr = data.signature_date 
+            ? new Date(data.signature_date + "T12:00:00").toLocaleDateString('pt-BR') 
+            : dateStr;
+          
+          let updatedMarkdownLink = `[${docTitle} ${signDateStr}](${contractUrl})`;
 
           initializeMerge(existingProfile, incomingMapped, hist || [], bondsData || [], costsData || [], updatedMarkdownLink);
         } catch (loadErr: unknown) {
@@ -800,8 +805,15 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
 
         if (contractUrl) {
-          const docTypeStr = data.document_type ? data.document_type : 'Contrato';
-          const linkStr = `[${docTypeStr} ${dateStr}](${contractUrl})`;
+          let docTitle = data.document_title || data.document_type || 'Documento';
+          if (data.document_type === 'Aditivo' && data.additive_changes) {
+            docTitle = `Aditivo (${data.additive_changes})`;
+          }
+          const signDateStr = data.signature_date 
+            ? new Date(data.signature_date + "T12:00:00").toLocaleDateString('pt-BR') 
+            : dateStr;
+            
+          const linkStr = `[${docTitle} ${signDateStr}](${contractUrl})`;
           
           if (data.document_type === 'Aditivo') {
              const currentAditivos = next.links_aditivos ? next.links_aditivos + '\n' : '';
