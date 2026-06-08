@@ -89,8 +89,8 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
               <th className="py-4 px-6 min-w-[250px]">Colaborador / Cargo</th>
               <th className="py-4 px-4 text-center">Empresa</th>
               <th className="py-4 px-4 text-center">Vínculo</th>
-              <th className="py-4 px-4 text-right">Remuneração</th>
-              <th className="py-4 px-4 text-center">Aditivos</th>
+              <th className="py-4 px-4 text-right">Valor Base</th>
+              <th className="py-4 px-4 text-right">Bônus</th>
               <th className="py-4 px-4 text-center">Início</th>
               <th className="py-4 px-4 text-center">Vencimento</th>
               <th className="py-4 px-6 text-center">Ações</th>
@@ -199,19 +199,16 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                     </td>
                     <td className="py-4 px-4 text-right text-sm font-bold text-slate-700 tabular-nums">
                       {showValues ? (
-                        emp.remuneration > 0 ? formatCurrency(emp.remuneration) : '—'
+                        emp.remuneration_fixed && emp.remuneration_fixed > 0 ? formatCurrency(emp.remuneration_fixed) : (emp.remuneration > 0 ? formatCurrency(emp.remuneration) : '—')
                       ) : (
                         <span className="text-slate-300 font-normal">••••••</span>
                       )}
                     </td>
-                    <td className="py-4 px-4 text-center">
-                      {(emp.aditivoCount || 0) > 0 ? (
-                        <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-full text-[10px] font-bold">
-                          <FileText size={10} />
-                          <span>{emp.aditivoCount}</span>
-                        </div>
+                    <td className="py-4 px-4 text-right text-sm font-bold text-emerald-600 tabular-nums">
+                      {showValues ? (
+                        emp.remuneration_bonus && emp.remuneration_bonus > 0 ? formatCurrency(emp.remuneration_bonus) : '—'
                       ) : (
-                        <span className="text-[10px] text-slate-300 font-medium">Nenhum</span>
+                        <span className="text-slate-300 font-normal">••••••</span>
                       )}
                     </td>
                     <td className="py-4 px-4 text-center text-xs text-slate-500 tabular-nums">
