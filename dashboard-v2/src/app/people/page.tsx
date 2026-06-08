@@ -92,6 +92,7 @@ export default function PeoplePage() {
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [filterVinculo, setFilterVinculo] = useState<string[]>([]);
   const [filterSetor, setFilterSetor] = useState<string[]>([]);
+  const [filterGrau, setFilterGrau] = useState<string[]>([]);
   const [filterTerceirizado, setFilterTerceirizado] = useState<string[]>([]);
   const [filterLocalPrestacao, setFilterLocalPrestacao] = useState<string[]>([]);
   const [filterRegimeTributario, setFilterRegimeTributario] = useState<string[]>([]);
@@ -235,6 +236,11 @@ export default function PeoplePage() {
     return Array.from(s).sort();
   }, [employees]);
 
+  const graus = useMemo(() => {
+    const s = new Set(employees.map(e => e.grau).filter(Boolean) as string[]);
+    return Array.from(s).sort();
+  }, [employees]);
+
   // ----- Apply people filters -----
   useEffect(() => {
     let result = [...employees];
@@ -252,6 +258,7 @@ export default function PeoplePage() {
     if (filterStatus.length > 0) result = result.filter(e => filterStatus.includes(e.status || ''));
     if (filterVinculo.length > 0) result = result.filter(e => filterVinculo.includes(e.linkType || ''));
     if (filterSetor.length > 0) result = result.filter(e => filterSetor.includes(e.department || ''));
+    if (filterGrau.length > 0) result = result.filter(e => filterGrau.includes(e.grau || ''));
     
     if (filterTerceirizado.length > 0) {
       result = result.filter(e => filterTerceirizado.includes(e.is_outsourced ? 'true' : 'false'));
@@ -287,7 +294,7 @@ export default function PeoplePage() {
     }
     
     setFilteredEmployees(result);
-  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, showInativos, filterInsight, noRaiseMonths, noPromoMonths]);
+  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau, filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, showInativos, filterInsight, noRaiseMonths, noPromoMonths]);
 
   const fetchData = async () => {
     setError(null);
@@ -333,6 +340,7 @@ export default function PeoplePage() {
     setFilterStatus([]);
     setFilterVinculo([]);
     setFilterSetor([]);
+    setFilterGrau([]);
     setFilterTerceirizado([]);
     setFilterLocalPrestacao([]);
     setFilterRegimeTributario([]);
@@ -516,6 +524,15 @@ export default function PeoplePage() {
               options={setores.map(s => ({ label: s, value: s }))}
             />
           </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Grau</label>
+            <MultiSelectDropdown
+              value={filterGrau}
+              onChange={setFilterGrau}
+              placeholder="Todos os Graus"
+              options={graus.map(s => ({ label: s, value: s }))}
+            />
+          </div>
 
           <div className="pt-2">
             <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400 hover:text-slate-200">
@@ -646,6 +663,15 @@ export default function PeoplePage() {
                     onChange={setFilterSetor}
                     placeholder="Todos os Setores"
                     options={setores.map(s => ({ label: s, value: s }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Grau</label>
+                  <MultiSelectDropdown
+                    value={filterGrau}
+                    onChange={setFilterGrau}
+                    placeholder="Todos os Graus"
+                    options={graus.map(s => ({ label: s, value: s }))}
                   />
                 </div>
 
