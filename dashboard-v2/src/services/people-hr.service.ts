@@ -227,31 +227,6 @@ export const PeopleHRService = {
   },
 
   async deleteEmployee(employeeId: string): Promise<void> {
-    // Manually cascade deletes since Supabase might not have ON DELETE CASCADE on all related tables
-    
-    // 1. Delete loan payments
-    await supabase.from('loan_payments').delete().eq('employee_id', employeeId);
-    
-    // 2. Delete loans
-    await supabase.from('employee_loans').delete().eq('employee_id', employeeId);
-    
-    // 3. Delete employee events (history)
-    await supabase.from('employee_events').delete().eq('employee_id', employeeId);
-
-    // 4. Delete monthly costs
-    await supabase.from('people_monthly_costs').delete().eq('employee_id', employeeId);
-
-    // 5. Delete contract allocations (if any, requires contract_id)
-    const { data: contracts } = await supabase.from('employment_contracts').select('id').eq('employee_id', employeeId);
-    if (contracts && contracts.length > 0) {
-      const contractIds = contracts.map(c => c.id);
-      await supabase.from('contract_allocations').delete().in('contract_id', contractIds);
-    }
-
-    // 6. Delete employment contracts
-    await supabase.from('employment_contracts').delete().eq('employee_id', employeeId);
-
-    // 7. Finally, delete the employee
     const { error } = await supabase
       .from('employees')
       .delete()

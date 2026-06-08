@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.45.22";
+export const APP_VERSION = "v.02.45.23";
 export const VERSION_DATE = "2026-06-08";
 export const VERSION_CHANGELOG = [
+  "v.02.45.23 - Fix: Reversão da exclusão em cascata. Históricos financeiros e de contratos serão sempre mantidos. Exclusão agora restrita apenas a cadastros sem histórico.",
   "v.02.45.22 - Fix: Exclusão de colaboradores agora limpa manualmente todas as tabelas dependentes (empréstimos, aditivos, custos e histórico) contornando a falta de ON DELETE CASCADE no banco de dados.",
   "v.02.45.21 - Fix: Mapeamento de metadata (grau, glosa, e last_raise_date) na listagem principal do dashboard que estava sendo ignorado.",
   "v.02.45.20 - Feat: Adição do campo Grau, opções de filtro de Grau (I, II, III padronizados), e upload simplificado na criação.",
