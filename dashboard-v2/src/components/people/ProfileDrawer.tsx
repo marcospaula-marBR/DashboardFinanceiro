@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
@@ -93,6 +93,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
   // Estados para busca de colaboradores cadastrados
   const [isSearchExistingOpen, setIsSearchExistingOpen] = useState(false);
+  const [isDiannaImportOpen, setIsDiannaImportOpen] = useState(false);
+  const [diannaResults, setDiannaResults] = useState<any[]>([]);
+  const [selectedDiannaRows, setSelectedDiannaRows] = useState<number[]>([]);
+  const [isImportingDianna, setIsImportingDianna] = useState(false);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchingExisting, setIsSearchingExisting] = useState(false);
@@ -1160,24 +1164,24 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       
       const computedLiquido = editingCostFixo + editingCostBonus + editingCostComissao;
 
-      await PeopleHRService.updateMonthlyCost(editingCost.id, {
+      const payload = {
         competencia: editingCostCompetencia,
         valor_liquido: computedLiquido,
         valor_fixo: editingCostFixo,
         valor_bonus: editingCostBonus,
         valor_comissao: editingCostComissao,
         vinculo_tipo: editingCostType,
-      });
+        origem: editingCost.id ? editingCost.origem : 'manual'
+      };
+
+      if (editingCost.id) {
+        await PeopleHRService.updateMonthlyCost(editingCost.id, payload);
+        setCosts(prev => prev.map(c => c.id === editingCost.id ? { ...c, ...payload } : c));
+      } else {
+        const newCost = await PeopleHRService.insertMonthlyCost({ ...payload, employee_id: profile.id } as any);
+        setCosts(prev => [...prev, newCost]);
+      }
       
-      setCosts(prev => prev.map(c => c.id === editingCost.id ? { 
-        ...c, 
-        competencia: editingCostCompetencia, 
-        valor_liquido: computedLiquido, 
-        valor_fixo: editingCostFixo,
-        valor_bonus: editingCostBonus,
-        valor_comissao: editingCostComissao,
-        vinculo_tipo: editingCostType 
-      } : c));
       setEditingCost(null);
       if (onDataChanged) onDataChanged();
     } catch (err: unknown) {
@@ -1193,9 +1197,74 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setCosts(prev => prev.filter(c => c.id !== costId));
       setEditingCost(null);
       if (onDataChanged) onDataChanged();
-    } catch (err: unknown) {
-      const error = err as Error;
-      alert(error.message || 'Erro ao excluir lançamento.');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir custo.');
+    }
+  };
+
+  const handleSearchDianna = async () => {
+    setIsSearchingExisting(true);
+    setDiannaResults([]);
+    setSelectedDiannaRows([]);
+    try {
+      const res = await fetch('/dianna_source.json');
+      if (!res.ok) throw new Error('Não foi possível carregar a fonte Dianna (dianna_source.json). O Data Lake precisa ser gerado primeiro.');
+      const data = await res.json();
+      
+      // Filter by name (simple includes, case insensitive)
+      const queryWords = (profile.name || '').toLowerCase().split(' ').filter((w: string) => w.length > 2);
+      
+      const matched = data.filter((row: any) => {
+        if (!row.nome_bruto) return false;
+        const n = row.nome_bruto.toLowerCase();
+        // Return true if at least one meaningful word matches
+        return queryWords.some((w: string) => n.includes(w));
+      });
+      
+      setDiannaResults(matched);
+      setIsDiannaImportOpen(true);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Erro ao buscar no Data Lake Dianna.');
+    } finally {
+      setIsSearchingExisting(false);
+    }
+  };
+
+  const handleImportDiannaSelected = async () => {
+    if (selectedDiannaRows.length === 0) return;
+    setIsImportingDianna(true);
+    try {
+      const itemsToImport = selectedDiannaRows.map(index => diannaResults[index]);
+      
+      // Run sequentially to keep it simple and safe
+      const newCosts: MonthlyCost[] = [];
+      for (const item of itemsToImport) {
+        const payload = {
+          employee_id: profile.id,
+          competencia: item.competencia,
+          valor_liquido: item.valor_total,
+          valor_fixo: item.valor_total,
+          valor_bonus: 0,
+          valor_comissao: 0,
+          vinculo_tipo: profile.linkType === 'CLT' ? 'CLT' : 'MEI',
+          origem: 'dianna_import'
+        };
+        const newCost = await PeopleHRService.insertMonthlyCost(payload as any);
+        newCosts.push(newCost);
+      }
+      
+      setCosts(prev => [...prev, ...newCosts]);
+      setIsDiannaImportOpen(false);
+      setSelectedDiannaRows([]);
+      if (onDataChanged) onDataChanged();
+      alert(`${newCosts.length} lançamentos importados com sucesso!`);
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao importar dados. ' + err.message);
+    } finally {
+      setIsImportingDianna(false);
     }
   };
 
@@ -2154,7 +2223,53 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                           <Coins size={16} className="text-emerald-600" /> Histórico Mensal de Custos
                         </h4>
-                        <span className="text-xs font-black text-slate-400 uppercase">Fase 2 (Dianna Import)</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSearchDianna}
+                            disabled={isSearchingExisting}
+                            className="px-3 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+                          >
+                            {isSearchingExisting ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+                            Buscar na Dianna
+                          </button>
+                          {costs && costs.length > 0 && (
+                            <button
+                              onClick={() => {
+                                const lastCost = [...costs].sort((a,b) => b.competencia.localeCompare(a.competencia))[0];
+                                const nextMonth = new Date(lastCost.competencia + 'T12:00:00');
+                                nextMonth.setMonth(nextMonth.getMonth() + 1);
+                                const nextComp = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
+                                
+                                setEditingCost({} as any);
+                                setEditingCostCompetencia(nextComp);
+                                setEditingCostType(lastCost.vinculo_tipo);
+                                setEditingCostFixo(lastCost.valor_fixo !== undefined ? lastCost.valor_fixo : (lastCost.valor_liquido - ((lastCost.valor_bonus || 0) + (lastCost.valor_comissao || 0))));
+                                setEditingCostBonus(lastCost.valor_bonus || 0);
+                                setEditingCostComissao(lastCost.valor_comissao || 0);
+                                setSaveCostError(null);
+                              }}
+                              className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Copy size={14} /> Repetir Anterior
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              const today = new Date();
+                              const comp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+                              setEditingCost({} as any);
+                              setEditingCostCompetencia(comp);
+                              setEditingCostType(profile?.linkType === 'CLT' ? 'CLT' : 'MEI');
+                              setEditingCostFixo(profile?.remuneration_fixed || profile?.remuneration || 0);
+                              setEditingCostBonus(profile?.remuneration_bonus || 0);
+                              setEditingCostComissao(profile?.remuneration_commission || 0);
+                              setSaveCostError(null);
+                            }}
+                            className="px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+                          >
+                            <Plus size={14} /> Novo Custo
+                          </button>
+                        </div>
                       </div>
 
                       {(() => {
@@ -2367,8 +2482,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-emerald-600 p-4 text-white flex items-center justify-between">
               <div>
-                <h4 className="font-bold text-sm">Ajustar Lançamento de Custo</h4>
-                <p className="text-[10px] text-emerald-100 uppercase mt-0.5">Correção rápida de inconsistência</p>
+                <h4 className="font-bold text-sm">{editingCost?.id ? 'Ajustar Lançamento de Custo' : 'Novo Lançamento de Custo'}</h4>
+                <p className="text-[10px] text-emerald-100 uppercase mt-0.5">{editingCost?.id ? 'Correção rápida de inconsistência' : 'Adicionar custo histórico ou atual'}</p>
               </div>
               <button onClick={() => setEditingCost(null)} className="text-white/80 hover:text-white">
                 <X size={18} />
@@ -2445,12 +2560,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => handleDeleteCost(editingCost.id)}
-                  className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
-                >
-                  <Trash2 size={13} /> Excluir Custo
-                </button>
+                {editingCost?.id && (
+                  <button
+                    onClick={() => handleDeleteCost(editingCost.id)}
+                    className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                  >
+                    <Trash2 size={13} /> Excluir Custo
+                  </button>
+                )}
                 <button
                   onClick={() => setEditingCost(null)}
                   className="ml-auto px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 transition-all"
@@ -2462,6 +2579,106 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                   className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-bold transition-all shadow-sm"
                 >
                   Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DIANNA IMPORT */}
+      {isDiannaImportOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-amber-50/50 dark:bg-amber-950/20">
+              <div>
+                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-500 flex items-center gap-2">
+                  <Database size={16} /> Data Lake: Planilha Dianna
+                </h3>
+                <p className="text-[10px] text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">
+                  Resultados encontrados para "{profile.name || 'Desconhecido'}"
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsDiannaImportOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-5 bg-slate-50/30 dark:bg-slate-900">
+              {diannaResults.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-sm text-slate-500 font-bold">Nenhum registro encontrado.</p>
+                  <p className="text-xs text-slate-400 mt-1">O nome deste colaborador não foi localizado na fonte de dados atual.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {diannaResults.map((item, idx) => {
+                    const isSelected = selectedDiannaRows.includes(idx);
+                    return (
+                      <div 
+                        key={idx}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedDiannaRows(prev => prev.filter(i => i !== idx));
+                          } else {
+                            setSelectedDiannaRows(prev => [...prev, idx]);
+                          }
+                        }}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-4 ${
+                          isSelected 
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' 
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                          isSelected ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 bg-white'
+                        }`}>
+                          {isSelected && <CheckCircle2 size={14} />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start">
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                              {new Date(item.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                            </p>
+                            <p className="text-sm font-extrabold text-emerald-600 tabular-nums">
+                              R$ {item.valor_total?.toFixed(2).replace('.', ',')}
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">
+                            Nome na Planilha: <span className="font-bold text-slate-700">{item.nome_bruto}</span>
+                          </p>
+                          <p className="text-[10px] text-slate-400 uppercase mt-0.5">
+                            Aba Origem: {item.sheet}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-500">
+                {selectedDiannaRows.length} selecionados
+              </span>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsDiannaImportOpen(false)}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleImportDiannaSelected}
+                  disabled={selectedDiannaRows.length === 0 || isImportingDianna}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition-all shadow-sm shadow-emerald-600/20 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isImportingDianna ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  Importar Selecionados
                 </button>
               </div>
             </div>

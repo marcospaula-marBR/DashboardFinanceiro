@@ -401,6 +401,16 @@ export const PeopleHRService = {
     return result;
   },
 
+  async insertMonthlyCost(payload: Partial<MonthlyCost>): Promise<MonthlyCost> {
+    const { data, error } = await supabase
+      .from('people_monthly_costs')
+      .insert([payload])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   async updateMonthlyCost(costId: string, payload: Partial<MonthlyCost>): Promise<void> {
     const { error } = await supabase
       .from('people_monthly_costs')
