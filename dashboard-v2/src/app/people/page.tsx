@@ -846,7 +846,85 @@ export default function PeoplePage() {
                 { label: 'EST', value: hrKpis.est.toString() },
               ]}
             />
-          </div>          {/* ── Main HR / Employee Table ── */}
+          </div>
+
+          {/* 🌟 Alertas & Filtros Transformados em Cards 🌟 */}
+          <div className="mt-8 flex flex-col gap-4">
+             <div className="flex items-center justify-between gap-4">
+               <div className="flex items-center gap-2">
+                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                   <Target size={18} className="text-purple-600"/> Monitoramento & Alertas
+                 </h3>
+                 {filterInsight && (
+                   <button onClick={() => setFilterInsight(null)} className="ml-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-200 hover:text-slate-800 transition-colors uppercase">
+                     Limpar Filtro
+                   </button>
+                 )}
+               </div>
+
+               <div className="flex items-center gap-4">
+                 <div className="flex flex-col">
+                    <label className="text-[9px] font-bold text-slate-500 uppercase">Janela Base</label>
+                    <select value={noRaiseMonths} onChange={e => setNoRaiseMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
+                       <option value={3}>3 meses</option>
+                       <option value={6}>6 meses</option>
+                       <option value={12}>12 meses</option>
+                       <option value={24}>24 meses</option>
+                    </select>
+                 </div>
+                 <div className="flex flex-col">
+                    <label className="text-[9px] font-bold text-slate-500 uppercase">Janela Nível</label>
+                    <select value={noPromoMonths} onChange={e => setNoPromoMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
+                       <option value={3}>3 meses</option>
+                       <option value={6}>6 meses</option>
+                       <option value={12}>12 meses</option>
+                       <option value={24}>24 meses</option>
+                    </select>
+                 </div>
+               </div>
+             </div>
+
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+               <PeopleKpiCard
+                 title="Glosa na NF"
+                 value={insightCounts.glosa}
+                 icon={<AlertCircle size={20} />}
+                 color="amber"
+                 onClick={() => setFilterInsight(filterInsight === 'glosa' ? null : 'glosa')}
+                 isActive={filterInsight === 'glosa'}
+                 sub="Divergência ou Punição"
+               />
+               <PeopleKpiCard
+                 title="Com Empréstimo"
+                 value={insightCounts.emprestimo}
+                 icon={<Coins size={20} />}
+                 color="blue"
+                 onClick={() => setFilterInsight(filterInsight === 'emprestimo' ? null : 'emprestimo')}
+                 isActive={filterInsight === 'emprestimo'}
+                 sub="Saldo devedor ativo"
+               />
+               <PeopleKpiCard
+                 title="Sem Revisão (Base)"
+                 value={insightCounts.aumento}
+                 icon={<UserCog size={20} />}
+                 color="rose"
+                 onClick={() => setFilterInsight(filterInsight === 'aumento' ? null : 'aumento')}
+                 isActive={filterInsight === 'aumento'}
+                 sub={`Há mais de ${noRaiseMonths} meses`}
+               />
+               <PeopleKpiCard
+                 title="Sem Nível/Função"
+                 value={insightCounts.promocao}
+                 icon={<Target size={20} />}
+                 color="indigo"
+                 onClick={() => setFilterInsight(filterInsight === 'promocao' ? null : 'promocao')}
+                 isActive={filterInsight === 'promocao'}
+                 sub={`Há mais de ${noPromoMonths} meses`}
+               />
+             </div>
+          </div>
+
+          {/* ── Main HR / Employee Table ── */}
           {isLoadingEmployees ? (
             <div className="p-12 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm mt-6">
               <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />

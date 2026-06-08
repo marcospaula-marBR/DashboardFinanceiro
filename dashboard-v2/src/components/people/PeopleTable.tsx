@@ -91,7 +91,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
               <th className="py-4 px-4 text-center">Vínculo</th>
               <th className="py-4 px-4 text-right">Valor Base</th>
               <th className="py-4 px-4 text-right">Bônus</th>
-              <th className="py-4 px-4 text-center">Início</th>
+              <th className="py-4 px-4 text-center">Início Contratual</th>
               <th className="py-4 px-4 text-center">Vencimento</th>
               <th className="py-4 px-6 text-center">Ações</th>
             </tr>

@@ -297,12 +297,16 @@ export const PeopleHRService = {
     };
 
     const startVal = new Date(startDate + 'T00:00:00').getTime();
+    const startDateObj = new Date(startDate + 'T00:00:00');
 
     for (const cost of costs) {
       const costVal = new Date(cost.competencia + 'T00:00:00').getTime();
+      const costDateObj = new Date(cost.competencia + 'T00:00:00');
       
-      // 1. Date before admission
-      if (costVal < startVal) {
+      const isSameMonth = startDateObj.getFullYear() === costDateObj.getFullYear() && startDateObj.getMonth() === costDateObj.getMonth();
+      
+      // 1. Date before admission (only if not in the same month)
+      if (costVal < startVal && !isSameMonth) {
         issues.push({
           id: cost.id,
           employee_id: employeeId,
