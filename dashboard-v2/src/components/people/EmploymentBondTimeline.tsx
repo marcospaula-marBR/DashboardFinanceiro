@@ -96,7 +96,7 @@ export function EmploymentBondTimeline({
         ? `${firstBond.regime} • ${firstBond.contracting_company || "MarBR"}`
         : "",
       vinculo: firstBond?.regime,
-      documentLinks: parsedContratos.filter(l => l.name.includes("Contrato")),
+      documentLinks: parsedContratos.filter(l => !l.name.toLowerCase().includes("distrato") && !l.name.toLowerCase().includes("rescisão")),
     });
   }
 
@@ -132,7 +132,7 @@ export function EmploymentBondTimeline({
       type: "termination",
       label: "Desligamento / Distrato",
       sub: "Encerramento do contrato",
-      documentLinks: parsedContratos.filter(l => l.name.includes("Distrato")),
+      documentLinks: parsedContratos.filter(l => l.name.toLowerCase().includes("distrato") || l.name.toLowerCase().includes("rescisão")),
     });
   }
 
