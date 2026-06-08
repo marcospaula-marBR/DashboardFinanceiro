@@ -5,10 +5,11 @@ interface PeopleKpiCardProps {
   title: string;
   value: string | number;
   icon: ReactNode;
-  color?: "emerald" | "blue" | "amber" | "slate" | "red";
+  color?: "emerald" | "blue" | "amber" | "slate" | "red" | "rose" | "indigo" | "purple";
   sub?: string;
   breakdown?: { label: string; value: string }[];
   onClick?: () => void;
+  isActive?: boolean;
 }
 
 const colorMap = {
@@ -42,6 +43,24 @@ const colorMap = {
     border: "border-red-100",
     value: "text-red-700",
   },
+  rose: {
+    bg: "bg-rose-50",
+    icon: "bg-rose-100 text-rose-600",
+    border: "border-rose-100",
+    value: "text-rose-700",
+  },
+  indigo: {
+    bg: "bg-indigo-50",
+    icon: "bg-indigo-100 text-indigo-600",
+    border: "border-indigo-100",
+    value: "text-indigo-700",
+  },
+  purple: {
+    bg: "bg-purple-50",
+    icon: "bg-purple-100 text-purple-600",
+    border: "border-purple-100",
+    value: "text-purple-700",
+  },
 };
 
 export function PeopleKpiCard({
@@ -52,15 +71,16 @@ export function PeopleKpiCard({
   sub,
   breakdown,
   onClick,
+  isActive = false,
 }: PeopleKpiCardProps) {
   const c = colorMap[color];
 
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-2xl border ${c.border} shadow-sm p-5 flex flex-col gap-3 ${
-        onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""
-      }`}
+      className={`p-5 rounded-2xl border transition-all duration-300 flex flex-col gap-3 ${
+        onClick ? "cursor-pointer hover:-translate-y-1 hover:shadow-lg" : ""
+      } ${c.bg} ${isActive ? `ring-2 ring-offset-2 ring-${color}-400 shadow-md ${c.border}` : c.border}`}
     >
       <div className="flex items-center gap-3">
         <div

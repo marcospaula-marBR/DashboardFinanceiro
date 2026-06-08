@@ -6,7 +6,6 @@ import { ProfileDrawer } from "@/components/people/ProfileDrawer";
 import { PeopleKpiCard } from "@/components/people/PeopleKpiCard";
 import { DeleteConfirmDialog } from "@/components/people/DeleteConfirmDialog";
 import { PeopleTable } from "@/components/people/PeopleTable";
-import { PayrollCostChart } from "@/components/people/PayrollCostChart";
 import { KPIStatsDrawer } from "@/components/people/KPIStatsDrawer";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
@@ -210,9 +209,12 @@ export default function PeoplePage() {
   }, [filteredEmployees, loanStats]);
 
   // Sum of total payroll cost for the current active employees (Remuneration total)
-  const latestPayrollCost = useMemo(() => {
+  const payrollCosts = useMemo(() => {
     const activeEmps = filteredEmployees.filter(e => e.status === 'Ativo' || e.status === 'Férias' || e.status === 'Provisão');
-    return activeEmps.reduce((sum, e) => sum + (e.remuneration || 0), 0);
+    const total = activeEmps.reduce((sum, e) => sum + (e.remuneration || 0), 0);
+    const base = activeEmps.reduce((sum, e) => sum + (e.remuneration_fixed || 0), 0);
+    const bonus = activeEmps.reduce((sum, e) => sum + (e.remuneration_bonus || 0), 0);
+    return { total, base, bonus };
   }, [filteredEmployees]);
 
   // Average active employee remuneration
@@ -806,13 +808,17 @@ export default function PeoplePage() {
               ]}
             />
             <PeopleKpiCard
-              title="Custo da Folha"
-              value={showValues ? formatCurrency(latestPayrollCost) : '••••••'}
-              icon={<Coins size={20} />}
-              color="blue"
-              onClick={() => { setActiveKpiMode('payroll'); setIsKpiDrawerOpen(true); }}
-              sub="Consolidado do último mês"
-            />
+                title="Custo da Folha"
+                value={showValues ? formatCurrency(payrollCosts.total) : '••••••'}
+                icon={<Coins size={20} />}
+                color="blue"
+                onClick={() => { setActiveKpiMode('payroll'); setIsKpiDrawerOpen(true); }}
+                sub="Consolidado (Ativos/Férias/Provisão)"
+                breakdown={[
+                  { label: 'Valor Base', value: showValues ? formatCurrency(payrollCosts.base) : '•••' },
+                  { label: 'Bônus', value: showValues ? formatCurrency(payrollCosts.bonus) : '•••' },
+                ]}
+              />
             <PeopleKpiCard
               title="Saldo Devedor Ativo"
               value={showValues ? formatCurrency(hrKpis.saldoDevedorTotal) : '••••••'}
@@ -840,77 +846,7 @@ export default function PeoplePage() {
                 { label: 'EST', value: hrKpis.est.toString() },
               ]}
             />
-          </div>
-
-          {/* ── Insights & Alertas (Legend) ── */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col lg:flex-row items-center justify-between gap-4 mt-6">
-            <div className="flex items-center gap-2 shrink-0">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                <Target size={16} className="text-purple-600"/> Alertas & Filtros
-              </h3>
-              
-              {filterInsight && (
-                <button onClick={() => setFilterInsight(null)} className="ml-2 text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full hover:bg-red-100 transition-colors">
-                  Limpar
-                </button>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-2 flex-wrap flex-1 justify-center lg:justify-start">
-              <button 
-                onClick={() => setFilterInsight(filterInsight === 'glosa' ? null : 'glosa')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'glosa' ? 'bg-amber-100 text-amber-800 ring-2 ring-amber-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-              >
-                ⚠️ Glosa na NF <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.glosa}</span>
-              </button>
-              <button 
-                onClick={() => setFilterInsight(filterInsight === 'emprestimo' ? null : 'emprestimo')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'emprestimo' ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-              >
-                💸 Empréstimo <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.emprestimo}</span>
-              </button>
-              <button 
-                onClick={() => setFilterInsight(filterInsight === 'aumento' ? null : 'aumento')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'aumento' ? 'bg-rose-100 text-rose-800 ring-2 ring-rose-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-              >
-                ⏳ Sem Revisão Valor Base (&gt;{noRaiseMonths}m) <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.aumento}</span>
-              </button>
-              <button 
-                onClick={() => setFilterInsight(filterInsight === 'promocao' ? null : 'promocao')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterInsight === 'promocao' ? 'bg-indigo-100 text-indigo-800 ring-2 ring-indigo-400' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-              >
-                🎯 Sem Nível/Função (&gt;{noPromoMonths}m) <span className="bg-white/50 px-1.5 rounded-md ml-1">{insightCounts.promocao}</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-4 lg:border-l lg:pl-4 shrink-0">
-              <div className="flex flex-col">
-                 <label className="text-[9px] font-bold text-slate-500 uppercase">Janela Revisão Base</label>
-                 <select value={noRaiseMonths} onChange={e => setNoRaiseMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
-                    <option value={3}>3 meses</option>
-                    <option value={6}>6 meses</option>
-                    <option value={12}>12 meses</option>
-                    <option value={24}>24 meses</option>
-                 </select>
-              </div>
-              <div className="flex flex-col">
-                 <label className="text-[9px] font-bold text-slate-500 uppercase">Janela Nível/Função</label>
-                 <select value={noPromoMonths} onChange={e => setNoPromoMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
-                    <option value={3}>3 meses</option>
-                    <option value={6}>6 meses</option>
-                    <option value={12}>12 meses</option>
-                    <option value={24}>24 meses</option>
-                 </select>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Real Payroll Cost History Chart ── */}
-          {!isLoadingCosts && (
-            <PayrollCostChart costs={monthlyCosts} />
-          )}
-
-          {/* ── Main HR / Employee Table ── */}
+          </div>          {/* ── Main HR / Employee Table ── */}
           {isLoadingEmployees ? (
             <div className="p-12 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm mt-6">
               <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
