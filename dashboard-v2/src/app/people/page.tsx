@@ -237,7 +237,8 @@ export default function PeoplePage() {
   }, [employees]);
 
   const graus = useMemo(() => {
-    const s = new Set(employees.map(e => e.grau).filter(Boolean) as string[]);
+    const defaultGraus = ['I', 'II', 'III'];
+    const s = new Set([...defaultGraus, ...employees.map(e => e.grau).filter(Boolean) as string[]]);
     return Array.from(s).sort();
   }, [employees]);
 
