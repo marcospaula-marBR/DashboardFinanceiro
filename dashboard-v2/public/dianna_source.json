@@ -1,0 +1,14 @@
+[
+  {
+    "sheet": "Mensal Líquido",
+    "competencia": "2024-01-01",
+    "nome_bruto": "João Silva",
+    "valor_total": 5000.00
+  },
+  {
+    "sheet": "Mensal Líquido",
+    "competencia": "2024-02-01",
+    "nome_bruto": "João Silva",
+    "valor_total": 5000.00
+  }
+]
