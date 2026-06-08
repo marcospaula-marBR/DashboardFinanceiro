@@ -253,8 +253,7 @@ export default function PeoplePage() {
     return Array.from(s).sort();
   }, [employees]);
 
-  // ----- Apply people filters -----
-  useEffect(() => {
+  const baseFilteredEmployees = useMemo(() => {
     let result = [...employees];
     const explicitlyShowingInativos = filterStatus.includes('Inativo');
     if (!showInativos && !explicitlyShowingInativos) {
@@ -274,7 +273,6 @@ export default function PeoplePage() {
     if (filterStatus.length > 0) result = result.filter(e => filterStatus.includes(e.status || ''));
     if (filterVinculo.length > 0) result = result.filter(e => filterVinculo.includes(e.linkType || ''));
     if (filterSetor.length > 0) {
-      // Case insensitive compare for setor filter
       const lowerFilterSetor = filterSetor.map(s => s.toLowerCase());
       result = result.filter(e => {
          const dept = (e.department || '').trim().toLowerCase();
@@ -292,6 +290,13 @@ export default function PeoplePage() {
     if (filterRegimeTributario.length > 0) {
       result = result.filter(e => filterRegimeTributario.includes(e.tax_regime || ''));
     }
+    
+    return result;
+  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau, filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, showInativos]);
+
+  // ----- Apply people filters -----
+  useEffect(() => {
+    let result = [...baseFilteredEmployees];
     
     // Filtro de Insights
     if (filterInsight) {
@@ -317,7 +322,7 @@ export default function PeoplePage() {
     }
     
     setFilteredEmployees(result);
-  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau, filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, showInativos, filterInsight, noRaiseMonths, noPromoMonths]);
+  }, [baseFilteredEmployees, filterInsight, noRaiseMonths, noPromoMonths]);
 
   const fetchData = async () => {
     setError(null);
@@ -377,7 +382,7 @@ export default function PeoplePage() {
     let aumento = 0;
     let promocao = 0;
 
-    employees.forEach(e => {
+    baseFilteredEmployees.forEach(e => {
       if (e.has_invoice_glosa) glosa++;
       if ((e.balance || 0) > 0) emprestimo++;
       
@@ -394,7 +399,7 @@ export default function PeoplePage() {
       }
     });
     return { glosa, emprestimo, aumento, promocao };
-  }, [employees, noRaiseMonths, noPromoMonths]);
+  }, [baseFilteredEmployees, noRaiseMonths, noPromoMonths]);
 
   const handleEmployeeClick = (employeeId: string) => {
     setSelectedEmployee(employeeId);
