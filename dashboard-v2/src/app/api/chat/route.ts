@@ -80,15 +80,9 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 6)}`;
 
-    let lastError = '';
-    let responseText = '';
-    let usedModel = '';
+    let allErrors: string[] = [];
 
-    for (const modelName of MODEL_CASCADE) {
-      try {
-        console.log(`[BrisinhAI] Tentando modelo: ${modelName}`);
-        const isLegacy = modelName === 'gemini-pro' || modelName.startsWith('gemini-1.0-pro');
-        const systemInstructionText = `Você é o BrisinhAI, o CFO e Consultor de Negócios/RH virtual da Mar Brasil.
+    const systemInstructionText = `Você é o BrisinhAI, o CFO e Consultor de Negócios/RH virtual da Mar Brasil.
 Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos, custos, colaboradores, recursos humanos (RH), folha de pagamento e headcount fornecidos no contexto.
 REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
 1. Se a pergunta do usuário não for sobre finanças, contabilidade, gestão de negócios, custos, colaboradores/RH ou sobre os dados do painel fornecidos, você DEVE recusar responder de forma educada e extremamente curta usando exatamente o seguinte padrão:
@@ -96,16 +90,19 @@ REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
 2. Nunca responda a perguntas de cultura geral, receitas, piadas, programação de computadores ou bate-papo informal.
 3. Seja extremamente conciso, pragmático e direto ao ponto. Evite saudações longas ou explicações prolixas para economizar tokens de saída.`;
 
+    for (const modelName of MODEL_CASCADE) {
+      try {
+        console.log(`[BrisinhAI] Tentando modelo: ${modelName}`);
         const model = genAI.getGenerativeModel({
           model: modelName,
           generationConfig: {
             temperature: 0.3, // Menor criatividade = mais precisão e segurança financeira
             maxOutputTokens: 1024, // Limite reduzido para economizar tokens
-          },
-          ...(isLegacy ? {} : { systemInstruction: systemInstructionText })
+          }
         });
 
-        const result = await model.generateContent(prompt);
+        const fullPrompt = `${systemInstructionText}\n\nPERGUNTA DO USUÁRIO:\n${prompt}`;
+        const result = await model.generateContent(fullPrompt);
         const text = result.response.text();
 
         if (text) {
@@ -116,7 +113,7 @@ REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        lastError = `[${modelName}] ${errorMsg}`;
+        allErrors.push(`[${modelName}] ${errorMsg}`);
         console.warn(`[BrisinhAI] Falha no modelo ${modelName}: ${errorMsg}`);
       }
     }
@@ -125,7 +122,7 @@ REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
       return NextResponse.json(
         {
           error: {
-            message: `Não foi possível conectar a nenhum modelo do Gemini (Chave ativa no Vercel: ${maskedKey}). Último erro: ${lastError}`,
+            message: `Não foi possível conectar a nenhum modelo do Gemini (Chave ativa no Vercel: ${maskedKey}). Erros encontrados:\n${allErrors.slice(0, 3).join('\n')}`,
           },
         },
         { status: 500 }
