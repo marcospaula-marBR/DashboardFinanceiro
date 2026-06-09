@@ -81,6 +81,8 @@ export async function POST(req: Request) {
     const maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 6)}`;
 
     let allErrors: string[] = [];
+    let responseText = '';
+    let usedModel = '';
 
     const systemInstructionText = `Você é o BrisinhAI, o CFO e Consultor de Negócios/RH virtual da Mar Brasil.
 Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos, custos, colaboradores, recursos humanos (RH), folha de pagamento e headcount fornecidos no contexto.
