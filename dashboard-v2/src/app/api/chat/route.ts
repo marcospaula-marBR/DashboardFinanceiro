@@ -4,13 +4,19 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 // Modelos em ordem de prioridade — apenas compatíveis com generateContent
 // Referência: https://ai.google.dev/gemini-api/docs/models
 const MODEL_CASCADE = [
-  'gemini-2.5-flash',     // Mais moderno, melhor custo-benefício
-  'gemini-2.5-pro',       // Mais poderoso (pode ter menor quota gratuita)
-  'gemini-2.0-flash',     // Estável e rápido
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
-  'gemini-1.5-flash',     // Legado estável
-  'gemini-1.5-pro',       // Legado robusto
-  // REMOVIDOS: gemini-pro, gemini-1.0-pro (descontinuados, não suportam generateContent)
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-pro-latest',
+  'gemini-1.5-flash-002',
+  'gemini-1.5-pro-002',
+  'gemini-1.5-flash-001',
+  'gemini-1.5-pro-001',
+  'gemini-pro'
 ];
 
 export async function POST(req: Request) {
@@ -79,19 +85,22 @@ export async function POST(req: Request) {
     for (const modelName of MODEL_CASCADE) {
       try {
         console.log(`[BrisinhAI] Tentando modelo: ${modelName}`);
+        const isLegacy = modelName === 'gemini-pro';
+        const systemInstructionText = `Você é o BrisinhAI, o CFO e Consultor de Negócios/RH virtual da Mar Brasil.
+Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos, custos, colaboradores, recursos humanos (RH), folha de pagamento e headcount fornecidos no contexto.
+REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
+1. Se a pergunta do usuário não for sobre finanças, contabilidade, gestão de negócios, custos, colaboradores/RH ou sobre os dados do painel fornecidos, você DEVE recusar responder de forma educada e extremamente curta usando exatamente o seguinte padrão:
+   "Desculpe, como CFO/RH Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras, de negócios e gestão de pessoas (RH) relacionadas ao dashboard. Como posso ajudar com os seus dados hoje?"
+2. Nunca responda a perguntas de cultura geral, receitas, piadas, programação de computadores ou bate-papo informal.
+3. Seja extremamente conciso, pragmático e direto ao ponto. Evite saudações longas ou explicações prolixas para economizar tokens de saída.`;
+
         const model = genAI.getGenerativeModel({
           model: modelName,
           generationConfig: {
             temperature: 0.3, // Menor criatividade = mais precisão e segurança financeira
             maxOutputTokens: 1024, // Limite reduzido para economizar tokens
           },
-          systemInstruction: `Você é o BrisinhAI, o CFO e Consultor de Negócios/RH virtual da Mar Brasil.
-Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos, custos, colaboradores, recursos humanos (RH), folha de pagamento e headcount fornecidos no contexto.
-REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
-1. Se a pergunta do usuário não for sobre finanças, contabilidade, gestão de negócios, custos, colaboradores/RH ou sobre os dados do painel fornecidos, você DEVE recusar responder de forma educada e extremamente curta usando exatamente o seguinte padrão:
-   "Desculpe, como CFO/RH Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras, de negócios e gestão de pessoas (RH) relacionadas ao dashboard. Como posso ajudar com os seus dados hoje?"
-2. Nunca responda a perguntas de cultura geral, receitas, piadas, programação de computadores ou bate-papo informal.
-3. Seja extremamente conciso, pragmático e direto ao ponto. Evite saudações longas ou explicações prolixas para economizar tokens de saída.`,
+          ...(isLegacy ? {} : { systemInstruction: systemInstructionText })
         });
 
         const result = await model.generateContent(prompt);
