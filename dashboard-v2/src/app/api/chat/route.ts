@@ -16,6 +16,8 @@ const MODEL_CASCADE = [
   'gemini-1.5-pro-002',
   'gemini-1.5-flash-001',
   'gemini-1.5-pro-001',
+  'gemini-1.0-pro',
+  'gemini-1.0-pro-latest',
   'gemini-pro'
 ];
 
@@ -85,7 +87,7 @@ export async function POST(req: Request) {
     for (const modelName of MODEL_CASCADE) {
       try {
         console.log(`[BrisinhAI] Tentando modelo: ${modelName}`);
-        const isLegacy = modelName === 'gemini-pro';
+        const isLegacy = modelName === 'gemini-pro' || modelName.startsWith('gemini-1.0-pro');
         const systemInstructionText = `Você é o BrisinhAI, o CFO e Consultor de Negócios/RH virtual da Mar Brasil.
 Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos, custos, colaboradores, recursos humanos (RH), folha de pagamento e headcount fornecidos no contexto.
 REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:

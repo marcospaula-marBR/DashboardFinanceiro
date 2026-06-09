@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.05";
-export const VERSION_DATE = "2026-06-08";
+export const APP_VERSION = "v.02.46.06";
+export const VERSION_DATE = "2026-06-09";
 export const VERSION_CHANGELOG = [
+  "v.02.46.06 - Fix: Adiciona gemini-1.0-pro e forca cache invalidation para resolver 404 da API do Gemini.",
   "v.02.46.05 - Feat: Criação do Importador Inteligente (Data Lake Dianna) na aba Custo Histórico, permitindo buscar registros diretamente da planilha bruta e importar em lote de forma visual e seletiva.",
   "v.02.46.04 - Feat: Novo visual para os alertas de auditoria (transformados em Cards KPI) com navegação fluída, e melhoria na regra de alertas de admissão vs custo de folha (não gera alerta no mês da admissão).",
   "v.02.46.03 - Feat: Separação do Valor Base e Bônus na listagem e também dentro do detalhamento de Custo de Folha, com a remoção da coluna Aditivos.",
