@@ -146,6 +146,15 @@ export function DreSidebar({
     });
   };
 
+  const toggleAll = (key: keyof DreFilters, availableItems: string[]) => {
+    if (availableItems.length === 0) return;
+    const isAllSelected = (filters[key] || []).length === availableItems.length;
+    onFilterChange({
+      ...filters,
+      [key]: isAllSelected ? [] : [...availableItems]
+    });
+  };
+
   const hasActiveFilters = 
     filters.empresas.length > 0 || 
     filters.periodos.length > 0 || 
@@ -170,10 +179,11 @@ export function DreSidebar({
         {onToggleSidebar && (
           <button 
             onClick={onToggleSidebar}
-            className="p-1.5 rounded-xl border border-slate-850 bg-slate-950/40 hover:bg-slate-850 hover:border-slate-700 text-slate-450 hover:text-white transition-all duration-200 active:scale-95 flex items-center justify-center shadow-sm"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-850 hover:border-slate-700 text-slate-300 hover:text-white transition-all duration-200 active:scale-95 shadow-sm"
             title="Recolher Filtros"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={14} />
+            <span className="text-xs font-bold">Recolher</span>
           </button>
         )}
       </div>
@@ -251,30 +261,40 @@ export function DreSidebar({
           <div className="space-y-4">
             {/* 1. EMPRESAS */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
                 <span className="flex items-center gap-1.5">
                   <Building2 size={13} className="text-slate-400" />
                   Empresa ({availableEmpresas.length})
                 </span>
-                {filters.empresas.length > 0 && (
-                  <button 
-                    onClick={() => clearGroup('empresas')}
-                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
-                  >
-                    Limpar
-                  </button>
-                )}
+                <div className="flex gap-2 items-center">
+                  {availableEmpresas.length > 0 && (
+                    <button 
+                      onClick={() => toggleAll('empresas', availableEmpresas)}
+                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
+                    >
+                      {filters.empresas.length === availableEmpresas.length ? 'Nenhum' : 'Todos'}
+                    </button>
+                  )}
+                  {filters.empresas.length > 0 && (
+                    <button 
+                      onClick={() => clearGroup('empresas')}
+                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
               </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
                 {availableEmpresas.map(emp => {
                   const isSelected = filters.empresas.includes(emp);
                   return (
-                    <label key={emp} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                    <label key={emp} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
                       <input 
                         type="checkbox" 
                         checked={isSelected}
                         onChange={() => toggleFilter('empresas', emp)}
-                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                       />
                       <span className="truncate">{emp}</span>
                     </label>
@@ -285,30 +305,40 @@ export function DreSidebar({
 
             {/* 2. PERÍODOS */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
                 <span className="flex items-center gap-1.5">
                   <Calendar size={13} className="text-slate-400" />
                   Período ({availablePeriodos.length})
                 </span>
-                {filters.periodos.length > 0 && (
-                  <button 
-                    onClick={() => clearGroup('periodos')}
-                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
-                  >
-                    Limpar
-                  </button>
-                )}
+                <div className="flex gap-2 items-center">
+                  {availablePeriodos.length > 0 && (
+                    <button 
+                      onClick={() => toggleAll('periodos', availablePeriodos)}
+                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
+                    >
+                      {filters.periodos.length === availablePeriodos.length ? 'Nenhum' : 'Todos'}
+                    </button>
+                  )}
+                  {filters.periodos.length > 0 && (
+                    <button 
+                      onClick={() => clearGroup('periodos')}
+                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
               </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
                 {availablePeriodos.map(per => {
                   const isSelected = filters.periodos.includes(per);
                   return (
-                    <label key={per} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                    <label key={per} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
                       <input 
                         type="checkbox" 
                         checked={isSelected}
                         onChange={() => toggleFilter('periodos', per)}
-                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                       />
                       <span>{per}</span>
                     </label>
@@ -319,35 +349,45 @@ export function DreSidebar({
 
             {/* 3. DEPARTAMENTO */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
                 <span className="flex items-center gap-1.5">
                   <FolderTree size={13} className="text-slate-400" />
                   Departamento ({availableDepartamentos.length})
                 </span>
-                {filters.departamentos.length > 0 && (
-                  <button 
-                    onClick={() => clearGroup('departamentos')}
-                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
-                  >
-                    Limpar
-                  </button>
-                )}
+                <div className="flex gap-2 items-center">
+                  {availableDepartamentos.length > 0 && (
+                    <button 
+                      onClick={() => toggleAll('departamentos', availableDepartamentos)}
+                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
+                    >
+                      {filters.departamentos.length === availableDepartamentos.length ? 'Nenhum' : 'Todos'}
+                    </button>
+                  )}
+                  {filters.departamentos.length > 0 && (
+                    <button 
+                      onClick={() => clearGroup('departamentos')}
+                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
               </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
                 {availableDepartamentos.length === 0 ? (
-                  <p className="text-[10px] text-slate-500 p-1">Nenhum disponível</p>
+                  <p className="text-xs text-slate-500 p-1">Nenhum disponível</p>
                 ) : (
                   availableDepartamentos.map(dept => {
                     const isSelected = filters.departamentos.includes(dept);
                     return (
-                      <label key={dept} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                      <label key={dept} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
                         <input 
                           type="checkbox" 
                           checked={isSelected}
                           onChange={() => toggleFilter('departamentos', dept)}
-                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                         />
-                        <span className="truncate">{dept}</span>
+                        <span className="truncate" title={dept}>{dept}</span>
                       </label>
                     );
                   })
@@ -357,35 +397,45 @@ export function DreSidebar({
 
             {/* 4. CONTA DRE */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
                 <span className="flex items-center gap-1.5">
                   <Landmark size={13} className="text-slate-400" />
                   Conta DRE ({availableContasDre.length})
                 </span>
-                {filters.contasDre.length > 0 && (
-                  <button 
-                    onClick={() => clearGroup('contasDre')}
-                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
-                  >
-                    Limpar
-                  </button>
-                )}
+                <div className="flex gap-2 items-center">
+                  {availableContasDre.length > 0 && (
+                    <button 
+                      onClick={() => toggleAll('contasDre', availableContasDre)}
+                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
+                    >
+                      {filters.contasDre.length === availableContasDre.length ? 'Nenhum' : 'Todos'}
+                    </button>
+                  )}
+                  {filters.contasDre.length > 0 && (
+                    <button 
+                      onClick={() => clearGroup('contasDre')}
+                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
               </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
                 {availableContasDre.length === 0 ? (
-                  <p className="text-[10px] text-slate-500 p-1">Nenhuma disponível</p>
+                  <p className="text-xs text-slate-500 p-1">Nenhuma disponível</p>
                 ) : (
                   availableContasDre.map(conta => {
                     const isSelected = filters.contasDre.includes(conta);
                     return (
-                      <label key={conta} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                      <label key={conta} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
                         <input 
                           type="checkbox" 
                           checked={isSelected}
                           onChange={() => toggleFilter('contasDre', conta)}
-                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                         />
-                        <span className="truncate">{conta}</span>
+                        <span className="truncate" title={conta}>{conta}</span>
                       </label>
                     );
                   })
@@ -395,35 +445,45 @@ export function DreSidebar({
 
             {/* 5. PROJETO */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
                 <span className="flex items-center gap-1.5">
                   <Target size={13} className="text-slate-400" />
                   Projeto ({availableProjetos.length})
                 </span>
-                {filters.projetos.length > 0 && (
-                  <button 
-                    onClick={() => clearGroup('projetos')}
-                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
-                  >
-                    Limpar
-                  </button>
-                )}
+                <div className="flex gap-2 items-center">
+                  {availableProjetos.length > 0 && (
+                    <button 
+                      onClick={() => toggleAll('projetos', availableProjetos)}
+                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
+                    >
+                      {filters.projetos.length === availableProjetos.length ? 'Nenhum' : 'Todos'}
+                    </button>
+                  )}
+                  {filters.projetos.length > 0 && (
+                    <button 
+                      onClick={() => clearGroup('projetos')}
+                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
               </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
                 {availableProjetos.length === 0 ? (
-                  <p className="text-[10px] text-slate-500 p-1">Nenhum disponível</p>
+                  <p className="text-xs text-slate-500 p-1">Nenhum disponível</p>
                 ) : (
                   availableProjetos.map(proj => {
                     const isSelected = filters.projetos.includes(proj);
                     return (
-                      <label key={proj} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                      <label key={proj} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
                         <input 
                           type="checkbox" 
                           checked={isSelected}
                           onChange={() => toggleFilter('projetos', proj)}
-                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                         />
-                        <span className="truncate">{proj}</span>
+                        <span className="truncate" title={proj}>{proj}</span>
                       </label>
                     );
                   })
@@ -433,35 +493,45 @@ export function DreSidebar({
 
             {/* 6. CATEGORIA */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between mb-2 select-none">
+              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
                 <span className="flex items-center gap-1.5">
                   <Tags size={13} className="text-slate-400" />
                   Categoria ({availableCategorias.length})
                 </span>
-                {filters.categorias.length > 0 && (
-                  <button 
-                    onClick={() => clearGroup('categorias')}
-                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors"
-                  >
-                    Limpar
-                  </button>
-                )}
+                <div className="flex gap-2 items-center">
+                  {availableCategorias.length > 0 && (
+                    <button 
+                      onClick={() => toggleAll('categorias', availableCategorias)}
+                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
+                    >
+                      {filters.categorias.length === availableCategorias.length ? 'Nenhum' : 'Todos'}
+                    </button>
+                  )}
+                  {filters.categorias.length > 0 && (
+                    <button 
+                      onClick={() => clearGroup('categorias')}
+                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
               </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-28 overflow-y-auto space-y-1">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
                 {availableCategorias.length === 0 ? (
-                  <p className="text-[10px] text-slate-500 p-1">Nenhuma disponível</p>
+                  <p className="text-xs text-slate-500 p-1">Nenhuma disponível</p>
                 ) : (
                   availableCategorias.map(cat => {
                     const isSelected = filters.categorias.includes(cat);
                     return (
-                      <label key={cat} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-800/40 text-xs font-medium cursor-pointer text-slate-300 transition-colors">
+                      <label key={cat} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
                         <input 
                           type="checkbox" 
                           checked={isSelected}
                           onChange={() => toggleFilter('categorias', cat)}
-                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                         />
-                        <span className="truncate">{cat}</span>
+                        <span className="truncate" title={cat}>{cat}</span>
                       </label>
                     );
                   })

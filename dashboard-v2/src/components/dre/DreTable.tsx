@@ -33,30 +33,30 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
       <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-        <h3 className="font-bold text-slate-800">Detalhamento Financeiro</h3>
+        <h3 className="font-bold text-slate-800 text-lg">Detalhamento Financeiro</h3>
       </div>
       
       <div className="overflow-auto max-h-[68vh] relative">
-        <table className="w-full text-sm text-left whitespace-nowrap border-separate border-spacing-0">
-          <thead className="bg-slate-100 text-slate-600 font-semibold text-xs uppercase tracking-wider sticky top-0 z-30">
+        <table className="w-full text-[15px] text-left whitespace-nowrap border-separate border-spacing-0">
+          <thead className="bg-slate-105 text-slate-700 font-bold text-sm tracking-wide sticky top-0 z-30">
             <tr>
-              <th className="px-4 py-3 sticky top-0 left-0 bg-slate-100 z-30 border-r border-b border-slate-200 min-w-[220px] w-[220px] max-w-[220px]">
+              <th className="px-4 py-3.5 sticky top-0 left-0 bg-slate-100 z-30 border-r border-b border-slate-200 min-w-[260px] w-[260px] max-w-[260px]">
                 Descrição
               </th>
-              <th className="px-4 py-3 text-right sticky top-0 left-[220px] bg-slate-200 font-bold border-r border-b border-slate-300 z-30 min-w-[120px] w-[120px]">
+              <th className="px-4 py-3.5 text-right sticky top-0 left-[260px] bg-slate-200 font-extrabold border-r border-b border-slate-300 z-30 min-w-[130px] w-[130px]">
                 Total
               </th>
-              <th className="px-4 py-3 text-right sticky top-0 left-[340px] bg-slate-100 font-bold border-r border-b border-slate-200 z-30 min-w-[100px] w-[100px]">
+              <th className="px-4 py-3.5 text-right sticky top-0 left-[390px] bg-slate-100 font-extrabold border-r border-b border-slate-200 z-30 min-w-[110px] w-[110px]">
                 Média
               </th>
               {reversedColumns.map(col => (
-                <th key={col} className="px-4 py-3 text-right sticky top-0 bg-slate-100 border-b border-slate-200 z-20">
+                <th key={col} className="px-4 py-3.5 text-right sticky top-0 bg-slate-100 border-b border-slate-200 z-20">
                   {col}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 text-slate-800">
             {estrutura.map((item, idx) => {
               if (item.tipo === 'hidden') return null;
               
@@ -80,19 +80,19 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
                   key={idx} 
                   onClick={() => onRowClick && onRowClick(item.titulo)}
                   className={`transition-colors group ${onRowClick ? 'cursor-pointer' : ''} ${
-                    isCard ? 'bg-slate-50 font-bold text-slate-800' : 'text-slate-600 hover:bg-slate-50'
+                    isCard ? 'bg-slate-50/80 font-bold text-slate-900 text-[15px]' : 'text-slate-700 font-medium hover:bg-slate-50'
                   }`}
                 >
-                  <td className={`px-4 py-2.5 sticky left-0 border-r border-b border-slate-200 min-w-[220px] w-[220px] max-w-[220px] transition-colors group-hover:bg-slate-100 ${
+                  <td className={`px-4 py-3 sticky left-0 border-r border-b border-slate-200 min-w-[260px] w-[260px] max-w-[260px] transition-colors group-hover:bg-slate-100 ${
                     isCard ? 'bg-slate-50 z-10' : 'bg-white z-10'
                   }`}>
                     <div className="flex items-center justify-between w-full">
-                      <span className="truncate">{item.titulo}</span>
+                      <span className="truncate text-[14.5px]">{item.titulo}</span>
                       {!isPercent && totalVal !== 0 && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ml-2 shrink-0 ${
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ml-2 shrink-0 ${
                           isCard 
                             ? 'text-amber-700 bg-amber-100/80 border border-amber-250/20' 
-                            : 'text-slate-500 bg-slate-100 group-hover:bg-slate-200/50'
+                            : 'text-slate-600 bg-slate-100 group-hover:bg-slate-200/50'
                         }`}>
                           {pct.toFixed(1).replace('.', ',')}%
                         </span>
@@ -100,13 +100,13 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
                     </div>
                   </td>
                   
-                  <td className={`px-4 py-2.5 text-right font-mono font-bold text-[13px] sticky left-[220px] border-r border-b border-slate-300 transition-colors group-hover:bg-slate-100 ${
+                  <td className={`px-4 py-3 text-right font-mono font-bold text-[14px] sticky left-[260px] border-r border-b border-slate-300 transition-colors group-hover:bg-slate-100 ${
                     isCard ? 'bg-slate-100 z-10' : 'bg-slate-50 z-10'
                   }`}>
                     {displayValue(totalVal, isPercent)}
                   </td>
 
-                  <td className={`px-4 py-2.5 text-right font-mono text-[13px] sticky left-[340px] border-r border-b border-slate-200 transition-colors group-hover:bg-slate-100 ${
+                  <td className={`px-4 py-3 text-right font-mono text-[14px] sticky left-[390px] border-r border-b border-slate-200 transition-colors group-hover:bg-slate-100 ${
                     isCard ? 'bg-slate-50 font-bold z-10' : 'bg-white z-10'
                   }`}>
                     {displayValue(avgVal, isPercent)}
@@ -115,7 +115,7 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
                   {reversedColumns.map(col => {
                     const monthVal = mensal[item.titulo]?.[col] || 0;
                     return (
-                      <td key={col} className="px-4 py-2.5 text-right font-mono text-[13px] border-b border-slate-100 transition-colors group-hover:bg-slate-50">
+                      <td key={col} className="px-4 py-3 text-right font-mono text-[14px] border-b border-slate-100 transition-colors group-hover:bg-slate-50">
                         {displayValue(monthVal, isPercent)}
                       </td>
                     );
