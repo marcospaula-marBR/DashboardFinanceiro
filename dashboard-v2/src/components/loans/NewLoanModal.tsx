@@ -227,14 +227,15 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Vencimento da 1ª Parcela (Opcional)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Vencimento da 1ª Parcela <span className="text-red-500">*</span></label>
                 <input
                   type="date"
+                  required
                   value={formData.first_payment_date}
                   onChange={e => setFormData({...formData, first_payment_date: e.target.value})}
                   className="w-full border-slate-300 rounded-lg shadow-sm focus:border-primary focus:ring-primary px-3 py-2 text-sm bg-slate-50 border"
-                  placeholder="Se vazio, assume o dia 10 do ciclo"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">Data real do primeiro débito em folha</p>
               </div>
 
               <div>

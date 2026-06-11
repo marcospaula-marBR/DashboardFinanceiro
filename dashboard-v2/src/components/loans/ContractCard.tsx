@@ -157,7 +157,12 @@ export function ContractCard({
             </div>
             <div>
               <p className="text-xs font-black text-slate-900">OP. #{contract.id}</p>
-              <p className="text-[10px] text-slate-400 font-semibold">Início: {contract.startDate}</p>
+              <p className="text-[10px] text-slate-400 font-semibold">Início do ciclo: {contract.startDate}</p>
+              {contract.firstPaymentDate && (
+                <p className="text-[10px] text-emerald-600 font-bold mt-0.5">
+                  Início do débito: {formatDate(contract.firstPaymentDate)}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
