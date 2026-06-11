@@ -126,6 +126,7 @@ export interface Contract {
   description?: string;
   contractUrl?: string; // NOVO: URL do anexo do contrato
   created_at?: string;
+  firstPaymentDate?: string; // NOVO: Data do primeiro vencimento
 }
 
 export interface LoanStats {

@@ -22,6 +22,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
     installments: '',
     start_cycle: new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0'),
     request_date: new Date().toISOString().split('T')[0],
+    first_payment_date: '',
     notes: ''
   });
   
@@ -38,6 +39,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
         amount: '', 
         installments: '', 
         request_date: new Date().toISOString().split('T')[0],
+        first_payment_date: '',
         notes: '' 
       }));
     }
@@ -109,6 +111,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
         installments: parseInt(formData.installments),
         start_cycle: formData.start_cycle,
         request_date: formData.request_date ? formData.request_date + 'T12:00:00.000Z' : new Date().toISOString(),
+        first_payment_date: formData.first_payment_date || undefined,
         notes: formData.notes
       }, isTestMode);
       
@@ -221,6 +224,17 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
                     className="w-full border-slate-300 rounded-lg shadow-sm focus:border-primary focus:ring-primary px-3 py-2 text-sm bg-slate-50 border"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Vencimento da 1ª Parcela (Opcional)</label>
+                <input
+                  type="date"
+                  value={formData.first_payment_date}
+                  onChange={e => setFormData({...formData, first_payment_date: e.target.value})}
+                  className="w-full border-slate-300 rounded-lg shadow-sm focus:border-primary focus:ring-primary px-3 py-2 text-sm bg-slate-50 border"
+                  placeholder="Se vazio, assume o dia 10 do ciclo"
+                />
               </div>
 
               <div>

@@ -20,19 +20,74 @@ export interface PaymentBatchRequest {
   postponed_date?: string;
 }
 
+function addMonths(dateStr: string, months: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1 + months, day, 12, 0, 0);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export class PaymentsService {
   /**
-   * Gera automaticamente as parcelas para um contrato
+   * Gera automaticamente as parcelas para um contrato via TypeScript cliente
    */
   static async generateInstallments(contractId: string, isTestMode?: boolean): Promise<void> {
-    const rpcName = isTestMode ? 'generate_installments_test' : 'generate_installments';
-    const { error } = await supabase.rpc(rpcName, {
-      p_contract_id: contractId
-    });
-
-    if (error) {
-      console.warn('Erro ao gerar parcelas via RPC:', error);
-      // Fallback ou apenas log
+    const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
+    const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
+    
+    // Busca os dados do contrato
+    const { data: contract, error: fetchErr } = await supabase
+      .from(table)
+      .select('id, employee_id, amount, installments, start_cycle, first_payment_date')
+      .eq('id', contractId)
+      .single();
+      
+    if (fetchErr || !contract) {
+      console.error('Erro ao buscar contrato para gerar parcelas:', fetchErr);
+      throw new Error(`Falha ao buscar contrato: ${fetchErr?.message}`);
+    }
+    
+    const amount = parseFloat(String(contract.amount)) || 0;
+    const installments = parseInt(String(contract.installments)) || 0;
+    if (amount <= 0 || installments <= 0) return;
+    
+    const installmentValue = amount / installments;
+    
+    // Determina a data do primeiro pagamento
+    let firstPaymentDateStr: string;
+    if (contract.first_payment_date) {
+      firstPaymentDateStr = contract.first_payment_date;
+    } else {
+      // Fallback: ciclo + 1 mes, no dia 10
+      const [y, m] = contract.start_cycle.split('-').map(Number);
+      const firstPaymentDate = new Date(y, m, 10); // m ja vira mes seguinte porque o construtor Date e 0-indexed
+      firstPaymentDateStr = firstPaymentDate.toISOString().split('T')[0];
+    }
+    
+    const paymentsToInsert = [];
+    for (let i = 0; i < installments; i++) {
+      const due = addMonths(firstPaymentDateStr, i);
+      const cycle = due.substring(0, 7); // YYYY-MM
+      
+      paymentsToInsert.push({
+        contract_id: contractId,
+        employee_id: contract.employee_id,
+        month_cycle: cycle,
+        due_date: due,
+        amount: installmentValue,
+        status: 'PENDENTE'
+      });
+    }
+    
+    const { error: insertErr } = await supabase
+      .from(paymentsTable)
+      .insert(paymentsToInsert);
+      
+    if (insertErr) {
+      console.error('Erro ao inserir parcelas via TS:', insertErr);
+      throw new Error(`Falha ao gerar parcelas no banco: ${insertErr.message}`);
     }
   }
 
@@ -89,13 +144,14 @@ export class PaymentsService {
     paymentId: string, 
     status: 'PAGO' | 'POSTERGADO',
     isTestMode?: boolean,
-    postponedDate?: string
+    postponedDate?: string,
+    paidDate?: string
   ): Promise<void> {
     const table = isTestMode ? 'loan_payments_test' : 'loan_payments';
     const updates: Partial<LoanPayment> = { status };
     
     if (status === 'PAGO') {
-      updates.paid_date = new Date().toISOString().split('T')[0];
+      updates.paid_date = paidDate || new Date().toISOString().split('T')[0];
     } else if (status === 'POSTERGADO' && postponedDate) {
       updates.postponed_to = postponedDate;
     }

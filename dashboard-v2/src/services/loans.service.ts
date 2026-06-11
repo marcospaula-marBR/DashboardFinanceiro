@@ -29,6 +29,16 @@ interface RawLoan {
   paid_installments?: number;
   postponed_months?: number;
   contract_url?: string;
+  first_payment_date?: string; // NOVO: Vencimento da 1ª parcela
+}
+
+function addMonths(dateStr: string, months: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1 + months, day, 12, 0, 0);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function overrideLoans<T extends { id?: string; start_cycle?: string }>(loans: T[]): T[] {
@@ -74,81 +84,106 @@ function getElapsedMonths(ln: RawLoan): number {
   return Math.max(0, Math.min(elapsed, inst));
 }
 
-function calcDebtForLoan(ln: RawLoan): number {
+function calcDebtForLoan(ln: RawLoan, contractPayments?: { status: string, amount: number }[]): number {
   const amount = parseFloat(String(ln.amount)) || 0;
   const inst = parseInt(String(ln.installments)) || 0;
   if (!amount || !inst) return 0;
+  const extraPaid = parseFloat(String(ln.amount_paid_extra)) || 0;
 
-  // REVERSÃO: Voltando ao cálculo AUTOMÁTICO por tempo decorrido
+  if (contractPayments && contractPayments.length > 0) {
+    const paidAmount = contractPayments
+      .filter(p => p.status === 'PAGO')
+      .reduce((sum, p) => sum + p.amount, 0);
+    return Math.max(0, amount - paidAmount - extraPaid);
+  }
+
+  // Fallback para calculo automatico por tempo decorrido
   const elapsed = getElapsedMonths(ln);
   const standardPaid = elapsed * (amount / inst);
-  const extraPaid = parseFloat(String(ln.amount_paid_extra)) || 0;
-  
   return Math.max(0, amount - (standardPaid + extraPaid));
 }
 
-function calcReceivedForLoan(ln: RawLoan): number {
+function calcReceivedForLoan(ln: RawLoan, contractPayments?: { status: string, amount: number }[]): number {
   const amount = parseFloat(String(ln.amount)) || 0;
   const inst = parseInt(String(ln.installments)) || 0;
   if (!amount || !inst) return 0;
+  const extraPaid = parseFloat(String(ln.amount_paid_extra)) || 0;
+
+  if (contractPayments && contractPayments.length > 0) {
+    const paidAmount = contractPayments
+      .filter(p => p.status === 'PAGO')
+      .reduce((sum, p) => sum + p.amount, 0);
+    return paidAmount + extraPaid;
+  }
 
   const elapsed = getElapsedMonths(ln);
   const standardPaid = elapsed * (amount / inst);
-  const extraPaid = parseFloat(String(ln.amount_paid_extra)) || 0;
-  
   return standardPaid + extraPaid;
 }
 
-export function calcInstallmentForMonth(ln: RawLoan, monthStr: string): number {
+export function calcInstallmentForMonth(ln: RawLoan, monthStr: string, contractPayments?: { status: string, amount: number, due_date: string }[]): number {
+  if (contractPayments && contractPayments.length > 0) {
+    const targetMonthPayments = contractPayments.filter(p => p.due_date.substring(0, 7) === monthStr);
+    const pendingAmount = targetMonthPayments
+      .filter(p => p.status === 'PENDENTE')
+      .reduce((sum, p) => sum + p.amount, 0);
+    return pendingAmount;
+  }
+
   const [ty, tm] = monthStr.split('-').map(Number);
   const targetAbs = ty * 12 + tm;
   const amount = parseFloat(String(ln.amount)) || 0;
   const inst = parseInt(String(ln.installments)) || 0;
   if (!amount || !inst || !ln.start_cycle) return 0;
 
-  // Se já liquidou (antecipou tudo), o recebível daqui pra frente é zero
   if (calcDebtForLoan(ln) <= 0) return 0;
 
   const [sy, sm] = ln.start_cycle.split('-').map(Number);
   const startAbs = sy * 12 + sm;
-  const startPaymentAbs = startAbs + 1; // Pagamento inicia 1 mês após o ciclo base
+  const startPaymentAbs = startAbs + 1;
   const postponed = parseInt(String(ln.postponed_months)) || 0;
 
-  // O contrato se estende pelos meses postergados
   const endAbs = startPaymentAbs + inst - 1 + postponed;
 
-  // Fora do intervalo do contrato: sem valor
   if (targetAbs < startPaymentAbs || targetAbs > endAbs) return 0;
 
-  // O "buraco" de cobrança está logo após o último mês pago:
-  //   posições (elapsed+1) até (elapsed+postponed) contando a partir do início do contrato.
-  // Isso exclui corretamente o mês postergado (ex: Março/26 postergado → pos elapsed+1 = 0).
   if (postponed > 0) {
-    const elapsed = getElapsedMonths(ln);        // meses efetivamente pagos (já desconta postponed)
-    const posFromStart = targetAbs - startPaymentAbs + 1; // posição 1-indexada do mês alvo no contrato
+    const elapsed = getElapsedMonths(ln);
+    const posFromStart = targetAbs - startPaymentAbs + 1;
     if (posFromStart >= elapsed + 1 && posFromStart <= elapsed + postponed) return 0;
   }
 
   return amount / inst;
 }
 
-function loanStatus(ln: RawLoan): 'ATIVO' | 'LIQUIDADO' | 'ATRASADO' {
-  return calcDebtForLoan(ln) <= 0 ? 'LIQUIDADO' : 'ATIVO';
+function loanStatus(ln: RawLoan, contractPayments?: { status: string, amount: number }[]): 'ATIVO' | 'LIQUIDADO' | 'ATRASADO' {
+  return calcDebtForLoan(ln, contractPayments) <= 0 ? 'LIQUIDADO' : 'ATIVO';
 }
 
-function loanEndDate(ln: RawLoan): string {
+function loanEndDate(ln: RawLoan, contractPayments?: { due_date: string }[]): string {
+  if (contractPayments && contractPayments.length > 0) {
+    const sorted = [...contractPayments].sort((a, b) => a.due_date.localeCompare(b.due_date));
+    return sorted[sorted.length - 1]?.due_date || '-';
+  }
+
   if (!ln.start_cycle || !ln.installments) return '-';
   const postponed = parseInt(String(ln.postponed_months)) || 0;
   const [y, m] = ln.start_cycle.split('-').map(Number);
   
-  // +1 para shiftar a data de início para o mês seguinte, -1 do período, totalizando = y*12 + m
   const endAbs = y * 12 + m + ln.installments + postponed;
   const ey = Math.floor((endAbs - 1) / 12);
   const em = ((endAbs - 1) % 12) + 1;
   return `${ey}-${String(em).padStart(2, '0')}-10`;
 }
 
-function loanNextPayment(ln: RawLoan): string {
+function loanNextPayment(ln: RawLoan, contractPayments?: { due_date: string, status: string }[]): string {
+  if (contractPayments && contractPayments.length > 0) {
+    const nextPending = contractPayments
+      .filter(p => p.status === 'PENDENTE')
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+    return nextPending?.due_date || '-';
+  }
+
   if (!ln.start_cycle || !ln.installments) return '-';
   const status = loanStatus(ln);
   if (status === 'LIQUIDADO') return '-';
@@ -159,7 +194,6 @@ function loanNextPayment(ln: RawLoan): string {
   const elapsed = getElapsedMonths(ln);
   const postponed = parseInt(String(ln.postponed_months)) || 0;
   
-  // A próxima parcela devida é a Parcela Atual + 1 a partir da data do 1º pagamento (startAbs + 1)
   const nextAbs = startAbs + 1 + elapsed + postponed;
   
   const ny = Math.floor((nextAbs - 1) / 12);
@@ -173,7 +207,7 @@ async function fetchLoans(isTestMode: boolean): Promise<RawLoan[]> {
   const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
   const { data, error } = await supabase
     .from(table)
-    .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,notes,request_date,postponed_months,contract_url');
+    .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,notes,request_date,postponed_months,contract_url,first_payment_date');
 
   if (error) {
     // Caso a tabela teste ainda não exista, retorna vazio sem quebrar
@@ -221,7 +255,24 @@ export class LoansService {
     console.log(`[LoansService] Buscando colaboradores (Modo Teste: ${isTestMode})...`);
 
     const safeTestMode = Boolean(isTestMode);
-    const [emps, loans] = await Promise.all([fetchEmployees(safeTestMode), fetchLoans(safeTestMode)]);
+    const paymentsTable = safeTestMode ? 'loan_payments_test' : 'loan_payments';
+    const [emps, loans, paymentsRes] = await Promise.all([
+      fetchEmployees(safeTestMode),
+      fetchLoans(safeTestMode),
+      supabase.from(paymentsTable).select('contract_id, status, amount, due_date')
+    ]);
+
+    const payments = paymentsRes.data || [];
+    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string }[]>();
+    payments.forEach(p => {
+      const arr = paymentsByContract.get(p.contract_id) || [];
+      arr.push({
+        status: p.status,
+        amount: parseFloat(String(p.amount)) || 0,
+        due_date: p.due_date
+      });
+      paymentsByContract.set(p.contract_id, arr);
+    });
 
     const loansByEmp = new Map<string, RawLoan[]>();
     loans.forEach(ln => {
@@ -275,9 +326,9 @@ export class LoansService {
       if (!showAll && filteredEmpLoans.length === 0) return;
 
       const totalTaken = filteredEmpLoans.reduce((a, ln) => a + (parseFloat(String(ln.amount)) || 0), 0);
-      const balance = filteredEmpLoans.reduce((a, ln) => a + calcDebtForLoan(ln), 0);
-      const totalReceived = filteredEmpLoans.reduce((a, ln) => a + calcReceivedForLoan(ln), 0);
-      const monthInstallment = filteredEmpLoans.reduce((a, ln) => a + calcInstallmentForMonth(ln, billingMonthStr), 0);
+      const balance = filteredEmpLoans.reduce((a, ln) => a + calcDebtForLoan(ln, paymentsByContract.get(ln.id)), 0);
+      const totalReceived = filteredEmpLoans.reduce((a, ln) => a + calcReceivedForLoan(ln, paymentsByContract.get(ln.id)), 0);
+      const monthInstallment = filteredEmpLoans.reduce((a, ln) => a + calcInstallmentForMonth(ln, billingMonthStr, paymentsByContract.get(ln.id)), 0);
 
       // --- Lógica de Deduplicação de Aditivos ---
       const aditivoUrls = new Set<string>();
@@ -333,7 +384,24 @@ export class LoansService {
   /** Estatísticas gerais calculadas dos dados reais */
   static async getStats(isTestMode?: boolean, dateFilters?: { dateStart?: string, dateEnd?: string }): Promise<LoanStats> {
     const safeTestMode = Boolean(isTestMode);
-    const [emps, loans] = await Promise.all([fetchEmployees(safeTestMode), fetchLoans(safeTestMode)]);
+    const paymentsTable = safeTestMode ? 'loan_payments_test' : 'loan_payments';
+    const [emps, loans, paymentsRes] = await Promise.all([
+      fetchEmployees(safeTestMode),
+      fetchLoans(safeTestMode),
+      supabase.from(paymentsTable).select('contract_id, status, amount, due_date')
+    ]);
+
+    const payments = paymentsRes.data || [];
+    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string }[]>();
+    payments.forEach(p => {
+      const arr = paymentsByContract.get(p.contract_id) || [];
+      arr.push({
+        status: p.status,
+        amount: parseFloat(String(p.amount)) || 0,
+        due_date: p.due_date
+      });
+      paymentsByContract.set(p.contract_id, arr);
+    });
 
     const empMap = new Map(emps.map(e => [e.id, e]));
     const now = new Date();
@@ -364,13 +432,14 @@ export class LoansService {
       }
 
       const amount = parseFloat(String(ln.amount)) || 0;
-      const debt = calcDebtForLoan(ln);
-      const status = loanStatus(ln);
+      const contractPayments = paymentsByContract.get(ln.id);
+      const debt = calcDebtForLoan(ln, contractPayments);
+      const status = loanStatus(ln, contractPayments);
 
       totalEmprestado += amount;
       saldoDevedor += debt;
-      totalRecebido += calcReceivedForLoan(ln);
-      recebivelMes += calcInstallmentForMonth(ln, billingMonthStr);
+      totalRecebido += calcReceivedForLoan(ln, contractPayments);
+      recebivelMes += calcInstallmentForMonth(ln, billingMonthStr, contractPayments);
 
       if (status === 'ATIVO') {
         contratosAtivos++;
@@ -458,23 +527,43 @@ export class LoansService {
   /** Empréstimos de um colaborador específico */
   static async getEmployeeContracts(employeeId: string, isTestMode?: boolean): Promise<Contract[]> {
     const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
-    const { data, error } = await supabase
-      .from(table)
-      .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,notes,request_date,paid_installments,postponed_months,contract_url')
-      .eq('employee_id', employeeId)
-      .order('request_date', { ascending: false });
+    const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
+    
+    const [loansRes, paymentsRes] = await Promise.all([
+      supabase.from(table)
+        .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,notes,request_date,paid_installments,postponed_months,contract_url,first_payment_date')
+        .eq('employee_id', employeeId)
+        .order('request_date', { ascending: false }),
+      supabase.from(paymentsTable)
+        .select('contract_id, status, amount, due_date')
+        .eq('employee_id', employeeId)
+    ]);
 
-    if (error) {
-      console.error('[LoansService] Erro ao buscar empréstimos:', error);
+    if (loansRes.error) {
+      console.error('[LoansService] Erro ao buscar empréstimos:', loansRes.error);
       throw new Error('Falha ao carregar empréstimos');
     }
 
-    const loans = overrideLoans((data || []) as RawLoan[]);
+    const loans = overrideLoans((loansRes.data || []) as RawLoan[]);
+    const payments = paymentsRes.data || [];
+    
+    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string }[]>();
+    payments.forEach(p => {
+      const arr = paymentsByContract.get(p.contract_id) || [];
+      arr.push({
+        status: p.status,
+        amount: parseFloat(String(p.amount)) || 0,
+        due_date: p.due_date
+      });
+      paymentsByContract.set(p.contract_id, arr);
+    });
 
     return loans.map((ln, idx) => {
       const amount = parseFloat(String(ln.amount)) || 0;
       const installmentValue = ln.installments > 0 ? amount / ln.installments : 0;
-      const balance = calcDebtForLoan(ln);
+      const contractPayments = paymentsByContract.get(ln.id) || [];
+      const balance = calcDebtForLoan(ln, contractPayments);
+      const installmentsPaid = contractPayments.filter(p => p.status === 'PAGO').length;
 
       return {
         id: ln.id,
@@ -484,14 +573,15 @@ export class LoansService {
         balance,
         installments: ln.installments || 0,
         installmentValue,
-        installmentsPaid: installmentValue > 0 ? Math.round((amount - balance) / installmentValue) : 0,
-        nextPaymentDate: loanNextPayment(ln),
-        endDate: loanEndDate(ln),
-        status: loanStatus(ln),
+        installmentsPaid,
+        nextPaymentDate: loanNextPayment(ln, contractPayments),
+        endDate: loanEndDate(ln, contractPayments),
+        status: loanStatus(ln, contractPayments),
         startDate: ln.start_cycle ? `${ln.start_cycle}-01` : '-',
         requestDate: ln.request_date,
         description: ln.notes || '',
         contractUrl: ln.contract_url || '',
+        firstPaymentDate: ln.first_payment_date,
       };
     });
   }
@@ -500,15 +590,19 @@ export class LoansService {
   static async getEmployeeDetails(employeeId: string, isTestMode?: boolean): Promise<Employee | null> {
     const empsTable = isTestMode ? 'employees_test' : 'employees';
     const loansTable = isTestMode ? 'employee_loans_test' : 'employee_loans';
+    const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
     
-    const [empRes, loansRes] = await Promise.all([
+    const [empRes, loansRes, paymentsRes] = await Promise.all([
       supabase.from(empsTable)
         .select('id,full_name,company,employment_type,remuneration,status,start_date')
         .eq('id', employeeId)
         .single(),
       supabase.from(loansTable)
-        .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,paid_installments,postponed_months')
+        .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,paid_installments,postponed_months,first_payment_date')
         .eq('employee_id', employeeId),
+      supabase.from(paymentsTable)
+        .select('contract_id, status, amount, due_date')
+        .eq('employee_id', employeeId)
     ]);
 
     if (empRes.error || !empRes.data) {
@@ -518,13 +612,26 @@ export class LoansService {
 
     const emp = empRes.data as RawEmployee;
     const loans = overrideLoans((loansRes.data || []) as RawLoan[]);
+    const payments = paymentsRes.data || [];
+    
+    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string }[]>();
+    payments.forEach(p => {
+      const arr = paymentsByContract.get(p.contract_id) || [];
+      arr.push({
+        status: p.status,
+        amount: parseFloat(String(p.amount)) || 0,
+        due_date: p.due_date
+      });
+      paymentsByContract.set(p.contract_id, arr);
+    });
+
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     const totalTaken = loans.reduce((a, ln) => a + (parseFloat(String(ln.amount)) || 0), 0);
-    const balance = loans.reduce((a, ln) => a + calcDebtForLoan(ln), 0);
-    const totalReceived = loans.reduce((a, ln) => a + calcReceivedForLoan(ln), 0);
-    const monthInstallment = loans.reduce((a, ln) => a + calcInstallmentForMonth(ln, currentMonthStr), 0);
+    const balance = loans.reduce((a, ln) => a + calcDebtForLoan(ln, paymentsByContract.get(ln.id)), 0);
+    const totalReceived = loans.reduce((a, ln) => a + calcReceivedForLoan(ln, paymentsByContract.get(ln.id)), 0);
+    const monthInstallment = loans.reduce((a, ln) => a + calcInstallmentForMonth(ln, currentMonthStr, paymentsByContract.get(ln.id)), 0);
 
     return {
       id: emp.id,
@@ -540,7 +647,6 @@ export class LoansService {
       status: balance > 0 ? 'Ativo' : 'Quitado',
     };
   }
-
   // ─── Ações de Painel Lateral & Criação ───────────────────────────────────────
 
   static async createLoan(data: {
@@ -549,6 +655,7 @@ export class LoansService {
     installments: number;
     start_cycle: string;
     request_date?: string;
+    first_payment_date?: string;
     notes?: string;
   }, isTestMode?: boolean): Promise<{id: string, [key: string]: any}> {
     const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
@@ -560,6 +667,7 @@ export class LoansService {
       start_cycle: data.start_cycle,
       notes: data.notes || '',
       request_date: data.request_date || new Date().toISOString(),
+      first_payment_date: data.first_payment_date || null,
       paid_installments: 0,
       postponed_months: 0,
       amount_paid_extra: 0
@@ -591,24 +699,38 @@ export class LoansService {
 
   static async liquidateContract(contractId: string, isTestMode?: boolean): Promise<void> {
     const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
+    const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
     
-    // Buscar o contrato para saber o saldo devedor atual
+    // Buscar o contrato para saber as notas atuais
     const { data: loan, error: fetchErr } = await supabase
       .from(table)
-      .select('amount, installments, start_cycle, amount_paid_extra, postponed_months')
+      .select('notes')
       .eq('id', contractId)
       .single();
     if (fetchErr) throw new Error('Não foi possível buscar o contrato.');
 
-    const debt = calcDebtForLoan(loan as RawLoan);
-    if (debt <= 0) return; // Já liquidado
+    // 1. Atualizar todas as parcelas PENDENTES para PAGO no banco
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { error: payErr } = await supabase
+      .from(paymentsTable)
+      .update({
+        status: 'PAGO',
+        paid_date: todayStr
+      })
+      .eq('contract_id', contractId)
+      .eq('status', 'PENDENTE');
 
-    const currentExt = parseFloat(String(loan.amount_paid_extra)) || 0;
-    const { error: updErr } = await supabase.from(table).update({
-      amount_paid_extra: currentExt + debt
-    }).eq('id', contractId);
+    if (payErr) throw new Error(`Falha ao atualizar parcelas para liquidação: ${payErr.message}`);
 
-    if (updErr) throw new Error(`Falha ao liquidar contrato: ${updErr.message}`);
+    // 2. Adicionar uma nota informativa ao contrato
+    const currentNotes = loan.notes || '';
+    const newNote = `\n[LIQUIDADO TOTALMENTE em ${new Date().toLocaleDateString('pt-BR')}]`;
+    await supabase
+      .from(table)
+      .update({
+        notes: currentNotes + newNote
+      })
+      .eq('id', contractId);
   }
 
   static async postponeContract(contractId: string, isTestMode?: boolean): Promise<void> {
@@ -704,15 +826,39 @@ export class LoansService {
 
   static async getContractTimeline(contractId: string, isTestMode?: boolean) {
     const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
-    const { data: rawLoan, error } = await supabase.from(table).select('*').eq('id', contractId).single();
-    if (error || !rawLoan) throw new Error('Contrato não encontrado');
-    const loan = overrideLoan(rawLoan);
+    const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
+
+    const [{ data: rawLoan, error: loanErr }, { data: dbPayments, error: payErr }] = await Promise.all([
+      supabase.from(table).select('*').eq('id', contractId).single(),
+      supabase.from(paymentsTable).select('*').eq('contract_id', contractId).order('due_date', { ascending: true })
+    ]);
+
+    if (loanErr || !rawLoan) throw new Error('Contrato não encontrado');
     
+    if (dbPayments && dbPayments.length > 0) {
+      let physicalIndex = 1;
+      const timeline = dbPayments.map(p => {
+        let label = '-';
+        if (p.due_date) {
+          const [y, m, d] = p.due_date.split('-');
+          label = `${d}/${m}/${y}`;
+        }
+        return {
+          id: p.id,
+          index: p.status === 'POSTERGADO' ? 0 : physicalIndex++,
+          label,
+          status: p.status,
+          amount: parseFloat(String(p.amount)) || 0
+        };
+      });
+      return timeline;
+    }
+
+    // Fallback legada se nao existirem parcelas no banco
+    const loan = overrideLoan(rawLoan);
     const amount = parseFloat(String(loan.amount)) || 0;
     const inst = parseInt(String(loan.installments)) || 1;
     const installmentValue = amount / inst;
-    
-    // Matemática de elapsed vs extra. Precisamos mockar RawLoan pra type safe
     const elapsed = getElapsedMonths(loan as unknown as RawLoan); 
     const extraPaid = parseFloat(String(loan.amount_paid_extra)) || 0;
     const anticipatedCount = Math.floor(extraPaid / installmentValue);
@@ -747,11 +893,72 @@ export class LoansService {
         statusStr = 'A PAGAR';
         timeline.push({ index: physicalIndex++, label, status: statusStr, amount: installmentValue });
       }
-      
       currentAbs++;
     }
-    
     return timeline;
+  }
+
+  static async updateContractDates(
+    contractId: string,
+    requestDate: string,
+    firstPaymentDate: string,
+    isTestMode?: boolean
+  ): Promise<void> {
+    const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
+    const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
+    
+    // 1. Atualiza o contrato
+    const { error: updErr } = await supabase
+      .from(table)
+      .update({
+        request_date: requestDate,
+        first_payment_date: firstPaymentDate
+      })
+      .eq('id', contractId);
+      
+    if (updErr) {
+      console.error('Erro ao atualizar datas do contrato:', updErr);
+      throw new Error(`Falha ao atualizar datas do contrato: ${updErr.message}`);
+    }
+    
+    // 2. Busca parcelas para atualizar os vencimentos se nenhuma estiver paga
+    const { data: payments, error: fetchErr } = await supabase
+      .from(paymentsTable)
+      .select('id, status')
+      .eq('contract_id', contractId)
+      .order('due_date', { ascending: true });
+      
+    if (fetchErr) {
+      console.error('Erro ao carregar parcelas para recalculo:', fetchErr);
+      throw new Error(`Falha ao carregar parcelas para recalculo: ${fetchErr.message}`);
+    }
+    
+    if (!payments || payments.length === 0) return;
+    
+    const hasPaid = payments.some(p => p.status === 'PAGO');
+    if (hasPaid) {
+      throw new Error('Nao e permitido alterar as datas apos o pagamento de parcelas.');
+    }
+    
+    // Atualiza o vencimento de cada parcela em lote
+    for (let i = 0; i < payments.length; i++) {
+      const p = payments[i];
+      const due = addMonths(firstPaymentDate, i);
+      const cycle = due.substring(0, 7);
+      
+      const { error: payUpdErr } = await supabase
+        .from(paymentsTable)
+        .update({
+          due_date: due,
+          month_cycle: cycle
+        })
+        .eq('id', p.id);
+        
+      if (payUpdErr) {
+        console.error(`Erro ao atualizar parcela ${i}:`, payUpdErr);
+        throw new Error(`Falha ao atualizar parcela ${i}: ${payUpdErr.message}`);
+      }
+    }
   }
 }
 

@@ -33,7 +33,9 @@ export function SideDrawer({ isOpen, onClose, employeeId, onDataChanged, onAddNe
   }, [isOpen, employeeId, isTestMode]);
 
   const fetchEmployeeData = async (id: string) => {
-    setIsLoading(true);
+    if (!employee) {
+      setIsLoading(true);
+    }
     setError(null);
     
     try {
@@ -69,7 +71,6 @@ export function SideDrawer({ isOpen, onClose, employeeId, onDataChanged, onAddNe
 
   const handleAction = async (actionName: string, actionFn: Promise<void>) => {
     if (!employeeId) return;
-    setIsLoading(true);
     try {
       await actionFn;
       await fetchEmployeeData(employeeId); // Refresh interior do Drawer
@@ -79,7 +80,6 @@ export function SideDrawer({ isOpen, onClose, employeeId, onDataChanged, onAddNe
     } catch (err: any) {
       console.error(`Erro ao ${actionName}:`, err);
       setError(`Falha na ação: ${err.message}`);
-      setIsLoading(false);
     }
   };
 
@@ -274,7 +274,9 @@ export function SideDrawer({ isOpen, onClose, employeeId, onDataChanged, onAddNe
                         endDate: formatDate(contract.endDate || contract.nextPaymentDate),
                         status: contract.status,
                         startDate: formatDate(contract.startDate),
-                        contractUrl: contract.contractUrl || ''
+                        contractUrl: contract.contractUrl || '',
+                        requestDate: contract.requestDate,
+                        firstPaymentDate: contract.firstPaymentDate
                       }}
                       onLiquidar={() => onLiquidar(contract.id)}
                       onPostergar={() => onPostergar(contract.id)}

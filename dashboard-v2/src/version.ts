@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.07";
-export const VERSION_DATE = "2026-06-09";
+export const APP_VERSION = "v.02.46.08";
+export const VERSION_DATE = "2026-06-11";
 export const VERSION_CHANGELOG = [
+  "v.02.46.08 - Feat: Empréstimos — edição de datas contratuais (assinatura e 1ª parcela), botão de baixa manual por parcela, cálculo de saldo devedor baseado em status real do banco, travamento de edição após 1º pagamento, liquidação correta de todas as parcelas via botão Liquidar, e UX otimizada do drawer sem reload visual.",
   "v.02.46.07 - Fix: Remove systemInstruction param from Gemini model due to compatibility issues with standard prompts and display early errors.",
   "v.02.46.06 - Fix: Adiciona gemini-1.0-pro e forca cache invalidation para resolver 404 da API do Gemini.",
   "v.02.46.05 - Feat: Criação do Importador Inteligente (Data Lake Dianna) na aba Custo Histórico, permitindo buscar registros diretamente da planilha bruta e importar em lote de forma visual e seletiva.",

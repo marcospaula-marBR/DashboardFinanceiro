@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowUpRight, Clock, CheckCircle, RotateCcw, ChevronDown, ChevronUp, Paperclip, Check, Upload, ExternalLink, Loader2, Trash2, FileText } from "lucide-react";
+import { ArrowUpRight, Clock, CheckCircle, RotateCcw, ChevronDown, ChevronUp, Paperclip, Check, Upload, ExternalLink, Loader2, Trash2, FileText, Calendar } from "lucide-react";
 import { useDataMode } from "@/contexts/DataModeContext";
-import { LoansService } from "@/services/loans.service";
+import { LoansService, formatDate } from "@/services/loans.service";
+import { PaymentsService } from "@/services/payments.service";
 
 interface Contract {
   id: string;
@@ -16,6 +17,8 @@ interface Contract {
   status: "ATIVO" | "LIQUIDADO" | "ATRASADO";
   startDate: string;
   contractUrl?: string;
+  requestDate?: string;
+  firstPaymentDate?: string;
 }
 
 interface ContractCardProps {
@@ -71,6 +74,19 @@ export function ContractCard({
   const [isUploading, setIsUploading] = useState(false);
   const [isOpeningFile, setIsOpeningFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // States para edicao de datas
+  const [isEditing, setIsEditing] = useState(false);
+  const [editRequestDate, setEditRequestDate] = useState("");
+  const [editFirstPaymentDate, setEditFirstPaymentDate] = useState("");
+  const [isSavingDates, setIsSavingDates] = useState(false);
+
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditRequestDate(contract.requestDate?.split('T')[0] || "");
+    setEditFirstPaymentDate(contract.firstPaymentDate?.split('T')[0] || "");
+    setIsEditing(true);
+  };
   
   const fetchTimeline = async () => {
     setIsLoadingTimeline(true);
@@ -85,10 +101,10 @@ export function ContractCard({
   };
 
   useEffect(() => {
-    if (isExpanded && timeline.length === 0) {
+    if (isExpanded) {
       fetchTimeline();
     }
-  }, [isExpanded]);
+  }, [isExpanded, contract.balance, contract.status, contract.firstPaymentDate, contract.requestDate]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -169,6 +185,14 @@ export function ContractCard({
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Última Parcela</p>
           <p className="text-sm font-black text-emerald-600 tabular-nums">{contract.endDate}</p>
         </div>
+        <div>
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Assinatura</p>
+          <p className="text-xs font-bold text-slate-700">{contract.requestDate ? formatDate(contract.requestDate) : '-'}</p>
+        </div>
+        <div>
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">1ª Parcela</p>
+          <p className="text-xs font-bold text-slate-700">{contract.firstPaymentDate ? formatDate(contract.firstPaymentDate) : '-'}</p>
+        </div>
       </div>
 
       </div>
@@ -209,12 +233,113 @@ export function ContractCard({
             </button>
             <button 
               onClick={(e) => { e.stopPropagation(); onReverter?.(); }}
-              className="flex flex-col items-center gap-1 p-2 rounded-lg bg-white hover:bg-slate-50 text-slate-600 hover:text-amber-600 transition-all border border-slate-200 hover:border-amber-200 col-span-2 shadow-sm"
+              className="flex flex-col items-center gap-1 p-2 rounded-lg bg-white hover:bg-slate-50 text-slate-600 hover:text-amber-600 transition-all border border-slate-200 hover:border-amber-200 col-span-1 shadow-sm"
             >
               <RotateCcw size={16} />
-              <span className="text-[9px] font-bold uppercase transition-colors">Reverter Transações Feitas</span>
+              <span className="text-[9px] font-bold uppercase transition-colors">Reverter</span>
             </button>
+
+            {!timeline.some(t => t.status === 'PAGO') && (
+              <button 
+                onClick={handleStartEdit}
+                className="flex flex-col items-center gap-1 p-2 rounded-lg bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-600 transition-all border border-slate-200 hover:border-amber-200 col-span-1 shadow-sm"
+              >
+                <Calendar size={16} className="text-amber-600" />
+                <span className="text-[9px] font-bold uppercase transition-colors">Editar Datas</span>
+              </button>
+            )}
           </div>
+
+          {/* Formulario de Edicao de Datas */}
+          {isEditing && (
+            <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-200 mb-6 space-y-4 shadow-sm">
+              <h5 className="text-xs font-black text-amber-800 uppercase flex items-center gap-1">
+                <Calendar size={14} /> Editar Datas do Contrato
+              </h5>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data Assinatura</label>
+                  <input
+                    type="date"
+                    value={editRequestDate}
+                    onChange={(e) => setEditRequestDate(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Vencimento 1ª Parc.</label>
+                  <input
+                    type="date"
+                    value={editFirstPaymentDate}
+                    onChange={(e) => setEditFirstPaymentDate(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 opacity-60">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Valor (Contratual)</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={contract.value}
+                    className="w-full bg-slate-100 border border-slate-200 rounded-lg p-2 text-xs cursor-not-allowed outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Qtd. Parcelas</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={contract.installments}
+                    className="w-full bg-slate-100 border border-slate-200 rounded-lg p-2 text-xs cursor-not-allowed outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  disabled={isSavingDates}
+                  onClick={(e) => { e.stopPropagation(); setIsEditing(false); }}
+                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={isSavingDates}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!editRequestDate || !editFirstPaymentDate) {
+                      alert("Por favor, preencha ambas as datas.");
+                      return;
+                    }
+                    setIsSavingDates(true);
+                    try {
+                      await LoansService.updateContractDates(
+                        contract.id,
+                        editRequestDate,
+                        editFirstPaymentDate,
+                        isTestMode
+                      );
+                      setIsEditing(false);
+                      await fetchTimeline();
+                      if (onDataChanged) onDataChanged();
+                    } catch (err: any) {
+                      alert(`Erro ao salvar datas: ${err.message}`);
+                    } finally {
+                      setIsSavingDates(false);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 disabled:opacity-50"
+                >
+                  {isSavingDates && <Loader2 size={12} className="animate-spin" />}
+                  Salvar
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Anexo de Contrato */}
           <input
@@ -312,11 +437,49 @@ export function ContractCard({
                           {item.index > 0 ? `Parcela ${item.index}` : 'Suspensão'} • {item.status}
                         </span>
                       </div>
-                      {item.amount > 0 && (
-                        <span className="text-xs font-bold text-slate-800 font-mono">
-                          R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {item.amount > 0 && (
+                          <span className="text-xs font-bold text-slate-800 font-mono">
+                            R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
+                        {item.status === 'PENDENTE' && item.id && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const todayBR = new Date().toLocaleDateString('pt-BR');
+                              const userDate = window.prompt(
+                                "Confirmar pagamento desta parcela?\n\n" +
+                                "Digite a data do pagamento no formato DD/MM/AAAA\n(ou deixe em branco para usar a data de hoje):",
+                                todayBR
+                              );
+                              
+                              if (userDate === null) return; // cancelou
+                              
+                              let paidDate: string | undefined = undefined;
+                              if (userDate.trim() !== '') {
+                                const parts = userDate.split('/');
+                                if (parts.length === 3) {
+                                  paidDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                                } else {
+                                  alert("Formato de data inválido. Usando data atual.");
+                                }
+                              }
+                              
+                              try {
+                                await PaymentsService.updatePaymentStatus(item.id, 'PAGO', isTestMode, undefined, paidDate);
+                                await fetchTimeline();
+                                if (onDataChanged) onDataChanged();
+                              } catch (err: any) {
+                                alert(`Falha ao dar baixa: ${err.message}`);
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black transition border border-emerald-200"
+                          >
+                            Baixar
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
