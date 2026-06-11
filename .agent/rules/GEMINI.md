@@ -95,6 +95,33 @@ When auto-applying an agent, inform the user:
 
 ## TIER 0: UNIVERSAL RULES (Always Active)
 
+### 🔢 VERSION BUMP — OBRIGAÇÃO ABSOLUTA (P0)
+
+> 🔴 **REGRA INVIOLÁVEL:** Toda vez que qualquer arquivo do projeto `dashboard-v2` for modificado E um `git push` / deploy for executado, a versão em `dashboard-v2/src/version.ts` DEVE ser incrementada ANTES do commit.
+
+**Arquivo de versão:** `d:\DRE-V33-Dianna\dashboard-v2\src\version.ts`
+
+**Protocolo obrigatório antes de qualquer `git push`:**
+
+1. Abrir `version.ts`
+2. Incrementar o patch: `v.XX.YY.ZZ` → `v.XX.YY.(ZZ+1)`
+3. Atualizar `VERSION_DATE` para a data atual (`YYYY-MM-DD`)
+4. Adicionar entrada no topo de `VERSION_CHANGELOG` descrevendo o que mudou
+5. Incluir `version.ts` no commit
+
+**Checklist de deploy (obrigatório):**
+
+| # | Verificação | Bloqueante? |
+|---|------------|-------------|
+| 1 | `version.ts` foi atualizado com nova versão? | ✅ SIM — não fazer push sem isso |
+| 2 | `VERSION_DATE` reflete hoje? | ✅ SIM |
+| 3 | `VERSION_CHANGELOG` tem entrada descritiva? | ✅ SIM |
+
+> ❌ **PROIBIDO:** Fazer `git push` ou deploy sem bumpar a versão. Sem exceções.
+> ✅ **SEMPRE:** Mesmo para fixes de 1 linha, a versão sobe.
+
+---
+
 ### 🌐 Language Handling
 
 When user's prompt is NOT in English:

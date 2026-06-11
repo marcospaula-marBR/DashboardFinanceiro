@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.46.08";
+export const APP_VERSION = "v.02.46.10";
 export const VERSION_DATE = "2026-06-11";
 export const VERSION_CHANGELOG = [
+  "v.02.46.10 - Fix: Remove 'Início do ciclo' do cabeçalho do card de contrato; adiciona regra obrigatória de version bump no GEMINI.md.",
+  "v.02.46.09 - Feat: Campo 'Vencimento da 1ª Parcela' obrigatório no cadastro de empréstimo; exibe 'Início do débito' no card do contrato.",
   "v.02.46.08 - Feat: Empréstimos — edição de datas contratuais (assinatura e 1ª parcela), botão de baixa manual por parcela, cálculo de saldo devedor baseado em status real do banco, travamento de edição após 1º pagamento, liquidação correta de todas as parcelas via botão Liquidar, e UX otimizada do drawer sem reload visual.",
   "v.02.46.07 - Fix: Remove systemInstruction param from Gemini model due to compatibility issues with standard prompts and display early errors.",
   "v.02.46.06 - Fix: Adiciona gemini-1.0-pro e forca cache invalidation para resolver 404 da API do Gemini.",
