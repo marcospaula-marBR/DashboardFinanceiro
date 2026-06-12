@@ -1,7 +1,7 @@
-export const APP_VERSION = "v.02.46.11";
-export const VERSION_DATE = "2026-06-11";
+export const APP_VERSION = "v.02.46.12";
+export const VERSION_DATE = "2026-06-12";
 export const VERSION_CHANGELOG = [
-  "v.02.46.11 - Feat: Adição de 'Selecionar todos' / 'Desmarcar todos' nos filtros DRE, ampliação das fontes para maior legibilidade na tabela DRE e na sidebar, e botão de recolhimento da sidebar com texto visível.",
+  "v.02.46.12 - Feat: Novos campos de valor contratual na aba Info Pessoal da Ficha do Colaborador: Conectividade (auxílio conectividade) e Incentivos. Valores inclusos no cálculo do Total Geral de Remuneração. Armazenados via metadata no banco sem alteração de schema.",
   "v.02.46.10 - Fix: Remove 'Início do ciclo' do cabeçalho do card de contrato; adiciona regra obrigatória de version bump no GEMINI.md.",
   "v.02.46.09 - Feat: Campo 'Vencimento da 1ª Parcela' obrigatório no cadastro de empréstimo; exibe 'Início do débito' no card do contrato.",
   "v.02.46.08 - Feat: Empréstimos — edição de datas contratuais (assinatura e 1ª parcela), botão de baixa manual por parcela, cálculo de saldo devedor baseado em status real do banco, travamento de edição após 1º pagamento, liquidação correta de todas as parcelas via botão Liquidar, e UX otimizada do drawer sem reload visual.",

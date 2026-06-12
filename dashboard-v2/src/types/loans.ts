@@ -92,6 +92,8 @@ export interface Employee {
   remuneration_fixed?: number;
   remuneration_bonus?: number;
   remuneration_commission?: number;
+  remuneration_connectivity?: number; // Auxílio Conectividade
+  remuneration_incentives?: number;   // Incentivos
 
   // Novos campos adicionados na migração v3
   is_outsourced?: boolean;

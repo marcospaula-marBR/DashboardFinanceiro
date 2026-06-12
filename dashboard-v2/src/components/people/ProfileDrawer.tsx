@@ -1634,7 +1634,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             onChange={e => {
                               const val = parseFloat(e.target.value) || 0;
                               handleChange('remuneration_fixed', val);
-                              const tot = val + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0);
+                              const tot = val + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0);
                               handleChange('remuneration', tot);
                             }} 
                             readOnly={!isEditMode} 
@@ -1651,7 +1651,41 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             onChange={e => {
                               const val = parseFloat(e.target.value) || 0;
                               handleChange('remuneration_bonus', val);
-                              const tot = (profile.remuneration_fixed || 0) + val + (profile.remuneration_commission || 0);
+                              const tot = (profile.remuneration_fixed || 0) + val + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0);
+                              handleChange('remuneration', tot);
+                            }} 
+                            readOnly={!isEditMode} 
+                            className={inputClass} 
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Conectividade</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={profile.remuneration_connectivity ?? ''} 
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              handleChange('remuneration_connectivity', val);
+                              const tot = (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + val + (profile.remuneration_incentives || 0);
+                              handleChange('remuneration', tot);
+                            }} 
+                            readOnly={!isEditMode} 
+                            className={inputClass} 
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Incentivos</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={profile.remuneration_incentives ?? ''} 
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              handleChange('remuneration_incentives', val);
+                              const tot = (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + val;
                               handleChange('remuneration', tot);
                             }} 
                             readOnly={!isEditMode} 
@@ -1675,7 +1709,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                         <div>
                           <label className={labelClass}>{getRemunerationLabel(profile.linkType || 'CLT').bruto} (Total Geral)</label>
                           <div className={`py-3 text-base text-slate-900 dark:text-white font-extrabold`}>
-                            {formatCurrency((profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0))}
+                            {formatCurrency((profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0))}
                           </div>
                         </div>
 

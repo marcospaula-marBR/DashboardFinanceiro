@@ -264,6 +264,8 @@ export class PeopleService {
       remuneration_fixed: raw.remuneration_fixed ? parseFloat(String(raw.remuneration_fixed)) : 0,
       remuneration_bonus: raw.remuneration_bonus ? parseFloat(String(raw.remuneration_bonus)) : 0,
       remuneration_commission: raw.remuneration_commission ? parseFloat(String(raw.remuneration_commission)) : 0,
+      remuneration_connectivity: raw.remuneration_connectivity ? parseFloat(String(raw.remuneration_connectivity)) : (raw.metadata?.remuneration_connectivity ? parseFloat(String(raw.metadata.remuneration_connectivity)) : 0),
+      remuneration_incentives: raw.remuneration_incentives ? parseFloat(String(raw.remuneration_incentives)) : (raw.metadata?.remuneration_incentives ? parseFloat(String(raw.metadata.remuneration_incentives)) : 0),
       totalTaken: raw.loan_amount ? parseFloat(String(raw.loan_amount)) : 0,
       balance: raw.loan_amount ? parseFloat(String(raw.loan_amount)) : 0,
       status: raw.status || (raw.active ? 'Ativo' : 'Inativo'),
@@ -340,7 +342,7 @@ export class PeopleService {
       pj_type: profile.pj_type,
       employment_type: profile.linkType,
       company: profile.company,
-      remuneration: (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0),
+      remuneration: (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0),
       remuneration_fixed: profile.remuneration_fixed || 0,
       remuneration_bonus: profile.remuneration_bonus || 0,
       remuneration_commission: profile.remuneration_commission || 0,
@@ -399,7 +401,9 @@ export class PeopleService {
         ...(profile.metadata || {}),
         has_invoice_glosa: profile.has_invoice_glosa || false,
         last_raise_date: profile.last_raise_date || null,
-        grau: profile.grau || ''
+        grau: profile.grau || '',
+        remuneration_connectivity: profile.remuneration_connectivity || 0,
+        remuneration_incentives: profile.remuneration_incentives || 0
       }
     };
   }

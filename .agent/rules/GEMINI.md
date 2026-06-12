@@ -122,6 +122,57 @@ When auto-applying an agent, inform the user:
 
 ---
 
+### 🚀 COMMIT & DEPLOY — OBRIGAÇÃO ABSOLUTA (P0)
+
+> 🔴 **REGRA INVIOLÁVEL:** Toda alteração em arquivos do projeto `dashboard-v2` DEVE ser seguida de um `git commit` e `git push` imediatos. O deploy no Vercel é automático via push — sem push, não há deploy.
+
+**Fluxo obrigatório após QUALQUER modificação no `dashboard-v2`:**
+
+```
+1. Bumpar versão em version.ts   ← Ver regra VERSION BUMP acima
+2. git add -A
+3. git commit -m "tipo: descrição objetiva da mudança"
+4. git push origin main          ← Dispara deploy automático no Vercel
+```
+
+**Comandos prontos (PowerShell):**
+
+```powershell
+# Executar a partir de: d:\DRE-V33-Dianna\dashboard-v2
+cd d:\DRE-V33-Dianna
+git add -A
+git commit -m "feat: <descrição da mudança>"
+git push origin main
+```
+
+**Checklist de commit (obrigatório antes do push):**
+
+| # | Verificação | Bloqueante? |
+|---|------------|-------------|
+| 1 | `version.ts` foi atualizado (versão + data + changelog)? | ✅ SIM |
+| 2 | Todos os arquivos modificados estão no stage (`git add -A`)? | ✅ SIM |
+| 3 | Mensagem do commit segue o padrão Conventional Commits? | ✅ SIM |
+| 4 | Push foi executado (`git push origin main`)? | ✅ SIM — deploy só ocorre com push |
+
+**Padrão de mensagem de commit (Conventional Commits):**
+
+| Prefixo | Quando usar |
+|---------|-------------|
+| `feat:` | Nova funcionalidade ou campo |
+| `fix:` | Correção de bug |
+| `refactor:` | Refatoração sem mudança de comportamento |
+| `style:` | Ajuste visual / CSS |
+| `chore:` | Tarefas de manutenção (bump de versão, config) |
+| `docs:` | Atualização de documentação |
+
+> ❌ **PROIBIDO:** Terminar uma sessão de desenvolvimento sem commitar e fazer push.
+> ❌ **PROIBIDO:** Fazer push sem antes bumpar a versão em `version.ts`.
+> ✅ **SEMPRE:** Alteração → Versão → Commit → Push. Nessa ordem, sem pular etapas.
+
+---
+
+
+
 ### 🌐 Language Handling
 
 When user's prompt is NOT in English:
