@@ -126,23 +126,34 @@ export const PeopleHRService = {
     const bonusTotal = costs.reduce((sum, c) => sum + (c.valor_bonus || 0), 0);
     const commissionTotal = costs.reduce((sum, c) => sum + (c.valor_comissao || 0), 0);
     const incentivosTotal = costs.reduce((sum, c) => sum + (c.valor_incentivos || 0), 0);
+    const conectividadeTotal = costs.reduce((sum, c) => sum + (c.valor_ajuda_custo || 0), 0);
     const glosaBaseTotal = costs.reduce((sum, c) => sum + (c.valor_glosa_base || 0), 0);
     const glosaBonusTotal = costs.reduce((sum, c) => sum + (c.valor_glosa_bonus || 0), 0);
     const deducoesTotal = costs.reduce((sum, c) => sum + (c.valor_deducoes || 0), 0);
+
+    const count = costs.length;
 
     return {
       total: values.reduce((a, b) => a + b, 0),
       average: values.reduce((a, b) => a + b, 0) / values.length,
       min: Math.min(...values),
       max: Math.max(...values),
-      count: costs.length,
+      count,
       fixedTotal,
       bonusTotal,
       commissionTotal,
       incentivosTotal,
+      conectividadeTotal,
       glosaBaseTotal,
       glosaBonusTotal,
       deducoesTotal,
+      // averages:
+      fixedAverage: fixedTotal / count,
+      bonusAverage: bonusTotal / count,
+      commissionAverage: commissionTotal / count,
+      incentivosAverage: incentivosTotal / count,
+      conectividadeAverage: conectividadeTotal / count,
+      totalAverage: costs.reduce((sum, c) => sum + c.valor_liquido, 0) / count,
       history: values
     };
   },

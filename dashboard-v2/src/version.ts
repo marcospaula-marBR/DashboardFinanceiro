@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.20";
+export const APP_VERSION = "v.02.46.21";
 export const VERSION_DATE = "2026-06-12";
 export const VERSION_CHANGELOG = [
+  "v.02.46.21 - Feat: Redesenha a aba Custo Histórico para comparar valores previsto vs pago, adiciona botão Copiar do Contrato, exibe médias e totalizador, e vincula Conectividade a valor_ajuda_custo.",
   "v.02.46.20 - Feat: Adiciona a coluna Incentivos na listagem de colaboradores da página People.",
   "v.02.46.19 - Fix: Refina prompt do parser de IA para detectar auxílios veiculares como Incentivo; define padrão de mesclagem como 'incoming' para campos profissionais/financeiros em divergência e ajusta data de registro da trajetória baseado na data do novo contrato.",
   "v.02.46.18 - Fix: IA mapeia ajudas de custo/bonificação veicular como Incentivo e não Bônus; adiciona campo department_start_date ao diálogo de mesclagem seletiva de contratos e define a data da trajetória baseado na data de assinatura do novo contrato.",

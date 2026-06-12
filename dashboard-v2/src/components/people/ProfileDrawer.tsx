@@ -87,6 +87,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [editingCostBonus, setEditingCostBonus] = useState(0);
   const [editingCostComissao, setEditingCostComissao] = useState(0);
   const [editingCostIncentivos, setEditingCostIncentivos] = useState(0);
+  const [editingCostConectividade, setEditingCostConectividade] = useState(0);
   const [editingCostGlosaBase, setEditingCostGlosaBase] = useState(0);
   const [editingCostGlosaBonus, setEditingCostGlosaBonus] = useState(0);
   const [editingCostDeducoes, setEditingCostDeducoes] = useState(0);
@@ -1299,7 +1300,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior à data de admissão (${formatDateBR(profile.start_date)}).`);
       }
       
-      const computedLiquido = (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos) - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
+      const computedLiquido = (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade) - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
 
       const payload = {
         competencia: editingCostCompetencia,
@@ -1308,6 +1309,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         valor_bonus: editingCostBonus,
         valor_comissao: editingCostComissao,
         valor_incentivos: editingCostIncentivos,
+        valor_ajuda_custo: editingCostConectividade,
         valor_glosa_base: editingCostGlosaBase,
         valor_glosa_bonus: editingCostGlosaBonus,
         valor_deducoes: editingCostDeducoes,
@@ -2422,6 +2424,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 setEditingCostBonus(lastCost.valor_bonus || 0);
                                 setEditingCostComissao(lastCost.valor_comissao || 0);
                                 setEditingCostIncentivos(lastCost.valor_incentivos || 0);
+                                setEditingCostConectividade(lastCost.valor_ajuda_custo || 0);
                                 setEditingCostGlosaBase(lastCost.valor_glosa_base || 0);
                                 setEditingCostGlosaBonus(lastCost.valor_glosa_bonus || 0);
                                 setEditingCostDeducoes(lastCost.valor_deducoes || 0);
@@ -2442,7 +2445,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               setEditingCostFixo(profile?.remuneration_fixed || profile?.remuneration || 0);
                               setEditingCostBonus(profile?.remuneration_bonus || 0);
                               setEditingCostComissao(profile?.remuneration_commission || 0);
-                              setEditingCostIncentivos(0);
+                              setEditingCostIncentivos(profile?.remuneration_incentives || 0);
+                              setEditingCostConectividade(profile?.remuneration_connectivity || 0);
                               setEditingCostGlosaBase(0);
                               setEditingCostGlosaBonus(0);
                               setEditingCostDeducoes(0);
@@ -2470,78 +2474,135 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                         return (
                           <div className="space-y-6">
-                            <div className="grid grid-cols-4 gap-4">
-                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total Fixo</p>
-                                <p className="text-sm font-black text-slate-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.fixedTotal || 0)}
-                                </p>
-                              </div>
-                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total Bônus</p>
-                                <p className="text-sm font-black text-slate-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.bonusTotal || 0)}
-                                </p>
-                              </div>
-                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total Comissões</p>
-                                <p className="text-sm font-black text-slate-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.commissionTotal || 0)}
-                                </p>
-                              </div>
-                              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                                <p className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">Total Incentivos</p>
-                                <p className="text-sm font-black text-emerald-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.incentivosTotal || 0)}
-                                </p>
+                            {/* Dashboard de Totais e Médias */}
+                            <div className="space-y-4">
+                              <div>
+                                <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Ganhos Recebidos</h5>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                  <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                    <div>
+                                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Fixo</p>
+                                      <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                                        {formatCurrency(stats.fixedTotal || 0)}
+                                      </p>
+                                    </div>
+                                    <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
+                                      Média: {formatCurrency(stats.fixedAverage || 0)}
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                    <div>
+                                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Bônus</p>
+                                      <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                                        {formatCurrency(stats.bonusTotal || 0)}
+                                      </p>
+                                    </div>
+                                    <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
+                                      Média: {formatCurrency(stats.bonusAverage || 0)}
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                    <div>
+                                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Comissões</p>
+                                      <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                                        {formatCurrency(stats.commissionTotal || 0)}
+                                      </p>
+                                    </div>
+                                    <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
+                                      Média: {formatCurrency(stats.commissionAverage || 0)}
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                    <div>
+                                      <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Incentivos</p>
+                                      <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
+                                        {formatCurrency(stats.incentivosTotal || 0)}
+                                      </p>
+                                    </div>
+                                    <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase">
+                                      Média: {formatCurrency(stats.incentivosAverage || 0)}
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                    <div>
+                                      <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Conectividade</p>
+                                      <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
+                                        {formatCurrency(stats.conectividadeTotal || 0)}
+                                      </p>
+                                    </div>
+                                    <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase">
+                                      Média: {formatCurrency(stats.conectividadeAverage || 0)}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
 
-                              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-                                <p className="text-[10px] font-black text-red-800 uppercase tracking-wider">Total Glosa Base</p>
-                                <p className="text-sm font-black text-red-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.glosaBaseTotal || 0)}
-                                </p>
-                              </div>
-                              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-                                <p className="text-[10px] font-black text-red-800 uppercase tracking-wider">Total Glosa Bônus</p>
-                                <p className="text-sm font-black text-red-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.glosaBonusTotal || 0)}
-                                </p>
-                              </div>
-                              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-                                <p className="text-[10px] font-black text-red-800 uppercase tracking-wider">Total Deduções</p>
-                                <p className="text-sm font-black text-red-700 mt-1 tabular-nums">
-                                  {formatCurrency(stats.deducoesTotal || 0)}
-                                </p>
-                              </div>
-                              <div className="bg-emerald-100 border border-emerald-300 rounded-xl p-3">
-                                <p className="text-[10px] font-black text-emerald-900 uppercase tracking-wider">Total Geral</p>
-                                <p className="text-sm font-black text-emerald-800 mt-1 tabular-nums">
-                                  {formatCurrency(stats.total)}
-                                </p>
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="md:col-span-3">
+                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Descontos e Ajustes</h5>
+                                  <div className="grid grid-cols-3 gap-3">
+                                    <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm">
+                                      <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Glosa Base</p>
+                                      <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
+                                        {formatCurrency(stats.glosaBaseTotal || 0)}
+                                      </p>
+                                    </div>
+                                    <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm">
+                                      <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Glosa Bônus</p>
+                                      <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
+                                        {formatCurrency(stats.glosaBonusTotal || 0)}
+                                      </p>
+                                    </div>
+                                    <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm">
+                                      <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Deduções</p>
+                                      <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
+                                        {formatCurrency(stats.deducoesTotal || 0)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col justify-end">
+                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resultado Final</h5>
+                                  <div className="bg-emerald-100 dark:bg-emerald-950 border border-emerald-300 dark:border-emerald-900 rounded-xl p-3 flex flex-col justify-between shadow-sm h-[66px]">
+                                    <div className="flex justify-between items-baseline">
+                                      <p className="text-[10px] font-black text-emerald-950 dark:text-emerald-400 uppercase tracking-wider">Total Geral</p>
+                                      <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-500 uppercase">
+                                        Média: {formatCurrency(stats.totalAverage || 0)}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm font-black text-emerald-900 dark:text-emerald-200 mt-0.5 tabular-nums">
+                                      {formatCurrency(stats.total)}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-
+ 
                             <div className="space-y-2">
-                              <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider">Lançamentos Recentes ({stats.count})</h5>
-                              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-white max-h-[250px] overflow-y-auto">
+                              <h5 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Lançamentos Recentes ({stats.count})</h5>
+                              <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-950 max-h-[250px] overflow-y-auto shadow-sm">
                                 {costs.map((c, i) => {
                                   const fixedVal = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
                                     ? c.valor_fixo 
                                     : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
                                   return (
-                                    <div key={i} className="p-3 hover:bg-slate-50/50 flex flex-col gap-2">
+                                    <div key={i} className="p-3 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 flex flex-col gap-2">
                                       <div className="flex justify-between items-center">
                                         <div>
-                                          <p className="text-sm font-black text-slate-800 uppercase">
+                                          <p className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase">
                                             {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                                           </p>
-                                          <p className="text-[10px] text-slate-400 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
+                                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
                                         </div>
                                         <div className="flex items-center gap-3">
                                           <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Total:</span>
-                                            <span className="text-sm font-extrabold text-emerald-600 tabular-nums">
+                                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">Total:</span>
+                                            <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">
                                               {formatCurrency(c.valor_liquido)}
                                             </span>
                                           </div>
@@ -2554,12 +2615,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                               setEditingCostBonus(c.valor_bonus || 0);
                                               setEditingCostComissao(c.valor_comissao || 0);
                                               setEditingCostIncentivos(c.valor_incentivos || 0);
+                                              setEditingCostConectividade(c.valor_ajuda_custo || 0);
                                               setEditingCostGlosaBase(c.valor_glosa_base || 0);
                                               setEditingCostGlosaBonus(c.valor_glosa_bonus || 0);
                                               setEditingCostDeducoes(c.valor_deducoes || 0);
                                               setSaveCostError(null);
                                             }}
-                                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-emerald-600 transition-colors"
+                                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
                                             title="Editar lançamento"
                                           >
                                             <PenBox size={13} />
@@ -2567,45 +2629,51 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         </div>
                                       </div>
                                       
-                                      <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1.5 border-t border-slate-100/50 text-[10px]">
+                                      <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1.5 border-t border-slate-100/50 dark:border-slate-800/50 text-[10px]">
                                         <div>
-                                          <span className="text-slate-400 font-bold block uppercase text-[8px]">Fixo</span>
-                                          <span className="text-slate-700 font-bold tabular-nums">{formatCurrency(fixedVal || 0)}</span>
+                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Fixo</span>
+                                          <span className="text-slate-700 dark:text-slate-300 font-bold tabular-nums">{formatCurrency(fixedVal || 0)}</span>
                                         </div>
                                         <div>
-                                          <span className="text-slate-400 font-bold block uppercase text-[8px]">Bônus</span>
-                                          <span className={`font-bold tabular-nums ${c.valor_bonus ? 'text-blue-600' : 'text-slate-400'}`}>
+                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Bônus</span>
+                                          <span className={`font-bold tabular-nums ${c.valor_bonus ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
                                             {formatCurrency(c.valor_bonus || 0)}
                                           </span>
                                         </div>
                                         <div>
-                                          <span className="text-slate-400 font-bold block uppercase text-[8px]">Comissão</span>
-                                          <span className={`font-bold tabular-nums ${c.valor_comissao ? 'text-amber-600' : 'text-slate-400'}`}>
+                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Comissão</span>
+                                          <span className={`font-bold tabular-nums ${c.valor_comissao ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
                                             {formatCurrency(c.valor_comissao || 0)}
                                           </span>
                                         </div>
                                         {!!c.valor_incentivos && (
                                           <div>
-                                            <span className="text-emerald-400 font-bold block uppercase text-[8px]">Incentivos</span>
-                                            <span className="font-bold tabular-nums text-emerald-600">{formatCurrency(c.valor_incentivos)}</span>
+                                            <span className="text-emerald-500 font-bold block uppercase text-[8px]">Incentivos</span>
+                                            <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(c.valor_incentivos)}</span>
+                                          </div>
+                                        )}
+                                        {!!c.valor_ajuda_custo && (
+                                          <div>
+                                            <span className="text-emerald-500 font-bold block uppercase text-[8px]">Conectividade</span>
+                                            <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(c.valor_ajuda_custo)}</span>
                                           </div>
                                         )}
                                         {!!c.valor_glosa_base && (
                                           <div>
-                                            <span className="text-red-400 font-bold block uppercase text-[8px]">Glosa Base</span>
-                                            <span className="font-bold tabular-nums text-red-600">{formatCurrency(c.valor_glosa_base)}</span>
+                                            <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Glosa Base</span>
+                                            <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_glosa_base)}</span>
                                           </div>
                                         )}
                                         {!!c.valor_glosa_bonus && (
                                           <div>
-                                            <span className="text-red-400 font-bold block uppercase text-[8px]">Glosa Bônus</span>
-                                            <span className="font-bold tabular-nums text-red-600">{formatCurrency(c.valor_glosa_bonus)}</span>
+                                            <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Glosa Bônus</span>
+                                            <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_glosa_bonus)}</span>
                                           </div>
                                         )}
                                         {!!c.valor_deducoes && (
                                           <div>
-                                            <span className="text-red-400 font-bold block uppercase text-[8px]">Deduções</span>
-                                            <span className="font-bold tabular-nums text-red-600">{formatCurrency(c.valor_deducoes)}</span>
+                                            <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Deduções</span>
+                                            <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_deducoes)}</span>
                                           </div>
                                         )}
                                       </div>
@@ -2689,6 +2757,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             setEditingCostBonus(cost.valor_bonus || 0);
                                             setEditingCostComissao(cost.valor_comissao || 0);
                                             setEditingCostIncentivos(cost.valor_incentivos || 0);
+                                            setEditingCostConectividade(cost.valor_ajuda_custo || 0);
                                             setEditingCostGlosaBase(cost.valor_glosa_base || 0);
                                             setEditingCostGlosaBonus(cost.valor_glosa_bonus || 0);
                                             setEditingCostDeducoes(cost.valor_deducoes || 0);
@@ -2719,7 +2788,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       {/* Dynamic Inline cost editor modal */}
       {editingCost && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-xl w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-emerald-600 p-4 text-white flex items-center justify-between">
               <div>
                 <h4 className="font-bold text-sm">{editingCost?.id ? 'Ajustar Lançamento de Custo' : 'Novo Lançamento de Custo'}</h4>
@@ -2737,116 +2806,277 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 </div>
               )}
 
-              <div>
-                <label className={labelClass}>Competência Mensal</label>
-                <input 
-                  type="date" 
-                  value={editingCostCompetencia} 
-                  onChange={e => setEditingCostCompetencia(e.target.value)} 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                />
-              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Competência Mensal</label>
+                  <input 
+                    type="date" 
+                    value={editingCostCompetencia} 
+                    onChange={e => setEditingCostCompetencia(e.target.value)} 
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  />
+                </div>
 
-              <div>
-                <label className={labelClass}>Regime / Tipo de Vínculo</label>
-                <select 
-                  value={editingCostType} 
-                  onChange={e => setEditingCostType(e.target.value as 'CLT' | 'MEI')} 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                >
-                  <option value="CLT">CLT</option>
-                  <option value="MEI">MEI / PJ</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-4 gap-3">
                 <div>
-                  <label className={labelClass}>Valor Fixo</label>
-                  <input 
-                    type="number" 
-                    value={editingCostFixo} 
-                    onChange={e => setEditingCostFixo(parseFloat(e.target.value) || 0)} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Bônus</label>
-                  <input 
-                    type="number" 
-                    value={editingCostBonus} 
-                    onChange={e => setEditingCostBonus(parseFloat(e.target.value) || 0)} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Comissão</label>
-                  <input 
-                    type="number" 
-                    value={editingCostComissao} 
-                    onChange={e => setEditingCostComissao(parseFloat(e.target.value) || 0)} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Incentivos</label>
-                  <input 
-                    type="number" 
-                    value={editingCostIncentivos} 
-                    onChange={e => setEditingCostIncentivos(parseFloat(e.target.value) || 0)} 
-                    className="w-full bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
-                    placeholder="0.00"
-                  />
+                  <label className={labelClass}>Regime / Tipo de Vínculo</label>
+                  <select 
+                    value={editingCostType} 
+                    onChange={e => setEditingCostType(e.target.value as 'CLT' | 'MEI')} 
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  >
+                    <option value="CLT">CLT</option>
+                    <option value="MEI">MEI / PJ</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className={labelClass}>Glosa Valor Base</label>
-                  <input 
-                    type="number" 
-                    value={editingCostGlosaBase} 
-                    onChange={e => setEditingCostGlosaBase(parseFloat(e.target.value) || 0)} 
-                    className="w-full bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold"
-                    placeholder="0.00"
-                  />
+              {/* Tabela de Comparação de Verbas */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Detalhamento de Verbas</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCostFixo(profile?.remuneration_fixed || profile?.remuneration || 0);
+                      setEditingCostBonus(profile?.remuneration_bonus || 0);
+                      setEditingCostComissao(profile?.remuneration_commission || 0);
+                      setEditingCostIncentivos(profile?.remuneration_incentives || 0);
+                      setEditingCostConectividade(profile?.remuneration_connectivity || 0);
+                    }}
+                    className="px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-400 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 transform"
+                  >
+                    <Copy size={12} /> Copiar do Contrato (Repetir Tudo)
+                  </button>
                 </div>
-                <div>
-                  <label className={labelClass}>Glosa Bônus</label>
-                  <input 
-                    type="number" 
-                    value={editingCostGlosaBonus} 
-                    onChange={e => setEditingCostGlosaBonus(parseFloat(e.target.value) || 0)} 
-                    className="w-full bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold"
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Deduções</label>
-                  <input 
-                    type="number" 
-                    value={editingCostDeducoes} 
-                    onChange={e => setEditingCostDeducoes(parseFloat(e.target.value) || 0)} 
-                    className="w-full bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold"
-                    placeholder="0.00"
-                  />
+
+                <div className="border border-slate-150 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="p-2.5">Verba</th>
+                        <th className="p-2.5 text-right">Previsto</th>
+                        <th className="p-2.5 text-center" style={{ width: '130px' }}>Pago (Real)</th>
+                        <th className="p-2.5 text-right">Diferença</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
+                      {/* Fixo */}
+                      <tr>
+                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Fixo</td>
+                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                          {formatCurrency(profile?.remuneration_fixed || profile?.remuneration || 0)}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          <input 
+                            type="number"
+                            value={editingCostFixo}
+                            onChange={e => setEditingCostFixo(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                            placeholder="0.00"
+                          />
+                        </td>
+                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                          (editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                          (editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                        }`}>
+                          {(() => {
+                            const diff = editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0);
+                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                          })()}
+                        </td>
+                      </tr>
+
+                      {/* Bônus */}
+                      <tr>
+                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Bônus</td>
+                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                          {formatCurrency(profile?.remuneration_bonus || 0)}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          <input 
+                            type="number"
+                            value={editingCostBonus}
+                            onChange={e => setEditingCostBonus(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                            placeholder="0.00"
+                          />
+                        </td>
+                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                          (editingCostBonus - (profile?.remuneration_bonus || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                          (editingCostBonus - (profile?.remuneration_bonus || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                        }`}>
+                          {(() => {
+                            const diff = editingCostBonus - (profile?.remuneration_bonus || 0);
+                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                          })()}
+                        </td>
+                      </tr>
+
+                      {/* Comissão */}
+                      <tr>
+                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Comissão</td>
+                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                          {formatCurrency(profile?.remuneration_commission || 0)}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          <input 
+                            type="number"
+                            value={editingCostComissao}
+                            onChange={e => setEditingCostComissao(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                            placeholder="0.00"
+                          />
+                        </td>
+                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                          (editingCostComissao - (profile?.remuneration_commission || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                          (editingCostComissao - (profile?.remuneration_commission || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                        }`}>
+                          {(() => {
+                            const diff = editingCostComissao - (profile?.remuneration_commission || 0);
+                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                          })()}
+                        </td>
+                      </tr>
+
+                      {/* Incentivos */}
+                      <tr>
+                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Incentivos</td>
+                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                          {formatCurrency(profile?.remuneration_incentives || 0)}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          <input 
+                            type="number"
+                            value={editingCostIncentivos}
+                            onChange={e => setEditingCostIncentivos(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                            placeholder="0.00"
+                          />
+                        </td>
+                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                          (editingCostIncentivos - (profile?.remuneration_incentives || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                          (editingCostIncentivos - (profile?.remuneration_incentives || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                        }`}>
+                          {(() => {
+                            const diff = editingCostIncentivos - (profile?.remuneration_incentives || 0);
+                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                          })()}
+                        </td>
+                      </tr>
+
+                      {/* Conectividade */}
+                      <tr>
+                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Conectividade</td>
+                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                          {formatCurrency(profile?.remuneration_connectivity || 0)}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          <input 
+                            type="number"
+                            value={editingCostConectividade}
+                            onChange={e => setEditingCostConectividade(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                            placeholder="0.00"
+                          />
+                        </td>
+                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                          (editingCostConectividade - (profile?.remuneration_connectivity || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                          (editingCostConectividade - (profile?.remuneration_connectivity || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                        }`}>
+                          {(() => {
+                            const diff = editingCostConectividade - (profile?.remuneration_connectivity || 0);
+                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                          })()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Geral Calculado</span>
-                <span className="text-sm font-extrabold text-emerald-600 tabular-nums">
-                  {formatCurrency((editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos) - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes))}
-                </span>
+              {/* Seção de Descontos e Ajustes */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Descontos e Ajustes do Mês</span>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Glosa Base</label>
+                    <input 
+                      type="number" 
+                      value={editingCostGlosaBase} 
+                      onChange={e => setEditingCostGlosaBase(parseFloat(e.target.value) || 0)} 
+                      className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Glosa Bônus</label>
+                    <input 
+                      type="number" 
+                      value={editingCostGlosaBonus} 
+                      onChange={e => setEditingCostGlosaBonus(parseFloat(e.target.value) || 0)} 
+                      className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Deduções</label>
+                    <input 
+                      type="number" 
+                      value={editingCostDeducoes} 
+                      onChange={e => setEditingCostDeducoes(parseFloat(e.target.value) || 0)} 
+                      className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
               </div>
+
+              {/* Resumo do Total Líquido */}
+              {(() => {
+                const previstoTotal = (profile?.remuneration_fixed || profile?.remuneration || 0) + 
+                                      (profile?.remuneration_bonus || 0) + 
+                                      (profile?.remuneration_commission || 0) + 
+                                      (profile?.remuneration_incentives || 0) + 
+                                      (profile?.remuneration_connectivity || 0);
+                
+                const pagoTotal = (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade) - 
+                                  (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
+                
+                const diffTotal = pagoTotal - previstoTotal;
+                
+                return (
+                  <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-2 shadow-inner">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Resumo do Total Líquido</span>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Previsto (Contrato)</span>
+                        <span className="text-xs font-black text-slate-700 dark:text-slate-350 tabular-nums">{formatCurrency(previstoTotal)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Pago (Real)</span>
+                        <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(pagoTotal)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Diferença</span>
+                        <span className={`text-xs font-black tabular-nums ${
+                          diffTotal > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                          diffTotal < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                        }`}>
+                          {diffTotal > 0.01 ? '+' : ''}{formatCurrency(diffTotal)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="flex gap-3 pt-2">
                 {editingCost?.id && (
                   <button
                     onClick={() => handleDeleteCost(editingCost.id)}
-                    className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                    className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95"
                   >
                     <Trash2 size={13} /> Excluir Custo
                   </button>
