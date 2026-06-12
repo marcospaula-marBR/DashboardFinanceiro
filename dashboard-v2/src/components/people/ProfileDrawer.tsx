@@ -371,21 +371,31 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     const file = e.target.files?.[0];
     if (!file) return;
     
+    // Gera ID temporário se ainda não houver (novo colaborador)
     let targetId = profile.id;
     if (!targetId) {
       targetId = crypto.randomUUID();
-      handleChange('id', targetId);
+      setProfile(prev => ({ ...prev, id: targetId }));
     }
     
     setIsSaving(true);
     try {
       const url = await PeopleService.uploadProfilePhoto(targetId, file, isTestMode);
-      handleChange('photo_url', url);
-      // Se já estava no DB, atualiza a foto lá também
-      if (profile.id) {
-        await PeopleService.saveEmployeeProfile({ ...profile, photo_url: url }, isTestMode);
-      }
-      if (onDataChanged) onDataChanged(targetId);
+      
+      // Aplica a URL usando o state funcional para capturar o perfil mais atual
+      // e evitar perda de dados editados ainda não salvos (stale closure)
+      setProfile(prev => {
+        const updated = { ...prev, photo_url: url, id: targetId };
+        
+        // Persiste no banco apenas se o colaborador já existia (tem ID real do DB)
+        if (profile.id) {
+          PeopleService.saveEmployeeProfile(updated, isTestMode)
+            .then(() => { if (onDataChanged) onDataChanged(targetId); })
+            .catch(err => setError((err as Error).message));
+        }
+        
+        return updated;
+      });
     } catch (err: unknown) {
        const error = err as Error;
        setError(error.message);
@@ -393,6 +403,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setIsSaving(false);
     }
   };
+
 
   const handleAdditiveUpload = async (e: React.ChangeEvent<HTMLInputElement>, historyId?: string) => {
     const file = e.target.files?.[0];
@@ -462,10 +473,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       const newBonus = parseFloat(String(data.remuneration_bonus)) || 0;
       next.remuneration_bonus = Math.max(currentBonus, newBonus);
     }
+    if (data.remuneration_incentives !== undefined && data.remuneration_incentives !== null) {
+      const newIncentives = parseFloat(String(data.remuneration_incentives)) || 0;
+      if (newIncentives > 0) next.remuneration_incentives = newIncentives;
+    }
+    if (data.remuneration_connectivity !== undefined && data.remuneration_connectivity !== null) {
+      const newConn = parseFloat(String(data.remuneration_connectivity)) || 0;
+      if (newConn > 0) next.remuneration_connectivity = newConn;
+    }
     if (data.remuneration_fixed) {
       next.remuneration_fixed = data.remuneration_fixed;
     }
-    next.remuneration = (next.remuneration_fixed || 0) + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
+    next.remuneration = (next.remuneration_fixed || 0) + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0) + (next.remuneration_connectivity || 0) + (next.remuneration_incentives || 0);
+    if (data.executive_summary && !prev.executive_summary) {
+      next.executive_summary = data.executive_summary;
+    }
     if (data.email) next.email = data.email;
     if (data.phone) next.phone = formatPhone(data.phone);
     if (data.zip_code) next.zip_code = formatCEP(data.zip_code);
@@ -758,10 +780,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           const newBonus = parseFloat(String(data.remuneration_bonus)) || 0;
           next.remuneration_bonus = Math.max(currentBonus, newBonus);
         }
+        if (data.remuneration_incentives !== undefined && data.remuneration_incentives !== null) {
+          const newIncentives = parseFloat(String(data.remuneration_incentives)) || 0;
+          if (newIncentives > 0) next.remuneration_incentives = newIncentives;
+        }
+        if (data.remuneration_connectivity !== undefined && data.remuneration_connectivity !== null) {
+          const newConn = parseFloat(String(data.remuneration_connectivity)) || 0;
+          if (newConn > 0) next.remuneration_connectivity = newConn;
+        }
         if (data.remuneration_fixed) {
           next.remuneration_fixed = data.remuneration_fixed;
         }
-        next.remuneration = (next.remuneration_fixed || 0) + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0);
+        next.remuneration = (next.remuneration_fixed || 0) + (next.remuneration_bonus || 0) + (next.remuneration_commission || 0) + (next.remuneration_connectivity || 0) + (next.remuneration_incentives || 0);
+        
+        // Ficha Executiva: preencher automaticamente se a IA extraiu o resumo
+        if (data.executive_summary && !prev.executive_summary) {
+          next.executive_summary = data.executive_summary;
+        }
         if (data.email) next.email = data.email;
         if (data.phone) next.phone = formatPhone(data.phone);
         if (data.zip_code) next.zip_code = formatCEP(data.zip_code);

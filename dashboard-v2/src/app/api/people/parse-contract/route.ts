@@ -69,8 +69,11 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "cnpj": "CNPJ da empresa contratada (formato 00.000.000/0000-00, se for PJ)",
   "linkType": "\"PJ\" se houver CNPJ ou menção a prestação de serviço por pessoa jurídica, caso contrário \"CLT\"",
   "remuneration_fixed": Valor monetário base mensal da remuneração/salário/honorário (apenas número decimal),
-  "remuneration_bonus": Valor monetário base mensal de bônus/premiação/variável se houver (apenas número decimal). Analise todo o contrato por cláusulas de bônus, remuneração variável ou metas e extraia o maior valor de bônus encontrado,
-  "bonus_description": "Breve descrição do bônus/remuneração variável (ex: Bônus por meta de X, ou Bônus mensal de assiduidade)",
+  "remuneration_bonus": Valor monetário de BÔNUS VARIÁVEL ligado a metas, desempenho ou resultados (apenas número decimal). ATENÇÃO: bônus é sempre condicional/variável — não confunda com incentivos fixos ou periódicos. Analise o contrato por cláusulas de bônus por meta, remuneração variável, comissão ou prêmio por resultado e extraia o maior valor encontrado,
+  "bonus_description": "Breve descrição do bônus variável (ex: Bônus por atingimento de meta de X, Prêmio de produção)",
+  "remuneration_incentives": Valor monetário de INCENTIVOS FIXOS OU PERIÓDICOS que não sejam salário base nem bônus por meta. Exemplos: PLR (Participação nos Lucros), gratificação semestral/anual fixa, incentivo de assiduidade, prêmio mensal fixo, adicional de função fixo (apenas número decimal ou nulo se não houver),
+  "incentives_description": "Breve descrição dos incentivos (ex: PLR anual, Gratificação de função, Incentivo de assiduidade mensal)",
+  "remuneration_connectivity": Valor monetário de auxílio conectividade, ajuda de custo de internet, telefonia ou home office se houver (apenas número decimal ou nulo),
   "email": "E-mail de contato pessoal",
   "phone": "Telefone de contato pessoal (DDD + Número. NÃO INCLUA o código de país +55/55 sob nenhuma hipótese)",
   "email_professional": "E-mail de contato profissional/corporativo (trabalho)",
@@ -92,13 +95,16 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "start_date": "Data de início do contrato/admissão/início da prestação (formato YYYY-MM-DD)",
   "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato se houver (formato YYYY-MM-DD)",
   "termination_date": "Se for Distrato, busque a DATA EFETIVA DO ÚLTIMO DIA TRABALHADO ou data real do encerramento da prestação de serviços. Atenção: pode não ser a data de assinatura! Procure por frases como 'tendo seu término no dia X' ou 'o último dia de serviço será Y' (formato YYYY-MM-DD)",
-  "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)"
+  "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)",
+  "executive_summary": "Resumo profissional executivo baseado no OBJETO DO CONTRATO. Descreva em 3 a 5 frases as principais atividades, responsabilidades e entregas esperadas do contratado conforme definidas no contrato. Use linguagem formal e objetiva, na terceira pessoa. Exemplo: 'Responsável pela prestação de serviços de consultoria em tecnologia da informação. Deverá desenvolver e manter sistemas conforme especificações técnicas acordadas. Participará de reuniões de acompanhamento e entregará relatórios mensais de progresso.' Se o contrato não descrever o objeto ou atividades, retorne nulo."
 }
 
 Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser EXCLUSIVAMENTE 'PJ'. O termo MEI diz respeito apenas a regime tributário e nunca deve ser listado como linkType.
+IMPORTANTE sobre remuneração: distinga claramente BÔNUS VARIÁVEL (condicional a metas/resultados → remuneration_bonus) de INCENTIVOS FIXOS (periódicos, garantidos → remuneration_incentives). Nunca some ambos no mesmo campo. Se uma verba puder ser de ambas as categorias, prefira incentivos se for garantida, ou bônus se for condicional.
 Se document_type for 'Distrato', a termination_date deve refletir o último dia real de vínculo/serviço, e não necessariamente o dia em que o distrato foi assinado. Se o documento mencionar que os serviços encerram no dia X, X será a termination_date.
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
 `;
+
 
     const result = await model.generateContent([
       {
