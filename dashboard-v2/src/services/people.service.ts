@@ -123,6 +123,21 @@ export class PeopleService {
   }
 
   /**
+   * Atualização cirúrgica apenas da foto de perfil — não toca em nenhum outro campo.
+   */
+  static async updatePhotoUrl(employeeId: string, photoUrl: string, isTestMode?: boolean): Promise<void> {
+    const table = isTestMode ? 'employees_test' : 'employees';
+    const { error } = await supabase
+      .from(table)
+      .update({ photo_url: photoUrl })
+      .eq('id', employeeId);
+
+    if (error) throw new Error(`Falha ao atualizar foto: ${error.message}`);
+  }
+
+
+
+  /**
    * Busca um colaborador existente por CNPJ, CPF ou Nome (em ordem de prioridade)
    */
   static async findEmployeeByUniqueKeys(

@@ -370,39 +370,34 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     // Gera ID temporário se ainda não houver (novo colaborador)
     let targetId = profile.id;
     if (!targetId) {
       targetId = crypto.randomUUID();
-      setProfile(prev => ({ ...prev, id: targetId }));
     }
-    
+
     setIsSaving(true);
     try {
       const url = await PeopleService.uploadProfilePhoto(targetId, file, isTestMode);
-      
-      // Aplica a URL usando o state funcional para capturar o perfil mais atual
-      // e evitar perda de dados editados ainda não salvos (stale closure)
-      setProfile(prev => {
-        const updated = { ...prev, photo_url: url, id: targetId };
-        
-        // Persiste no banco apenas se o colaborador já existia (tem ID real do DB)
-        if (profile.id) {
-          PeopleService.saveEmployeeProfile(updated, isTestMode)
-            .then(() => { if (onDataChanged) onDataChanged(targetId); })
-            .catch(err => setError((err as Error).message));
-        }
-        
-        return updated;
-      });
+
+      // Atualiza apenas photo_url via updater funcional (preserva todos os campos editados)
+      setProfile(prev => ({ ...prev, photo_url: url, id: targetId }));
+
+      // Persiste a foto no banco apenas se o colaborador já existia
+      // Método cirúrgico: atualiza só photo_url, não toca em outros campos
+      if (profile.id) {
+        await PeopleService.updatePhotoUrl(profile.id, url, isTestMode);
+        if (onDataChanged) onDataChanged(profile.id);
+      }
     } catch (err: unknown) {
-       const error = err as Error;
-       setError(error.message);
+      const error = err as Error;
+      setError(error.message);
     } finally {
       setIsSaving(false);
     }
   };
+
 
 
   const handleAdditiveUpload = async (e: React.ChangeEvent<HTMLInputElement>, historyId?: string) => {
