@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.46.17";
+export const APP_VERSION = "v.02.46.19";
 export const VERSION_DATE = "2026-06-12";
 export const VERSION_CHANGELOG = [
+  "v.02.46.19 - Fix: Refina prompt do parser de IA para detectar auxílios veiculares como Incentivo; define padrão de mesclagem como 'incoming' para campos profissionais/financeiros em divergência e ajusta data de registro da trajetória baseado na data do novo contrato.",
+  "v.02.46.18 - Fix: IA mapeia ajudas de custo/bonificação veicular como Incentivo e não Bônus; adiciona campo department_start_date ao diálogo de mesclagem seletiva de contratos e define a data da trajetória baseado na data de assinatura do novo contrato.",
   "v.02.46.17 - Fix: Corrige detecção dinâmica entre INSERT/UPDATE com consulta prévia no Supabase para evitar conflito de chave única (duplicate key value pkey) ao mesclar novo colaborador com registro existente; corrige classificação dos tipos de evento na trajetória para exibir Cargo, Setor e Remuneração.",
   "v.02.46.16 - Fix: Corrige chaves do histórico de aditivos automático (change_date e observations) evitando erro de coluna inexistente 'description' no Supabase.",
   "v.02.46.15 - Fix: Corrige persistência indevida de uploads em colaboradores não salvos e garante INSERT correto para novos cadastros com ID gerado localmente; mapeia remuneration_connectivity e remuneration_incentives no dashboard.",

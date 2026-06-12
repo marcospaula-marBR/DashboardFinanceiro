@@ -31,6 +31,8 @@ const MERGE_FIELDS = [
   { key: 'company', label: 'Empresa' },
   { key: 'remuneration_fixed', label: 'Salário / Valor Fixo', isCurrency: true },
   { key: 'remuneration_bonus', label: 'Bônus', isCurrency: true },
+  { key: 'remuneration_connectivity', label: 'Conectividade', isCurrency: true },
+  { key: 'remuneration_incentives', label: 'Incentivos', isCurrency: true },
   { key: 'email', label: 'E-mail Pessoal' },
   { key: 'phone', label: 'Telefone Pessoal' },
   { key: 'email_professional', label: 'E-mail Profissional' },
@@ -45,6 +47,7 @@ const MERGE_FIELDS = [
   { key: 'contract_expiry_date', label: 'Vencimento Contrato', isDate: true },
   { key: 'job_role', label: 'Cargo / Função' },
   { key: 'department', label: 'Setor / Departamento' },
+  { key: 'department_start_date', label: 'Início no Setor/Função', isDate: true },
   { key: 'responsible_name', label: 'Nome do Responsável' },
   { key: 'responsible_cpf', label: 'CPF do Responsável' },
   { key: 'degree', label: 'Grau de Instrução' },
@@ -113,6 +116,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     existingBonds: EmploymentContract[];
     existingCosts: MonthlyCost[];
     fileLink?: string;
+    contractDate?: string;
   } | null>(null);
   const [selectedMergeFields, setSelectedMergeFields] = useState<Record<string, 'existing' | 'incoming'>>({});
   const [pendingHistoryItems, setPendingHistoryItems] = useState<any[]>([]);
@@ -531,6 +535,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     if (data.start_date) {
       next.start_date = getOldestDate(prev.start_date, data.start_date);
     }
+    if (data.job_role || data.department) {
+      next.department_start_date = data.signature_date || data.start_date || new Date().toISOString().split('T')[0];
+    }
     if (data.contract_expiry_date) {
       next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
     }
@@ -561,7 +568,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     hist: HistoryItem[],
     bondsData: EmploymentContract[],
     costsData: MonthlyCost[],
-    fileLink?: string
+    fileLink?: string,
+    contractDate?: string
   ) => {
     const cleanVal = (val: any) => {
       if (val === undefined || val === null) return '';
@@ -580,7 +588,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       if (['document_id', 'pj_type', 'zip_code', 'phone', 'phone_professional', 'cnpj_zip_code', 'responsible_cpf'].includes(key)) {
         return cleanVal(existingVal) !== cleanVal(incomingVal);
       }
-      if (['remuneration_fixed', 'remuneration_bonus'].includes(key)) {
+      if (['remuneration_fixed', 'remuneration_bonus', 'remuneration_connectivity', 'remuneration_incentives'].includes(key)) {
         return Number(existingVal || 0) !== Number(incomingVal || 0);
       }
       return cleanStr(existingVal) !== cleanStr(incomingVal);
@@ -603,6 +611,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           } else {
             defaults[field.key] = d1 ? 'existing' : 'incoming';
           }
+        } else if ([
+          'job_role', 'department', 'department_start_date',
+          'remuneration_fixed', 'remuneration_bonus', 'remuneration_incentives', 'remuneration_connectivity',
+          'contract_expiry_date', 'corporate_name', 'pj_type', 'links_contratos', 'links_aditivos'
+        ].includes(field.key)) {
+          defaults[field.key] = 'incoming';
         } else {
           defaults[field.key] = 'existing';
         }
@@ -615,7 +629,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       existingHistory: hist,
       existingBonds: bondsData,
       existingCosts: costsData,
-      fileLink
+      fileLink,
+      contractDate
     });
     setSelectedMergeFields(defaults);
   };
@@ -623,7 +638,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const handleConfirmMerge = async () => {
     if (!pendingMerge) return;
 
-    const { existingProfile, incomingData, existingHistory, existingBonds, existingCosts, fileLink } = pendingMerge;
+    const { existingProfile, incomingData, existingHistory, existingBonds, existingCosts, fileLink, contractDate } = pendingMerge;
     const mergedProfile = { ...existingProfile };
     const historyChanges: string[] = [];
     const changeDate = new Date().toISOString().split('T')[0];
@@ -642,6 +657,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           historyChanges.push(`Setor/Departamento alterado de '${existingVal || '-'}' para '${incomingVal}'`);
         } else if (field.key === 'remuneration_fixed' && Number(existingVal || 0) !== Number(incomingVal || 0)) {
           historyChanges.push(`Remuneração alterada de ${formatCurrency(Number(existingVal || 0))} para ${formatCurrency(Number(incomingVal || 0))}`);
+        } else if (field.key === 'remuneration_incentives' && Number(existingVal || 0) !== Number(incomingVal || 0)) {
+          historyChanges.push(`Incentivos alterados de ${formatCurrency(Number(existingVal || 0))} para ${formatCurrency(Number(incomingVal || 0))}`);
+        } else if (field.key === 'remuneration_connectivity' && Number(existingVal || 0) !== Number(incomingVal || 0)) {
+          historyChanges.push(`Conectividade alterada de ${formatCurrency(Number(existingVal || 0))} para ${formatCurrency(Number(incomingVal || 0))}`);
         }
       } else {
         (mergedProfile as any)[field.key] = existingVal !== undefined ? existingVal : incomingVal;
@@ -656,22 +675,26 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     }
 
     const newHistoryItems: any[] = [];
+    const eventDate = contractDate || incomingData.department_start_date || changeDate;
     
     historyChanges.forEach(changeText => {
       let event_type = 'Outro';
       if (changeText.startsWith("Cargo")) event_type = "Cargo";
       else if (changeText.startsWith("Setor/Departamento") || changeText.startsWith("Setor")) event_type = "Setor";
-      else if (changeText.startsWith("Remuneração")) event_type = "Remuneração";
+      else if (changeText.startsWith("Remuneração") || changeText.startsWith("Incentivos") || changeText.startsWith("Conectividade")) event_type = "Remuneração";
 
       newHistoryItems.push({
         employee_id: mergedProfile.id || '',
         event_type,
-        change_date: changeDate,
+        change_date: eventDate,
         observations: `${changeText} (via importação de contrato PDF)`
       });
     });
     
     setPendingHistoryItems(prev => [...prev, ...newHistoryItems]);
+
+    // Recalcular a remuneração total do perfil mesclado com base em seus componentes individuais
+    mergedProfile.remuneration = (mergedProfile.remuneration_fixed || 0) + (mergedProfile.remuneration_bonus || 0) + (mergedProfile.remuneration_commission || 0) + (mergedProfile.remuneration_connectivity || 0) + (mergedProfile.remuneration_incentives || 0);
 
     setProfile(mergedProfile);
     setHistory(existingHistory);
@@ -766,7 +789,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           
           let updatedMarkdownLink = `[${docTitle} ${signDateStr}](${contractUrl})`;
 
-          initializeMerge(existingProfile, incomingMapped, hist || [], bondsData || [], costsData || [], updatedMarkdownLink);
+          initializeMerge(existingProfile, incomingMapped, hist || [], bondsData || [], costsData || [], updatedMarkdownLink, data.signature_date || data.start_date);
         } catch (loadErr: unknown) {
           const error = loadErr as Error;
           console.error('Erro ao carregar dados do colaborador existente:', error);
@@ -779,13 +802,48 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       }
       
       // Histórico de Mudança Automático para Aditivos
-      if (data.job_role && data.job_role !== profile.job_role) {
-        setPendingHistoryItems(h => [...h, {
-          employee_id: profile.id || '',
-          event_type: 'Cargo',
-          change_date: new Date().toISOString().split('T')[0],
-          observations: `Cargo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (Via IA)`
-        }]);
+      const docDate = data.signature_date || data.start_date || new Date().toISOString().split('T')[0];
+      if (profile.id) {
+        if (data.job_role && data.job_role !== profile.job_role) {
+          setPendingHistoryItems(h => [...h, {
+            employee_id: profile.id || '',
+            event_type: 'Cargo',
+            change_date: docDate,
+            observations: `Cargo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (via importação de contrato PDF)`
+          }]);
+        }
+        if (data.department && data.department !== profile.department) {
+          setPendingHistoryItems(h => [...h, {
+            employee_id: profile.id || '',
+            event_type: 'Setor',
+            change_date: docDate,
+            observations: `Setor/Departamento alterado de '${profile.department || '-'}' para '${data.department}' (via importação de contrato PDF)`
+          }]);
+        }
+        if (data.remuneration_fixed !== undefined && data.remuneration_fixed !== null && Number(data.remuneration_fixed || 0) !== Number(profile.remuneration_fixed || 0)) {
+          setPendingHistoryItems(h => [...h, {
+            employee_id: profile.id || '',
+            event_type: 'Remuneração',
+            change_date: docDate,
+            observations: `Remuneração alterada de ${formatCurrency(Number(profile.remuneration_fixed || 0))} para ${formatCurrency(Number(data.remuneration_fixed || 0))} (via importação de contrato PDF)`
+          }]);
+        }
+        if (data.remuneration_incentives !== undefined && data.remuneration_incentives !== null && Number(data.remuneration_incentives || 0) !== Number(profile.remuneration_incentives || 0)) {
+          setPendingHistoryItems(h => [...h, {
+            employee_id: profile.id || '',
+            event_type: 'Remuneração',
+            change_date: docDate,
+            observations: `Incentivos alterados de ${formatCurrency(Number(profile.remuneration_incentives || 0))} para ${formatCurrency(Number(data.remuneration_incentives || 0))} (via importação de contrato PDF)`
+          }]);
+        }
+        if (data.remuneration_connectivity !== undefined && data.remuneration_connectivity !== null && Number(data.remuneration_connectivity || 0) !== Number(profile.remuneration_connectivity || 0)) {
+          setPendingHistoryItems(h => [...h, {
+            employee_id: profile.id || '',
+            event_type: 'Remuneração',
+            change_date: docDate,
+            observations: `Conectividade alterada de ${formatCurrency(Number(profile.remuneration_connectivity || 0))} para ${formatCurrency(Number(data.remuneration_connectivity || 0))} (via importação de contrato PDF)`
+          }]);
+        }
       }
 
       // Mesclar os dados extraídos no profile
@@ -850,6 +908,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         // Datas: Admissão (Mais antiga) e Vencimento (Maior/Mais recente)
         if (data.start_date && data.document_type !== 'Distrato') {
           next.start_date = getOldestDate(prev.start_date, data.start_date);
+        }
+        if (data.job_role || data.department) {
+          next.department_start_date = data.signature_date || data.start_date || new Date().toISOString().split('T')[0];
         }
         if (data.contract_expiry_date && data.document_type !== 'Distrato') {
           next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
