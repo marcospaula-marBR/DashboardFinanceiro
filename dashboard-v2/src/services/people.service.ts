@@ -86,7 +86,7 @@ export class PeopleService {
   /**
    * Salva ou Atualiza um Colaborador no banco de dados.
    */
-  static async saveEmployeeProfile(payload: Partial<Employee>, isTestMode?: boolean): Promise<any> {
+  static async saveEmployeeProfile(payload: Partial<Employee>, isTestMode?: boolean, isNew?: boolean): Promise<any> {
     const table = isTestMode ? 'employees_test' : 'employees';
     
     if (payload.service_location) {
@@ -98,7 +98,9 @@ export class PeopleService {
     
     const { id, ...updateData } = dbPayload;
 
-    if (id) {
+    const shouldInsert = isNew ?? !id;
+
+    if (!shouldInsert && id) {
       // UPDATE
       const { data, error } = await supabase
         .from(table)
@@ -111,9 +113,12 @@ export class PeopleService {
       return data;
     } else {
       // INSERT
+      // Se houver um id preexistente (gerado temporariamente para foto/contrato), incluímos no insert
+      const insertData = id ? dbPayload : updateData;
+      
       const { data, error } = await supabase
         .from(table)
-        .insert([updateData])
+        .insert([insertData])
         .select()
         .single();
       

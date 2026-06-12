@@ -309,7 +309,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
       }
       
-      const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode);
+      const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode, !employeeId);
       
       // Se houver itens de histórico pendentes do merge, salvamos agora
       if (pendingHistoryItems.length > 0 && saved.id) {
@@ -384,11 +384,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       // Atualiza apenas photo_url via updater funcional (preserva todos os campos editados)
       setProfile(prev => ({ ...prev, photo_url: url, id: targetId }));
 
-      // Persiste a foto no banco apenas se o colaborador já existia
-      // Método cirúrgico: atualiza só photo_url, não toca em outros campos
-      if (profile.id) {
-        await PeopleService.updatePhotoUrl(profile.id, url, isTestMode);
-        if (onDataChanged) onDataChanged(profile.id);
+      // Persiste a foto no banco apenas se o colaborador já existia (prop employeeId presente)
+      if (employeeId) {
+        await PeopleService.updatePhotoUrl(employeeId, url, isTestMode);
+        if (onDataChanged) onDataChanged(employeeId);
       }
     } catch (err: unknown) {
       const error = err as Error;
@@ -402,11 +401,18 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
   const handleAdditiveUpload = async (e: React.ChangeEvent<HTMLInputElement>, historyId?: string) => {
     const file = e.target.files?.[0];
-    if (!file || !profile.id) return;
+    if (!file) return;
+
+    // Gera ID temporário se ainda não houver (novo colaborador)
+    let targetId = profile.id;
+    if (!targetId) {
+      targetId = crypto.randomUUID();
+      setProfile(prev => ({ ...prev, id: targetId }));
+    }
     
     setIsSaving(true);
     try {
-      const url = await PeopleService.uploadAdditiveFile(profile.id, file, isTestMode);
+      const url = await PeopleService.uploadAdditiveFile(targetId, file, isTestMode);
       const dateStr = new Date().toLocaleDateString('pt-BR');
       const markdownLink = `[Anexo ${dateStr}](${url})`;
 
@@ -422,9 +428,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         const currentText = profile.links_aditivos ? profile.links_aditivos + '\n' : '';
         const newText = currentText + markdownLink;
         handleChange('links_aditivos', newText);
-        await PeopleService.saveEmployeeProfile({ ...profile, links_aditivos: newText }, isTestMode);
+        // Persiste apenas se o colaborador já existe no banco
+        if (employeeId) {
+          await PeopleService.saveEmployeeProfile({ ...profile, links_aditivos: newText }, isTestMode);
+        }
       }
-      if (onDataChanged) onDataChanged();
+      if (employeeId && onDataChanged) onDataChanged();
     } catch (err: unknown) {
        const error = err as Error;
        setError(error.message);
@@ -435,17 +444,27 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
   const handleBaseContractUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !profile.id) return;
+    if (!file) return;
+
+    // Gera ID temporário se ainda não houver (novo colaborador)
+    let targetId = profile.id;
+    if (!targetId) {
+      targetId = crypto.randomUUID();
+      setProfile(prev => ({ ...prev, id: targetId }));
+    }
     
     setIsSaving(true);
     try {
-      const url = await PeopleService.uploadAdditiveFile(profile.id, file, isTestMode);
+      const url = await PeopleService.uploadAdditiveFile(targetId, file, isTestMode);
       const currentText = profile.links_contratos ? profile.links_contratos + '\n' : '';
       const newText = currentText + `[Documento Base ${new Date().toLocaleDateString('pt-BR')}](${url})`;
       
       handleChange('links_contratos', newText);
-      await PeopleService.saveEmployeeProfile({ ...profile, links_contratos: newText }, isTestMode);
-      if (onDataChanged) onDataChanged();
+      // Persiste apenas se o colaborador já existe no banco
+      if (employeeId) {
+        await PeopleService.saveEmployeeProfile({ ...profile, links_contratos: newText }, isTestMode);
+        if (onDataChanged) onDataChanged();
+      }
     } catch (err: unknown) {
        const error = err as Error;
        setError(error.message);
@@ -900,8 +919,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     setIsSaving(true);
     try {
       handleChange(field, newText);
-      await PeopleService.saveEmployeeProfile({ ...profile, [field]: newText }, isTestMode);
-      if (onDataChanged) onDataChanged();
+      if (employeeId) {
+        await PeopleService.saveEmployeeProfile({ ...profile, [field]: newText }, isTestMode);
+        if (onDataChanged) onDataChanged();
+      }
     } catch (err: unknown) {
       const error = err as Error;
       setError(error.message);

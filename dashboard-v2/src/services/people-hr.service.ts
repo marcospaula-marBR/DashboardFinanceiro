@@ -56,6 +56,8 @@ interface RawEmployeeDb {
   executive_summary?: string;
   executive_link?: string;
   commission_plan?: string;
+  remuneration_connectivity?: number;
+  remuneration_incentives?: number;
 }
 
 export const PeopleHRService = {
@@ -221,6 +223,8 @@ export const PeopleHRService = {
         remuneration_fixed: emp.remuneration_fixed ? parseFloat(String(emp.remuneration_fixed)) : 0,
         remuneration_bonus: emp.remuneration_bonus ? parseFloat(String(emp.remuneration_bonus)) : 0,
         remuneration_commission: emp.remuneration_commission ? parseFloat(String(emp.remuneration_commission)) : 0,
+        remuneration_connectivity: emp.remuneration_connectivity ? parseFloat(String(emp.remuneration_connectivity)) : (emp.metadata?.remuneration_connectivity ? parseFloat(String(emp.metadata.remuneration_connectivity)) : 0),
+        remuneration_incentives: emp.remuneration_incentives ? parseFloat(String(emp.remuneration_incentives)) : (emp.metadata?.remuneration_incentives ? parseFloat(String(emp.metadata.remuneration_incentives)) : 0),
         contract_expiry_date: emp.contract_expiry_date,
         aditivoCount: aditivos.length,
         is_outsourced: emp.is_outsourced,
