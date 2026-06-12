@@ -98,27 +98,43 @@ export class PeopleService {
     
     const { id, ...updateData } = dbPayload;
 
-    const shouldInsert = isNew ?? !id;
-
-    if (!shouldInsert && id) {
-      // UPDATE
-      const { data, error } = await supabase
+    if (id) {
+      // Verifica se o ID já existe na tabela para decidir entre UPDATE e INSERT.
+      // Isso resolve o caso onde um colaborador foi mesclado a partir de um registro do banco (e tem ID real)
+      // mas o formulário foi aberto em modo de criação (!employeeId era true).
+      const { data: existingRecord } = await supabase
         .from(table)
-        .update(updateData)
+        .select('id')
         .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw new Error(`Falha ao atualizar colaborador: ${error.message}`);
-      return data;
+        .maybeSingle();
+
+      if (existingRecord) {
+        // UPDATE
+        const { data, error } = await supabase
+          .from(table)
+          .update(updateData)
+          .eq('id', id)
+          .select()
+          .single();
+        
+        if (error) throw new Error(`Falha ao atualizar colaborador: ${error.message}`);
+        return data;
+      } else {
+        // INSERT com ID preexistente (gerado localmente para upload de foto/contrato)
+        const { data, error } = await supabase
+          .from(table)
+          .insert([dbPayload])
+          .select()
+          .single();
+        
+        if (error) throw new Error(`Falha ao registrar novo colaborador: ${error.message}`);
+        return data;
+      }
     } else {
-      // INSERT
-      // Se houver um id preexistente (gerado temporariamente para foto/contrato), incluímos no insert
-      const insertData = id ? dbPayload : updateData;
-      
+      // INSERT sem ID (geração automática pelo Supabase)
       const { data, error } = await supabase
         .from(table)
-        .insert([insertData])
+        .insert([updateData])
         .select()
         .single();
       

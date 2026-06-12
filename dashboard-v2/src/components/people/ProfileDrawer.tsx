@@ -655,12 +655,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       }
     }
 
-    const newHistoryItems = historyChanges.map(changeText => ({
-      employee_id: mergedProfile.id || '',
-      event_type: 'Aditivo',
-      change_date: changeDate,
-      observations: `${changeText} (via importação de contrato PDF)`
-    }));
+    const newHistoryItems: any[] = [];
+    
+    historyChanges.forEach(changeText => {
+      let event_type = 'Outro';
+      if (changeText.startsWith("Cargo")) event_type = "Cargo";
+      else if (changeText.startsWith("Setor/Departamento") || changeText.startsWith("Setor")) event_type = "Setor";
+      else if (changeText.startsWith("Remuneração")) event_type = "Remuneração";
+
+      newHistoryItems.push({
+        employee_id: mergedProfile.id || '',
+        event_type,
+        change_date: changeDate,
+        observations: `${changeText} (via importação de contrato PDF)`
+      });
+    });
     
     setPendingHistoryItems(prev => [...prev, ...newHistoryItems]);
 
@@ -773,7 +782,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       if (data.job_role && data.job_role !== profile.job_role) {
         setPendingHistoryItems(h => [...h, {
           employee_id: profile.id || '',
-          event_type: 'Aditivo',
+          event_type: 'Cargo',
           change_date: new Date().toISOString().split('T')[0],
           observations: `Cargo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (Via IA)`
         }]);
