@@ -91,6 +91,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
               <th className="py-4 px-4 text-center">Vínculo</th>
               <th className="py-4 px-4 text-right">Valor Base</th>
               <th className="py-4 px-4 text-right">Bônus</th>
+              <th className="py-4 px-4 text-right">Incentivos</th>
               <th className="py-4 px-4 text-center">Início Contratual</th>
               <th className="py-4 px-4 text-center">Vencimento</th>
               <th className="py-4 px-6 text-center">Ações</th>
@@ -99,7 +100,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
           <tbody className="divide-y divide-slate-100">
             {paginatedEmployees.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-400 text-sm italic">
+                <td colSpan={9} className="py-12 text-center text-slate-400 text-sm italic">
                   Nenhum colaborador encontrado para os filtros selecionados.
                 </td>
               </tr>
@@ -207,6 +208,13 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                     <td className="py-4 px-4 text-right text-sm font-bold text-emerald-600 tabular-nums">
                       {showValues ? (
                         emp.remuneration_bonus && emp.remuneration_bonus > 0 ? formatCurrency(emp.remuneration_bonus) : '—'
+                      ) : (
+                        <span className="text-slate-300 font-normal">••••••</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-right text-sm font-bold text-teal-600 tabular-nums">
+                      {showValues ? (
+                        emp.remuneration_incentives && emp.remuneration_incentives > 0 ? formatCurrency(emp.remuneration_incentives) : '—'
                       ) : (
                         <span className="text-slate-300 font-normal">••••••</span>
                       )}
