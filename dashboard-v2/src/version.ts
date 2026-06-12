@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.15";
+export const APP_VERSION = "v.02.46.16";
 export const VERSION_DATE = "2026-06-12";
 export const VERSION_CHANGELOG = [
+  "v.02.46.16 - Fix: Corrige chaves do histórico de aditivos automático (change_date e observations) evitando erro de coluna inexistente 'description' no Supabase.",
   "v.02.46.15 - Fix: Corrige persistência indevida de uploads em colaboradores não salvos e garante INSERT correto para novos cadastros com ID gerado localmente; mapeia remuneration_connectivity e remuneration_incentives no dashboard.",
   "v.02.46.14 - Fix: Erro 'Cannot coerce to single JSON object' ao subir foto. Side effect de save removido do updater React (StrictMode double-invoke). Novo método updatePhotoUrl faz update cirúrgico apenas da coluna photo_url.",
   "v.02.46.10 - Fix: Remove 'Início do ciclo' do cabeçalho do card de contrato; adiciona regra obrigatória de version bump no GEMINI.md.",

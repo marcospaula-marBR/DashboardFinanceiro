@@ -774,8 +774,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         setPendingHistoryItems(h => [...h, {
           employee_id: profile.id || '',
           event_type: 'Aditivo',
-          event_date: new Date().toISOString().split('T')[0],
-          description: `Cargo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (Via IA)`
+          change_date: new Date().toISOString().split('T')[0],
+          observations: `Cargo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (Via IA)`
         }]);
       }
 
