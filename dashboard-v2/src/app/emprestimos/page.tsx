@@ -43,7 +43,17 @@ export default function EmprestimosPage() {
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [stats, setStats] = useState<LoanStats | null>(null);
   const [projections, setProjections] = useState<ProjectionData[]>([]);
-  const [activeFilters, setActiveFilters] = useState<FilterValues | undefined>(undefined);
+  const [activeFilters, setActiveFilters] = useState<FilterValues>({
+    search: "",
+    empresa: "",
+    vinculo: "",
+    status: "",
+    cargo: "",
+    remuneracaoRange: "",
+    temAditivo: "",
+    incluirQuitados: false,
+    mostrarTodos: false,
+  });
   
   // Lista de colaboradores com contrato vencendo (<= 10 dias)
   const [expiringEmployees, setExpiringEmployees] = useState<Employee[]>([]);
@@ -96,14 +106,10 @@ export default function EmprestimosPage() {
     try {
       // Fetch employees
       setIsLoadingEmployees(true);
-      const employeesData = await LoansService.getEmployees(filters, isTestMode);
+      const currentFilters = filters || activeFilters;
+      const employeesData = await LoansService.getEmployees(currentFilters, isTestMode);
       setEmployees(employeesData);
-      
-      if (filters) {
-        applyLocalFilters(employeesData, filters);
-      } else {
-        setFilteredEmployees(employeesData);
-      }
+      applyLocalFilters(employeesData, currentFilters);
     } catch (err) {
       console.error('Erro ao carregar colaboradores:', err);
       setError('Falha ao carregar colaboradores');

@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.25";
+export const APP_VERSION = "v.02.46.26";
 export const VERSION_DATE = "2026-06-16";
 export const VERSION_CHANGELOG = [
+  "v.02.46.26 - Fix: Filtros de listagem de empréstimos — inicializa o estado de filtros ativos com os valores padrão e garante que apenas colaboradores com empréstimos ATIVOS sejam listados por padrão no carregamento inicial, ocultando quitados e sem empréstimos até serem explicitamente selecionados no filtro.",
   "v.02.46.25 - Fix: Alinhamento matemático do dashboard de empréstimos — simplifica e corrige calcReceivedForLoan para retornar amount - debt, eliminando a discrepância estatística entre Total Emprestado, Saldo Devedor e Total Já Recebido provocada por dupla contagem de quitações extras e parcelas liquidadas.",
   "v.02.46.24 - Fix: Correção de cálculo e exibição de parcelas para contratos LIQUIDADOS — zera o comprometimento mensal (calcInstallmentForMonth) para contratos liquidados matematicamente por pagamentos extras/antecipações; desabilita o botão 'Baixar' e estiliza as parcelas pendentes futuras como 'Descontínuo (Liquidado)' na timeline.",
   "v.02.46.23 - Feat: Edição flexível de cronograma de empréstimos — desbloqueio da alteração de data de início com parcelas já pagas (preservando o status de PAGO); botão 'Sugerir Datas via IA' integrado ao Gemini no formulário de edição de datas para extração direta de PDFs/Imagens; e edição individual de data de vencimento (due_date) via timeline de parcelas.",
