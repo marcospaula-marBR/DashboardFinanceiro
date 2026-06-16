@@ -11,6 +11,7 @@ interface StatCardProps {
   color?: "blue" | "red" | "green" | "emerald" | "purple" | "amber" | "sky" | "slate";
   description?: string;
   size?: "default" | "large";
+  onClick?: () => void;
 }
 
 const colorMap = {
@@ -64,7 +65,7 @@ const colorMap = {
   },
 };
 
-export function StatCard({ title, value, icon, trend, color = "blue", description, size = "default" }: StatCardProps) {
+export function StatCard({ title, value, icon, trend, color = "blue", description, size = "default", onClick }: StatCardProps) {
   const colors = colorMap[color];
   
   return (
@@ -72,7 +73,8 @@ export function StatCard({ title, value, icon, trend, color = "blue", descriptio
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
-      className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 transition-all hover:shadow-md"
+      onClick={onClick}
+      className={`bg-white rounded-xl border border-slate-200 shadow-sm p-5 transition-all hover:shadow-md ${onClick ? 'cursor-pointer hover:border-slate-300' : ''}`}
     >
       <div className="flex items-center gap-4">
         <div className={`${colors.iconBg} p-3 rounded-xl text-white shrink-0`}>

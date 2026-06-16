@@ -144,6 +144,9 @@ export interface LoanStats {
   maiorEmprestimoRef: string;
   proximoEncerrar: string;
   parcelasRestantes: number;
+  proximoEncerrarValor?: number;
+  ultimaParcelaMes?: string;
+  ultimaParcelaValor?: number;
 }
 
 export interface ProjectionData {

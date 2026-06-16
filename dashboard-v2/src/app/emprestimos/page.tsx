@@ -26,7 +26,8 @@ import {
   Timer,
   Loader2,
   AlertCircle,
-  CreditCard
+  CreditCard,
+  X
 } from "lucide-react";
 
 export default function EmprestimosPage() {
@@ -37,6 +38,207 @@ export default function EmprestimosPage() {
   const [isNewLoanOpen, setIsNewLoanOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
+
+  interface CardDetailItem {
+    id: string;
+    initials: string;
+    company: string;
+    value1: string | number;
+    value2?: string | number;
+    value3?: string | number;
+    status?: string;
+  }
+
+  const [detailsModal, setDetailsModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    subtitle: string;
+    headers: string[];
+    items: CardDetailItem[];
+  }>({
+    isOpen: false,
+    title: "",
+    subtitle: "",
+    headers: [],
+    items: [],
+  });
+
+  const getInitials = (fullName: string) => {
+    if (!fullName) return "-";
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const openTotalEmprestadoDetails = () => {
+    const items = filteredEmployees
+      .filter(e => e.totalTaken > 0)
+      .map(e => ({
+        id: e.id,
+        initials: getInitials(e.name),
+        company: e.company,
+        value1: formatCurrency(e.totalTaken),
+        value2: e.loanStatus || "-",
+        status: e.loanStatus
+      }));
+
+    setDetailsModal({
+      isOpen: true,
+      title: "Detalhamento de Empréstimos Concedidos",
+      subtitle: "Histórico geral de todos os empréstimos registrados para a seleção atual",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Valor Emprestado", "Status"],
+      items
+    });
+  };
+
+  const openSaldoDevedorDetails = () => {
+    const items = filteredEmployees
+      .filter(e => e.balance > 0)
+      .map(e => ({
+        id: e.id,
+        initials: getInitials(e.name),
+        company: e.company,
+        value1: formatCurrency(e.balance),
+        value2: `${e.remainingInstallments ?? 0} parcelas`,
+        status: e.loanStatus
+      }));
+
+    setDetailsModal({
+      isOpen: true,
+      title: "Detalhamento do Saldo Devedor",
+      subtitle: "Contratos ativos com valores em aberto a receber",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Saldo Devedor", "Restantes", "Status"],
+      items
+    });
+  };
+
+  const openTotalRecebidoDetails = () => {
+    const items = filteredEmployees
+      .filter(e => e.totalTaken > 0)
+      .map(e => ({
+        id: e.id,
+        initials: getInitials(e.name),
+        company: e.company,
+        value1: formatCurrency(e.totalTaken),
+        value2: formatCurrency(e.totalReceived),
+        status: e.loanStatus
+      }));
+
+    setDetailsModal({
+      isOpen: true,
+      title: "Detalhamento de Valores Amortizados",
+      subtitle: "Total amortizado e liquidado dos empréstimos",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Valor Concedido", "Total Já Pago", "Status"],
+      items
+    });
+  };
+
+  const openTotalMesDetails = () => {
+    const items = filteredEmployees
+      .filter(e => e.monthInstallment > 0)
+      .map(e => ({
+        id: e.id,
+        initials: getInitials(e.name),
+        company: e.company,
+        value1: formatCurrency(e.monthInstallment),
+        value2: e.loanStatus || "-",
+        status: e.loanStatus
+      }));
+
+    setDetailsModal({
+      isOpen: true,
+      title: "Recebíveis Previstos para o Ciclo",
+      subtitle: "Parcelas e descontos em folha previstos para o mês de faturamento",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Parcela Mês", "Status"],
+      items
+    });
+  };
+
+  const openColaboradoresAtivosDetails = () => {
+    const items = filteredEmployees
+      .filter(e => e.loanStatus === 'Ativo')
+      .map(e => ({
+        id: e.id,
+        initials: getInitials(e.name),
+        company: e.company,
+        value1: e.job_role || "-",
+        value2: formatCurrency(e.balance),
+        status: e.loanStatus
+      }));
+
+    setDetailsModal({
+      isOpen: true,
+      title: "Colaboradores com Contratos Ativos",
+      subtitle: "Empréstimos com parcelas pendentes de desconto",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Cargo", "Saldo Devedor", "Status"],
+      items
+    });
+  };
+
+  const openTotalmenteQuitadosDetails = () => {
+    const items = filteredEmployees
+      .filter(e => e.totalTaken > 0 && e.balance <= 0)
+      .map(e => ({
+        id: e.id,
+        initials: getInitials(e.name),
+        company: e.company,
+        value1: formatCurrency(e.totalTaken),
+        value2: "Quitado",
+        status: "Quitado"
+      }));
+
+    setDetailsModal({
+      isOpen: true,
+      title: "Contratos Totalmente Quitados",
+      subtitle: "Empréstimos que foram quitados integralmente",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Total Emprestado", "Status"],
+      items
+    });
+  };
+
+  const openUltimaParcelaDetails = () => {
+    const items = filteredEmployees
+      .filter(e => e.lastInstallmentDate && e.lastInstallmentDate !== '-')
+      .sort((a, b) => (b.lastInstallmentDate || '').localeCompare(a.lastInstallmentDate || ''))
+      .map(e => ({
+        id: e.id,
+        initials: getInitials(e.name),
+        company: e.company,
+        value1: e.lastInstallmentDate ? new Date(e.lastInstallmentDate + 'T12:00:00').toLocaleDateString('pt-BR') : "-",
+        value2: formatCurrency(e.monthInstallment || 0),
+        status: e.loanStatus
+      }));
+
+    setDetailsModal({
+      isOpen: true,
+      title: "Cronograma de Término de Contratos (Última Parcela)",
+      subtitle: "Datas da última parcela dos empréstimos ordenadas das mais distantes para as mais próximas",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Data da Última Parcela", "Valor Parcela", "Status"],
+      items
+    });
+  };
+
+  const openProximoEncerrarDetails = () => {
+    const items = filteredEmployees
+      .filter(e => e.loanStatus === 'Ativo' && e.lastInstallmentDate && e.lastInstallmentDate !== '-')
+      .sort((a, b) => (a.lastInstallmentDate || '').localeCompare(b.lastInstallmentDate || ''))
+      .map(e => ({
+        id: e.id,
+        initials: getInitials(e.name),
+        company: e.company,
+        value1: e.lastInstallmentDate ? new Date(e.lastInstallmentDate + 'T12:00:00').toLocaleDateString('pt-BR') : "-",
+        value2: `${e.remainingInstallments ?? 0} restantes`,
+        status: e.loanStatus
+      }));
+
+    setDetailsModal({
+      isOpen: true,
+      title: "Contratos Próximos de Encerrar",
+      subtitle: "Empréstimos ativos ordenados por proximidade de encerramento",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Mês de Encerramento", "Parcelas Restantes", "Status"],
+      items
+    });
+  };
   
   // Data states
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -328,24 +530,28 @@ export default function EmprestimosPage() {
                 value={formatCurrency(filteredStats.totalEmprestado)}
                 icon={<Receipt size={22} />}
                 color="blue"
+                onClick={openTotalEmprestadoDetails}
               />
               <StatCard 
                 title="Saldo Devedor"
                 value={formatCurrency(filteredStats.saldoDevedor)}
                 icon={<PiggyBank size={22} />}
                 color="red"
+                onClick={openSaldoDevedorDetails}
               />
               <StatCard 
                 title="Total Já Recebido"
                 value={formatCurrency(filteredStats.totalRecebido)}
                 icon={<HandCoins size={22} />}
                 color="green"
+                onClick={openTotalRecebidoDetails}
               />
               <StatCard 
                 title="Total Mês"
                 value={formatCurrency(filteredStats.recebivelMes)}
                 icon={<CalendarClock size={22} />}
                 color="emerald"
+                onClick={openTotalMesDetails}
               />
             </>
           )}
@@ -367,6 +573,7 @@ export default function EmprestimosPage() {
                 icon={<FileCheck size={22} />}
                 color="purple"
                 description="Com dívida ativa"
+                onClick={openColaboradoresAtivosDetails}
               />
               <StatCard 
                 title="Totalmente Quitados"
@@ -374,20 +581,23 @@ export default function EmprestimosPage() {
                 icon={<Files size={22} />}
                 color="amber"
                 description="Sem dívida pendente"
+                onClick={openTotalmenteQuitadosDetails}
               />
               <StatCard 
-                title="Maior Empréstimo"
-                value={formatCurrency(stats?.maiorEmprestimo ?? 0)}
-                icon={<TrendingUp size={22} />}
+                title="Última Parcela"
+                value={stats?.ultimaParcelaMes ?? '-'}
+                icon={<CalendarClock size={22} />}
                 color="sky"
-                description={`Ref: ${stats?.maiorEmprestimoRef ?? '-'}`}
+                description={stats?.ultimaParcelaValor ? `Valor: ${formatCurrency(stats.ultimaParcelaValor)}` : 'Nenhuma'}
+                onClick={openUltimaParcelaDetails}
               />
               <StatCard 
                 title="Próximo a Encerrar"
                 value={stats?.proximoEncerrar ?? '-'}
                 icon={<Timer size={22} />}
                 color="slate"
-                description={`${stats?.parcelasRestantes ?? 0} parcelas restantes`}
+                description={stats?.proximoEncerrarValor ? `Valor: ${formatCurrency(stats.proximoEncerrarValor)} (${stats.parcelasRestantes} rest.)` : 'Nenhum'}
+                onClick={openProximoEncerrarDetails}
               />
             </>
           )}
@@ -470,6 +680,101 @@ export default function EmprestimosPage() {
           PDFService.generateDebtTermPDF(loanData, {}, isTestMode);
         }}
       />
+
+      {/* Modal de Detalhes dos Cards */}
+      {detailsModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="text-base font-bold text-slate-800">
+                  {detailsModal.title}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {detailsModal.subtitle}
+                </p>
+              </div>
+              <button
+                onClick={() => setDetailsModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {detailsModal.items.length === 0 ? (
+                <div className="text-center py-8 text-sm text-slate-400">
+                  Nenhum registro encontrado.
+                </div>
+              ) : (
+                <div className="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+                  <table className="w-full border-collapse text-left text-xs text-slate-500">
+                    <thead className="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                      <tr>
+                        {detailsModal.headers.map((h, idx) => (
+                          <th key={idx} className="px-4 py-3">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {detailsModal.items.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-3 font-semibold text-slate-700">
+                            {item.initials}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {item.company}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-700">
+                            {item.value1}
+                          </td>
+                          {detailsModal.headers.length >= 4 && (
+                            <td className="px-4 py-3 text-slate-600">
+                              {item.value2}
+                            </td>
+                          )}
+                          {detailsModal.headers.length >= 5 && (
+                            <td className="px-4 py-3">
+                              {item.status ? (
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  item.status === 'Ativo' 
+                                    ? 'bg-blue-50 text-blue-600 border border-blue-100' 
+                                    : item.status === 'Quitado' 
+                                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                    : 'bg-slate-50 text-slate-500 border border-slate-100'
+                                }`}>
+                                  {item.status}
+                                </span>
+                              ) : (
+                                item.value3
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+              <button
+                onClick={() => setDetailsModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition-colors shadow-sm"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

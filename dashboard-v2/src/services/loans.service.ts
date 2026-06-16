@@ -191,6 +191,17 @@ function loanNextPayment(ln: RawLoan, contractPayments?: { due_date: string, sta
   return `${ny}-${String(nm).padStart(2, '0')}-10`;
 }
 
+function getMonthNameAndYear(dateStr: string): string {
+  if (!dateStr || dateStr === '-') return '-';
+  const parts = dateStr.split('-');
+  if (parts.length < 2) return '-';
+  const y = parts[0];
+  const m = parseInt(parts[1], 10) - 1;
+  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  if (m < 0 || m > 11) return '-';
+  return `${monthNames[m]}/${y}`;
+}
+
 // ─── Fetch helpers ───────────────────────────────────────────────────────────
 
 async function fetchLoans(isTestMode: boolean): Promise<RawLoan[]> {
@@ -425,6 +436,8 @@ export class LoansService {
     let maiorEmprestimo = 0, maiorEmprestimoRef = '-';
     let menorEndAbs = Infinity;
     let proximoEncerrarLoan: RawLoan | null = null;
+    let ultimaParcelaLoan: RawLoan | null = null;
+    let ultimaParcelaDate = '';
 
     loans.forEach(ln => {
       const emp = empMap.get(ln.employee_id);
@@ -456,15 +469,22 @@ export class LoansService {
 
       if (status === 'ATIVO') {
         contratosAtivos++;
-          const [sy, sm] = (ln.start_cycle || "").split("-").map(Number);
-          if (!isNaN(sy) && !isNaN(sm)) {
-            const postponed = parseInt(String(ln.postponed_months)) || 0;
-            const endAbs = sy * 12 + sm + (parseInt(String(ln.installments)) || 0) + postponed;
-            if (endAbs < menorEndAbs) {
-              menorEndAbs = endAbs;
-              proximoEncerrarLoan = ln;
-            }
+        const [sy, sm] = (ln.start_cycle || "").split("-").map(Number);
+        if (!isNaN(sy) && !isNaN(sm)) {
+          const postponed = parseInt(String(ln.postponed_months)) || 0;
+          const endAbs = sy * 12 + sm + (parseInt(String(ln.installments)) || 0) + postponed;
+          if (endAbs < menorEndAbs) {
+            menorEndAbs = endAbs;
+            proximoEncerrarLoan = ln;
           }
+        }
+
+        // Última Parcela (Mais Longeva)
+        const endDate = loanEndDate(ln, contractPayments);
+        if (endDate && endDate !== '-' && endDate > ultimaParcelaDate) {
+          ultimaParcelaDate = endDate;
+          ultimaParcelaLoan = ln;
+        }
       } else {
         contratosLiquidados++;
       }
@@ -476,15 +496,28 @@ export class LoansService {
       }
     });
 
-    let proximoEncerrar = '-', parcelasRestantes = 0;
+    let proximoEncerrar = '-', parcelasRestantes = 0, proximoEncerrarValor = 0;
     if (proximoEncerrarLoan) {
       const pl = proximoEncerrarLoan as RawLoan;
-      const emp = empMap.get(pl.employee_id);
-      proximoEncerrar = emp?.full_name?.split(' ')[0] || '-';
+      const endD = loanEndDate(pl, paymentsByContract.get(pl.id));
+      proximoEncerrar = getMonthNameAndYear(endD);
       
       const installments = parseInt(String(pl.installments)) || 0;
       const elapsed = getElapsedMonths(pl);
       parcelasRestantes = Math.max(0, installments - elapsed);
+      proximoEncerrarValor = (parseFloat(String(pl.amount)) || 0) / (installments || 1);
+    }
+
+    let ultimaParcelaMes = '-';
+    let ultimaParcelaValor = 0;
+    if (ultimaParcelaLoan) {
+      const ul = ultimaParcelaLoan as RawLoan;
+      const endD = loanEndDate(ul, paymentsByContract.get(ul.id));
+      ultimaParcelaMes = getMonthNameAndYear(endD);
+      
+      const installments = parseInt(String(ul.installments)) || 1;
+      const amount = parseFloat(String(ul.amount)) || 0;
+      ultimaParcelaValor = amount / installments;
     }
 
     return {
@@ -492,6 +525,9 @@ export class LoansService {
       contratosAtivos, contratosLiquidados,
       maiorEmprestimo, maiorEmprestimoRef,
       proximoEncerrar, parcelasRestantes,
+      proximoEncerrarValor,
+      ultimaParcelaMes,
+      ultimaParcelaValor,
     };
   }
 
