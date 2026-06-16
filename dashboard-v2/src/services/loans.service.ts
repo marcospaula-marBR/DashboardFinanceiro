@@ -935,10 +935,8 @@ export class LoansService {
     
     if (!payments || payments.length === 0) return;
     
-    const hasPaid = payments.some(p => p.status === 'PAGO');
-    if (hasPaid) {
-      throw new Error('Nao e permitido alterar as datas apos o pagamento de parcelas.');
-    }
+    // Atualiza o vencimento de cada parcela em lote - mesmo com parcelas pagas, recalculamos as datas
+    // de vencimento de todas as parcelas mantendo os status de pagamento originais.
     
     // Atualiza o vencimento de cada parcela em lote
     for (let i = 0; i < payments.length; i++) {

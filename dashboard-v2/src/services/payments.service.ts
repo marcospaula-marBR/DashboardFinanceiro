@@ -172,6 +172,31 @@ export class PaymentsService {
   }
 
   /**
+   * Atualiza a data de vencimento (due_date e month_cycle) de uma parcela específica.
+   */
+  static async updateDueDate(
+    paymentId: string,
+    dueDate: string,
+    isTestMode?: boolean
+  ): Promise<void> {
+    const table = isTestMode ? 'loan_payments_test' : 'loan_payments';
+    const cycle = dueDate.substring(0, 7);
+
+    const { error } = await supabase
+      .from(table)
+      .update({
+        due_date: dueDate,
+        month_cycle: cycle
+      })
+      .eq('id', paymentId);
+
+    if (error) {
+      console.error('Erro ao atualizar data de vencimento da parcela:', error);
+      throw new Error(`Falha ao atualizar data de vencimento da parcela: ${error.message}`);
+    }
+  }
+
+  /**
    * Processa múltiplas parcelas em lote
    */
   static async processBatch(request: PaymentBatchRequest, isTestMode?: boolean): Promise<void> {

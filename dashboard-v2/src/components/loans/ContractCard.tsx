@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowUpRight, Clock, CheckCircle, RotateCcw, ChevronDown, ChevronUp, Paperclip, Check, Upload, ExternalLink, Loader2, Trash2, FileText, Calendar } from "lucide-react";
+import { ArrowUpRight, Clock, CheckCircle, RotateCcw, ChevronDown, ChevronUp, Paperclip, Check, Upload, ExternalLink, Loader2, Trash2, FileText, Calendar, Edit2, XCircle } from "lucide-react";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { LoansService, formatDate } from "@/services/loans.service";
 import { PaymentsService } from "@/services/payments.service";
@@ -80,6 +80,50 @@ export function ContractCard({
   const [editRequestDate, setEditRequestDate] = useState("");
   const [editFirstPaymentDate, setEditFirstPaymentDate] = useState("");
   const [isSavingDates, setIsSavingDates] = useState(false);
+  const [isExtractingDates, setIsExtractingDates] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editingDueDate, setEditingDueDate] = useState<string>("");
+
+  const ddmmyyyyToYyyymmdd = (dateStr: string) => {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return "";
+  };
+
+  const handleSuggestDates = async () => {
+    if (!contract.contractUrl) return;
+    setIsExtractingDates(true);
+    try {
+      const response = await fetch('/api/loans/extract-contract-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contractUrl: contract.contractUrl })
+      });
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      if (data.first_payment_date) {
+        setEditFirstPaymentDate(data.first_payment_date);
+      }
+      if (data.request_date) {
+        setEditRequestDate(data.request_date);
+      }
+      
+      let msg = "Sugestão carregada com sucesso!";
+      if (data.confidence !== undefined) {
+        msg += ` (Confiança da IA: ${Math.round(data.confidence * 100)}%)`;
+      }
+      alert(msg);
+    } catch (err: any) {
+      alert(`Erro ao sugerir datas via IA: ${err.message}`);
+    } finally {
+      setIsExtractingDates(false);
+    }
+  };
 
   const handleStartEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -243,15 +287,13 @@ export function ContractCard({
               <span className="text-[9px] font-bold uppercase transition-colors">Reverter</span>
             </button>
 
-            {!timeline.some(t => t.status === 'PAGO') && (
-              <button 
-                onClick={handleStartEdit}
-                className="flex flex-col items-center gap-1 p-2 rounded-lg bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-600 transition-all border border-slate-200 hover:border-amber-200 col-span-1 shadow-sm"
-              >
-                <Calendar size={16} className="text-amber-600" />
-                <span className="text-[9px] font-bold uppercase transition-colors">Editar Datas</span>
-              </button>
-            )}
+            <button 
+              onClick={handleStartEdit}
+              className="flex flex-col items-center gap-1 p-2 rounded-lg bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-600 transition-all border border-slate-200 hover:border-amber-200 col-span-1 shadow-sm"
+            >
+              <Calendar size={16} className="text-amber-600" />
+              <span className="text-[9px] font-bold uppercase transition-colors">Editar Datas</span>
+            </button>
           </div>
 
           {/* Formulario de Edicao de Datas */}
@@ -260,6 +302,32 @@ export function ContractCard({
               <h5 className="text-xs font-black text-amber-800 uppercase flex items-center gap-1">
                 <Calendar size={14} /> Editar Datas do Contrato
               </h5>
+              
+              {timeline.some(t => t.status === 'PAGO') && (
+                <div className="bg-amber-100 text-amber-900 border-l-4 border-amber-500 p-2.5 rounded-r-lg text-[10px] font-semibold leading-relaxed">
+                  ⚠️ <strong>Atenção:</strong> Este contrato possui parcelas já pagas. Alterar as datas irá recalcular o cronograma, mas preservará o status de PAGO das parcelas.
+                </div>
+              )}
+
+              {contract.contractUrl && (
+                <button
+                  type="button"
+                  disabled={isExtractingDates}
+                  onClick={handleSuggestDates}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm text-center"
+                >
+                  {isExtractingDates ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      Lendo contrato com IA...
+                    </>
+                  ) : (
+                    <>
+                      <span>🤖 Sugerir Datas via IA</span>
+                    </>
+                  )}
+                </button>
+              )}
               
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -434,9 +502,57 @@ export function ContractCard({
                     
                     <div className="flex-1 flex justify-between items-center">
                       <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-800">
-                          {item.label}
-                        </span>
+                        {editingPaymentId === item.id ? (
+                          <div className="flex items-center gap-1.5 py-0.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="date"
+                              value={editingDueDate}
+                              onChange={(e) => setEditingDueDate(e.target.value)}
+                              className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-emerald-500 font-sans"
+                            />
+                            <button
+                              onClick={async () => {
+                                if (!editingDueDate) return;
+                                try {
+                                  await PaymentsService.updateDueDate(item.id, editingDueDate, isTestMode);
+                                  setEditingPaymentId(null);
+                                  await fetchTimeline();
+                                  if (onDataChanged) onDataChanged();
+                                } catch (err: any) {
+                                  alert(`Erro ao atualizar data: ${err.message}`);
+                                }
+                              }}
+                              className="p-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded transition"
+                              title="Salvar"
+                            >
+                              <Check size={12} />
+                            </button>
+                            <button
+                              onClick={() => setEditingPaymentId(null)}
+                              className="p-1 bg-slate-100 text-slate-500 hover:bg-slate-200 rounded transition"
+                              title="Cancelar"
+                            >
+                              <XCircle size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 group/edit">
+                            {item.label}
+                            {item.id && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingPaymentId(item.id);
+                                  setEditingDueDate(ddmmyyyyToYyyymmdd(item.label));
+                                }}
+                                className="opacity-0 group-hover/edit:opacity-100 p-0.5 text-slate-400 hover:text-slate-700 transition"
+                                title="Editar data de vencimento desta parcela"
+                              >
+                                <Edit2 size={11} className="inline" />
+                              </button>
+                            )}
+                          </span>
+                        )}
                         <span className={`text-[10px] ${textColor}`}>
                           {item.index > 0 ? `Parcela ${item.index}` : 'Suspensão'} • {item.status}
                         </span>

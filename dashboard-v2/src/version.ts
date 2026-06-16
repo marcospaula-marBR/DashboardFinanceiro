@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.22";
+export const APP_VERSION = "v.02.46.23";
 export const VERSION_DATE = "2026-06-16";
 export const VERSION_CHANGELOG = [
+  "v.02.46.23 - Feat: Edição flexível de cronograma de empréstimos — desbloqueio da alteração de data de início com parcelas já pagas (preservando o status de PAGO); botão 'Sugerir Datas via IA' integrado ao Gemini no formulário de edição de datas para extração direta de PDFs/Imagens; e edição individual de data de vencimento (due_date) via timeline de parcelas.",
   "v.02.46.22 - Feat: Auditoria de parcelas — botão 'Estornar' (PAGO→PENDENTE) na timeline de contratos; Painel de Auditoria Global colapsável com saúde de todos os contratos (ok/revisar/excesso) e filtros; backup pré-auditoria em JSON e snapshot SQL no Supabase.",
   "v.02.46.21 - Feat: Redesenha a aba Custo Histórico para comparar valores previsto vs pago, adiciona botão Copiar do Contrato, exibe médias e totalizador, e vincula Conectividade a valor_ajuda_custo.",
   "v.02.46.20 - Feat: Adiciona a coluna Incentivos na listagem de colaboradores da página People.",
