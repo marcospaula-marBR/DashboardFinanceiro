@@ -447,6 +447,7 @@ export function ContractCard({
                             R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
                         )}
+                        {/* Baixar: PENDENTE → PAGO */}
                         {item.status === 'PENDENTE' && item.id && (
                           <button
                             onClick={async (e) => {
@@ -481,6 +482,33 @@ export function ContractCard({
                             className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black transition border border-emerald-200"
                           >
                             Baixar
+                          </button>
+                        )}
+                        {/* Estornar: PAGO → PENDENTE (correção de auditoria) */}
+                        {item.status === 'PAGO' && item.id && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const confirmed = window.confirm(
+                                `⚠️ ESTORNAR PARCELA ${item.index}?\n\n` +
+                                `Vencimento: ${item.label}\n` +
+                                `Valor: R$ ${item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` +
+                                `Esta ação reverte o status para PENDENTE e limpa a data de pagamento.\n` +
+                                `Confirmar estorno?`
+                              );
+                              if (!confirmed) return;
+                              try {
+                                await PaymentsService.updatePaymentStatus(item.id, 'PENDENTE', isTestMode);
+                                await fetchTimeline();
+                                if (onDataChanged) onDataChanged();
+                              } catch (err: any) {
+                                alert(`Falha ao estornar parcela: ${err.message}`);
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-black transition border border-red-200"
+                            title="Estornar pagamento (reverter para Pendente)"
+                          >
+                            Estornar
                           </button>
                         )}
                       </div>

@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.21";
-export const VERSION_DATE = "2026-06-12";
+export const APP_VERSION = "v.02.46.22";
+export const VERSION_DATE = "2026-06-16";
 export const VERSION_CHANGELOG = [
+  "v.02.46.22 - Feat: Auditoria de parcelas — botão 'Estornar' (PAGO→PENDENTE) na timeline de contratos; Painel de Auditoria Global colapsável com saúde de todos os contratos (ok/revisar/excesso) e filtros; backup pré-auditoria em JSON e snapshot SQL no Supabase.",
   "v.02.46.21 - Feat: Redesenha a aba Custo Histórico para comparar valores previsto vs pago, adiciona botão Copiar do Contrato, exibe médias e totalizador, e vincula Conectividade a valor_ajuda_custo.",
   "v.02.46.20 - Feat: Adiciona a coluna Incentivos na listagem de colaboradores da página People.",
   "v.02.46.19 - Fix: Refina prompt do parser de IA para detectar auxílios veiculares como Incentivo; define padrão de mesclagem como 'incoming' para campos profissionais/financeiros em divergência e ajusta data de registro da trajetória baseado na data do novo contrato.",

@@ -138,22 +138,26 @@ export class PaymentsService {
   }
 
   /**
-   * Atualiza status de uma parcela
+   * Atualiza status de uma parcela.
+   * Aceita 'PAGO', 'POSTERGADO' e 'PENDENTE' (estorno/reversão).
    */
   static async updatePaymentStatus(
-    paymentId: string, 
-    status: 'PAGO' | 'POSTERGADO',
+    paymentId: string,
+    status: 'PAGO' | 'POSTERGADO' | 'PENDENTE',
     isTestMode?: boolean,
     postponedDate?: string,
     paidDate?: string
   ): Promise<void> {
     const table = isTestMode ? 'loan_payments_test' : 'loan_payments';
-    const updates: Partial<LoanPayment> = { status };
-    
+    // Usamos Record explícito para suportar paid_date: null (estorno limpo)
+    const updates: Record<string, string | null> = { status };
+
     if (status === 'PAGO') {
       updates.paid_date = paidDate || new Date().toISOString().split('T')[0];
     } else if (status === 'POSTERGADO' && postponedDate) {
       updates.postponed_to = postponedDate;
+    } else if (status === 'PENDENTE') {
+      updates.paid_date = null; // estorno: limpa a data de pagamento
     }
 
     const { error } = await supabase

@@ -960,6 +960,57 @@ export class LoansService {
       }
     }
   }
+
+  /** Relatorio de auditoria: saude de todos os contratos */
+  static async getAuditReport(isTestMode?: boolean) {
+    const safeTestMode = Boolean(isTestMode);
+    const loansTable = safeTestMode ? 'employee_loans_test' : 'employee_loans';
+    const paymentsTable = safeTestMode ? 'loan_payments_test' : 'loan_payments';
+
+    const [emps, loansRes, paymentsRes] = await Promise.all([
+      fetchEmployees(safeTestMode),
+      supabase.from(loansTable).select('id, employee_id, amount, installments, request_date, notes'),
+      supabase.from(paymentsTable).select('contract_id, status, amount, due_date, id'),
+    ]);
+
+    if (loansRes.error) throw new Error('Falha ao buscar contratos: ' + loansRes.error.message);
+
+    const empMap = new Map(emps.map(e => [e.id, e.full_name]));
+    const payments = paymentsRes.data || [];
+
+    const payMap = new Map();
+    payments.forEach(p => {
+      const arr = payMap.get(p.contract_id) || [];
+      arr.push({ id: p.id, status: p.status, amount: Number(p.amount) || 0, due_date: p.due_date });
+      payMap.set(p.contract_id, arr);
+    });
+
+    return (loansRes.data || []).map(ln => {
+      const contractPayments = payMap.get(ln.id) || [];
+      const expectedInstallments = Number(ln.installments) || 0;
+      const paidCount = contractPayments.filter((p: { status: string }) => p.status === 'PAGO').length;
+      const pendingCount = contractPayments.filter((p: { status: string }) => p.status === 'PENDENTE').length;
+      const totalRecorded = contractPayments.length;
+
+      const hasExcess = paidCount > expectedInstallments;
+      const missingRecords = totalRecorded < expectedInstallments;
+      const health: 'ok' | 'revisar' | 'excesso' = hasExcess ? 'excesso' : missingRecords ? 'revisar' : 'ok';
+
+      return {
+        contractId: ln.id,
+        employeeName: empMap.get(ln.employee_id) || 'Desconhecido',
+        amount: Number(ln.amount) || 0,
+        expectedInstallments,
+        totalRecorded,
+        paidCount,
+        pendingCount,
+        health,
+        excess: Math.max(0, paidCount - expectedInstallments),
+        requestDate: ln.request_date || null,
+        payments: contractPayments,
+      };
+    });
+  }
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -980,4 +1031,20 @@ export function formatDate(date: string): string {
   } catch {
     return '-';
   }
+}
+
+// --- Audit Types ---
+
+export interface AuditContractReport {
+  contractId: string;
+  employeeName: string;
+  amount: number;
+  expectedInstallments: number;
+  totalRecorded: number;
+  paidCount: number;
+  pendingCount: number;
+  health: 'ok' | 'revisar' | 'excesso';
+  excess: number;
+  requestDate: string | null;
+  payments: { id: string; status: string; amount: number; due_date: string }[];
 }

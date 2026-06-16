@@ -10,6 +10,7 @@ import { EmployeeTable } from "@/components/loans/EmployeeTable";
 import { SideDrawer } from "@/components/loans/SideDrawer";
 import { PaymentProcessingModal } from "@/components/loans/PaymentProcessingModal";
 import { NewLoanModal } from "@/components/loans/NewLoanModal";
+import { AuditPanel } from "@/components/loans/AuditPanel";
 import { LoansService, formatCurrency } from "@/services/loans.service";
 import { Employee, LoanStats, ProjectionData } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
@@ -35,6 +36,7 @@ export default function EmprestimosPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isNewLoanOpen, setIsNewLoanOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
+  const [isAuditOpen, setIsAuditOpen] = useState(false);
   
   // Data states
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -392,6 +394,27 @@ export default function EmprestimosPage() {
             </div>
           ) : (
             <ProjectionChart data={projections} />
+          )}
+        </div>
+
+        {/* Painel de Auditoria (colapsavel) */}
+        <div className="mb-6">
+          <button
+            onClick={() => setIsAuditOpen(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-slate-200 rounded-xl hover:border-emerald-300 hover:shadow-sm transition-all text-sm font-bold text-slate-700 group"
+          >
+            <span className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-600 text-xs">🔍</span>
+              Painel de Auditoria de Contratos
+            </span>
+            <span className="text-xs font-medium text-slate-400 group-hover:text-emerald-600 transition-colors">
+              {isAuditOpen ? "Fechar ▲" : "Abrir ▼"}
+            </span>
+          </button>
+          {isAuditOpen && (
+            <div className="mt-3">
+              <AuditPanel />
+            </div>
           )}
         </div>
 
