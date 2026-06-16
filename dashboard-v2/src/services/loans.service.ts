@@ -428,7 +428,6 @@ export class LoansService {
     });
 
     const empMap = new Map(emps.map(e => [e.id, e]));
-    const now = new Date();
     const billingMonthStr = getBillingMonthStr();
 
     let totalEmprestado = 0, saldoDevedor = 0, totalRecebido = 0, recebivelMes = 0;
@@ -529,6 +528,52 @@ export class LoansService {
       ultimaParcelaMes,
       ultimaParcelaValor,
     };
+  }
+
+  /** Histórico real dos recebidos no passado agrupados por mês */
+  static async getPastPayments(isTestMode?: boolean): Promise<{ month: string; total: number; previsto: number }[]> {
+    const safeTestMode = Boolean(isTestMode);
+    const paymentsTable = safeTestMode ? 'loan_payments_test' : 'loan_payments';
+    
+    const { data, error } = await supabase
+      .from(paymentsTable)
+      .select('amount, due_date, status');
+      
+    if (error || !data) {
+      console.error('[LoansService] Erro ao carregar histórico de pagamentos:', error);
+      return [];
+    }
+    
+    const monthlyMap = new Map<string, { total: number; previsto: number }>();
+    
+    data.forEach(p => {
+      if (!p.due_date) return;
+      const parts = p.due_date.split('-');
+      if (parts.length < 2) return;
+      const monthKey = `${parts[0]}-${parts[1]}`;
+      const amount = parseFloat(String(p.amount)) || 0;
+      
+      const current = monthlyMap.get(monthKey) || { total: 0, previsto: 0 };
+      if (p.status === 'PAGO') {
+        current.total += amount;
+      }
+      current.previsto += amount;
+      monthlyMap.set(monthKey, current);
+    });
+    
+    const sortedKeys = Array.from(monthlyMap.keys()).sort();
+    const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    
+    return sortedKeys.map(key => {
+      const [y, m] = key.split('-');
+      const label = `${monthNames[parseInt(m, 10) - 1]}/${y.substring(2)}`;
+      const val = monthlyMap.get(key)!;
+      return {
+        month: label,
+        total: Number(val.total.toFixed(2)),
+        previsto: Number(val.previsto.toFixed(2))
+      };
+    });
   }
 
   /** Projeção mensal dos recebíveis */

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { HeaderDashboard } from "@/components/layout/HeaderDashboard";
 import { FilterBar, FilterValues } from "@/components/loans/FilterBar";
 import { StatCard } from "@/components/loans/StatCard";
-import { ProjectionChart } from "@/components/loans/ProjectionChart";
+import { DashboardCharts } from "@/components/loans/DashboardCharts";
 import { EmployeeTable } from "@/components/loans/EmployeeTable";
 import { SideDrawer } from "@/components/loans/SideDrawer";
 import { PaymentProcessingModal } from "@/components/loans/PaymentProcessingModal";
@@ -245,6 +245,7 @@ export default function EmprestimosPage() {
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [stats, setStats] = useState<LoanStats | null>(null);
   const [projections, setProjections] = useState<ProjectionData[]>([]);
+  const [historyData, setHistoryData] = useState<ProjectionData[]>([]);
   const [activeFilters, setActiveFilters] = useState<FilterValues>({
     search: "",
     empresa: "",
@@ -337,12 +338,16 @@ export default function EmprestimosPage() {
     }
 
     try {
-      // Fetch projections
+      // Fetch projections and history
       setIsLoadingProjections(true);
-      const projectionsData = await LoansService.getProjections(isTestMode);
+      const [projectionsData, historyDataRes] = await Promise.all([
+        LoansService.getProjections(isTestMode),
+        LoansService.getPastPayments(isTestMode),
+      ]);
       setProjections(projectionsData);
+      setHistoryData(historyDataRes);
     } catch (err) {
-      console.error('Erro ao carregar projeções:', err);
+      console.error('Erro ao carregar gráficos:', err);
     } finally {
       setIsLoadingProjections(false);
     }
@@ -605,11 +610,15 @@ export default function EmprestimosPage() {
 
         <div className="mb-6">
           {isLoadingProjections ? (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 h-[400px] flex items-center justify-center">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 h-[480px] flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
             </div>
           ) : (
-            <ProjectionChart data={projections} />
+            <DashboardCharts 
+              projectionsData={projections} 
+              historyData={historyData}
+              employees={filteredEmployees}
+            />
           )}
         </div>
 
