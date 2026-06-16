@@ -490,6 +490,9 @@ export function ContractCard({
                 } else if (item.status === 'POSTERGADO') {
                   dotColor = "bg-amber-400 border-amber-100";
                   textColor = "text-amber-600 font-bold";
+                } else if (item.status === 'PENDENTE' && contract.status === 'LIQUIDADO') {
+                  dotColor = "bg-slate-200 border-slate-100";
+                  textColor = "text-slate-400 italic font-normal";
                 } else {
                   dotColor = "bg-slate-300 border-white";
                   textColor = "text-slate-500";
@@ -554,7 +557,7 @@ export function ContractCard({
                           </span>
                         )}
                         <span className={`text-[10px] ${textColor}`}>
-                          {item.index > 0 ? `Parcela ${item.index}` : 'Suspensão'} • {item.status}
+                          {item.index > 0 ? `Parcela ${item.index}` : 'Suspensão'} • {item.status === 'PENDENTE' && contract.status === 'LIQUIDADO' ? 'DESCONTÍNUO (LIQUIDADO)' : item.status}
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
@@ -564,7 +567,7 @@ export function ContractCard({
                           </span>
                         )}
                         {/* Baixar: PENDENTE → PAGO */}
-                        {item.status === 'PENDENTE' && item.id && (
+                        {item.status === 'PENDENTE' && item.id && contract.status !== 'LIQUIDADO' && (
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();

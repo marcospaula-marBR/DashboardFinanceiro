@@ -122,6 +122,8 @@ function calcReceivedForLoan(ln: RawLoan, contractPayments?: { status: string, a
 }
 
 export function calcInstallmentForMonth(ln: RawLoan, monthStr: string, contractPayments?: { status: string, amount: number, due_date: string }[]): number {
+  if (calcDebtForLoan(ln, contractPayments) <= 0) return 0;
+
   if (contractPayments && contractPayments.length > 0) {
     const targetMonthPayments = contractPayments.filter(p => p.due_date.substring(0, 7) === monthStr);
     const pendingAmount = targetMonthPayments
