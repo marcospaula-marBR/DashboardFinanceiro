@@ -105,20 +105,8 @@ function calcDebtForLoan(ln: RawLoan, contractPayments?: { status: string, amoun
 
 function calcReceivedForLoan(ln: RawLoan, contractPayments?: { status: string, amount: number }[]): number {
   const amount = parseFloat(String(ln.amount)) || 0;
-  const inst = parseInt(String(ln.installments)) || 0;
-  if (!amount || !inst) return 0;
-  const extraPaid = parseFloat(String(ln.amount_paid_extra)) || 0;
-
-  if (contractPayments && contractPayments.length > 0) {
-    const paidAmount = contractPayments
-      .filter(p => p.status === 'PAGO')
-      .reduce((sum, p) => sum + p.amount, 0);
-    return paidAmount + extraPaid;
-  }
-
-  const elapsed = getElapsedMonths(ln);
-  const standardPaid = elapsed * (amount / inst);
-  return standardPaid + extraPaid;
+  const debt = calcDebtForLoan(ln, contractPayments);
+  return Math.max(0, amount - debt);
 }
 
 export function calcInstallmentForMonth(ln: RawLoan, monthStr: string, contractPayments?: { status: string, amount: number, due_date: string }[]): number {
