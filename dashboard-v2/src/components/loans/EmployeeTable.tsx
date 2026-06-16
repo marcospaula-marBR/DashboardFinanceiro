@@ -58,7 +58,7 @@ export function EmployeeTable({ employees, onEmployeeClick }: EmployeeTableProps
               <th className="py-4 px-4 text-center">Empresa</th>
               <th className="py-4 px-4 text-center whitespace-nowrap">Vínculo</th>
               <th className="py-4 px-4 text-right">Remuneração</th>
-              <th className="py-4 px-4 text-center">Aditivos</th>
+              <th className="py-4 px-4 text-center">Restantes</th>
               <th className="py-4 px-4 text-right">Saldo Devedor</th>
               <th className="py-4 px-4 text-right">
                 <div className="flex flex-col items-end">
@@ -66,7 +66,7 @@ export function EmployeeTable({ employees, onEmployeeClick }: EmployeeTableProps
                   <span className="text-[9px] font-bold text-emerald-600 normal-case tracking-normal">{currentMonthLabel}</span>
                 </div>
               </th>
-              <th className="py-4 px-4 text-center">Vencimento</th>
+              <th className="py-4 px-4 text-center">Última</th>
               <th className="py-4 px-6 text-center">Ações</th>
             </tr>
           </thead>
@@ -123,19 +123,7 @@ function EmployeeRow({
     }
   }, [isExpanded, employee.id, isTestMode]);
 
-  // Lógica para Aditivos: Usamos a contagem inteligente já calculada pelo Service (Deduplicada)
-  const aditiveCount = employee.aditivoCount || 0;
-  const hasAditives = aditiveCount > 0;
-
-  // Lógica para Vencimento
-  const isExpiringSoon = (dateStr: string) => {
-    if (!dateStr) return false;
-    const expiry = new Date(dateStr + 'T12:00:00');
-    const now = new Date();
-    const diffTime = expiry.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays >= 0 && diffDays <= 10;
-  };
+  // Nenhuma lógica de aditivos ou vencimento de contrato de trabalho necessária aqui
 
   return (
     <>
@@ -180,15 +168,16 @@ function EmployeeRow({
           {formatCurrency(employee.remuneration)}
         </td>
         
-        {/* Nova Coluna: Aditivos */}
+        {/* Nova Coluna: Restantes */}
         <td className="py-4 px-4 text-center">
-          {hasAditives ? (
-            <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
-               <FileText size={12} />
-               <span className="text-[10px] font-black">{aditiveCount}</span>
-            </div>
+          {employee.totalTaken === 0 ? (
+            <span className="text-[10px] font-bold text-slate-300">-</span>
+          ) : employee.remainingInstallments && employee.remainingInstallments > 0 ? (
+            <span className="text-xs font-black text-slate-800 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+              {employee.remainingInstallments}
+            </span>
           ) : (
-            <span className="text-[10px] font-bold text-slate-300">Nenhum</span>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Quitado</span>
           )}
         </td>
 
@@ -201,19 +190,12 @@ function EmployeeRow({
           </span>
         </td>
 
-        {/* Nova Coluna: Vencimento */}
+        {/* Nova Coluna: Última */}
         <td className="py-4 px-4 text-center whitespace-nowrap">
-          {employee.contract_expiry_date ? (
-            <div className={`inline-flex flex-col items-center gap-0.5 ${isExpiringSoon(employee.contract_expiry_date) ? 'animate-pulse' : ''}`}>
-               <span className={`text-[10px] font-black tabular-nums ${isExpiringSoon(employee.contract_expiry_date) ? 'text-amber-600' : 'text-slate-600'}`}>
-                 {new Date(employee.contract_expiry_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-               </span>
-               {isExpiringSoon(employee.contract_expiry_date) && (
-                 <span className="text-[8px] font-black text-amber-500 uppercase flex items-center gap-1">
-                   <AlertCircle size={8} /> Vence em breve
-                 </span>
-               )}
-            </div>
+          {employee.lastInstallmentDate ? (
+            <span className="text-[10px] font-black text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded shadow-sm font-sans">
+              {new Date(employee.lastInstallmentDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+            </span>
           ) : (
              <span className="text-[10px] font-bold text-slate-300">-</span>
           )}

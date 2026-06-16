@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.26";
+export const APP_VERSION = "v.02.46.27";
 export const VERSION_DATE = "2026-06-16";
 export const VERSION_CHANGELOG = [
+  "v.02.46.27 - Feat: Substitui coluna 'Aditivos' por 'Restantes' e 'Vencimento' por 'Última' na listagem de colaboradores do dashboard de empréstimos, exibindo total de parcelas pendentes e a data da última parcela (mais distante).",
   "v.02.46.26 - Fix: Filtros de listagem de empréstimos — inicializa o estado de filtros ativos com os valores padrão e garante que apenas colaboradores com empréstimos ATIVOS sejam listados por padrão no carregamento inicial, ocultando quitados e sem empréstimos até serem explicitamente selecionados no filtro.",
   "v.02.46.25 - Fix: Alinhamento matemático do dashboard de empréstimos — simplifica e corrige calcReceivedForLoan para retornar amount - debt, eliminando a discrepância estatística entre Total Emprestado, Saldo Devedor e Total Já Recebido provocada por dupla contagem de quitações extras e parcelas liquidadas.",
   "v.02.46.24 - Fix: Correção de cálculo e exibição de parcelas para contratos LIQUIDADOS — zera o comprometimento mensal (calcInstallmentForMonth) para contratos liquidados matematicamente por pagamentos extras/antecipações; desabilita o botão 'Baixar' e estiliza as parcelas pendentes futuras como 'Descontínuo (Liquidado)' na timeline.",

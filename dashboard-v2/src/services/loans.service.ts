@@ -320,6 +320,27 @@ export class LoansService {
       const totalReceived = filteredEmpLoans.reduce((a, ln) => a + calcReceivedForLoan(ln, paymentsByContract.get(ln.id)), 0);
       const monthInstallment = filteredEmpLoans.reduce((a, ln) => a + calcInstallmentForMonth(ln, billingMonthStr, paymentsByContract.get(ln.id)), 0);
 
+      // --- Parcelas Restantes e Vencimento Mais Longevo ---
+      const remainingInstallments = filteredEmpLoans.reduce((sum, ln) => {
+        const cPayments = paymentsByContract.get(ln.id) || [];
+        if (calcDebtForLoan(ln, cPayments) <= 0) return sum;
+        if (cPayments.length > 0) {
+          const pendingCount = cPayments.filter(p => p.status === 'PENDENTE').length;
+          return sum + pendingCount;
+        }
+        const inst = parseInt(String(ln.installments)) || 0;
+        const elapsed = getElapsedMonths(ln);
+        return sum + Math.max(0, inst - elapsed);
+      }, 0);
+
+      let lastInstallmentDate = '';
+      filteredEmpLoans.forEach(ln => {
+        const endDate = loanEndDate(ln, paymentsByContract.get(ln.id));
+        if (endDate && endDate !== '-' && endDate > lastInstallmentDate) {
+          lastInstallmentDate = endDate;
+        }
+      });
+
       // --- Lógica de Deduplicação de Aditivos ---
       const aditivoUrls = new Set<string>();
       let textOnlyCount = 0;
@@ -363,7 +384,9 @@ export class LoansService {
         contract_expiry_date: emp.contract_expiry_date,
         job_role: emp.job_role,
         links_aditivos: emp.links_aditivos,
-        aditivoCount // Passamos a contagem final inteligente
+        aditivoCount,
+        remainingInstallments,
+        lastInstallmentDate: lastInstallmentDate || null
       });
     });
 

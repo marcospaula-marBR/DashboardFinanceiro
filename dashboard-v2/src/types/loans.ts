@@ -23,6 +23,8 @@ export interface Employee {
   status: "Ativo" | "Provisão" | "Quitado" | "Inativo" | "Sem Empréstimo" | "Férias";
   loanStatus?: string;
   aditivoCount?: number;
+  remainingInstallments?: number;
+  lastInstallmentDate?: string | null;
   avatar?: string;
   created_at?: string;
 
