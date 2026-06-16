@@ -579,43 +579,67 @@ export class LoansService {
   /** Projeção mensal dos recebíveis */
   static async getProjections(isTestMode?: boolean): Promise<ProjectionData[]> {
     const safeTestMode = Boolean(isTestMode);
-    const loans = await fetchLoans(safeTestMode);
-    const now = new Date();
-
-    let maxMonthAbs = now.getFullYear() * 12 + (now.getMonth() + 1) + 11;
-    loans.forEach(ln => {
-      if (!ln.start_cycle || !ln.installments) return;
-      const [sy, sm] = ln.start_cycle.split("-").map(Number);
-      if (isNaN(sy) || isNaN(sm)) return;
-      
-      const installments = parseInt(String(ln.installments)) || 0;
-      const endAbs = sy * 12 + sm + installments;
-      if (endAbs > maxMonthAbs) maxMonthAbs = endAbs;
-    });
-
-    const currentAbs = now.getFullYear() * 12 + (now.getMonth() + 1);
+    const paymentsTable = safeTestMode ? 'loan_payments_test' : 'loan_payments';
     
-    // Safety limit: 60 meses (5 anos) para evitar travamento da UI em caso de dados excessivos
-    const safetyLimit = currentAbs + 60;
-    if (maxMonthAbs > safetyLimit) maxMonthAbs = safetyLimit;
-    const result: ProjectionData[] = [];
-
-    for (let abs = currentAbs; abs <= maxMonthAbs; abs++) {
-      const y = Math.floor((abs - 1) / 12);
-      const m = ((abs - 1) % 12) + 1;
-      const monthStr = `${y}-${String(m).padStart(2, '0')}`;
-      const label = new Date(y, m - 1, 1)
-        .toLocaleString('pt-BR', { month: 'short', year: '2-digit' })
-        .toUpperCase()
-        .replace(' DE ', '/')
-        .replace(/\. /g, '/')
-        .replace(/\./g, '');
-
-      const total = loans.reduce((a, ln) => a + calcInstallmentForMonth(ln, monthStr), 0);
-      result.push({ month: label, total, previsto: total });
+    const { data: paymentsRes, error } = await supabase
+      .from(paymentsTable)
+      .select('amount, due_date, status');
+      
+    if (error || !paymentsRes) {
+      console.error('[LoansService] Erro ao carregar projeções:', error);
+      return [];
     }
-
-    return result;
+    
+    const currentBillingMonth = getBillingMonthStr();
+    const monthlyMap = new Map<string, { total: number; previsto: number }>();
+    
+    paymentsRes.forEach(p => {
+      if (!p.due_date) return;
+      const parts = p.due_date.split('-');
+      if (parts.length < 2) return;
+      const monthKey = `${parts[0]}-${parts[1]}`;
+      
+      // Filtrar apenas o presente e futuro (a partir do mês de cobrança corrente)
+      if (monthKey < currentBillingMonth) return;
+      
+      const amount = parseFloat(String(p.amount)) || 0;
+      
+      const current = monthlyMap.get(monthKey) || { total: 0, previsto: 0 };
+      if (p.status === 'PAGO') {
+        current.total += amount;
+      }
+      current.previsto += amount;
+      monthlyMap.set(monthKey, current);
+    });
+    
+    const sortedKeys = Array.from(monthlyMap.keys()).sort();
+    
+    // Fallback se estiver vazio
+    if (sortedKeys.length === 0) {
+      const now = new Date();
+      let currentAbs = now.getFullYear() * 12 + now.getMonth() + 1;
+      for (let i = 0; i < 24; i++) {
+        const y = Math.floor((currentAbs - 1) / 12);
+        const m = ((currentAbs - 1) % 12) + 1;
+        const key = `${y}-${String(m).padStart(2, '0')}`;
+        monthlyMap.set(key, { total: 0, previsto: 0 });
+        currentAbs++;
+      }
+      sortedKeys.push(...Array.from(monthlyMap.keys()).sort());
+    }
+    
+    const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    
+    return sortedKeys.map(key => {
+      const [y, m] = key.split('-');
+      const label = `${monthNames[parseInt(m, 10) - 1]}/${y.substring(2)}`;
+      const val = monthlyMap.get(key)!;
+      return {
+        month: label,
+        total: Number(val.total.toFixed(2)),
+        previsto: Number(val.previsto.toFixed(2))
+      };
+    });
   }
 
   /** Empréstimos de um colaborador específico */

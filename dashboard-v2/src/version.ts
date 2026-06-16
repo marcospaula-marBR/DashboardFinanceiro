@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.29";
+export const APP_VERSION = "v.02.46.30";
 export const VERSION_DATE = "2026-06-16";
 export const VERSION_CHANGELOG = [
+  "v.02.46.30 - Fix: Ajusta Projeção de Recebimentos futura e Histórico de Recebidos para separar corretamente os dados temporais do banco (futuro vs passado) baseado no mês corrente de cobrança, exibindo corretamente parcelas pagas vs previstas.",
   "v.02.46.29 - Feat: Sistema de abas no painel de gráficos — adiciona a Aba 1 (Projeção Futura), a Aba 2 (Histórico de Recebidos agrupado do Supabase) com barra deslizante/seletores de período reativos (6, 12, 24M), e a Aba 3 (Concentração de Carteira) com gráfico de Rosca (Donut) interativo por Empresa/Vínculo e Saldo Devedor/Valor Concedido.",
   "v.02.46.28 - Feat: Torna os cartões de KPIs interativos exibindo modais de detalhamento com iniciais dos colaboradores para privacidade; substitui o card de maior empréstimo por 'Última Parcela' e oculta nomes no card 'Próximo a Encerrar', mostrando apenas o mês e valor da parcela.",
   "v.02.46.27 - Feat: Substitui coluna 'Aditivos' por 'Restantes' e 'Vencimento' por 'Última' na listagem de colaboradores do dashboard de empréstimos, exibindo total de parcelas pendentes e a data da última parcela (mais distante).",
