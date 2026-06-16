@@ -64,6 +64,7 @@ export class ComissoesService {
     equipeMap: Map<string, string>,
     filters?: ComissoesFilters
   ): Promise<Recebimento[]> {
+    // 1. Consulta na tabela 'recebimentos'
     let query = supabase
       .from('recebimentos')
       .select(`
@@ -87,13 +88,90 @@ export class ComissoesService {
     if (filters?.ciclo)      query = query.eq('ciclo', filters.ciclo);
     if (filters?.contratoId) query = query.eq('contrato_id', filters.contratoId);
 
-    const { data, error } = await query;
-    if (error) throw new Error(`Falha ao buscar histórico: ${error.message}`);
+    // 2. Consulta na tabela 'notas_fiscais' (para trazer faturamentos adicionais da DRE)
+    let nfQuery = supabase
+      .from('notas_fiscais')
+      .select(`
+        id,
+        contrato_id,
+        numero_nf,
+        data_emissao,
+        data_recebimento,
+        competencia,
+        valor_faturado,
+        valor_liquido,
+        status,
+        contratos_base ( nome_contrato )
+      `);
 
-    const raw = (data || []) as unknown as RawRecebimento[];
+    if (filters?.dataInicio) nfQuery = nfQuery.gte('data_emissao', filters.dataInicio);
+    if (filters?.dataFim)    nfQuery = nfQuery.lte('data_emissao', filters.dataFim);
+    if (filters?.ciclo)      nfQuery = nfQuery.eq('competencia', filters.ciclo);
+    if (filters?.contratoId) nfQuery = nfQuery.eq('contrato_id', filters.contratoId);
+
+    const [recRes, nfRes] = await Promise.all([
+      query,
+      nfQuery
+    ]);
+
+    if (recRes.error) throw new Error(`Falha ao buscar histórico: ${recRes.error.message}`);
+    if (nfRes.error) throw new Error(`Falha ao buscar faturamentos (NFs): ${nfRes.error.message}`);
+
+    const rawRecs = (recRes.data || []) as unknown as RawRecebimento[];
+    const rawNfs = nfRes.data || [];
+
+    // Helper para diferença de dias
+    const daysDiff = (d1: string | null | undefined, d2: string | null | undefined): number => {
+      if (!d1 || !d2) return 9999;
+      const t1 = new Date(d1.substring(0, 10)).getTime();
+      const t2 = new Date(d2.substring(0, 10)).getTime();
+      return Math.abs(t1 - t2) / (1000 * 60 * 60 * 24);
+    };
+
+    // Mescla faturamentos não duplicados da tabela notas_fiscais
+    const mergedRaw: RawRecebimento[] = [...rawRecs];
+
+    for (const nf of rawNfs) {
+      const nfVal = Number(nf.valor_faturado) || 0;
+      
+      // Verifica se já existe um recebimento equivalente para evitar duplicidade
+      let isDuplicate = false;
+      for (const rec of rawRecs) {
+        if (rec.contrato_id === nf.contrato_id) {
+          const recVal = Number(rec.valor_bruto) || 0;
+          if (Math.abs(recVal - nfVal) < 1.0) {
+            const diff = daysDiff(rec.data_recebimento, nf.data_emissao);
+            if (diff <= 60) {
+              isDuplicate = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!isDuplicate) {
+        mergedRaw.push({
+          id: nf.id,
+          contrato_id: nf.contrato_id,
+          data_recebimento: nf.data_recebimento || nf.data_emissao || '',
+          nota_fiscal: nf.numero_nf,
+          ciclo: nf.competencia,
+          mes_ref: nf.competencia ? parseInt(nf.competencia.split('-')[1]) : null,
+          ano_ref: nf.competencia ? parseInt(nf.competencia.split('-')[0]) : null,
+          valor_bruto: nfVal,
+          valor_liquido: Number(nf.valor_liquido) || 0,
+          status: nf.status || 'Pago',
+          contratos_base: nf.contratos_base,
+          comissoes: []
+        });
+      }
+    }
+
+    // Ordena os faturamentos combinados por data de recebimento descrescente
+    mergedRaw.sort((a, b) => b.data_recebimento.localeCompare(a.data_recebimento));
 
     // Resolve nomes de contrato e de membros no client
-    let result: Recebimento[] = raw.map(rec => ({
+    let result: Recebimento[] = mergedRaw.map(rec => ({
       id: rec.id,
       contrato_id: rec.contrato_id,
       contratoNome: Array.isArray(rec.contratos_base)
@@ -159,8 +237,20 @@ export class ComissoesService {
     };
 
     let recebimentoId = payload.editId;
+    let existsInRecebimentos = false;
 
     if (payload.editId) {
+      const { data: existingRec } = await supabase
+        .from('recebimentos')
+        .select('id')
+        .eq('id', payload.editId)
+        .maybeSingle();
+      if (existingRec) {
+        existsInRecebimentos = true;
+      }
+    }
+
+    if (payload.editId && existsInRecebimentos) {
       const { error } = await supabase
         .from('recebimentos')
         .update(recPayload)
@@ -174,9 +264,14 @@ export class ComissoesService {
         .eq('recebimento_id', payload.editId);
       if (delErr) throw new Error(`Falha ao limpar comissões antigas: ${delErr.message}`);
     } else {
+      // Se tiver editId mas não existe em recebimentos, inserimos com o mesmo ID
+      const insertPayload = payload.editId 
+        ? { ...recPayload, id: payload.editId }
+        : recPayload;
+
       const { data, error } = await supabase
         .from('recebimentos')
-        .insert([recPayload])
+        .insert([insertPayload])
         .select('id')
         .single();
       if (error) throw new Error(`Falha ao criar recebimento: ${error.message}`);
@@ -205,11 +300,20 @@ export class ComissoesService {
 
   /** Remove um recebimento (comissões são removidas em CASCADE) */
   static async deleteRecebimento(id: string): Promise<void> {
-    const { error } = await supabase
+    const { error: recErr } = await supabase
       .from('recebimentos')
       .delete()
       .eq('id', id);
-    if (error) throw new Error(`Falha ao excluir recebimento: ${error.message}`);
+
+    // Tenta deletar também de notas_fiscais (caso tenha vindo de lá)
+    const { error: nfErr } = await supabase
+      .from('notas_fiscais')
+      .delete()
+      .eq('id', id);
+
+    if (recErr && nfErr) {
+      throw new Error(`Falha ao excluir faturamento: ${recErr.message || nfErr.message}`);
+    }
   }
 
   /** Cria um novo contrato */
@@ -290,11 +394,50 @@ export class ComissoesService {
 
   /** Liquida/Dá baixa em um recebimento e suas comissões */
   static async liquidateRecebimento(recebimentoId: string, paidDate: string): Promise<void> {
-    const { error: recErr } = await supabase
+    // Verifica se existe em recebimentos
+    const { data: existingRec } = await supabase
       .from('recebimentos')
-      .update({ status: 'Pago', data_recebimento: paidDate })
-      .eq('id', recebimentoId);
-    if (recErr) throw new Error(`Falha ao liquidar faturamento: ${recErr.message}`);
+      .select('id')
+      .eq('id', recebimentoId)
+      .maybeSingle();
+
+    if (!existingRec) {
+      // Se não existe, buscamos os dados da tabela notas_fiscais para criar em recebimentos
+      const { data: nf } = await supabase
+        .from('notas_fiscais')
+        .select('*')
+        .eq('id', recebimentoId)
+        .single();
+
+      if (nf) {
+        const ciclo = nf.competencia || null;
+        const recPayload = {
+          id: recebimentoId,
+          contrato_id: nf.contrato_id,
+          data_recebimento: paidDate,
+          nota_fiscal: nf.numero_nf || null,
+          ciclo,
+          mes_ref: ciclo ? parseInt(ciclo.split('-')[1]) : null,
+          ano_ref: ciclo ? parseInt(ciclo.split('-')[0]) : null,
+          valor_bruto: Number(nf.valor_faturado) || 0,
+          valor_liquido: Number(nf.valor_liquido) || 0,
+          status: 'Pago'
+        };
+
+        const { error: insErr } = await supabase
+          .from('recebimentos')
+          .insert([recPayload]);
+        if (insErr) throw new Error(`Falha ao criar faturamento para liquidação: ${insErr.message}`);
+      } else {
+        throw new Error("Lançamento não encontrado em nenhuma tabela.");
+      }
+    } else {
+      const { error: recErr } = await supabase
+        .from('recebimentos')
+        .update({ status: 'Pago', data_recebimento: paidDate })
+        .eq('id', recebimentoId);
+      if (recErr) throw new Error(`Falha ao liquidar faturamento: ${recErr.message}`);
+    }
 
     const { error: comErr } = await supabase
       .from('comissoes')

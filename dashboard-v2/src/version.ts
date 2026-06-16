@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.34";
+export const APP_VERSION = "v.02.46.35";
 export const VERSION_DATE = "2026-06-16";
 export const VERSION_CHANGELOG = [
+  "v.02.46.35 - Fix: Corrige exibição de valores de contratos de comissões integrando as tabelas recebimentos e notas_fiscais com algoritmo de mesclagem e deduplicação temporal (60 dias de tolerância e correspondência de valor/contrato) para preencher contratos sem histórico de lançamentos manuais.",
   "v.02.46.34 - Feat: Redesenho do módulo de comissões (/comissoes) no estilo premium de empréstimos, com tabelas expansíveis de contratos e faturamentos, gráficos em abas e vinculação com colaboradores da base People.",
   "v.02.46.33 - Chore: Renomeia a rota e a página /comissoes para /comissoes-v1.",
   "v.02.46.32 - Fix: Corrige agrupamento do Histórico de Recebidos para usar paid_date no realizado (total) corrigindo desvios em parcelas atrasadas/antecipadas; atualiza o cálculo de recebimento mensal do card e a coluna 'Mês Débito' para exibir a próxima parcela pendente (valor e data real de vencimento) sem rollover ou referências estáticas de competência.",
