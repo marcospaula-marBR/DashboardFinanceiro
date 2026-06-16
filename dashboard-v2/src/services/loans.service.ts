@@ -109,17 +109,19 @@ function calcReceivedForLoan(ln: RawLoan, contractPayments?: { status: string, a
   return Math.max(0, amount - debt);
 }
 
-export function calcInstallmentForMonth(ln: RawLoan, monthStr: string, contractPayments?: { status: string, amount: number, due_date: string }[]): number {
-  if (calcDebtForLoan(ln, contractPayments) <= 0) return 0;
-
+export function calcInstallmentForMonth(ln: RawLoan, monthStr: string, contractPayments?: { status: string, amount: number, due_date: string, paid_date?: string }[]): number {
   if (contractPayments && contractPayments.length > 0) {
-    const targetMonthPayments = contractPayments.filter(p => p.due_date.substring(0, 7) === monthStr);
-    const pendingAmount = targetMonthPayments
-      .filter(p => p.status === 'PENDENTE')
+    const paidAmount = contractPayments
+      .filter(p => p.status === 'PAGO')
+      .filter(p => {
+        const dateStr = p.paid_date || p.due_date;
+        return dateStr && dateStr.substring(0, 7) === monthStr;
+      })
       .reduce((sum, p) => sum + p.amount, 0);
-    return pendingAmount;
+    return paidAmount;
   }
 
+  // Fallback se não existirem parcelas no banco
   const [ty, tm] = monthStr.split('-').map(Number);
   const targetAbs = ty * 12 + tm;
   const amount = parseFloat(String(ln.amount)) || 0;
@@ -143,7 +145,13 @@ export function calcInstallmentForMonth(ln: RawLoan, monthStr: string, contractP
     if (posFromStart >= elapsed + 1 && posFromStart <= elapsed + postponed) return 0;
   }
 
-  return amount / inst;
+  // Assumimos que parcelas passadas foram pagas/recebidas
+  const now = new Date();
+  const nowAbs = now.getFullYear() * 12 + (now.getMonth() + 1);
+  if (targetAbs < nowAbs) {
+    return amount / inst;
+  }
+  return 0;
 }
 
 function loanStatus(ln: RawLoan, contractPayments?: { status: string, amount: number }[]): 'ATIVO' | 'LIQUIDADO' | 'ATRASADO' {
@@ -243,10 +251,7 @@ export async function fetchEmployees(isTestMode: boolean): Promise<RawEmployee[]
  */
 export function getBillingMonthStr(): string {
   const now = new Date();
-  const billingDate = now.getDate() >= 10
-    ? new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    : new Date(now.getFullYear(), now.getMonth(), 1);
-  return `${billingDate.getFullYear()}-${String(billingDate.getMonth() + 1).padStart(2, '0')}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
 export class LoansService {
@@ -260,17 +265,18 @@ export class LoansService {
     const [emps, loans, paymentsRes] = await Promise.all([
       fetchEmployees(safeTestMode),
       fetchLoans(safeTestMode),
-      supabase.from(paymentsTable).select('contract_id, status, amount, due_date')
+      supabase.from(paymentsTable).select('contract_id, status, amount, due_date, paid_date')
     ]);
 
     const payments = paymentsRes.data || [];
-    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string }[]>();
+    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string, paid_date?: string }[]>();
     payments.forEach(p => {
       const arr = paymentsByContract.get(p.contract_id) || [];
       arr.push({
         status: p.status,
         amount: parseFloat(String(p.amount)) || 0,
-        due_date: p.due_date
+        due_date: p.due_date,
+        paid_date: p.paid_date
       });
       paymentsByContract.set(p.contract_id, arr);
     });
@@ -378,6 +384,31 @@ export class LoansService {
       
       const aditivoCount = aditivoUrls.size + textOnlyCount;
 
+      // --- Cálculo da próxima parcela pendente a ser paga ---
+      const allPendingInstallments: { due_date: string; amount: number }[] = [];
+      filteredEmpLoans.forEach(ln => {
+        const cPayments = paymentsByContract.get(ln.id) || [];
+        if (calcDebtForLoan(ln, cPayments) <= 0) return;
+        cPayments.forEach(p => {
+          if (p.status === 'PENDENTE' && p.due_date) {
+            allPendingInstallments.push({
+              due_date: p.due_date,
+              amount: p.amount
+            });
+          }
+        });
+      });
+
+      let nextInstallmentValue = 0;
+      let nextInstallmentDate: string | null = null;
+      if (allPendingInstallments.length > 0) {
+        allPendingInstallments.sort((a, b) => a.due_date.localeCompare(b.due_date));
+        nextInstallmentDate = allPendingInstallments[0].due_date;
+        nextInstallmentValue = allPendingInstallments
+          .filter(p => p.due_date === nextInstallmentDate)
+          .reduce((sum, p) => sum + p.amount, 0);
+      }
+
       result.push({
         id: emp.id,
         name: emp.full_name,
@@ -396,7 +427,9 @@ export class LoansService {
         links_aditivos: emp.links_aditivos,
         aditivoCount,
         remainingInstallments,
-        lastInstallmentDate: lastInstallmentDate || null
+        lastInstallmentDate: lastInstallmentDate || null,
+        nextInstallmentValue,
+        nextInstallmentDate
       });
     });
 
@@ -411,17 +444,18 @@ export class LoansService {
     const [emps, loans, paymentsRes] = await Promise.all([
       fetchEmployees(safeTestMode),
       fetchLoans(safeTestMode),
-      supabase.from(paymentsTable).select('contract_id, status, amount, due_date')
+      supabase.from(paymentsTable).select('contract_id, status, amount, due_date, paid_date')
     ]);
 
     const payments = paymentsRes.data || [];
-    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string }[]>();
+    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string, paid_date?: string }[]>();
     payments.forEach(p => {
       const arr = paymentsByContract.get(p.contract_id) || [];
       arr.push({
         status: p.status,
         amount: parseFloat(String(p.amount)) || 0,
-        due_date: p.due_date
+        due_date: p.due_date,
+        paid_date: p.paid_date
       });
       paymentsByContract.set(p.contract_id, arr);
     });
@@ -536,7 +570,7 @@ export class LoansService {
     
     const { data, error } = await supabase
       .from(paymentsTable)
-      .select('amount, due_date, status');
+      .select('amount, due_date, status, paid_date');
       
     if (error || !data) {
       console.error('[LoansService] Erro ao carregar histórico de pagamentos:', error);
@@ -550,19 +584,29 @@ export class LoansService {
       if (!p.due_date) return;
       const parts = p.due_date.split('-');
       if (parts.length < 2) return;
-      const monthKey = `${parts[0]}-${parts[1]}`;
-      
-      // Filtrar apenas o passado (menor ou igual ao mês corrente de cobrança)
-      if (monthKey > currentBillingMonth) return;
-      
+      const dueMonthKey = `${parts[0]}-${parts[1]}`;
       const amount = parseFloat(String(p.amount)) || 0;
       
-      const current = monthlyMap.get(monthKey) || { total: 0, previsto: 0 };
-      if (p.status === 'PAGO') {
-        current.total += amount;
+      // Previsto goes to the due_date month
+      if (dueMonthKey <= currentBillingMonth) {
+        const current = monthlyMap.get(dueMonthKey) || { total: 0, previsto: 0 };
+        current.previsto += amount;
+        monthlyMap.set(dueMonthKey, current);
       }
-      current.previsto += amount;
-      monthlyMap.set(monthKey, current);
+      
+      // Realizado goes to the paid_date month (if PAGO)
+      if (p.status === 'PAGO') {
+        const paidDateStr = p.paid_date || p.due_date;
+        const paidParts = paidDateStr.split('-');
+        if (paidParts.length >= 2) {
+          const paidMonthKey = `${paidParts[0]}-${paidParts[1]}`;
+          if (paidMonthKey <= currentBillingMonth) {
+            const current = monthlyMap.get(paidMonthKey) || { total: 0, previsto: 0 };
+            current.total += amount;
+            monthlyMap.set(paidMonthKey, current);
+          }
+        }
+      }
     });
     
     const sortedKeys = Array.from(monthlyMap.keys()).sort();
@@ -705,7 +749,7 @@ export class LoansService {
         .eq('employee_id', employeeId)
         .order('request_date', { ascending: false }),
       supabase.from(paymentsTable)
-        .select('contract_id, status, amount, due_date')
+        .select('contract_id, status, amount, due_date, paid_date')
         .eq('employee_id', employeeId)
     ]);
 
@@ -717,13 +761,14 @@ export class LoansService {
     const loans = overrideLoans((loansRes.data || []) as RawLoan[]);
     const payments = paymentsRes.data || [];
     
-    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string }[]>();
+    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string, paid_date?: string }[]>();
     payments.forEach(p => {
       const arr = paymentsByContract.get(p.contract_id) || [];
       arr.push({
         status: p.status,
         amount: parseFloat(String(p.amount)) || 0,
-        due_date: p.due_date
+        due_date: p.due_date,
+        paid_date: p.paid_date
       });
       paymentsByContract.set(p.contract_id, arr);
     });
@@ -771,7 +816,7 @@ export class LoansService {
         .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,paid_installments,postponed_months,first_payment_date')
         .eq('employee_id', employeeId),
       supabase.from(paymentsTable)
-        .select('contract_id, status, amount, due_date')
+        .select('contract_id, status, amount, due_date, paid_date')
         .eq('employee_id', employeeId)
     ]);
 
@@ -784,13 +829,14 @@ export class LoansService {
     const loans = overrideLoans((loansRes.data || []) as RawLoan[]);
     const payments = paymentsRes.data || [];
     
-    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string }[]>();
+    const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string, paid_date?: string }[]>();
     payments.forEach(p => {
       const arr = paymentsByContract.get(p.contract_id) || [];
       arr.push({
         status: p.status,
         amount: parseFloat(String(p.amount)) || 0,
-        due_date: p.due_date
+        due_date: p.due_date,
+        paid_date: p.paid_date
       });
       paymentsByContract.set(p.contract_id, arr);
     });

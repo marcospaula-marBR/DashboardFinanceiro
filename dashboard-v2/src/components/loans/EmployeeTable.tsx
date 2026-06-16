@@ -60,12 +60,7 @@ export function EmployeeTable({ employees, onEmployeeClick }: EmployeeTableProps
               <th className="py-4 px-4 text-right">Remuneração</th>
               <th className="py-4 px-4 text-center">Restantes</th>
               <th className="py-4 px-4 text-right">Saldo Devedor</th>
-              <th className="py-4 px-4 text-right">
-                <div className="flex flex-col items-end">
-                  <span>Mês Débito</span>
-                  <span className="text-[9px] font-bold text-emerald-600 normal-case tracking-normal">{currentMonthLabel}</span>
-                </div>
-              </th>
+              <th className="py-4 px-4 text-right">Mês Débito</th>
               <th className="py-4 px-4 text-center">Última</th>
               <th className="py-4 px-6 text-center">Ações</th>
             </tr>
@@ -185,9 +180,22 @@ function EmployeeRow({
           {formatCurrency(employee.balance)}
         </td>
         <td className="py-4 px-4 text-right">
-          <span className="text-sm font-black text-emerald-600 tabular-nums">
-            {formatCurrency(employee.monthInstallment)}
-          </span>
+          {employee.nextInstallmentValue && employee.nextInstallmentValue > 0 ? (
+            <div className="flex flex-col items-end">
+              <span className="text-sm font-black text-emerald-600 tabular-nums">
+                {formatCurrency(employee.nextInstallmentValue)}
+              </span>
+              {employee.nextInstallmentDate && (
+                <span className="text-[10px] font-bold text-slate-400 mt-0.5 block font-sans">
+                  {new Date(employee.nextInstallmentDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </span>
+              )}
+            </div>
+          ) : employee.balance <= 0 && employee.totalTaken > 0 ? (
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 inline-block">Quitado</span>
+          ) : (
+            <span className="text-[10px] font-bold text-slate-300">-</span>
+          )}
         </td>
 
         {/* Nova Coluna: Última */}

@@ -25,6 +25,8 @@ export interface Employee {
   aditivoCount?: number;
   remainingInstallments?: number;
   lastInstallmentDate?: string | null;
+  nextInstallmentValue?: number;
+  nextInstallmentDate?: string | null;
   avatar?: string;
   created_at?: string;
 

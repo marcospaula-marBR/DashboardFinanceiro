@@ -147,9 +147,9 @@ export default function EmprestimosPage() {
 
     setDetailsModal({
       isOpen: true,
-      title: "Recebíveis Previstos para o Ciclo",
-      subtitle: "Parcelas e descontos em folha previstos para o mês de faturamento",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Parcela Mês", "Status"],
+      title: "Recebíveis Realizados no Ciclo",
+      subtitle: "Parcelas e descontos em folha realizados (pagos) no mês de faturamento",
+      headers: ["Colaborador (Iniciais)", "Empresa", "Valor Pago", "Status"],
       items
     });
   };
