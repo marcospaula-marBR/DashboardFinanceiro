@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.32";
+export const APP_VERSION = "v.02.46.33";
 export const VERSION_DATE = "2026-06-16";
 export const VERSION_CHANGELOG = [
+  "v.02.46.33 - Chore: Renomeia a rota e a página /comissoes para /comissoes-v1.",
   "v.02.46.32 - Fix: Corrige agrupamento do Histórico de Recebidos para usar paid_date no realizado (total) corrigindo desvios em parcelas atrasadas/antecipadas; atualiza o cálculo de recebimento mensal do card e a coluna 'Mês Débito' para exibir a próxima parcela pendente (valor e data real de vencimento) sem rollover ou referências estáticas de competência.",
   "v.02.46.31 - Fix: Corrige projeção e processamento de parcelas de contratos liquidados (ex: KaychWare, SL Refrigeração, MRAP) desconsiderando-as quando PENDENTES; agrupa recebíveis realizados pelo paid_date real no gráfico de Projeção Futura; ajusta Gisele (GAP) para PENDENTE em Jun/26 e remove controles temporais do Histórico de Recebidos para exibir apenas a visão total 'Tudo'.",
   "v.02.46.30 - Fix: Ajusta Projeção de Recebimentos futura e Histórico de Recebidos para separar corretamente os dados temporais do banco (futuro vs passado) baseado no mês corrente de cobrança, exibindo corretamente parcelas pagas vs previstas.",
