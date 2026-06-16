@@ -6,7 +6,6 @@ export interface Membro {
   nome: string;
   ativo: boolean;
   pct_padrao: number;
-  employee_id?: string | null;
   created_at?: string;
 }
 
@@ -27,7 +26,6 @@ export interface RawComissao {
   porcentagem: number;
   valor_calculado: number;
   status?: string | null;
-  paid_date?: string | null;
 }
 
 export interface Comissao extends RawComissao {
@@ -46,7 +44,6 @@ export interface Recebimento {
   ano_ref?: number | null;
   valor_bruto: number;
   valor_liquido: number;
-  status?: string; // 'Pendente' | 'Pago'
   comissoes: Comissao[];
 }
 
@@ -79,10 +76,4 @@ export interface LancamentoFormData {
 export interface KpiTotais {
   [nome: string]: number;
   Geral: number;
-}
-
-export interface ProjectionData {
-  month: string;
-  total: number;
-  previsto: number;
 }

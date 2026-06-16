@@ -13,7 +13,6 @@ interface RawRecebimento {
   ano_ref?: number | null;
   valor_bruto: number;
   valor_liquido: number;
-  status?: string;
   // Supabase retorna FK joins como array ou objeto dependendo da relação
   contratos_base?: { nome_contrato: string } | { nome_contrato: string }[] | null;
   comissoes?: RawComissaoDb[];
@@ -26,7 +25,6 @@ interface RawComissaoDb {
   porcentagem: number;
   valor_calculado: number;
   status?: string | null;
-  paid_date?: string | null;
 }
 
 // ─── ComissoesService ─────────────────────────────────────────────────────────
@@ -37,7 +35,7 @@ export class ComissoesService {
   static async getEquipe(): Promise<Membro[]> {
     const { data, error } = await supabase
       .from('equipe')
-      .select('id, nome, ativo, pct_padrao, employee_id')
+      .select('id, nome, ativo, pct_padrao')
       .order('nome');
 
     if (error) throw new Error(`Falha ao buscar equipe: ${error.message}`);
@@ -76,9 +74,8 @@ export class ComissoesService {
         ano_ref,
         valor_bruto,
         valor_liquido,
-        status,
         contratos_base ( nome_contrato ),
-        comissoes ( id, recebimento_id, membro_id, porcentagem, valor_calculado, status, paid_date )
+        comissoes ( id, recebimento_id, membro_id, porcentagem, valor_calculado, status )
       `)
       .order('data_recebimento', { ascending: false });
 
@@ -106,7 +103,6 @@ export class ComissoesService {
       ano_ref: rec.ano_ref,
       valor_bruto: Number(rec.valor_bruto) || 0,
       valor_liquido: Number(rec.valor_liquido) || 0,
-      status: rec.status || 'Pago',
       comissoes: (rec.comissoes || []).map((c): Comissao => ({
         id: c.id,
         recebimento_id: c.recebimento_id,
@@ -114,7 +110,6 @@ export class ComissoesService {
         porcentagem: Number(c.porcentagem) || 0,
         valor_calculado: Number(c.valor_calculado) || 0,
         status: c.status,
-        paid_date: c.paid_date,
         membroNome: equipeMap.get(c.membro_id) ?? 'Desconhecido',
       })),
     }));
@@ -140,12 +135,10 @@ export class ComissoesService {
     ciclo?: string;
     valor_bruto: number;
     valor_liquido: number;
-    status?: string;
     divisoes: Array<{ membro_id: string; porcentagem: number; valor_calculado: number }>;
     editId?: string;
   }): Promise<void> {
     const ciclo = payload.ciclo || null;
-    const status = payload.status || 'Pago';
     const recPayload = {
       contrato_id: payload.contrato_id,
       data_recebimento: payload.data_recebimento,
@@ -155,7 +148,6 @@ export class ComissoesService {
       ano_ref: ciclo ? parseInt(ciclo.split('-')[0]) : null,
       valor_bruto: payload.valor_bruto,
       valor_liquido: payload.valor_liquido,
-      status
     };
 
     let recebimentoId = payload.editId;
@@ -191,8 +183,7 @@ export class ComissoesService {
         membro_id: d.membro_id,
         porcentagem: d.porcentagem / 100, // Armazena como decimal (0.0035)
         valor_calculado: d.valor_calculado,
-        status: status, // Mesmo status do recebimento
-        paid_date: status === 'Pago' ? payload.data_recebimento : null
+        status: 'pendente',
       }));
 
     if (comissoesPayload.length > 0) {
@@ -247,75 +238,10 @@ export class ComissoesService {
       .from('equipe')
       .update({ ativo })
       .eq('id', id)
-      .select('id, nome, ativo, pct_padrao, employee_id')
+      .select('id, nome, ativo, pct_padrao')
       .single();
     if (error) throw new Error(`Falha ao atualizar membro: ${error.message}`);
     return data as Membro;
-  }
-
-  /** Habilita comissão para um colaborador da base People */
-  static async enableEmployeeCommission(employeeId: string, name: string, pctPadrao: number): Promise<Membro> {
-    const { data, error } = await supabase
-      .from('equipe')
-      .insert([{ employee_id: employeeId, nome: name, pct_padrao: pctPadrao, ativo: true }])
-      .select('id, nome, ativo, pct_padrao, employee_id')
-      .single();
-    if (error) throw new Error(`Falha ao habilitar colaborador: ${error.message}`);
-    return data as Membro;
-  }
-
-  /** Busca todos os colaboradores ativos da base global */
-  static async getGlobalEmployees(): Promise<{ id: string; name: string }[]> {
-    const { data, error } = await supabase
-      .from('employees')
-      .select('id, full_name')
-      .neq('status', 'Inativo')
-      .order('full_name');
-
-    if (error) throw new Error(`Falha ao buscar colaboradores globais: ${error.message}`);
-    return (data || []).map(e => ({ id: e.id, name: e.full_name }));
-  }
-
-  /** Atualiza as comissões padrão e vínculos de membros da equipe */
-  static async updateMembro(id: string, payload: { nome: string; pct_padrao: number; employee_id?: string | null }): Promise<Membro> {
-    const { data, error } = await supabase
-      .from('equipe')
-      .update(payload)
-      .eq('id', id)
-      .select('id, nome, ativo, pct_padrao, employee_id')
-      .single();
-    if (error) throw new Error(`Falha ao atualizar comissionado: ${error.message}`);
-    return data as Membro;
-  }
-
-  /** Liquida/Dá baixa em um recebimento e suas comissões */
-  static async liquidateRecebimento(recebimentoId: string, paidDate: string): Promise<void> {
-    const { error: recErr } = await supabase
-      .from('recebimentos')
-      .update({ status: 'Pago', data_recebimento: paidDate })
-      .eq('id', recebimentoId);
-    if (recErr) throw new Error(`Falha ao liquidar faturamento: ${recErr.message}`);
-
-    const { error: comErr } = await supabase
-      .from('comissoes')
-      .update({ status: 'Pago', paid_date: paidDate })
-      .eq('recebimento_id', recebimentoId);
-    if (comErr) throw new Error(`Falha ao atualizar comissões: ${comErr.message}`);
-  }
-
-  /** Estorna/Reverte a quitação de um recebimento e suas comissões */
-  static async revertRecebimento(recebimentoId: string): Promise<void> {
-    const { error: recErr } = await supabase
-      .from('recebimentos')
-      .update({ status: 'Pendente' })
-      .eq('id', recebimentoId);
-    if (recErr) throw new Error(`Falha ao reverter faturamento: ${recErr.message}`);
-
-    const { error: comErr } = await supabase
-      .from('comissoes')
-      .update({ status: 'Pendente', paid_date: null })
-      .eq('recebimento_id', recebimentoId);
-    if (comErr) throw new Error(`Falha ao reverter comissões: ${comErr.message}`);
   }
 }
 

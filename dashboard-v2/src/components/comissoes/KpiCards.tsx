@@ -1,81 +1,113 @@
 "use client";
 
-import { Membro, Recebimento, KpiTotais } from "@/types/comissoes";
+import { 
+  TrendingUp, 
+  CheckCircle2, 
+  Clock, 
+  BadgeDollarSign 
+} from "lucide-react";
 import { formatCurrency } from "@/services/comissoes.service";
-import { BadgeDollarSign, TrendingUp } from "lucide-react";
+import { Recebimento } from "@/types/comissoes";
 
 interface KpiCardsProps {
-  equipe: Membro[];
   historico: Recebimento[];
+  onOpenFaturado: () => void;
+  onOpenRecebido: () => void;
+  onOpenAReceber: () => void;
+  onOpenComissoes: () => void;
 }
 
-const COLORS = [
-  { bg: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-700",   icon: "bg-amber-100",   value: "text-amber-800"  },
-  { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-700",    icon: "bg-blue-100",    value: "text-blue-800"   },
-  { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", icon: "bg-emerald-100", value: "text-emerald-800" },
-  { bg: "bg-rose-50",    border: "border-rose-200",    text: "text-rose-700",    icon: "bg-rose-100",    value: "text-rose-800"   },
-  { bg: "bg-violet-50",  border: "border-violet-200",  text: "text-violet-700",  icon: "bg-violet-100",  value: "text-violet-800" },
-];
+export function KpiCards({ 
+  historico, 
+  onOpenFaturado, 
+  onOpenRecebido, 
+  onOpenAReceber, 
+  onOpenComissoes 
+}: KpiCardsProps) {
+  
+  // Totais
+  const totalFaturado = historico.reduce((sum, r) => sum + r.valor_bruto, 0);
+  
+  const totalRecebido = historico
+    .filter(r => r.status === 'Pago')
+    .reduce((sum, r) => sum + r.valor_bruto, 0);
+    
+  const totalAReceber = historico
+    .filter(r => r.status === 'Pendente')
+    .reduce((sum, r) => sum + r.valor_bruto, 0);
 
-export function KpiCards({ equipe, historico }: KpiCardsProps) {
-  // Calcula totais de comissão por membro
-  const totais: KpiTotais = { Geral: 0 };
-
-  equipe.forEach(m => { totais[m.id] = 0; });
-
-  historico.forEach(rec => {
-    rec.comissoes.forEach(com => {
-      if (!totais[com.membro_id]) totais[com.membro_id] = 0;
-      totais[com.membro_id] += com.valor_calculado;
-      totais.Geral += com.valor_calculado;
-    });
-  });
-
-  const ativos = equipe.filter(m => m.ativo || (totais[m.id] ?? 0) > 0);
-
-  if (ativos.length === 0) return null;
+  const totalComissoes = historico.reduce(
+    (sum, r) => sum + r.comissoes.reduce((s, c) => s + c.valor_calculado, 0),
+    0
+  );
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-      {/* Card Total Geral */}
-      <div className="col-span-2 md:col-span-3 lg:col-span-5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-2xl p-4 shadow-md flex items-center justify-between">
-        <div>
-          <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider mb-1">
-            Total em Comissões (Período)
-          </p>
-          <p className="text-white text-3xl font-black">
-            {formatCurrency(totais.Geral)}
-          </p>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      
+      {/* CARD 1: TOTAL FATURADO */}
+      <div 
+        onClick={onOpenFaturado}
+        className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer relative overflow-hidden group"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center transition-colors group-hover:bg-sky-500 group-hover:text-white">
+            <TrendingUp size={20} />
+          </div>
+          <span className="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Geral</span>
         </div>
-        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-          <TrendingUp className="text-white" size={26} />
-        </div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Total Faturado</p>
+        <h3 className="text-2xl font-black text-slate-800 tabular-nums">{formatCurrency(totalFaturado)}</h3>
+        <p className="text-[10px] font-bold text-slate-400 mt-2 block">Clique para ver todos os faturamentos</p>
       </div>
 
-      {/* Cards por membro */}
-      {ativos.map((m, idx) => {
-        const color = COLORS[idx % COLORS.length];
-        const valor = totais[m.id] ?? 0;
-        return (
-          <div
-            key={m.id}
-            className={`${color.bg} ${color.border} border rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow`}
-          >
-            <div className={`w-8 h-8 ${color.icon} rounded-lg flex items-center justify-center mb-3`}>
-              <BadgeDollarSign className={color.text} size={16} />
-            </div>
-            <p className={`text-xs font-bold uppercase tracking-wide ${color.text} mb-1`}>
-              {m.nome}
-            </p>
-            <p className={`text-lg font-black ${color.value}`}>
-              {formatCurrency(valor)}
-            </p>
-            <p className="text-slate-400 text-[10px] mt-1">
-              {(m.pct_padrao * 100).toFixed(2)}% padrão
-            </p>
+      {/* CARD 2: TOTAL RECEBIDO */}
+      <div 
+        onClick={onOpenRecebido}
+        className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer relative overflow-hidden group"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center transition-colors group-hover:bg-emerald-500 group-hover:text-white">
+            <CheckCircle2 size={20} />
           </div>
-        );
-      })}
+          <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Liquidado</span>
+        </div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Total Recebido</p>
+        <h3 className="text-2xl font-black text-emerald-600 tabular-nums">{formatCurrency(totalRecebido)}</h3>
+        <p className="text-[10px] font-bold text-emerald-500 mt-2 block">Clique para ver baixas efetivadas</p>
+      </div>
+
+      {/* CARD 3: SALDO A RECEBER */}
+      <div 
+        onClick={onOpenAReceber}
+        className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer relative overflow-hidden group"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center transition-colors group-hover:bg-amber-500 group-hover:text-white">
+            <Clock size={20} />
+          </div>
+          <span className="text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Aberto</span>
+        </div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Saldo A Receber</p>
+        <h3 className="text-2xl font-black text-amber-600 tabular-nums">{formatCurrency(totalAReceber)}</h3>
+        <p className="text-[10px] font-bold text-amber-500 mt-2 block">Clique para gerenciar lançamentos em aberto</p>
+      </div>
+
+      {/* CARD 4: TOTAL COMISSÕES */}
+      <div 
+        onClick={onOpenComissoes}
+        className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer relative overflow-hidden group"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center transition-colors group-hover:bg-slate-800 group-hover:text-white">
+            <BadgeDollarSign size={20} />
+          </div>
+          <span className="text-[10px] font-black uppercase text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Equipe</span>
+        </div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Total em Comissões</p>
+        <h3 className="text-2xl font-black text-slate-800 tabular-nums">{formatCurrency(totalComissoes)}</h3>
+        <p className="text-[10px] font-bold text-slate-400 mt-2 block">Clique para ver rateio dos colaboradores</p>
+      </div>
+
     </div>
   );
 }
