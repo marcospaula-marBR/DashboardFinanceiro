@@ -43,7 +43,7 @@ export function DashboardCharts({ projectionsData = [], historyData = [], employ
   
   // Controles de Período
   const [projectionMonths, setProjectionMonths] = useState<number>(12);
-  const [historyMonths, setHistoryMonths] = useState<number | "all">(12);
+  const [historyMonths, setHistoryMonths] = useState<number | "all">("all");
 
   // Controles de Concentração
   const [concentrationGroupBy, setConcentrationGroupBy] = useState<"company" | "linkType">("company");
@@ -224,23 +224,7 @@ export function DashboardCharts({ projectionsData = [], historyData = [], employ
             </div>
           )}
 
-          {activeTab === "history" && (
-            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
-              {([6, 12, "all"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setHistoryMonths(m)}
-                  className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                    historyMonths === m
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {m === "all" ? "Tudo" : `${m} Meses`}
-                </button>
-              ))}
-            </div>
-          )}
+
 
           {activeTab === "concentration" && (
             <div className="flex gap-2">

@@ -23,21 +23,21 @@ def http(method, path, body=None):
         return e.code, err
 
 def main():
-    status, loans = http("GET", "/rest/v1/employee_loans?select=*")
-    status, payments = http("GET", "/rest/v1/loan_payments?select=*")
     status, emps = http("GET", "/rest/v1/employees?select=id,full_name")
-    
     emp_map = {e['id']: e['full_name'] for e in emps}
     
-    # Calculate balances
+    status, loans = http("GET", "/rest/v1/employee_loans?select=*")
+    status, payments = http("GET", "/rest/v1/loan_payments?select=*")
+    
+    # Calculate loan balances
     loan_map = {}
     for l in loans:
         loan_map[l['id']] = {
             'info': l,
             'emp_name': emp_map.get(l['employee_id'], 'UNKNOWN'),
             'paid_amt': 0,
-            'pago_count': 0,
-            'pendente_count': 0
+            'pago_statuses': [],
+            'pendente_statuses': []
         }
         
     for p in payments:
@@ -45,20 +45,23 @@ def main():
         if cid in loan_map:
             if p['status'] == 'PAGO':
                 loan_map[cid]['paid_amt'] += float(p['amount'])
-                loan_map[cid]['pago_count'] += 1
+                loan_map[cid]['pago_statuses'].append(p)
             elif p['status'] == 'PENDENTE':
-                loan_map[cid]['pendente_count'] += 1
+                loan_map[cid]['pendente_statuses'].append(p)
                 
+    print("=== LIQUIDATED LOANS WITH PENDING PAYMENTS ===")
     for cid, ldata in loan_map.items():
-        if "ana carolina" in ldata['emp_name'].lower():
-            ln = ldata['info']
-            amount = float(ln['amount'])
-            extra = float(ln.get('amount_paid_extra') or 0)
-            debt = max(0.0, amount - ldata['paid_amt'] - extra)
-            print(f"Loan ID: {cid[:8]}... | Emp: {ldata['emp_name']}")
-            print(f"  Amt: {amount} | Paid: {ldata['paid_amt']} | Extra: {extra} | Debt: {debt}")
-            print(f"  Inst: {ln['installments']} | Pago Count: {ldata['pago_count']} | Pend Count: {ldata['pendente_count']}")
-            print(f"  Notes: {ln.get('notes')}")
+        ln = ldata['info']
+        amount = float(ln['amount'])
+        extra = float(ln.get('amount_paid_extra') or 0)
+        debt = max(0.0, amount - ldata['paid_amt'] - extra)
+        if debt <= 0:
+            pendentes = ldata['pendente_statuses']
+            if len(pendentes) > 0:
+                print(f"Loan ID: {cid[:8]}... | Emp: {ldata['emp_name']} | Amt: {amount} | Paid: {ldata['paid_amt']} | Extra: {extra} | Debt: {debt}")
+                print(f"  Pending installments count: {len(pendentes)}")
+                for p in sorted(pendentes, key=lambda x: x['due_date']):
+                    print(f"    Due: {p['due_date']} | Amt: {p['amount']}")
 
 if __name__ == "__main__":
     main()

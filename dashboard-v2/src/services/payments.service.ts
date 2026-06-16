@@ -232,27 +232,70 @@ export class PaymentsService {
   static async getPaymentsByMonth(monthCycle: string, isTestMode?: boolean): Promise<LoanPayment[]> {
     const table = isTestMode ? 'loan_payments_test' : 'loan_payments';
     const empsTable = isTestMode ? 'employees_test' : 'employees';
+    const loansTable = isTestMode ? 'employee_loans_test' : 'employee_loans';
 
-    const { data, error } = await supabase
-      .from(table)
-      .select(`
+    // Buscamos todas as parcelas e empréstimos para calcular saldo devedor atual de cada contrato
+    const [paymentsRes, loansRes] = await Promise.all([
+      supabase.from(table).select(`
         *,
         employee: ${empsTable}!employee_id (
           full_name
         )
-      `)
-      .eq('month_cycle', monthCycle);
+      `),
+      supabase.from(loansTable).select('id, amount, amount_paid_extra')
+    ]);
 
-    if (error) {
-      console.error('Erro ao buscar parcelas do mês:', error);
+    if (paymentsRes.error) {
+      console.error('Erro ao buscar parcelas do mês:', paymentsRes.error);
       throw new Error('Falha ao carregar parcelas do mês');
     }
 
+    const allPayments = paymentsRes.data || [];
+    const allLoans = loansRes.data || [];
+
+    // Mapear empréstimos por id
+    const loanMap = new Map<string, { amount: number; extra: number; paid: number }>();
+    allLoans.forEach(l => {
+      loanMap.set(l.id, {
+        amount: parseFloat(String(l.amount)) || 0,
+        extra: parseFloat(String(l.amount_paid_extra)) || 0,
+        paid: 0
+      });
+    });
+
+    // Somar parcelas já pagas no banco
+    allPayments.forEach(p => {
+      if (p.status === 'PAGO') {
+        const l = loanMap.get(p.contract_id);
+        if (l) {
+          l.paid += parseFloat(String(p.amount)) || 0;
+        }
+      }
+    });
+
+    const isLoanLiquidated = (contractId: string) => {
+      const l = loanMap.get(contractId);
+      if (!l) return false;
+      const debt = Math.max(0, l.amount - l.paid - l.extra);
+      return debt <= 0;
+    };
+
+    // Filtrar fora parcelas PENDENTES de contratos liquidados
+    const filteredPayments = allPayments.filter(p => {
+      if (p.month_cycle !== monthCycle) return false;
+      if (p.status === 'PENDENTE' && isLoanLiquidated(p.contract_id)) {
+        return false;
+      }
+      return true;
+    });
+
     // Tradução para o formato esperado pela UI do Modal
-    return (data || []).map(item => ({
+    return filteredPayments.map(item => ({
       ...item,
       contracts: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         employee_name: (item as any).employee?.full_name || 'Desconhecido',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         operation_number: (item as any).contract_id?.slice(0, 8) || '---'
       }
     })) as LoanPayment[];
@@ -263,16 +306,48 @@ export class PaymentsService {
    */
   static async getMonthStats(monthCycle: string, isTestMode?: boolean) {
     const table = isTestMode ? 'loan_payments_test' : 'loan_payments';
-    const { data, error } = await supabase
-      .from(table)
-      .select('status, amount')
-      .eq('month_cycle', monthCycle);
+    const loansTable = isTestMode ? 'employee_loans_test' : 'employee_loans';
 
-    if (error) {
-      if (isTestMode && error.code === '42P01') return { total: 0, pending: 0, paid: 0, postponed: 0, pendingAmount: 0, paidAmount: 0, postponedAmount: 0 };
-      console.error('Erro ao buscar estatísticas:', error);
+    const [paymentsRes, loansRes] = await Promise.all([
+      supabase.from(table).select('status, amount, contract_id, month_cycle'),
+      supabase.from(loansTable).select('id, amount, amount_paid_extra')
+    ]);
+
+    if (paymentsRes.error) {
+      if (isTestMode && paymentsRes.error.code === '42P01') {
+        return { total: 0, pending: 0, paid: 0, postponed: 0, pendingAmount: 0, paidAmount: 0, postponedAmount: 0 };
+      }
+      console.error('Erro ao buscar estatísticas:', paymentsRes.error);
       throw new Error('Falha ao carregar estatísticas');
     }
+
+    const allPayments = paymentsRes.data || [];
+    const allLoans = loansRes.data || [];
+
+    const loanMap = new Map<string, { amount: number; extra: number; paid: number }>();
+    allLoans.forEach(l => {
+      loanMap.set(l.id, {
+        amount: parseFloat(String(l.amount)) || 0,
+        extra: parseFloat(String(l.amount_paid_extra)) || 0,
+        paid: 0
+      });
+    });
+
+    allPayments.forEach(p => {
+      if (p.status === 'PAGO') {
+        const l = loanMap.get(p.contract_id);
+        if (l) {
+          l.paid += parseFloat(String(p.amount)) || 0;
+        }
+      }
+    });
+
+    const isLoanLiquidated = (contractId: string) => {
+      const l = loanMap.get(contractId);
+      if (!l) return false;
+      const debt = Math.max(0, l.amount - l.paid - l.extra);
+      return debt <= 0;
+    };
 
     const stats = {
       total: 0,
@@ -284,7 +359,12 @@ export class PaymentsService {
       postponedAmount: 0
     };
 
-    data?.forEach(p => {
+    allPayments.forEach(p => {
+      if (p.month_cycle !== monthCycle) return;
+      if (p.status === 'PENDENTE' && isLoanLiquidated(p.contract_id)) {
+        return; // Ignora parcelas pendentes de contratos já liquidados
+      }
+
       stats.total++;
       if (p.status === 'PENDENTE') {
         stats.pending++;

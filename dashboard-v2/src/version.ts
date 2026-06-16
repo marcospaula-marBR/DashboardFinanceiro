@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.30";
+export const APP_VERSION = "v.02.46.31";
 export const VERSION_DATE = "2026-06-16";
 export const VERSION_CHANGELOG = [
+  "v.02.46.31 - Fix: Corrige projeção e processamento de parcelas de contratos liquidados (ex: KaychWare, SL Refrigeração, MRAP) desconsiderando-as quando PENDENTES; agrupa recebíveis realizados pelo paid_date real no gráfico de Projeção Futura; ajusta Gisele (GAP) para PENDENTE em Jun/26 e remove controles temporais do Histórico de Recebidos para exibir apenas a visão total 'Tudo'.",
   "v.02.46.30 - Fix: Ajusta Projeção de Recebimentos futura e Histórico de Recebidos para separar corretamente os dados temporais do banco (futuro vs passado) baseado no mês corrente de cobrança, exibindo corretamente parcelas pagas vs previstas.",
   "v.02.46.29 - Feat: Sistema de abas no painel de gráficos — adiciona a Aba 1 (Projeção Futura), a Aba 2 (Histórico de Recebidos agrupado do Supabase) com barra deslizante/seletores de período reativos (6, 12, 24M), e a Aba 3 (Concentração de Carteira) com gráfico de Rosca (Donut) interativo por Empresa/Vínculo e Saldo Devedor/Valor Concedido.",
   "v.02.46.28 - Feat: Torna os cartões de KPIs interativos exibindo modais de detalhamento com iniciais dos colaboradores para privacidade; substitui o card de maior empréstimo por 'Última Parcela' e oculta nomes no card 'Próximo a Encerrar', mostrando apenas o mês e valor da parcela.",

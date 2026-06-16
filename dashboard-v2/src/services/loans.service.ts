@@ -282,7 +282,6 @@ export class LoansService {
       loansByEmp.set(ln.employee_id, arr);
     });
 
-    const now = new Date();
     const billingMonthStr = getBillingMonthStr();
     
     // Busca contagem de aditivos via Histórico (Deduplicação)
@@ -544,6 +543,7 @@ export class LoansService {
       return [];
     }
     
+    const currentBillingMonth = getBillingMonthStr();
     const monthlyMap = new Map<string, { total: number; previsto: number }>();
     
     data.forEach(p => {
@@ -551,6 +551,10 @@ export class LoansService {
       const parts = p.due_date.split('-');
       if (parts.length < 2) return;
       const monthKey = `${parts[0]}-${parts[1]}`;
+      
+      // Filtrar apenas o passado (menor ou igual ao mês corrente de cobrança)
+      if (monthKey > currentBillingMonth) return;
+      
       const amount = parseFloat(String(p.amount)) || 0;
       
       const current = monthlyMap.get(monthKey) || { total: 0, previsto: 0 };
@@ -580,36 +584,84 @@ export class LoansService {
   static async getProjections(isTestMode?: boolean): Promise<ProjectionData[]> {
     const safeTestMode = Boolean(isTestMode);
     const paymentsTable = safeTestMode ? 'loan_payments_test' : 'loan_payments';
+    const loansTable = safeTestMode ? 'employee_loans_test' : 'employee_loans';
     
-    const { data: paymentsRes, error } = await supabase
-      .from(paymentsTable)
-      .select('amount, due_date, status');
+    const [paymentsRes, loansRes] = await Promise.all([
+      supabase.from(paymentsTable).select('amount, due_date, status, contract_id, paid_date'),
+      supabase.from(loansTable).select('id, amount, amount_paid_extra')
+    ]);
       
-    if (error || !paymentsRes) {
-      console.error('[LoansService] Erro ao carregar projeções:', error);
+    if (paymentsRes.error || !paymentsRes.data) {
+      console.error('[LoansService] Erro ao carregar projeções:', paymentsRes.error);
       return [];
     }
+    
+    const allPayments = paymentsRes.data || [];
+    const allLoans = loansRes.data || [];
+
+    // Mapear empréstimos por id
+    const loanMap = new Map<string, { amount: number; extra: number; paid: number }>();
+    allLoans.forEach(l => {
+      loanMap.set(l.id, {
+        amount: parseFloat(String(l.amount)) || 0,
+        extra: parseFloat(String(l.amount_paid_extra)) || 0,
+        paid: 0
+      });
+    });
+
+    // Somar parcelas pagas no banco
+    allPayments.forEach(p => {
+      if (p.status === 'PAGO') {
+        const l = loanMap.get(p.contract_id);
+        if (l) {
+          l.paid += parseFloat(String(p.amount)) || 0;
+        }
+      }
+    });
+
+    const isLoanLiquidated = (contractId: string) => {
+      const l = loanMap.get(contractId);
+      if (!l) return false;
+      const debt = Math.max(0, l.amount - l.paid - l.extra);
+      return debt <= 0;
+    };
     
     const currentBillingMonth = getBillingMonthStr();
     const monthlyMap = new Map<string, { total: number; previsto: number }>();
     
-    paymentsRes.forEach(p => {
+    allPayments.forEach(p => {
       if (!p.due_date) return;
       const parts = p.due_date.split('-');
       if (parts.length < 2) return;
       const monthKey = `${parts[0]}-${parts[1]}`;
       
-      // Filtrar apenas o presente e futuro (a partir do mês de cobrança corrente)
-      if (monthKey < currentBillingMonth) return;
+      // 1. Desconsiderar parcelas (de qualquer status) de contratos já liquidados se o vencimento for futuro/presente
+      if (isLoanLiquidated(p.contract_id) && monthKey >= currentBillingMonth) {
+        return;
+      }
       
       const amount = parseFloat(String(p.amount)) || 0;
       
-      const current = monthlyMap.get(monthKey) || { total: 0, previsto: 0 };
-      if (p.status === 'PAGO') {
-        current.total += amount;
+      // Previsto: vai para o mês do due_date (vencimento esperado) se for do presente/futuro
+      if (monthKey >= currentBillingMonth) {
+        const current = monthlyMap.get(monthKey) || { total: 0, previsto: 0 };
+        current.previsto += amount;
+        monthlyMap.set(monthKey, current);
       }
-      current.previsto += amount;
-      monthlyMap.set(monthKey, current);
+      
+      // Realizado: vai para o mês do paid_date (realmente recebido)
+      if (p.status === 'PAGO') {
+        const paidDateStr = p.paid_date || p.due_date;
+        const paidParts = paidDateStr.split('-');
+        if (paidParts.length >= 2) {
+          const paidMonthKey = `${paidParts[0]}-${paidParts[1]}`;
+          if (paidMonthKey >= currentBillingMonth) {
+            const current = monthlyMap.get(paidMonthKey) || { total: 0, previsto: 0 };
+            current.total += amount;
+            monthlyMap.set(paidMonthKey, current);
+          }
+        }
+      }
     });
     
     const sortedKeys = Array.from(monthlyMap.keys()).sort();
