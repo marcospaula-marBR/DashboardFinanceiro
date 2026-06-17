@@ -58,6 +58,18 @@ export function ComissoesTable({
     }
   };
 
+  // Returns the earliest invoice date from a list of recebimentos as MM/AAAA
+  const getEarliestDate = (recs: typeof recebimentos): string => {
+    if (!recs.length) return "—";
+    const dates = recs
+      .map(r => r.data_recebimento)
+      .filter(Boolean)
+      .sort();
+    if (!dates.length) return "—";
+    const [year, month] = dates[0].split("-");
+    return `${month}/${year}`;
+  };
+
   // Organiza contratos agrupando por Rede (quando preenchido)
   const tableItems = useMemo(() => {
     const groups: Record<string, ContratoBase[]> = {};
@@ -117,8 +129,9 @@ export function ComissoesTable({
         <table className="w-full text-left">
           <thead>
             <tr className="bg-slate-50/80 text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
-              <th className="py-4 px-6 min-w-[280px]">Contrato / Cliente / Rede</th>
+              <th className="py-4 px-6 min-w-[420px]">Contrato / Cliente / Rede</th>
               <th className="py-4 px-4 text-center">Empresa</th>
+              <th className="py-4 px-4 text-center">Início</th>
               <th className="py-4 px-4 text-right">Total Faturado</th>
               <th className="py-4 px-4 text-right text-emerald-600">Total Recebido</th>
               <th className="py-4 px-4 text-right text-amber-600">A Receber</th>
@@ -130,13 +143,13 @@ export function ComissoesTable({
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-400 text-sm font-bold">
+                <td colSpan={9} className="py-12 text-center text-slate-400 text-sm font-bold">
                   Carregando informações dos contratos...
                 </td>
               </tr>
             ) : tableItems.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-400 text-sm italic">
+                <td colSpan={9} className="py-12 text-center text-slate-400 text-sm italic">
                   Nenhum contrato encontrado.
                 </td>
               </tr>
@@ -185,6 +198,11 @@ export function ComissoesTable({
                         <td className="py-4 px-4 text-center">
                           <span className="text-[10px] font-black text-slate-400">—</span>
                         </td>
+                        <td className="py-4 px-4 text-center">
+                          <span className="text-[10px] font-black text-slate-500 tabular-nums">
+                            {getEarliestDate(redeRecs)}
+                          </span>
+                        </td>
                         <td className="py-4 px-4 text-right text-sm font-bold text-slate-700 tabular-nums">
                           {formatCurrency(totalFaturado)}
                         </td>
@@ -212,7 +230,7 @@ export function ComissoesTable({
 
                       {isExpanded && (
                         <tr onClick={(e) => e.stopPropagation()}>
-                          <td colSpan={8} className="p-0 border-t-0 bg-slate-50/50">
+                          <td colSpan={9} className="p-0 border-t-0 bg-slate-50/50">
                             <div className="p-6 space-y-5 animate-in slide-in-from-top-2 duration-300">
                               
                               {/* Lista de Contratos da Rede */}
@@ -226,7 +244,7 @@ export function ComissoesTable({
                                     return (
                                       <div key={c.id} className="bg-slate-50 border border-slate-200/50 rounded-xl p-3 flex items-center justify-between gap-4">
                                         <div className="min-w-0">
-                                          <p className="text-[11px] font-black text-slate-800 uppercase tracking-tight truncate">
+                                          <p className="text-[11px] font-black text-slate-800 uppercase tracking-tight whitespace-normal break-words">
                                             {c.nome_contrato}
                                           </p>
                                           <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
@@ -417,7 +435,7 @@ export function ComissoesTable({
                               {contract.nome_contrato.charAt(0)}
                             </div>
                             <div>
-                              <p className="text-sm font-black text-slate-800 uppercase tracking-tight line-clamp-1">
+                              <p className="text-sm font-black text-slate-800 uppercase tracking-tight whitespace-normal break-words">
                                 {contract.nome_contrato}
                               </p>
                               {contract.numero_contrato && (
@@ -431,6 +449,11 @@ export function ComissoesTable({
                         <td className="py-4 px-4 text-center">
                           <span className="text-[10px] font-black text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded-md shadow-sm">
                             {contract.empresa || 'MarBR'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <span className="text-[10px] font-black text-slate-500 tabular-nums">
+                            {getEarliestDate(contractRecs)}
                           </span>
                         </td>
                         <td className="py-4 px-4 text-right text-sm font-bold text-slate-700 tabular-nums">
@@ -476,7 +499,7 @@ export function ComissoesTable({
 
                       {isExpanded && (
                         <tr onClick={(e) => e.stopPropagation()}>
-                          <td colSpan={8} className="p-0 border-t-0 bg-slate-50/50">
+                          <td colSpan={9} className="p-0 border-t-0 bg-slate-50/50">
                             <div className="p-6 animate-in slide-in-from-top-2 duration-300">
                               <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">

@@ -14,9 +14,10 @@ interface ContratoModalProps {
     rede?: string | null;
   }) => Promise<void>;
   editData?: ContratoBase | null;
+  redesExistentes?: string[];
 }
 
-export function ContratoModal({ isOpen, onClose, onSave, editData }: ContratoModalProps) {
+export function ContratoModal({ isOpen, onClose, onSave, editData, redesExistentes = ["Rede Alpha", "Capina Elétrica", "Bertioga"] }: ContratoModalProps) {
   const [nome, setNome] = useState("");
   const [numero, setNumero] = useState("");
   const [obs, setObs] = useState("");
@@ -34,7 +35,10 @@ export function ContratoModal({ isOpen, onClose, onSave, editData }: ContratoMod
       setObs(editData.observacoes ?? "");
       
       const r = editData.rede ?? "";
-      if (r === "" || r === "Rede Alpha" || r === "Capina Elétrica" || r === "Bertioga") {
+      if (r === "") {
+        setRedeOption("");
+        setCustomRede("");
+      } else if (redesExistentes.includes(r)) {
         setRedeOption(r);
         setCustomRede("");
       } else {
@@ -49,7 +53,7 @@ export function ContratoModal({ isOpen, onClose, onSave, editData }: ContratoMod
       setCustomRede("");
     }
     setError(null);
-  }, [isOpen, editData]);
+  }, [isOpen, editData, redesExistentes]);
 
   const handleSubmit = async () => {
     if (!nome.trim()) { 
@@ -124,9 +128,9 @@ export function ContratoModal({ isOpen, onClose, onSave, editData }: ContratoMod
               onChange={e => setRedeOption(e.target.value)}
             >
               <option value="">Sem Rede (Contrato Independente)</option>
-              <option value="Rede Alpha">Rede Alpha</option>
-              <option value="Capina Elétrica">Capina Elétrica</option>
-              <option value="Bertioga">Bertioga</option>
+              {redesExistentes.map(rede => (
+                <option key={rede} value={rede}>{rede}</option>
+              ))}
               <option value="custom">Nova Rede / Personalizada...</option>
             </select>
           </div>

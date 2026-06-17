@@ -31,7 +31,6 @@ const COLORS = [
   '#84cc16', // Lime
 ];
 
-// Tooltips customizados (declarados fora do render para evitar recriação e erros de lint)
 interface CustomTooltipProps {
   active?: boolean;
   payload?: Array<{
@@ -103,20 +102,8 @@ export function ComissoesCharts({
   concentrationData = [],
   concentrationTitle = "Comissões"
 }: ComissoesChartsProps) {
-  const [activeTab, setActiveTab] = useState<"projections" | "history" | "concentration">("projections");
-  
-  // Controles de Período
-  const [projectionMonths, setProjectionMonths] = useState<number>(12);
-
-  // Filtragem e Formatação de Projeções
-  const formattedProjections = useMemo(() => {
-    const data = projectionsData.slice(0, projectionMonths);
-    return data.map(d => ({
-      month: d.month,
-      total: Number(d.total.toFixed(2)),
-      previsto: Number(d.previsto.toFixed(2)),
-    }));
-  }, [projectionsData, projectionMonths]);
+  // O gráfico agora inicia no histórico recebido, com a projeção futura excluída
+  const [activeTab, setActiveTab] = useState<"history" | "concentration">("history");
 
   // Filtragem e Formatação de Histórico
   const formattedHistory = useMemo(() => {
@@ -147,16 +134,6 @@ export function ComissoesCharts({
         {/* Seletores de Abas */}
         <div className="flex bg-slate-100/80 p-0.5 rounded-xl border border-slate-200/30">
           <button
-            onClick={() => setActiveTab("projections")}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-              activeTab === "projections"
-                ? "bg-white text-slate-800 shadow-sm"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            Projeção Futura
-          </button>
-          <button
             onClick={() => setActiveTab("history")}
             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
               activeTab === "history"
@@ -182,14 +159,9 @@ export function ComissoesCharts({
       {/* Controles de Gráfico e Visualização */}
       <div className="flex justify-between items-center mb-4 min-h-[38px] bg-slate-50/60 px-4 py-2 rounded-xl border border-slate-100">
         <div>
-          {activeTab === "projections" && (
-            <p className="text-[11px] text-slate-400 font-bold">
-              Projeção de fluxo de recebimentos futuros dos contratos
-            </p>
-          )}
           {activeTab === "history" && (
             <p className="text-[11px] text-slate-400 font-bold">
-              Histórico de parcelas faturadas vs liquidadas
+              Histórico de faturamento bruto vs recebido líquido
             </p>
           )}
           {activeTab === "concentration" && (
@@ -198,49 +170,10 @@ export function ComissoesCharts({
             </p>
           )}
         </div>
-
-        <div>
-          {activeTab === "projections" && (
-            <div className="flex bg-white p-0.5 rounded-lg border border-slate-200 text-[10px]">
-              <button 
-                onClick={() => setProjectionMonths(6)}
-                className={`px-2 py-0.5 rounded font-black ${projectionMonths === 6 ? 'bg-amber-500 text-white' : 'text-slate-500'}`}
-              >
-                6M
-              </button>
-              <button 
-                onClick={() => setProjectionMonths(12)}
-                className={`px-2 py-0.5 rounded font-black ${projectionMonths === 12 ? 'bg-amber-500 text-white' : 'text-slate-500'}`}
-              >
-                12M
-              </button>
-              <button 
-                onClick={() => setProjectionMonths(24)}
-                className={`px-2 py-0.5 rounded font-black ${projectionMonths === 24 ? 'bg-amber-500 text-white' : 'text-slate-500'}`}
-              >
-                24M
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Área do Gráfico */}
       <div className="flex-1 w-full min-h-0">
-        {activeTab === "projections" && (
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={formattedProjections} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="month" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v).replace('R$', '').trim()} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend verticalAlign="top" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 'bold' }} />
-              <Bar dataKey="previsto" name="Faturamentos Previstos" fill="#fcd34d" radius={[4, 4, 0, 0]} maxBarSize={30} />
-              <Line type="monotone" dataKey="total" name="Recebido Realizado" stroke="#10b981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
-
         {activeTab === "history" && (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={formattedHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>

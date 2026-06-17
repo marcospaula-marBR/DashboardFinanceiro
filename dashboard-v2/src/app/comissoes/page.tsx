@@ -197,6 +197,16 @@ export default function ComissoesPage() {
     };
   }, [historico]);
 
+  const redesExistentes = useMemo(() => {
+    const set = new Set<string>(["Rede Alpha", "Capina Elétrica", "Bertioga"]);
+    contratos.forEach(c => {
+      if (c.rede) {
+        set.add(c.rede.trim());
+      }
+    });
+    return Array.from(set).filter(Boolean).sort();
+  }, [contratos]);
+
   // ── Handlers ─────────────────────────────────────────────────────────────────
   const handleSaveLancamento = async (payload: {
     contrato_id: string;
@@ -794,6 +804,7 @@ export default function ComissoesPage() {
         onClose={() => { setIsContratoOpen(false); setEditContratoData(null); }}
         onSave={handleSaveContrato}
         editData={editContratoData}
+        redesExistentes={redesExistentes}
       />
 
       {/* Unificar Contratos */}
