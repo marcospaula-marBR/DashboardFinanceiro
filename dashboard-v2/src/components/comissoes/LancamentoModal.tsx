@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Membro, ContratoBase, Recebimento, DivisaoInput } from "@/types/comissoes";
-import { formatCurrency } from "@/services/comissoes.service";
-import { X, Plus, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ComissoesService, formatCurrency } from "@/services/comissoes.service";
+import { X, Plus, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 
 interface LancamentoModalProps {
   isOpen: boolean;
@@ -15,6 +15,8 @@ interface LancamentoModalProps {
     ciclo: string;
     valor_bruto: number;
     valor_liquido: number;
+    glosa: number;
+    impostos: number;
     status: string;
     divisoes: DivisaoInput[];
     editId?: string;
@@ -23,6 +25,8 @@ interface LancamentoModalProps {
   equipe: Membro[];
   contratos: ContratoBase[];
   editData?: Recebimento | null;
+  onEnableEmployee: (employeeId: string, name: string, pctPadrao: number) => Promise<Membro>;
+  onToggle: (id: string, ativo: boolean) => Promise<any>;
 }
 
 export function LancamentoModal({
@@ -33,24 +37,46 @@ export function LancamentoModal({
   equipe,
   contratos,
   editData,
+  onEnableEmployee,
+  onToggle,
 }: LancamentoModalProps) {
   const [contratoId, setContratoId] = useState("");
   const [data, setData] = useState("");
   const [nf, setNf] = useState("");
   const [ciclo, setCiclo] = useState("");
   const [bruto, setBruto] = useState("");
+  const [glosa, setGlosa] = useState("0");
+  const [impostos, setImpostos] = useState("0");
   const [liquido, setLiquido] = useState("");
   const [status, setStatus] = useState("Pago"); // "Pago" | "Pendente"
   const [divisoes, setDivisoes] = useState<DivisaoInput[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [globalEmployees, setGlobalEmployees] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const [isAddingCandidate, setIsAddingCandidate] = useState(false);
+
   const membrosAtivos = useMemo(() => equipe.filter(m => m.ativo), [equipe]);
   const liquidoNum = parseFloat(liquido) || 0;
   
-  // A soma dos percentuais cadastrados deve dar exatamente 1.00% (como padrão do rateio comercial)
+  // A soma dos percentuais cadastrados deve dar aproximadamente 1.00% (com tolerância para conversão R$ <-> %)
   const totalPct = divisoes.reduce((s, d) => s + d.porcentagem, 0);
-  const pctOk = Math.abs(totalPct - 1.0) < 0.001;
+  const pctOk = Math.abs(totalPct - 1.0) < 0.05;
+
+  // Carrega colaboradores globais
+  useEffect(() => {
+    if (!isOpen) return;
+    async function fetchGlobals() {
+      try {
+        const data = await ComissoesService.getGlobalEmployees();
+        setGlobalEmployees(data);
+      } catch (err) {
+        console.error("Erro ao carregar colaboradores globais:", err);
+      }
+    }
+    fetchGlobals();
+  }, [isOpen]);
 
   // Inicializa o formulário ao abrir
   useEffect(() => {
@@ -63,17 +89,26 @@ export function LancamentoModal({
       setNf(editData.nota_fiscal ?? "");
       setCiclo(editData.ciclo ?? "");
       setBruto(String(editData.valor_bruto));
+      setGlosa(String(editData.glosa ?? 0));
+      setImpostos(String(editData.impostos ?? 0));
       setLiquido(String(editData.valor_liquido));
       setStatus(editData.status || "Pago");
       
       // Mapeia divisões existentes ou aplica o percentual ativo
-      setDivisoes(membrosAtivos.map(m => {
+      const alreadyInSplit = new Set(editData.comissoes.map(c => c.membro_id));
+      const equipeEditList = [
+        ...membrosAtivos,
+        ...equipe.filter(m => alreadyInSplit.has(m.id) && !m.ativo)
+      ];
+
+      setDivisoes(equipeEditList.map(m => {
         const com = editData.comissoes.find(c => c.membro_id === m.id);
         return {
           membro_id: m.id,
           nome: m.nome,
           porcentagem: com ? com.porcentagem * 100 : (m.pct_padrao * 100),
           valor_calculado: com?.valor_calculado ?? 0,
+          mode: 'pct'
         };
       }));
     } else {
@@ -83,6 +118,8 @@ export function LancamentoModal({
       setNf("");
       setCiclo("");
       setBruto("");
+      setGlosa("0");
+      setImpostos("0");
       setLiquido("");
       setStatus("Pendente"); // Inicia como Pendente para controle de baixa de fatura
       
@@ -91,20 +128,58 @@ export function LancamentoModal({
         nome: m.nome,
         porcentagem: m.pct_padrao * 100,
         valor_calculado: 0,
+        mode: 'pct'
       })));
     }
     setError(null);
-  }, [isOpen, editData, membrosAtivos]);
+    setSelectedCandidateId("");
+  }, [isOpen, editData, membrosAtivos, equipe]);
 
-  // Recalcula o valor calculado em reais sempre que o líquido ou as divisões mudam
+  // Recalcula o valor calculado ou porcentagem sempre que o líquido muda
   useEffect(() => {
     setDivisoes(prev =>
-      prev.map(d => ({
-        ...d,
-        valor_calculado: Number((liquidoNum * (d.porcentagem / 100)).toFixed(2)),
-      }))
+      prev.map(d => {
+        if (d.mode === 'value') {
+          // Se está no modo valor livre, mantém o valor calculado e recalcula a porcentagem
+          const pct = liquidoNum > 0 ? (d.valor_calculado / liquidoNum) * 100 : 0;
+          return {
+            ...d,
+            porcentagem: Number(pct.toFixed(4))
+          };
+        } else {
+          // Se está no modo %, mantém a porcentagem e recalcula o valor em reais
+          return {
+            ...d,
+            valor_calculado: Number((liquidoNum * (d.porcentagem / 100)).toFixed(2))
+          };
+        }
+      })
     );
   }, [liquidoNum]);
+
+  // Helpers de cálculo para os campos de valores bruto/glosa/impostos
+  const recalculateLiquido = (b: string, g: string, i: string) => {
+    const bNum = parseFloat(b) || 0;
+    const gNum = parseFloat(g) || 0;
+    const iNum = parseFloat(i) || 0;
+    const val = bNum - gNum - iNum;
+    setLiquido(String(Number(Math.max(0, val).toFixed(2))));
+  };
+
+  const handleBrutoChange = (val: string) => {
+    setBruto(val);
+    recalculateLiquido(val, glosa, impostos);
+  };
+
+  const handleGlosaChange = (val: string) => {
+    setGlosa(val);
+    recalculateLiquido(bruto, val, impostos);
+  };
+
+  const handleImpostosChange = (val: string) => {
+    setImpostos(val);
+    recalculateLiquido(bruto, glosa, val);
+  };
 
   const handlePctChange = (membroId: string, pct: number) => {
     setDivisoes(prev =>
@@ -114,6 +189,106 @@ export function LancamentoModal({
           : d
       )
     );
+  };
+
+  const handleValueChange = (membroId: string, value: number) => {
+    setDivisoes(prev =>
+      prev.map(d => {
+        if (d.membro_id === membroId) {
+          const pct = liquidoNum > 0 ? (value / liquidoNum) * 100 : 0;
+          return {
+            ...d,
+            porcentagem: Number(pct.toFixed(4)),
+            valor_calculado: value
+          };
+        }
+        return d;
+      })
+    );
+  };
+
+  const handleToggleMode = (membroId: string, mode: 'pct' | 'value') => {
+    setDivisoes(prev =>
+      prev.map(d =>
+        d.membro_id === membroId
+          ? { ...d, mode }
+          : d
+      )
+    );
+  };
+
+  const handleDeleteDivisao = (membroId: string) => {
+    setDivisoes(prev => prev.filter(d => d.membro_id !== membroId));
+  };
+
+  // Listagem de candidatos elegíveis para rateio
+  const availableCandidates = useMemo(() => {
+    const activeMembroIds = new Set(divisoes.map(d => d.membro_id));
+    
+    // 1. Membros da equipe não presentes no rateio local
+    const candidatesFromEquipe = equipe
+      .filter(m => !activeMembroIds.has(m.id))
+      .map(m => ({
+        id: m.id,
+        name: m.nome,
+        type: 'equipe' as const,
+        pct_padrao: m.pct_padrao,
+        membro: m
+      }));
+      
+    // 2. Colaboradores globais (do people) não cadastrados na equipe
+    const equipeEmployeeIds = new Set(equipe.map(m => m.employee_id).filter(Boolean));
+    const candidatesFromGlobal = globalEmployees
+      .filter(emp => !equipeEmployeeIds.has(emp.id))
+      .map(emp => ({
+        id: emp.id,
+        name: emp.name,
+        type: 'global' as const,
+        pct_padrao: 0.0035, // padrão 0.35%
+        membro: null
+      }));
+      
+    return [...candidatesFromEquipe, ...candidatesFromGlobal].sort((a, b) => a.name.localeCompare(b.name));
+  }, [equipe, globalEmployees, divisoes]);
+
+  const handleAddCandidate = async () => {
+    if (!selectedCandidateId) return;
+    const candidate = availableCandidates.find(c => c.id === selectedCandidateId);
+    if (!candidate) return;
+
+    setIsAddingCandidate(true);
+    try {
+      let finalMembroId = candidate.id;
+      let finalName = candidate.name;
+      let pct = candidate.pct_padrao * 100;
+
+      if (candidate.type === 'global') {
+        // Ativa permanentemente comissão no banco de dados (People)
+        const novo = await onEnableEmployee(candidate.id, candidate.name, candidate.pct_padrao);
+        finalMembroId = novo.id;
+        finalName = novo.nome;
+        pct = novo.pct_padrao * 100;
+      } else if (candidate.membro && !candidate.membro.ativo) {
+        // Reativa membro na equipe
+        await onToggle(candidate.id, true);
+      }
+
+      setDivisoes(prev => [
+        ...prev,
+        {
+          membro_id: finalMembroId,
+          nome: finalName,
+          porcentagem: pct,
+          valor_calculado: Number((liquidoNum * (pct / 100)).toFixed(2)),
+          mode: 'pct'
+        }
+      ]);
+      setSelectedCandidateId("");
+    } catch (err) {
+      alert("Erro ao adicionar colaborador: " + ((err as { message?: string })?.message || "Erro desconhecido"));
+    } finally {
+      setIsAddingCandidate(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -130,7 +305,7 @@ export function LancamentoModal({
       return;
     }
     if (!pctOk && divisoes.length > 0) {
-      setError(`A soma das comissões distribuídas deve ser exatamente 1,00%. Atual: ${totalPct.toFixed(2)}%`);
+      setError(`A soma das comissões distribuídas deve ser aproximadamente 1,00%. Atual: ${totalPct.toFixed(2)}%`);
       return;
     }
 
@@ -144,6 +319,8 @@ export function LancamentoModal({
         ciclo,
         valor_bruto: parseFloat(bruto) || parseFloat(liquido),
         valor_liquido: parseFloat(liquido),
+        glosa: parseFloat(glosa) || 0,
+        impostos: parseFloat(impostos) || 0,
         status,
         divisoes,
         editId: editData?.id,
@@ -265,35 +442,69 @@ export function LancamentoModal({
           </div>
 
           {/* Valores */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50/50 p-4 border border-slate-100 rounded-2xl">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
-                Valor Faturado Bruto
+              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                Faturado Bruto
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span>
                 <input
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  className="w-full pl-8 pr-2 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
                   value={bruto}
-                  onChange={e => setBruto(e.target.value)}
+                  onChange={e => handleBrutoChange(e.target.value)}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
-                Valor Recebido Líquido *
+              <label className="block text-[9px] font-black text-red-400 uppercase tracking-wider mb-2">
+                Glosa (Dedução)
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-red-400 text-xs font-bold">R$</span>
                 <input
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  className="w-full pl-8 pr-2 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  value={glosa}
+                  onChange={e => handleGlosaChange(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                Impostos
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="w-full pl-8 pr-2 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  value={impostos}
+                  onChange={e => handleImpostosChange(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[9px] font-black text-emerald-500 uppercase tracking-wider mb-2">
+                Líquido Recebido *
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-500 text-xs font-bold">R$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="w-full pl-8 pr-2 py-1.5 border border-emerald-300 bg-emerald-50/10 rounded-xl text-xs font-black text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
                   value={liquido}
                   onChange={e => setLiquido(e.target.value)}
                 />
@@ -320,35 +531,134 @@ export function LancamentoModal({
               </span>
             </div>
 
-            {membrosAtivos.length === 0 ? (
+            {divisoes.length === 0 ? (
               <p className="text-xs text-slate-400 italic text-center py-4">
-                Nenhum membro da equipe ativo. Habilite comissionados no painel de equipe primeiro.
+                Nenhum membro ativo no rateio deste faturamento. Adicione colaboradores abaixo.
               </p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {divisoes.map(d => (
-                  <div key={d.membro_id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-4 shadow-sm">
+                  <div key={d.membro_id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between gap-3 shadow-sm relative group/row">
                     <div className="min-w-0">
                       <p className="text-[11px] font-black text-slate-800 uppercase tracking-tight truncate">{d.nome}</p>
-                      <p className="text-[10px] font-bold text-slate-500 mt-1 tabular-nums">
-                        {formatCurrency(d.valor_calculado)}
+                      <p className="text-[10px] font-bold text-slate-500 mt-0.5 tabular-nums">
+                        {d.mode === 'value' ? (
+                          <span className="text-[9px] font-semibold text-slate-400">
+                            Equivale a {d.porcentagem.toFixed(4)}%
+                          </span>
+                        ) : (
+                          formatCurrency(d.valor_calculado)
+                        )}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        className="w-16 px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-black text-right text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                        value={d.porcentagem}
-                        onChange={e => handlePctChange(d.membro_id, parseFloat(e.target.value) || 0)}
-                      />
-                      <span className="text-[10px] font-bold text-slate-400">%</span>
+                      {/* Alternador de Modo */}
+                      <div className="flex bg-slate-100 rounded-lg p-0.5 border border-slate-200/50">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMode(d.membro_id, 'pct')}
+                          className={`px-1.5 py-0.5 text-[9px] font-black rounded-md transition-all ${
+                            d.mode !== 'value'
+                              ? 'bg-white text-amber-600 shadow-sm border border-slate-100'
+                              : 'text-slate-400 hover:text-slate-600'
+                          }`}
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMode(d.membro_id, 'value')}
+                          className={`px-1.5 py-0.5 text-[9px] font-black rounded-md transition-all ${
+                            d.mode === 'value'
+                              ? 'bg-white text-amber-600 shadow-sm border border-slate-100'
+                              : 'text-slate-400 hover:text-slate-600'
+                          }`}
+                        >
+                          R$
+                        </button>
+                      </div>
+
+                      {/* Input de acordo com o modo */}
+                      <div className="relative flex items-center">
+                        {d.mode === 'value' ? (
+                          <>
+                            <span className="absolute left-2 text-[9px] font-bold text-slate-400">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="w-20 pl-6 pr-1.5 py-1 border border-slate-200 rounded-lg text-xs font-black text-right text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                              value={d.valor_calculado}
+                              onChange={e => handleValueChange(d.membro_id, parseFloat(e.target.value) || 0)}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="number"
+                              step="0.0001"
+                              min="0"
+                              max="100"
+                              className="w-16 px-1.5 py-1 border border-slate-200 rounded-lg text-xs font-black text-right text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                              value={d.porcentagem}
+                              onChange={e => handlePctChange(d.membro_id, parseFloat(e.target.value) || 0)}
+                            />
+                            <span className="text-[10px] font-bold text-slate-400 ml-0.5">%</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Botão de Excluir */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDivisao(d.membro_id)}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
+                        title="Remover deste rateio"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Dropdown de Adicionar Candidatos */}
+            {availableCandidates.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-200 flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                    Adicionar Colaborador ao Rateio
+                  </label>
+                  <select
+                    value={selectedCandidateId}
+                    onChange={e => setSelectedCandidateId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    disabled={isAddingCandidate}
+                  >
+                    <option value="">Selecione um colaborador para adicionar...</option>
+                    {availableCandidates.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.type === 'global' ? '(Novo no Rateio)' : '(Inativo/Não Incluído)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCandidate}
+                  disabled={!selectedCandidateId || isAddingCandidate}
+                  className="px-3 py-2 bg-amber-550 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  {isAddingCandidate ? (
+                    "Adicionando..."
+                  ) : (
+                    <>
+                      <Plus size={14} /> Incluir
+                    </>
+                  )}
+                </button>
               </div>
             )}
           </div>

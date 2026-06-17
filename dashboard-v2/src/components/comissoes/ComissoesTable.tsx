@@ -196,7 +196,9 @@ export function ComissoesTable({
                                         <th className="py-2.5 px-3">Data Ref/Fatura</th>
                                         <th className="py-2.5 px-3">Nota Fiscal</th>
                                         <th className="py-2.5 px-3 text-right">Valor Bruto</th>
-                                        <th className="py-2.5 px-3 text-right">Valor Líquido</th>
+                                        <th className="py-2.5 px-3 text-right text-red-500">Glosa</th>
+                                        <th className="py-2.5 px-3 text-right text-slate-500">Impostos</th>
+                                        <th className="py-2.5 px-3 text-right text-emerald-600 font-bold">Valor Líquido</th>
                                         <th className="py-2.5 px-3 text-center">Status</th>
                                         <th className="py-2.5 px-3">Comissionados</th>
                                         <th className="py-2.5 px-3 text-center">Ações</th>
@@ -219,7 +221,13 @@ export function ComissoesTable({
                                           <td className="py-3 px-3 text-right font-semibold text-slate-700 tabular-nums">
                                             {formatCurrency(rec.valor_bruto)}
                                           </td>
-                                          <td className="py-3 px-3 text-right font-semibold text-slate-600 tabular-nums">
+                                          <td className="py-3 px-3 text-right text-red-600 font-semibold tabular-nums">
+                                            {formatCurrency(rec.glosa || 0)}
+                                          </td>
+                                          <td className="py-3 px-3 text-right text-slate-600 font-semibold tabular-nums">
+                                            {formatCurrency(rec.impostos || 0)}
+                                          </td>
+                                          <td className="py-3 px-3 text-right font-black text-emerald-600 tabular-nums">
                                             {formatCurrency(rec.valor_liquido)}
                                           </td>
                                           <td className="py-3 px-3 text-center">

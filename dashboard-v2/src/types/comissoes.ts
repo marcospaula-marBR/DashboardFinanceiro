@@ -46,6 +46,8 @@ export interface Recebimento {
   ano_ref?: number | null;
   valor_bruto: number;
   valor_liquido: number;
+  glosa?: number;
+  impostos?: number;
   status?: string; // 'Pendente' | 'Pago'
   comissoes: Comissao[];
 }
@@ -63,6 +65,7 @@ export interface DivisaoInput {
   nome: string;
   porcentagem: number; // 0-100 representando %, ex: 0.35 para 0.35%
   valor_calculado: number;
+  mode?: 'pct' | 'value';
 }
 
 export interface LancamentoFormData {

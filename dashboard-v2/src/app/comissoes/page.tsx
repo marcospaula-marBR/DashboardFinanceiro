@@ -201,6 +201,8 @@ export default function ComissoesPage() {
     ciclo: string;
     valor_bruto: number;
     valor_liquido: number;
+    glosa: number;
+    impostos: number;
     status: string;
     divisoes: DivisaoInput[];
     editId?: string;
@@ -247,14 +249,16 @@ export default function ComissoesPage() {
     }
   };
 
-  const handleToggleMembro = async (id: string, ativo: boolean) => {
+  const handleToggleMembro = async (id: string, ativo: boolean): Promise<Membro> => {
     const updated = await ComissoesService.toggleMembro(id, ativo);
     setEquipe(prev => prev.map(m => m.id === id ? updated : m));
+    return updated;
   };
 
-  const handleEnableEmployee = async (employeeId: string, name: string, pctPadrao: number) => {
+  const handleEnableEmployee = async (employeeId: string, name: string, pctPadrao: number): Promise<Membro> => {
     const novo = await ComissoesService.enableEmployeeCommission(employeeId, name, pctPadrao);
     setEquipe(prev => [...prev, novo]);
+    return novo;
   };
 
   const handleUpdateMembroPercent = async (id: string, pctPadrao: number) => {
@@ -729,6 +733,8 @@ export default function ComissoesPage() {
         equipe={equipe}
         contratos={contratos}
         editData={modalEditData}
+        onEnableEmployee={handleEnableEmployee}
+        onToggle={handleToggleMembro}
       />
 
       {/* Gerenciar Equipe (Comissionados) */}

@@ -13,6 +13,8 @@ interface RawRecebimento {
   ano_ref?: number | null;
   valor_bruto: number;
   valor_liquido: number;
+  glosa?: number;
+  impostos?: number;
   status?: string;
   // Supabase retorna FK joins como array ou objeto dependendo da relação
   contratos_base?: { nome_contrato: string } | { nome_contrato: string }[] | null;
@@ -77,6 +79,8 @@ export class ComissoesService {
         ano_ref,
         valor_bruto,
         valor_liquido,
+        glosa,
+        impostos,
         status,
         contratos_base ( nome_contrato ),
         comissoes ( id, recebimento_id, membro_id, porcentagem, valor_calculado, status, paid_date )
@@ -100,6 +104,8 @@ export class ComissoesService {
         competencia,
         valor_faturado,
         valor_liquido,
+        valor_retido,
+        total_impostos,
         status,
         contratos_base ( nome_contrato )
       `);
@@ -160,6 +166,8 @@ export class ComissoesService {
           ano_ref: nf.competencia ? parseInt(nf.competencia.split('-')[0]) : null,
           valor_bruto: nfVal,
           valor_liquido: Number(nf.valor_liquido) || 0,
+          glosa: Number(nf.valor_retido) || 0,
+          impostos: Number(nf.total_impostos) || 0,
           status: nf.status || 'Pago',
           contratos_base: nf.contratos_base,
           comissoes: []
@@ -184,6 +192,8 @@ export class ComissoesService {
       ano_ref: rec.ano_ref,
       valor_bruto: Number(rec.valor_bruto) || 0,
       valor_liquido: Number(rec.valor_liquido) || 0,
+      glosa: Number(rec.glosa) || 0,
+      impostos: Number(rec.impostos) || 0,
       status: rec.status || 'Pago',
       comissoes: (rec.comissoes || []).map((c): Comissao => ({
         id: c.id,
@@ -218,6 +228,8 @@ export class ComissoesService {
     ciclo?: string;
     valor_bruto: number;
     valor_liquido: number;
+    glosa?: number;
+    impostos?: number;
     status?: string;
     divisoes: Array<{ membro_id: string; porcentagem: number; valor_calculado: number }>;
     editId?: string;
@@ -233,6 +245,8 @@ export class ComissoesService {
       ano_ref: ciclo ? parseInt(ciclo.split('-')[0]) : null,
       valor_bruto: payload.valor_bruto,
       valor_liquido: payload.valor_liquido,
+      glosa: payload.glosa || 0,
+      impostos: payload.impostos || 0,
       status
     };
 
@@ -421,6 +435,8 @@ export class ComissoesService {
           ano_ref: ciclo ? parseInt(ciclo.split('-')[0]) : null,
           valor_bruto: Number(nf.valor_faturado) || 0,
           valor_liquido: Number(nf.valor_liquido) || 0,
+          glosa: Number(nf.valor_retido) || 0,
+          impostos: Number(nf.total_impostos) || 0,
           status: 'Pago'
         };
 

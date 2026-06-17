@@ -9,8 +9,8 @@ interface EquipeModalProps {
   isOpen: boolean;
   onClose: () => void;
   equipe: Membro[];
-  onToggle: (id: string, ativo: boolean) => Promise<void>;
-  onEnableEmployee: (employeeId: string, name: string, pctPadrao: number) => Promise<void>;
+  onToggle: (id: string, ativo: boolean) => Promise<any>;
+  onEnableEmployee: (employeeId: string, name: string, pctPadrao: number) => Promise<any>;
   onUpdateMembroPercent: (id: string, pctPadrao: number) => Promise<void>;
 }
 
