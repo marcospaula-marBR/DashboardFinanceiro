@@ -198,65 +198,164 @@
     to { transform: rotate(calc(var(--start-angle) + 360deg)) translateY(-275px) rotate(calc(-1 * (var(--start-angle) + 360deg))); }
 }
 
+/* ── Mobile-only elements: hidden by default on desktop ── */
+.mobileHeader,
+.mobileDivider,
+.mobileGrid,
+.mobileFooter {
+    display: none;
+}
+
 @media (max-width: 850px) {
     .pageContainer {
         overflow-y: auto;
-        display: block;
-        padding-top: 50px;
-    }
-    .scene {
-        width: 100%;
-        height: auto;
+        display: flex;
         flex-direction: column;
-        justify-content: flex-start;
-        padding: 50px 0;
+        align-items: stretch;
+        padding: 0;
+        background-image:
+            radial-gradient(circle at 50% 0%, rgba(242, 145, 27, 0.18) 0%, transparent 55%),
+            radial-gradient(circle at 100% 100%, rgba(0, 71, 122, 0.2) 0%, transparent 40%);
     }
-    .core {
-        margin-bottom: 50px;
-        width: 180px;
-        height: 180px;
-    }
-    .satelliteWrapper {
-        position: relative !important;
-        top: auto !important;
-        left: auto !important;
-        animation: none !important;
-        width: 100%;
-        display: block;
-        margin-bottom: 20px;
-    }
-    .satellite {
-        position: relative !important;
-        margin: 0 auto;
-        transform: none !important;
-        width: 80%;
-        height: auto;
-        border-radius: 12px;
-        flex-direction: row;
-        justify-content: flex-start;
-        padding: 15px 25px;
-        gap: 20px;
-    }
-    .satellite svg {
-        margin-bottom: 0px !important;
-    }
-    .satellite span {
-        font-size: 1rem;
-    }
-    .satellite p {
+
+    /* Hide the orbital scene entirely on mobile */
+    .scene {
         display: none;
     }
-    .orbitalRing {
-        display: none;
+
+    /* Mobile-only header — inserted via pseudo overlay in CSS
+       (actual header is built in the page component via .mobileHeader) */
+    .mobileHeader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px 24px 24px;
+        gap: 12px;
     }
-    .hudInfo, .hudVersion {
+
+    .mobileHeader img {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        filter: drop-shadow(0 0 24px rgba(242, 145, 27, 0.7));
+        animation: coreFloat 4s ease-in-out infinite;
+    }
+
+    .mobileHeader h1 {
+        font-size: 1.1rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        color: #fff;
+        margin: 0;
+    }
+
+    .mobileHeader p {
+        font-size: 0.65rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.4);
+        margin: 0;
+    }
+
+    /* 2-column grid of module cards */
+    .mobileGrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding: 0 16px 32px;
+    }
+
+    /* Each card */
+    .mobileCard {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(242, 145, 27, 0.15);
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px 12px 18px;
+        gap: 10px;
+        text-decoration: none;
+        color: #fff;
+        text-align: center;
+        transition: background 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+        -webkit-tap-highlight-color: transparent;
+        cursor: pointer;
+        min-height: 120px;
+    }
+
+    .mobileCard:active {
+        background: rgba(242, 145, 27, 0.25);
+        transform: scale(0.96);
+        box-shadow: 0 0 24px rgba(242, 145, 27, 0.4);
+    }
+
+    .mobileCard svg {
+        color: #F2911B;
+        flex-shrink: 0;
+    }
+
+    .mobileCardTitle {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        line-height: 1.2;
+        color: #fff;
+    }
+
+    .mobileCardSub {
+        font-size: 0.62rem;
+        color: rgba(255,255,255,0.45);
+        font-weight: 400;
+        letter-spacing: 0.3px;
+        line-height: 1.3;
+    }
+
+    /* Divider line below header */
+    .mobileDivider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(242,145,27,0.4), transparent);
+        margin: 0 24px 20px;
+    }
+
+    /* Footer info row */
+    .mobileFooter {
+        padding: 0 24px 32px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .hudInfo {
         position: relative;
         bottom: auto;
         left: auto;
+        border-left: 2px solid #F2911B;
+        padding-left: 10px;
+        font-size: 0.6rem;
+        letter-spacing: 1.5px;
+        color: rgba(255,255,255,0.35);
+        text-transform: uppercase;
+    }
+
+    .hudVersion {
+        position: relative;
+        bottom: auto;
         right: auto;
-        margin: 20px;
-        text-align: center;
-        border-left: none;
-        padding-left: 0;
+        font-size: 0.6rem;
+        color: rgba(255,255,255,0.35);
+    }
+
+    /* Hide orbital elements */
+    .orbitalRing,
+    .satelliteWrapper,
+    .satellite,
+    .core,
+    .coreGlow,
+    .coreImg {
+        display: none;
     }
 }

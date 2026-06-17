@@ -1,7 +1,7 @@
-export const APP_VERSION = "v.02.46.38";
+export const APP_VERSION = "v.02.46.39";
 export const VERSION_DATE = "2026-06-17";
 export const VERSION_CHANGELOG = [
-  "v.02.46.38 - Fix/Feat: Remove aba Projeção Futura do gráfico de comissões; aumenta coluna cliente para 420px com quebra de linha; torna dropdown de redes dinâmico (carrega redes existentes do banco); adiciona coluna Início (MM/AAAA — 1ª competência faturada) na tabela de contratos; ajusta colSpan de 8 para 9.",
+  "v.02.46.39 - Feat: Redesenha a landing page mobile com layout cockpit premium — grade 2 colunas de cards dark+amber com ícone/título/subtítulo, header com logo animado e footer; substitui fallback de lista plana sem identidade visual; desktop orbital preservado sem alterações.",
   "v.02.46.37 - Feat: Adiciona ferramenta de Unificação de Contratos (merge de recebimentos e notas fiscais) e opção de agrupamento sob redes/chapéus (ex: Rede Alpha, Capina Elétrica, Bertioga) com consolidação e agregação de valores na ComissoesTable; adiciona edição/configuração direta de contratos base.",
   "v.02.46.36 - Feat: Adiciona suporte a comissão por valor fixo (R$) ou porcentabilidade (%) com conversão em tempo real; permite inclusão de novos comissionados da base People no rateio reativando-os ou habilitando-os permanentemente na equipe; insere campos Glosa e Impostos com cálculo automático de líquido recebido com override e os exibe no histórico de contratos.",
   "v.02.46.35 - Fix: Corrige exibição de valores de contratos de comissões integrando as tabelas recebimentos e notas_fiscais com algoritmo de mesclagem e deduplicação temporal (60 dias de tolerância e correspondência de valor/contrato) para preencher contratos sem histórico de lançamentos manuais.",
