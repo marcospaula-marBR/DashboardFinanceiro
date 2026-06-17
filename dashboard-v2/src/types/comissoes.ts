@@ -18,6 +18,7 @@ export interface ContratoBase {
   is_comissionavel?: boolean;
   ativo?: boolean;
   empresa?: string | null;
+  rede?: string | null;
 }
 
 export interface RawComissao {

@@ -10,6 +10,7 @@ import { ComissoesCharts } from "@/components/comissoes/ComissoesCharts";
 import { LancamentoModal } from "@/components/comissoes/LancamentoModal";
 import { EquipeModal } from "@/components/comissoes/EquipeModal";
 import { ContratoModal } from "@/components/comissoes/ContratoModal";
+import { UnificacaoModal } from "@/components/comissoes/UnificacaoModal";
 import { APP_VERSION } from "@/version";
 import {
   Plus,
@@ -19,7 +20,8 @@ import {
   RefreshCw,
   SlidersHorizontal,
   X,
-  Coins
+  Coins,
+  Merge
 } from "lucide-react";
 
 export default function ComissoesPage() {
@@ -35,8 +37,10 @@ export default function ComissoesPage() {
   const [isLancamentoOpen, setIsLancamentoOpen] = useState(false);
   const [isEquipeOpen, setIsEquipeOpen] = useState(false);
   const [isContratoOpen, setIsContratoOpen] = useState(false);
+  const [isUnificacaoOpen, setIsUnificacaoOpen] = useState(false);
   const [editData, setEditData] = useState<Recebimento | null>(null);
   const [prefilledContractId, setPrefilledContractId] = useState<string | null>(null);
+  const [editContratoData, setEditContratoData] = useState<ContratoBase | null>(null);
 
   // Filtros
   const [showFilters, setShowFilters] = useState(false);
@@ -272,9 +276,36 @@ export default function ComissoesPage() {
     setEquipe(prev => prev.map(m => m.id === id ? updated : m));
   };
 
-  const handleAddContrato = async (payload: { nome_contrato: string; numero_contrato?: string; observacoes?: string }) => {
-    const novo = await ComissoesService.addContrato(payload);
-    setContratos(prev => [...prev, novo]);
+  const handleSaveContrato = async (payload: {
+    nome_contrato: string;
+    numero_contrato?: string;
+    observacoes?: string;
+    rede?: string | null;
+  }) => {
+    try {
+      if (editContratoData) {
+        const updated = await ComissoesService.updateContrato(editContratoData.id, payload);
+        setContratos(prev => prev.map(c => c.id === editContratoData.id ? updated : c));
+        setEditContratoData(null);
+      } else {
+        const novo = await ComissoesService.addContrato(payload);
+        setContratos(prev => [...prev, novo]);
+      }
+      await fetchHistorico(filters);
+    } catch (err: any) {
+      alert("Erro ao salvar contrato: " + (err.message || "Erro desconhecido"));
+    }
+  };
+
+  const handleEditContrato = (contract: ContratoBase) => {
+    setEditContratoData(contract);
+    setIsContratoOpen(true);
+  };
+
+  const handleUnificarContratos = async (origemId: string, destinoId: string) => {
+    await ComissoesService.unificarContratos(origemId, destinoId);
+    await fetchInit();
+    await fetchHistorico(filters);
   };
 
   const handleAddRecebimentoFromTable = (contractId: string) => {
@@ -465,6 +496,15 @@ export default function ComissoesPage() {
               )}
             </button>
 
+            {/* Unificar Contratos Trigger */}
+            <button
+              onClick={() => setIsUnificacaoOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase tracking-wider text-slate-500 hover:border-amber-400 hover:text-amber-600 transition-all shadow-sm"
+            >
+              <Merge size={14} />
+              Unificar Contratos
+            </button>
+
             {/* Gerenciar Equipe Trigger */}
             <button
               onClick={() => setIsEquipeOpen(true)}
@@ -609,6 +649,7 @@ export default function ComissoesPage() {
             onLiquidateRecebimento={handleLiquidateRecebimento}
             onRevertRecebimento={handleRevertRecebimento}
             isLoading={isLoadingInit || isLoadingHistorico}
+            onEditContrato={handleEditContrato}
           />
 
         </div>
@@ -747,11 +788,20 @@ export default function ComissoesPage() {
         onUpdateMembroPercent={handleUpdateMembroPercent}
       />
 
-      {/* Criar Novo Contrato */}
+      {/* Criar/Editar Contrato */}
       <ContratoModal
         isOpen={isContratoOpen}
-        onClose={() => { setIsContratoOpen(false); setIsLancamentoOpen(true); }}
-        onSave={handleAddContrato}
+        onClose={() => { setIsContratoOpen(false); setEditContratoData(null); }}
+        onSave={handleSaveContrato}
+        editData={editContratoData}
+      />
+
+      {/* Unificar Contratos */}
+      <UnificacaoModal
+        isOpen={isUnificacaoOpen}
+        onClose={() => setIsUnificacaoOpen(false)}
+        onConfirm={handleUnificarContratos}
+        contratos={contratos}
       />
 
     </main>

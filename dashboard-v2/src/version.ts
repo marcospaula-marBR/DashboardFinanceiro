@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.36";
+export const APP_VERSION = "v.02.46.37";
 export const VERSION_DATE = "2026-06-17";
 export const VERSION_CHANGELOG = [
+  "v.02.46.37 - Feat: Adiciona ferramenta de Unificação de Contratos (merge de recebimentos e notas fiscais) e opção de agrupamento sob redes/chapéus (ex: Rede Alpha, Capina Elétrica, Bertioga) com consolidação e agregação de valores na ComissoesTable; adiciona edição/configuração direta de contratos base.",
   "v.02.46.36 - Feat: Adiciona suporte a comissão por valor fixo (R$) ou porcentabilidade (%) com conversão em tempo real; permite inclusão de novos comissionados da base People no rateio reativando-os ou habilitando-os permanentemente na equipe; insere campos Glosa e Impostos com cálculo automático de líquido recebido com override e os exibe no histórico de contratos.",
   "v.02.46.35 - Fix: Corrige exibição de valores de contratos de comissões integrando as tabelas recebimentos e notas_fiscais com algoritmo de mesclagem e deduplicação temporal (60 dias de tolerância e correspondência de valor/contrato) para preencher contratos sem histórico de lançamentos manuais.",
   "v.02.46.34 - Feat: Redesenho do módulo de comissões (/comissoes) no estilo premium de empréstimos, com tabelas expansíveis de contratos e faturamentos, gráficos em abas e vinculação com colaboradores da base People.",

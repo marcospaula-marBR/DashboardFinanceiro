@@ -50,7 +50,7 @@ export class ComissoesService {
   static async getContratos(): Promise<ContratoBase[]> {
     const { data, error } = await supabase
       .from('contratos_base')
-      .select('id, nome_contrato, numero_contrato, observacoes, ativo, empresa')
+      .select('id, nome_contrato, numero_contrato, observacoes, ativo, empresa, rede')
       .eq('ativo', true)
       .order('nome_contrato');
 
@@ -335,14 +335,59 @@ export class ComissoesService {
     nome_contrato: string;
     numero_contrato?: string;
     observacoes?: string;
+    rede?: string | null;
   }): Promise<ContratoBase> {
     const { data, error } = await supabase
       .from('contratos_base')
       .insert([{ ...payload, ativo: true, is_comissionavel: true }])
-      .select('id, nome_contrato, numero_contrato, observacoes')
+      .select('id, nome_contrato, numero_contrato, observacoes, ativo, empresa, rede')
       .single();
     if (error) throw new Error(`Falha ao criar contrato: ${error.message}`);
     return data as ContratoBase;
+  }
+
+  /** Atualiza um contrato existente */
+  static async updateContrato(
+    id: string,
+    payload: {
+      nome_contrato: string;
+      numero_contrato?: string;
+      observacoes?: string;
+      rede?: string | null;
+    }
+  ): Promise<ContratoBase> {
+    const { data, error } = await supabase
+      .from('contratos_base')
+      .update(payload)
+      .eq('id', id)
+      .select('id, nome_contrato, numero_contrato, observacoes, ativo, empresa, rede')
+      .single();
+    if (error) throw new Error(`Falha ao atualizar contrato: ${error.message}`);
+    return data as ContratoBase;
+  }
+
+  /** Unifica contratos duplicados migrando recebimentos e notas fiscais */
+  static async unificarContratos(origemId: string, destinoId: string): Promise<void> {
+    // 1. Atualiza recebimentos da tabela 'recebimentos'
+    const { error: recErr } = await supabase
+      .from('recebimentos')
+      .update({ contrato_id: destinoId })
+      .eq('contrato_id', origemId);
+    if (recErr) throw new Error(`Falha ao transferir recebimentos na unificação: ${recErr.message}`);
+
+    // 2. Atualiza faturamentos da tabela 'notas_fiscais'
+    const { error: nfErr } = await supabase
+      .from('notas_fiscais')
+      .update({ contrato_id: destinoId })
+      .eq('contrato_id', origemId);
+    if (nfErr) throw new Error(`Falha ao transferir notas fiscais na unificação: ${nfErr.message}`);
+
+    // 3. Desativa o contrato de origem
+    const { error: delErr } = await supabase
+      .from('contratos_base')
+      .update({ ativo: false })
+      .eq('id', origemId);
+    if (delErr) throw new Error(`Falha ao desativar contrato de origem: ${delErr.message}`);
   }
 
   /** Cria um novo membro da equipe */
