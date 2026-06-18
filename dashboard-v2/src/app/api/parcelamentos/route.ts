@@ -158,6 +158,8 @@ export async function GET() {
       const startDateFormatted = `${sD}/${sM}/${sY}`;
 
       return {
+        id: debt.id,
+        installments: insts,
         "ATIVOS E BENS": debt.descricao || '',
         "Detalhes": details,
         "FORMATO": format,
