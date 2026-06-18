@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.40";
+export const APP_VERSION = "v.02.46.41";
 export const VERSION_DATE = "2026-06-18";
 export const VERSION_CHANGELOG = [
+  "v.02.46.41 - Feat: Conecta painel de Parcelamentos ao Supabase online com carregamento automático de API e sincronização ao fazer upload de CSV.",
   "v.02.46.40 - Fix: Adiciona rewrite no vercel.json para forçar rota /parcelamentos a carregar a página estática /parcelamentos.html, contornando cache de deploys anteriores.",
   "v.02.46.39 - Feat: Redesenha a landing page mobile com layout cockpit premium — grade 2 colunas de cards dark+amber com ícone/título/subtítulo, header com logo animado e footer; substitui fallback de lista plana sem identidade visual; desktop orbital preservado sem alterações.",
   "v.02.46.37 - Feat: Adiciona ferramenta de Unificação de Contratos (merge de recebimentos e notas fiscais) e opção de agrupamento sob redes/chapéus (ex: Rede Alpha, Capina Elétrica, Bertioga) com consolidação e agregação de valores na ComissoesTable; adiciona edição/configuração direta de contratos base.",

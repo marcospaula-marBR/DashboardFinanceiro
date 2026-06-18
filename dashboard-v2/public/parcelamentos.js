@@ -58,13 +58,35 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * Tenta carregar dados automaticamente se estiver em ambiente remoto
+ * Tenta carregar dados automaticamente do Supabase ou recorre ao arquivo local
  */
 function tryAutoLoad() {
-    const isGitHubPages = window.location.hostname.includes('github.io');
-    const defaultFile = 'dados-parcelamentos.csv';
+    console.log("Tentando carregar dados online do Supabase via API...");
+    
+    fetch('/api/parcelamentos')
+        .then(response => {
+            if (!response.ok) throw new Error("Erro na resposta da API");
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.length > 0) {
+                console.log(`✅ Carregados ${data.length} parcelamentos do Supabase!`);
+                processData(data);
+                document.getElementById('lastUpdate').innerText = "Sincronizado com Supabase em: " + new Date().toLocaleTimeString();
+            } else {
+                console.log("Base online vazia, recorrendo ao arquivo local...");
+                loadLocalCSV();
+            }
+        })
+        .catch(err => {
+            console.warn("Falha ao carregar do Supabase. Recorrendo ao arquivo local...", err.message);
+            loadLocalCSV();
+        });
+}
 
-    console.log(`Tentando auto-load Parcelamentos (${defaultFile})...`);
+function loadLocalCSV() {
+    const defaultFile = 'dados-parcelamentos.csv';
+    console.log(`Tentando auto-load Parcelamentos estático (${defaultFile})...`);
 
     fetch(defaultFile)
         .then(response => {
@@ -74,14 +96,10 @@ function tryAutoLoad() {
         .then(blob => {
             const file = new File([blob], defaultFile, { type: 'text/csv' });
             const event = { target: { files: [file] } };
-            handleFileUpload(event);
-
-            if (isGitHubPages) {
-                console.log("Ambiente GitHub Pages detectado.");
-            }
+            handleFileUpload(event, true);
         })
         .catch(err => {
-            console.warn("Auto-load indisponível ou arquivo não encontrado:", err.message);
+            console.warn("Auto-load estático indisponível ou arquivo não encontrado:", err.message);
         });
 }
 
@@ -218,7 +236,7 @@ function debug(msg) {
     }
 }
 
-function handleFileUpload(event) {
+function handleFileUpload(event, isSilent = false) {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -267,9 +285,14 @@ function handleFileUpload(event) {
                                 "Coluna Descrição: " + (sample.debug.matchedKeys.description || "❌"),
                                 "Coluna Valor: " + (sample.debug.matchedKeys.totalValue || "❌")
                             ].join("\n");
-                            debug("✅ Dashborad atualizado.\n" + info);
+                            debug("✅ Dashboard atualizado.\n" + info);
                         }
-                        document.getElementById('lastUpdate').innerText = "Atualizado em: " + new Date().toLocaleTimeString();
+                        
+                        if (!isSilent) {
+                            saveDataToSupabase(results.data);
+                        } else {
+                            document.getElementById('lastUpdate').innerText = "Carregado localmente em: " + new Date().toLocaleTimeString();
+                        }
                     }, 50);
 
                 } catch (error) {
@@ -280,6 +303,32 @@ function handleFileUpload(event) {
             }
         });
     }, 100);
+}
+
+function saveDataToSupabase(data) {
+    debug("Sincronizando dados com o Supabase...");
+    
+    fetch('/api/parcelamentos', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        if (!response.ok) throw new Error("Erro ao salvar dados no Supabase");
+        return response.json();
+    })
+    .then(res => {
+        debug("✅ Dados salvos com sucesso no Supabase!");
+        document.getElementById('lastUpdate').innerText = "Sincronizado com Supabase em: " + new Date().toLocaleTimeString();
+        alert("Dados salvos e sincronizados com sucesso no Supabase!");
+    })
+    .catch(err => {
+        console.error("Erro ao sincronizar com Supabase:", err);
+        debug("❌ Falha ao salvar online: " + err.message);
+        alert("Erro ao salvar dados no Supabase. Os dados estão visíveis localmente, mas não foram salvos online: " + err.message);
+    });
 }
 
 function processData(data) {
