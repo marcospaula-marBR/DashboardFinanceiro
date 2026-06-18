@@ -271,3 +271,90 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message || 'Error saving debts' }, { status: 500 });
   }
 }
+
+export async function PUT(req: Request) {
+  try {
+    const { id, empresa, descricao, credor, categoria, valor_total, total_parcelas, valor_parcela, data_inicio, data_vencimento_dia, status, observacoes, installments } = await req.json();
+
+    if (!id) {
+      return NextResponse.json({ error: 'id é obrigatório' }, { status: 400 });
+    }
+
+    // 1. Atualizar o cabeçalho
+    const { error: updateError } = await supabase
+      .from('debts')
+      .update({
+        empresa,
+        descricao,
+        credor,
+        categoria,
+        valor_total,
+        total_parcelas,
+        valor_parcela,
+        data_inicio,
+        data_vencimento_dia: data_vencimento_dia || null,
+        status,
+        observacoes,
+      })
+      .eq('id', id);
+
+    if (updateError) throw new Error(updateError.message);
+
+    // 2. Atualizar as parcelas
+    if (Array.isArray(installments)) {
+      for (const inst of installments) {
+        if (inst.id) {
+          const { error: instErr } = await supabase
+            .from('debt_installments')
+            .update({
+              valor: inst.valor,
+              vencimento: inst.vencimento,
+              pago: inst.pago,
+              data_pagamento: inst.pago ? (inst.data_pagamento || new Date().toISOString().split('T')[0]) : null,
+              observacao: inst.observacao || null
+            })
+            .eq('id', inst.id);
+          if (instErr) throw new Error(instErr.message);
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating debt:', error);
+    return NextResponse.json({ error: error.message || 'Error updating debt' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'id é obrigatório' }, { status: 400 });
+    }
+
+    // 1. Deletar parcelas
+    const { error: instErr } = await supabase
+      .from('debt_installments')
+      .delete()
+      .eq('debt_id', id);
+
+    if (instErr) throw new Error(instErr.message);
+
+    // 2. Deletar cabeçalho
+    const { error: debtErr } = await supabase
+      .from('debts')
+      .delete()
+      .eq('id', id);
+
+    if (debtErr) throw new Error(debtErr.message);
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting debt:', error);
+    return NextResponse.json({ error: error.message || 'Error deleting debt' }, { status: 500 });
+  }
+}
+

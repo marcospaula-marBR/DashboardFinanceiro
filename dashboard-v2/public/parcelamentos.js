@@ -643,6 +643,10 @@ function updateTable(data) {
         if (item.calculated.status.includes('Pagando') || item.calculated.status === 'Ativo') statusClass = 'bg-warning text-dark';
         if (item.calculated.status === 'Quitado') statusClass = 'bg-success';
 
+        const actionBtn = item.id ?
+            '<td class="text-center"><button class="btn btn-sm btn-outline-primary" onclick="openEditModal(\'' + item.id + '\')"><i class="bi bi-pencil-fill"></i></button></td>' :
+            '<td class="text-center text-muted small"><i class="bi bi-cloud-slash" title="Offline"></i></td>';
+
         tr.innerHTML = '<td><div class="fw-bold text-wrap" style="max-width: 250px;">' + item.description + '</div>' +
             '<div class="small text-muted">' + item.company + ' | ' + item.format + '</div></td>' +
             '<td><span class="badge bg-light text-dark border">' + item.category + '</span></td>' +
@@ -654,7 +658,8 @@ function updateTable(data) {
             '<span class="badge bg-secondary opacity-75">' + item.calculated.remainingCount + ' Restam</span>' +
             '</div></td>' +
             '<td class="text-end text-danger fw-bold">' + formatCurrency(item.calculated.outstandingValue) + '</td>' +
-            '<td><span class="badge ' + statusClass + '">' + item.calculated.status + '</span></td>';
+            '<td><span class="badge ' + statusClass + '">' + item.calculated.status + '</span></td>' +
+            actionBtn;
         fragment.appendChild(tr);
     });
 
@@ -917,3 +922,239 @@ async function exportToPDF() {
 
 // Expose globally
 window.exportToPDF = exportToPDF;
+
+// ========================================
+// Edit Contract & Installments Modal Logic
+// ========================================
+let activeContract = null;
+
+function openEditModal(debtId) {
+    activeContract = state.rawData.find(d => d.id === debtId);
+    if (!activeContract) {
+        alert("Contrato não encontrado!");
+        return;
+    }
+    
+    // Deep clone activeContract to allow cancelation
+    activeContract = JSON.parse(JSON.stringify(activeContract));
+
+    document.getElementById('editDebtId').value = activeContract.id;
+    document.getElementById('editDescription').value = activeContract.description || '';
+    document.getElementById('editCompany').value = activeContract.company || 'MAR BRASIL';
+    document.getElementById('editCategory').value = activeContract.category || 'Outros';
+    document.getElementById('editCredor').value = activeContract.raw?.['FORMA DE PAGTO'] || activeContract.credor || '';
+    document.getElementById('editTotalValue').value = activeContract.totalValue || 0;
+    document.getElementById('editStatus').value = activeContract.calculated?.status || 'Ativo';
+    
+    // Clear amortization value
+    document.getElementById('amortizationValue').value = '';
+
+    // Render installments
+    renderEditInstallments();
+
+    // Show Modal
+    const modal = new bootstrap.Modal(document.getElementById('editContractModal'));
+    modal.show();
+}
+
+function renderEditInstallments() {
+    const tbody = document.querySelector('#editInstallmentsTable tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!activeContract.installments || activeContract.installments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Nenhuma parcela gerada.</td></tr>';
+        return;
+    }
+
+    // Set "Check All" state based on whether all installments are paid
+    const allPaid = activeContract.installments.every(i => i.pago);
+    document.getElementById('checkAllInstallments').checked = allPaid;
+
+    activeContract.installments.forEach((inst, idx) => {
+        const tr = document.createElement('tr');
+        
+        const dateFormatted = inst.vencimento ? 
+            inst.vencimento.split('-').reverse().join('/') : '-';
+
+        const statusClass = inst.pago ? 'bg-success' : 'bg-warning text-dark';
+        const statusText = inst.pago ? 'Pago' : 'Pendente';
+
+        tr.innerHTML = `
+            <td class="text-center">
+                <input class="form-check-input inst-checkbox" type="checkbox" 
+                    ${inst.pago ? 'checked' : ''} 
+                    onchange="toggleInstallment(${idx}, this)">
+            </td>
+            <td>Parcela ${inst.numero}</td>
+            <td>${dateFormatted}</td>
+            <td class="text-end fw-semibold">${formatCurrency(inst.valor)}</td>
+            <td><span class="badge ${statusClass}">${statusText}</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function toggleInstallment(idx, checkbox) {
+    if (activeContract && activeContract.installments[idx]) {
+        activeContract.installments[idx].pago = checkbox.checked;
+        activeContract.installments[idx].data_pagamento = checkbox.checked ? new Date().toISOString().split('T')[0] : null;
+        renderEditInstallments();
+    }
+}
+
+function toggleAllInstallments(checkbox) {
+    if (activeContract && activeContract.installments) {
+        activeContract.installments.forEach(inst => {
+            inst.pago = checkbox.checked;
+            inst.data_pagamento = checkbox.checked ? new Date().toISOString().split('T')[0] : null;
+        });
+        renderEditInstallments();
+    }
+}
+
+function applyAmortizationMath() {
+    const valInput = document.getElementById('amortizationValue');
+    const value = parseFloat(valInput.value);
+    if (isNaN(value) || value <= 0) {
+        alert("Por favor, insira um valor válido de amortização!");
+        return;
+    }
+
+    const strategy = document.getElementById('amortizationStrategy').value;
+    const pendingInstallments = activeContract.installments.filter(i => !i.pago);
+
+    if (pendingInstallments.length === 0) {
+        alert("Todas as parcelas deste contrato já estão pagas!");
+        return;
+    }
+
+    if (strategy === 'reduceTerm') {
+        // Option 1: Reduce Term (abater parcelas do fim)
+        let remainingAmortization = value;
+        const sortedPending = [...pendingInstallments].sort((a, b) => b.numero - a.numero);
+        
+        for (const inst of sortedPending) {
+            if (remainingAmortization >= inst.valor) {
+                inst.pago = true;
+                inst.data_pagamento = new Date().toISOString().split('T')[0];
+                remainingAmortization -= inst.valor;
+            } else if (remainingAmortization > 0) {
+                inst.valor = Math.max(0, inst.valor - remainingAmortization);
+                remainingAmortization = 0;
+            }
+            if (remainingAmortization <= 0) break;
+        }
+        
+        alert(`Amortização aplicada! R$ ${value.toLocaleString('pt-BR')} foram abatidos reduzindo o prazo (parcelas finais).`);
+
+    } else if (strategy === 'reduceInstallment') {
+        // Option 2: Reduce Installment (diminuir valor das parcelas)
+        const portion = value / pendingInstallments.length;
+        
+        pendingInstallments.forEach(inst => {
+            inst.valor = Math.max(0, inst.valor - portion);
+        });
+
+        alert(`Amortização aplicada! R$ ${value.toLocaleString('pt-BR')} foram distribuídos, reduzindo as parcelas restantes.`);
+    }
+
+    // Refresh UI
+    renderEditInstallments();
+    valInput.value = '';
+}
+
+function saveContractChangesToServer() {
+    if (!activeContract) return;
+
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.classList.remove('d-none');
+
+    // Collect edited values from fields
+    const updatedContract = {
+        id: activeContract.id,
+        descricao: document.getElementById('editDescription').value,
+        empresa: document.getElementById('editCompany').value,
+        categoria: document.getElementById('editCategory').value,
+        credor: document.getElementById('editCredor').value,
+        valor_total: parseFloat(document.getElementById('editTotalValue').value) || 0,
+        status: document.getElementById('editStatus').value,
+        observacoes: JSON.stringify({
+            details: activeContract.raw?.['Detalhes'] || '',
+            format: activeContract.raw?.['FORMATO'] || '',
+            doc: document.getElementById('editCredor').value,
+            cc: activeContract.raw?.['CENTRO DE CUSTO'] || ''
+        }),
+        installments: activeContract.installments
+    };
+
+    fetch('/api/parcelamentos', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updatedContract)
+    })
+    .then(response => {
+        if (!response.ok) throw new Error("Falha ao salvar alterações");
+        return response.json();
+    })
+    .then(res => {
+        if (overlay) overlay.classList.add('d-none');
+        
+        const modalEl = document.getElementById('editContractModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+
+        alert("Alterações salvas com sucesso!");
+        
+        tryAutoLoad();
+    })
+    .catch(err => {
+        if (overlay) overlay.classList.add('d-none');
+        console.error(err);
+        alert("Erro ao salvar alterações no Supabase: " + err.message);
+    });
+}
+
+function deleteContractFromServer() {
+    if (!activeContract) return;
+    
+    if (!confirm(`Tem certeza absoluta que deseja EXCLUIR o contrato "${activeContract.description}" do banco de dados? Esta ação não pode ser desfeita.`)) {
+        return;
+    }
+
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.classList.remove('d-none');
+
+    fetch(`/api/parcelamentos?id=${activeContract.id}`, {
+        method: 'DELETE'
+    })
+    .then(response => {
+        if (!response.ok) throw new Error("Falha ao excluir contrato");
+        return response.json();
+    })
+    .then(res => {
+        if (overlay) overlay.classList.add('d-none');
+        
+        const modalEl = document.getElementById('editContractModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+
+        alert("Contrato excluído com sucesso!");
+        
+        tryAutoLoad();
+    })
+    .catch(err => {
+        if (overlay) overlay.classList.add('d-none');
+        console.error(err);
+        alert("Erro ao excluir contrato: " + err.message);
+    });
+}
+
+window.openEditModal = openEditModal;
+window.toggleInstallment = toggleInstallment;
+window.toggleAllInstallments = toggleAllInstallments;
+window.applyAmortizationMath = applyAmortizationMath;
+window.saveContractChangesToServer = saveContractChangesToServer;
+window.deleteContractFromServer = deleteContractFromServer;

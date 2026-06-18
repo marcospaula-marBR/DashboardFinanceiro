@@ -212,6 +212,7 @@
                                 <th class="text-center">Progresso (Pag/Rest)</th>
                                 <th class="text-end">Saldo Devedor</th>
                                 <th>Status</th>
+                                <th class="text-center">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -244,6 +245,146 @@
                             </thead>
                             <tbody></tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Contract Modal -->
+    <div class="modal fade" id="editContractModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2 text-primary"></i>Editar Contrato e Cronograma</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-4">
+                        <!-- Left Panel: Contract Header info -->
+                        <div class="col-lg-5 border-end">
+                            <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">Informações Gerais</h6>
+                            <input type="hidden" id="editDebtId">
+                            
+                            <div class="mb-3">
+                                <label class="form-label font-semibold">Descrição do Ativo/Contrato</label>
+                                <input type="text" class="form-control" id="editDescription" required>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Empresa</label>
+                                    <select class="form-select" id="editCompany">
+                                        <option value="MAR BRASIL">MAR BRASIL</option>
+                                        <option value="DZM">DZM</option>
+                                        <option value="G2">G2</option>
+                                        <option value="CONECTIUS">CONECTIUS</option>
+                                        <option value="PESSOAL">PESSOAL</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Categoria (Tipo)</label>
+                                    <select class="form-select" id="editCategory">
+                                        <option value="Financiamento">Financiamento</option>
+                                        <option value="Empréstimo">Empréstimo</option>
+                                        <option value="Consórcio">Consórcio</option>
+                                        <option value="Leasing">Leasing</option>
+                                        <option value="Cartão">Cartão</option>
+                                        <option value="Fornecedor">Fornecedor</option>
+                                        <option value="Mútuo">Mútuo</option>
+                                        <option value="Outros">Outros</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Fornecedor / Credor</label>
+                                <input type="text" class="form-control" id="editCredor">
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Valor Total</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="number" step="0.01" class="form-control" id="editTotalValue">
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Status do Contrato</label>
+                                    <select class="form-select" id="editStatus">
+                                        <option value="Ativo">Ativo</option>
+                                        <option value="Atrasado">Atrasado</option>
+                                        <option value="Quitado">Quitado</option>
+                                        <option value="Desistido">Desistido</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Prepayment/Amortization section -->
+                            <div class="card bg-light border-0 mt-4">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-2 text-danger"><i class="bi bi-piggy-bank me-2"></i>Amortizar / Antecipar</h6>
+                                    <p class="small text-muted mb-3">Abata o saldo devedor amortizando um montante financeiro.</p>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label small">Valor para Amortizar (R$)</label>
+                                        <input type="number" step="0.01" class="form-control form-control-sm" id="amortizationValue" placeholder="Ex: 5000.00">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label small">Estratégia de Amortização</label>
+                                        <select class="form-select form-select-sm" id="amortizationStrategy">
+                                            <option value="reduceTerm">Reduzir Prazo (Quitar parcelas do fim)</option>
+                                            <option value="reduceInstallment">Reduzir Parcela (Diminuir valor das parcelas restantes)</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <button type="button" class="btn btn-danger btn-sm w-100" onclick="applyAmortizationMath()">
+                                        <i class="bi bi-check-circle me-1"></i>Aplicar Amortização
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Installments Grid -->
+                        <div class="col-lg-7">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0 text-primary">Cronograma de Parcelas</h6>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="checkAllInstallments" onchange="toggleAllInstallments(this)">
+                                    <label class="form-check-label small fw-bold" for="checkAllInstallments">Marcar Todas</label>
+                                </div>
+                            </div>
+                            
+                            <div class="table-responsive" style="max-height: 450px;">
+                                <table class="table table-sm table-hover table-striped align-middle" id="editInstallmentsTable">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th style="width: 40px;">Pago</th>
+                                            <th>Nº Parcela</th>
+                                            <th>Vencimento</th>
+                                            <th class="text-end">Valor Parcela</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Installments populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-outline-danger" id="btnDeleteContract" onclick="deleteContractFromServer()">
+                        <i class="bi bi-trash me-1"></i>Excluir Contrato
+                    </button>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="saveContractChangesToServer()">
+                            <i class="bi bi-save me-1"></i>Salvar Alterações
+                        </button>
                     </div>
                 </div>
             </div>
