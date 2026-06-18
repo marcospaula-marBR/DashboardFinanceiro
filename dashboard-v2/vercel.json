@@ -2,6 +2,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/parcelamentos",
+      "destination": "/parcelamentos.html"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     }

@@ -181,6 +181,43 @@ When user's prompt is NOT in English:
 2. **Respond in user's language** - match their communication
 3. **Code comments/variables** remain in English
 
+---
+
+### 📱 MOBILE FIRST — DIRETRIZ PERMANENTE DO PROJETO (P0)
+
+> 🔴 **REGRA INVIOLÁVEL:** Este projeto é **Mobile First**. Todo componente, página, layout ou funcionalidade criada ou alterada DEVE ser projetada e validada primeiro para telas pequenas (mobile), e depois adaptada para desktop.
+
+**O que isso significa na prática:**
+
+| Situação | Obrigação |
+|----------|-----------|
+| Criando nova página/componente | Iniciar o CSS/layout pela menor tela (≤ 480px) |
+| Alterando layout existente | Verificar breakpoints mobile ANTES do desktop |
+| Adicionando colunas ou tabelas | Garantir que funcionem em tela pequena (scroll horizontal ou colapso) |
+| Criando modais | Testar abertura/fechamento e scroll em viewport mobile |
+| Revisando UI | Sempre verificar `max-width: 480px` e `max-width: 850px` |
+
+**Ordem obrigatória de desenvolvimento de CSS/Layout:**
+
+```
+1. Mobile (≤ 480px)  → estilos base
+2. Tablet (≤ 850px)  → ajustes intermediários
+3. Desktop (> 850px) → expansão e refinamento
+```
+
+**Checklist Mobile First (obrigatório antes de qualquer commit de UI):**
+
+| # | Verificação | Bloqueante? |
+|---|------------|-------------|
+| 1 | O layout funciona e está legível em tela de 390px de largura? | ✅ SIM |
+| 2 | Tabelas/grids possuem scroll horizontal ou colapsam corretamente? | ✅ SIM |
+| 3 | Botões e elementos interativos têm área de toque mínima de 44px? | ✅ SIM |
+| 4 | Modais e drawers são usáveis sem zoom no mobile? | ✅ SIM |
+
+> ❌ **PROIBIDO:** Criar layouts que só funcionam no desktop e depois "quebrar" no mobile.
+> ✅ **SEMPRE:** Pensar no menor ecrã primeiro. O desktop é o progressivo, não o padrão.
+
+
 ### 🧹 Clean Code (Global Mandatory)
 
 **ALL code MUST follow `@[skills/clean-code]` rules. No exceptions.**

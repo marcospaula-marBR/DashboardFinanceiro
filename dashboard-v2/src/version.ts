@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.39";
-export const VERSION_DATE = "2026-06-17";
+export const APP_VERSION = "v.02.46.40";
+export const VERSION_DATE = "2026-06-18";
 export const VERSION_CHANGELOG = [
+  "v.02.46.40 - Fix: Adiciona rewrite no vercel.json para forçar rota /parcelamentos a carregar a página estática /parcelamentos.html, contornando cache de deploys anteriores.",
   "v.02.46.39 - Feat: Redesenha a landing page mobile com layout cockpit premium — grade 2 colunas de cards dark+amber com ícone/título/subtítulo, header com logo animado e footer; substitui fallback de lista plana sem identidade visual; desktop orbital preservado sem alterações.",
   "v.02.46.37 - Feat: Adiciona ferramenta de Unificação de Contratos (merge de recebimentos e notas fiscais) e opção de agrupamento sob redes/chapéus (ex: Rede Alpha, Capina Elétrica, Bertioga) com consolidação e agregação de valores na ComissoesTable; adiciona edição/configuração direta de contratos base.",
   "v.02.46.36 - Feat: Adiciona suporte a comissão por valor fixo (R$) ou porcentabilidade (%) com conversão em tempo real; permite inclusão de novos comissionados da base People no rateio reativando-os ou habilitando-os permanentemente na equipe; insere campos Glosa e Impostos com cálculo automático de líquido recebido com override e os exibe no histórico de contratos.",
