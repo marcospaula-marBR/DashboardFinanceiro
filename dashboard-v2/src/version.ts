@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.42";
+export const APP_VERSION = "v.02.46.43";
 export const VERSION_DATE = "2026-06-18";
 export const VERSION_CHANGELOG = [
+  "v.02.46.43 - Fix: Sincroniza window.APP_VERSION em public/version.js para exibir a versão atual no cabeçalho das páginas estáticas.",
   "v.02.46.42 - Feat: Adiciona modal de edição de contratos e cronogramas, baixa de parcelas individuais e em lote, e regras de amortização (redução de prazo vs redução de parcela).",
   "v.02.46.41 - Feat: Conecta painel de Parcelamentos ao Supabase online com carregamento automático de API e sincronização ao fazer upload de CSV.",
   "v.02.46.40 - Fix: Adiciona rewrite no vercel.json para forçar rota /parcelamentos a carregar a página estática /parcelamentos.html, contornando cache de deploys anteriores.",
