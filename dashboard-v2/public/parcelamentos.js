@@ -389,6 +389,7 @@ function processData(data) {
             endDateStr: getValue(row, ['término de contrato', 'termino de contrato', 'Término', 'Termino', 'Data Termino', 'Data de Termino', 'Vencimento', 'Fim'], 'endDate'),
             totalValue: parseCurrency(getValue(row, ['total do contrato', 'Total Contrato', 'Valor Total', 'Total', 'Valor Global'], 'totalValue')),
             paidFromCsv: parseCurrency(getValue(row, ['Total Pago', 'Já Pago', 'Pago'], 'paidFromCsv')),
+            paidCountFromCsv: parseInt(getValue(row, ['Parcelas Pagas', 'Pagas'], 'paidCountFromCsv') || '-1'),
             remainingFromCsv: parseInt(getValue(row, ['Parcelas Restantes', 'Restam', 'Qtd Restante', 'Saldo de Parcelas'], 'remainingFromCsv') || '-1'),
             installmentValue: parseCurrency(getValue(row, ['Valor da parcela', 'Valor Parcela', 'Parcela', 'Mensalidade'], 'installmentValue')),
             totalInstallments: parseInt(getValue(row, ['parcelas contratadas', 'Parcelas Contratadas', 'Total Parcelas', 'Qtd Parcelas', 'Prazo']) || '0'),
@@ -448,8 +449,11 @@ function processData(data) {
                 item.calculated.remainingCount = Math.max(0, item.totalInstallments - paidCount);
             } else {
                 item.calculated.remainingCount = item.remainingFromCsv;
-                // Estimate paidCount for the UI badge
-                item.calculated.paidCount = Math.max(0, item.totalInstallments - item.calculated.remainingCount);
+                if (item.paidCountFromCsv !== -1) {
+                    item.calculated.paidCount = item.paidCountFromCsv;
+                } else {
+                    item.calculated.paidCount = Math.max(0, item.totalInstallments - item.calculated.remainingCount);
+                }
             }
 
             // Formula requested: Saldo Devedor = Parcelas Restantes x Valor Parcela

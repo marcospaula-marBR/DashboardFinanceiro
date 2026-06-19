@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.49";
+export const APP_VERSION = "v.02.46.50";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.50 - Fix: Corrige contagem de parcelas pagas no Progresso (PAG/REST) no detalhamento extraindo o valor diretamente da API/CSV em vez de calcular por diferença, evitando erros em contratos com parcelas desistidas.",
   "v.02.46.49 - Fix: Corrige o preenchimento de opções no filtro Categoria (antigo Formato) mapeando e tratando dados legados de observacoes invertidos entre tipo e formato.",
   "v.02.46.48 - Feat: Adiciona status Desistido, campo data para amortização, quitação antecipada total marcando restantes como Quitadas, renomeia filtros e coluna da tabela, adiciona 'Vence este mês' ao KPI de saldo devedor, corrige projeção do gráfico evolução para calendar-based, modal de detalhamento do mês ao clicar no gráfico, e barra de rolagem horizontal dupla.",
   "v.02.46.47 - Fix: Corrige contraste de texto dos campos de entrada no modal de edição e criação de novos parcelamentos (garante texto escuro em fundo branco).",
