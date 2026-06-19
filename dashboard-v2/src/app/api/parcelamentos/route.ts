@@ -426,6 +426,29 @@ export async function PUT(req: Request) {
 
     // 2. Atualizar as parcelas
     if (Array.isArray(installments)) {
+      const payloadInstallmentIds = installments
+        .map(i => i.id)
+        .filter(id => id && !id.toString().startsWith('temp_'));
+
+      // Remove parcelas que foram excluídas no frontend
+      const { data: existingInsts } = await supabase
+        .from('debt_installments')
+        .select('id')
+        .eq('debt_id', id);
+
+      if (existingInsts) {
+        const idsToDelete = existingInsts
+          .map(e => e.id)
+          .filter(existingId => !payloadInstallmentIds.includes(existingId));
+            
+        if (idsToDelete.length > 0) {
+          await supabase
+            .from('debt_installments')
+            .delete()
+            .in('id', idsToDelete);
+        }
+      }
+
       for (const inst of installments) {
         const isTemp = !inst.id || inst.id.toString().startsWith('temp_');
         if (!isTemp) {
