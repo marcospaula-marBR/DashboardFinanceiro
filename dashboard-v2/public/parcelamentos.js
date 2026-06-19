@@ -1185,9 +1185,16 @@ function renderEditInstallments() {
     tbody.innerHTML = '';
 
     if (!activeContract.installments || activeContract.installments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Nenhuma parcela gerada.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhuma parcela gerada.</td></tr>';
         return;
     }
+
+    // Sort chronologically by Due Date
+    activeContract.installments.sort((a, b) => {
+        if (!a.vencimento) return 1;
+        if (!b.vencimento) return -1;
+        return new Date(a.vencimento) - new Date(b.vencimento);
+    });
 
     // Set "Check All" state based on whether all installments are paid
     const allPaid = activeContract.installments.every(i => i.pago);
@@ -1220,6 +1227,11 @@ function renderEditInstallments() {
             </td>
             <td>
                 <input type="text" class="form-control form-control-sm" value="${inst.observacao || ''}" placeholder="Obs" onchange="changeInstallmentObs(${idx}, this.value)">
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-outline-danger btn-sm p-1" onclick="deleteInstallment(${idx})" title="Excluir Parcela">
+                    <i class="bi bi-trash"></i>
+                </button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -1738,6 +1750,23 @@ function applyBatchAddInstallments() {
 function changeInstallmentDate(idx, value) {
     if (activeContract && activeContract.installments[idx]) {
         activeContract.installments[idx].vencimento = value;
+        // Sort chronologically
+        activeContract.installments.sort((a, b) => new Date(a.vencimento) - new Date(b.vencimento));
+        renderEditInstallments();
+    }
+}
+
+function deleteInstallment(idx) {
+    if (activeContract && activeContract.installments[idx]) {
+        if (confirm("Tem certeza que deseja remover esta parcela? O contrato precisará ser salvo para efetivar a remoção.")) {
+            activeContract.installments.splice(idx, 1);
+            
+            // Recalculate contract total value
+            const newTotal = activeContract.installments.reduce((sum, i) => sum + i.valor, 0);
+            document.getElementById('editTotalValue').value = newTotal;
+            
+            renderEditInstallments();
+        }
     }
 }
 
