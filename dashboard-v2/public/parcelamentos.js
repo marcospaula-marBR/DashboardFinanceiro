@@ -767,7 +767,7 @@ function updateDashboard() {
     }
 
     if (state.charts.top) {
-        const topItems = [...activeDf].sort((a, b) => b.installmentValue - a.installmentValue).slice(0, 5);
+        const topItems = [...activeDf].filter(r => r.calculated.remainingCount > 0).sort((a, b) => b.installmentValue - a.installmentValue).slice(0, 5);
         state.charts.top.data = { labels: topItems.map(i => i.description.substring(0, 15) + '...'), datasets: [{ label: 'Valor da Parcela', data: topItems.map(i => i.installmentValue), backgroundColor: [CONFIG.COLORS.primary, CONFIG.COLORS.secondary, CONFIG.COLORS.info, CONFIG.COLORS.success, CONFIG.COLORS.warning], borderRadius: 4 }] };
         state.charts.top.update();
     }
