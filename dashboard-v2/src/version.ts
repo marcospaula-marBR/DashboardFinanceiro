@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.63";
+export const APP_VERSION = "v.02.46.64";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.64 - Fix: Resolve problema de contratos grandes tendo suas parcelas limitadas devido à restrição de carregamento máximo por requisição do banco de dados (paginação implementada).",
   "v.02.46.63 - Fix: Força o Saldo Devedor a ser zero caso o status do contrato seja Desistido ou Transferido, mesmo que existam parcelas cadastradas.",
   "v.02.46.62 - Fix: Corrige erro na função de duplicar contrato que impedia a abertura do modal preenchido.",
   "v.02.46.61 - Feat: Adiciona recurso de duplicar contratos e possibilidade de ordenar a tabela principal clicando nos títulos das colunas.",

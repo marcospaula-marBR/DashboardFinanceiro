@@ -105,28 +105,68 @@ function generateInstallments(
 
 export async function GET() {
   try {
-    const { data: debts, error } = await supabase
-      .from('debts')
-      .select('*')
-      .order('created_at', { ascending: false });
+    let debts: any[] = [];
+    let hasMoreDebts = true;
+    let pageDebts = 0;
+    const sizeDebts = 1000;
 
-    if (error) throw new Error(error.message);
+    while (hasMoreDebts) {
+      const { data: debtChunk, error } = await supabase
+        .from('debts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(pageDebts * sizeDebts, (pageDebts + 1) * sizeDebts - 1);
+
+      if (error) throw new Error(error.message);
+
+      if (debtChunk && debtChunk.length > 0) {
+        debts = debts.concat(debtChunk);
+        if (debtChunk.length < sizeDebts) {
+          hasMoreDebts = false;
+        } else {
+          pageDebts++;
+        }
+      } else {
+        hasMoreDebts = false;
+      }
+    }
+
     if (!debts || debts.length === 0) {
       return NextResponse.json([]);
     }
 
     const ids = debts.map((d) => d.id);
-    const { data: installments, error: instErr } = await supabase
-      .from('debt_installments')
-      .select('*')
-      .in('debt_id', ids)
-      .order('numero', { ascending: true })
-      .limit(10000);
+    
+    // Pagination to bypass Supabase's max_rows limit (default 1000)
+    let allInstallments: any[] = [];
+    let hasMore = true;
+    let page = 0;
+    const pageSize = 1000;
 
-    if (instErr) throw new Error(instErr.message);
+    while (hasMore) {
+      const { data: instChunk, error: instErr } = await supabase
+        .from('debt_installments')
+        .select('*')
+        .in('debt_id', ids)
+        .order('numero', { ascending: true })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (instErr) throw new Error(instErr.message);
+
+      if (instChunk && instChunk.length > 0) {
+        allInstallments = allInstallments.concat(instChunk);
+        if (instChunk.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
 
     const instMap = new Map<string, any[]>();
-    (installments || []).forEach((inst) => {
+    allInstallments.forEach((inst) => {
       if (!instMap.has(inst.debt_id)) instMap.set(inst.debt_id, []);
       instMap.get(inst.debt_id)!.push(inst);
     });
