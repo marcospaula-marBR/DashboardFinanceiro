@@ -79,10 +79,14 @@ function generateInstallments(
   const dayOfVenc = vencDia || day || 1;
 
   for (let i = 0; i < totalParcelas; i++) {
-    const d = new Date(year, month - 1 + i, dayOfVenc);
-    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const targetMonth = month - 1 + i;
+    const targetYear = year + Math.floor(targetMonth / 12);
+    const normMonth = targetMonth % 12;
+    
+    const lastDay = new Date(targetYear, normMonth + 1, 0).getDate();
     const safeDay = Math.min(dayOfVenc, lastDay);
-    const vencimento = new Date(d.getFullYear(), d.getMonth(), safeDay);
+    const vencimento = new Date(targetYear, normMonth, safeDay);
+    
     const vencDate = vencimento.toISOString().split('T')[0];
     const isPaid = i < parcelasPagas;
 
@@ -432,7 +436,7 @@ export async function PUT(req: Request) {
               valor: inst.valor,
               vencimento: inst.vencimento,
               pago: inst.pago,
-              data_pagamento: inst.pago ? (inst.data_pagamento || new Date().toISOString().split('T')[0]) : null,
+              data_pagamento: inst.pago ? (inst.data_pagamento || inst.vencimento) : null,
               observacao: inst.observacao || null
             })
             .eq('id', inst.id);
@@ -447,7 +451,7 @@ export async function PUT(req: Request) {
               valor: inst.valor,
               vencimento: inst.vencimento,
               pago: inst.pago,
-              data_pagamento: inst.pago ? (inst.data_pagamento || new Date().toISOString().split('T')[0]) : null,
+              data_pagamento: inst.pago ? (inst.data_pagamento || inst.vencimento) : null,
               observacao: inst.observacao || null
             });
           if (instErr) throw new Error(instErr.message);

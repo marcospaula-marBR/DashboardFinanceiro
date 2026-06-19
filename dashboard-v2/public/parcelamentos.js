@@ -1230,7 +1230,7 @@ function toggleInstallment(idx, checkbox) {
     // Legacy support (fallback)
     if (activeContract && activeContract.installments[idx]) {
         activeContract.installments[idx].pago = checkbox.checked;
-        activeContract.installments[idx].data_pagamento = checkbox.checked ? new Date().toISOString().split('T')[0] : null;
+        activeContract.installments[idx].data_pagamento = checkbox.checked ? (activeContract.installments[idx].data_pagamento || activeContract.installments[idx].vencimento) : null;
         renderEditInstallments();
     }
 }
@@ -1239,7 +1239,7 @@ function toggleAllInstallments(checkbox) {
     if (activeContract && activeContract.installments) {
         activeContract.installments.forEach(inst => {
             inst.pago = checkbox.checked;
-            inst.data_pagamento = checkbox.checked ? new Date().toISOString().split('T')[0] : null;
+            inst.data_pagamento = checkbox.checked ? (inst.data_pagamento || inst.vencimento) : null;
             if (!checkbox.checked && (inst.observacao === 'Postergado' || inst.observacao === 'Desistido' || inst.observacao === 'Quitação Antecipada')) {
                 inst.observacao = null;
             }
@@ -1488,7 +1488,7 @@ function changeInstallmentStatus(idx, status) {
         const inst = activeContract.installments[idx];
         if (status === 'Pago') {
             inst.pago = true;
-            inst.data_pagamento = inst.data_pagamento || new Date().toISOString().split('T')[0];
+            inst.data_pagamento = inst.data_pagamento || inst.vencimento;
             inst.observacao = null;
         } else if (status === 'Postergado') {
             inst.pago = false;
@@ -1707,10 +1707,13 @@ function applyBatchAddInstallments() {
     const startNum = activeContract.installments.reduce((max, inst) => Math.max(max, inst.numero), 0) + 1;
     
     for (let i = 0; i < qtd; i++) {
-        const d = new Date(year, month - 1 + i, dayOfVenc);
-        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        const targetMonth = month - 1 + i;
+        const targetYear = year + Math.floor(targetMonth / 12);
+        const normMonth = targetMonth % 12;
+        
+        const lastDay = new Date(targetYear, normMonth + 1, 0).getDate();
         const safeDay = Math.min(dayOfVenc, lastDay);
-        const vencimento = new Date(d.getFullYear(), d.getMonth(), safeDay);
+        const vencimento = new Date(targetYear, normMonth, safeDay);
         
         activeContract.installments.push({
             id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.57";
+export const APP_VERSION = "v.02.46.58";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.58 - Fix: Corrige bug em que meses com menos dias que o dia de vencimento (ex: dia 30 em fevereiro) pulavam para o mês seguinte; Altera comportamento do 'Pago' e 'Marcar Todas' para assumir a Data de Pagamento igual à Data de Vencimento da parcela, não mais o dia atual.",
   "v.02.46.57 - Fix: Corrige fallback legado que impedia o salvamento de Formato e Tipo; Adiciona campo para edição de Data de Pagamento da Transação individual no modal; Corrige criação de parcelas pagas para usar a data de vencimento em vez da data atual.",
   "v.02.46.56 - Refactor: Separa Categoria em Tipo de Operação, Formato de Pagamento e Banco/Cartão, com autocompletar dinâmico e novos filtros laterais.",
   "v.02.46.55 - Feat: Adiciona campo de 'Observações (opcional)' no modal de Novo/Editar Contrato, integrado ao campo Detalhes do Supabase.",
