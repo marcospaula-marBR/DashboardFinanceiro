@@ -571,6 +571,7 @@ function updateDashboard() {
 
     let dueThisMonth = 0;
     df.forEach(item => {
+        if (item.calculated.status === 'Desistido' || item.calculated.status === 'Transferido' || item.calculated.status === 'Quitado') return;
         if (item.installments && Array.isArray(item.installments)) {
             item.installments.forEach(inst => {
                 if (!inst.pago && inst.observacao !== 'Desistido' && inst.vencimento) {
@@ -673,6 +674,7 @@ function updateDashboard() {
         // Find the latest vencimento date of all pending installments
         let maxDate = new Date(currentYear, currentMonth + 11, 1); // default to 12 months ahead
         df.forEach(item => {
+            if (item.calculated.status === 'Desistido' || item.calculated.status === 'Transferido' || item.calculated.status === 'Quitado') return;
             if (item.installments && Array.isArray(item.installments)) {
                 item.installments.forEach(inst => {
                     if (!inst.pago && inst.observacao !== 'Desistido' && inst.vencimento) {
@@ -700,6 +702,7 @@ function updateDashboard() {
             const monthContracts = [];
 
             df.forEach(item => {
+                if (item.calculated.status === 'Desistido' || item.calculated.status === 'Transferido' || item.calculated.status === 'Quitado') return;
                 if (item.installments && Array.isArray(item.installments)) {
                     item.installments.forEach(inst => {
                         if (!inst.pago && inst.observacao !== 'Desistido' && inst.vencimento) {
