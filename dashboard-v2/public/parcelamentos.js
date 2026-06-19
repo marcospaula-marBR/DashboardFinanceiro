@@ -1539,18 +1539,18 @@ function duplicateContract(id) {
     const original = state.rawData.find(c => c.id === id);
     if (!original) return;
     
-    openNewContractModal();
+    openAddModal();
     
     setTimeout(() => {
-        if (document.getElementById('newDescription')) document.getElementById('newDescription').value = original.description + " (Cópia)";
-        if (document.getElementById('newCompany')) document.getElementById('newCompany').value = original.company || '';
-        if (document.getElementById('newCategory')) document.getElementById('newCategory').value = original.category || '';
-        if (document.getElementById('newFormat')) document.getElementById('newFormat').value = original.format || '';
-        if (document.getElementById('newBanco')) document.getElementById('newBanco').value = original.banco || '';
+        if (document.getElementById('editDescription')) document.getElementById('editDescription').value = original.description + " (Cópia)";
+        if (document.getElementById('editCompany')) document.getElementById('editCompany').value = original.company || '';
+        if (document.getElementById('editTipo')) document.getElementById('editTipo').value = original.category || '';
+        if (document.getElementById('editFormato')) document.getElementById('editFormato').value = original.format || '';
+        if (document.getElementById('editBanco')) document.getElementById('editBanco').value = original.banco || '';
         
-        if (document.getElementById('newTotalValue')) document.getElementById('newTotalValue').value = original.totalValue || '';
-        if (document.getElementById('newStatus')) document.getElementById('newStatus').value = original.calculated?.status || 'Ativo';
-        if (document.getElementById('newObs')) document.getElementById('newObs').value = original.raw?.['Detalhes'] || '';
+        if (document.getElementById('editTotalValue')) document.getElementById('editTotalValue').value = original.totalValue || '';
+        if (document.getElementById('editStatus')) document.getElementById('editStatus').value = original.calculated?.status || 'Ativo';
+        if (document.getElementById('editObs')) document.getElementById('editObs').value = original.raw?.['Detalhes'] || '';
         
         if (document.getElementById('newStartDate')) document.getElementById('newStartDate').value = original.startDateObj ? original.startDateObj.toISOString().split('T')[0] : '';
         if (document.getElementById('newDueDay')) document.getElementById('newDueDay').value = original.dueDay || '';

@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.61";
+export const APP_VERSION = "v.02.46.62";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.62 - Fix: Corrige erro na função de duplicar contrato que impedia a abertura do modal preenchido.",
   "v.02.46.61 - Feat: Adiciona recurso de duplicar contratos e possibilidade de ordenar a tabela principal clicando nos títulos das colunas.",
   "v.02.46.60 - Fix: Corrige bug em que a exclusão de parcelas no frontend não era refletida no banco de dados durante a edição do contrato.",
   "v.02.46.59 - Feat: Adiciona ordenação cronológica automática do cronograma de parcelas e botão para excluir parcelas individuais diretamente no modal.",
