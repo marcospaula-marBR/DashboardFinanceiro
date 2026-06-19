@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+
+
 // Helper to parse currency values from various formats
 function parseCurrency(val: any): number {
   if (typeof val === 'number') return val;
@@ -388,22 +391,25 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: 'id é obrigatório' }, { status: 400 });
     }
 
-    // 1. Atualizar o cabeçalho
+    // 1. Atualizar o cabeçalho (apenas chaves fornecidas para evitar sobrescrever com null)
+    const updateObj: any = {
+      empresa,
+      descricao,
+      credor,
+      categoria,
+      valor_total,
+      status,
+      observacoes
+    };
+
+    if (total_parcelas !== undefined) updateObj.total_parcelas = total_parcelas;
+    if (valor_parcela !== undefined) updateObj.valor_parcela = valor_parcela;
+    if (data_inicio !== undefined) updateObj.data_inicio = data_inicio;
+    if (data_vencimento_dia !== undefined) updateObj.data_vencimento_dia = data_vencimento_dia || null;
+
     const { error: updateError } = await supabase
       .from('debts')
-      .update({
-        empresa,
-        descricao,
-        credor,
-        categoria,
-        valor_total,
-        total_parcelas,
-        valor_parcela,
-        data_inicio,
-        data_vencimento_dia: data_vencimento_dia || null,
-        status,
-        observacoes,
-      })
+      .update(updateObj)
       .eq('id', id);
 
     if (updateError) throw new Error(updateError.message);
@@ -411,7 +417,9 @@ export async function PUT(req: Request) {
     // 2. Atualizar as parcelas
     if (Array.isArray(installments)) {
       for (const inst of installments) {
-        if (inst.id) {
+        const isTemp = !inst.id || inst.id.toString().startsWith('temp_');
+        if (!isTemp) {
+          // Atualizar parcela existente
           const { error: instErr } = await supabase
             .from('debt_installments')
             .update({
@@ -422,6 +430,20 @@ export async function PUT(req: Request) {
               observacao: inst.observacao || null
             })
             .eq('id', inst.id);
+          if (instErr) throw new Error(instErr.message);
+        } else {
+          // Inserir nova parcela
+          const { error: instErr } = await supabase
+            .from('debt_installments')
+            .insert({
+              debt_id: id,
+              numero: inst.numero,
+              valor: inst.valor,
+              vencimento: inst.vencimento,
+              pago: inst.pago,
+              data_pagamento: inst.pago ? (inst.data_pagamento || new Date().toISOString().split('T')[0]) : null,
+              observacao: inst.observacao || null
+            });
           if (instErr) throw new Error(instErr.message);
         }
       }

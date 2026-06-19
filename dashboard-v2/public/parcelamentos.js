@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function tryAutoLoad() {
     console.log("Tentando carregar dados online do Supabase via API...");
     
-    fetch('/api/parcelamentos')
+    fetch('/api/parcelamentos?_t=' + Date.now())
         .then(response => {
             if (!response.ok) throw new Error("Erro na resposta da API");
             return response.json();
@@ -439,36 +439,60 @@ function processData(data) {
             }
         }
 
-        if ((isActive || item.calculated.status.includes('Pagando')) && start && !isNaN(start.getTime())) {
-            // Only calculate if not provided in CSV
-            if (item.remainingFromCsv === -1) {
-                var monthsElapsed = (currentMonthStart.getFullYear() - start.getFullYear()) * 12 + (currentMonthStart.getMonth() - start.getMonth());
-                if (monthsElapsed < 0) monthsElapsed = 0;
-                var paidCount = Math.min(monthsElapsed, item.totalInstallments);
-                item.calculated.paidCount = paidCount;
-                item.calculated.remainingCount = Math.max(0, item.totalInstallments - paidCount);
-            } else {
-                item.calculated.remainingCount = item.remainingFromCsv;
-                if (item.paidCountFromCsv !== -1) {
-                    item.calculated.paidCount = item.paidCountFromCsv;
-                } else {
-                    item.calculated.paidCount = Math.max(0, item.totalInstallments - item.calculated.remainingCount);
+        // If installments are present, they are the single source of truth for counts and value
+        if (item.installments && Array.isArray(item.installments) && item.installments.length > 0) {
+            const paidInsts = item.installments.filter(i => i.pago);
+            const pendingInsts = item.installments.filter(i => !i.pago && i.observacao !== 'Desistido');
+            
+            item.calculated.paidCount = paidInsts.length;
+            item.calculated.remainingCount = pendingInsts.length;
+            item.calculated.paidValue = paidInsts.reduce((sum, i) => sum + i.valor, 0);
+            item.calculated.outstandingValue = pendingInsts.reduce((sum, i) => sum + i.valor, 0);
+            
+            if (item.calculated.status !== 'Transferido' && item.calculated.status !== 'Desistido') {
+                if (item.calculated.remainingCount === 0 && item.calculated.paidCount > 0) {
+                    item.calculated.status = 'Quitado';
+                } else if (item.calculated.remainingCount > 0) {
+                    item.calculated.status = 'Pagando';
                 }
             }
-
-            // Formula requested: Saldo Devedor = Parcelas Restantes x Valor Parcela
-            item.calculated.outstandingValue = item.calculated.remainingCount * item.installmentValue;
-
-            if (item.calculated.remainingCount <= 0) {
-                item.calculated.status = 'Quitado';
-                item.calculated.outstandingValue = 0;
-            }
         } else {
-            if (item.calculated.status === 'Transferido' || item.calculated.status === 'Desistido') {
-                item.calculated.outstandingValue = 0;
-                item.calculated.remainingCount = 0;
-            } else if (normalize(item.calculated.status) === 'quitado') {
-                item.calculated.outstandingValue = 0;
+            // Fallback for offline CSV without installments array
+            if ((isActive || item.calculated.status.includes('Pagando')) && start && !isNaN(start.getTime())) {
+                if (item.remainingFromCsv === -1) {
+                    var monthsElapsed = (currentMonthStart.getFullYear() - start.getFullYear()) * 12 + (currentMonthStart.getMonth() - start.getMonth());
+                    if (monthsElapsed < 0) monthsElapsed = 0;
+                    var paidCount = Math.min(monthsElapsed, item.totalInstallments);
+                    item.calculated.paidCount = paidCount;
+                    item.calculated.remainingCount = Math.max(0, item.totalInstallments - paidCount);
+                } else {
+                    item.calculated.remainingCount = item.remainingFromCsv;
+                    if (item.paidCountFromCsv !== -1) {
+                        item.calculated.paidCount = item.paidCountFromCsv;
+                    } else {
+                        item.calculated.paidCount = Math.max(0, item.totalInstallments - item.calculated.remainingCount);
+                    }
+                }
+
+                item.calculated.outstandingValue = item.calculated.remainingCount * item.installmentValue;
+
+                if (item.calculated.remainingCount <= 0) {
+                    item.calculated.status = 'Quitado';
+                    item.calculated.outstandingValue = 0;
+                }
+            } else {
+                if (item.calculated.status === 'Transferido' || item.calculated.status === 'Desistido') {
+                    item.calculated.outstandingValue = 0;
+                    item.calculated.remainingCount = 0;
+                } else if (normalize(item.calculated.status) === 'quitado') {
+                    item.calculated.outstandingValue = 0;
+                    item.calculated.remainingCount = 0;
+                    if (item.paidCountFromCsv !== -1) {
+                        item.calculated.paidCount = item.paidCountFromCsv;
+                    } else if (item.totalInstallments > 0) {
+                        item.calculated.paidCount = item.totalInstallments;
+                    }
+                }
             }
         }
         return item;
@@ -480,6 +504,10 @@ function processData(data) {
     if (document.getElementById('filterFormato')) populateSelect('filterFormato', [...new Set(cleanData.map(d => d.format))].filter(Boolean).sort());
     if (document.getElementById('filterEmpresa')) populateSelect('filterEmpresa', [...new Set(cleanData.map(d => d.company))].filter(Boolean).sort());
     populateSelect('filterStatus', [...new Set(cleanData.map(d => d.calculated.status))].sort());
+
+    if (typeof populateCategoriesDatalist === 'function') {
+        populateCategoriesDatalist();
+    }
 
     applyFilters();
 }
@@ -1120,40 +1148,28 @@ function renderEditInstallments() {
     activeContract.installments.forEach((inst, idx) => {
         const tr = document.createElement('tr');
         
-        const dateFormatted = inst.vencimento ? 
-            inst.vencimento.split('-').reverse().join('/') : '-';
-
-        let statusClass = 'bg-secondary';
-        let statusText = 'Pendente';
-        if (inst.pago) {
-            statusClass = 'bg-success';
-            statusText = inst.observacao === 'Quitação Antecipada' ? 'Quitada' : 'Pago';
-        } else if (inst.observacao === 'Postergado') {
-            statusClass = 'bg-info text-dark';
-            statusText = 'Postergado';
-        } else if (inst.observacao === 'Desistido') {
-            statusClass = 'bg-danger';
-            statusText = 'Desistido';
-        }
-
-        const obsText = inst.observacao ? `<div class="small text-muted text-wrap" style="max-width: 180px;" title="${inst.observacao}">${inst.observacao}</div>` : '';
-
         tr.innerHTML = `
             <td class="text-center">
-                <select class="form-select form-select-sm" style="width: 125px; margin: 0 auto;" onchange="changeInstallmentStatus(${idx}, this.value)">
+                <select class="form-select form-select-sm" style="width: 110px; margin: 0 auto;" onchange="changeInstallmentStatus(${idx}, this.value)">
                     <option value="Pendente" ${!inst.pago && inst.observacao !== 'Postergado' && inst.observacao !== 'Desistido' ? 'selected' : ''}>Pendente</option>
                     <option value="Pago" ${inst.pago ? 'selected' : ''}>Pago</option>
                     <option value="Postergado" ${!inst.pago && inst.observacao === 'Postergado' ? 'selected' : ''}>Postergado</option>
                     <option value="Desistido" ${!inst.pago && inst.observacao === 'Desistido' ? 'selected' : ''}>Desistido</option>
                 </select>
             </td>
-            <td>Parcela ${inst.numero}</td>
-            <td>${dateFormatted}</td>
-            <td class="text-end fw-semibold">
-                ${formatCurrency(inst.valor)}
-                ${obsText}
+            <td class="text-center font-semibold" style="width: 80px;">P. ${inst.numero}</td>
+            <td>
+                <input type="date" class="form-control form-control-sm" style="width: 135px;" value="${inst.vencimento || ''}" onchange="changeInstallmentDate(${idx}, this.value)">
             </td>
-            <td><span class="badge ${statusClass}">${statusText}</span></td>
+            <td>
+                <div class="input-group input-group-sm" style="width: 120px;">
+                    <span class="input-group-text">R$</span>
+                    <input type="number" step="0.01" class="form-control" value="${inst.valor || 0}" onchange="changeInstallmentValue(${idx}, this.value)">
+                </div>
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm" value="${inst.observacao || ''}" placeholder="Obs" onchange="changeInstallmentObs(${idx}, this.value)">
+            </td>
         `;
         tbody.appendChild(tr);
     });
@@ -1333,6 +1349,9 @@ function saveContractChangesToServer() {
             credor: credor,
             valor_total: totalValue,
             status: status,
+            total_parcelas: activeContract.installments.length,
+            valor_parcela: activeContract.installments[0]?.valor || activeContract.installmentValue || 0,
+            data_inicio: activeContract.startDateStr || (activeContract.installments[0]?.vencimento ? activeContract.installments[0].vencimento : new Date().toISOString().split('T')[0]),
             observacoes: JSON.stringify({
                 details: activeContract.raw?.['Detalhes'] || '',
                 format: activeContract.raw?.['FORMATO'] || '',
@@ -1519,6 +1538,182 @@ function initDoubleScroll() {
     };
 }
 
+// ========================================
+// Manual and Batch Add Installments Controls
+// ========================================
+
+function addNewInstallmentRow() {
+    if (!activeContract) return;
+    
+    // Find the next installment number
+    const nextNum = (activeContract.installments || []).reduce((max, inst) => Math.max(max, inst.numero), 0) + 1;
+    
+    // Find the next installment due date (1 month after the last installment's due date, or today)
+    let nextDateStr = new Date().toISOString().split('T')[0];
+    if (activeContract.installments && activeContract.installments.length > 0) {
+        const lastInst = activeContract.installments[activeContract.installments.length - 1];
+        if (lastInst.vencimento) {
+            const lastDate = new Date(lastInst.vencimento + 'T00:00:00');
+            const nextDate = new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, lastDate.getDate());
+            nextDateStr = nextDate.toISOString().split('T')[0];
+        }
+    }
+    
+    // Default installment value
+    const lastValue = activeContract.installments && activeContract.installments.length > 0 ? 
+        activeContract.installments[activeContract.installments.length - 1].valor : 
+        (activeContract.installmentValue || 0);
+
+    const newInst = {
+        id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        numero: nextNum,
+        valor: lastValue,
+        vencimento: nextDateStr,
+        pago: false,
+        data_pagamento: null,
+        observacao: null
+    };
+    
+    if (!activeContract.installments) {
+        activeContract.installments = [];
+    }
+    activeContract.installments.push(newInst);
+    
+    // Update contract total value by summing all installments
+    const newTotal = activeContract.installments.reduce((sum, i) => sum + i.valor, 0);
+    document.getElementById('editTotalValue').value = newTotal;
+    
+    renderEditInstallments();
+}
+
+function showAddBatchForm() {
+    const container = document.getElementById('batchAddContainer');
+    if (!container) return;
+    container.style.display = 'block';
+    
+    // Auto-fill defaults
+    document.getElementById('batchQtd').value = '1';
+    
+    // Default installment value: last installment value or contract average
+    const lastValue = activeContract.installments && activeContract.installments.length > 0 ? 
+        activeContract.installments[activeContract.installments.length - 1].valor : 
+        (activeContract.installmentValue || 0);
+    document.getElementById('batchValue').value = lastValue;
+    
+    // Default date: 1 month after last installment
+    let nextDateStr = new Date().toISOString().split('T')[0];
+    let nextDueDay = new Date().getDate();
+    if (activeContract.installments && activeContract.installments.length > 0) {
+        const lastInst = activeContract.installments[activeContract.installments.length - 1];
+        if (lastInst.vencimento) {
+            const lastDate = new Date(lastInst.vencimento + 'T00:00:00');
+            const nextDate = new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, lastDate.getDate());
+            nextDateStr = nextDate.toISOString().split('T')[0];
+            nextDueDay = lastDate.getDate();
+        }
+    }
+    document.getElementById('batchStartDate').value = nextDateStr;
+    document.getElementById('batchDueDay').value = nextDueDay;
+}
+
+function hideAddBatchForm() {
+    const container = document.getElementById('batchAddContainer');
+    if (container) container.style.display = 'none';
+}
+
+function applyBatchAddInstallments() {
+    if (!activeContract) return;
+    
+    const qtd = parseInt(document.getElementById('batchQtd').value) || 0;
+    const value = parseFloat(document.getElementById('batchValue').value) || 0;
+    const startDate = document.getElementById('batchStartDate').value;
+    const dueDay = parseInt(document.getElementById('batchDueDay').value) || 1;
+    
+    if (qtd <= 0) {
+        alert("Por favor, insira uma quantidade maior que zero.");
+        return;
+    }
+    if (value <= 0) {
+        alert("Por favor, insira um valor de parcela válido.");
+        return;
+    }
+    if (!startDate) {
+        alert("Por favor, selecione a data do primeiro vencimento.");
+        return;
+    }
+    
+    const [year, month, day] = startDate.split('-').map(Number);
+    const dayOfVenc = dueDay || day || 1;
+    
+    if (!activeContract.installments) {
+        activeContract.installments = [];
+    }
+    
+    const startNum = activeContract.installments.reduce((max, inst) => Math.max(max, inst.numero), 0) + 1;
+    
+    for (let i = 0; i < qtd; i++) {
+        const d = new Date(year, month - 1 + i, dayOfVenc);
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        const safeDay = Math.min(dayOfVenc, lastDay);
+        const vencimento = new Date(d.getFullYear(), d.getMonth(), safeDay);
+        
+        activeContract.installments.push({
+            id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            numero: startNum + i,
+            valor: value,
+            vencimento: vencimento.toISOString().split('T')[0],
+            pago: false,
+            data_pagamento: null,
+            observacao: null
+        });
+    }
+    
+    // Recalculate contract total value
+    const newTotal = activeContract.installments.reduce((sum, i) => sum + i.valor, 0);
+    document.getElementById('editTotalValue').value = newTotal;
+    
+    hideAddBatchForm();
+    renderEditInstallments();
+    alert(`${qtd} parcelas adicionadas com sucesso!`);
+}
+
+function changeInstallmentDate(idx, value) {
+    if (activeContract && activeContract.installments[idx]) {
+        activeContract.installments[idx].vencimento = value;
+    }
+}
+
+function changeInstallmentValue(idx, value) {
+    if (activeContract && activeContract.installments[idx]) {
+        activeContract.installments[idx].valor = parseFloat(value) || 0;
+        // Recalculate contract total value
+        const newTotal = activeContract.installments.reduce((sum, i) => sum + i.valor, 0);
+        document.getElementById('editTotalValue').value = newTotal;
+    }
+}
+
+function changeInstallmentObs(idx, value) {
+    if (activeContract && activeContract.installments[idx]) {
+        activeContract.installments[idx].observacao = value || null;
+    }
+}
+
+function populateCategoriesDatalist() {
+    const datalist = document.getElementById('categoriesDatalist');
+    if (!datalist) return;
+    
+    const defaults = ["Financiamento", "Empréstimo", "Consórcio", "Leasing", "Cartão", "Fornecedor", "Mútuo", "Outros"];
+    const current = state.rawData.map(d => d.category).filter(Boolean);
+    const unique = [...new Set([...defaults, ...current])].sort();
+    
+    datalist.innerHTML = '';
+    unique.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c;
+        datalist.appendChild(option);
+    });
+}
+
 window.openAddModal = openAddModal;
 window.openEditModal = openEditModal;
 window.toggleInstallment = toggleInstallment;
@@ -1530,3 +1725,12 @@ window.changeInstallmentStatus = changeInstallmentStatus;
 window.toggleEarlyPayoffView = toggleEarlyPayoffView;
 window.showMonthDetailsModal = showMonthDetailsModal;
 window.initDoubleScroll = initDoubleScroll;
+window.addNewInstallmentRow = addNewInstallmentRow;
+window.showAddBatchForm = showAddBatchForm;
+window.hideAddBatchForm = hideAddBatchForm;
+window.applyBatchAddInstallments = applyBatchAddInstallments;
+window.changeInstallmentDate = changeInstallmentDate;
+window.changeInstallmentValue = changeInstallmentValue;
+window.changeInstallmentObs = changeInstallmentObs;
+window.populateCategoriesDatalist = populateCategoriesDatalist;
+
