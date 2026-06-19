@@ -1076,6 +1076,7 @@ function openAddModal() {
     document.getElementById('editCompany').value = 'MAR BRASIL';
     populateEditCategoryOptions('Outros');
     document.getElementById('editCredor').value = '';
+    document.getElementById('editObs').value = '';
     document.getElementById('editTotalValue').value = '';
     document.getElementById('editStatus').value = 'Ativo';
     document.getElementById('amortizationDate').value = new Date().toISOString().split('T')[0];
@@ -1121,6 +1122,16 @@ function openEditModal(debtId) {
     document.getElementById('editCompany').value = activeContract.company || 'MAR BRASIL';
     populateEditCategoryOptions(activeContract.category || 'Outros');
     document.getElementById('editCredor').value = activeContract.raw?.['FORMA DE PAGTO'] || activeContract.credor || '';
+    
+    let obsDetails = activeContract.raw?.['Detalhes'] || '';
+    if (!obsDetails && activeContract.observacoes) {
+        try {
+            const obsObj = JSON.parse(activeContract.observacoes);
+            obsDetails = obsObj.details || '';
+        } catch (e) {}
+    }
+    document.getElementById('editObs').value = obsDetails;
+    
     document.getElementById('editTotalValue').value = activeContract.totalValue || 0;
     document.getElementById('editStatus').value = activeContract.calculated?.status || 'Ativo';
     
@@ -1350,7 +1361,7 @@ function saveContractChangesToServer() {
             valor_total: totalValue || (installmentValue * totalInstallments), // auto-calc if 0
             status: status,
             observacoes: JSON.stringify({
-                details: '',
+                details: document.getElementById('editObs').value,
                 format: '',
                 doc: credor,
                 cc: ''
@@ -1374,7 +1385,7 @@ function saveContractChangesToServer() {
             valor_parcela: activeContract.installments[0]?.valor || activeContract.installmentValue || 0,
             data_inicio: activeContract.startDateStr || (activeContract.installments[0]?.vencimento ? activeContract.installments[0].vencimento : new Date().toISOString().split('T')[0]),
             observacoes: JSON.stringify({
-                details: activeContract.raw?.['Detalhes'] || '',
+                details: document.getElementById('editObs').value,
                 format: activeContract.raw?.['FORMATO'] || '',
                 doc: credor,
                 cc: activeContract.raw?.['CENTRO DE CUSTO'] || ''

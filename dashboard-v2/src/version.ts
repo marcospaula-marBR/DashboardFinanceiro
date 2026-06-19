@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.54";
+export const APP_VERSION = "v.02.46.55";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.55 - Feat: Adiciona campo de 'Observações (opcional)' no modal de Novo/Editar Contrato, integrado ao campo Detalhes do Supabase.",
   "v.02.46.54 - Fix: Corrige fallback indevido do tryAutoLoad para o CSV local quando o Supabase está vazio, permitindo que a tela fique corretamente em branco após limpeza.",
   "v.02.46.53 - Feat: Adiciona o status 'Carência' quando a primeira parcela está a mais de 90 dias de distância do vencimento.",
   "v.02.46.52 - Fix: Corrige falha de salvamento (erro de data/hora fora do intervalo) formatando data_inicio para o padrão ISO no servidor; refatora a inserção de categorias customizadas substituindo o datalist por um select dinâmico com opção de cadastro manual.",
