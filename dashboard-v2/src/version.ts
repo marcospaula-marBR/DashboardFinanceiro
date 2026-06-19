@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.60";
+export const APP_VERSION = "v.02.46.61";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.61 - Feat: Adiciona recurso de duplicar contratos e possibilidade de ordenar a tabela principal clicando nos títulos das colunas.",
   "v.02.46.60 - Fix: Corrige bug em que a exclusão de parcelas no frontend não era refletida no banco de dados durante a edição do contrato.",
   "v.02.46.59 - Feat: Adiciona ordenação cronológica automática do cronograma de parcelas e botão para excluir parcelas individuais diretamente no modal.",
   "v.02.46.58 - Fix: Corrige bug em que meses com menos dias que o dia de vencimento (ex: dia 30 em fevereiro) pulavam para o mês seguinte; Altera comportamento do 'Pago' e 'Marcar Todas' para assumir a Data de Pagamento igual à Data de Vencimento da parcela, não mais o dia atual.",

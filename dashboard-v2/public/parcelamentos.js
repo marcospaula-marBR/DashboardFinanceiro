@@ -27,6 +27,11 @@ let state = {
     charts: {} // evolution, category, paidVsPending, top
 };
 
+let sortState = {
+    column: null,
+    direction: 1 // 1 for asc, -1 for desc
+};
+
 // Error Handler
 window.onerror = function (msg, url, line, col, error) {
     console.error("Global Error:", msg, "at", line, ":", col);
@@ -773,10 +778,44 @@ function updateTable(data) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
+    // Sort logic
+    let sortedData = [...data];
+    if (sortState.column) {
+        sortedData.sort((a, b) => {
+            let valA, valB;
+            
+            // Handle nested properties (e.g. calculated.status)
+            if (sortState.column.includes('.')) {
+                const parts = sortState.column.split('.');
+                valA = a[parts[0]]?.[parts[1]];
+                valB = b[parts[0]]?.[parts[1]];
+            } else {
+                valA = a[sortState.column];
+                valB = b[sortState.column];
+            }
+            
+            // Handle dates
+            if (valA instanceof Date) valA = valA.getTime();
+            if (valB instanceof Date) valB = valB.getTime();
+            
+            // Handle strings (case insensitive)
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+            
+            // Handle nulls/undefined
+            if (valA === null || valA === undefined) valA = '';
+            if (valB === null || valB === undefined) valB = '';
+            
+            if (valA < valB) return -1 * sortState.direction;
+            if (valA > valB) return 1 * sortState.direction;
+            return 0;
+        });
+    }
+
     // Performance optimization: use DocumentFragment to avoid reflows
     var fragment = document.createDocumentFragment();
 
-    data.forEach(function (item) {
+    sortedData.forEach(function (item) {
         var tr = document.createElement('tr');
         var start = item.startDateObj ? item.startDateObj.toLocaleDateString('pt-BR') : '-';
         var end = item.endDateObj ? item.endDateObj.toLocaleDateString('pt-BR') : '-';
@@ -788,7 +827,8 @@ function updateTable(data) {
         if (item.calculated.status === 'Carência') statusClass = 'bg-info text-dark';
 
         const actionBtn = item.id ?
-            '<td class="text-center"><button class="btn btn-sm btn-outline-primary" onclick="openEditModal(\'' + item.id + '\')"><i class="bi bi-pencil-fill"></i></button></td>' :
+            '<td class="text-center"><button class="btn btn-sm btn-outline-primary me-1" onclick="openEditModal(\'' + item.id + '\')" title="Editar"><i class="bi bi-pencil-fill"></i></button>' +
+            '<button class="btn btn-sm btn-outline-secondary" onclick="duplicateContract(\'' + item.id + '\')" title="Duplicar"><i class="bi bi-files"></i></button></td>' :
             '<td class="text-center text-muted small"><i class="bi bi-cloud-slash" title="Offline"></i></td>';
 
         tr.innerHTML = '<td><div class="fw-bold text-wrap" style="max-width: 250px;">' + item.description + '</div>' +
@@ -1493,6 +1533,40 @@ function deleteContractFromServer() {
         console.error(err);
         alert("Erro ao excluir contrato: " + err.message);
     });
+}
+
+function duplicateContract(id) {
+    const original = state.rawData.find(c => c.id === id);
+    if (!original) return;
+    
+    openNewContractModal();
+    
+    setTimeout(() => {
+        if (document.getElementById('newDescription')) document.getElementById('newDescription').value = original.description + " (Cópia)";
+        if (document.getElementById('newCompany')) document.getElementById('newCompany').value = original.company || '';
+        if (document.getElementById('newCategory')) document.getElementById('newCategory').value = original.category || '';
+        if (document.getElementById('newFormat')) document.getElementById('newFormat').value = original.format || '';
+        if (document.getElementById('newBanco')) document.getElementById('newBanco').value = original.banco || '';
+        
+        if (document.getElementById('newTotalValue')) document.getElementById('newTotalValue').value = original.totalValue || '';
+        if (document.getElementById('newStatus')) document.getElementById('newStatus').value = original.calculated?.status || 'Ativo';
+        if (document.getElementById('newObs')) document.getElementById('newObs').value = original.raw?.['Detalhes'] || '';
+        
+        if (document.getElementById('newStartDate')) document.getElementById('newStartDate').value = original.startDateObj ? original.startDateObj.toISOString().split('T')[0] : '';
+        if (document.getElementById('newDueDay')) document.getElementById('newDueDay').value = original.dueDay || '';
+        if (document.getElementById('newTotalInstallments')) document.getElementById('newTotalInstallments').value = original.totalInstallments || '';
+        if (document.getElementById('newInstallmentValue')) document.getElementById('newInstallmentValue').value = original.installmentValue || '';
+    }, 150);
+}
+
+function sortTable(column) {
+    if (sortState.column === column) {
+        sortState.direction *= -1;
+    } else {
+        sortState.column = column;
+        sortState.direction = 1;
+    }
+    updateTable(state.filteredData);
 }
 
 function changeInstallmentStatus(idx, status) {
