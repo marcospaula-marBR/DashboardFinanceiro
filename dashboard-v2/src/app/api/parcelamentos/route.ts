@@ -135,15 +135,61 @@ export async function GET() {
       let format = '';
       let doc = '';
       let cc = '';
+      let typeFromObs = '';
+
       if (debt.observacoes) {
-        try {
-          const parsed = JSON.parse(debt.observacoes);
-          details = parsed.details || '';
-          format = parsed.format || '';
-          doc = parsed.doc || '';
-          cc = parsed.cc || '';
-        } catch {
-          details = debt.observacoes || '';
+        const obsStr = debt.observacoes.trim();
+        if (obsStr.startsWith('{') && obsStr.endsWith('}')) {
+          try {
+            const parsed = JSON.parse(obsStr);
+            details = parsed.details || '';
+            format = parsed.format || '';
+            doc = parsed.doc || '';
+            cc = parsed.cc || '';
+          } catch {}
+        } else {
+          // Parse pipe-separated format: Key: Value | Key2: Value2
+          const parts = obsStr.split('|');
+          parts.forEach((part: string) => {
+            const colonIdx = part.indexOf(':');
+            if (colonIdx !== -1) {
+              const k = part.substring(0, colonIdx).trim().toLowerCase();
+              const v = part.substring(colonIdx + 1).trim();
+              if (k === 'detalhes' || k === 'obs') {
+                details = v;
+              } else if (k === 'tipo') {
+                typeFromObs = v;
+              } else if (k === 'doc' || k === 'documento') {
+                doc = v;
+              } else if (k === 'cc' || k === 'centro de custo') {
+                cc = v;
+              } else if (k === 'formato' || k === 'format') {
+                format = v;
+              }
+            }
+          });
+          if (!details && !typeFromObs && !doc && !cc && !format) {
+            details = obsStr;
+          }
+        }
+      }
+
+      // Normalization check to align legacy and new structures
+      // Old structure: Categoria column stores format ('Financiamento'), Observacoes stores type ('Tipo: ATIVOS')
+      // New structure: Categoria column stores type ('ATIVOS'), Observacoes stores format ('Financiamento')
+      const FORMAT_OPTIONS = ['financiamento', 'emprestimo', 'consorcio', 'leasing', 'cartao', 'fornecedor', 'mutuo', 'outros'];
+      const catNorm = (debt.categoria || '').toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+      let finalFormat = format || '';
+      let finalType = debt.categoria || '';
+
+      if (FORMAT_OPTIONS.includes(catNorm)) {
+        finalFormat = debt.categoria;
+        finalType = typeFromObs || 'ATIVOS';
+      } else {
+        finalType = debt.categoria;
+        if (!finalFormat && typeFromObs) {
+          finalFormat = typeFromObs;
         }
       }
 
@@ -162,8 +208,8 @@ export async function GET() {
         installments: insts,
         "ATIVOS E BENS": debt.descricao || '',
         "Detalhes": details,
-        "FORMATO": format,
-        "TIPO": debt.categoria || '',
+        "FORMATO": finalFormat,
+        "TIPO": finalType,
         "EMPRESA": debt.empresa || '',
         "Documento": doc,
         "CENTRO DE CUSTO": cc,
