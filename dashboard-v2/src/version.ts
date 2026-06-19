@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.55";
+export const APP_VERSION = "v.02.46.56";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.56 - Refactor: Separa Categoria em Tipo de Operação, Formato de Pagamento e Banco/Cartão, com autocompletar dinâmico e novos filtros laterais.",
   "v.02.46.55 - Feat: Adiciona campo de 'Observações (opcional)' no modal de Novo/Editar Contrato, integrado ao campo Detalhes do Supabase.",
   "v.02.46.54 - Fix: Corrige fallback indevido do tryAutoLoad para o CSV local quando o Supabase está vazio, permitindo que a tela fique corretamente em branco após limpeza.",
   "v.02.46.53 - Feat: Adiciona o status 'Carência' quando a primeira parcela está a mais de 90 dias de distância do vencimento.",

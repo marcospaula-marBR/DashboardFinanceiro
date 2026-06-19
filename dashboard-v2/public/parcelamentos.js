@@ -21,7 +21,8 @@ let state = {
         categorias: [],
         formatos: [],
         empresas: [],
-        status: []
+        status: [],
+        bancos: []
     },
     charts: {} // evolution, category, paidVsPending, top
 };
@@ -127,8 +128,8 @@ function initEventListeners() {
     // ... (rest of the listeners)
 
     // Filters
-    const filterIds = ['filterCategoria', 'filterFormato', 'filterEmpresa', 'filterStatus'];
-    const filterKeys = ['categorias', 'formatos', 'empresas', 'status'];
+    const filterIds = ['filterCategoria', 'filterFormato', 'filterBanco', 'filterEmpresa', 'filterStatus'];
+    const filterKeys = ['categorias', 'formatos', 'bancos', 'empresas', 'status'];
     filterIds.forEach(function (id, idx) { setupFilterListener(id, filterKeys[idx]); });
 
     // Clear Filters
@@ -342,6 +343,21 @@ function saveDataToSupabase(data) {
     });
 }
 
+function populateDatalists(data) {
+    const tipos = [...new Set(data.map(d => d.category))].filter(Boolean).sort();
+    const formatos = [...new Set(data.map(d => d.format))].filter(Boolean).sort();
+    const bancos = [...new Set(data.map(d => d.banco))].filter(Boolean).sort();
+
+    const dtTipo = document.getElementById('tipoOptions');
+    if (dtTipo) dtTipo.innerHTML = tipos.map(t => `<option value="${t}">`).join('');
+    
+    const dtFormato = document.getElementById('formatoOptions');
+    if (dtFormato) dtFormato.innerHTML = formatos.map(f => `<option value="${f}">`).join('');
+    
+    const dtBanco = document.getElementById('bancoOptions');
+    if (dtBanco) dtBanco.innerHTML = bancos.map(b => `<option value="${b}">`).join('');
+}
+
 function processData(data) {
     // Expose data for BrisinhAI
     window.FULL_CSV_DATA = data;
@@ -382,7 +398,8 @@ function processData(data) {
             raw: row,
             description: getValue(row, ['Ativos e bens', 'Ativos', 'Descrição', 'Item', 'Objeto', 'Nome'], 'description'),
             format: getValue(row, ['formato', 'Formato'], 'format'),
-            category: getValue(row, ['tipo', 'Tipo', 'Categoria', 'Classificação'], 'category'),
+            category: getValue(row, ['tipo', 'Tipo', 'Categoria', 'Classificação', 'TIPO'], 'category'),
+            banco: getValue(row, ['banco', 'cartao', 'cartão', 'banco / cartao', 'BANCO'], 'banco'),
             company: getValue(row, ['empresa', 'Empresa', 'Fornecedor', 'Credor'], 'company'),
             statusCsv: getValue(row, ['status', 'Status', 'Situação', 'Estado'], 'status'),
             startDateStr: getValue(row, ['inicício de contrato', 'inicio de contrato', 'Início', 'Inicio', 'Data Inicio', 'Data de Inicio', 'Contratação'], 'startDate'),
@@ -516,8 +533,10 @@ function processData(data) {
 
     state.rawData = cleanData;
 
-    populateSelect('filterCategoria', [...new Set(cleanData.map(d => d.category))].sort());
+    populateDatalists(cleanData);
+    populateSelect('filterCategoria', [...new Set(cleanData.map(d => d.category))].filter(Boolean).sort());
     if (document.getElementById('filterFormato')) populateSelect('filterFormato', [...new Set(cleanData.map(d => d.format))].filter(Boolean).sort());
+    if (document.getElementById('filterBanco')) populateSelect('filterBanco', [...new Set(cleanData.map(d => d.banco))].filter(Boolean).sort());
     if (document.getElementById('filterEmpresa')) populateSelect('filterEmpresa', [...new Set(cleanData.map(d => d.company))].filter(Boolean).sort());
     populateSelect('filterStatus', [...new Set(cleanData.map(d => d.calculated.status))].sort());
 
@@ -528,6 +547,7 @@ function applyFilters() {
     let df = state.rawData;
     if (state.filters.categorias.length > 0) df = df.filter(r => state.filters.categorias.includes(r.category));
     if (state.filters.formatos.length > 0) df = df.filter(r => state.filters.formatos.includes(r.format));
+    if (state.filters.bancos && state.filters.bancos.length > 0) df = df.filter(r => state.filters.bancos.includes(r.banco));
     if (state.filters.empresas.length > 0) df = df.filter(r => state.filters.empresas.includes(r.company));
     if (state.filters.status.length > 0) df = df.filter(r => state.filters.status.includes(r.calculated.status));
 
@@ -1074,7 +1094,9 @@ function openAddModal() {
     document.getElementById('editDebtId').value = '';
     document.getElementById('editDescription').value = '';
     document.getElementById('editCompany').value = 'MAR BRASIL';
-    populateEditCategoryOptions('Outros');
+    document.getElementById('editTipo').value = '';
+    document.getElementById('editFormato').value = '';
+    document.getElementById('editBanco').value = '';
     document.getElementById('editCredor').value = '';
     document.getElementById('editObs').value = '';
     document.getElementById('editTotalValue').value = '';
@@ -1120,7 +1142,9 @@ function openEditModal(debtId) {
     document.getElementById('editDebtId').value = activeContract.id;
     document.getElementById('editDescription').value = activeContract.description || '';
     document.getElementById('editCompany').value = activeContract.company || 'MAR BRASIL';
-    populateEditCategoryOptions(activeContract.category || 'Outros');
+    document.getElementById('editTipo').value = activeContract.category || '';
+    document.getElementById('editFormato').value = activeContract.format || activeContract.raw?.['FORMATO'] || '';
+    document.getElementById('editBanco').value = activeContract.banco || '';
     document.getElementById('editCredor').value = activeContract.raw?.['FORMA DE PAGTO'] || activeContract.credor || '';
     
     let obsDetails = activeContract.raw?.['Detalhes'] || '';
@@ -1307,15 +1331,9 @@ function saveContractChangesToServer() {
     // Collect values
     const description = document.getElementById('editDescription').value;
     const company = document.getElementById('editCompany').value;
-    let category = document.getElementById('editCategory').value;
-    if (category === '__custom__') {
-        category = document.getElementById('editCategoryCustom').value.trim();
-        if (!category) {
-            alert("Por favor, digite o nome da nova categoria.");
-            if (overlay) overlay.classList.add('d-none');
-            return;
-        }
-    }
+    const category = document.getElementById('editTipo').value;
+    const formatValue = document.getElementById('editFormato').value;
+    const bancoValue = document.getElementById('editBanco').value;
     const credor = document.getElementById('editCredor').value;
     const totalValue = parseFloat(document.getElementById('editTotalValue').value) || 0;
     const status = document.getElementById('editStatus').value;
@@ -1362,7 +1380,8 @@ function saveContractChangesToServer() {
             status: status,
             observacoes: JSON.stringify({
                 details: document.getElementById('editObs').value,
-                format: '',
+                format: formatValue,
+                banco: bancoValue,
                 doc: credor,
                 cc: ''
             }),
@@ -1386,7 +1405,8 @@ function saveContractChangesToServer() {
             data_inicio: activeContract.startDateStr || (activeContract.installments[0]?.vencimento ? activeContract.installments[0].vencimento : new Date().toISOString().split('T')[0]),
             observacoes: JSON.stringify({
                 details: document.getElementById('editObs').value,
-                format: activeContract.raw?.['FORMATO'] || '',
+                format: formatValue,
+                banco: bancoValue,
                 doc: credor,
                 cc: activeContract.raw?.['CENTRO DE CUSTO'] || ''
             }),

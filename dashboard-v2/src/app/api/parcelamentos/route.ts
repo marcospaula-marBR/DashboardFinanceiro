@@ -134,10 +134,11 @@ export async function GET() {
       const remainingCount = pendingInsts.length;
       const paidValue = paidInsts.reduce((sum, i) => sum + i.valor, 0);
 
-      let details = '';
       let format = '';
+      let details = '';
       let doc = '';
       let cc = '';
+      let banco = '';
       let typeFromObs = '';
 
       if (debt.observacoes) {
@@ -147,6 +148,7 @@ export async function GET() {
             const parsed = JSON.parse(obsStr);
             details = parsed.details || '';
             format = parsed.format || '';
+            banco = parsed.banco || '';
             doc = parsed.doc || '';
             cc = parsed.cc || '';
           } catch {}
@@ -168,6 +170,8 @@ export async function GET() {
                 cc = v;
               } else if (k === 'formato' || k === 'format') {
                 format = v;
+              } else if (k === 'banco' || k === 'cartao' || k === 'cartão') {
+                banco = v;
               }
             }
           });
@@ -213,6 +217,7 @@ export async function GET() {
         "Detalhes": details,
         "FORMATO": finalFormat,
         "TIPO": finalType,
+        "BANCO": banco,
         "EMPRESA": debt.empresa || '',
         "Documento": doc,
         "CENTRO DE CUSTO": cc,
