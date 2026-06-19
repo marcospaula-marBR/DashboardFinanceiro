@@ -767,8 +767,39 @@ function updateDashboard() {
     }
 
     if (state.charts.top) {
-        const topItems = [...activeDf].filter(r => r.calculated.remainingCount > 0).sort((a, b) => b.installmentValue - a.installmentValue).slice(0, 5);
-        state.charts.top.data = { labels: topItems.map(i => i.description.substring(0, 15) + '...'), datasets: [{ label: 'Valor da Parcela', data: topItems.map(i => i.installmentValue), backgroundColor: [CONFIG.COLORS.primary, CONFIG.COLORS.secondary, CONFIG.COLORS.info, CONFIG.COLORS.success, CONFIG.COLORS.warning], borderRadius: 4 }] };
+        const contractsWithPending = [];
+        df.forEach(item => {
+            if (item.calculated.status !== 'Quitado' && item.calculated.status !== 'Desistido' && item.calculated.status !== 'Transferido') {
+                let maxPendingValue = 0;
+                if (item.installments && item.installments.length > 0) {
+                    item.installments.forEach(inst => {
+                        if (!inst.pago && inst.observacao !== 'Desistido') {
+                            if (inst.valor > maxPendingValue) maxPendingValue = inst.valor;
+                        }
+                    });
+                } else if (item.calculated.remainingCount > 0) {
+                    maxPendingValue = item.installmentValue;
+                }
+                
+                if (maxPendingValue > 0) {
+                    contractsWithPending.push({
+                        description: item.description,
+                        maxPendingValue: maxPendingValue
+                    });
+                }
+            }
+        });
+
+        const topItems = contractsWithPending.sort((a, b) => b.maxPendingValue - a.maxPendingValue).slice(0, 5);
+        state.charts.top.data = { 
+            labels: topItems.map(i => i.description.substring(0, 15) + '...'), 
+            datasets: [{ 
+                label: 'Maior Parcela a Vencer', 
+                data: topItems.map(i => i.maxPendingValue), 
+                backgroundColor: [CONFIG.COLORS.primary, CONFIG.COLORS.secondary, CONFIG.COLORS.info, CONFIG.COLORS.success, CONFIG.COLORS.warning], 
+                borderRadius: 4 
+            }] 
+        };
         state.charts.top.update();
     }
 

@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.65";
+export const APP_VERSION = "v.02.46.66";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.66 - Fix: Gráfico de Maiores Parcelamentos agora varre apenas os valores reais das parcelas pendentes individuais, ignorando o valor da parcela padrão do contrato ou parcelas já pagas.",
   "v.02.46.65 - Feat: Gráfico de Maiores Parcelamentos agora considera apenas contratos que possuam parcelas pendentes.",
   "v.02.46.64 - Fix: Resolve problema de contratos grandes tendo suas parcelas limitadas devido à restrição de carregamento máximo por requisição do banco de dados (paginação implementada).",
   "v.02.46.63 - Fix: Força o Saldo Devedor a ser zero caso o status do contrato seja Desistido ou Transferido, mesmo que existam parcelas cadastradas.",
