@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.45";
+export const APP_VERSION = "v.02.46.46";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.46 - Fix: Atualiza cache-busting dos scripts em parcelamentos.html para v=02.46.46, corrigindo exibição do botão Novo Contrato e da versão atual.",
   "v.02.46.45 - Fix: Corrige processamento de dados mapeados preservando id e installments; implementa botão Novo Contrato e formulário de criação de cronograma online.",
   "v.02.46.44 - Fix: Inclui id e installments no retorno mapeado da rota GET /api/parcelamentos para corrigir exibição de botões de ações.",
   "v.02.46.43 - Fix: Sincroniza window.APP_VERSION em public/version.js para exibir a versão atual no cabeçalho das páginas estáticas.",
