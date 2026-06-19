@@ -471,7 +471,9 @@ function processData(data) {
             item.calculated.paidValue = paidInsts.reduce((sum, i) => sum + i.valor, 0);
             item.calculated.outstandingValue = pendingInsts.reduce((sum, i) => sum + i.valor, 0);
             
-            if (item.calculated.status !== 'Transferido' && item.calculated.status !== 'Desistido') {
+            if (item.calculated.status === 'Transferido' || item.calculated.status === 'Desistido') {
+                item.calculated.outstandingValue = 0;
+            } else {
                 if (item.calculated.remainingCount === 0 && item.calculated.paidCount > 0) {
                     item.calculated.status = 'Quitado';
                 } else if (item.calculated.remainingCount > 0) {
