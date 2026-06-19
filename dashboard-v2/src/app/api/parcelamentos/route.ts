@@ -83,15 +83,16 @@ function generateInstallments(
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     const safeDay = Math.min(dayOfVenc, lastDay);
     const vencimento = new Date(d.getFullYear(), d.getMonth(), safeDay);
+    const vencDate = vencimento.toISOString().split('T')[0];
     const isPaid = i < parcelasPagas;
 
     installments.push({
       debt_id: debtId,
       numero: i + 1,
       valor: valorParcela,
-      vencimento: vencimento.toISOString().split('T')[0],
+      vencimento: vencDate,
       pago: isPaid,
-      data_pagamento: isPaid ? vencimento.toISOString().split('T')[0] : null,
+      data_pagamento: isPaid ? vencDate : null,
       observacao: null,
     });
   }
@@ -190,12 +191,12 @@ export async function GET() {
       let finalFormat = format || '';
       let finalType = debt.categoria || '';
 
-      if (FORMAT_OPTIONS.includes(catNorm)) {
-        finalFormat = debt.categoria;
-        finalType = typeFromObs || 'ATIVOS';
-      } else {
-        finalType = debt.categoria;
-        if (!finalFormat && typeFromObs) {
+      // Fallback para dados legados: Se o JSON 'format' estiver vazio, tenta inferir das colunas antigas
+      if (!format) {
+        if (FORMAT_OPTIONS.includes(catNorm)) {
+          finalFormat = debt.categoria;
+          finalType = typeFromObs || 'ATIVOS';
+        } else if (typeFromObs) {
           finalFormat = typeFromObs;
         }
       }

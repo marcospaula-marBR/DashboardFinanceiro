@@ -1210,6 +1210,9 @@ function renderEditInstallments() {
                 <input type="date" class="form-control form-control-sm" style="width: 135px;" value="${inst.vencimento || ''}" onchange="changeInstallmentDate(${idx}, this.value)">
             </td>
             <td>
+                <input type="date" class="form-control form-control-sm" style="width: 135px;" value="${inst.data_pagamento || ''}" onchange="changeInstallmentPaymentDate(${idx}, this.value)" ${inst.pago ? '' : 'disabled'}>
+            </td>
+            <td>
                 <div class="input-group input-group-sm" style="width: 120px;">
                     <span class="input-group-text">R$</span>
                     <input type="number" step="0.01" class="form-control" value="${inst.valor || 0}" onchange="changeInstallmentValue(${idx}, this.value)">
@@ -1732,6 +1735,12 @@ function applyBatchAddInstallments() {
 function changeInstallmentDate(idx, value) {
     if (activeContract && activeContract.installments[idx]) {
         activeContract.installments[idx].vencimento = value;
+    }
+}
+
+function changeInstallmentPaymentDate(idx, value) {
+    if (activeContract && activeContract.installments[idx]) {
+        activeContract.installments[idx].data_pagamento = value;
     }
 }
 

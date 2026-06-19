@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.56";
+export const APP_VERSION = "v.02.46.57";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.57 - Fix: Corrige fallback legado que impedia o salvamento de Formato e Tipo; Adiciona campo para edição de Data de Pagamento da Transação individual no modal; Corrige criação de parcelas pagas para usar a data de vencimento em vez da data atual.",
   "v.02.46.56 - Refactor: Separa Categoria em Tipo de Operação, Formato de Pagamento e Banco/Cartão, com autocompletar dinâmico e novos filtros laterais.",
   "v.02.46.55 - Feat: Adiciona campo de 'Observações (opcional)' no modal de Novo/Editar Contrato, integrado ao campo Detalhes do Supabase.",
   "v.02.46.54 - Fix: Corrige fallback indevido do tryAutoLoad para o CSV local quando o Supabase está vazio, permitindo que a tela fique corretamente em branco após limpeza.",
