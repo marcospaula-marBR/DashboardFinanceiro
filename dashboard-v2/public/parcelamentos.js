@@ -70,12 +70,12 @@ function tryAutoLoad() {
             return response.json();
         })
         .then(data => {
-            if (data && data.length > 0) {
+            if (Array.isArray(data)) {
                 console.log(`✅ Carregados ${data.length} parcelamentos do Supabase!`);
                 processData(data);
                 document.getElementById('lastUpdate').innerText = "Sincronizado com Supabase em: " + new Date().toLocaleTimeString();
             } else {
-                console.log("Base online vazia, recorrendo ao arquivo local...");
+                console.log("Resposta inválida, recorrendo ao arquivo local...");
                 loadLocalCSV();
             }
         })

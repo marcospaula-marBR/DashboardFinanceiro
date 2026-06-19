@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.53";
+export const APP_VERSION = "v.02.46.54";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.54 - Fix: Corrige fallback indevido do tryAutoLoad para o CSV local quando o Supabase está vazio, permitindo que a tela fique corretamente em branco após limpeza.",
   "v.02.46.53 - Feat: Adiciona o status 'Carência' quando a primeira parcela está a mais de 90 dias de distância do vencimento.",
   "v.02.46.52 - Fix: Corrige falha de salvamento (erro de data/hora fora do intervalo) formatando data_inicio para o padrão ISO no servidor; refatora a inserção de categorias customizadas substituindo o datalist por um select dinâmico com opção de cadastro manual.",
   "v.02.46.51 - Feat: Permite inserção manual e em lote de parcelas no modal de edição, suporte a alteração de datas e valores individuais das parcelas, datalist dinâmico para novas categorias no modal e nos filtros, e resolve bug de contagem de parcelas quitadas/desistidas usando a lista de parcelas como fonte de verdade primária.",
