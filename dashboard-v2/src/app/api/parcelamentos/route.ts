@@ -404,7 +404,7 @@ export async function PUT(req: Request) {
 
     if (total_parcelas !== undefined) updateObj.total_parcelas = total_parcelas;
     if (valor_parcela !== undefined) updateObj.valor_parcela = valor_parcela;
-    if (data_inicio !== undefined) updateObj.data_inicio = data_inicio;
+    if (data_inicio !== undefined) updateObj.data_inicio = parseDateToISO(data_inicio);
     if (data_vencimento_dia !== undefined) updateObj.data_vencimento_dia = data_vencimento_dia || null;
 
     const { error: updateError } = await supabase

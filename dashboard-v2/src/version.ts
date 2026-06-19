@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.51";
+export const APP_VERSION = "v.02.46.52";
 export const VERSION_DATE = "2026-06-19";
 export const VERSION_CHANGELOG = [
+  "v.02.46.52 - Fix: Corrige falha de salvamento (erro de data/hora fora do intervalo) formatando data_inicio para o padrão ISO no servidor; refatora a inserção de categorias customizadas substituindo o datalist por um select dinâmico com opção de cadastro manual.",
   "v.02.46.51 - Feat: Permite inserção manual e em lote de parcelas no modal de edição, suporte a alteração de datas e valores individuais das parcelas, datalist dinâmico para novas categorias no modal e nos filtros, e resolve bug de contagem de parcelas quitadas/desistidas usando a lista de parcelas como fonte de verdade primária.",
   "v.02.46.50 - Fix: Corrige contagem de parcelas pagas no Progresso (PAG/REST) no detalhamento extraindo o valor diretamente da API/CSV em vez de calcular por diferença, evitando erros em contratos com parcelas desistidas.",
   "v.02.46.49 - Fix: Corrige o preenchimento de opções no filtro Categoria (antigo Formato) mapeando e tratando dados legados de observacoes invertidos entre tipo e formato.",

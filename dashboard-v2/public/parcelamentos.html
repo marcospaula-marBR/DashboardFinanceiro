@@ -290,18 +290,15 @@
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Categoria (Tipo)</label>
-                                    <input type="text" class="form-control" id="editCategory" list="categoriesDatalist" placeholder="Selecione ou digite...">
-                                    <datalist id="categoriesDatalist">
-                                        <option value="Financiamento">
-                                        <option value="Empréstimo">
-                                        <option value="Consórcio">
-                                        <option value="Leasing">
-                                        <option value="Cartão">
-                                        <option value="Fornecedor">
-                                        <option value="Mútuo">
-                                        <option value="Outros">
-                                    </datalist>
+                                    <select class="form-select" id="editCategory" onchange="toggleCustomCategoryField(this.value)">
+                                        <!-- Populated dynamically -->
+                                    </select>
                                 </div>
+                            </div>
+
+                            <div class="mb-3" id="editCategoryCustomContainer" style="display: none;">
+                                <label class="form-label font-semibold text-danger">Nova Categoria (Tipo)</label>
+                                <input type="text" class="form-control" id="editCategoryCustom" placeholder="Digite o nome da nova categoria">
                             </div>
 
                             <div class="mb-3">

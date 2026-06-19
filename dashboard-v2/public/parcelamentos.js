@@ -505,10 +505,6 @@ function processData(data) {
     if (document.getElementById('filterEmpresa')) populateSelect('filterEmpresa', [...new Set(cleanData.map(d => d.company))].filter(Boolean).sort());
     populateSelect('filterStatus', [...new Set(cleanData.map(d => d.calculated.status))].sort());
 
-    if (typeof populateCategoriesDatalist === 'function') {
-        populateCategoriesDatalist();
-    }
-
     applyFilters();
 }
 
@@ -1061,7 +1057,7 @@ function openAddModal() {
     document.getElementById('editDebtId').value = '';
     document.getElementById('editDescription').value = '';
     document.getElementById('editCompany').value = 'MAR BRASIL';
-    document.getElementById('editCategory').value = 'Outros';
+    populateEditCategoryOptions('Outros');
     document.getElementById('editCredor').value = '';
     document.getElementById('editTotalValue').value = '';
     document.getElementById('editStatus').value = 'Ativo';
@@ -1106,7 +1102,7 @@ function openEditModal(debtId) {
     document.getElementById('editDebtId').value = activeContract.id;
     document.getElementById('editDescription').value = activeContract.description || '';
     document.getElementById('editCompany').value = activeContract.company || 'MAR BRASIL';
-    document.getElementById('editCategory').value = activeContract.category || 'Outros';
+    populateEditCategoryOptions(activeContract.category || 'Outros');
     document.getElementById('editCredor').value = activeContract.raw?.['FORMA DE PAGTO'] || activeContract.credor || '';
     document.getElementById('editTotalValue').value = activeContract.totalValue || 0;
     document.getElementById('editStatus').value = activeContract.calculated?.status || 'Ativo';
@@ -1283,7 +1279,15 @@ function saveContractChangesToServer() {
     // Collect values
     const description = document.getElementById('editDescription').value;
     const company = document.getElementById('editCompany').value;
-    const category = document.getElementById('editCategory').value;
+    let category = document.getElementById('editCategory').value;
+    if (category === '__custom__') {
+        category = document.getElementById('editCategoryCustom').value.trim();
+        if (!category) {
+            alert("Por favor, digite o nome da nova categoria.");
+            if (overlay) overlay.classList.add('d-none');
+            return;
+        }
+    }
     const credor = document.getElementById('editCredor').value;
     const totalValue = parseFloat(document.getElementById('editTotalValue').value) || 0;
     const status = document.getElementById('editStatus').value;
@@ -1698,20 +1702,55 @@ function changeInstallmentObs(idx, value) {
     }
 }
 
-function populateCategoriesDatalist() {
-    const datalist = document.getElementById('categoriesDatalist');
-    if (!datalist) return;
+function populateEditCategoryOptions(currentValue) {
+    const select = document.getElementById('editCategory');
+    if (!select) return;
     
     const defaults = ["Financiamento", "Empréstimo", "Consórcio", "Leasing", "Cartão", "Fornecedor", "Mútuo", "Outros"];
     const current = state.rawData.map(d => d.category).filter(Boolean);
     const unique = [...new Set([...defaults, ...current])].sort();
     
-    datalist.innerHTML = '';
+    select.innerHTML = '';
     unique.forEach(c => {
-        const option = document.createElement('option');
-        option.value = c;
-        datalist.appendChild(option);
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        select.appendChild(opt);
     });
+    
+    // Add custom option
+    const optCustom = document.createElement('option');
+    optCustom.value = '__custom__';
+    optCustom.textContent = '+ Cadastrar Nova Categoria...';
+    select.appendChild(optCustom);
+    
+    // Set value
+    if (unique.includes(currentValue)) {
+        select.value = currentValue;
+        document.getElementById('editCategoryCustomContainer').style.display = 'none';
+    } else if (currentValue) {
+        const opt = document.createElement('option');
+        opt.value = currentValue;
+        opt.textContent = currentValue;
+        select.insertBefore(opt, optCustom);
+        select.value = currentValue;
+        document.getElementById('editCategoryCustomContainer').style.display = 'none';
+    } else {
+        select.value = 'Outros';
+        document.getElementById('editCategoryCustomContainer').style.display = 'none';
+    }
+}
+
+function toggleCustomCategoryField(value) {
+    const container = document.getElementById('editCategoryCustomContainer');
+    if (!container) return;
+    if (value === '__custom__') {
+        container.style.display = 'block';
+        document.getElementById('editCategoryCustom').value = '';
+        document.getElementById('editCategoryCustom').focus();
+    } else {
+        container.style.display = 'none';
+    }
 }
 
 window.openAddModal = openAddModal;
@@ -1732,5 +1771,6 @@ window.applyBatchAddInstallments = applyBatchAddInstallments;
 window.changeInstallmentDate = changeInstallmentDate;
 window.changeInstallmentValue = changeInstallmentValue;
 window.changeInstallmentObs = changeInstallmentObs;
-window.populateCategoriesDatalist = populateCategoriesDatalist;
+window.populateEditCategoryOptions = populateEditCategoryOptions;
+window.toggleCustomCategoryField = toggleCustomCategoryField;
 
