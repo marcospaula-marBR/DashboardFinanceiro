@@ -619,3 +619,37 @@
     font-weight: 500;
 }
 
+/* ========================================
+   FIX: Edit/Create Contract Modal Fields
+   ======================================== */
+
+/* Garantir texto escuro nos campos do modal de parcelamentos */
+#editContractModal .form-control,
+#editContractModal .form-select,
+#editContractModal input,
+#editContractModal select,
+#editContractModal textarea {
+    color: #212529 !important;
+    background-color: #fff !important;
+}
+
+#editContractModal .form-control:focus,
+#editContractModal .form-select:focus {
+    color: #212529 !important;
+    background-color: #fff !important;
+    border-color: #F2911B;
+    box-shadow: 0 0 0 0.25rem rgba(242, 145, 27, 0.25);
+}
+
+#editContractModal .form-control[readonly] {
+    background-color: #e9ecef !important;
+    color: #495057 !important;
+}
+
+/* Labels do formulário */
+#editContractModal .form-label {
+    color: #212529 !important;
+    font-weight: 500;
+}
+
+
