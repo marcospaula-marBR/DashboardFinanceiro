@@ -454,6 +454,16 @@ function processData(data) {
                     item.calculated.status = 'Quitado';
                 } else if (item.calculated.remainingCount > 0) {
                     item.calculated.status = 'Pagando';
+                    
+                    const firstInst = pendingInsts.length > 0 ? pendingInsts[0] : item.installments[0];
+                    if (firstInst && firstInst.vencimento) {
+                        const firstDate = new Date(firstInst.vencimento + 'T00:00:00');
+                        const diffTime = firstDate - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        if (diffDays > 90) {
+                            item.calculated.status = 'Carência';
+                        }
+                    }
                 }
             }
         } else {
@@ -479,6 +489,12 @@ function processData(data) {
                 if (item.calculated.remainingCount <= 0) {
                     item.calculated.status = 'Quitado';
                     item.calculated.outstandingValue = 0;
+                } else {
+                    const diffTime = start - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays > 90) {
+                        item.calculated.status = 'Carência';
+                    }
                 }
             } else {
                 if (item.calculated.status === 'Transferido' || item.calculated.status === 'Desistido') {
@@ -749,6 +765,7 @@ function updateTable(data) {
         if (item.calculated.status.includes('Pagando') || item.calculated.status === 'Ativo') statusClass = 'bg-warning text-dark';
         if (item.calculated.status === 'Quitado') statusClass = 'bg-success';
         if (item.calculated.status === 'Desistido') statusClass = 'bg-danger';
+        if (item.calculated.status === 'Carência') statusClass = 'bg-info text-dark';
 
         const actionBtn = item.id ?
             '<td class="text-center"><button class="btn btn-sm btn-outline-primary" onclick="openEditModal(\'' + item.id + '\')"><i class="bi bi-pencil-fill"></i></button></td>' :
