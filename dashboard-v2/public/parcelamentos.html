@@ -196,8 +196,10 @@
         <!-- Detailed Table -->
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-table me-2 text-primary"></i>Detalhamento dos Parcelamentos
-                </h6>
+                <h6 class="mb-0 fw-bold"><i class="bi bi-table me-2 text-primary"></i>Detalhamento dos Parcelamentos</h6>
+                <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+                    <i class="bi bi-plus-circle me-1"></i>Novo Contrato
+                </button>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -322,7 +324,7 @@
                             </div>
 
                             <!-- Prepayment/Amortization section -->
-                            <div class="card bg-light border-0 mt-4">
+                            <div class="card bg-light border-0 mt-4" id="amortizationContainer">
                                 <div class="card-body">
                                     <h6 class="fw-bold mb-2 text-danger"><i class="bi bi-piggy-bank me-2"></i>Amortizar / Antecipar</h6>
                                     <p class="small text-muted mb-3">Abata o saldo devedor amortizando um montante financeiro.</p>
@@ -348,7 +350,7 @@
                         </div>
 
                         <!-- Right Panel: Installments Grid -->
-                        <div class="col-lg-7">
+                        <div class="col-lg-7" id="editInstallmentsPanel">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6 class="fw-bold mb-0 text-primary">Cronograma de Parcelas</h6>
                                 <div class="form-check form-switch">
@@ -372,6 +374,45 @@
                                         <!-- Installments populated by JS -->
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+
+                        <!-- Creation Panel (Visible only when creating new contract) -->
+                        <div class="col-lg-7" id="creationPanel" style="display: none;">
+                            <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">Configuração do Cronograma</h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label font-semibold">Data de Início do Contrato</label>
+                                    <input type="date" class="form-control" id="newStartDate" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label font-semibold">Dia do Vencimento das Parcelas</label>
+                                    <input type="number" class="form-control" id="newDueDay" min="1" max="31" placeholder="Ex: 10" required>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label font-semibold">Quantidade de Parcelas</label>
+                                    <input type="number" class="form-control" id="newTotalInstallments" min="1" placeholder="Ex: 12" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label font-semibold">Valor de Cada Parcela</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="number" step="0.01" class="form-control" id="newInstallmentValue" placeholder="Ex: 1500.00" required>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label font-semibold">Parcelas Já Pagas (Opcional)</label>
+                                <input type="number" class="form-control" id="newPaidCount" min="0" value="0" placeholder="Ex: 3 (marcará as 3 primeiras como pagas)">
+                            </div>
+                            
+                            <div class="alert alert-info border-0 small mt-3">
+                                <i class="bi bi-info-circle me-1"></i> As parcelas serão geradas mensalmente a partir da data de início informada.
                             </div>
                         </div>
                     </div>

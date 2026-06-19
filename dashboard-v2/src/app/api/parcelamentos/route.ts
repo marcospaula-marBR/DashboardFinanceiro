@@ -191,17 +191,77 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const rows = await req.json();
+    const payload = await req.json();
 
-    if (!Array.isArray(rows)) {
-      return NextResponse.json({ error: 'Body must be an array of rows' }, { status: 400 });
+    // 1. Single contract creation mode
+    if (!Array.isArray(payload)) {
+      const {
+        descricao,
+        empresa,
+        categoria,
+        credor,
+        valor_total,
+        status,
+        observacoes,
+        startDate,
+        dueDay,
+        totalInstallments,
+        installmentValue,
+        paidCount
+      } = payload;
+
+      // Insert debt header
+      const { data: inserted, error: insertError } = await supabase
+        .from('debts')
+        .insert({
+          empresa,
+          descricao,
+          credor,
+          categoria,
+          valor_total: valor_total || (installmentValue * totalInstallments),
+          total_parcelas: totalInstallments,
+          valor_parcela: installmentValue,
+          data_inicio: startDate,
+          data_vencimento_dia: dueDay || null,
+          status: status || 'Ativo',
+          observacoes,
+        })
+        .select()
+        .single();
+
+      if (insertError || !inserted) {
+        throw new Error(insertError?.message || 'Failed to insert debt');
+      }
+
+      // Generate and insert installments if totalInstallments > 0
+      if (totalInstallments > 0) {
+        const installments = generateInstallments(
+          inserted.id,
+          totalInstallments,
+          installmentValue,
+          startDate,
+          dueDay,
+          paidCount
+        );
+
+        const { error: instError } = await supabase
+          .from('debt_installments')
+          .insert(installments);
+
+        if (instError) {
+          throw new Error(instError.message);
+        }
+      }
+
+      return NextResponse.json({ success: true, id: inserted.id });
     }
 
+    // 2. CSV Import Mode (wipes and inserts)
     // Clean old records first
     await supabase.from('debt_installments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('debts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-    for (const row of rows) {
+    for (const row of payload) {
       const descricao = getValue(row, ['Ativos e bens', 'Ativos', 'Descrição', 'Item', 'Objeto', 'Nome']);
       const empresa = getValue(row, ['empresa', 'Empresa', 'Fornecedor', 'Credor']);
       const credor = getValue(row, ['FORMA DE PAGTO', 'forma_pagto']);

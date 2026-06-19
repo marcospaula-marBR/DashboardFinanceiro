@@ -366,6 +366,8 @@ function processData(data) {
         };
 
         const item = {
+            id: row.id || '',
+            installments: row.installments || [],
             raw: row,
             description: getValue(row, ['Ativos e bens', 'Ativos', 'Descrição', 'Item', 'Objeto', 'Nome'], 'description'),
             format: getValue(row, ['formato', 'Formato'], 'format'),
@@ -928,6 +930,51 @@ window.exportToPDF = exportToPDF;
 // ========================================
 let activeContract = null;
 
+function openAddModal() {
+    activeContract = {
+        id: '',
+        description: '',
+        company: 'MAR BRASIL',
+        category: 'Outros',
+        credor: '',
+        totalValue: 0,
+        calculated: { status: 'Ativo' },
+        installments: []
+    };
+    
+    // Set modal title to "Novo Contrato"
+    const titleEl = document.querySelector('#editContractModal .modal-title');
+    if (titleEl) {
+        titleEl.innerHTML = '<i class="bi bi-plus-square-fill me-2 text-primary"></i>Novo Contrato';
+    }
+
+    // Reset inputs
+    document.getElementById('editDebtId').value = '';
+    document.getElementById('editDescription').value = '';
+    document.getElementById('editCompany').value = 'MAR BRASIL';
+    document.getElementById('editCategory').value = 'Outros';
+    document.getElementById('editCredor').value = '';
+    document.getElementById('editTotalValue').value = '';
+    document.getElementById('editStatus').value = 'Ativo';
+
+    // Clear creation inputs
+    document.getElementById('newStartDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('newDueDay').value = new Date().getDate();
+    document.getElementById('newTotalInstallments').value = '';
+    document.getElementById('newInstallmentValue').value = '';
+    document.getElementById('newPaidCount').value = '0';
+
+    // Hide edit-only panels and show creation panel
+    document.getElementById('editInstallmentsPanel').style.display = 'none';
+    document.getElementById('creationPanel').style.display = 'block';
+    document.getElementById('amortizationContainer').style.display = 'none';
+    document.getElementById('btnDeleteContract').style.display = 'none';
+
+    // Show Modal
+    const modal = new bootstrap.Modal(document.getElementById('editContractModal'));
+    modal.show();
+}
+
 function openEditModal(debtId) {
     activeContract = state.rawData.find(d => d.id === debtId);
     if (!activeContract) {
@@ -937,6 +984,12 @@ function openEditModal(debtId) {
     
     // Deep clone activeContract to allow cancelation
     activeContract = JSON.parse(JSON.stringify(activeContract));
+
+    // Set modal title to "Editar Contrato"
+    const titleEl = document.querySelector('#editContractModal .modal-title');
+    if (titleEl) {
+        titleEl.innerHTML = '<i class="bi bi-pencil-square me-2 text-primary"></i>Editar Contrato e Cronograma';
+    }
 
     document.getElementById('editDebtId').value = activeContract.id;
     document.getElementById('editDescription').value = activeContract.description || '';
@@ -948,6 +1001,12 @@ function openEditModal(debtId) {
     
     // Clear amortization value
     document.getElementById('amortizationValue').value = '';
+
+    // Show edit-only panels and hide creation panel
+    document.getElementById('editInstallmentsPanel').style.display = 'block';
+    document.getElementById('creationPanel').style.display = 'none';
+    document.getElementById('amortizationContainer').style.display = 'block';
+    document.getElementById('btnDeleteContract').style.display = 'block';
 
     // Render installments
     renderEditInstallments();
@@ -1067,33 +1126,99 @@ function applyAmortizationMath() {
 function saveContractChangesToServer() {
     if (!activeContract) return;
 
+    const debtId = document.getElementById('editDebtId').value;
+    const isNew = !debtId;
+
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) overlay.classList.remove('d-none');
 
-    // Collect edited values from fields
-    const updatedContract = {
-        id: activeContract.id,
-        descricao: document.getElementById('editDescription').value,
-        empresa: document.getElementById('editCompany').value,
-        categoria: document.getElementById('editCategory').value,
-        credor: document.getElementById('editCredor').value,
-        valor_total: parseFloat(document.getElementById('editTotalValue').value) || 0,
-        status: document.getElementById('editStatus').value,
-        observacoes: JSON.stringify({
-            details: activeContract.raw?.['Detalhes'] || '',
-            format: activeContract.raw?.['FORMATO'] || '',
-            doc: document.getElementById('editCredor').value,
-            cc: activeContract.raw?.['CENTRO DE CUSTO'] || ''
-        }),
-        installments: activeContract.installments
-    };
+    // Collect values
+    const description = document.getElementById('editDescription').value;
+    const company = document.getElementById('editCompany').value;
+    const category = document.getElementById('editCategory').value;
+    const credor = document.getElementById('editCredor').value;
+    const totalValue = parseFloat(document.getElementById('editTotalValue').value) || 0;
+    const status = document.getElementById('editStatus').value;
+
+    if (!description.trim()) {
+        alert("Por favor, preencha a descrição do contrato.");
+        if (overlay) overlay.classList.add('d-none');
+        return;
+    }
+
+    let payload = {};
+
+    if (isNew) {
+        // Collect generation parameters
+        const startDate = document.getElementById('newStartDate').value;
+        const dueDay = parseInt(document.getElementById('newDueDay').value) || 1;
+        const totalInstallments = parseInt(document.getElementById('newTotalInstallments').value) || 0;
+        const installmentValue = parseFloat(document.getElementById('newInstallmentValue').value) || 0;
+        const paidCount = parseInt(document.getElementById('newPaidCount').value) || 0;
+
+        if (!startDate) {
+            alert("Por favor, preencha a data de início.");
+            if (overlay) overlay.classList.add('d-none');
+            return;
+        }
+        if (totalInstallments <= 0) {
+            alert("Por favor, preencha a quantidade de parcelas.");
+            if (overlay) overlay.classList.add('d-none');
+            return;
+        }
+        if (installmentValue <= 0) {
+            alert("Por favor, preencha o valor da parcela.");
+            if (overlay) overlay.classList.add('d-none');
+            return;
+        }
+
+        payload = {
+            isNew: true,
+            descricao: description,
+            empresa: company,
+            categoria: category,
+            credor: credor,
+            valor_total: totalValue || (installmentValue * totalInstallments), // auto-calc if 0
+            status: status,
+            observacoes: JSON.stringify({
+                details: '',
+                format: '',
+                doc: credor,
+                cc: ''
+            }),
+            startDate,
+            dueDay,
+            totalInstallments,
+            installmentValue,
+            paidCount
+        };
+    } else {
+        payload = {
+            id: debtId,
+            descricao: description,
+            empresa: company,
+            categoria: category,
+            credor: credor,
+            valor_total: totalValue,
+            status: status,
+            observacoes: JSON.stringify({
+                details: activeContract.raw?.['Detalhes'] || '',
+                format: activeContract.raw?.['FORMATO'] || '',
+                doc: credor,
+                cc: activeContract.raw?.['CENTRO DE CUSTO'] || ''
+            }),
+            installments: activeContract.installments
+        };
+    }
+
+    const method = isNew ? 'POST' : 'PUT';
 
     fetch('/api/parcelamentos', {
-        method: 'PUT',
+        method: method,
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(updatedContract)
+        body: JSON.stringify(payload)
     })
     .then(response => {
         if (!response.ok) throw new Error("Falha ao salvar alterações");
@@ -1106,7 +1231,7 @@ function saveContractChangesToServer() {
         const modal = bootstrap.Modal.getInstance(modalEl);
         if (modal) modal.hide();
 
-        alert("Alterações salvas com sucesso!");
+        alert(isNew ? "Contrato criado com sucesso!" : "Alterações salvas com sucesso!");
         
         tryAutoLoad();
     })
@@ -1152,6 +1277,7 @@ function deleteContractFromServer() {
     });
 }
 
+window.openAddModal = openAddModal;
 window.openEditModal = openEditModal;
 window.toggleInstallment = toggleInstallment;
 window.toggleAllInstallments = toggleAllInstallments;
