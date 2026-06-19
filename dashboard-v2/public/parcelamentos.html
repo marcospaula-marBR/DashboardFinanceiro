@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <script src="auth-check.js?v=02.46.47"></script>
+    <script src="auth-check.js?v=02.46.48"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parcelamentos - Mar Brasil</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -22,11 +22,11 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="styles.css?v=02.46.47">
-    <link rel="stylesheet" href="custom-fixes.css?v=02.46.47">
+    <link rel="stylesheet" href="styles.css?v=02.46.48">
+    <link rel="stylesheet" href="custom-fixes.css?v=02.46.48">
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="Favicon.png">
-    <script src="version.js?v=02.46.47"></script>
+    <script src="version.js?v=02.46.48"></script>
 </head>
 
 <body>
@@ -59,14 +59,14 @@
                 <h6 class="text-uppercase text-white-50 mb-3"><i class="bi bi-funnel me-2"></i>Filtros</h6>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Categoria (Tipo)</label>
+                    <label class="form-label text-white">Tipo</label>
                     <select class="form-select form-select-sm" id="filterCategoria" multiple>
                         <!-- Options populated by JS -->
                     </select>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Formato</label>
+                    <label class="form-label text-white">Categoria</label>
                     <select class="form-select form-select-sm" id="filterFormato" multiple>
                         <!-- Options populated by JS -->
                     </select>
@@ -202,12 +202,16 @@
                 </button>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
+                <!-- Top Scrollbar Helper -->
+                <div id="top-scrollbar-container" style="overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid #dee2e6; display: none; position: sticky; top: 0; z-index: 100; background: white;">
+                    <div id="top-scrollbar-dummy" style="height: 1px;"></div>
+                </div>
+                <div class="table-responsive" id="actual-table-responsive">
                     <table class="table table-hover table-striped align-middle mb-0" id="parcelasTable">
                         <thead class="table-light sticky-top">
                             <tr>
                                 <th>Descrição/Ativo</th>
-                                <th>Categoria</th>
+                                <th>Tipo</th>
                                 <th>Início/Fim</th>
                                 <th class="text-end">Total Contrato</th>
                                 <th class="text-end">Valor Parcela</th>
@@ -330,11 +334,23 @@
                                     <p class="small text-muted mb-3">Abata o saldo devedor amortizando um montante financeiro.</p>
                                     
                                     <div class="mb-3">
+                                        <label class="form-label small">Data da Transação</label>
+                                        <input type="date" class="form-control form-control-sm" id="amortizationDate">
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="amortizationIsEarlyPayoff" onchange="toggleEarlyPayoffView(this)">
+                                        <label class="form-check-label small fw-bold text-danger" for="amortizationIsEarlyPayoff">
+                                            Quitação Antecipada (Total)
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="mb-3" id="amortizationValueGroup">
                                         <label class="form-label small">Valor para Amortizar (R$)</label>
                                         <input type="number" step="0.01" class="form-control form-control-sm" id="amortizationValue" placeholder="Ex: 5000.00">
                                     </div>
                                     
-                                    <div class="mb-3">
+                                    <div class="mb-3" id="amortizationStrategyGroup">
                                         <label class="form-label small">Estratégia de Amortização</label>
                                         <select class="form-select form-select-sm" id="amortizationStrategy">
                                             <option value="reduceTerm">Reduzir Prazo (Quitar parcelas do fim)</option>
@@ -343,7 +359,7 @@
                                     </div>
                                     
                                     <button type="button" class="btn btn-danger btn-sm w-100" onclick="applyAmortizationMath()">
-                                        <i class="bi bi-check-circle me-1"></i>Aplicar Amortização
+                                        <i class="bi bi-check-circle me-1"></i>Aplicar Transação
                                     </button>
                                 </div>
                             </div>
@@ -432,6 +448,37 @@
         </div>
     </div>
 
+    <!-- Month Details Modal -->
+    <div class="modal fade" id="monthDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-md">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="monthDetailsModalTitle">Detalhes de Pagamentos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped align-middle mb-0" id="monthDetailsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Contrato / Empresa</th>
+                                    <th class="text-center">Nº Parcela</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loadingOverlay"
         class="d-none position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-flex justify-content-center align-items-center"
@@ -449,7 +496,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <script src="parcelamentos.js?v=02.46.47"></script>
+    <script src="parcelamentos.js?v=02.46.48"></script>
     <script>
         // Version Updater
         document.addEventListener('DOMContentLoaded', () => {
@@ -470,8 +517,8 @@
     </script>
 
     <!-- BrisinhAI Scripts -->
-    <script src="ai.service.v2.js?v=02.46.47"></script>
-    <script src="brisinhai.js?v=02.46.47"></script>
+    <script src="ai.service.v2.js?v=02.46.48"></script>
+    <script src="brisinhai.js?v=02.46.48"></script>
 </body>
 
 </html>

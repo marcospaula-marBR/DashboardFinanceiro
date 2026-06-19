@@ -126,7 +126,7 @@ export async function GET() {
     const mappedRows = debts.map((debt) => {
       const insts = instMap.get(debt.id) || [];
       const paidInsts = insts.filter(i => i.pago);
-      const pendingInsts = insts.filter(i => !i.pago);
+      const pendingInsts = insts.filter(i => !i.pago && i.observacao !== 'Desistido');
       const paidCount = paidInsts.length;
       const remainingCount = pendingInsts.length;
       const paidValue = paidInsts.reduce((sum, i) => sum + i.valor, 0);

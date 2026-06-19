@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
         registerPlugins();
         initEventListeners();
         initCharts();
+        initDoubleScroll();
         console.log("Initialization complete");
         tryAutoLoad();
     } catch (e) {
@@ -200,6 +201,16 @@ function initCharts() {
                     grid: { display: false }
                 },
                 y: { beginAtZero: true, ticks: { callback: (v) => formatCurrencyCompact(v) } }
+            },
+            onClick: (event, elements) => {
+                if (elements && elements.length > 0) {
+                    const index = elements[0].index;
+                    const chart = state.charts.evolution;
+                    const monthLabel = chart.data.labels[index];
+                    if (window.showMonthDetailsModal) {
+                        window.showMonthDetailsModal(index, monthLabel);
+                    }
+                }
             }
         }
     };
@@ -416,8 +427,8 @@ function processData(data) {
         else if (['pagando', 'ativo', 'em andamento', 'vigente', 'aberto'].some(s => statusNorm.includes(s))) {
             isActive = true;
             item.calculated.status = 'Pagando';
-        } else if (['quitado', 'finalizado', 'concluido', 'pago', 'encerrado', 'transferido'].some(function (s) { return statusNorm.includes(s); })) {
-            item.calculated.status = statusNorm.includes('transferido') ? 'Transferido' : 'Quitado';
+        } else if (['quitado', 'finalizado', 'concluido', 'pago', 'encerrado', 'transferido', 'desistido'].some(function (s) { return statusNorm.includes(s); })) {
+            item.calculated.status = statusNorm.includes('transferido') ? 'Transferido' : (statusNorm.includes('desistido') ? 'Desistido' : 'Quitado');
         } else {
             if (start && item.totalValue > 0) {
                 isActive = true;
@@ -449,7 +460,7 @@ function processData(data) {
                 item.calculated.outstandingValue = 0;
             }
         } else {
-            if (item.calculated.status === 'Transferido') {
+            if (item.calculated.status === 'Transferido' || item.calculated.status === 'Desistido') {
                 item.calculated.outstandingValue = 0;
                 item.calculated.remainingCount = 0;
             } else if (normalize(item.calculated.status) === 'quitado') {
@@ -481,8 +492,25 @@ function applyFilters() {
 }
 
 function updateDashboard() {
-    const df = state.filteredData;
+    const df = state.filteredData || [];
     const activeDf = df.filter(r => r.calculated.status.includes('Pagando') || r.calculated.status === 'Ativo');
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    let dueThisMonth = 0;
+    df.forEach(item => {
+        if (item.installments && Array.isArray(item.installments)) {
+            item.installments.forEach(inst => {
+                if (!inst.pago && inst.observacao !== 'Desistido' && inst.vencimento) {
+                    const vencDate = new Date(inst.vencimento + 'T00:00:00');
+                    if (vencDate.getFullYear() === currentYear && vencDate.getMonth() === currentMonth) {
+                        dueThisMonth += inst.valor;
+                    }
+                }
+            });
+        }
+    });
 
     const sortedByValue = [...df].sort((a, b) => b.totalValue - a.totalValue);
     const largestContract = sortedByValue[0];
@@ -536,6 +564,7 @@ function updateDashboard() {
                     <h6 class="text-white-50 small text-uppercase mb-2">Saldo Devedor Total <i class="bi bi-search ms-1"></i></h6>
                     <h3 class="fw-bold mb-0">${formatCurrency(currentTotalOutstanding)}</h3>
                     <div class="small mt-2 text-white-50">${activeDf.length} contratos ativos</div>
+                    <div class="small mt-1 text-white-50">Vence este mês: <span class="fw-bold text-white">${formatCurrency(dueThisMonth)}</span></div>
                 </div>
             </div>
         </div>
@@ -569,17 +598,63 @@ function updateDashboard() {
     if (state.charts.evolution) {
         const labels = [];
         const values = [];
-        const today = new Date();
 
-        // Find max duration to project until the end
-        const maxRemaining = activeDf.reduce((max, item) => Math.max(max, item.calculated.remainingCount), 12);
+        // Find the latest vencimento date of all pending installments
+        let maxDate = new Date(currentYear, currentMonth + 11, 1); // default to 12 months ahead
+        df.forEach(item => {
+            if (item.installments && Array.isArray(item.installments)) {
+                item.installments.forEach(inst => {
+                    if (!inst.pago && inst.observacao !== 'Desistido' && inst.vencimento) {
+                        const vencDate = new Date(inst.vencimento + 'T00:00:00');
+                        if (vencDate > maxDate) {
+                            maxDate = vencDate;
+                        }
+                    }
+                });
+            }
+        });
 
-        for (let i = 0; i < maxRemaining; i++) {
-            const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-            const monthlyTotal = activeDf.reduce((sum, item) => (i < item.calculated.remainingCount) ? sum + item.installmentValue : sum, 0);
-            labels.push(d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }));
+        // Compute number of months to project
+        const totalMonths = (maxDate.getFullYear() - currentYear) * 12 + (maxDate.getMonth() - currentMonth) + 1;
+        const projectionMonths = Math.max(12, totalMonths);
+
+        const monthDetailsMap = new Map();
+
+        for (let i = 0; i < projectionMonths; i++) {
+            const targetDate = new Date(currentYear, currentMonth + i, 1);
+            const targetYear = targetDate.getFullYear();
+            const targetMonth = targetDate.getMonth();
+
+            let monthlyTotal = 0;
+            const monthContracts = [];
+
+            df.forEach(item => {
+                if (item.installments && Array.isArray(item.installments)) {
+                    item.installments.forEach(inst => {
+                        if (!inst.pago && inst.observacao !== 'Desistido' && inst.vencimento) {
+                            const vencDate = new Date(inst.vencimento + 'T00:00:00');
+                            if (vencDate.getFullYear() === targetYear && vencDate.getMonth() === targetMonth) {
+                                monthlyTotal += inst.valor;
+                                monthContracts.push({
+                                    description: item.description,
+                                    company: item.company,
+                                    numero: inst.numero,
+                                    valor: inst.valor,
+                                    vencimento: inst.vencimento
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+
+            const monthLabel = targetDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+            labels.push(monthLabel);
             values.push(monthlyTotal);
+            monthDetailsMap.set(i, monthContracts);
         }
+
+        state.monthDetails = monthDetailsMap;
 
         // Adjust chart container width based on number of labels to allow scroll
         const chartContainer = document.querySelector('#evolutionChart').closest('.chart-container');
@@ -598,7 +673,8 @@ function updateDashboard() {
                 backgroundColor: 'rgba(242, 145, 27, 0.1)',
                 fill: true,
                 tension: 0.4,
-                pointRadius: 2
+                pointRadius: 4,
+                pointHoverRadius: 6
             }]
         };
         state.charts.evolution.update();
@@ -644,6 +720,7 @@ function updateTable(data) {
         var statusClass = 'bg-secondary';
         if (item.calculated.status.includes('Pagando') || item.calculated.status === 'Ativo') statusClass = 'bg-warning text-dark';
         if (item.calculated.status === 'Quitado') statusClass = 'bg-success';
+        if (item.calculated.status === 'Desistido') statusClass = 'bg-danger';
 
         const actionBtn = item.id ?
             '<td class="text-center"><button class="btn btn-sm btn-outline-primary" onclick="openEditModal(\'' + item.id + '\')"><i class="bi bi-pencil-fill"></i></button></td>' :
@@ -956,6 +1033,9 @@ function openAddModal() {
     document.getElementById('editCredor').value = '';
     document.getElementById('editTotalValue').value = '';
     document.getElementById('editStatus').value = 'Ativo';
+    document.getElementById('amortizationDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('amortizationIsEarlyPayoff').checked = false;
+    toggleEarlyPayoffView(document.getElementById('amortizationIsEarlyPayoff'));
 
     // Clear creation inputs
     document.getElementById('newStartDate').value = new Date().toISOString().split('T')[0];
@@ -999,8 +1079,11 @@ function openEditModal(debtId) {
     document.getElementById('editTotalValue').value = activeContract.totalValue || 0;
     document.getElementById('editStatus').value = activeContract.calculated?.status || 'Ativo';
     
-    // Clear amortization value
+    // Clear amortization value and reset dates
     document.getElementById('amortizationValue').value = '';
+    document.getElementById('amortizationDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('amortizationIsEarlyPayoff').checked = false;
+    toggleEarlyPayoffView(document.getElementById('amortizationIsEarlyPayoff'));
 
     // Show edit-only panels and hide creation panel
     document.getElementById('editInstallmentsPanel').style.display = 'block';
@@ -1036,18 +1119,36 @@ function renderEditInstallments() {
         const dateFormatted = inst.vencimento ? 
             inst.vencimento.split('-').reverse().join('/') : '-';
 
-        const statusClass = inst.pago ? 'bg-success' : 'bg-warning text-dark';
-        const statusText = inst.pago ? 'Pago' : 'Pendente';
+        let statusClass = 'bg-secondary';
+        let statusText = 'Pendente';
+        if (inst.pago) {
+            statusClass = 'bg-success';
+            statusText = inst.observacao === 'Quitação Antecipada' ? 'Quitada' : 'Pago';
+        } else if (inst.observacao === 'Postergado') {
+            statusClass = 'bg-info text-dark';
+            statusText = 'Postergado';
+        } else if (inst.observacao === 'Desistido') {
+            statusClass = 'bg-danger';
+            statusText = 'Desistido';
+        }
+
+        const obsText = inst.observacao ? `<div class="small text-muted text-wrap" style="max-width: 180px;" title="${inst.observacao}">${inst.observacao}</div>` : '';
 
         tr.innerHTML = `
             <td class="text-center">
-                <input class="form-check-input inst-checkbox" type="checkbox" 
-                    ${inst.pago ? 'checked' : ''} 
-                    onchange="toggleInstallment(${idx}, this)">
+                <select class="form-select form-select-sm" style="width: 125px; margin: 0 auto;" onchange="changeInstallmentStatus(${idx}, this.value)">
+                    <option value="Pendente" ${!inst.pago && inst.observacao !== 'Postergado' && inst.observacao !== 'Desistido' ? 'selected' : ''}>Pendente</option>
+                    <option value="Pago" ${inst.pago ? 'selected' : ''}>Pago</option>
+                    <option value="Postergado" ${!inst.pago && inst.observacao === 'Postergado' ? 'selected' : ''}>Postergado</option>
+                    <option value="Desistido" ${!inst.pago && inst.observacao === 'Desistido' ? 'selected' : ''}>Desistido</option>
+                </select>
             </td>
             <td>Parcela ${inst.numero}</td>
             <td>${dateFormatted}</td>
-            <td class="text-end fw-semibold">${formatCurrency(inst.valor)}</td>
+            <td class="text-end fw-semibold">
+                ${formatCurrency(inst.valor)}
+                ${obsText}
+            </td>
             <td><span class="badge ${statusClass}">${statusText}</span></td>
         `;
         tbody.appendChild(tr);
@@ -1055,6 +1156,7 @@ function renderEditInstallments() {
 }
 
 function toggleInstallment(idx, checkbox) {
+    // Legacy support (fallback)
     if (activeContract && activeContract.installments[idx]) {
         activeContract.installments[idx].pago = checkbox.checked;
         activeContract.installments[idx].data_pagamento = checkbox.checked ? new Date().toISOString().split('T')[0] : null;
@@ -1067,12 +1169,35 @@ function toggleAllInstallments(checkbox) {
         activeContract.installments.forEach(inst => {
             inst.pago = checkbox.checked;
             inst.data_pagamento = checkbox.checked ? new Date().toISOString().split('T')[0] : null;
+            if (!checkbox.checked && (inst.observacao === 'Postergado' || inst.observacao === 'Desistido' || inst.observacao === 'Quitação Antecipada')) {
+                inst.observacao = null;
+            }
         });
         renderEditInstallments();
     }
 }
 
 function applyAmortizationMath() {
+    const txnDate = document.getElementById('amortizationDate').value || new Date().toISOString().split('T')[0];
+    const isEarlyPayoff = document.getElementById('amortizationIsEarlyPayoff').checked;
+
+    if (isEarlyPayoff) {
+        const pendingInstallments = activeContract.installments.filter(i => !i.pago);
+        if (pendingInstallments.length === 0) {
+            alert("Todas as parcelas deste contrato já estão pagas!");
+            return;
+        }
+        pendingInstallments.forEach(inst => {
+            inst.pago = true;
+            inst.data_pagamento = txnDate;
+            inst.observacao = 'Quitação Antecipada';
+        });
+        document.getElementById('editStatus').value = 'Quitado';
+        alert(`Quitação antecipada aplicada! ${pendingInstallments.length} parcelas foram marcadas como Quitadas.`);
+        renderEditInstallments();
+        return;
+    }
+
     const valInput = document.getElementById('amortizationValue');
     const value = parseFloat(valInput.value);
     if (isNaN(value) || value <= 0) {
@@ -1096,10 +1221,12 @@ function applyAmortizationMath() {
         for (const inst of sortedPending) {
             if (remainingAmortization >= inst.valor) {
                 inst.pago = true;
-                inst.data_pagamento = new Date().toISOString().split('T')[0];
+                inst.data_pagamento = txnDate;
+                inst.observacao = 'Amortizado (Prazo)';
                 remainingAmortization -= inst.valor;
             } else if (remainingAmortization > 0) {
                 inst.valor = Math.max(0, inst.valor - remainingAmortization);
+                inst.observacao = (inst.observacao || '') + ` Amortizado R$ ${remainingAmortization.toFixed(2)} (Prazo)`;
                 remainingAmortization = 0;
             }
             if (remainingAmortization <= 0) break;
@@ -1113,6 +1240,7 @@ function applyAmortizationMath() {
         
         pendingInstallments.forEach(inst => {
             inst.valor = Math.max(0, inst.valor - portion);
+            inst.observacao = (inst.observacao || '') + ` Reduzida R$ ${portion.toFixed(2)} por Amortização em ${txnDate}`;
         });
 
         alert(`Amortização aplicada! R$ ${value.toLocaleString('pt-BR')} foram distribuídos, reduzindo as parcelas restantes.`);
@@ -1277,6 +1405,116 @@ function deleteContractFromServer() {
     });
 }
 
+function changeInstallmentStatus(idx, status) {
+    if (activeContract && activeContract.installments[idx]) {
+        const inst = activeContract.installments[idx];
+        if (status === 'Pago') {
+            inst.pago = true;
+            inst.data_pagamento = inst.data_pagamento || new Date().toISOString().split('T')[0];
+            inst.observacao = null;
+        } else if (status === 'Postergado') {
+            inst.pago = false;
+            inst.data_pagamento = null;
+            inst.observacao = 'Postergado';
+        } else if (status === 'Desistido') {
+            inst.pago = false;
+            inst.data_pagamento = null;
+            inst.observacao = 'Desistido';
+        } else { // Pendente
+            inst.pago = false;
+            inst.data_pagamento = null;
+            inst.observacao = null;
+        }
+        renderEditInstallments();
+    }
+}
+
+function toggleEarlyPayoffView(checkbox) {
+    const valueGroup = document.getElementById('amortizationValueGroup');
+    const strategyGroup = document.getElementById('amortizationStrategyGroup');
+    if (!valueGroup || !strategyGroup) return;
+    if (checkbox.checked) {
+        valueGroup.style.display = 'none';
+        strategyGroup.style.display = 'none';
+    } else {
+        valueGroup.style.display = 'block';
+        strategyGroup.style.display = 'block';
+    }
+}
+
+function showMonthDetailsModal(index, label) {
+    const details = state.monthDetails ? state.monthDetails.get(index) : [];
+    const tbody = document.querySelector('#monthDetailsTable tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    document.getElementById('monthDetailsModalTitle').innerHTML = `<i class="bi bi-calendar-event me-2 text-primary"></i>Parcelas de ${label}`;
+
+    if (!details || details.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted p-3">Nenhum pagamento previsto para este mês.</td></tr>';
+    } else {
+        let total = 0;
+        details.forEach(item => {
+            total += item.valor;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <div class="fw-bold text-wrap" style="max-width: 250px;">${item.description}</div>
+                    <div class="small text-muted">${item.company}</div>
+                </td>
+                <td class="text-center"><span class="badge bg-light text-dark border">Parcela ${item.numero}</span></td>
+                <td class="text-end fw-semibold">${formatCurrency(item.valor)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // Add total row
+        const trTotal = document.createElement('tr');
+        trTotal.className = 'table-light fw-bold';
+        trTotal.innerHTML = `
+            <td colspan="2" class="text-end">TOTAL</td>
+            <td class="text-end">${formatCurrency(total)}</td>
+        `;
+        tbody.appendChild(trTotal);
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('monthDetailsModal'));
+    modal.show();
+}
+
+function initDoubleScroll() {
+    const topScroll = document.getElementById('top-scrollbar-container');
+    const topDummy = document.getElementById('top-scrollbar-dummy');
+    const bottomScroll = document.getElementById('actual-table-responsive');
+    const table = document.getElementById('parcelasTable');
+
+    if (!topScroll || !bottomScroll || !table) return;
+
+    // Sync widths using ResizeObserver
+    const resizeObserver = new ResizeObserver(() => {
+        const tableWidth = table.scrollWidth;
+        if (topDummy) topDummy.style.width = tableWidth + 'px';
+        
+        if (tableWidth > bottomScroll.clientWidth) {
+            topScroll.style.display = 'block';
+        } else {
+            topScroll.style.display = 'none';
+        }
+    });
+    resizeObserver.observe(table);
+    resizeObserver.observe(bottomScroll);
+
+    // Sync top scroll to bottom scroll
+    topScroll.onscroll = function() {
+        bottomScroll.scrollLeft = topScroll.scrollLeft;
+    };
+
+    // Sync bottom scroll to top scroll
+    bottomScroll.onscroll = function() {
+        topScroll.scrollLeft = bottomScroll.scrollLeft;
+    };
+}
+
 window.openAddModal = openAddModal;
 window.openEditModal = openEditModal;
 window.toggleInstallment = toggleInstallment;
@@ -1284,3 +1522,7 @@ window.toggleAllInstallments = toggleAllInstallments;
 window.applyAmortizationMath = applyAmortizationMath;
 window.saveContractChangesToServer = saveContractChangesToServer;
 window.deleteContractFromServer = deleteContractFromServer;
+window.changeInstallmentStatus = changeInstallmentStatus;
+window.toggleEarlyPayoffView = toggleEarlyPayoffView;
+window.showMonthDetailsModal = showMonthDetailsModal;
+window.initDoubleScroll = initDoubleScroll;
