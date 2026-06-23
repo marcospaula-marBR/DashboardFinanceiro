@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import Papa from 'papaparse';
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -8,7 +9,8 @@ import {
 } from 'recharts';
 import { 
   UploadCloud, Filter, XCircle, LayoutDashboard, TableIcon, Settings, Plus, X, 
-  ChevronRight, ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Percent, Download, Eye, EyeOff
+  ChevronRight, ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Percent, Download, Eye, EyeOff,
+  ChevronLeft
 } from 'lucide-react';
 
 // ─── LOCAL TYPES ────────────────────────────────────────────────────────────
@@ -764,11 +766,20 @@ export default function DreCustomPage() {
       <section className="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto max-h-screen">
         {/* Header Bar */}
         <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-          <div>
-            <h2 className="text-2xl font-black text-slate-100 tracking-tight">Gerenciamento Contábil Avançado</h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Visualize resultados, configure regras dinamicamente e aplique simulações em tempo real.
-            </p>
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/" 
+              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 hover:border-amber-500/50 hover:bg-slate-800 text-slate-400 hover:text-amber-500 transition-all shadow-sm duration-200 active:scale-95 flex items-center justify-center"
+              title="Voltar ao Início"
+            >
+              <ChevronLeft size={18} />
+            </Link>
+            <div>
+              <h2 className="text-2xl font-black text-slate-100 tracking-tight">Gerenciamento Contábil Avançado</h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Visualize resultados, configure regras dinamicamente e aplique simulações em tempo real.
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

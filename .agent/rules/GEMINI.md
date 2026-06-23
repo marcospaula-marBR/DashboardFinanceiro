@@ -218,6 +218,16 @@ When user's prompt is NOT in English:
 > ✅ **SEMPRE:** Pensar no menor ecrã primeiro. O desktop é o progressivo, não o padrão.
 
 
+### 🔙 BOTÃO VOLTAR AO INÍCIO — DIRETRIZ DE NAVEGAÇÃO UNIFICADA (P0)
+
+> 🔴 **REGRA INVIOLÁVEL:** Toda página ou subpágina (incluindo rotas do Next.js e templates HTML legados na pasta `public/` ou raiz) DEVE conter um botão/link padrão no header/barra de navegação superior apontando para a raiz `/` (página inicial do portal) com o título ou rótulo exato de **"Voltar ao Início"**.
+
+**Padrões de implementação:**
+- **React / Next.js:** Usar componente `Link` do `next/link` com o texto "Voltar ao Início" (e opcionalmente um ícone como `ChevronLeft`).
+- **HTML Clássico (Legado):** Usar `<a href="/" ...>Voltar ao Início</a>` ou botão com ação de redirecionamento para `/`.
+
+---
+
 ### 🧹 Clean Code (Global Mandatory)
 
 **ALL code MUST follow `@[skills/clean-code]` rules. No exceptions.**

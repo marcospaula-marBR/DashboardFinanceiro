@@ -15,7 +15,8 @@ import { LoansService, formatCurrency } from "@/services/loans.service";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, AlertCircle, Users, Eye, EyeOff, Search, Filter, X, 
-  UserCog, Plus, HandCoins, Coins, TrendingUp, Landmark, Target
+  UserCog, Plus, HandCoins, Coins, TrendingUp, Landmark, Target,
+  ChevronLeft
 } from "lucide-react";
 
 // Custom MultiSelect Dropdown Component
@@ -738,6 +739,13 @@ export default function PeoplePage() {
         {/* Header bar */}
         <header className="bg-white border-b border-slate-200 py-4 px-6 shrink-0 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-450 hover:bg-amber-50 text-slate-500 hover:text-amber-600 transition-all shadow-sm duration-200 active:scale-95 flex items-center justify-center"
+              title="Voltar ao Início"
+            >
+              <ChevronLeft size={16} />
+            </Link>
             {/* Mobile Sidebar Toggle */}
             <button className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl" onClick={() => setIsMobileSidebarOpen(true)}>
               <Filter size={18} />
