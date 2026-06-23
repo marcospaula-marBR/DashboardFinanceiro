@@ -24,7 +24,7 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Outras Entradas', tipo: 'card', var: 'outras_entradas' },
   { titulo: '', tipo: 'divisor' },
   { titulo: 'Impostos', tipo: 'linha', categorias: ['Impostos'] },
-  { titulo: 'Provisão IRPJ e CSSL Trimestral', tipo: 'linha', categorias: ['Provisão - IRPJ e CSSL Trimestral'] },
+  { titulo: 'Provisão IRPJ e CSSL Trimestral', tipo: 'hidden', categorias: ['Provisão - IRPJ e CSSL Trimestral'] },
   { titulo: 'Total de Impostos', tipo: 'card', var: 'total_impostos' },
   { titulo: '', tipo: 'divisor' },
   { titulo: 'Credenciado Operacional', tipo: 'linha', categorias: ['Credenciado Operacional', 'Adiantamento - Credenciado Operacional'] },
