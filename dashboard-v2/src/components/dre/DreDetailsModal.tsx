@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, TrendingUp, ListTree, BarChart2, Plus, Minus, ChevronRight, ChevronDown } from 'lucide-react';
-import { DreRow } from '@/types/dre';
+import { DreRow, DreCalculatedResult } from '@/types/dre';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip 
 } from 'recharts';
@@ -12,6 +12,7 @@ interface DreDetailsModalProps {
   mensalData: Record<string, number>;
   sourceRows?: Record<string, DreRow[]>;
   isPrivacyMode: boolean;
+  allResults?: DreCalculatedResult | null;
 }
 
 export function DreDetailsModal({ 
@@ -20,7 +21,8 @@ export function DreDetailsModal({
   title, 
   mensalData, 
   sourceRows,
-  isPrivacyMode 
+  isPrivacyMode,
+  allResults 
 }: DreDetailsModalProps) {
   
   const [activeTab, setActiveTab] = useState<'chart' | 'transactions'>('chart');
@@ -32,6 +34,163 @@ export function DreDetailsModal({
   };
 
   if (!isOpen) return null;
+
+  const isLucroAntesFcl = title === 'Lucro antes do FCL';
+
+  if (isLucroAntesFcl && allResults) {
+    const cols = [...allResults.validColumns].reverse();
+    
+    const getValMensal = (key: string, col: string) => allResults.mensal[key]?.[col] || 0;
+    const getValTotal = (key: string) => allResults.totais[key] || 0;
+    
+    const auditRows = [
+      { 
+        label: '(+) Receita (Entradas Operacionais)', 
+        key: 'Total Entradas Operacionais', 
+        isSubtracted: false,
+        className: 'font-semibold text-slate-700'
+      },
+      { 
+        label: '(+) Outras Entradas', 
+        key: 'Outras Entradas', 
+        isSubtracted: false,
+        className: 'text-slate-500'
+      },
+      { 
+        label: '(-) Impostos', 
+        key: 'Total de Impostos', 
+        isSubtracted: true,
+        className: 'text-rose-600 font-medium'
+      },
+      { 
+        label: '(-) Custos Operacionais', 
+        key: 'Total Custos Operacionais', 
+        isSubtracted: true,
+        className: 'text-rose-600 font-medium'
+      },
+      { 
+        label: '(-) Despesas Rateadas', 
+        key: 'Total Despesas Rateadas', 
+        isSubtracted: true,
+        className: 'text-rose-500'
+      },
+      { 
+        label: '(-) Investimentos Operacionais (Serviços e Consórcios)', 
+        isCustom: true,
+        getValue: (col: string) => (allResults.mensal['Consórcios a contemplar']?.[col] || 0) + (allResults.mensal['Serviços']?.[col] || 0),
+        getTotal: () => (allResults.totais['Consórcios a contemplar'] || 0) + (allResults.totais['Serviços'] || 0),
+        isSubtracted: true,
+        className: 'text-rose-500'
+      },
+      { 
+        label: '(=) Lucro antes do FCL', 
+        key: 'Lucro antes do FCL', 
+        isResult: true,
+        className: 'font-bold text-slate-900'
+      }
+    ];
+
+    const formatValue = (value: number, isSubtracted = false) => {
+      if (isPrivacyMode) return 'R$ ****';
+      const displayVal = isSubtracted ? -Math.abs(value) : value;
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(displayVal);
+    };
+
+    const getAverage = (row: typeof auditRows[0]) => {
+      const total = row.isCustom ? row.getTotal!() : getValTotal(row.key!);
+      return cols.length > 0 ? total / cols.length : 0;
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
+        <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          {/* Header */}
+          <div className="flex flex-col border-b border-slate-100 bg-slate-50/50 p-6 pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600">
+                  <TrendingUp size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-800">{title}</h2>
+                  <p className="text-sm font-medium text-slate-500">
+                    Demonstrativo de Composição para Auditoria
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={onClose}
+                className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="mt-4 bg-amber-50/60 border border-amber-200/50 rounded-2xl p-4 text-slate-700 text-[12px] leading-relaxed">
+              <p className="font-bold text-amber-800 mb-1">Entendendo o Lucro antes do FCL:</p>
+              <p>
+                Este card representa o resultado líquido gerado pelas operações no período antes de deduzir investimentos de capital em <strong>Ativos</strong> e a distribuição de <strong>Dividendos</strong>.
+              </p>
+              <p className="mt-2 font-semibold">
+                Fórmula de Cálculo: Receitas + Outras Entradas - Impostos - Custos Operacionais - Despesas Rateadas - Investimentos Operacionais (Serviços/Consórcios) = Lucro antes do FCL
+              </p>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 overflow-y-auto">
+            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+                <span className="font-bold text-slate-700 text-sm">Conciliação de Valores (DRE Simplificada)</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left whitespace-nowrap border-separate border-spacing-0">
+                  <thead className="bg-slate-105 text-slate-600 font-semibold uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3 border-b border-slate-200 sticky left-0 min-w-[280px] max-w-[280px] bg-slate-50 z-20 border-r">Linha de Composição</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[280px] min-w-[120px] max-w-[120px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Total</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[400px] min-w-[100px] max-w-[100px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Média</th>
+                      {cols.map(month => (
+                        <th key={month} className="px-4 py-3 border-b border-slate-200 text-right">{month}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {auditRows.map((row, idx) => {
+                      const totalVal = row.isCustom ? row.getTotal!() : getValTotal(row.key!);
+                      const avgVal = getAverage(row);
+                      
+                      return (
+                        <tr key={idx} className={`hover:bg-slate-50/50 transition-colors ${row.isResult ? 'font-bold bg-slate-105' : ''}`}>
+                          <td className={`px-4 py-3 font-medium sticky left-0 border-r border-slate-100 z-10 bg-white group-hover:bg-slate-50 ${row.className} ${row.isResult ? 'bg-slate-50' : ''}`}>
+                            {row.label}
+                          </td>
+                          <td className={`px-4 py-3 text-right font-mono font-bold border-r border-slate-100 sticky left-[280px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] ${row.isResult ? 'bg-slate-100 text-slate-900' : 'bg-slate-50 text-slate-700'}`}>
+                            {formatValue(totalVal, row.isSubtracted)}
+                          </td>
+                          <td className={`px-4 py-3 text-right font-mono border-r border-slate-100 sticky left-[400px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] ${row.isResult ? 'bg-slate-50 font-bold text-slate-900' : 'bg-white text-slate-600'}`}>
+                            {formatValue(avgVal, row.isSubtracted)}
+                          </td>
+                          {cols.map(month => {
+                            const val = row.isCustom ? row.getValue!(month) : getValMensal(row.key!, month);
+                            return (
+                              <td key={month} className={`px-4 py-3 text-right font-mono ${row.isResult ? 'text-slate-900 font-bold' : 'text-slate-600'}`}>
+                                {formatValue(val, row.isSubtracted)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const data = Object.keys(mensalData).map(col => ({
     name: col,

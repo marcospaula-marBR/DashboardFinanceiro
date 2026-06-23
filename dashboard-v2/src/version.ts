@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.71";
+export const APP_VERSION = "v.02.46.72";
 export const VERSION_DATE = "2026-06-23";
 export const VERSION_CHANGELOG = [
+  "v.02.46.72 - Feat: Adiciona modal de auditoria simplificado para o card 'Lucro antes do FCL' (Resultado) que exibe a exata composição matemática detalhada mês a mês (Receitas + Outras Entradas - Impostos - Custos - Despesas Rateadas - Investimentos Operacionais).",
   "v.02.46.71 - Feat: Adiciona o card KPI 'Lucro antes do FCL' (Resultado) para facilitar a visualização direta do lucro operacional sem deduções de investimento em Ativos.",
   "v.02.46.70 - Feat: Adiciona toggle switch para Desconsiderar Despesas Rateadas na barra lateral de filtros, recalculando dinamicamente as despesas como R$ 0, as saídas totais, o FCL e os percentuais operacionais.",
   "v.02.46.69 - Refactor: Oculta a linha Provisão IRPJ e CSSL Trimestral do detalhamento da DRE (tipo alterado para hidden), pois os valores já vêm embutidos na linha de Impostos, mantendo os cálculos de impostos totais íntegros.",

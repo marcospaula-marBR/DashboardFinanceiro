@@ -679,6 +679,7 @@ export default function DrePage() {
         mensalData={modalData}
         sourceRows={modalSourceRows}
         isPrivacyMode={isPrivacyMode}
+        allResults={results}
       />
 
       <DreExportModal
