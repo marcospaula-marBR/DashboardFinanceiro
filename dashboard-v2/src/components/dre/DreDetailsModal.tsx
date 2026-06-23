@@ -75,14 +75,6 @@ export function DreDetailsModal({
         className: 'text-rose-500'
       },
       { 
-        label: '(-) Investimentos Operacionais (Serviços e Consórcios)', 
-        isCustom: true,
-        getValue: (col: string) => (allResults.mensal['Consórcios a contemplar']?.[col] || 0) + (allResults.mensal['Serviços']?.[col] || 0),
-        getTotal: () => (allResults.totais['Consórcios a contemplar'] || 0) + (allResults.totais['Serviços'] || 0),
-        isSubtracted: true,
-        className: 'text-rose-500'
-      },
-      { 
         label: '(=) Lucro antes do FCL', 
         key: 'Lucro antes do FCL', 
         isResult: true,
@@ -97,7 +89,7 @@ export function DreDetailsModal({
     };
 
     const getAverage = (row: typeof auditRows[0]) => {
-      const total = row.isCustom ? row.getTotal!() : getValTotal(row.key!);
+      const total = getValTotal(row.key);
       return cols.length > 0 ? total / cols.length : 0;
     };
 
@@ -120,7 +112,7 @@ export function DreDetailsModal({
               </div>
               <button 
                 onClick={onClose}
-                className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                className="p-2 text-slate-404 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
               >
                 <X size={24} />
               </button>
@@ -129,10 +121,10 @@ export function DreDetailsModal({
             <div className="mt-4 bg-amber-50/60 border border-amber-200/50 rounded-2xl p-4 text-slate-700 text-[12px] leading-relaxed">
               <p className="font-bold text-amber-800 mb-1">Entendendo o Lucro antes do FCL:</p>
               <p>
-                Este card representa o resultado líquido gerado pelas operações no período antes de deduzir investimentos de capital em <strong>Ativos</strong> e a distribuição de <strong>Dividendos</strong>.
+                Este card representa o resultado líquido gerado pelas operações no período antes de deduzir investimentos de capital em <strong>Ativos, Consórcios</strong> e <strong>Serviços</strong>, bem como a distribuição de <strong>Dividendos</strong>.
               </p>
               <p className="mt-2 font-semibold">
-                Fórmula de Cálculo: Receitas + Outras Entradas - Impostos - Custos Operacionais - Despesas Rateadas - Investimentos Operacionais (Serviços/Consórcios) = Lucro antes do FCL
+                Fórmula de Cálculo: Receitas + Outras Entradas - Impostos - Custos Operacionais - Despesas Rateadas = Lucro antes do FCL
               </p>
             </div>
           </div>
@@ -157,7 +149,7 @@ export function DreDetailsModal({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {auditRows.map((row, idx) => {
-                      const totalVal = row.isCustom ? row.getTotal!() : getValTotal(row.key!);
+                      const totalVal = getValTotal(row.key);
                       const avgVal = getAverage(row);
                       
                       return (
@@ -172,7 +164,7 @@ export function DreDetailsModal({
                             {formatValue(avgVal, row.isSubtracted)}
                           </td>
                           {cols.map(month => {
-                            const val = row.isCustom ? row.getValue!(month) : getValMensal(row.key!, month);
+                            const val = getValMensal(row.key, month);
                             return (
                               <td key={month} className={`px-4 py-3 text-right font-mono ${row.isResult ? 'text-slate-900 font-bold' : 'text-slate-600'}`}>
                                 {formatValue(val, row.isSubtracted)}
