@@ -38,10 +38,10 @@ export function DreHeader({
         <div className="flex gap-2">
           <Link 
             href="/" 
-            className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-450 hover:bg-amber-50 text-slate-500 hover:text-amber-600 transition-all shadow-sm duration-200 active:scale-95"
-            title="Voltar ao Início"
+            className="flex items-center gap-1.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-amber-450 hover:bg-amber-50 text-slate-600 hover:text-amber-700 transition-all shadow-sm duration-200 active:scale-95 text-xs font-bold"
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft size={16} />
+            <span>Voltar ao Início</span>
           </Link>
           <button 
             onClick={onToggleSidebar}

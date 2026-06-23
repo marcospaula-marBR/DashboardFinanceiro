@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { DreSidebar } from '@/components/dre/DreSidebar';
 import { DreHeader } from '@/components/dre/DreHeader';
 import { DreKpiCards } from '@/components/dre/DreKpiCards';
@@ -19,7 +20,7 @@ import { DreFilters, DreMetadata, DreCalculatedResult, DreRow, DreSimulationPara
 import { DreExportModal, ExportSelections } from '@/components/dre/DreExportModal';
 import { DrePrintCharts } from '@/components/dre/DrePrintCharts';
 import { DreCustomCardModal } from '@/components/dre/DreCustomCardModal';
-import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles, Filter } from 'lucide-react';
+import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles, Filter, ChevronLeft } from 'lucide-react';
 
 export default function DrePage() {
   const [isUploading, setIsUploading] = useState(false);
@@ -537,6 +538,14 @@ export default function DrePage() {
                 <ArrowRight size={16} />
               </button>
             </form>
+
+            <Link
+              href="/"
+              className="mt-6 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-400 hover:text-amber-500 transition-colors uppercase tracking-wider"
+            >
+              <ChevronLeft size={14} />
+              Voltar ao Início
+            </Link>
           </div>
         </div>
       </div>

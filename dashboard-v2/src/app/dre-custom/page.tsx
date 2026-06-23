@@ -769,10 +769,10 @@ export default function DreCustomPage() {
           <div className="flex items-center gap-4">
             <Link 
               href="/" 
-              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 hover:border-amber-500/50 hover:bg-slate-800 text-slate-400 hover:text-amber-500 transition-all shadow-sm duration-200 active:scale-95 flex items-center justify-center"
-              title="Voltar ao Início"
+              className="flex items-center gap-1.5 p-2 px-3 rounded-xl border border-slate-800 bg-slate-900 hover:border-amber-500/50 hover:bg-slate-800 text-slate-400 hover:text-amber-500 transition-all shadow-sm duration-200 active:scale-95 text-xs font-bold"
             >
-              <ChevronLeft size={18} />
+              <ChevronLeft size={16} />
+              <span>Voltar ao Início</span>
             </Link>
             <div>
               <h2 className="text-2xl font-black text-slate-100 tracking-tight">Gerenciamento Contábil Avançado</h2>
