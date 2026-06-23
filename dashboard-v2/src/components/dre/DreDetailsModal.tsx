@@ -51,12 +51,6 @@ export function DreDetailsModal({
         className: 'font-semibold text-slate-700'
       },
       { 
-        label: '(+) Outras Entradas', 
-        key: 'Outras Entradas', 
-        isSubtracted: false,
-        className: 'text-slate-500'
-      },
-      { 
         label: '(-) Impostos', 
         key: 'Total de Impostos', 
         isSubtracted: true,
@@ -124,7 +118,7 @@ export function DreDetailsModal({
                 Este card representa o resultado líquido gerado pelas operações no período antes de deduzir investimentos de capital em <strong>Ativos, Consórcios</strong> e <strong>Serviços</strong>, bem como a distribuição de <strong>Dividendos</strong>.
               </p>
               <p className="mt-2 font-semibold">
-                Fórmula de Cálculo: Receitas + Outras Entradas - Impostos - Custos Operacionais - Despesas Rateadas = Lucro antes do FCL
+                Fórmula de Cálculo: Receitas - Impostos - Custos Operacionais - Despesas Rateadas = Lucro antes do FCL
               </p>
             </div>
           </div>

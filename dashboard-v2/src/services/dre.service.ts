@@ -598,7 +598,7 @@ export class DreService {
     const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos");
     const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
 
-    const resultado = totalEntradas + outrasEntradas - totalImpostos - totalCustos - totalDespesas;
+    const resultado = totalEntradas - totalImpostos - totalCustos - totalDespesas;
     const fcl = totalEntradas + outrasEntradas - totalSaidas;
 
     // Novo: Equipamentos
@@ -711,7 +711,7 @@ export class DreService {
         ...sourceRows["Total Investimentos"][col]
       ];
 
-      const resCol = totEnt + outrasEnt - totImp - totCust - totDesp;
+      const resCol = totEnt - totImp - totCust - totDesp;
       const fclCol = totEnt + outrasEnt - totSai;
 
       valoresMensal["Lucro antes do FCL"][col] = resCol;

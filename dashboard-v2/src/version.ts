@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.73";
+export const APP_VERSION = "v.02.46.74";
 export const VERSION_DATE = "2026-06-23";
 export const VERSION_CHANGELOG = [
+  "v.02.46.74 - Refactor: Elimina Outras Entradas do racional de cálculo e do modal de conciliação de 'Lucro antes do FCL' (o Lucro antes do FCL agora é estritamente Receitas - Impostos - Custos - Despesas Rateadas, garantindo que a soma dos cartões de despesas/impostos + margem de lucro some exatamente 100%).",
   "v.02.46.73 - Refactor: Elimina Investimentos Operacionais do racional e do modal de auditoria do card 'Lucro antes do FCL' para evitar qualquer confusão com o FCL (o Lucro antes do FCL passa a ser estritamente Receitas + Outras Entradas - Impostos - Custos - Despesas Rateadas).",
   "v.02.46.72 - Feat: Adiciona modal de auditoria simplificado para o card 'Lucro antes do FCL' (Resultado) que exibe a exata composição matemática detalhada mês a mês (Receitas + Outras Entradas - Impostos - Custos - Despesas Rateadas - Investimentos Operacionais).",
   "v.02.46.71 - Feat: Adiciona o card KPI 'Lucro antes do FCL' (Resultado) para facilitar a visualização direta do lucro operacional sem deduções de investimento em Ativos.",
