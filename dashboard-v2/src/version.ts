@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.69";
+export const APP_VERSION = "v.02.46.70";
 export const VERSION_DATE = "2026-06-23";
 export const VERSION_CHANGELOG = [
+  "v.02.46.70 - Feat: Adiciona toggle switch para Desconsiderar Despesas Rateadas na barra lateral de filtros, recalculando dinamicamente as despesas como R$ 0, as saídas totais, o FCL e os percentuais operacionais.",
   "v.02.46.69 - Refactor: Oculta a linha Provisão IRPJ e CSSL Trimestral do detalhamento da DRE (tipo alterado para hidden), pois os valores já vêm embutidos na linha de Impostos, mantendo os cálculos de impostos totais íntegros.",
   "v.02.46.68 - Fix: Corrige o cálculo da média para as linhas de porcentagem da DRE (Lucro e FCL), usando a média aritmética simples dos meses em vez de dividir o acumulado global pela quantidade de meses.",
   "v.02.46.67 - Fix: O Gráfico de Evolução de Saldo Devedor e o cálculo do total a vencer no mês agora ignoram os contratos com status Desistido, Transferido ou Quitado.",

@@ -5,6 +5,7 @@ export interface DreFilters {
   contasDre: string[];     // Rebatizado do antigo 'categorias'
   projetos: string[];      // Novo filtro
   categorias: string[];    // Novo filtro
+  excludeSharedExpenses?: boolean;
 }
 
 export interface DreSimulationParams {

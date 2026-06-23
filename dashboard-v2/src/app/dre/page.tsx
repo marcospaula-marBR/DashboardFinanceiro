@@ -67,7 +67,8 @@ export default function DrePage() {
     departamentos: [],
     contasDre: [],
     projetos: [],
-    categorias: []
+    categorias: [],
+    excludeSharedExpenses: false
   });
 
   // 1. Verificação de Sessão (Password Screen Gate)
@@ -234,7 +235,8 @@ export default function DrePage() {
         departamentos: [],
         contasDre: [],
         projetos: [],
-        categorias: []
+        categorias: [],
+        excludeSharedExpenses: false
       });
 
       setLastUpdate(new Date().toLocaleTimeString() + ' (Local)');

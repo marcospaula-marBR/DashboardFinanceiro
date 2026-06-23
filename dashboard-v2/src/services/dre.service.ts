@@ -510,9 +510,26 @@ export class DreService {
     const consorciosTotal = getCatTotal('Consórcios - a contemplar');
 
     estrutura.forEach(item => {
+      const isSharedExpense = filters.excludeSharedExpenses && [
+        'Credenciado Administrativo',
+        'Credenciado TI',
+        'Despesas Administrativas',
+        'Despesas de Vendas e Marketing',
+        'Despesas Financeiras',
+        'Outros Tributos',
+        'Despesas Eventuais',
+        'Despesas Variáveis',
+        'Intermediação de Negócios',
+        'Total Despesas Rateadas',
+        'Distribuição de Dividendos',
+        'Dividendos'
+      ].includes(item.titulo);
+
       if (item.tipo === 'linha' || item.tipo === 'hidden' || (item.tipo === 'card' && item.categorias)) {
         let total = 0;
-        item.categorias?.forEach(cat => total += getCatTotal(cat));
+        if (!isSharedExpense) {
+          item.categorias?.forEach(cat => total += getCatTotal(cat));
+        }
         valoresTotal[item.titulo] = total;
 
         valoresMensal[item.titulo] = {};
@@ -520,12 +537,14 @@ export class DreService {
         validColumns.forEach(col => {
           let mesTotal = 0;
           let rowsForMonth: DreRow[] = [];
-          item.categorias?.forEach(cat => {
-            mesTotal += getCatMonthly(cat, col);
-            if (catSourceRows[cat] && catSourceRows[cat][col]) {
-              rowsForMonth.push(...catSourceRows[cat][col]);
-            }
-          });
+          if (!isSharedExpense) {
+            item.categorias?.forEach(cat => {
+              mesTotal += getCatMonthly(cat, col);
+              if (catSourceRows[cat] && catSourceRows[cat][col]) {
+                rowsForMonth.push(...catSourceRows[cat][col]);
+              }
+            });
+          }
           valoresMensal[item.titulo][col] = mesTotal;
           sourceRows[item.titulo][col] = rowsForMonth;
         });
@@ -568,10 +587,12 @@ export class DreService {
       getVal("Terceirização de Mão de Obra") + getVal("CLTs") + getVal("Custo dos Serviços Prestados") +
       getVal("Preventiva - B2G") + getVal("Corretiva - B2G") + getVal("Outros Custos");
 
-    const totalDespesas = getVal("Credenciado Administrativo") + getVal("Credenciado TI") +
-      getVal("Despesas Administrativas") + getVal("Despesas de Vendas e Marketing") + getVal("Despesas Financeiras") +
-      getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios") +
-      getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos");
+    const totalDespesas = filters.excludeSharedExpenses
+      ? 0
+      : (getVal("Credenciado Administrativo") + getVal("Credenciado TI") +
+         getVal("Despesas Administrativas") + getVal("Despesas de Vendas e Marketing") + getVal("Despesas Financeiras") +
+         getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios") +
+         getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos"));
 
     const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos");
     const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
@@ -657,10 +678,12 @@ export class DreService {
         ...getSourceRowsMensal("Preventiva - B2G", col), ...getSourceRowsMensal("Corretiva - B2G", col), ...getSourceRowsMensal("Outros Custos", col)
       ];
 
-      const totDesp = getValMensal("Credenciado Administrativo", col) + getValMensal("Credenciado TI", col) +
-        getValMensal("Despesas Administrativas", col) + getValMensal("Despesas de Vendas e Marketing", col) + getValMensal("Despesas Financeiras", col) +
-        getValMensal("Outros Tributos", col) + getValMensal("Despesas Eventuais", col) + getValMensal("Despesas Variáveis", col) + getValMensal("Intermediação de Negócios", col) +
-        getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col);
+      const totDesp = filters.excludeSharedExpenses
+        ? 0
+        : (getValMensal("Credenciado Administrativo", col) + getValMensal("Credenciado TI", col) +
+           getValMensal("Despesas Administrativas", col) + getValMensal("Despesas de Vendas e Marketing", col) + getValMensal("Despesas Financeiras", col) +
+           getValMensal("Outros Tributos", col) + getValMensal("Despesas Eventuais", col) + getValMensal("Despesas Variáveis", col) + getValMensal("Intermediação de Negócios", col) +
+           getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col));
       valoresMensal["Total Despesas Rateadas"][col] = totDesp;
       sourceRows["Total Despesas Rateadas"][col] = [
         ...getSourceRowsMensal("Credenciado Administrativo", col), ...getSourceRowsMensal("Credenciado TI", col),

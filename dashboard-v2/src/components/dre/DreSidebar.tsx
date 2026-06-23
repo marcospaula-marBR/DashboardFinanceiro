@@ -108,7 +108,7 @@ export function DreSidebar({
   }, [rowsFilteredByProjeto]);
 
   // Helper to handle filter selection
-  const toggleFilter = (key: keyof DreFilters, value: string) => {
+  const toggleFilter = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, value: string) => {
     const current = [...(filters[key] || [])];
     const index = current.indexOf(value);
     if (index > -1) {
@@ -135,18 +135,19 @@ export function DreSidebar({
       departamentos: [],
       contasDre: [],
       projetos: [],
-      categorias: []
+      categorias: [],
+      excludeSharedExpenses: false
     });
   };
 
-  const clearGroup = (key: keyof DreFilters) => {
+  const clearGroup = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>) => {
     onFilterChange({
       ...filters,
       [key]: []
     });
   };
 
-  const toggleAll = (key: keyof DreFilters, availableItems: string[]) => {
+  const toggleAll = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, availableItems: string[]) => {
     if (availableItems.length === 0) return;
     const isAllSelected = (filters[key] || []).length === availableItems.length;
     onFilterChange({
@@ -161,7 +162,8 @@ export function DreSidebar({
     filters.departamentos.length > 0 || 
     filters.contasDre.length > 0 || 
     filters.projetos.length > 0 || 
-    filters.categorias.length > 0;
+    filters.categorias.length > 0 ||
+    !!filters.excludeSharedExpenses;
 
   return (
     <aside className="w-80 flex-shrink-0 bg-slate-900 text-slate-100 flex flex-col h-screen border-r border-slate-800 select-none">
@@ -259,6 +261,39 @@ export function DreSidebar({
           </div>
         ) : (
           <div className="space-y-4">
+            {/* TOGGLE EXCLUDE SHARED EXPENSES */}
+            <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-sm">
+              <div className="flex flex-col gap-0.5 max-w-[70%]">
+                <span className="text-xs font-bold text-slate-200">
+                  Desconsiderar Despesas Rateadas
+                </span>
+                <span className="text-[10px] text-slate-400 leading-tight">
+                  Zera despesas administrativas e financeiras para fins operacionais
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onFilterChange({
+                    ...filters,
+                    excludeSharedExpenses: !filters.excludeSharedExpenses
+                  });
+                }}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  filters.excludeSharedExpenses ? 'bg-amber-500' : 'bg-slate-700'
+                }`}
+                role="switch"
+                aria-checked={filters.excludeSharedExpenses}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    filters.excludeSharedExpenses ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* 1. EMPRESAS */}
             <div>
               <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
