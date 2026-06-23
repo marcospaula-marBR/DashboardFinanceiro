@@ -47,7 +47,7 @@ export function DreKpiCards({
 
   return (
     <div className="mb-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative z-20">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 relative z-20">
       {/* Total Entradas */}
       <div 
         className={`bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-transform flex flex-col justify-between ${onCardClick ? 'cursor-pointer hover:scale-105' : ''}`}
@@ -95,6 +95,22 @@ export function DreKpiCards({
         <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-100/70 w-fit px-2.5 py-1.5 rounded-md">
           <Wallet size={12} className="text-emerald-500" />
           <span>{calcPercent(kpis.totalDespesas)} da Receita • Média: {displayValue(getAverageVal(kpis.totalDespesas))}</span>
+        </div>
+      </div>
+
+      {/* Resultado (Lucro) */}
+      <div 
+        className={`bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-transform flex flex-col justify-between ${onCardClick ? 'cursor-pointer hover:scale-105' : ''}`}
+        onClick={() => onCardClick && onCardClick("Lucro antes do FCL")}
+      >
+        <div>
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Lucro antes do FCL</h3>
+          <p className={`text-3xl font-black tracking-tight ${kpis.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {displayValue(kpis.resultado)}
+          </p>
+        </div>
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-100/70 w-fit px-2.5 py-1.5 rounded-md">
+          <span>Margem: {displayValue(kpis.percLucro, true)} • Média: {displayValue(getAverageVal(kpis.resultado))}</span>
         </div>
       </div>
 

@@ -53,6 +53,7 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Total Investimentos', tipo: 'card', var: 'total_investimentos' },
   { titulo: '', tipo: 'divisor' },
   { titulo: 'Total Saídas', tipo: 'card', var: 'total_saidas' },
+  { titulo: 'Lucro antes do FCL', tipo: 'card', var: 'resultado' },
   { titulo: 'Fluxo de Caixa Livre FCL', tipo: 'card', var: 'fcl' },
   { titulo: 'Lucro s/ Receita Operacional', tipo: 'card_percentual', var: 'perc_lucro' },
   { titulo: 'FCL s/ Receita Operacional', tipo: 'card_percentual', var: 'perc_fcl' },
@@ -611,6 +612,7 @@ export class DreService {
     valoresTotal["Total Despesas Rateadas"] = totalDespesas;
     valoresTotal["Total Investimentos"] = totalInvestimentos;
     valoresTotal["Total Saídas"] = totalSaidas;
+    valoresTotal["Lucro antes do FCL"] = resultado;
     valoresTotal["Fluxo de Caixa Livre FCL"] = fcl;
     valoresTotal["Resultado Liquido Final"] = resultado;
     valoresTotal["Impostos Gerais"] = totalImpostos;
@@ -635,6 +637,7 @@ export class DreService {
     valoresMensal["Total Despesas Rateadas"] = {};
     valoresMensal["Total Investimentos"] = {};
     valoresMensal["Total Saídas"] = {};
+    valoresMensal["Lucro antes do FCL"] = {};
     valoresMensal["Fluxo de Caixa Livre FCL"] = {};
     valoresMensal["Lucro s/ Receita Operacional"] = {};
     valoresMensal["FCL s/ Receita Operacional"] = {};
@@ -647,6 +650,7 @@ export class DreService {
     sourceRows["Total Despesas Rateadas"] = {};
     sourceRows["Total Investimentos"] = {};
     sourceRows["Total Saídas"] = {};
+    sourceRows["Lucro antes do FCL"] = {};
     sourceRows["Fluxo de Caixa Livre FCL"] = {};
     sourceRows["Equipamentos"] = {};
 
@@ -709,6 +713,13 @@ export class DreService {
 
       const resCol = totEnt + getCatMonthly("Ativos", col) + outrasEnt - totSai;
       const fclCol = resCol - getCatMonthly("Ativos", col);
+
+      valoresMensal["Lucro antes do FCL"][col] = resCol;
+      sourceRows["Lucro antes do FCL"][col] = [
+        ...sourceRows["Total Entradas Operacionais"][col],
+        ...sourceRows["Outras Entradas"][col],
+        ...sourceRows["Total Saídas"][col]
+      ];
 
       valoresMensal["Fluxo de Caixa Livre FCL"][col] = fclCol;
       sourceRows["Fluxo de Caixa Livre FCL"][col] = [
