@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.67";
-export const VERSION_DATE = "2026-06-19";
+export const APP_VERSION = "v.02.46.68";
+export const VERSION_DATE = "2026-06-23";
 export const VERSION_CHANGELOG = [
+  "v.02.46.68 - Fix: Corrige o cálculo da média para as linhas de porcentagem da DRE (Lucro e FCL), usando a média aritmética simples dos meses em vez de dividir o acumulado global pela quantidade de meses.",
   "v.02.46.67 - Fix: O Gráfico de Evolução de Saldo Devedor e o cálculo do total a vencer no mês agora ignoram os contratos com status Desistido, Transferido ou Quitado.",
   "v.02.46.66 - Fix: Gráfico de Maiores Parcelamentos agora varre apenas os valores reais das parcelas pendentes individuais, ignorando o valor da parcela padrão do contrato ou parcelas já pagas.",
   "v.02.46.65 - Feat: Gráfico de Maiores Parcelamentos agora considera apenas contratos que possuam parcelas pendentes.",

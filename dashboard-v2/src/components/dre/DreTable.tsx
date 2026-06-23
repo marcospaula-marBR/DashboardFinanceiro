@@ -72,7 +72,11 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
               const isPercent = item.tipo === 'card_percentual';
 
               const totalVal = totais[item.titulo] || 0;
-              const avgVal = reversedColumns.length > 0 ? (totalVal / reversedColumns.length) : 0;
+              const avgVal = isPercent
+                ? (reversedColumns.length > 0
+                    ? (reversedColumns.reduce((sum, col) => sum + (mensal[item.titulo]?.[col] || 0), 0) / reversedColumns.length)
+                    : 0)
+                : (reversedColumns.length > 0 ? (totalVal / reversedColumns.length) : 0);
               const pct = totalReceita > 0 ? (totalVal / totalReceita) * 100 : 0;
 
               return (
