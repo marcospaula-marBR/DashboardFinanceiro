@@ -1,28 +1,45 @@
 'use client';
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   X, TrendingUp, TrendingDown, Scissors, Target, Zap, RotateCcw,
-  ChevronRight, AlertTriangle, Loader2, Sparkles, Info,
-  ToggleLeft, ToggleRight, Building2, Calendar,
-  CheckCircle2, ArrowDownRight, ArrowUpRight, DollarSign, Activity,
-  ShieldAlert, Gauge, BarChart3,
+  AlertTriangle, Loader2, Sparkles, Info, ToggleLeft, ToggleRight,
+  Building2, Calendar, CheckCircle2, ArrowDownRight, ArrowUpRight,
+  DollarSign, Activity, ShieldAlert, Gauge, BarChart3, Save, Copy, Trash2,
+  ListFilter, FileSpreadsheet, Percent, Grid, HelpCircle, ChevronRight
 } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, AreaChart, Area, ReferenceLine,
+  ResponsiveContainer, Legend, BarChart, Cell, ReferenceLine
 } from 'recharts';
+import { DreCalculatedResult, DreRow, DreMetadata } from '@/types/dre';
 import {
-  DreCalculatedResult, DreSimulationParams, DreRow, DreMetadata,
-} from '@/types/dre';
+  Scenario,
+  ScenarioAssumption,
+  SimulatorScenarioType,
+  SimulatorAmountType,
+  SimulatorRecurrence,
+  MacroIndexType
+} from '@/types/dre-simulator.types';
+import {
+  colToIso,
+  isoToCol,
+  addMonthsIso,
+  diffMonthsIso,
+  isColInPeriod,
+  sortColList
+} from '@/lib/date-utils';
+import { DreSimulatorEngine } from '@/services/dre-simulator.engine';
 
-// ─── Paleta & Formatação ──────────────────────────────────────────────────────
+// ── Cores e Paletas Executivas ───────────────────────────────────────────────
 const PAL = {
-  receita: '#10b981',
-  fcl: '#3b82f6',
-  custos: '#f59e0b',
-  despesas: '#6366f1',
-  sim: '#f97316',
-  danger: '#f43f5e',
+  receita: '#10b981', // Verde esmeralda
+  fcl: '#3b82f6',     // Azul
+  custos: '#f59e0b',   // Laranja âmbar
+  despesas: '#6366f1', // Indigo
+  sim: '#f97316',      // Laranja ativo
+  danger: '#ef4444',   // Vermelho
+  bgDark: '#0f172a',   // Slate escuro
+  bgCard: '#ffffff',
 };
 
 const fmt = (v: number) =>
@@ -31,39 +48,56 @@ const fmtK = (v: number) => `${(v / 1000).toFixed(0)}k`;
 const fmtPct = (v: number, showPlus = true) =>
   `${showPlus && v > 0 ? '+' : ''}${v.toFixed(1)}%`;
 
-// ─── Cenários Rápidos ─────────────────────────────────────────────────────────
-type ScenarioId = 'rev_up' | 'rev_down' | 'costs_cut' | 'exp_cut' | 'contract_loss' | 'goal_seek' | 'custom';
-type TabId = 'cenarios' | 'granular' | 'reposicao' | 'sensibilidade';
-
-const SCENARIOS = [
-  { id: 'rev_up' as ScenarioId, label: 'Crescimento', sublabel: 'Novo contrato ou expansão', icon: <TrendingUp size={16} />, color: 'emerald', defVal: 10 },
-  { id: 'rev_down' as ScenarioId, label: 'Queda de Receita', sublabel: 'Perda parcial de faturamento', icon: <TrendingDown size={16} />, color: 'rose', defVal: -15 },
-  { id: 'costs_cut' as ScenarioId, label: 'Corte de Custos', sublabel: 'Credenciados, CLTs, terceiros', icon: <Scissors size={16} />, color: 'amber', defVal: -20 },
-  { id: 'exp_cut' as ScenarioId, label: 'Redução Despesas', sublabel: 'Despesas rateadas / admin', icon: <Scissors size={16} />, color: 'indigo', defVal: -25 },
-  { id: 'contract_loss' as ScenarioId, label: 'Perda de Contrato', sublabel: 'Rescisão de departamento', icon: <AlertTriangle size={16} />, color: 'orange', defVal: -100 },
-  { id: 'goal_seek' as ScenarioId, label: 'Meta de FCL', sublabel: 'Quanto preciso para atingir X?', icon: <Target size={16} />, color: 'blue', defVal: 0 },
-] as const;
-
-const SCENARIO_COLORS: Record<string, string> = {
-  emerald: 'border-emerald-300 bg-emerald-50 text-emerald-700',
-  rose: 'border-rose-300 bg-rose-50 text-rose-700',
-  amber: 'border-amber-300 bg-amber-50 text-amber-700',
-  indigo: 'border-indigo-300 bg-indigo-50 text-indigo-700',
-  orange: 'border-orange-300 bg-orange-50 text-orange-700',
-  blue: 'border-blue-300 bg-blue-50 text-blue-700',
+const tooltipStyle = {
+  borderRadius: '12px',
+  border: 'none',
+  boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+  fontSize: '12px',
 };
 
-// ─── IA Questions ─────────────────────────────────────────────────────────────
-const AI_QUESTIONS = [
-  { id: 'risk', label: 'Qual o risco principal?', icon: '⚠️' },
-  { id: 'breakeven', label: 'Ponto de equilíbrio', icon: '⚖️' },
-  { id: 'recovery', label: 'Estratégia de recuperação', icon: '🔄' },
-  { id: 'actions', label: 'Ações recomendadas', icon: '🎯' },
-  { id: 'cashflow', label: 'Impacto no caixa', icon: '💸' },
-  { id: 'timeline', label: 'Prazo para normalização', icon: '📅' },
+// ── Cenários Rápidos ─────────────────────────────────────────────────────────
+interface QuickButton {
+  id: SimulatorScenarioType;
+  label: string;
+  sublabel: string;
+  icon: React.ReactNode;
+  color: string;
+  defaultVal: number;
+}
+
+const SCENARIO_BUTTONS: QuickButton[] = [
+  { id: 'revenue_increase', label: 'Aumento de Receita', sublabel: 'Projetar novos contratos', icon: <TrendingUp size={15} />, color: 'emerald', defaultVal: 10 },
+  { id: 'revenue_reduction', label: 'Redução de Receita', sublabel: 'Simular queda macro', icon: <TrendingDown size={15} />, color: 'rose', defaultVal: -10 },
+  { id: 'contract_loss', label: 'Perda de Contrato', sublabel: 'Rescisão de departamento', icon: <AlertTriangle size={15} />, color: 'orange', defaultVal: -100 },
+  { id: 'revenue_replacement', label: 'Reposição de Receita', sublabel: 'Meta linear ou curva S', icon: <Target size={15} />, color: 'teal', defaultVal: 50000 },
+  { id: 'expense_increase', label: 'Aumento de Despesas', sublabel: 'Crescimento de custos gerais', icon: <TrendingUp size={15} />, color: 'amber', defaultVal: 8 },
+  { id: 'expense_reduction', label: 'Redução de Despesas', sublabel: 'Cortes administrativos', icon: <Scissors size={15} />, color: 'indigo', defaultVal: -12 },
+  { id: 'costs_cut', label: 'Corte de Custos', sublabel: 'Otimizar pessoal e credenciados', icon: <Scissors size={15} />, color: 'blue', defaultVal: -15 },
+  { id: 'macro_driver', label: 'Reajuste por Índice', sublabel: 'Indexadores IPCA/INCC/CDI', icon: <Activity size={15} />, color: 'slate', defaultVal: 4.5 },
 ];
 
-// ─── Interfaces ───────────────────────────────────────────────────────────────
+const BUTTON_COLORS: Record<string, string> = {
+  emerald: 'border-emerald-250 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
+  rose: 'border-rose-250 bg-rose-50 text-rose-800 hover:bg-rose-100',
+  orange: 'border-orange-250 bg-orange-50 text-orange-800 hover:bg-orange-100',
+  teal: 'border-teal-250 bg-teal-50 text-teal-800 hover:bg-teal-100',
+  amber: 'border-amber-250 bg-amber-50 text-amber-800 hover:bg-amber-100',
+  indigo: 'border-indigo-250 bg-indigo-50 text-indigo-800 hover:bg-indigo-100',
+  blue: 'border-blue-250 bg-blue-50 text-blue-800 hover:bg-blue-100',
+  slate: 'border-slate-250 bg-slate-50 text-slate-800 hover:bg-slate-100',
+};
+
+// ── Mock Macro rates para indexador ─────────────────────────────────────────
+const MOCK_MACRO_RATES: Record<MacroIndexType, Record<string, number>> = {
+  IPCA: { '2026-07': 0.004, '2026-08': 0.003, '2026-09': 0.004, '2026-10': 0.005, '2026-11': 0.004, '2026-12': 0.004 },
+  INCC: { '2026-07': 0.005, '2026-08': 0.004, '2026-09': 0.006, '2026-10': 0.005, '2026-11': 0.005, '2026-12': 0.005 },
+  CDI: { '2026-07': 0.008, '2026-08': 0.008, '2026-09': 0.008, '2026-10': 0.008, '2026-11': 0.008, '2026-12': 0.008 },
+  SELIC: { '2026-07': 0.0085, '2026-08': 0.0085, '2026-09': 0.0085, '2026-10': 0.0085, '2026-11': 0.0085, '2026-12': 0.0085 },
+  dissidio: { '2026-07': 0.05 },
+  inflacao_fornecedores: { '2026-07': 0.005 },
+  cambio: { '2026-07': 0.01 }
+};
+
 interface DreSimulatorV2Props {
   isOpen: boolean;
   onClose: () => void;
@@ -71,217 +105,317 @@ interface DreSimulatorV2Props {
   simulatedResults: DreCalculatedResult | null;
   rawData: DreRow[];
   metadata: DreMetadata | null;
-  onParamsChange: (params: DreSimulationParams) => void;
+  activeScenario: Scenario | null;
+  onScenarioChange: (scenario: Scenario | null) => void;
+  onParamsChange?: (params: any) => void;
   empresaContext: string;
   periodoContext: string;
 }
 
-const MESES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+type TabId = 'dashboard' | 'premissas' | 'comparador' | 'tabela';
 
-function addMonths(col: string, n: number): string {
-  const [mesStr, anoStr] = col.split('/');
-  const mesIdx = MESES_PT.findIndex(m => m.toLowerCase() === mesStr.toLowerCase());
-  if (mesIdx === -1) return col;
-  const ano = 2000 + parseInt(anoStr);
-  const total = ano * 12 + mesIdx + n;
-  return `${MESES_PT[total % 12]}/${String(Math.floor(total / 12)).slice(-2)}`;
-}
-
-const DEFAULT_PARAMS: DreSimulationParams = {
-  revenueMultiplier: 1, costsMultiplier: 1, expensesMultiplier: 1,
-  taxesMultiplier: 1, investmentsMultiplier: 1,
-};
-
-const tooltipStyle = {
-  borderRadius: '10px', border: 'none',
-  boxShadow: '0 4px 24px rgba(0,0,0,0.12)', fontSize: '12px',
-};
-
-// ─── Componente Principal ─────────────────────────────────────────────────────
 export function DreSimulatorV2({
   isOpen, onClose, originalResults, simulatedResults, rawData, metadata,
-  onParamsChange, empresaContext, periodoContext,
+  activeScenario, onScenarioChange, onParamsChange, empresaContext, periodoContext
 }: DreSimulatorV2Props) {
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<TabId>('cenarios');
-  const [selectedScenario, setSelectedScenario] = useState<ScenarioId | null>(null);
-  const [impactMode, setImpactMode] = useState<'percent' | 'absolute'>('percent');
-  const [impactValue, setImpactValue] = useState<number>(10);
-  const [includeRateio, setIncludeRateio] = useState(true);
-
-  // Granular sliders
-  const [revSlider, setRevSlider] = useState(1.0);
-  const [costSlider, setCostSlider] = useState(1.0);
-  const [expSlider, setExpSlider] = useState(1.0);
-  const [taxSlider, setTaxSlider] = useState(1.0);
-  const [invSlider, setInvSlider] = useState(1.0);
-  const granularRef = useRef(false);
-
-  // Goal Seek
-  const [goalFcl, setGoalFcl] = useState('');
-
-  // Reposição
-  const [selectedDept, setSelectedDept] = useState('');
-  const [numMonths, setNumMonths] = useState(12);
+  // ── States ─────────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [savedScenarios, setSavedScenarios] = useState<Scenario[]>([]);
+  const [editingAssumption, setEditingAssumption] = useState<Partial<ScenarioAssumption> | null>(null);
 
   // IA
   const [aiQuestion, setAiQuestion] = useState<string | null>(null);
   const [aiResponse, setAiResponse] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
+  // Formulários de premissas temporários
+  const [asmType, setAsmType] = useState<SimulatorScenarioType>('revenue_increase');
+  const [asmTargetType, setAsmTargetType] = useState<'all' | 'department' | 'account' | 'account_group'>('all');
+  const [asmTargetIds, setAsmTargetIds] = useState<string[]>([]);
+  const [asmAmountType, setAsmAmountType] = useState<SimulatorAmountType>('percentage');
+  const [asmValue, setAsmValue] = useState<number>(10);
+  const [asmStartDate, setAsmStartDate] = useState('');
+  const [asmEndDate, setAsmEndDate] = useState('');
+  const [asmRecurrence, setAsmRecurrence] = useState<SimulatorRecurrence>('monthly');
+  const [asmMacroIndex, setAsmMacroIndex] = useState<MacroIndexType>('IPCA');
+
   const orig = originalResults?.kpis;
   const sim = simulatedResults?.kpis;
-  const isSimulating = useMemo(() => orig && sim && sim.fcl !== orig.fcl, [orig, sim]);
+  const columns = simulatedResults?.validColumns || [];
 
-  // ── Full reset ─────────────────────────────────────────────────────────────
-  const resetAll = useCallback(() => {
-    setSelectedScenario(null);
-    setImpactValue(10);
-    setImpactMode('percent');
-    setIncludeRateio(true);
-    setRevSlider(1.0);
-    setCostSlider(1.0);
-    setExpSlider(1.0);
-    setTaxSlider(1.0);
-    setInvSlider(1.0);
-    setGoalFcl('');
-    setSelectedDept('');
-    setNumMonths(12);
+  // ── Carregar do LocalStorage no mount ──────────────────────────────────────
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const local = localStorage.getItem('marbrasil_dre_saved_scenarios');
+      if (local) {
+        try {
+          setSavedScenarios(JSON.parse(local));
+        } catch (e) {
+          console.warn('Erro ao ler cenários do localStorage:', e);
+        }
+      }
+    }
+  }, []);
+
+  // ── Sincronizar cenários salvos no LocalStorage ────────────────────────────
+  const saveToLocal = (scenarios: Scenario[]) => {
+    setSavedScenarios(scenarios);
+    localStorage.setItem('marbrasil_dre_saved_scenarios', JSON.stringify(scenarios));
+  };
+
+  // ── Criar um rascunho de cenário se não houver um ativo ─────────────────────
+  const initializeDraft = useCallback(() => {
+    if (!originalResults) return;
+    const cols = originalResults.validColumns;
+    const lastCol = cols[cols.length - 1] || 'Jun/26';
+    const lastIso = colToIso(lastCol);
+    const nextMonthIso = addMonthsIso(lastIso, 1);
+    const endProjIso = addMonthsIso(lastIso, 6); // Projeção padrão de 6 meses
+
+    const newScenario: Scenario = {
+      id: `sc_${Date.now()}`,
+      name: 'Rascunho Simulação',
+      basePeriod: [...cols],
+      projectionStartDate: nextMonthIso,
+      projectionEndDate: endProjIso,
+      mode: 'future_projection',
+      includeAllocatedExpenses: true,
+      assumptions: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    onScenarioChange(newScenario);
+  }, [originalResults, onScenarioChange]);
+
+  useEffect(() => {
+    if (isOpen && !activeScenario) {
+      initializeDraft();
+    }
+  }, [isOpen, activeScenario, initializeDraft]);
+
+  // ── Reset Completo ─────────────────────────────────────────────────────────
+  const handleReset = () => {
+    onScenarioChange(null);
     setAiResponse('');
     setAiQuestion(null);
-    granularRef.current = false;
-    onParamsChange({ ...DEFAULT_PARAMS });
-  }, [onParamsChange]);
+    initializeDraft();
+  };
 
-  useEffect(() => { if (isOpen) resetAll(); }, [isOpen]);
+  // ── Salvar o Cenário Atual ────────────────────────────────────────────────
+  const handleSaveScenario = () => {
+    if (!activeScenario) return;
+    const name = prompt('Digite o nome do cenário executivo:', activeScenario.name);
+    if (!name) return;
 
-  // ── Departamentos disponíveis ───────────────────────────────────────────────
-  const departamentos = useMemo(() => metadata?.departamentos || [], [metadata]);
-
-  // ── Receita mensal média do departamento ───────────────────────────────────
-  const deptMonthlyRevenue = useMemo(() => {
-    if (!selectedDept || !originalResults) return 0;
-    const cols = originalResults.validColumns;
-    if (cols.length === 0) return 0;
-    let total = 0;
-    rawData.forEach(row => {
-      if (row.Departamento !== selectedDept) return;
-      const contaDRE = (row.ContaDRE || '').toString();
-      const isRevenue = contaDRE.toLowerCase().includes('receita');
-      if (!isRevenue) return;
-      cols.forEach(col => {
-        const v = parseFloat(row[col]?.toString().replace(',', '.') || '0');
-        if (!isNaN(v) && v > 0) total += v;
-      });
-    });
-    return cols.length > 0 ? total / cols.length : 0;
-  }, [selectedDept, originalResults, rawData]);
-
-  // ── Tabela de Reposição (lógica corrigida) ─────────────────────────────────
-  // Raciocínio: tenho N meses para substituir o contrato de R$ X/mês.
-  // Preciso trazer, progressivamente, novos contratos que somem X/mês até o vencimento.
-  // Meta mensal de novos contratos = X / N (ritmo linear)
-  // A cada mês i, já tenho acumulado (X/N)*i em receita recorrente nova.
-  // Falta reconquistar = X - (X/N)*i = X*(N-i)/N
-  const recoveryPoints = useMemo(() => {
-    if (!originalResults || deptMonthlyRevenue <= 0 || numMonths <= 0) return [];
-    const valorContrato = deptMonthlyRevenue; // receita mensal do contrato perdido
-    const metaMensal = valorContrato / numMonths; // novos contratos/mês necessários
-    const lastCol = originalResults.validColumns[originalResults.validColumns.length - 1] || 'Jun/26';
-
-    return Array.from({ length: numMonths }, (_, i) => {
-      const mes = addMonths(lastCol, i + 1);
-      const receitaNovaAcumulada = metaMensal * (i + 1); // receita nova já conquistada
-      const aReconquistar = Math.max(0, valorContrato - receitaNovaAcumulada);
-      const percReposto = Math.min(100, (receitaNovaAcumulada / valorContrato) * 100);
-      return { mes, metaMensal, receitaNovaAcumulada, aReconquistar, percReposto };
-    });
-  }, [originalResults, deptMonthlyRevenue, numMonths]);
-
-  // ── Aplicar cenário rápido ─────────────────────────────────────────────────
-  const applyScenario = useCallback((id: ScenarioId, val: number) => {
-    if (!orig) return;
-    let p = { ...DEFAULT_PARAMS };
-    const pct = val / 100;
-    switch (id) {
-      case 'rev_up': p.revenueMultiplier = 1 + pct; break;
-      case 'rev_down': p.revenueMultiplier = Math.max(0, 1 + pct); break;
-      case 'costs_cut': p.costsMultiplier = Math.max(0, 1 + pct); break;
-      case 'exp_cut': p.expensesMultiplier = Math.max(0, 1 + pct); break;
-      case 'contract_loss':
-        if (selectedDept && deptMonthlyRevenue > 0 && originalResults) {
-          const deptTotal = deptMonthlyRevenue * originalResults.validColumns.length;
-          const totalRev = orig.totalEntradas || 1;
-          p.revenueMultiplier = Math.max(0, 1 - (deptTotal / totalRev));
-        } else {
-          p.revenueMultiplier = Math.max(0, 1 + pct);
-        }
-        break;
-    }
-    if (!includeRateio) p.expensesMultiplier = 0;
-    onParamsChange(p);
-    setRevSlider(p.revenueMultiplier);
-    setCostSlider(p.costsMultiplier);
-    setExpSlider(p.expensesMultiplier);
-    setTaxSlider(p.taxesMultiplier);
-    setInvSlider(p.investmentsMultiplier);
-  }, [orig, originalResults, selectedDept, deptMonthlyRevenue, includeRateio, onParamsChange]);
-
-  // ── Aplicar granular (live) ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!granularRef.current) return;
-    onParamsChange({
-      revenueMultiplier: revSlider,
-      costsMultiplier: costSlider,
-      expensesMultiplier: includeRateio ? expSlider : 0,
-      taxesMultiplier: taxSlider,
-      investmentsMultiplier: invSlider,
-    });
-  }, [revSlider, costSlider, expSlider, taxSlider, invSlider, includeRateio]);
-
-  // ── Goal Seek ──────────────────────────────────────────────────────────────
-  const goalSeek = useMemo(() => {
-    if (!goalFcl || !orig) return null;
-    const meta = parseFloat(goalFcl.replace(/\./g, '').replace(',', '.'));
-    if (isNaN(meta)) return null;
-    const delta = meta - orig.fcl;
-    return {
-      meta, delta,
-      revPct: (delta / (orig.totalEntradas || 1)) * 100,
-      costPct: (delta / (orig.totalCustos || 1)) * 100,
-      expPct: (delta / (orig.totalDespesas || 1)) * 100,
+    const updated = {
+      ...activeScenario,
+      name,
+      updatedAt: new Date().toISOString()
     };
-  }, [goalFcl, orig]);
 
-  // ── Análise de Sensibilidade ───────────────────────────────────────────────
-  const sensitivityData = useMemo(() => {
-    if (!orig) return [];
-    const steps = [-20, -15, -10, -5, 5, 10, 15, 20];
-    return steps.map(pct => {
-      const revFcl = orig.fcl + (orig.totalEntradas * pct / 100);
-      const costFcl = orig.fcl - (orig.totalCustos * Math.abs(pct) / 100) * (pct < 0 ? -1 : 1);
-      const expFcl = orig.fcl - (orig.totalDespesas * Math.abs(pct) / 100) * (pct < 0 ? -1 : 1);
-      return { pct: `${pct > 0 ? '+' : ''}${pct}%`, revFcl, costFcl, expFcl };
+    let list = [...savedScenarios];
+    const idx = list.findIndex(s => s.id === updated.id);
+    if (idx !== -1) {
+      list[idx] = updated;
+    } else {
+      list.push(updated);
+    }
+
+    saveToLocal(list);
+    onScenarioChange(updated);
+    alert('Cenário executivo salvo com sucesso!');
+  };
+
+  // ── Duplicar Cenário ───────────────────────────────────────────────────────
+  const handleDuplicateScenario = (sc: Scenario) => {
+    const dup: Scenario = {
+      ...sc,
+      id: `sc_${Date.now()}`,
+      name: `${sc.name} (Cópia)`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const list = [...savedScenarios, dup];
+    saveToLocal(list);
+    onScenarioChange(dup);
+  };
+
+  // ── Excluir Cenário ────────────────────────────────────────────────────────
+  const handleDeleteScenario = (id: string) => {
+    if (!confirm('Deseja realmente remover este cenário?')) return;
+    const list = savedScenarios.filter(s => s.id !== id);
+    saveToLocal(list);
+    if (activeScenario?.id === id) {
+      onScenarioChange(null);
+    }
+  };
+
+  // ── Adicionar premissa ao cenário ativo ────────────────────────────────────
+  const handleAddAssumption = () => {
+    if (!activeScenario || !originalResults) return;
+
+    const defaultIsoStart = colToIso(originalResults.validColumns[0]);
+    const defaultIsoEnd = colToIso(originalResults.validColumns[originalResults.validColumns.length - 1]);
+
+    const newAsm: ScenarioAssumption = {
+      id: `asm_${Date.now()}`,
+      type: asmType,
+      targetType: asmTargetType,
+      targetIds: asmTargetIds.length > 0 ? asmTargetIds : ['all'],
+      amountType: asmAmountType,
+      value: asmValue,
+      startDate: asmStartDate || defaultIsoStart,
+      endDate: asmEndDate || defaultIsoEnd,
+      recurrence: asmRecurrence,
+      macroIndex: asmType === 'macro_driver' ? asmMacroIndex : undefined
+    };
+
+    const updated: Scenario = {
+      ...activeScenario,
+      assumptions: [...activeScenario.assumptions, newAsm],
+      updatedAt: new Date().toISOString()
+    };
+
+    onScenarioChange(updated);
+    setEditingAssumption(null);
+    // Limpar formulário temporário
+    setAsmTargetIds([]);
+    setAsmStartDate('');
+    setAsmEndDate('');
+  };
+
+  // ── Remover premissa do cenário ativo ──────────────────────────────────────
+  const handleRemoveAssumption = (asmId: string) => {
+    if (!activeScenario) return;
+    const updated: Scenario = {
+      ...activeScenario,
+      assumptions: activeScenario.assumptions.filter(a => a.id !== asmId),
+      updatedAt: new Date().toISOString()
+    };
+    onScenarioChange(updated);
+  };
+
+  // ── Visualizações Computadas ───────────────────────────────────────────────
+
+  // 1. Gráfico de Evolução (Base vs Simulado)
+  const evolucaoData = useMemo(() => {
+    if (!originalResults || !simulatedResults) return [];
+    return simulatedResults.validColumns.map(col => {
+      const isProj = colToIso(col) > colToIso(originalResults.validColumns[originalResults.validColumns.length - 1]);
+      return {
+        name: col,
+        'Receita Base': originalResults.mensal['Total Entradas Operacionais']?.[col] || (isProj ? simulatedResults.mensal['Total Entradas Operacionais']?.[col] : 0),
+        'Receita Sim.': simulatedResults.mensal['Total Entradas Operacionais']?.[col] || 0,
+        'FCL Base': originalResults.mensal['Fluxo de Caixa Livre FCL']?.[col] || (isProj ? simulatedResults.mensal['Fluxo de Caixa Livre FCL']?.[col] : 0),
+        'FCL Sim.': simulatedResults.mensal['Fluxo de Caixa Livre FCL']?.[col] || 0,
+      };
     });
-  }, [orig]);
+  }, [originalResults, simulatedResults]);
 
-  // ── Score de Risco ─────────────────────────────────────────────────────────
-  const riskScore = useMemo(() => {
-    if (!orig || !sim) return null;
-    const fclDrop = orig.fcl > 0 ? ((orig.fcl - sim.fcl) / orig.fcl) * 100 : 0;
-    const revDrop = orig.totalEntradas > 0 ? ((orig.totalEntradas - sim.totalEntradas) / orig.totalEntradas) * 100 : 0;
-    let score = 0;
-    let label = 'Baixo';
-    let color = 'emerald';
-    if (fclDrop > 50 || sim.fcl < 0) { score = 90; label = 'Crítico'; color = 'red'; }
-    else if (fclDrop > 30 || revDrop > 20) { score = 70; label = 'Alto'; color = 'rose'; }
-    else if (fclDrop > 15 || revDrop > 10) { score = 45; label = 'Médio'; color = 'amber'; }
-    else if (fclDrop > 5) { score = 20; label = 'Baixo'; color = 'emerald'; }
-    return { score, label, color, fclDrop, revDrop };
+  // 2. Gráfico Waterfall (EBITDA Ponte)
+  const waterfallData = useMemo(() => {
+    if (!orig || !sim) return [];
+    
+    // Desvios
+    const dReceita = sim.totalEntradas - orig.totalEntradas;
+    const dCustos = -(sim.totalCustos - orig.totalCustos); // sinal invertido
+    const dDespesas = -(sim.totalDespesas - orig.totalDespesas); // sinal invertido
+    const dInvestimentos = -(sim.totalInvestimentos - orig.totalInvestimentos);
+    const dImpostos = -(sim.totalImpostos - orig.totalImpostos);
+
+    const steps = [
+      { name: 'EBITDA Base', val: orig.resultado, cumulative: 0 },
+      { name: 'Receitas', val: dReceita, cumulative: orig.resultado },
+      { name: 'Custos Op.', val: dCustos, cumulative: orig.resultado + dReceita },
+      { name: 'Despesas', val: dDespesas, cumulative: orig.resultado + dReceita + dCustos },
+      { name: 'Impostos', val: dImpostos, cumulative: orig.resultado + dReceita + dCustos + dDespesas },
+      { name: 'Investimentos', val: dInvestimentos, cumulative: orig.resultado + dReceita + dCustos + dDespesas + dImpostos },
+      { name: 'EBITDA Simulado', val: sim.resultado, cumulative: 0, isFinal: true },
+    ];
+
+    return steps.map(s => ({
+      name: s.name,
+      base: s.isFinal ? 0 : (s.val >= 0 ? s.cumulative : s.cumulative + s.val),
+      bar: Math.abs(s.val),
+      positive: s.val >= 0,
+      isFinal: !!s.isFinal,
+      rawValue: s.val
+    }));
   }, [orig, sim]);
 
-  // ── IA Query ───────────────────────────────────────────────────────────────
+  // 3. Tornado Chart (Sensibilidade FCL)
+  // Mostra impacto teórico de +-10% em Receita, Custos e Despesas
+  const tornadoData = useMemo(() => {
+    if (!orig) return [];
+    return [
+      {
+        variable: 'Receita Operacional (±10%)',
+        positivo: orig.totalEntradas * 0.1,
+        negativo: -orig.totalEntradas * 0.1
+      },
+      {
+        variable: 'Custos Operacionais (±10%)',
+        positivo: -orig.totalCustos * 0.1,
+        negativo: orig.totalCustos * 0.1
+      },
+      {
+        variable: 'Despesas Rateadas (±10%)',
+        positivo: -orig.totalDespesas * 0.1,
+        negativo: orig.totalDespesas * 0.1
+      },
+      {
+        variable: 'Impostos Gerais (±10%)',
+        positivo: -orig.totalImpostos * 0.1,
+        negativo: orig.totalImpostos * 0.1
+      }
+    ].sort((a, b) => Math.abs(b.negativo) - Math.abs(a.negativo));
+  }, [orig]);
+
+  // 4. Heatmap Mensal de Desvios de FCL por Categoria
+  const heatmapGrid = useMemo(() => {
+    if (!originalResults || !simulatedResults) return { grid: [], cols: [], cats: [] };
+    const cols = simulatedResults.validColumns.slice(-6); // Últimos 6 meses
+    const cats = ['Total Entradas Operacionais', 'Total de Impostos', 'Total Custos Operacionais', 'Total Despesas Rateadas', 'Fluxo de Caixa Livre FCL'];
+
+    const grid: { cat: string; col: string; val: number; pct: number }[] = [];
+    cats.forEach(cat => {
+      cols.forEach(col => {
+        const oVal = originalResults.mensal[cat]?.[col] || 0;
+        const sVal = simulatedResults.mensal[cat]?.[col] || 0;
+        const diff = sVal - oVal;
+        const pct = oVal !== 0 ? (diff / oVal) * 100 : 0;
+        grid.push({ cat, col, val: diff, pct });
+      });
+    });
+    return { grid, cols, cats };
+  }, [originalResults, simulatedResults]);
+
+  // 5. Score de Risco do Cenário
+  const riskScore = useMemo(() => {
+    if (!orig || !sim) return null;
+    const fclDrop = orig.fcl > 0 ? ((orig.fcl - sim.fcl) / orig.fcl) * 150 : 0;
+    const marginDrop = orig.percLucro - sim.percLucro;
+    let score = Math.min(100, Math.max(0, Math.round(fclDrop + marginDrop * 2)));
+
+    let label = 'Baixo';
+    let color = 'text-emerald-600 border-emerald-200 bg-emerald-50';
+    let gaugeColor = '#10b981';
+
+    if (score > 75) {
+      label = 'Crítico';
+      color = 'text-red-700 border-red-200 bg-red-50';
+      gaugeColor = '#ef4444';
+    } else if (score > 40) {
+      label = 'Médio';
+      color = 'text-orange-700 border-orange-200 bg-orange-50';
+      gaugeColor = '#f97316';
+    }
+
+    return { score, label, color, gaugeColor };
+  }, [orig, sim]);
+
+  // ── IA Question ────────────────────────────────────────────────────────────
   const handleAiQuestion = async (qId: string, qLabel: string) => {
     if (!orig || !sim) return;
     setAiQuestion(qId);
@@ -293,637 +427,799 @@ export function DreSimulatorV2({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           questionId: qId, questionLabel: qLabel,
-          scenarioType: selectedScenario || 'custom',
+          scenarioType: activeScenario?.name || 'Cenário Executivo',
           originalKpis: orig, simulatedKpis: sim,
           empresa: empresaContext, periodo: periodoContext,
-          targetDepartamento: selectedDept || undefined,
-          impactMode, impactValue,
-          recoveryData: recoveryPoints.slice(0, 6),
+          assumptions: activeScenario?.assumptions || [],
         }),
       });
       const data = await res.json();
       setAiResponse(data.analysis || 'Não foi possível gerar a análise.');
-    } catch { setAiResponse('Erro ao conectar com a IA. Tente novamente.'); }
+    } catch { setAiResponse('Erro ao conectar com a BrisinhAI.'); }
     finally { setIsAiLoading(false); }
   };
 
-  // ── Dados dos Gráficos ─────────────────────────────────────────────────────
-  const evolucaoData = useMemo(() => {
-    if (!originalResults) return [];
-    return originalResults.validColumns.map(col => ({
-      name: col,
-      Receita: originalResults.mensal['Total Entradas Operacionais']?.[col] || 0,
-      ReceitaSim: simulatedResults?.mensal['Total Entradas Operacionais']?.[col] || 0,
-      FCL: originalResults.mensal['Fluxo de Caixa Livre FCL']?.[col] || 0,
-      FCLSim: simulatedResults?.mensal['Fluxo de Caixa Livre FCL']?.[col] || 0,
-    }));
-  }, [originalResults, simulatedResults]);
-
-  const recoveryChartData = useMemo(() => recoveryPoints.map(p => ({
-    name: p.mes,
-    'Novo/Mês': p.metaMensal,
-    'Reposto': p.receitaNovaAcumulada,
-    'Restante': p.aReconquistar,
-  })), [recoveryPoints]);
-
   if (!isOpen) return null;
 
-  // ── Delta Helper ───────────────────────────────────────────────────────────
-  const Delta = ({ o, s, invert = false, large = false }: { o: number; s: number; invert?: boolean; large?: boolean }) => {
-    const d = s - o;
-    if (Math.abs(d) < 0.01) return <span className="text-slate-400 font-mono text-xs">—</span>;
-    const good = invert ? d < 0 : d > 0;
-    const cls = good ? 'text-emerald-600' : 'text-rose-600';
-    return (
-      <span className={`font-mono font-bold flex items-center gap-0.5 ${large ? 'text-sm' : 'text-xs'} ${cls}`}>
-        {good ? <ArrowUpRight size={large ? 14 : 11} /> : <ArrowDownRight size={large ? 14 : 11} />}
-        {fmt(d)}
-      </span>
-    );
-  };
-
-  const TABS: { id: TabId; label: string }[] = [
-    { id: 'cenarios', label: '⚡ Cenários' },
-    { id: 'granular', label: '🎛️ Granular' },
-    { id: 'reposicao', label: '📅 Reposição' },
-    { id: 'sensibilidade', label: '📈 Sensibilidade' },
-  ];
-
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-stretch animate-in fade-in duration-200">
-
-      {/* ── PAINEL COMPLETO (2 colunas) ── */}
-      <div className="flex-1 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
-
-        {/* ── HEADER GLOBAL ── */}
-        <div className="flex-shrink-0 bg-slate-900 px-6 py-3.5 flex items-center justify-between border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-              <Zap size={16} className="text-white" />
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-stretch animate-in fade-in duration-200">
+      
+      {/* ── PAINEL FULLSCREEN DO SIMULADOR ── */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        
+        {/* ── HEADER SUPERIOR EXECUTIVO ── */}
+        <div className="flex-shrink-0 bg-slate-900 px-8 py-5 flex items-center justify-between border-b border-slate-800">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/10">
+              <Zap size={20} className="text-white" />
             </div>
             <div>
-              <span className="text-white font-bold text-sm">Simulador de Cenários DRE</span>
-              <span className="text-slate-400 text-xs ml-3">· {empresaContext} · {periodoContext}</span>
+              <h1 className="text-xl font-black text-white tracking-tight flex items-center gap-3">
+                Simulador Executivo de Cenários DRE
+                {activeScenario && (
+                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+                    Cenário: {activeScenario.name}
+                  </span>
+                )}
+              </h1>
+              <p className="text-slate-400 text-xs mt-0.5 font-medium">
+                Conselho de Administração · {empresaContext} · {periodoContext}
+              </p>
             </div>
-            {isSimulating && (
-              <span className="ml-2 flex items-center gap-1.5 text-[11px] font-bold text-orange-400 bg-orange-500/15 border border-orange-500/30 px-2.5 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
-                Simulação Ativa
-              </span>
-            )}
           </div>
-          <div className="flex items-center gap-2">
+          
+          <div className="flex items-center gap-3">
             <button
-              onClick={resetAll}
-              className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+              onClick={handleSaveScenario}
+              className="flex items-center gap-2 text-xs font-bold text-slate-100 bg-orange-600 hover:bg-orange-700 px-4 py-2.5 rounded-lg shadow-md transition-colors"
             >
-              <RotateCcw size={13} /> Resetar
+              <Save size={14} /> Salvar Cenário
             </button>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
-              <X size={18} />
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/10 px-3.5 py-2.5 rounded-lg transition-colors border border-slate-800"
+            >
+              <RotateCcw size={14} /> Resetar
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors border border-slate-800"
+            >
+              <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* ── BODY: 2 COLUNAS ── */}
+        {/* ── CORPO PRINCIPAL: 2 COLUNAS EXPANDIDAS ── */}
         <div className="flex-1 flex overflow-hidden">
-
-          {/* ════ COLUNA ESQUERDA — CONTROLES (420px) ════ */}
-          <div className="w-[420px] flex-shrink-0 bg-slate-50 border-r border-slate-200 flex flex-col overflow-hidden">
-
-            {/* KPI Strip */}
-            {orig && sim && (
-              <div className="flex-shrink-0 grid grid-cols-2 divide-x divide-slate-200 border-b border-slate-200 bg-white">
-                {[
-                  { label: 'FCL Simulado', o: orig.fcl, s: sim.fcl },
-                  { label: 'Receita', o: orig.totalEntradas, s: sim.totalEntradas },
-                ].map(k => (
-                  <div key={k.label} className="px-4 py-2.5">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{k.label}</p>
-                    <p className={`text-base font-black font-mono mt-0.5 ${k.s >= k.o ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(k.s)}</p>
-                    <Delta o={k.o} s={k.s} />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Tabs */}
-            <div className="flex-shrink-0 flex border-b border-slate-200 bg-white px-2 pt-1.5 gap-0.5 overflow-x-auto">
-              {TABS.map(t => (
+          
+          {/* ════ COLUNA ESQUERDA — PAINEL DE CONTROLES (440px) ════ */}
+          <div className="w-[440px] flex-shrink-0 bg-slate-900 border-r border-slate-850 flex flex-col overflow-hidden">
+            
+            {/* Abas Esquerda */}
+            <div className="flex-shrink-0 flex border-b border-slate-800 bg-slate-950 px-4 pt-3.5 gap-1">
+              {[
+                { id: 'dashboard' as TabId, label: '📊 Dashboard', icon: <Activity size={13} /> },
+                { id: 'premissas' as TabId, label: '🔧 Premissas', icon: <ListFilter size={13} /> },
+                { id: 'comparador' as TabId, label: '🏆 Comparar', icon: <Grid size={13} /> },
+                { id: 'tabela' as TabId, label: '📄 DRE Simulado', icon: <FileSpreadsheet size={13} /> },
+              ].map(t => (
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`flex-shrink-0 px-3 py-2 text-[11px] font-bold rounded-t-lg transition-all whitespace-nowrap ${activeTab === t.id ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-lg transition-all whitespace-nowrap ${activeTab === t.id ? 'bg-slate-900 text-white border-t-2 border-orange-500' : 'text-slate-450 hover:text-slate-200 hover:bg-slate-900/50'}`}
                 >
+                  {t.icon}
                   {t.label}
                 </button>
               ))}
             </div>
 
-            {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Painel de Rolagem */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
 
-              {/* ══ ABA CENÁRIOS ══ */}
-              {activeTab === 'cenarios' && (
+              {/* ══ ABA DASHBOARD: BOTÕES E ATIVOS ══ */}
+              {activeTab === 'dashboard' && (
                 <>
-                  {/* Toggles */}
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={() => setIncludeRateio(v => !v)}
-                      className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${includeRateio ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-slate-100 border-slate-300 text-slate-500'}`}
-                    >
-                      {includeRateio ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                      Rateio {includeRateio ? 'Incluído' : 'Excluído'}
-                    </button>
-                    <button
-                      onClick={() => setImpactMode(m => m === 'percent' ? 'absolute' : 'percent')}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                    >
-                      <DollarSign size={13} />
-                      {impactMode === 'percent' ? 'Modo: %' : 'Modo: R$'}
-                    </button>
-                  </div>
-
-                  {/* Grade de Cenários */}
-                  <div className="grid grid-cols-2 gap-2">
-                    {SCENARIOS.map(sc => {
-                      const active = selectedScenario === sc.id;
-                      return (
+                  {/* Cenários Macroeconômicos Rápidos */}
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Zap size={11} className="text-orange-500" /> Cenários de Simulação Rápida
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SCENARIO_BUTTONS.map(sc => (
                         <button
                           key={sc.id}
                           onClick={() => {
-                            setSelectedScenario(sc.id);
-                            granularRef.current = false;
-                            if (sc.id !== 'goal_seek' && sc.id !== 'contract_loss') {
-                              setImpactValue(sc.defVal);
-                              applyScenario(sc.id, sc.defVal);
+                            setAsmType(sc.id);
+                            setAsmValue(sc.defaultVal);
+                            if (sc.id === 'contract_loss') {
+                              setAsmTargetType('department');
+                            } else if (['revenue_reduction', 'revenue_increase'].includes(sc.id)) {
+                              setAsmTargetType('account_group');
+                              setAsmTargetIds(['receita']);
+                            } else if (sc.id === 'costs_cut') {
+                              setAsmTargetType('account_group');
+                              setAsmTargetIds(['custos_operacionais']);
+                            } else if (['expense_increase', 'expense_reduction'].includes(sc.id)) {
+                              setAsmTargetType('account_group');
+                              setAsmTargetIds(['despesas_rateadas']);
                             }
-                            if (sc.id === 'contract_loss') setActiveTab('reposicao');
+                            setEditingAssumption({});
                           }}
-                          className={`relative flex flex-col gap-1.5 p-3 rounded-xl border-2 text-left transition-all ${active ? 'border-orange-400 bg-orange-50 shadow-sm' : `border ${SCENARIO_COLORS[sc.color]} hover:shadow-sm`}`}
+                          className={`flex flex-col p-3 rounded-xl border text-left transition-all shadow-sm ${BUTTON_COLORS[sc.color]}`}
                         >
-                          {active && <CheckCircle2 size={13} className="absolute top-2 right-2 text-orange-500" />}
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${SCENARIO_COLORS[sc.color]}`}>
-                            {sc.icon}
+                          <div className="flex items-center justify-between w-full">
+                            <span className="p-1 rounded-md bg-white/50">{sc.icon}</span>
+                            <ChevronRight size={12} className="opacity-40" />
                           </div>
-                          <p className="text-xs font-bold text-slate-800 leading-tight">{sc.label}</p>
-                          <p className="text-[10px] text-slate-400 leading-tight">{sc.sublabel}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Configuração de impacto */}
-                  {selectedScenario && !['contract_loss', 'goal_seek'].includes(selectedScenario) && (
-                    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ajustar Impacto</p>
-                      {impactMode === 'percent' ? (
-                        <>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-slate-600">Percentual</span>
-                            <span className={`font-mono font-bold text-sm px-2.5 py-0.5 rounded-lg ${impactValue >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                              {impactValue > 0 ? '+' : ''}{impactValue}%
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min={selectedScenario === 'rev_up' ? 1 : -50}
-                            max={selectedScenario === 'rev_up' ? 50 : -1}
-                            step={1}
-                            value={impactValue}
-                            onChange={e => { const v = parseInt(e.target.value); setImpactValue(v); applyScenario(selectedScenario, v); }}
-                            className="w-full accent-orange-500 h-1.5"
-                          />
-                          <div className="flex justify-between text-[10px] text-slate-400">
-                            <span>{selectedScenario === 'rev_up' ? '+1%' : '-50%'}</span>
-                            <span>{selectedScenario === 'rev_up' ? '+50%' : '-1%'}</span>
-                          </div>
-                        </>
-                      ) : (
-                        <input
-                          type="number"
-                          value={Math.abs(impactValue)}
-                          onChange={e => {
-                            const v = selectedScenario === 'rev_up' ? Number(e.target.value) : -Number(e.target.value);
-                            setImpactValue(v);
-                            applyScenario(selectedScenario, v);
-                          }}
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2 font-mono text-sm focus:border-orange-400 outline-none"
-                          placeholder="Ex: 50000"
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {/* Goal Seek */}
-                  {selectedScenario === 'goal_seek' && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                      <p className="text-xs font-bold text-blue-700 flex items-center gap-1.5"><Target size={13} /> Meta de FCL</p>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-slate-400 text-sm font-bold">R$</span>
-                        <input
-                          type="text"
-                          value={goalFcl}
-                          onChange={e => setGoalFcl(e.target.value)}
-                          placeholder="150.000"
-                          className="w-full pl-9 pr-3 py-2 border-2 border-blue-200 focus:border-blue-500 rounded-xl outline-none font-mono font-bold text-slate-700 text-sm"
-                        />
-                      </div>
-                      <p className="text-xs text-slate-500">FCL atual: <strong className="font-mono">{fmt(orig?.fcl || 0)}</strong></p>
-                      {goalSeek && (
-                        <div className="grid grid-cols-3 gap-2">
-                          {[
-                            { label: 'Via Receita', pct: goalSeek.revPct, type: 'rev' },
-                            { label: 'Via Custos', pct: -goalSeek.costPct, type: 'cost' },
-                            { label: 'Via Despesas', pct: -goalSeek.expPct, type: 'exp' },
-                          ].map(opt => (
-                            <button
-                              key={opt.type}
-                              disabled={Math.abs(opt.pct) > 100}
-                              onClick={() => {
-                                let p = { ...DEFAULT_PARAMS };
-                                if (opt.type === 'rev') p.revenueMultiplier = 1 + goalSeek.revPct / 100;
-                                else if (opt.type === 'cost') p.costsMultiplier = Math.max(0, 1 - goalSeek.costPct / 100);
-                                else p.expensesMultiplier = Math.max(0, 1 - goalSeek.expPct / 100);
-                                onParamsChange(p);
-                              }}
-                              className="flex flex-col items-center p-2 rounded-lg border bg-white hover:bg-blue-50 text-center disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                            >
-                              <span className="text-[10px] text-slate-500 font-semibold">{opt.label}</span>
-                              <span className={`text-sm font-black font-mono ${Math.abs(opt.pct) > 100 ? 'text-slate-400' : opt.pct >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                {Math.abs(opt.pct) > 100 ? 'N/A' : fmtPct(opt.pct)}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* IA Buttons */}
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1"><Sparkles size={11} className="text-orange-400" /> Análise BrisinhAI</p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {AI_QUESTIONS.map(q => (
-                        <button
-                          key={q.id}
-                          onClick={() => handleAiQuestion(q.id, q.label)}
-                          disabled={isAiLoading || !isSimulating}
-                          className={`flex items-center gap-1.5 p-2.5 rounded-lg border text-left text-[11px] font-semibold transition-all ${aiQuestion === q.id && !isAiLoading ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-orange-300 hover:bg-orange-50 disabled:opacity-40 disabled:cursor-not-allowed'}`}
-                        >
-                          <span>{q.icon}</span>
-                          <span className="leading-tight">{q.label}</span>
-                          {aiQuestion === q.id && isAiLoading && <Loader2 size={11} className="ml-auto animate-spin text-orange-500 flex-shrink-0" />}
+                          <span className="text-xs font-bold mt-2.5 leading-tight">{sc.label}</span>
+                          <span className="text-[9px] text-slate-500 leading-tight mt-0.5">{sc.sublabel}</span>
                         </button>
                       ))}
                     </div>
-                    {!isSimulating && <p className="text-[11px] text-slate-400 text-center">Configure um cenário para habilitar a IA</p>}
+                  </div>
+
+                  {/* Configurações Globais do Cenário */}
+                  {activeScenario && (
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuração do Horizonte</p>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Início Impacto</label>
+                          <input
+                            type="month"
+                            value={activeScenario.projectionStartDate}
+                            onChange={e => onScenarioChange({ ...activeScenario, projectionStartDate: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-orange-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Fim Impacto</label>
+                          <input
+                            type="month"
+                            value={activeScenario.projectionEndDate}
+                            onChange={e => onScenarioChange({ ...activeScenario, projectionEndDate: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-orange-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-xs text-slate-350 font-medium">Incluir Despesas Rateadas</span>
+                        <button
+                          onClick={() => onScenarioChange({ ...activeScenario, includeAllocatedExpenses: !activeScenario.includeAllocatedExpenses })}
+                          className="text-slate-400 hover:text-white"
+                        >
+                          {activeScenario.includeAllocatedExpenses ? (
+                            <ToggleRight size={32} className="text-orange-500" />
+                          ) : (
+                            <ToggleLeft size={32} className="text-slate-600" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* IA integrada BrisinhAI */}
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Sparkles size={11} className="text-orange-400" /> Consultar FP&A IA</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { id: 'timeline', label: ' timeline de risco', icon: '📅' },
+                        { id: 'breakeven', label: 'Ponto de Equilíbrio', icon: '⚖️' },
+                        { id: 'actions', label: 'Plano de Ação', icon: '🎯' },
+                        { id: 'summary', label: 'Resumo do Conselho', icon: '📈' },
+                      ].map(q => (
+                        <button
+                          key={q.id}
+                          onClick={() => handleAiQuestion(q.id, q.label)}
+                          disabled={isAiLoading || !activeScenario?.assumptions.length}
+                          className="flex items-center gap-2 p-3 rounded-xl border border-slate-800 bg-slate-950/40 text-slate-300 text-left text-xs font-semibold hover:border-orange-500/40 hover:bg-orange-950/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <span>{q.icon}</span>
+                          <span className="leading-tight">{q.label}</span>
+                          {aiQuestion === q.id && isAiLoading && <Loader2 size={12} className="ml-auto animate-spin text-orange-500 flex-shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </>
               )}
 
-              {/* ══ ABA GRANULAR ══ */}
-              {activeTab === 'granular' && (
-                <>
+              {/* ══ ABA PREMISSAS: LISTA DE APLICAÇÃO ══ */}
+              {activeTab === 'premissas' && activeScenario && (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Premissas Ativas no Cenário</p>
+                  
+                  {activeScenario.assumptions.length === 0 ? (
+                    <div className="text-center py-10 text-slate-500 border border-dashed border-slate-800 rounded-xl">
+                      <HelpCircle size={32} className="mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">Nenhuma premissa aplicada ainda.</p>
+                      <button onClick={() => setActiveTab('dashboard')} className="text-orange-500 text-xs font-bold mt-2 hover:underline">
+                        Adicionar primeiro cenário
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeScenario.assumptions.map(asm => (
+                        <div key={asm.id} className="bg-slate-950 border border-slate-850 rounded-xl p-3.5 flex items-start justify-between">
+                          <div>
+                            <p className="text-xs font-extrabold text-white">
+                              {asm.type === 'contract_loss' && 'Perda de Contrato'}
+                              {asm.type === 'revenue_increase' && 'Aumento de Receita'}
+                              {asm.type === 'revenue_reduction' && 'Redução de Receita'}
+                              {asm.type === 'expense_increase' && 'Aumento de Despesa'}
+                              {asm.type === 'expense_reduction' && 'Redução de Despesa'}
+                              {asm.type === 'costs_cut' && 'Corte de Custos'}
+                              {asm.type === 'revenue_replacement' && 'Reposição de Receita'}
+                              {asm.type === 'macro_driver' && `Reajuste via ${asm.macroIndex}`}
+                            </p>
+                            <p className="text-[10px] text-slate-450 mt-1">
+                              Foco: {asm.targetType === 'all' ? 'Portfólio Inteiro' : asm.targetIds.join(', ')}
+                            </p>
+                            <p className="text-[10px] text-orange-400 font-mono mt-0.5">
+                              {asm.amountType === 'percentage' ? `${asm.value > 0 ? '+' : ''}${asm.value}%` : fmt(asm.value)}
+                              {asm.recurrence === 'linear_ramp' && ' (Curva Linear)'}
+                              {asm.recurrence === 'one_time' && ' (Única)'}
+                            </p>
+                            <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                              De {isoToCol(asm.startDate)} até {isoToCol(asm.endDate)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveAssumption(asm.id)}
+                            className="p-1.5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ══ ABA COMPARADOR: LISTA DE CENÁRIOS SALVOS ══ */}
+              {activeTab === 'comparador' && (
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Controle por Linha</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cenários Executivos Salvos</p>
+                    <span className="text-[10px] font-mono text-slate-500">{savedScenarios.length} cenários</span>
+                  </div>
+
+                  {savedScenarios.length === 0 ? (
+                    <div className="text-center py-10 text-slate-500 border border-dashed border-slate-800 rounded-xl">
+                      <Save size={32} className="mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">Nenhum cenário salvo ainda no LocalStorage.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {savedScenarios.map(sc => (
+                        <div
+                          key={sc.id}
+                          className={`border rounded-xl p-3.5 flex items-center justify-between transition-all ${activeScenario?.id === sc.id ? 'border-orange-500 bg-slate-900' : 'border-slate-800 bg-slate-950/40'}`}
+                        >
+                          <button
+                            onClick={() => onScenarioChange(sc)}
+                            className="flex-1 text-left"
+                          >
+                            <p className="text-xs font-bold text-white leading-tight">{sc.name}</p>
+                            <p className="text-[9px] text-slate-500 mt-1 font-mono">
+                              Premissas: {sc.assumptions.length} · Projeção: {isoToCol(sc.projectionStartDate)}...{isoToCol(sc.projectionEndDate)}
+                            </p>
+                          </button>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDuplicateScenario(sc)}
+                              title="Duplicar Cenário"
+                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                              <Copy size={12} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteScenario(sc.id)}
+                              title="Deletar Cenário"
+                              className="p-1.5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ══ ABA TABELA: INFO SIMPLES ══ */}
+              {activeTab === 'tabela' && (
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DRE Projetado Detalhado</p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Você pode visualizar o detalhamento completo mês a mês na coluna da direita alternando para a aba correspondente.
+                  </p>
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => setIncludeRateio(v => !v)}
-                      className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all ${includeRateio ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-100 border-slate-200 text-slate-500'}`}
+                      onClick={() => setActiveTab('tabela')}
+                      className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-2 text-xs font-bold"
                     >
-                      {includeRateio ? <ToggleRight size={13} /> : <ToggleLeft size={13} />} Rateio
+                      Exportar Cenário
                     </button>
                   </div>
-                  {[
-                    { label: 'Receitas Operacionais', val: revSlider, set: setRevSlider, min: 0.3, max: 2.0, color: 'emerald' },
-                    { label: 'Custos Operacionais', val: costSlider, set: setCostSlider, min: 0.3, max: 1.5, color: 'amber' },
-                    { label: 'Despesas Rateadas', val: expSlider, set: setExpSlider, min: 0, max: 1.5, color: 'indigo', disabled: !includeRateio },
-                    { label: 'Impostos e Taxas', val: taxSlider, set: setTaxSlider, min: 0.5, max: 1.5, color: 'rose' },
-                    { label: 'Investimentos', val: invSlider, set: setInvSlider, min: 0, max: 2.0, color: 'slate' },
-                  ].map(sl => {
-                    const pct = Math.round((sl.val - 1) * 100);
-                    return (
-                      <div key={sl.label} className={`bg-white border border-slate-200 rounded-xl p-3.5 space-y-2 ${sl.disabled ? 'opacity-40' : ''}`}>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-semibold text-slate-700">{sl.label}</span>
-                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full font-mono ${pct === 0 ? 'bg-slate-100 text-slate-500' : pct > 0 && sl.color === 'emerald' ? 'bg-emerald-100 text-emerald-700' : pct < 0 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {pct >= 0 ? '+' : ''}{pct}%
-                          </span>
-                        </div>
-                        <input
-                          type="range" min={sl.min} max={sl.max} step={0.01}
-                          value={sl.val} disabled={sl.disabled}
-                          onChange={e => { granularRef.current = true; sl.set(parseFloat(e.target.value)); setSelectedScenario('custom'); }}
-                          className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-${sl.color}-500`}
-                        />
-                      </div>
-                    );
-                  })}
-                </>
+                </div>
               )}
 
-              {/* ══ ABA REPOSIÇÃO ══ */}
-              {activeTab === 'reposicao' && (
-                <>
+            </div>
+
+            {/* KPI Rápido Inferior */}
+            {orig && sim && (
+              <div className="flex-shrink-0 bg-slate-950 border-t border-slate-850 p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Fluxo de Caixa Livre</span>
+                  <Delta o={orig.fcl} s={sim.fcl} large />
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[10px] text-slate-450">Base: {fmt(orig.fcl)}</span>
+                  <span className="text-xl font-black text-white font-mono">{fmt(sim.fcl)}</span>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* ════ COLUNA DIREITA — PAINÉIS ANALÍTICOS GIGANTES (100% PRO) ════ */}
+          <div className="flex-1 overflow-y-auto bg-slate-950 p-8 space-y-8 flex flex-col">
+            
+            {/* Avisos Executivos e KPIs Expandidos */}
+            <div className="flex-shrink-0 flex gap-6 items-stretch">
+              
+              {/* Score de Risco */}
+              {orig && sim && riskScore && (
+                <div className="w-[300px] border border-slate-800 bg-slate-900/40 rounded-2xl p-5 flex items-center gap-5">
+                  <div className="w-16 h-16 rounded-2xl flex flex-col items-center justify-center flex-shrink-0" style={{ backgroundColor: `${riskScore.gaugeColor}20` }}>
+                    <Gauge size={24} style={{ color: riskScore.gaugeColor }} />
+                    <span className="text-xs font-black mt-0.5" style={{ color: riskScore.gaugeColor }}>{riskScore.score}</span>
+                  </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Estudo de Reposição</p>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Calcule quantos novos contratos você precisa fechar por mês para substituir a receita perdida antes do vencimento.
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Risco do Cenário</span>
+                    <p className={`text-xl font-black ${riskScore.score > 70 ? 'text-rose-500' : riskScore.score > 40 ? 'text-orange-500' : 'text-emerald-500'}`}>
+                      {riskScore.label}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                      FCL: {fmtPct(((sim.fcl - orig.fcl) / (orig.fcl || 1)) * 100)}
                     </p>
                   </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                      <Building2 size={11} /> Departamento / Contrato
-                    </label>
-                    <select
-                      value={selectedDept}
-                      onChange={e => {
-                        setSelectedDept(e.target.value);
-                        if (e.target.value) { setSelectedScenario('contract_loss'); applyScenario('contract_loss', -100); }
-                      }}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:border-orange-400 outline-none bg-white"
-                    >
-                      <option value="">Selecione o contrato perdido...</option>
-                      {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                      <Calendar size={11} /> Meses até a rescisão
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range" min={1} max={36} step={1} value={numMonths}
-                        onChange={e => setNumMonths(parseInt(e.target.value))}
-                        className="flex-1 accent-orange-500 h-1.5"
-                      />
-                      <span className="text-sm font-black text-orange-600 w-12 text-right font-mono">{numMonths}m</span>
-                    </div>
-                  </div>
-
-                  {selectedDept && deptMonthlyRevenue > 0 && (
-                    <>
-                      {/* KPIs da reposição */}
-                      <div className="grid grid-cols-1 gap-2">
-                        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex justify-between items-center">
-                          <div>
-                            <p className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Receita mensal a repor</p>
-                            <p className="text-base font-black text-rose-700 font-mono">{fmt(deptMonthlyRevenue)}</p>
-                          </div>
-                          <ArrowDownRight size={20} className="text-rose-400" />
-                        </div>
-                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex justify-between items-center">
-                          <div>
-                            <p className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">
-                              Meta: novos contratos/mês
-                            </p>
-                            <p className="text-base font-black text-orange-700 font-mono">{fmt(deptMonthlyRevenue / numMonths)}</p>
-                            <p className="text-[10px] text-orange-500 mt-0.5">{fmt(deptMonthlyRevenue)} ÷ {numMonths} meses</p>
-                          </div>
-                          <Target size={20} className="text-orange-400" />
-                        </div>
-                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex justify-between items-center">
-                          <div>
-                            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Receita acumulada no vencimento</p>
-                            <p className="text-base font-black text-blue-700 font-mono">{fmt(deptMonthlyRevenue)}/mês</p>
-                            <p className="text-[10px] text-blue-500 mt-0.5">100% reposto ao final de {numMonths} meses</p>
-                          </div>
-                          <CheckCircle2 size={20} className="text-blue-400" />
-                        </div>
-                      </div>
-
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2">
-                        <Info size={13} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-[11px] text-amber-700 leading-relaxed">
-                          <strong>Lógica:</strong> Você tem {numMonths} meses para construir gradualmente novos contratos. Trazendo {fmt(deptMonthlyRevenue / numMonths)}/mês em novos contratos, ao final terá {fmt(deptMonthlyRevenue)}/mês de receita recorrente nova — exatamente o que o contrato perdido gerava.
-                        </p>
-                      </div>
-                    </>
-                  )}
-
-                  {!selectedDept && (
-                    <div className="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
-                      <Building2 size={28} className="mx-auto mb-2 opacity-25" />
-                      <p className="text-xs">Selecione um departamento acima</p>
-                    </div>
-                  )}
-                </>
+                </div>
               )}
 
-              {/* ══ ABA SENSIBILIDADE ══ */}
-              {activeTab === 'sensibilidade' && (
-                <>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Análise de Sensibilidade — FCL</p>
-                  <p className="text-[11px] text-slate-400">Impacto no FCL (Fluxo de Caixa Livre) em diferentes cenários de variação</p>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full text-[11px]">
-                      <thead className="bg-slate-800 text-white">
-                        <tr>
-                          <th className="px-2 py-2 text-left font-semibold">Δ%</th>
-                          <th className="px-2 py-2 text-right font-semibold">Via Receita</th>
-                          <th className="px-2 py-2 text-right font-semibold">Via Custos</th>
-                          <th className="px-2 py-2 text-right font-semibold">Via Despesas</th>
+              {/* KPIs Principais Expandidos */}
+              {orig && sim && (
+                <div className="flex-1 grid grid-cols-3 gap-4">
+                  {[
+                    { label: 'Receita Operacional', o: orig.totalEntradas, s: sim.totalEntradas },
+                    { label: 'Custos Operacionais', o: orig.totalCustos, s: sim.totalCustos, invert: true },
+                    { label: 'EBITDA Operacional', o: orig.resultado, s: sim.resultado },
+                  ].map(k => (
+                    <div key={k.label} className="border border-slate-800 bg-slate-900/40 rounded-2xl p-4.5 flex flex-col justify-between">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{k.label}</span>
+                        <Delta o={k.o} s={k.s} invert={k.invert} />
+                      </div>
+                      <div className="mt-3">
+                        <p className="text-[10px] text-slate-450 font-mono">Base: {fmt(k.o)}</p>
+                        <p className="text-2xl font-black text-white font-mono mt-0.5">{fmt(k.s)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ══ GRÁFICOS E ANÁLISES EXECUTIVAS ══ */}
+            <div className="flex-1 flex flex-col gap-6">
+
+              {/* ABA 1: DASHBOARD ANALÍTICO (GRÁFICOS EXPANDIDOS) */}
+              {activeTab === 'dashboard' && (
+                <div className="grid grid-cols-2 gap-6 items-stretch flex-1">
+                  
+                  {/* Gráfico 1: Evolução Base vs Simulado (Ampliado para PC) */}
+                  <div className="bg-slate-900/30 border border-slate-850 rounded-2xl p-6 flex flex-col justify-between min-h-[380px]">
+                    <div className="flex items-center gap-2 mb-4">
+                      <BarChart3 size={15} className="text-orange-500" />
+                      <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Evolução Mensal: Original vs. Simulado</span>
+                    </div>
+                    <div className="flex-1 h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={evolucaoData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                          <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <YAxis tickFormatter={fmtK} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <Tooltip formatter={(v: any, name: any) => [fmt(Number(v)), name] as any} contentStyle={tooltipStyle} />
+                          <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                          <Bar dataKey="Receita Base" fill="#10b981" fillOpacity={0.2} radius={[4, 4, 0, 0]} maxBarSize={16} />
+                          <Bar dataKey="Receita Sim." fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={16} />
+                          <Line type="monotone" dataKey="FCL Base" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="3 3" dot={false} />
+                          <Line type="monotone" dataKey="FCL Sim." stroke="#f97316" strokeWidth={2.5} dot={{ r: 3, fill: '#f97316' }} />
+                          <ReferenceLine y={0} stroke="#475569" />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Gráfico 2: Ponte de Impacto EBITDA (Waterfall) */}
+                  <div className="bg-slate-900/30 border border-slate-850 rounded-2xl p-6 flex flex-col justify-between min-h-[380px]">
+                    <div className="flex items-center gap-2 mb-4">
+                      <TrendingUp size={15} className="text-orange-500" />
+                      <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Ponte de EBITDA: Construção de Impactos</span>
+                    </div>
+                    <div className="flex-1 h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={waterfallData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                          <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <YAxis tickFormatter={fmtK} tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <Tooltip formatter={(v: any, name: any, prop: any) => [fmt(prop.payload.rawValue), ''] as any} contentStyle={tooltipStyle} />
+                          <Bar dataKey="base" stackId="wf" fill="transparent" />
+                          <Bar dataKey="bar" stackId="wf" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                            {waterfallData.map((entry, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={
+                                  entry.isFinal
+                                    ? (entry.rawValue >= 0 ? '#3b82f6' : '#ef4444')
+                                    : (entry.positive ? '#10b981' : '#ef4444')
+                                }
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Tornado Chart (Sensibilidade do FCL) */}
+                  <div className="bg-slate-900/30 border border-slate-850 rounded-2xl p-6 flex flex-col justify-between min-h-[360px]">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ListFilter size={15} className="text-orange-500" />
+                      <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Tornado Chart: Sensibilidade do FCL</span>
+                    </div>
+                    <div className="flex-1 h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={tornadoData} layout="vertical" margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e293b" />
+                          <XAxis type="number" tickFormatter={fmtK} tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <YAxis dataKey="variable" type="category" tick={{ fontSize: 9, fill: '#cbd5e1' }} axisLine={false} tickLine={false} width={130} />
+                          <Tooltip formatter={(v: any) => [fmt(Number(v)), 'Desvio FCL'] as any} contentStyle={tooltipStyle} />
+                          <Bar dataKey="positivo" fill="#10b981" radius={[0, 4, 4, 0]} maxBarSize={14} />
+                          <Bar dataKey="negativo" fill="#ef4444" radius={[4, 0, 0, 4]} maxBarSize={14} />
+                          <ReferenceLine x={0} stroke="#475569" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Heatmap de Sensibilidade */}
+                  <div className="bg-slate-900/30 border border-slate-850 rounded-2xl p-6 flex flex-col justify-between min-h-[360px]">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Percent size={15} className="text-orange-500" />
+                      <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Heatmap de Impactos (Mês x Categoria DRE)</span>
+                    </div>
+                    <div className="flex-1 flex flex-col justify-center">
+                      <div className="grid" style={{ gridTemplateColumns: `140px repeat(${heatmapGrid.cols.length}, 1fr)` }}>
+                        {/* Header */}
+                        <div className="text-[9px] text-slate-500 font-bold uppercase p-1">Categoria</div>
+                        {heatmapGrid.cols.map(c => (
+                          <div key={c} className="text-[9px] text-slate-400 font-bold font-mono text-center p-1 border-b border-slate-800">{c}</div>
+                        ))}
+
+                        {/* Linhas */}
+                        {heatmapGrid.cats.map(cat => {
+                          const displayLabel = cat.replace('Total ', '').replace(' Operacionais', '').replace(' Rateadas', '');
+                          return (
+                            <React.Fragment key={cat}>
+                              <div className="text-[10px] text-slate-300 font-semibold py-2 border-b border-slate-850 flex items-center">{displayLabel}</div>
+                              {heatmapGrid.cols.map(col => {
+                                const cell = heatmapGrid.grid.find(g => g.cat === cat && g.col === col);
+                                const val = cell?.pct || 0;
+                                
+                                // Determinar cor
+                                let bg = 'bg-slate-900/40 text-slate-450';
+                                if (val > 1) bg = 'bg-emerald-500/20 text-emerald-300';
+                                else if (val < -1) bg = 'bg-rose-500/20 text-rose-300';
+
+                                return (
+                                  <div
+                                    key={col}
+                                    className={`text-[9px] font-mono font-bold flex flex-col items-center justify-center p-2 border-b border-slate-850 ${bg}`}
+                                  >
+                                    <span>{val > 0 ? '+' : ''}{val.toFixed(0)}%</span>
+                                  </div>
+                                );
+                              })}
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ABA 2: FORMULÁRIO DE PREMISSAS ADICIONADAS */}
+              {activeTab === 'premissas' && editingAssumption && (
+                <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-8 max-w-2xl mx-auto space-y-6">
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <Zap className="text-orange-500" size={18} /> Configure a Premissa de Simulação
+                  </h3>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mapeamento da Premissa</label>
+                      <select
+                        value={asmType}
+                        onChange={e => setAsmType(e.target.value as any)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none"
+                      >
+                        <option value="revenue_increase">Aumento de Receita</option>
+                        <option value="revenue_reduction">Redução de Receita</option>
+                        <option value="contract_loss">Perda de Contrato</option>
+                        <option value="revenue_replacement">Reposição de Receita</option>
+                        <option value="expense_increase">Aumento de Despesa</option>
+                        <option value="expense_reduction">Redução de Despesa</option>
+                        <option value="costs_cut">Corte de Custos</option>
+                        <option value="macro_driver">Cenário Macroeconômico</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tipo de Aplicação</label>
+                      <select
+                        value={asmAmountType}
+                        onChange={e => setAsmAmountType(e.target.value as any)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none"
+                      >
+                        <option value="percentage">Percentual (%)</option>
+                        <option value="absolute_value">Valor Absoluto (R$)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Valor do Impacto</label>
+                      <input
+                        type="number"
+                        value={asmValue}
+                        onChange={e => setAsmValue(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Início (Mês/Ano)</label>
+                      <input
+                        type="month"
+                        value={asmStartDate}
+                        onChange={e => setAsmStartDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Fim (Mês/Ano)</label>
+                      <input
+                        type="month"
+                        value={asmEndDate}
+                        onChange={e => setAsmEndDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {asmType === 'contract_loss' && metadata && (
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Selecione o Contrato/Departamento</label>
+                      <select
+                        onChange={e => setAsmTargetIds([e.target.value])}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none"
+                      >
+                        <option value="">Selecione...</option>
+                        {metadata.departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {asmType === 'macro_driver' && (
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Índice Macroeconômico</label>
+                      <select
+                        value={asmMacroIndex}
+                        onChange={e => setAsmMacroIndex(e.target.value as any)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none"
+                      >
+                        <option value="IPCA">IPCA (Inflação Oficial)</option>
+                        <option value="INCC">INCC (Construção Civil)</option>
+                        <option value="CDI">CDI (Custos Financeiros)</option>
+                        <option value="SELIC">SELIC (Taxa de Juros)</option>
+                        <option value="dissidio">Dissídio Anual de Folha</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 justify-end pt-4">
+                    <button
+                      onClick={() => setEditingAssumption(null)}
+                      className="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-xs font-bold"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleAddAssumption}
+                      className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-4 py-2 text-xs font-bold"
+                    >
+                      Confirmar Premissa
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 3: COMPARAÇÃO DE CENÁRIOS SALVOS */}
+              {activeTab === 'comparador' && (
+                <div className="bg-slate-900/30 border border-slate-850 rounded-2xl p-6 flex flex-col justify-between flex-1">
+                  <div className="flex items-center gap-2 mb-6">
+                    <Grid size={15} className="text-orange-500" />
+                    <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Comparador de Cenários DRE</span>
+                  </div>
+
+                  <div className="flex-1 overflow-x-auto">
+                    <table className="w-full text-xs text-slate-300">
+                      <thead>
+                        <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-450">
+                          <th className="px-4 py-3 text-left font-bold uppercase tracking-wider">Indicador Executivo</th>
+                          <th className="px-4 py-3 text-right font-bold font-mono">DRE Base</th>
+                          <th className="px-4 py-3 text-right font-bold font-mono text-orange-400">Ativo ({activeScenario?.name})</th>
+                          {savedScenarios.slice(0, 3).map(sc => (
+                            <th key={sc.id} className="px-4 py-3 text-right font-bold font-mono">{sc.name}</th>
+                          ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {sensitivityData.map((row, i) => {
-                          const isPos = parseFloat(row.pct) > 0;
+                      <tbody className="divide-y divide-slate-850">
+                        {[
+                          { label: 'Receitas Operacionais', key: 'Total Entradas Operacionais' },
+                          { label: 'Custos Operacionais', key: 'Total Custos Operacionais', invert: true },
+                          { label: 'Despesas Rateadas', key: 'Total Despesas Rateadas', invert: true },
+                          { label: 'Lucro antes do FCL (EBITDA)', key: 'Lucro antes do FCL' },
+                          { label: 'Fluxo de Caixa Livre FCL', key: 'Fluxo de Caixa Livre FCL' }
+                        ].map((row, rIdx) => (
+                          <tr key={rIdx} className="hover:bg-slate-900/10">
+                            <td className="px-4 py-3.5 font-semibold text-slate-200">{row.label}</td>
+                            <td className="px-4 py-3.5 text-right font-mono font-medium">{originalResults ? fmt(originalResults.totais[row.key] || 0) : '—'}</td>
+                            <td className="px-4 py-3.5 text-right font-mono font-bold text-orange-400">
+                              {simulatedResults ? fmt(simulatedResults.totais[row.key] || 0) : '—'}
+                            </td>
+                            {savedScenarios.slice(0, 3).map(sc => {
+                              // Calcular o cenário na hora para exibição
+                              const scRes = DreSimulatorEngine.runSimulation(
+                                rawData,
+                                metadata!,
+                                originalResults!.estrutura,
+                                {
+                                  empresas: [], periodos: [], departamentos: [], contasDre: [], projetos: [], categorias: [], excludeSharedExpenses: false
+                                },
+                                sc,
+                                {} as any
+                              );
+                              return (
+                                <td key={sc.id} className="px-4 py-3.5 text-right font-mono text-slate-400">
+                                  {fmt(scRes.totais[row.key] || 0)}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 4: TABELA DRE DETALHADA MÊS A MÊS */}
+              {activeTab === 'tabela' && simulatedResults && originalResults && (
+                <div className="bg-slate-900/30 border border-slate-850 rounded-2xl p-6 flex flex-col justify-between flex-1">
+                  <div className="flex items-center gap-2 mb-6">
+                    <FileSpreadsheet size={15} className="text-orange-500" />
+                    <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Demonstração Mensal Comparativa (Simulado vs. Base)</span>
+                  </div>
+
+                  <div className="flex-1 overflow-auto max-h-[500px]">
+                    <table className="w-full text-[11px] text-slate-350">
+                      <thead className="bg-slate-950/40 text-slate-450 sticky top-0 z-10">
+                        <tr className="border-b border-slate-800">
+                          <th className="px-3 py-2.5 text-left font-bold">Mês</th>
+                          <th className="px-3 py-2.5 text-right font-bold">Receita (Base)</th>
+                          <th className="px-3 py-2.5 text-right font-bold text-orange-400">Receita (Sim.)</th>
+                          <th className="px-3 py-2.5 text-right font-bold">Δ Abs.</th>
+                          <th className="px-3 py-2.5 text-right font-bold">Δ %</th>
+                          <th className="px-3 py-2.5 text-right font-bold">FCL (Base)</th>
+                          <th className="px-3 py-2.5 text-right font-bold text-orange-400">FCL (Sim.)</th>
+                          <th className="px-3 py-2.5 text-right font-bold">Δ Abs.</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-850 font-mono">
+                        {columns.map((col, idx) => {
+                          const isProj = colToIso(col) > colToIso(originalResults.validColumns[originalResults.validColumns.length - 1]);
+                          const oRev = originalResults.mensal['Total Entradas Operacionais']?.[col] || (isProj ? simulatedResults.mensal['Total Entradas Operacionais']?.[col] : 0);
+                          const sRev = simulatedResults.mensal['Total Entradas Operacionais']?.[col] || 0;
+                          
+                          const oFcl = originalResults.mensal['Fluxo de Caixa Livre FCL']?.[col] || (isProj ? simulatedResults.mensal['Fluxo de Caixa Livre FCL']?.[col] : 0);
+                          const sFcl = simulatedResults.mensal['Fluxo de Caixa Livre FCL']?.[col] || 0;
+
+                          const revDiff = sRev - oRev;
+                          const revPct = oRev !== 0 ? (revDiff / oRev) * 100 : 0;
+                          const fclDiff = sFcl - oFcl;
+
                           return (
-                            <tr key={i} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                              <td className={`px-2 py-1.5 font-bold font-mono ${isPos ? 'text-emerald-700' : 'text-rose-700'}`}>{row.pct}</td>
-                              <td className={`px-2 py-1.5 text-right font-mono ${row.revFcl >= (orig?.fcl || 0) ? 'text-emerald-700' : 'text-rose-700'}`}>{fmt(row.revFcl)}</td>
-                              <td className={`px-2 py-1.5 text-right font-mono ${row.costFcl >= (orig?.fcl || 0) ? 'text-emerald-700' : 'text-rose-700'}`}>{fmt(row.costFcl)}</td>
-                              <td className={`px-2 py-1.5 text-right font-mono ${row.expFcl >= (orig?.fcl || 0) ? 'text-emerald-700' : 'text-rose-700'}`}>{fmt(row.expFcl)}</td>
+                            <tr key={col} className={`hover:bg-slate-900/10 ${idx % 2 === 0 ? 'bg-slate-900/5' : 'bg-slate-900/20'}`}>
+                              <td className="px-3 py-2 font-bold text-slate-200">{col}</td>
+                              <td className="px-3 py-2 text-right">{fmt(oRev)}</td>
+                              <td className="px-3 py-2 text-right text-orange-400 font-bold">{fmt(sRev)}</td>
+                              <td className={`px-3 py-2 text-right font-bold ${revDiff >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmt(revDiff)}</td>
+                              <td className={`px-3 py-2 text-right font-bold ${revPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{revPct.toFixed(1)}%</td>
+                              <td className="px-3 py-2 text-right">{fmt(oFcl)}</td>
+                              <td className="px-3 py-2 text-right text-orange-400 font-bold">{fmt(sFcl)}</td>
+                              <td className={`px-3 py-2 text-right font-bold ${fclDiff >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmt(fclDiff)}</td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
                   </div>
-                  {orig && (
-                    <div className="bg-slate-100 rounded-xl p-3 text-[11px] text-slate-500 text-center">
-                      FCL Base: <strong className="font-mono text-slate-700">{fmt(orig.fcl)}</strong>
+                </div>
+              )}
+
+              {/* Box de Resposta da IA Integrada BrisinhAI (Sempre ao rodar IA) */}
+              {(aiResponse || isAiLoading) && (
+                <div className="bg-slate-900 border border-slate-850 rounded-2xl p-6 shadow-xl animate-in fade-in duration-300">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-7 h-7 bg-orange-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Sparkles size={14} className="text-white" />
                     </div>
+                    <span className="text-xs font-bold text-orange-400 uppercase tracking-wider">BrisinhAI — FP&A Insight</span>
+                  </div>
+                  {isAiLoading ? (
+                    <div className="flex items-center gap-3 text-slate-400 text-sm">
+                      <Loader2 size={16} className="animate-spin text-orange-500" />
+                      Calculando desvios e gerando narrativa de recomendação...
+                    </div>
+                  ) : (
+                    <p className="text-slate-350 text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-medium">{aiResponse}</p>
                   )}
-                </>
+                </div>
               )}
 
             </div>
           </div>
 
-          {/* ════ COLUNA DIREITA — PAINÉIS ANALÍTICOS ════ */}
-          <div className="flex-1 overflow-y-auto bg-slate-100 p-5 space-y-4">
-
-            {/* ── Score de Risco ── */}
-            {isSimulating && riskScore && (
-              <div className={`bg-white rounded-2xl border p-4 flex items-center gap-5 ${riskScore.color === 'red' ? 'border-red-200' : riskScore.color === 'rose' ? 'border-rose-200' : riskScore.color === 'amber' ? 'border-amber-200' : 'border-emerald-200'}`}>
-                <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 ${riskScore.color === 'red' ? 'bg-red-100' : riskScore.color === 'rose' ? 'bg-rose-100' : riskScore.color === 'amber' ? 'bg-amber-100' : 'bg-emerald-100'}`}>
-                  <Gauge size={20} className={riskScore.color === 'red' ? 'text-red-600' : riskScore.color === 'rose' ? 'text-rose-600' : riskScore.color === 'amber' ? 'text-amber-600' : 'text-emerald-600'} />
-                  <span className={`text-[10px] font-black mt-0.5 ${riskScore.color === 'red' ? 'text-red-700' : riskScore.color === 'rose' ? 'text-rose-700' : riskScore.color === 'amber' ? 'text-amber-700' : 'text-emerald-700'}`}>{riskScore.score}</span>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <ShieldAlert size={14} className="text-slate-400" />
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Score de Risco do Cenário</span>
-                  </div>
-                  <p className={`text-lg font-black ${riskScore.color === 'red' ? 'text-red-700' : riskScore.color === 'rose' ? 'text-rose-700' : riskScore.color === 'amber' ? 'text-amber-700' : 'text-emerald-700'}`}>
-                    Risco {riskScore.label}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    FCL reduz {fmtPct(-riskScore.fclDrop, false)} · Receita {fmtPct(-riskScore.revDrop, false)}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {orig && sim && [
-                    { label: 'Receita', o: orig.totalEntradas, s: sim.totalEntradas },
-                    { label: 'Custos', o: orig.totalCustos, s: sim.totalCustos, inv: true },
-                    { label: 'Desp.', o: orig.totalDespesas, s: sim.totalDespesas, inv: true },
-                    { label: 'FCL', o: orig.fcl, s: sim.fcl },
-                  ].map(k => (
-                    <div key={k.label} className="text-right">
-                      <p className="text-[10px] text-slate-400">{k.label}</p>
-                      <Delta o={k.o} s={k.s} invert={k.inv} large />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Gráfico de Evolução Original vs. Simulado ── */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 size={14} className="text-slate-400" />
-                <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Evolução: Original vs. Simulado</p>
-              </div>
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={evolucaoData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tickFormatter={fmtK} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      formatter={(v: any, name: any) => [fmt(Number(v)), name] as any}
-                      contentStyle={tooltipStyle}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    <Bar dataKey="Receita" fill={PAL.receita} fillOpacity={0.35} radius={[3, 3, 0, 0]} maxBarSize={18} name="Receita (Base)" />
-                    <Bar dataKey="ReceitaSim" fill={PAL.sim} radius={[3, 3, 0, 0]} maxBarSize={18} name="Receita (Sim.)" />
-                    <Line type="monotone" dataKey="FCL" stroke={PAL.fcl} strokeWidth={1.5} strokeDasharray="4 2" dot={false} name="FCL (Base)" />
-                    <Line type="monotone" dataKey="FCLSim" stroke="#f97316" strokeWidth={2.5} dot={{ r: 3, fill: '#f97316' }} name="FCL (Sim.)" />
-                    <ReferenceLine y={0} stroke="#e2e8f0" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* ── Tabela de Reposição ── (apenas quando ativa) */}
-            {activeTab === 'reposicao' && recoveryPoints.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Calendar size={14} className="text-slate-400" />
-                  <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                    Cronograma de Reposição — Meta: {fmt(deptMonthlyRevenue / numMonths)}/mês
-                  </p>
-                </div>
-
-                {/* Gráfico de área */}
-                <div className="h-44 mb-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={recoveryChartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="repGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={PAL.receita} stopOpacity={0.3} />
-                          <stop offset="95%" stopColor={PAL.receita} stopOpacity={0.02} />
-                        </linearGradient>
-                        <linearGradient id="faltaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={PAL.danger} stopOpacity={0.25} />
-                          <stop offset="95%" stopColor={PAL.danger} stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={Math.floor(numMonths / 6)} />
-                      <YAxis tickFormatter={fmtK} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                      <Tooltip formatter={(v: any, name: any) => [fmt(Number(v)), name] as any} contentStyle={tooltipStyle} />
-                      <Area type="monotone" dataKey="Reposto" stroke={PAL.receita} strokeWidth={2} fill="url(#repGrad)" name="Receita Nova Acumulada" />
-                      <Area type="monotone" dataKey="Restante" stroke={PAL.danger} strokeWidth={2} fill="url(#faltaGrad)" name="Ainda Falta Repor" />
-                      <ReferenceLine y={deptMonthlyRevenue} stroke="#10b981" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: 'Meta Total', fill: '#10b981', fontSize: 10, position: 'insideRight' }} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Tabela resumida */}
-                <div className="overflow-x-auto rounded-xl border border-slate-100">
-                  <table className="w-full text-[11px]">
-                    <thead className="bg-slate-100">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-bold text-slate-600">Mês</th>
-                        <th className="px-3 py-2 text-right font-bold text-slate-600">Trazer/Mês</th>
-                        <th className="px-3 py-2 text-right font-bold text-slate-600">Acumulado</th>
-                        <th className="px-3 py-2 text-right font-bold text-slate-600">Falta</th>
-                        <th className="px-3 py-2 text-right font-bold text-slate-600">%</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {recoveryPoints.map((p, i) => (
-                        <tr key={p.mes} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-orange-50/40 transition-colors`}>
-                          <td className="px-3 py-1.5 font-bold text-slate-700">{p.mes}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-emerald-700 font-bold">{fmt(p.metaMensal)}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-blue-700">{fmt(p.receitaNovaAcumulada)}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-rose-600">{fmt(p.aReconquistar)}</td>
-                          <td className="px-3 py-1.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <div className="w-16 bg-slate-200 rounded-full h-1.5">
-                                <div className="h-1.5 rounded-full bg-gradient-to-r from-orange-400 to-emerald-500 transition-all" style={{ width: `${p.percReposto}%` }} />
-                              </div>
-                              <span className="font-mono text-slate-600 font-bold w-8 text-right">{p.percReposto.toFixed(0)}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* ── Resposta IA ── */}
-            {(aiResponse || isAiLoading) && (
-              <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 animate-in fade-in duration-300">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Sparkles size={12} className="text-white" />
-                  </div>
-                  <span className="text-xs font-bold text-orange-400 uppercase tracking-wider">BrisinhAI — {AI_QUESTIONS.find(q => q.id === aiQuestion)?.label}</span>
-                </div>
-                {isAiLoading ? (
-                  <div className="flex items-center gap-2 text-slate-400 text-sm">
-                    <Loader2 size={15} className="animate-spin text-orange-400" />
-                    Analisando cenário...
-                  </div>
-                ) : (
-                  <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{aiResponse}</p>
-                )}
-              </div>
-            )}
-
-            {/* ── Placeholder quando não há simulação ── */}
-            {!isSimulating && !isAiLoading && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 bg-white border-2 border-dashed border-slate-300 rounded-2xl flex items-center justify-center mb-4">
-                  <Activity size={24} className="text-slate-300" />
-                </div>
-                <p className="text-slate-500 font-semibold text-sm">Nenhum cenário ativo</p>
-                <p className="text-slate-400 text-xs mt-1 max-w-xs">
-                  Selecione um cenário na aba Cenários ou ajuste os sliders em Granular para visualizar os impactos aqui.
-                </p>
-              </div>
-            )}
-
-          </div>
         </div>
       </div>
     </div>
   );
 }
+
+// ── Deltas de Comparação Visual ──────────────────────────────────────────────
+const Delta = ({ o, s, invert = false, large = false }: { o: number; s: number; invert?: boolean; large?: boolean }) => {
+  const d = s - o;
+  if (Math.abs(d) < 0.01) return <span className="text-slate-500 font-mono text-xs">—</span>;
+  const good = invert ? d < 0 : d > 0;
+  const cls = good ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/25' : 'text-rose-500 bg-rose-500/10 border-rose-500/25';
+  return (
+    <span className={`font-mono font-bold border px-2 py-0.5 rounded-md flex items-center gap-0.5 ${large ? 'text-sm' : 'text-[10px]'} ${cls}`}>
+      {good ? <ArrowUpRight size={large ? 14 : 11} /> : <ArrowDownRight size={large ? 14 : 11} />}
+      {fmt(d)}
+    </span>
+  );
+};

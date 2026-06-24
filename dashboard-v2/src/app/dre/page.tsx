@@ -17,6 +17,8 @@ import { ExportPdfService } from '@/services/exportPdf.service';
 import { BrisinhaiService } from '@/services/brisinhai.service';
 import { supabase } from '@/lib/supabase';
 import { DreFilters, DreMetadata, DreCalculatedResult, DreRow, DreSimulationParams, DreStructureItem, DreTemplateDefinition } from '@/types/dre';
+import { Scenario, ScenarioAssumption } from '@/types/dre-simulator.types';
+import { DreSimulatorEngine } from '@/services/dre-simulator.engine';
 import { DreExportModal, ExportSelections } from '@/components/dre/DreExportModal';
 import { DrePrintCharts } from '@/components/dre/DrePrintCharts';
 import { DreCustomCardModal } from '@/components/dre/DreCustomCardModal';
@@ -48,6 +50,7 @@ export default function DrePage() {
   const [showTable, setShowTable] = useState(false);
   const [equipamentoCounts, setEquipamentoCounts] = useState<Record<string, Record<string, number>>>({});
   const [isEquipmentsModalOpen, setIsEquipmentsModalOpen] = useState(false);
+  const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
   const [simParams, setSimParams] = useState<DreSimulationParams>({
     revenueMultiplier: 1.0,
     costsMultiplier: 1.0,
@@ -275,12 +278,20 @@ export default function DrePage() {
 
   // Simulated Calculation
   const results: DreCalculatedResult | null = useMemo(() => {
-    if (!originalResults || !estrutura) return null;
-    if (simParams.revenueMultiplier === 1 && simParams.costsMultiplier === 1 && simParams.expensesMultiplier === 1 && simParams.taxesMultiplier === 1 && simParams.investmentsMultiplier === 1) {
+    if (!originalResults || !estrutura || !metadata) return null;
+    if (!activeScenario || activeScenario.assumptions.length === 0) {
       return originalResults;
     }
-    return DreService.calculate(rawData, metadata!, estrutura, filters, simParams, equipamentoCounts);
-  }, [rawData, metadata, estrutura, filters, simParams, originalResults, equipamentoCounts]);
+    return DreSimulatorEngine.runSimulation(
+      rawData,
+      metadata,
+      estrutura,
+      filters,
+      activeScenario,
+      {} as any,
+      equipamentoCounts
+    );
+  }, [rawData, metadata, estrutura, filters, activeScenario, originalResults, equipamentoCounts]);
 
   // Alertas Inteligentes
   const alerts = useMemo(() => {
@@ -672,6 +683,8 @@ export default function DrePage() {
           simulatedResults={results}
           rawData={rawData}
           metadata={metadata}
+          activeScenario={activeScenario}
+          onScenarioChange={setActiveScenario}
           onParamsChange={setSimParams}
           empresaContext={filters.empresas.length === 1 ? filters.empresas[0] : (filters.empresas.length > 1 ? 'Múltiplas' : 'Todas as Empresas')}
           periodoContext={filters.periodos.length > 0 ? filters.periodos.join(', ') : 'Todos os Períodos'}

@@ -1,0 +1,541 @@
+import {
+  DreRow,
+  DreFilters,
+  DreMetadata,
+  DreStructureItem,
+  DreCalculatedResult,
+  DreTotal,
+  DreMensal,
+  DreKpis
+} from '@/types/dre';
+import {
+  Scenario,
+  ScenarioAssumption,
+  MacroIndexType,
+  SimulatorScenarioType
+} from '@/types/dre-simulator.types';
+import {
+  colToIso,
+  isoToCol,
+  addMonthsIso,
+  diffMonthsIso,
+  isColInPeriod,
+  sortColList
+} from '@/lib/date-utils';
+
+const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+// Categorias específicas de rateio administrativo (conforme dre.service.ts)
+const CATEGORIAS_RATEIO = [
+  'Credenciado Administrativo',
+  'Credenciado TI',
+  'Despesas Administrativas',
+  'Despesas de Vendas e Marketing',
+  'Despesas Financeiras',
+  'Outros Tributos',
+  'Despesas Eventuais',
+  'Jurídico',
+  'Despesas Variáveis',
+  'Intermediação de Negócios',
+  'Distribuição de Dividendos',
+  'Dividendos',
+  'Total Despesas Rateadas'
+];
+
+/**
+ * Motor de Simulação Avançada de Cenários DRE
+ */
+export class DreSimulatorEngine {
+
+  /**
+   * Executa a simulação completa sobre os dados de DRE com base nas premissas de um cenário
+   */
+  static runSimulation(
+    rawData: DreRow[],
+    metadata: DreMetadata,
+    estrutura: DreStructureItem[],
+    filters: DreFilters,
+    scenario: Scenario,
+    macroRates: Record<MacroIndexType, Record<string, number>> = {} as any,
+    equipamentoCounts?: Record<string, Record<string, number>>
+  ): DreCalculatedResult {
+
+    // 1. Filtragem Inicial (Empresa)
+    let df = [...rawData];
+    if (filters.empresas.length > 0) {
+      df = df.filter(row => filters.empresas.includes(row.Empresa));
+    }
+
+    // 2. Mapeamento e Ordenação de Colunas
+    const originalCols = sortColList(Object.keys(metadata.mapaMeses));
+    let validColumns = [...originalCols];
+
+    // Se houver filtros de períodos, limitamos as colunas históricas
+    if (filters.periodos.length > 0) {
+      validColumns = originalCols.filter(col => {
+        const mes = metadata.mapaMeses[col];
+        const ano = col.split('/')[1]?.trim();
+        return filters.periodos.includes(`${mes}/${ano}`);
+      });
+    }
+
+    const lastHistCol = validColumns[validColumns.length - 1];
+    const lastHistIso = colToIso(lastHistCol);
+
+    // Se for projeção futura e a data fim for posterior ao histórico, expandimos as colunas
+    if (scenario.mode === 'future_projection' && scenario.projectionEndDate > lastHistIso) {
+      let currentIso = addMonthsIso(lastHistIso, 1);
+      while (currentIso <= scenario.projectionEndDate) {
+        const colName = isoToCol(currentIso);
+        if (colName && !validColumns.includes(colName)) {
+          validColumns.push(colName);
+        }
+        currentIso = addMonthsIso(currentIso, 1);
+      }
+    }
+
+    // 3. Identificar Categorias e Subcategorias Únicas
+    const subCategoriasEspecificas = [
+      'Terceirização de Mão de Obra', 'Credenciado Operacional', 'Adiantamento - Credenciado Operacional',
+      'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva',
+      'Corretiva - B2G', 'Manutenção Corretiva', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
+      'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
+      'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas', 'Equipamentos',
+      'Jurídico', 'Intermediação de Negócios'
+    ];
+
+    // Mapeamos a estrutura de DRE por linha
+    const catTotals: Record<string, number> = {};
+    const catMonthly: Record<string, Record<string, number>> = {};
+    const catSourceRows: Record<string, Record<string, DreRow[]>> = {};
+
+    // 4. Calcular o Baseline das Categorias
+    // Para meses históricos, o baseline é o valor real filtrado.
+    // Para meses futuros, o baseline é a média do período base filtrado (scenario.basePeriod).
+    const baseCols = scenario.basePeriod.length > 0 ? scenario.basePeriod : originalCols;
+    
+    // Agrupar linhas por conta DRE e departamento para facilitar cálculos granulares
+    const baselineMensal: Record<string, Record<string, number>> = {}; // groupKey -> month -> value
+    const rowDetails: DreRow[] = [];
+
+    df.forEach(row => {
+      let cat = row.ContaDRE;
+      if (row.Categoria && subCategoriasEspecificas.some(sub => sub.toLowerCase() === row.Categoria.toString().trim().toLowerCase())) {
+        cat = subCategoriasEspecificas.find(sub => sub.toLowerCase() === row.Categoria.toString().trim().toLowerCase()) || row.Categoria;
+      }
+      if (!cat) return;
+
+      const groupKey = `${row.Empresa}|${row.Departamento}|${cat}|${row.Projeto || 'Sem Projeto'}`;
+      if (!baselineMensal[groupKey]) {
+        baselineMensal[groupKey] = {};
+        rowDetails.push({ ...row, Categoria: cat } as any); // Normalizado
+      }
+
+      validColumns.forEach(col => {
+        const isFuture = colToIso(col) > lastHistIso;
+        if (!isFuture) {
+          const val = parseFloat(row[col]?.toString().replace(',', '.') || '0');
+          baselineMensal[groupKey][col] = isNaN(val) ? 0 : val;
+        }
+      });
+    });
+
+    // Calcular médias históricas para as projeções futuras de cada linha
+    const groupAverages: Record<string, number> = {};
+    Object.keys(baselineMensal).forEach(groupKey => {
+      let sum = 0;
+      let count = 0;
+      baseCols.forEach(col => {
+        if (baselineMensal[groupKey][col] !== undefined) {
+          sum += baselineMensal[groupKey][col];
+          count++;
+        }
+      });
+      groupAverages[groupKey] = count > 0 ? sum / count : 0;
+    });
+
+    // Preencher meses futuros com a média base
+    Object.keys(baselineMensal).forEach(groupKey => {
+      validColumns.forEach(col => {
+        const isFuture = colToIso(col) > lastHistIso;
+        if (isFuture) {
+          baselineMensal[groupKey][col] = groupAverages[groupKey] || 0;
+        }
+      });
+    });
+
+    // 5. Aplicar Premissas do Cenário Mês a Mês, Linha a Linha
+    const simulatedMensal: Record<string, Record<string, number>> = JSON.parse(JSON.stringify(baselineMensal));
+
+    validColumns.forEach(col => {
+      const colIso = colToIso(col);
+      
+      // Aplicar premissas para cada combinação (Empresa/Departamento/Conta)
+      Object.keys(simulatedMensal).forEach(groupKey => {
+        const [emp, dept, cat, proj] = groupKey.split('|');
+        let currentVal = simulatedMensal[groupKey][col] || 0;
+
+        scenario.assumptions.forEach(asm => {
+          // 1. Verificar se o mês da coluna está dentro do range da premissa
+          if (colIso < asm.startDate || colIso > asm.endDate) return;
+
+          // 2. Verificar o escopo (Target)
+          let matches = false;
+          if (asm.targetType === 'all') {
+            matches = true;
+          } else if (asm.targetType === 'department' && asm.targetIds.includes(dept)) {
+            matches = true;
+          } else if (asm.targetType === 'account' && asm.targetIds.includes(cat)) {
+            matches = true;
+          } else if (asm.targetType === 'account_group') {
+            // Se for despesas rateadas, confere com a lista de despesas
+            if (asm.targetIds.includes('despesas_rateadas') && CATEGORIAS_RATEIO.includes(cat)) {
+              matches = true;
+            } else if (asm.targetIds.includes('custos_operacionais') && [
+              'Credenciado Operacional', 'Adiantamento - Credenciado Operacional', 'Terceirização de Mão de Obra',
+              'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva',
+              'Corretiva - B2G', 'Manutenção Corretiva', 'Outros Custos'
+            ].includes(cat)) {
+              matches = true;
+            } else if (asm.targetIds.includes('receita') && [
+              'Receita Bruta de Vendas', 'Receitas Indiretas'
+            ].includes(cat)) {
+              matches = true;
+            }
+          }
+
+          // Filtros adicionais baseados no tipo de premissa
+          if (asm.type === 'revenue_replacement' && !['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat)) {
+            matches = false;
+          }
+
+          if (!matches) return;
+
+          // Contar quantas chaves no portfólio batem com este mesmo target para ratear valores absolutos
+          const matchingKeysCount = Object.keys(simulatedMensal).filter(k => {
+            const [kEmp, kDept, kCat, kProj] = k.split('|');
+            let kMatches = false;
+            if (asm.targetType === 'all') {
+              kMatches = true;
+            } else if (asm.targetType === 'department' && asm.targetIds.includes(kDept)) {
+              kMatches = true;
+            } else if (asm.targetType === 'account' && asm.targetIds.includes(kCat)) {
+              kMatches = true;
+            } else if (asm.targetType === 'account_group') {
+              if (asm.targetIds.includes('despesas_rateadas') && CATEGORIAS_RATEIO.includes(kCat)) {
+                kMatches = true;
+              } else if (asm.targetIds.includes('custos_operacionais') && [
+                'Credenciado Operacional', 'Adiantamento - Credenciado Operacional', 'Terceirização de Mão de Obra',
+                'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva',
+                'Corretiva - B2G', 'Manutenção Corretiva', 'Outros Custos'
+              ].includes(kCat)) {
+                kMatches = true;
+              } else if (asm.targetIds.includes('receita') && [
+                'Receita Bruta de Vendas', 'Receitas Indiretas'
+              ].includes(kCat)) {
+                kMatches = true;
+              }
+            }
+            if (asm.type === 'revenue_replacement' && !['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(kCat)) {
+              kMatches = false;
+            }
+            return kMatches;
+          }).length || 1;
+
+          // 3. Aplicar o impacto com base na premissa
+          switch (asm.type) {
+            case 'revenue_reduction':
+            case 'expense_reduction':
+            case 'costs_cut':
+              if (asm.amountType === 'percentage') {
+                const factor = 1 + (asm.value / 100);
+                currentVal = currentVal * factor;
+              } else if (asm.amountType === 'absolute_value' || asm.amountType === 'monthly_value') {
+                currentVal = Math.max(0, currentVal - (Math.abs(asm.value) / matchingKeysCount));
+              }
+              break;
+
+            case 'revenue_increase':
+            case 'expense_increase':
+              if (asm.amountType === 'percentage') {
+                const factor = 1 + (asm.value / 100);
+                currentVal = currentVal * factor;
+              } else if (asm.amountType === 'absolute_value' || asm.amountType === 'monthly_value') {
+                currentVal = currentVal + (Math.abs(asm.value) / matchingKeysCount);
+              }
+              break;
+
+            case 'contract_loss':
+              if (['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat)) {
+                currentVal = 0;
+              }
+              break;
+
+            case 'revenue_replacement':
+              if (['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat)) {
+                const totalMonths = diffMonthsIso(asm.startDate, asm.endDate) + 1;
+                const currentMonthIdx = diffMonthsIso(asm.startDate, colIso);
+                
+                if (totalMonths > 0 && currentMonthIdx >= 0) {
+                  let replacementValue = 0;
+                  const valorTotalARepor = asm.value;
+                  
+                  if (asm.recurrence === 'linear_ramp') {
+                    const metaMensal = valorTotalARepor / totalMonths;
+                    replacementValue = metaMensal * (currentMonthIdx + 1);
+                  } else if (asm.recurrence === 'one_time') {
+                    replacementValue = valorTotalARepor;
+                  } else if (asm.recurrence === 'monthly') {
+                    const progress = (currentMonthIdx + 1) / totalMonths;
+                    replacementValue = valorTotalARepor * progress;
+                  } else {
+                    const progress = (currentMonthIdx + 1) / totalMonths;
+                    const factor = 3 * progress * progress - 2 * progress * progress * progress;
+                    replacementValue = valorTotalARepor * factor;
+                  }
+                  
+                  currentVal = currentVal + (replacementValue / matchingKeysCount);
+                }
+              }
+              break;
+
+            case 'macro_driver':
+              // Reajustes baseados em índices (IPCA, CDI, etc.)
+              if (asm.macroIndex) {
+                const monthlyRates = macroRates[asm.macroIndex] || {};
+                const elapsedMonths = diffMonthsIso(asm.startDate, colIso);
+                if (elapsedMonths >= 0) {
+                  // Compounding rates
+                  let compoundFactor = 1;
+                  let tempIso = asm.startDate;
+                  for (let i = 0; i <= elapsedMonths; i++) {
+                    const rate = monthlyRates[tempIso] !== undefined ? monthlyRates[tempIso] : (asm.value / 100);
+                    compoundFactor *= (1 + rate);
+                    tempIso = addMonthsIso(tempIso, 1);
+                  }
+                  currentVal = currentVal * compoundFactor;
+                }
+              }
+              break;
+          }
+        });
+
+        simulatedMensal[groupKey][col] = currentVal;
+      });
+    });
+
+    // 6. Agrupar em Categoria Totais e Mensais para a Tabela DRE
+    validColumns.forEach(col => {
+      Object.keys(simulatedMensal).forEach(groupKey => {
+        const [emp, dept, cat, proj] = groupKey.split('|');
+        const val = simulatedMensal[groupKey][col] || 0;
+
+        if (!catTotals[cat]) {
+          catTotals[cat] = 0;
+          catMonthly[cat] = {};
+          catSourceRows[cat] = {};
+          validColumns.forEach(c => {
+            catMonthly[cat][c] = 0;
+            catSourceRows[cat][c] = [];
+          });
+        }
+
+        catTotals[cat] += val;
+        catMonthly[cat][col] += val;
+      });
+    });
+
+    // 7. Consolidação Final da Estrutura DRE e KPIs
+    const valoresTotal: Record<string, number> = {};
+    const valoresMensal: Record<string, Record<string, number>> = {};
+    const sourceRows: Record<string, Record<string, DreRow[]>> = {};
+
+    const getCatTotal = (targetCat: string) => catTotals[targetCat] || 0;
+    const getCatMonthly = (targetCat: string, col: string) => catMonthly[targetCat]?.[col] || 0;
+
+    const servicosBaseTotal = getCatTotal('Serviços');
+    const consorciosTotal = getCatTotal('Consórcios - a contemplar');
+
+    estrutura.forEach(item => {
+      // Toggle de Despesas Rateadas Administrativas
+      const isExcludedShared = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses) && CATEGORIAS_RATEIO.includes(item.titulo);
+
+      if (item.tipo === 'linha' || item.tipo === 'hidden' || (item.tipo === 'card' && item.categorias)) {
+        let total = 0;
+        if (!isExcludedShared) {
+          item.categorias?.forEach(cat => total += getCatTotal(cat));
+        }
+        valoresTotal[item.titulo] = total;
+
+        valoresMensal[item.titulo] = {};
+        sourceRows[item.titulo] = {};
+        validColumns.forEach(col => {
+          let mesTotal = 0;
+          if (!isExcludedShared) {
+            item.categorias?.forEach(cat => {
+              mesTotal += getCatMonthly(cat, col);
+            });
+          }
+          valoresMensal[item.titulo][col] = mesTotal;
+          sourceRows[item.titulo][col] = []; // Para manter compatibilidade
+        });
+      } else if (item.tipo === 'linha_calc' && item.formula === 'servicos_menos_consorcios') {
+        valoresTotal[item.titulo] = servicosBaseTotal >= consorciosTotal ? servicosBaseTotal - consorciosTotal : 0;
+
+        valoresMensal[item.titulo] = {};
+        sourceRows[item.titulo] = {};
+        validColumns.forEach(col => {
+          const s = getCatMonthly('Serviços', col);
+          const c = getCatMonthly('Consórcios - a contemplar', col);
+          valoresMensal[item.titulo][col] = s >= c ? s - c : 0;
+          sourceRows[item.titulo][col] = [];
+        });
+      }
+    });
+
+    const getVal = (key: string) => valoresTotal[key] || 0;
+    const getValMensal = (key: string, col: string) => (valoresMensal[key] && valoresMensal[key][col]) ? valoresMensal[key][col] : 0;
+
+    const receitaOperacional = getVal("Receita Bruta de Vendas");
+    const receitaIndireta = getVal("Receitas Indiretas");
+    const totalEntradas = receitaOperacional + receitaIndireta;
+
+    const outrasEntradas = getVal("Outras Receitas") + getVal("Receitas Financeiras") + getVal("Honorários") + getVal("Juros e Devoluções") + getVal("Recuperação de Despesas Variáveis");
+    const totalImpostos = getVal("Impostos") + getVal("Provisão IRPJ e CSSL Trimestral");
+
+    const totalCustos = getCatTotal("Credenciado Operacional") + getCatTotal("Adiantamento - Credenciado Operacional") +
+      getVal("Terceirização de Mão de Obra") + getVal("CLTs") + getVal("Custo dos Serviços Prestados") +
+      getVal("Preventiva - B2G") + getVal("Corretiva - B2G") + getVal("Outros Custos");
+
+    const totalDespesas = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses)
+      ? 0
+      : (getVal("Credenciado Administrativo") + getVal("Credenciado TI") +
+         getVal("Despesas Administrativas") + getVal("Despesas de Vendas e Marketing") + getVal("Despesas Financeiras") +
+         getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios") +
+         getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos"));
+
+    const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos");
+    const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
+
+    const resultado = totalEntradas - totalImpostos - totalCustos - totalDespesas;
+    const fcl = totalEntradas + outrasEntradas - totalSaidas;
+
+    // Equipamentos
+    const totalEquipamentos = getCatTotal("Equipamentos");
+    valoresTotal["Equipamentos"] = totalEquipamentos;
+
+    valoresTotal["Total Entradas Operacionais"] = totalEntradas;
+    valoresTotal["Outras Entradas"] = outrasEntradas;
+    valoresTotal["Total de Impostos"] = totalImpostos;
+    valoresTotal["Total Custos Operacionais"] = totalCustos;
+    valoresTotal["Total Despesas Rateadas"] = totalDespesas;
+    valoresTotal["Total Investimentos"] = totalInvestimentos;
+    valoresTotal["Total Saídas"] = totalSaidas;
+    valoresTotal["Lucro antes do FCL"] = resultado;
+    valoresTotal["Fluxo de Caixa Livre FCL"] = fcl;
+    valoresTotal["Resultado Liquido Final"] = resultado;
+    valoresTotal["Impostos Gerais"] = totalImpostos;
+
+    const percLucro = totalEntradas !== 0 ? (resultado / totalEntradas * 100) : 0;
+    const percFcl = totalEntradas !== 0 ? (fcl / totalEntradas * 100) : 0;
+
+    valoresTotal["Lucro s/ Receita Operacional"] = percLucro;
+    valoresTotal["FCL s/ Receita Operacional"] = percFcl;
+
+    valoresMensal["Total Entradas Operacionais"] = {};
+    valoresMensal["Outras Entradas"] = {};
+    valoresMensal["Total de Impostos"] = {};
+    valoresMensal["Total Custos Operacionais"] = {};
+    valoresMensal["Total Despesas Rateadas"] = {};
+    valoresMensal["Total Investimentos"] = {};
+    valoresMensal["Total Saídas"] = {};
+    valoresMensal["Lucro antes do FCL"] = {};
+    valoresMensal["Fluxo de Caixa Livre FCL"] = {};
+    valoresMensal["Lucro s/ Receita Operacional"] = {};
+    valoresMensal["FCL s/ Receita Operacional"] = {};
+    valoresMensal["Equipamentos"] = {};
+
+    validColumns.forEach(col => {
+      const recOp = getValMensal("Receita Bruta de Vendas", col);
+      const recInd = getValMensal("Receitas Indiretas", col);
+      const totEnt = recOp + recInd;
+      valoresMensal["Total Entradas Operacionais"][col] = totEnt;
+
+      const outrasEnt = getValMensal("Outras Receitas", col) + getValMensal("Receitas Financeiras", col) + getValMensal("Honorários", col) + getValMensal("Juros e Devoluções", col) + getValMensal("Recuperação de Despesas Variáveis", col);
+      valoresMensal["Outras Entradas"][col] = outrasEnt;
+
+      const totImp = getValMensal("Impostos", col) + getValMensal("Provisão IRPJ e CSSL Trimestral", col);
+      valoresMensal["Total de Impostos"][col] = totImp;
+
+      const totCust = getCatMonthly("Credenciado Operacional", col) + getCatMonthly("Adiantamento - Credenciado Operacional", col) +
+        getValMensal("Terceirização de Mão de Obra", col) + getValMensal("CLTs", col) + getValMensal("Custo dos Serviços Prestados", col) +
+        getValMensal("Preventiva - B2G", col) + getValMensal("Corretiva - B2G", col) + getValMensal("Outros Custos", col);
+      valoresMensal["Total Custos Operacionais"][col] = totCust;
+
+      const totDesp = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses)
+        ? 0
+        : (getValMensal("Credenciado Administrativo", col) + getValMensal("Credenciado TI", col) +
+           getValMensal("Despesas Administrativas", col) + getValMensal("Despesas de Vendas e Marketing", col) + getValMensal("Despesas Financeiras", col) +
+           getValMensal("Outros Tributos", col) + getValMensal("Despesas Eventuais", col) + getValMensal("Despesas Variáveis", col) + getValMensal("Intermediação de Negócios", col) +
+           getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col));
+      valoresMensal["Total Despesas Rateadas"][col] = totDesp;
+
+      const totInv = getCatMonthly("Consórcios - a contemplar", col) + getValMensal("Serviços", col) + getCatMonthly("Ativos", col);
+      valoresMensal["Total Investimentos"][col] = totInv;
+
+      const totSai = totImp + totCust + totDesp + totInv;
+      valoresMensal["Total Saídas"][col] = totSai;
+
+      const resCol = totEnt - totImp - totCust - totDesp;
+      const fclCol = totEnt + outrasEnt - totSai;
+
+      valoresMensal["Lucro antes do FCL"][col] = resCol;
+      valoresMensal["Fluxo de Caixa Livre FCL"][col] = fclCol;
+
+      valoresMensal["Lucro s/ Receita Operacional"][col] = totEnt !== 0 ? (resCol / totEnt * 100) : 0;
+      valoresMensal["FCL s/ Receita Operacional"][col] = totEnt !== 0 ? (fclCol / totEnt * 100) : 0;
+      
+      valoresMensal["Equipamentos"][col] = getCatMonthly("Equipamentos", col);
+    });
+
+    const activeMachinesList = validColumns.map(col => {
+      const monthCounts = equipamentoCounts?.[col] || {};
+      const activeDepts = filters.departamentos.length > 0 
+        ? filters.departamentos 
+        : Object.keys(monthCounts);
+
+      let sum = 0;
+      activeDepts.forEach(dept => {
+        sum += monthCounts[dept] || 0;
+      });
+      return sum;
+    });
+    const machinesSum = activeMachinesList.reduce((a, b) => a + b, 0);
+    const averageMachines = validColumns.length > 0 ? (machinesSum / validColumns.length) : 0;
+
+    return {
+      totais: valoresTotal,
+      mensal: valoresMensal,
+      estrutura: estrutura,
+      validColumns,
+      sourceRows: {}, // Esvazia para economizar payload
+      kpis: {
+        receitaOperacional,
+        receitaIndireta,
+        totalEntradas,
+        outrasEntradas,
+        totalImpostos,
+        totalCustos,
+        totalDespesas,
+        totalInvestimentos,
+        totalSaidas,
+        resultado,
+        fcl,
+        percLucro,
+        percFcl,
+        totalEquipamentos,
+        averageMachines
+      }
+    };
+  }
+}
