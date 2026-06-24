@@ -66,14 +66,14 @@ interface QuickButton {
 }
 
 const SCENARIO_BUTTONS: QuickButton[] = [
-  { id: 'revenue_increase', label: 'Aumento de Receita', sublabel: 'Projetar novos contratos', icon: <TrendingUp size={15} />, color: 'emerald', defaultVal: 10 },
-  { id: 'revenue_reduction', label: 'Redução de Receita', sublabel: 'Simular queda macro', icon: <TrendingDown size={15} />, color: 'rose', defaultVal: -10 },
-  { id: 'contract_loss', label: 'Perda de Contrato', sublabel: 'Rescisão de departamento', icon: <AlertTriangle size={15} />, color: 'orange', defaultVal: -100 },
-  { id: 'revenue_replacement', label: 'Reposição de Receita', sublabel: 'Meta linear ou curva S', icon: <Target size={15} />, color: 'teal', defaultVal: 50000 },
-  { id: 'expense_increase', label: 'Aumento de Despesas', sublabel: 'Crescimento de custos gerais', icon: <TrendingUp size={15} />, color: 'amber', defaultVal: 8 },
-  { id: 'expense_reduction', label: 'Redução de Despesas', sublabel: 'Cortes administrativos', icon: <Scissors size={15} />, color: 'indigo', defaultVal: -12 },
-  { id: 'costs_cut', label: 'Corte de Custos', sublabel: 'Otimizar pessoal e credenciados', icon: <Scissors size={15} />, color: 'blue', defaultVal: -15 },
-  { id: 'macro_driver', label: 'Reajuste por Índice', sublabel: 'Indexadores IPCA/INCC/CDI', icon: <Activity size={15} />, color: 'slate', defaultVal: 4.5 },
+  { id: 'revenue_increase', label: 'Aumento de Receita', sublabel: 'Projetar novos contratos', icon: <TrendingUp size={18} />, color: 'emerald', defaultVal: 10 },
+  { id: 'revenue_reduction', label: 'Redução de Receita', sublabel: 'Simular queda macro', icon: <TrendingDown size={18} />, color: 'rose', defaultVal: -10 },
+  { id: 'contract_loss', label: 'Perda de Contrato', sublabel: 'Rescisão de departamento', icon: <AlertTriangle size={18} />, color: 'orange', defaultVal: -100 },
+  { id: 'revenue_replacement', label: 'Reposição de Receita', sublabel: 'Meta linear ou curva S', icon: <Target size={18} />, color: 'teal', defaultVal: 50000 },
+  { id: 'expense_increase', label: 'Aumento de Despesas', sublabel: 'Crescimento de custos gerais', icon: <TrendingUp size={18} />, color: 'amber', defaultVal: 8 },
+  { id: 'expense_reduction', label: 'Redução de Despesas', sublabel: 'Cortes administrativos', icon: <Scissors size={18} />, color: 'indigo', defaultVal: -12 },
+  { id: 'costs_cut', label: 'Corte de Custos', sublabel: 'Otimizar pessoal e credenciados', icon: <Scissors size={18} />, color: 'blue', defaultVal: -15 },
+  { id: 'macro_driver', label: 'Reajuste por Índice', sublabel: 'Indexadores IPCA/INCC/CDI', icon: <Activity size={18} />, color: 'slate', defaultVal: 4.5 },
 ];
 
 const BUTTON_COLORS: Record<string, string> = {
@@ -196,10 +196,40 @@ export function DreSimulatorV2({
 
   // ── Reset Completo ─────────────────────────────────────────────────────────
   const handleReset = () => {
-    onScenarioChange(null);
+    setEditingAssumption(null);
+    setAsmTargetIds([]);
+    setAsmStartDate('');
+    setAsmEndDate('');
+    setAsmValue(10);
+    setAsmType('revenue_increase');
+    setAsmAmountType('percentage');
+    setAsmRecurrence('monthly');
     setAiResponse('');
     setAiQuestion(null);
-    initializeDraft();
+    
+    if (originalResults) {
+      const cols = originalResults.validColumns;
+      const lastCol = cols[cols.length - 1] || 'Jun/26';
+      const lastIso = colToIso(lastCol);
+      const nextMonthIso = addMonthsIso(lastIso, 1);
+      const endProjIso = addMonthsIso(lastIso, 6);
+
+      const newScenario: Scenario = {
+        id: `sc_${Date.now()}`,
+        name: 'Rascunho Simulação',
+        basePeriod: [...cols],
+        projectionStartDate: nextMonthIso,
+        projectionEndDate: endProjIso,
+        mode: 'future_projection',
+        includeAllocatedExpenses: true,
+        assumptions: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      onScenarioChange(newScenario);
+    } else {
+      onScenarioChange(null);
+    }
   };
 
   // ── Salvar o Cenário Atual ────────────────────────────────────────────────
@@ -471,19 +501,19 @@ export function DreSimulatorV2({
           <div className="flex items-center gap-3">
             <button
               onClick={handleSaveScenario}
-              className="flex items-center gap-2 text-xs font-bold text-slate-100 bg-orange-600 hover:bg-orange-700 px-4 py-2.5 rounded-lg shadow-md transition-colors"
+              className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-white bg-orange-600 hover:bg-orange-700 px-5 py-3 rounded-lg shadow-md transition-colors cursor-pointer"
             >
-              <Save size={14} /> Salvar Cenário
+              <Save size={16} /> Salvar Cenário
             </button>
             <button
               onClick={handleReset}
-              className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/10 px-3.5 py-2.5 rounded-lg transition-colors border border-slate-800"
+              className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-5 py-3 rounded-lg transition-colors shadow-md cursor-pointer"
             >
-              <RotateCcw size={14} /> Resetar
+              <RotateCcw size={16} /> Resetar
             </button>
             <button
               onClick={onClose}
-              className="p-2.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors border border-slate-800"
+              className="p-3 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors border border-slate-800 cursor-pointer"
             >
               <X size={20} />
             </button>
@@ -499,15 +529,15 @@ export function DreSimulatorV2({
             {/* Abas Esquerda */}
             <div className="flex-shrink-0 flex border-b border-slate-800 bg-slate-950 px-4 pt-3.5 gap-1">
               {[
-                { id: 'dashboard' as TabId, label: '📊 Dashboard', icon: <Activity size={13} /> },
-                { id: 'premissas' as TabId, label: '🔧 Premissas', icon: <ListFilter size={13} /> },
-                { id: 'comparador' as TabId, label: '🏆 Comparar', icon: <Grid size={13} /> },
-                { id: 'tabela' as TabId, label: '📄 DRE Simulado', icon: <FileSpreadsheet size={13} /> },
+                { id: 'dashboard' as TabId, label: '📊 Dashboard', icon: <Activity size={14} /> },
+                { id: 'premissas' as TabId, label: '🔧 Premissas', icon: <ListFilter size={14} /> },
+                { id: 'comparador' as TabId, label: '🏆 Comparar', icon: <Grid size={14} /> },
+                { id: 'tabela' as TabId, label: '📄 DRE Simulado', icon: <FileSpreadsheet size={14} /> },
               ].map(t => (
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-lg transition-all whitespace-nowrap ${activeTab === t.id ? 'bg-slate-900 text-white border-t-2 border-orange-500' : 'text-slate-450 hover:text-slate-200 hover:bg-slate-900/50'}`}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-extrabold rounded-t-lg transition-all whitespace-nowrap cursor-pointer ${activeTab === t.id ? 'bg-slate-900 text-white border-t-2 border-orange-500' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/50'}`}
                 >
                   {t.icon}
                   {t.label}
@@ -523,10 +553,10 @@ export function DreSimulatorV2({
                 <>
                   {/* Cenários Macroeconômicos Rápidos */}
                   <div className="space-y-3">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Zap size={11} className="text-orange-500" /> Cenários de Simulação Rápida
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <Zap size={13} className="text-orange-500" /> Cenários de Simulação Rápida
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2.5">
                       {SCENARIO_BUTTONS.map(sc => (
                         <button
                           key={sc.id}
@@ -535,6 +565,7 @@ export function DreSimulatorV2({
                             setAsmValue(sc.defaultVal);
                             if (sc.id === 'contract_loss') {
                               setAsmTargetType('department');
+                              setAsmTargetIds([]);
                             } else if (['revenue_reduction', 'revenue_increase'].includes(sc.id)) {
                               setAsmTargetType('account_group');
                               setAsmTargetIds(['receita']);
@@ -544,17 +575,32 @@ export function DreSimulatorV2({
                             } else if (['expense_increase', 'expense_reduction'].includes(sc.id)) {
                               setAsmTargetType('account_group');
                               setAsmTargetIds(['despesas_rateadas']);
+                            } else {
+                              setAsmTargetType('all');
+                              setAsmTargetIds(['all']);
                             }
+
+                            if (activeScenario) {
+                              setAsmStartDate(activeScenario.projectionStartDate);
+                              setAsmEndDate(activeScenario.projectionEndDate);
+                            }
+
+                            if (sc.id === 'revenue_replacement') {
+                              setAsmAmountType('absolute_value');
+                            } else {
+                              setAsmAmountType('percentage');
+                            }
+
                             setEditingAssumption({});
                           }}
-                          className={`flex flex-col p-3 rounded-xl border text-left transition-all shadow-sm ${BUTTON_COLORS[sc.color]}`}
+                          className={`flex flex-col p-4.5 rounded-xl border text-left transition-all shadow-md cursor-pointer ${BUTTON_COLORS[sc.color]}`}
                         >
                           <div className="flex items-center justify-between w-full">
-                            <span className="p-1 rounded-md bg-white/50">{sc.icon}</span>
-                            <ChevronRight size={12} className="opacity-40" />
+                            <span className="p-1.5 rounded-md bg-white/50">{sc.icon}</span>
+                            <ChevronRight size={14} className="opacity-40" />
                           </div>
-                          <span className="text-xs font-bold mt-2.5 leading-tight">{sc.label}</span>
-                          <span className="text-[9px] text-slate-500 leading-tight mt-0.5">{sc.sublabel}</span>
+                          <span className="text-sm font-extrabold text-slate-900 mt-3 leading-snug">{sc.label}</span>
+                          <span className="text-xs text-slate-500 font-semibold leading-tight mt-1">{sc.sublabel}</span>
                         </button>
                       ))}
                     </div>
@@ -562,35 +608,35 @@ export function DreSimulatorV2({
 
                   {/* Configurações Globais do Cenário */}
                   {activeScenario && (
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuração do Horizonte</p>
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Configuração do Horizonte</p>
                       
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-3.5">
                         <div>
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Início Impacto</label>
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Início Impacto</label>
                           <input
                             type="month"
                             value={activeScenario.projectionStartDate}
                             onChange={e => onScenarioChange({ ...activeScenario, projectionStartDate: e.target.value })}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-orange-500"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-semibold outline-none focus:border-orange-500"
                           />
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Fim Impacto</label>
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Fim Impacto</label>
                           <input
                             type="month"
                             value={activeScenario.projectionEndDate}
                             onChange={e => onScenarioChange({ ...activeScenario, projectionEndDate: e.target.value })}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-orange-500"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-semibold outline-none focus:border-orange-500"
                           />
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between pt-1">
-                        <span className="text-xs text-slate-350 font-medium">Incluir Despesas Rateadas</span>
+                        <span className="text-sm text-slate-300 font-semibold">Incluir Despesas Rateadas</span>
                         <button
                           onClick={() => onScenarioChange({ ...activeScenario, includeAllocatedExpenses: !activeScenario.includeAllocatedExpenses })}
-                          className="text-slate-400 hover:text-white"
+                          className="text-slate-400 hover:text-white cursor-pointer"
                         >
                           {activeScenario.includeAllocatedExpenses ? (
                             <ToggleRight size={32} className="text-orange-500" />
@@ -604,8 +650,8 @@ export function DreSimulatorV2({
 
                   {/* IA integrada BrisinhAI */}
                   <div className="space-y-3">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Sparkles size={11} className="text-orange-400" /> Consultar FP&A IA</p>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Sparkles size={13} className="text-orange-400" /> Consultar FP&A IA</p>
+                    <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: 'timeline', label: ' timeline de risco', icon: '📅' },
                         { id: 'breakeven', label: 'Ponto de Equilíbrio', icon: '⚖️' },
@@ -616,7 +662,7 @@ export function DreSimulatorV2({
                           key={q.id}
                           onClick={() => handleAiQuestion(q.id, q.label)}
                           disabled={isAiLoading || !activeScenario?.assumptions.length}
-                          className="flex items-center gap-2 p-3 rounded-xl border border-slate-800 bg-slate-950/40 text-slate-300 text-left text-xs font-semibold hover:border-orange-500/40 hover:bg-orange-950/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="flex items-center gap-2 p-3.5 rounded-xl border border-slate-800 bg-slate-950/40 text-slate-200 text-left text-sm font-semibold hover:border-orange-500/40 hover:bg-orange-950/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                         >
                           <span>{q.icon}</span>
                           <span className="leading-tight">{q.label}</span>
@@ -631,22 +677,22 @@ export function DreSimulatorV2({
               {/* ══ ABA PREMISSAS: LISTA DE APLICAÇÃO ══ */}
               {activeTab === 'premissas' && activeScenario && (
                 <div className="space-y-4">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Premissas Ativas no Cenário</p>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Premissas Ativas no Cenário</p>
                   
                   {activeScenario.assumptions.length === 0 ? (
                     <div className="text-center py-10 text-slate-500 border border-dashed border-slate-800 rounded-xl">
                       <HelpCircle size={32} className="mx-auto mb-2 opacity-30" />
                       <p className="text-xs">Nenhuma premissa aplicada ainda.</p>
-                      <button onClick={() => setActiveTab('dashboard')} className="text-orange-500 text-xs font-bold mt-2 hover:underline">
+                      <button onClick={() => setActiveTab('dashboard')} className="text-orange-500 text-xs font-bold mt-2 hover:underline cursor-pointer">
                         Adicionar primeiro cenário
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {activeScenario.assumptions.map(asm => (
-                        <div key={asm.id} className="bg-slate-950 border border-slate-850 rounded-xl p-3.5 flex items-start justify-between">
+                        <div key={asm.id} className="bg-slate-950 border border-slate-850 rounded-xl p-4 flex items-start justify-between">
                           <div>
-                            <p className="text-xs font-extrabold text-white">
+                            <p className="text-sm font-black text-white">
                               {asm.type === 'contract_loss' && 'Perda de Contrato'}
                               {asm.type === 'revenue_increase' && 'Aumento de Receita'}
                               {asm.type === 'revenue_reduction' && 'Redução de Receita'}
@@ -656,23 +702,23 @@ export function DreSimulatorV2({
                               {asm.type === 'revenue_replacement' && 'Reposição de Receita'}
                               {asm.type === 'macro_driver' && `Reajuste via ${asm.macroIndex}`}
                             </p>
-                            <p className="text-[10px] text-slate-450 mt-1">
+                            <p className="text-xs text-slate-400 mt-1.5">
                               Foco: {asm.targetType === 'all' ? 'Portfólio Inteiro' : asm.targetIds.join(', ')}
                             </p>
-                            <p className="text-[10px] text-orange-400 font-mono mt-0.5">
+                            <p className="text-xs text-orange-400 font-mono mt-1 font-bold">
                               {asm.amountType === 'percentage' ? `${asm.value > 0 ? '+' : ''}${asm.value}%` : fmt(asm.value)}
                               {asm.recurrence === 'linear_ramp' && ' (Curva Linear)'}
                               {asm.recurrence === 'one_time' && ' (Única)'}
                             </p>
-                            <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                            <p className="text-[11px] text-slate-500 font-mono mt-1">
                               De {isoToCol(asm.startDate)} até {isoToCol(asm.endDate)}
                             </p>
                           </div>
                           <button
                             onClick={() => handleRemoveAssumption(asm.id)}
-                            className="p-1.5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                            className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       ))}
@@ -685,8 +731,8 @@ export function DreSimulatorV2({
               {activeTab === 'comparador' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cenários Executivos Salvos</p>
-                    <span className="text-[10px] font-mono text-slate-500">{savedScenarios.length} cenários</span>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cenários Executivos Salvos</p>
+                    <span className="text-xs font-mono text-slate-400">{savedScenarios.length} cenários</span>
                   </div>
 
                   {savedScenarios.length === 0 ? (
@@ -695,36 +741,36 @@ export function DreSimulatorV2({
                       <p className="text-xs">Nenhum cenário salvo ainda no LocalStorage.</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {savedScenarios.map(sc => (
                         <div
                           key={sc.id}
-                          className={`border rounded-xl p-3.5 flex items-center justify-between transition-all ${activeScenario?.id === sc.id ? 'border-orange-500 bg-slate-900' : 'border-slate-800 bg-slate-950/40'}`}
+                          className={`border rounded-xl p-4 flex items-center justify-between transition-all ${activeScenario?.id === sc.id ? 'border-orange-500 bg-slate-900' : 'border-slate-800 bg-slate-950/40'}`}
                         >
                           <button
                             onClick={() => onScenarioChange(sc)}
-                            className="flex-1 text-left"
+                            className="flex-1 text-left cursor-pointer"
                           >
-                            <p className="text-xs font-bold text-white leading-tight">{sc.name}</p>
-                            <p className="text-[9px] text-slate-500 mt-1 font-mono">
+                            <p className="text-sm font-bold text-white leading-tight">{sc.name}</p>
+                            <p className="text-xs text-slate-400 mt-1 font-mono">
                               Premissas: {sc.assumptions.length} · Projeção: {isoToCol(sc.projectionStartDate)}...{isoToCol(sc.projectionEndDate)}
                             </p>
                           </button>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => handleDuplicateScenario(sc)}
                               title="Duplicar Cenário"
-                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                             >
-                              <Copy size={12} />
+                              <Copy size={13} />
                             </button>
                             <button
                               onClick={() => handleDeleteScenario(sc.id)}
                               title="Deletar Cenário"
-                              className="p-1.5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                              className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
                             >
-                              <Trash2 size={12} />
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </div>
@@ -736,15 +782,15 @@ export function DreSimulatorV2({
 
               {/* ══ ABA TABELA: INFO SIMPLES ══ */}
               {activeTab === 'tabela' && (
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DRE Projetado Detalhado</p>
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">DRE Projetado Detalhado</p>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     Você pode visualizar o detalhamento completo mês a mês na coluna da direita alternando para a aba correspondente.
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2.5">
                     <button
                       onClick={() => setActiveTab('tabela')}
-                      className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-2 text-xs font-bold"
+                      className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-2.5 text-xs font-bold cursor-pointer"
                     >
                       Exportar Cenário
                     </button>
@@ -821,8 +867,8 @@ export function DreSimulatorV2({
             {/* ══ GRÁFICOS E ANÁLISES EXECUTIVAS ══ */}
             <div className="flex-1 flex flex-col gap-6">
 
-              {/* ABA 1: DASHBOARD ANALÍTICO (GRÁFICOS EXPANDIDOS) */}
-              {activeTab === 'dashboard' && (
+              {/* ABA 1: DASHBOARD ANALÍTICO & PREMISSAS (GRÁFICOS EXPANDIDOS) */}
+              {(activeTab === 'dashboard' || activeTab === 'premissas') && (
                 <div className="grid grid-cols-2 gap-6 items-stretch flex-1">
                   
                   {/* Gráfico 1: Evolução Base vs Simulado (Ampliado para PC) */}
@@ -949,123 +995,7 @@ export function DreSimulatorV2({
                 </div>
               )}
 
-              {/* ABA 2: FORMULÁRIO DE PREMISSAS ADICIONADAS */}
-              {activeTab === 'premissas' && editingAssumption && (
-                <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-8 max-w-2xl mx-auto space-y-6">
-                  <h3 className="text-lg font-black text-white flex items-center gap-2">
-                    <Zap className="text-orange-500" size={18} /> Configure a Premissa de Simulação
-                  </h3>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mapeamento da Premissa</label>
-                      <select
-                        value={asmType}
-                        onChange={e => setAsmType(e.target.value as any)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none"
-                      >
-                        <option value="revenue_increase">Aumento de Receita</option>
-                        <option value="revenue_reduction">Redução de Receita</option>
-                        <option value="contract_loss">Perda de Contrato</option>
-                        <option value="revenue_replacement">Reposição de Receita</option>
-                        <option value="expense_increase">Aumento de Despesa</option>
-                        <option value="expense_reduction">Redução de Despesa</option>
-                        <option value="costs_cut">Corte de Custos</option>
-                        <option value="macro_driver">Cenário Macroeconômico</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tipo de Aplicação</label>
-                      <select
-                        value={asmAmountType}
-                        onChange={e => setAsmAmountType(e.target.value as any)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none"
-                      >
-                        <option value="percentage">Percentual (%)</option>
-                        <option value="absolute_value">Valor Absoluto (R$)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Valor do Impacto</label>
-                      <input
-                        type="number"
-                        value={asmValue}
-                        onChange={e => setAsmValue(Number(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Início (Mês/Ano)</label>
-                      <input
-                        type="month"
-                        value={asmStartDate}
-                        onChange={e => setAsmStartDate(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Fim (Mês/Ano)</label>
-                      <input
-                        type="month"
-                        value={asmEndDate}
-                        onChange={e => setAsmEndDate(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {asmType === 'contract_loss' && metadata && (
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Selecione o Contrato/Departamento</label>
-                      <select
-                        onChange={e => setAsmTargetIds([e.target.value])}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none"
-                      >
-                        <option value="">Selecione...</option>
-                        {metadata.departamentos.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
-                    </div>
-                  )}
-
-                  {asmType === 'macro_driver' && (
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Índice Macroeconômico</label>
-                      <select
-                        value={asmMacroIndex}
-                        onChange={e => setAsmMacroIndex(e.target.value as any)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none"
-                      >
-                        <option value="IPCA">IPCA (Inflação Oficial)</option>
-                        <option value="INCC">INCC (Construção Civil)</option>
-                        <option value="CDI">CDI (Custos Financeiros)</option>
-                        <option value="SELIC">SELIC (Taxa de Juros)</option>
-                        <option value="dissidio">Dissídio Anual de Folha</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <div className="flex gap-3 justify-end pt-4">
-                    <button
-                      onClick={() => setEditingAssumption(null)}
-                      className="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-xs font-bold"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleAddAssumption}
-                      className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-4 py-2 text-xs font-bold"
-                    >
-                      Confirmar Premissa
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* ABA 2: FORMULÁRIO DE PREMISSAS ADICIONADAS (REMOVIDO DAQUI E TRANSFORMA EM MODAL GLOBAL) */}
 
               {/* ABA 3: COMPARAÇÃO DE CENÁRIOS SALVOS */}
               {activeTab === 'comparador' && (
@@ -1206,6 +1136,126 @@ export function DreSimulatorV2({
 
         </div>
       </div>
+
+      {editingAssumption && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-2xl w-full space-y-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-black text-white flex items-center gap-2">
+              <Zap className="text-orange-500" size={18} /> Configure a Premissa de Simulação
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Mapeamento da Premissa</label>
+                <select
+                  value={asmType}
+                  onChange={e => setAsmType(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                >
+                  <option value="revenue_increase">Aumento de Receita</option>
+                  <option value="revenue_reduction">Redução de Receita</option>
+                  <option value="contract_loss">Perda de Contrato</option>
+                  <option value="revenue_replacement">Reposição de Receita</option>
+                  <option value="expense_increase">Aumento de Despesa</option>
+                  <option value="expense_reduction">Redução de Despesa</option>
+                  <option value="costs_cut">Corte de Custos</option>
+                  <option value="macro_driver">Cenário Macroeconômico</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Tipo de Aplicação</label>
+                <select
+                  value={asmAmountType}
+                  onChange={e => setAsmAmountType(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                >
+                  <option value="percentage">Percentual (%)</option>
+                  <option value="absolute_value">Valor Absoluto (R$)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Valor do Impacto</label>
+                <input
+                  type="number"
+                  value={asmValue}
+                  onChange={e => setAsmValue(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Início (Mês/Ano)</label>
+                <input
+                  type="month"
+                  value={asmStartDate}
+                  onChange={e => setAsmStartDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Fim (Mês/Ano)</label>
+                <input
+                  type="month"
+                  value={asmEndDate}
+                  onChange={e => setAsmEndDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none font-mono"
+                />
+              </div>
+            </div>
+
+            {asmType === 'contract_loss' && metadata && (
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Selecione o Contrato/Departamento</label>
+                <select
+                  value={asmTargetIds[0] || ''}
+                  onChange={e => setAsmTargetIds([e.target.value])}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                >
+                  <option value="">Selecione...</option>
+                  {metadata.departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            )}
+
+            {asmType === 'macro_driver' && (
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Índice Macroeconômico</label>
+                <select
+                  value={asmMacroIndex}
+                  onChange={e => setAsmMacroIndex(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                >
+                  <option value="IPCA">IPCA (Inflação Oficial)</option>
+                  <option value="INCC">INCC (Construção Civil)</option>
+                  <option value="CDI">CDI (Custos Financeiros)</option>
+                  <option value="SELIC">SELIC (Taxa de Juros)</option>
+                  <option value="dissidio">Dissídio Anual de Folha</option>
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end pt-4">
+              <button
+                onClick={() => setEditingAssumption(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-5 py-2.5 text-xs font-black uppercase tracking-wider cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddAssumption}
+                className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-5 py-2.5 text-xs font-black uppercase tracking-wider cursor-pointer shadow-md"
+              >
+                Confirmar Premissa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
