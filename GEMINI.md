@@ -25,7 +25,9 @@ O projeto deve ser tratado como um produto executivo, financeiro e operacional. 
 
 ## 2. Versionamento obrigatório
 
-Toda alteração deve respeitar versionamento obrigatório.
+Toda alteração deve respeitar o versionamento obrigatório.
+
+**REGRA ABSOLUTA**: É estritamente obrigatório atualizar a versão do sistema a CADA modificação, correção de bug, ou implementação de nova funcionalidade. Nunca encerre uma tarefa ou realize um commit sem antes "bumpar" a versão no arquivo de controle correspondente (ex: `version.ts` ou changelog).
 
 Antes de qualquer mudança:
 
@@ -37,16 +39,15 @@ Antes de qualquer mudança:
 
 Depois da alteração:
 
-1. informar todos os arquivos criados, alterados ou removidos;
-2. resumir objetivamente o que mudou;
-3. explicar impactos técnicos e funcionais;
-4. informar testes executados;
-5. informar riscos remanescentes;
-6. sugerir próxima versão ou melhoria incremental.
+1. **Atualizar o arquivo de versão (incrementar número da versão e registrar no changelog)**;
+2. informar todos os arquivos criados, alterados ou removidos;
+3. resumir objetivamente o que mudou;
+4. explicar impactos técnicos e funcionais;
+5. informar testes executados;
+6. informar riscos remanescentes;
+7. sugerir próxima versão ou melhoria incremental.
 
-Nenhuma alteração deve ser feita sem rastreabilidade.
-
-Quando houver changelog, histórico interno, comentários de versão ou mecanismo próprio de versionamento no projeto, ele deve ser atualizado obrigatoriamente.
+Nenhuma alteração deve ser feita sem rastreabilidade. Quando houver changelog, histórico interno, comentários de versão ou arquivo `version.ts` no projeto, o incremento da versão e o registro da alteração devem ser realizados obrigatoriamente ANTES do commit.
 
 Formato recomendado de registro:
 
