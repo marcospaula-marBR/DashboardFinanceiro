@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.01";
+export const APP_VERSION = "v.02.48.02";
 export const VERSION_DATE = "2026-06-24";
 export const VERSION_CHANGELOG = [
+  "v.02.48.02 - Fix/FP&A: Corrige o cálculo matemático de fatores percentuais nas premissas de redução (receitas, custos, despesas) e aumento, imunizando o motor de simulação contra erros de sinal no preenchimento de inputs do usuário (usando Math.abs para assegurar que reduções sempre reduzam e aumentos sempre aumentem).",
   "v.02.48.01 - Fix/UX: Melhora usabilidade do Simulador DRE. Configuração de premissas passa a abrir em um modal de overlay global imediatamente ao clicar em qualquer card de cenário rápido, com inicialização automática do período do horizonte. Corrige a lógica de Reset de premissas e expande as escalas de fonte de todo o painel esquerdo para melhor leitura executiva em PC/desktop. Gráficos adicionados à exibição da aba Premissas.",
   "v.02.48.00 - Feat/FP&A: Lançamento do novo Simulador Executivo de Cenários DRE fullscreen expandido para PC. Adiciona motor de simulação temporal (dre-simulator.engine.ts), biblioteca de datas (date-utils.ts), persistência de múltiplos cenários no LocalStorage, 13 premissas rápidas operacionais e macroeconômicas (IPCA/CDI), e 4 novos painéis gráficos (Waterfall EBITDA ponte, Tornado Chart de sensibilidade, Heatmap mensal de desvios e Tabela de Comparador). Suíte de 10 testes de negócio determinísticos criada e validada.",
   "v.02.47.02 - Docs/Regras: Atualiza GEMINI.md para tornar explicitamente obrigat\u00f3ria (Regra Absoluta) a atualiza\u00e7\u00e3o do versionamento a cada altera\u00e7\u00e3o, implementa\u00e7\u00e3o ou corre\u00e7\u00e3o realizada por qualquer agente de IA.",

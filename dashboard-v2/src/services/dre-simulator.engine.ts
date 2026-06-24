@@ -248,7 +248,7 @@ export class DreSimulatorEngine {
             case 'expense_reduction':
             case 'costs_cut':
               if (asm.amountType === 'percentage') {
-                const factor = 1 + (asm.value / 100);
+                const factor = 1 - (Math.abs(asm.value) / 100);
                 currentVal = currentVal * factor;
               } else if (asm.amountType === 'absolute_value' || asm.amountType === 'monthly_value') {
                 currentVal = Math.max(0, currentVal - (Math.abs(asm.value) / matchingKeysCount));
@@ -258,7 +258,7 @@ export class DreSimulatorEngine {
             case 'revenue_increase':
             case 'expense_increase':
               if (asm.amountType === 'percentage') {
-                const factor = 1 + (asm.value / 100);
+                const factor = 1 + (Math.abs(asm.value) / 100);
                 currentVal = currentVal * factor;
               } else if (asm.amountType === 'absolute_value' || asm.amountType === 'monthly_value') {
                 currentVal = currentVal + (Math.abs(asm.value) / matchingKeysCount);
