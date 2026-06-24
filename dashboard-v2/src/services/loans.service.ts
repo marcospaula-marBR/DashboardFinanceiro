@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { Employee, Contract, LoanStats, ProjectionData } from '@/types/loans';
+import { Employee, Contract, LoanStats, ProjectionData, shouldDisplayExistingLoan, inferEntityType, isEligibleForNewLoan } from '@/types/loans';
 import { PaymentsService } from './payments.service';
 
 // ─── Raw types from Supabase tables ─────────────────────────────────────────
@@ -15,6 +15,11 @@ interface RawEmployee {
   contract_expiry_date?: string;
   job_role?: string;
   links_aditivos?: string;
+  metadata?: any;
+  is_outsourced?: boolean;
+  corporate_name?: string;
+  pj_type?: string;
+  tax_regime?: string;
 }
 
 interface RawLoan {
@@ -231,7 +236,7 @@ export async function fetchEmployees(isTestMode: boolean): Promise<RawEmployee[]
   const table = isTestMode ? 'employees_test' : 'employees';
   const { data, error } = await supabase
     .from(table)
-    .select('id,full_name,company,employment_type,remuneration,status,start_date,contract_expiry_date,job_role,links_aditivos')
+    .select('id,full_name,company,employment_type,remuneration,status,start_date,contract_expiry_date,job_role,links_aditivos,metadata,is_outsourced,corporate_name,pj_type,tax_regime')
     .order('full_name');
 
   if (error) {
@@ -328,8 +333,14 @@ export class LoansService {
         });
       }
 
+      const hasExistingLoan = filteredEmpLoans.length > 0;
+      // Regra de elegibilidade conservadora
+      if (!shouldDisplayExistingLoan(emp as any, hasExistingLoan)) {
+        return;
+      }
+      
       // Se não for "mostrar todos" e não tiver empréstimo, pula
-      if (!showAll && filteredEmpLoans.length === 0) return;
+      if (!showAll && !hasExistingLoan) return;
 
       const totalTaken = filteredEmpLoans.reduce((a, ln) => a + (parseFloat(String(ln.amount)) || 0), 0);
       const balance = filteredEmpLoans.reduce((a, ln) => a + calcDebtForLoan(ln, paymentsByContract.get(ln.id)), 0);
@@ -428,6 +439,12 @@ export class LoansService {
         aditivoCount,
         remainingInstallments,
         lastInstallmentDate: lastInstallmentDate || null,
+        is_outsourced: emp.is_outsourced,
+        corporate_name: emp.corporate_name,
+        pj_type: emp.pj_type,
+        tax_regime: emp.tax_regime,
+        metadata: emp.metadata || {},
+        entityType: emp.metadata?.entityType || inferEntityType(emp as any),
         nextInstallmentValue,
         nextInstallmentDate
       });

@@ -1,14 +1,27 @@
 const fs = require('fs');
 const path = require('path');
 
-const URL = 'https://ngtjhwswbbivqajtpjvg.supabase.co';
-const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ndGpod3N3YmJpdnFhanRwanZnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTE4MjM2MCwiZXhwIjoyMDg0NzU4MzYwfQ.2TPnOfnAzeWG23Y-VuDKxxzQ9QdbHwrnHdVBhS9hU28';
+const dotenv = require('dotenv');
+
+// Load environment variables from the root or local .env file
+const envPath = fs.existsSync(path.join(__dirname, '.env')) 
+  ? path.join(__dirname, '.env') 
+  : path.join(__dirname, '../.env');
+dotenv.config({ path: envPath });
+
+const URL = process.env.SUPABASE_URL || 'https://ngtjhwswbbivqajtpjvg.supabase.co';
+const KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const TABLES = [
   'employees',
   'employee_loans',
+  'loan_payments',
+  'people_monthly_costs',
+  'employment_contracts',
+  'employee_history',
   'employees_test',
-  'employee_loans_test'
+  'employee_loans_test',
+  'loan_payments_test'
 ];
 
 async function runBackup() {

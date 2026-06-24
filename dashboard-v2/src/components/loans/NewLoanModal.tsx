@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, AlertCircle, Save, FileText, FileSignature, CheckCircle2 } from 'lucide-react';
 import { useDataMode } from '@/contexts/DataModeContext';
 import { LoansService, fetchEmployees } from '@/services/loans.service';
+import { isEligibleForNewLoan } from '@/types/loans';
 
 interface NewLoanModalProps {
   isOpen: boolean;
@@ -58,7 +59,26 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
   const loadEmployees = async () => {
     try {
       const emps = await fetchEmployees(isTestMode);
-      setEmployees(emps);
+      const eligible = emps.filter(e => {
+        const empMapped = {
+          id: e.id,
+          name: e.full_name,
+          company: e.company,
+          linkType: e.employment_type,
+          remuneration: parseFloat(String(e.remuneration)) || 0,
+          status: e.status,
+          start_date: e.start_date,
+          contract_expiry_date: e.contract_expiry_date,
+          job_role: e.job_role,
+          metadata: e.metadata || {},
+          is_outsourced: e.is_outsourced,
+          corporate_name: e.corporate_name,
+          pj_type: e.pj_type,
+          tax_regime: e.tax_regime
+        };
+        return isEligibleForNewLoan(empMapped as any);
+      });
+      setEmployees(eligible);
     } catch (err) {
       console.error(err);
     }

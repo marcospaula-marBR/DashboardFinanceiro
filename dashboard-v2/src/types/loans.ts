@@ -113,6 +113,15 @@ export interface Employee {
   executive_summary?: string;
   executive_link?: string;
   commission_plan?: string; // plano de comissão (selecionável por produto)
+
+  // --- PeopleBoard Cockpit Properties ---
+  pbId?: string;
+  entityType?: EntityType;
+  relationshipNature?: RelationshipNature;
+  relationships?: PeopleRelationship[];
+  aiAgents?: PeopleAIAgent[];
+  permissions?: string[];
+  temporaryDelegations?: PeopleTemporaryDelegation[];
 }
 
 export interface Contract {
@@ -277,3 +286,227 @@ export interface AuditIssue {
     regimeAtivo?: string;
   };
 }
+
+// --- PeopleBoard / People Cockpit Metadata & Governance Types ---
+
+export type EntityType =
+  | "internal_person"
+  | "legal_entity"
+  | "partner"
+  | "supplier"
+  | "external_consultancy"
+  | "accredited_provider";
+
+export type RelationshipNature =
+  | "clt_internal"
+  | "pj_specialized"
+  | "accredited_company"
+  | "strategic_partner"
+  | "approved_supplier"
+  | "external_consultancy"
+  | "council_member"
+  | "shareholder"
+  | "founder";
+
+export type PBLevel = "E" | "T" | "O";
+export type PBDegree = 1 | 2 | 3;
+
+export interface PeopleAIAgent {
+  name: string;
+  chair?: string;
+  orbit?: string;
+  scope?: string;
+  permissions?: string[];
+  workflows?: string[];
+  indicators?: string[];
+  contextMemory?: string;
+  status?: string;
+  owner?: string;
+  updatedAt?: string;
+  sensitivityLevel?: string;
+}
+
+export interface PeopleTemporaryDelegation {
+  id: string;
+  roleOrPermission: string;
+  expiresAt: string;
+  assignedBy: string;
+  assignedAt: string;
+  status: 'active' | 'expired' | 'revoked';
+  observations?: string;
+}
+
+export interface PeopleRelationship {
+  employee_id: string;
+  relation_type:
+    | 'equivalent'              // Interface equivalente
+    | 'orientadora'             // Interface orientadora (above)
+    | 'apoiada'                 // Interface apoiada (below)
+    | 'referencia_tecnica'      // Referência técnica
+    | 'autoridade_delegada'     // Autoridade delegada
+    | 'responsabilidade_compartilhada' // Responsabilidade compartilhada
+    | 'dependencia_operacional' // Dependência operacional
+    | 'vinculo_governanca';     // Vínculo de governança
+}
+
+export interface PeopleMetadata {
+  pbId?: string;
+  entityType?: EntityType;
+  relationshipNature?: RelationshipNature;
+  aiAgents?: PeopleAIAgent[];
+  permissions?: string[];
+  temporaryDelegations?: PeopleTemporaryDelegation[];
+  relationships?: PeopleRelationship[];
+  dataQualityScore?: number;
+  version?: number;
+
+  // Legacy metadata fields
+  has_invoice_glosa?: boolean;
+  last_raise_date?: string | null;
+  grau?: string;
+  remuneration_connectivity?: number;
+  remuneration_incentives?: number;
+}
+
+// --- Future Payroll PDF Import Types ---
+
+export interface PayrollCostSnapshot {
+  id: string;
+  employeeId: string;
+  pbId?: string;
+  sourceDocumentId?: string;
+  competence: string; // YYYY-MM
+  employeeName: string;
+  documentId?: string; // CPF ou CNPJ extraído
+  department?: string;
+  chair?: string;
+  orbit?: string;
+  contractType?: string;
+  grossSalary?: number;
+  benefits?: number;
+  taxes?: number;
+  charges?: number;
+  discounts?: number;
+  netPay?: number;
+  totalCompanyCost?: number;
+  generatedFields?: string[];
+  confidenceScore?: number;
+  reviewed: boolean;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+export interface PayrollFrameAverage {
+  frameName: string; // "quadro" (Ex: Administrativo, Operação)
+  averageGrossSalary: number;
+  averageCompanyCost: number;
+  peopleCount: number;
+}
+
+export interface PayrollFrameTotal {
+  frameName: string;
+  totalGrossSalary: number;
+  totalCompanyCost: number;
+  peopleCount: number;
+}
+
+export interface PayrollImportSummary {
+  id: string;
+  sourceDocumentId: string;
+  competence: string;
+  totalEmployees: number;
+  totalGrossSalary: number;
+  totalBenefits: number;
+  totalTaxes: number;
+  totalCharges: number;
+  totalDiscounts: number;
+  totalNetPay: number;
+  totalCompanyCost: number;
+  averagesByFrame: PayrollFrameAverage[];
+  totalsByFrame: PayrollFrameTotal[];
+  createdAt: string;
+}
+
+export interface GeneratedField {
+  fieldName: string;
+  previousValue?: unknown;
+  generatedValue: unknown;
+  source: "payroll_pdf";
+  sourceDocumentId: string;
+  competence: string;
+  confidenceScore?: number;
+  status: "pending_review" | "approved" | "rejected";
+}
+
+// ─── PeopleBoard Cockpit Utility Helpers ─────────────────────────────────────
+
+export const PEOPLE_METADATA_VERSION = 1;
+
+export function normalizePeopleMetadata(raw: any): PeopleMetadata {
+  if (!raw) return { version: PEOPLE_METADATA_VERSION };
+  return {
+    pbId: raw.pbId || raw.pb_id || undefined,
+    entityType: raw.entityType || raw.entity_type || undefined,
+    relationshipNature: raw.relationshipNature || raw.relationship_nature || undefined,
+    aiAgents: Array.isArray(raw.aiAgents || raw.ai_agents) ? (raw.aiAgents || raw.ai_agents) : [],
+    permissions: Array.isArray(raw.permissions) ? raw.permissions : [],
+    temporaryDelegations: Array.isArray(raw.temporaryDelegations || raw.temporary_delegations) ? (raw.temporaryDelegations || raw.temporary_delegations) : [],
+    relationships: Array.isArray(raw.relationships) ? raw.relationships : [],
+    dataQualityScore: typeof raw.dataQualityScore === 'number' ? raw.dataQualityScore : (typeof raw.data_quality_score === 'number' ? raw.data_quality_score : 100),
+    version: typeof raw.version === 'number' ? raw.version : PEOPLE_METADATA_VERSION,
+  };
+}
+
+export function mergePeopleMetadata(currentMetadata: any, patch: Partial<PeopleMetadata>): PeopleMetadata {
+  const normalized = normalizePeopleMetadata(currentMetadata);
+  return {
+    ...normalized,
+    ...patch,
+    version: PEOPLE_METADATA_VERSION
+  };
+}
+
+export function inferEntityType(employee: Partial<Employee>): EntityType {
+  if (employee.metadata?.entityType) return employee.metadata.entityType;
+  if (employee.entityType) return employee.entityType;
+
+  const isOutsourced = employee.is_outsourced === true;
+  const hasCorporateName = typeof employee.corporate_name === 'string' && employee.corporate_name.trim().length > 0;
+  const hasPjType = typeof employee.pj_type === 'string' && employee.pj_type.trim().length > 0;
+  const hasTaxRegime = typeof employee.tax_regime === 'string' && employee.tax_regime.trim().length > 0;
+  const linkType = employee.linkType || '';
+
+  const isPJ = linkType === 'PJ' || linkType === 'MEI' || hasCorporateName || hasPjType || hasTaxRegime || isOutsourced;
+
+  return isPJ ? "legal_entity" : "internal_person";
+}
+
+export function isEligibleForNewLoan(employee: Employee): boolean {
+  return inferEntityType(employee) === "internal_person";
+}
+
+export function shouldDisplayExistingLoan(employee: Employee, hasExistingLoan: boolean): boolean {
+  return hasExistingLoan || isEligibleForNewLoan(employee);
+}
+
+export function getPBClassification(level?: string, degree?: string | number): string {
+  let l = "O";
+  if (level) {
+    const cleanLevel = level.trim().toUpperCase();
+    if (cleanLevel.startsWith("E")) l = "E";
+    else if (cleanLevel.startsWith("T")) l = "T";
+  }
+  
+  let d: 1 | 2 | 3 = 3;
+  if (degree !== undefined && degree !== null) {
+    const strDegree = String(degree).trim().toUpperCase();
+    if (strDegree === "1" || strDegree === "I") d = 1;
+    else if (strDegree === "2" || strDegree === "II") d = 2;
+    else if (strDegree === "3" || strDegree === "III") d = 3;
+  }
+
+  return `${l}${d}`;
+}
+
+

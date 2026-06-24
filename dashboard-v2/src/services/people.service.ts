@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
-import { Employee } from '@/types/loans';
+import { Employee, PeopleMetadata, EntityType, RelationshipNature, PeopleAIAgent, PeopleTemporaryDelegation, PeopleRelationship, mergePeopleMetadata, inferEntityType } from '@/types/loans';
 
 export class PeopleService {
   /**
@@ -361,7 +361,15 @@ export class PeopleService {
       links_emprestimos: raw.links_emprestimos,
       has_invoice_glosa: raw.metadata?.has_invoice_glosa || false,
       last_raise_date: raw.metadata?.last_raise_date || null,
-      grau: raw.metadata?.grau || ''
+      grau: raw.metadata?.grau || '',
+      pbId: raw.metadata?.pbId || raw.metadata?.pb_id || '',
+      entityType: raw.metadata?.entityType || raw.metadata?.entity_type || undefined,
+      relationshipNature: raw.metadata?.relationshipNature || raw.metadata?.relationship_nature || undefined,
+      relationships: Array.isArray(raw.metadata?.relationships) ? raw.metadata.relationships : [],
+      aiAgents: Array.isArray(raw.metadata?.aiAgents || raw.metadata?.ai_agents) ? (raw.metadata.aiAgents || raw.metadata.ai_agents) : [],
+      permissions: Array.isArray(raw.metadata?.permissions) ? raw.metadata.permissions : [],
+      temporaryDelegations: Array.isArray(raw.metadata?.temporaryDelegations || raw.metadata?.temporary_delegations) ? (raw.metadata.temporaryDelegations || raw.metadata.temporary_delegations) : [],
+      metadata: raw.metadata || {}
     };
   }
 
@@ -433,14 +441,20 @@ export class PeopleService {
       cnpj_state: profile.cnpj_state || '',
       executive_summary: profile.executive_summary || '',
       executive_link: profile.executive_link || '',
-      metadata: {
-        ...(profile.metadata || {}),
+      metadata: mergePeopleMetadata(profile.metadata, {
+        pbId: profile.pbId,
+        entityType: profile.entityType || inferEntityType(profile),
+        relationshipNature: profile.relationshipNature,
+        aiAgents: profile.aiAgents,
+        permissions: profile.permissions,
+        temporaryDelegations: profile.temporaryDelegations,
+        relationships: profile.relationships,
         has_invoice_glosa: profile.has_invoice_glosa || false,
         last_raise_date: profile.last_raise_date || null,
         grau: profile.grau || '',
         remuneration_connectivity: profile.remuneration_connectivity || 0,
         remuneration_incentives: profile.remuneration_incentives || 0
-      }
+      })
     };
   }
 
@@ -452,3 +466,4 @@ export class PeopleService {
       .join(' ');
   }
 }
+

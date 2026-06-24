@@ -15,9 +15,18 @@ import { LoansService, formatCurrency } from "@/services/loans.service";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, AlertCircle, Users, Eye, EyeOff, Search, Filter, X, 
-  UserCog, Plus, HandCoins, Coins, TrendingUp, Landmark, Target,
-  ChevronLeft
+  UserCog, Plus, HandCoins, Coins, Landmark, Target,
+  ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert
 } from "lucide-react";
+import { 
+  isExternalEntity, 
+  calculateEmployeeHealth, 
+  PeopleClassificationBadge, 
+  RelationshipNatureBadge, 
+  PeopleHealthBadge 
+} from "@/components/people/PeopleBadges";
+import { getPBClassification, inferEntityType } from "@/types/loans";
+import { PeopleMobileCard } from "@/components/people/PeopleMobileCard";
 
 // Custom MultiSelect Dropdown Component
 const MultiSelectDropdown = ({ 
@@ -85,7 +94,12 @@ export default function PeoplePage() {
 
   // UI states
   const [showValues, setShowValues] = useState(true);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
+  // Pagination for grid mode
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+
   // Filters state
   const [filterSearch, setFilterSearch] = useState('');
   const [filterEmpresa, setFilterEmpresa] = useState<string[]>([]);
@@ -97,6 +111,13 @@ export default function PeoplePage() {
   const [filterLocalPrestacao, setFilterLocalPrestacao] = useState<string[]>([]);
   const [filterRegimeTributario, setFilterRegimeTributario] = useState<string[]>([]);
   const [showInativos, setShowInativos] = useState(false);
+
+  // Novas variáveis de filtros do Cockpit
+  const [filterEntityType, setFilterEntityType] = useState<string[]>([]);
+  const [filterRelationshipNature, setFilterRelationshipNature] = useState<string[]>([]);
+  const [filterLevel, setFilterLevel] = useState<string[]>([]);
+  const [filterQuality, setFilterQuality] = useState<string[]>([]);
+  const [filterHasPbId, setFilterHasPbId] = useState<string[]>([]);
   
   // Insights & Alerts states
   const [noRaiseMonths, setNoRaiseMonths] = useState(6);
@@ -113,8 +134,6 @@ export default function PeoplePage() {
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
   const [isLoadingCosts, setIsLoadingCosts] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-
 
   useEffect(() => { 
     fetchData(); 
@@ -172,70 +191,97 @@ export default function PeoplePage() {
     };
   }, [employees, monthlyCosts, showValues]);
 
-  // ----- People KPI computed values -----
-  const hrKpis = useMemo(() => {
-    const ativos = filteredEmployees.filter(e => e.status === 'Ativo');
-    const inativos = filteredEmployees.filter(e => e.status === 'Inativo');
-    const ferias = filteredEmployees.filter(e => e.status === 'Férias');
-    const marBR = ativos.filter(e => e.company === 'MarBR').length;
-    const dzm = ativos.filter(e => e.company === 'DZM').length;
-    const g2 = ativos.filter(e => e.company === 'G2').length;
+  // Reset pagination when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredEmployees]);
+
+  // Verificar se há filtros ativos
+  const hasActiveFilters = useMemo(() => {
+    return (
+      filterSearch !== '' ||
+      filterEmpresa.length > 0 ||
+      filterStatus.length > 0 ||
+      filterVinculo.length > 0 ||
+      filterSetor.length > 0 ||
+      filterGrau.length > 0 ||
+      filterTerceirizado.length > 0 ||
+      filterLocalPrestacao.length > 0 ||
+      filterRegimeTributario.length > 0 ||
+      filterEntityType.length > 0 ||
+      filterRelationshipNature.length > 0 ||
+      filterLevel.length > 0 ||
+      filterQuality.length > 0 ||
+      filterHasPbId.length > 0 ||
+      showInativos ||
+      filterInsight !== null
+    );
+  }, [
+    filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau,
+    filterTerceirizado, filterLocalPrestacao, filterRegimeTributario,
+    filterEntityType, filterRelationshipNature, filterLevel, filterQuality, filterHasPbId,
+    showInativos, filterInsight
+  ]);
+
+  // ----- 10 KPIs Reativos do Cockpit baseados em Runtime -----
+  const cockpitKpis = useMemo(() => {
+    // Apenas ativos na visão filtrada
+    const activeFiltered = filteredEmployees.filter(e => e.status !== 'Inativo');
     
-    // Average tenure for actives
-    const tenures = ativos
-      .filter(e => e.start_date)
-      .map(e => {
-        const d = new Date(e.start_date! + 'T00:00:00');
-        const now = new Date();
-        return (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
-      });
-    const avgMonths = tenures.length > 0 ? Math.round(tenures.reduce((a, b) => a + b, 0) / tenures.length) : 0;
-    const avgYears = Math.floor(avgMonths / 12);
-    const avgRemMonths = avgMonths % 12;
-    const avgTenure = avgYears > 0 ? `${avgYears}a ${avgRemMonths > 0 ? avgRemMonths + 'm' : ''}` : `${avgMonths}m`;
-
-    return {
-      headcount: ativos.length,
-      inativos: inativos.length,
-      ferias: ferias.length,
-      marBR,
-      dzm,
-      g2,
-      avgTenure: avgMonths > 0 ? avgTenure : '—',
-      clt: ativos.filter(e => e.linkType === 'CLT').length,
-      mei: ativos.filter(e => e.linkType === 'MEI' || e.linkType === 'PJ').length,
-      est: ativos.filter(e => e.linkType === 'Estagiário').length,
-      saldoDevedorTotal: filteredEmployees.reduce((sum, e) => sum + (e.balance || 0), 0)
-    };
-  }, [filteredEmployees, loanStats]);
-
-  // Sum of total payroll cost for the current active employees (Remuneration total)
-  const payrollCosts = useMemo(() => {
-    const activeEmps = filteredEmployees.filter(e => e.status === 'Ativo' || e.status === 'Férias' || e.status === 'Provisão');
-    const total = activeEmps.reduce((sum, e) => sum + (e.remuneration || 0), 0);
-    const base = activeEmps.reduce((sum, e) => sum + (e.remuneration_fixed || 0), 0);
-    const bonus = activeEmps.reduce((sum, e) => sum + (e.remuneration_bonus || 0), 0);
-    return { total, base, bonus };
-  }, [filteredEmployees]);
-
-  // Average active employee remuneration
-  const avgRemuneration = useMemo(() => {
-    const activeEmps = filteredEmployees.filter(e => e.status === 'Ativo' && e.remuneration > 0);
-    if (activeEmps.length === 0) return 0;
-    return Math.round(activeEmps.reduce((sum, e) => sum + e.remuneration, 0) / activeEmps.length);
-  }, [filteredEmployees]);
-
-  // Count total audit inconsistencies found in the cockpit
-  const totalAuditIssuesCount = useMemo(() => {
-    return filteredEmployees.reduce((sum, emp) => {
-      const issues = allAuditIssues[emp.id];
-      return sum + (issues ? issues.length : 0);
+    // CLT/Estágio Físicos
+    const cltList = activeFiltered.filter(e => !isExternalEntity(e.entityType) && (e.linkType === 'CLT' || e.linkType === 'Estagiário'));
+    const cltCount = cltList.length;
+    
+    // PJ / Externos
+    const pjList = activeFiltered.filter(e => isExternalEntity(e.entityType));
+    const pjCount = pjList.length;
+    
+    // Custo CLT (leitura base remuneração dos CLT/Estágio ativos)
+    const cltCostTotal = cltList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
+    
+    // Custo PJ (leitura base do contrato de prestadores ativos)
+    const pjCostTotal = pjList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
+    
+    // Saldo Devedor Consignado (leitura runtime segura)
+    const totalLoansDebt = activeFiltered.reduce((sum, e) => sum + (e.balance || 0), 0);
+    
+    // Alertas de Auditoria
+    const totalAuditIssues = activeFiltered.reduce((sum, e) => {
+      const issues = allAuditIssues[e.id] || [];
+      return sum + issues.length;
     }, 0);
-  }, [allAuditIssues, filteredEmployees]);
+    
+    // Saúde Cadastral Crítica
+    const criticalHealthCount = activeFiltered.filter(e => {
+      const health = calculateEmployeeHealth(e);
+      return health.status === "Crítico";
+    }).length;
+    
+    // Nível Estratégico (E)
+    const strategicCount = activeFiltered.filter(e => {
+      const classification = getPBClassification(e.nivel, e.grau);
+      return classification.startsWith("E");
+    }).length;
+    
+    // Cadastros sem PB-ID
+    const noPbIdCount = activeFiltered.filter(e => !(e.pbId || e.metadata?.pbId)).length;
+    
+    return {
+      totalCount: activeFiltered.length,
+      cltCount,
+      pjCount,
+      cltCostTotal,
+      pjCostTotal,
+      totalLoansDebt,
+      totalAuditIssues,
+      criticalHealthCount,
+      strategicCount,
+      noPbIdCount
+    };
+  }, [filteredEmployees, allAuditIssues]);
 
-  // ----- Unique filter options from data -----
+  // Unique filter options from data
   const setores = useMemo(() => {
-    // Normalize to proper case and remove duplicates
     const s = new Set(
       employees
         .map(e => e.department)
@@ -254,6 +300,7 @@ export default function PeoplePage() {
     return Array.from(s).sort();
   }, [employees]);
 
+  // Base filtering logic
   const baseFilteredEmployees = useMemo(() => {
     let result = [...employees];
     const explicitlyShowingInativos = filterStatus.includes('Inativo');
@@ -273,6 +320,52 @@ export default function PeoplePage() {
     if (filterEmpresa.length > 0) result = result.filter(e => filterEmpresa.includes(e.company || ''));
     if (filterStatus.length > 0) result = result.filter(e => filterStatus.includes(e.status || ''));
     if (filterVinculo.length > 0) result = result.filter(e => filterVinculo.includes(e.linkType || ''));
+    
+    // Filtro por Tipo de Entidade (PF vs PJ)
+    if (filterEntityType.length > 0) {
+      result = result.filter(e => {
+        const type = e.entityType || inferEntityType(e);
+        const isPF = !isExternalEntity(type);
+        return (
+          (filterEntityType.includes("internal_person") && isPF) ||
+          (filterEntityType.includes("legal_entity") && !isPF)
+        );
+      });
+    }
+
+    // Filtro por Natureza da Relação
+    if (filterRelationshipNature.length > 0) {
+      result = result.filter(e => filterRelationshipNature.includes(e.relationshipNature || ''));
+    }
+
+    // Filtro por Nível PB (E, T, O)
+    if (filterLevel.length > 0) {
+      result = result.filter(e => {
+        const classification = getPBClassification(e.nivel, e.grau);
+        const lvl = classification.charAt(0);
+        return filterLevel.includes(lvl);
+      });
+    }
+
+    // Filtro por Qualidade Cadastral
+    if (filterQuality.length > 0) {
+      result = result.filter(e => {
+        const health = calculateEmployeeHealth(e);
+        return filterQuality.includes(health.status);
+      });
+    }
+
+    // Filtro por Existência de PB-ID
+    if (filterHasPbId.length > 0) {
+      result = result.filter(e => {
+        const hasId = !!(e.pbId || e.metadata?.pbId);
+        return (
+          (filterHasPbId.includes("sim") && hasId) ||
+          (filterHasPbId.includes("nao") && !hasId)
+        );
+      });
+    }
+
     if (filterSetor.length > 0) {
       const lowerFilterSetor = filterSetor.map(s => s.toLowerCase());
       result = result.filter(e => {
@@ -293,13 +386,17 @@ export default function PeoplePage() {
     }
     
     return result;
-  }, [employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau, filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, showInativos]);
+  }, [
+    employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau,
+    filterTerceirizado, filterLocalPrestacao, filterRegimeTributario,
+    filterEntityType, filterRelationshipNature, filterLevel, filterQuality, filterHasPbId,
+    showInativos
+  ]);
 
-  // ----- Apply people filters -----
+  // Apply insight alerts filters
   useEffect(() => {
     let result = [...baseFilteredEmployees];
     
-    // Filtro de Insights
     if (filterInsight) {
       const now = new Date();
       result = result.filter(e => {
@@ -324,6 +421,14 @@ export default function PeoplePage() {
     
     setFilteredEmployees(result);
   }, [baseFilteredEmployees, filterInsight, noRaiseMonths, noPromoMonths]);
+
+  // Pagination slice for grid view
+  const paginatedGridEmployees = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredEmployees.slice(start, start + itemsPerPage);
+  }, [filteredEmployees, currentPage]);
+
+  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage) || 1;
 
   const fetchData = async () => {
     setError(null);
@@ -373,6 +478,12 @@ export default function PeoplePage() {
     setFilterTerceirizado([]);
     setFilterLocalPrestacao([]);
     setFilterRegimeTributario([]);
+    setFilterEntityType([]);
+    setFilterRelationshipNature([]);
+    setFilterLevel([]);
+    setFilterQuality([]);
+    setFilterHasPbId([]);
+    setFilterInsight(null);
     setShowInativos(false);
   };
 
@@ -453,10 +564,85 @@ export default function PeoplePage() {
               <input
                 value={filterSearch}
                 onChange={e => setFilterSearch(e.target.value)}
-                placeholder="Nome, cargo, CPF..."
+                placeholder="Nome, cargo, CNPJ..."
                 className="w-full pl-9 pr-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white placeholder-slate-500 transition-all"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Tipo de Entidade</label>
+            <MultiSelectDropdown
+              value={filterEntityType}
+              onChange={setFilterEntityType}
+              placeholder="Todos os Perfis"
+              options={[
+                { label: 'Pessoa Física (PF Interno)', value: 'internal_person' },
+                { label: 'Pessoa Jurídica (PJ/Parceiros)', value: 'legal_entity' }
+              ]}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Natureza PB</label>
+            <MultiSelectDropdown
+              value={filterRelationshipNature}
+              onChange={setFilterRelationshipNature}
+              placeholder="Todas as Naturezas"
+              options={[
+                { label: 'Integrador CLT', value: 'clt_internal' },
+                { label: 'Prestador PJ', value: 'pj_specialized' },
+                { label: 'Empresa Credenciada', value: 'accredited_company' },
+                { label: 'Parceiro Estratégico', value: 'strategic_partner' },
+                { label: 'Fornecedor Homologado', value: 'approved_supplier' },
+                { label: 'Consultoria Externa', value: 'external_consultancy' },
+                { label: 'Membro do Conselho', value: 'council_member' },
+                { label: 'Acionista', value: 'shareholder' },
+                { label: 'Sócio Fundador', value: 'founder' }
+              ]}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Nível PB</label>
+            <MultiSelectDropdown
+              value={filterLevel}
+              onChange={setFilterLevel}
+              placeholder="Todos os Níveis"
+              options={[
+                { label: 'Estratégico (E)', value: 'E' },
+                { label: 'Tático (T)', value: 'T' },
+                { label: 'Operacional (O)', value: 'O' }
+              ]}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Qualidade Cadastral</label>
+            <MultiSelectDropdown
+              value={filterQuality}
+              onChange={setFilterQuality}
+              placeholder="Todas as Qualidades"
+              options={[
+                { label: 'Completo (100%)', value: 'Completo' },
+                { label: 'Atenção (80-99%)', value: 'Atenção' },
+                { label: 'Incompleto (50-79%)', value: 'Incompleto' },
+                { label: 'Crítico (<50%)', value: 'Crítico' }
+              ]}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Possui PB-ID</label>
+            <MultiSelectDropdown
+              value={filterHasPbId}
+              onChange={setFilterHasPbId}
+              placeholder="Ambos"
+              options={[
+                { label: 'Sim', value: 'sim' },
+                { label: 'Não', value: 'nao' }
+              ]}
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -488,7 +674,7 @@ export default function PeoplePage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Vínculo</label>
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Vínculo Histórico</label>
             <MultiSelectDropdown
               value={filterVinculo}
               onChange={setFilterVinculo}
@@ -497,19 +683,6 @@ export default function PeoplePage() {
                 { label: 'CLT', value: 'CLT' },
                 { label: 'PJ', value: 'PJ' },
                 { label: 'Estagiário', value: 'Estagiário' }
-              ]}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Terceirização</label>
-            <MultiSelectDropdown
-              value={filterTerceirizado}
-              onChange={setFilterTerceirizado}
-              placeholder="Todos (Direto & Terceirizado)"
-              options={[
-                { label: 'Contratação Direta (Interno)', value: 'false' },
-                { label: 'Terceirizado (Prestador)', value: 'true' }
               ]}
             />
           </div>
@@ -553,8 +726,9 @@ export default function PeoplePage() {
               options={setores.map(s => ({ label: s, value: s }))}
             />
           </div>
+
           <div className="space-y-1.5">
-            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Grau</label>
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Grau de Maturidade</label>
             <MultiSelectDropdown
               value={filterGrau}
               onChange={setFilterGrau}
@@ -616,7 +790,7 @@ export default function PeoplePage() {
                     <Users size={16} />
                   </div>
                   <div>
-                    <h2 className="text-xs font-black uppercase">Filtros HR</h2>
+                    <h2 className="text-xs font-black uppercase">Filtros Cockpit</h2>
                   </div>
                 </div>
                 <button onClick={() => setIsMobileSidebarOpen(false)} className="text-slate-400 hover:text-white">
@@ -633,10 +807,90 @@ export default function PeoplePage() {
                     <input
                       value={filterSearch}
                       onChange={e => setFilterSearch(e.target.value)}
-                      placeholder="Nome, cargo, CPF..."
+                      placeholder="Nome, cargo, CNPJ..."
                       className="w-full pl-9 pr-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white placeholder-slate-500 transition-all"
                     />
                   </div>
+                </div>
+
+                {/* Entity Type select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Tipo de Entidade</label>
+                  <MultiSelectDropdown
+                    value={filterEntityType}
+                    onChange={setFilterEntityType}
+                    placeholder="Todos os Perfis"
+                    options={[
+                      { label: 'Pessoa Física (PF Interno)', value: 'internal_person' },
+                      { label: 'Pessoa Jurídica (PJ/Parceiros)', value: 'legal_entity' }
+                    ]}
+                  />
+                </div>
+
+                {/* Relationship Nature select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Natureza PB</label>
+                  <MultiSelectDropdown
+                    value={filterRelationshipNature}
+                    onChange={setFilterRelationshipNature}
+                    placeholder="Todas as Naturezas"
+                    options={[
+                      { label: 'Integrador CLT', value: 'clt_internal' },
+                      { label: 'Prestador PJ', value: 'pj_specialized' },
+                      { label: 'Empresa Credenciada', value: 'accredited_company' },
+                      { label: 'Parceiro Estratégico', value: 'strategic_partner' },
+                      { label: 'Fornecedor Homologado', value: 'approved_supplier' },
+                      { label: 'Consultoria Externa', value: 'external_consultancy' },
+                      { label: 'Membro do Conselho', value: 'council_member' },
+                      { label: 'Acionista', value: 'shareholder' },
+                      { label: 'Sócio Fundador', value: 'founder' }
+                    ]}
+                  />
+                </div>
+
+                {/* Level select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Nível PB</label>
+                  <MultiSelectDropdown
+                    value={filterLevel}
+                    onChange={setFilterLevel}
+                    placeholder="Todos os Níveis"
+                    options={[
+                      { label: 'Estratégico (E)', value: 'E' },
+                      { label: 'Tático (T)', value: 'T' },
+                      { label: 'Operacional (O)', value: 'O' }
+                    ]}
+                  />
+                </div>
+
+                {/* Quality select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Qualidade Cadastral</label>
+                  <MultiSelectDropdown
+                    value={filterQuality}
+                    onChange={setFilterQuality}
+                    placeholder="Todas as Qualidades"
+                    options={[
+                      { label: 'Completo (100%)', value: 'Completo' },
+                      { label: 'Atenção (80-99%)', value: 'Atenção' },
+                      { label: 'Incompleto (50-79%)', value: 'Incompleto' },
+                      { label: 'Crítico (<50%)', value: 'Crítico' }
+                    ]}
+                  />
+                </div>
+
+                {/* Has PB ID select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Possui PB-ID</label>
+                  <MultiSelectDropdown
+                    value={filterHasPbId}
+                    onChange={setFilterHasPbId}
+                    placeholder="Ambos"
+                    options={[
+                      { label: 'Sim', value: 'sim' },
+                      { label: 'Não', value: 'nao' }
+                    ]}
+                  />
                 </div>
 
                 {/* Company select */}
@@ -666,41 +920,6 @@ export default function PeoplePage() {
                       { label: 'Férias', value: 'Férias' },
                       { label: 'Inativo', value: 'Inativo' }
                     ]}
-                  />
-                </div>
-
-                {/* Vínculo select */}
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Vínculo</label>
-                  <MultiSelectDropdown
-                    value={filterVinculo}
-                    onChange={setFilterVinculo}
-                    placeholder="Todos os Vínculos"
-                    options={[
-                      { label: 'CLT', value: 'CLT' },
-                      { label: 'PJ', value: 'PJ' },
-                      { label: 'Estagiário', value: 'Estagiário' }
-                    ]}
-                  />
-                </div>
-
-                {/* Sector select */}
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Setor</label>
-                  <MultiSelectDropdown
-                    value={filterSetor}
-                    onChange={setFilterSetor}
-                    placeholder="Todos os Setores"
-                    options={setores.map(s => ({ label: s, value: s }))}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Grau</label>
-                  <MultiSelectDropdown
-                    value={filterGrau}
-                    onChange={setFilterGrau}
-                    placeholder="Todos os Graus"
-                    options={graus.map(s => ({ label: s, value: s }))}
                   />
                 </div>
 
@@ -751,8 +970,8 @@ export default function PeoplePage() {
               <Filter size={18} />
             </button>
             <div>
-              <h1 className="text-base font-black text-slate-800 tracking-tight uppercase leading-none">Dashboard Executivo</h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mt-1">Bússola de Decisão de RH</p>
+              <h1 className="text-base font-black text-slate-800 tracking-tight uppercase leading-none">Cockpit de Governança</h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mt-1">Ecosystem Map & Pessoas</p>
             </div>
           </div>
 
@@ -769,6 +988,32 @@ export default function PeoplePage() {
             >
               {showValues ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
+
+            {/* Toggle view mode Cards vs Table */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0 shadow-inner">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-all flex items-center justify-center ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Exibição em Cards"
+              >
+                <LayoutGrid size={15} />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg transition-all flex items-center justify-center ${
+                  viewMode === 'table'
+                    ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Exibição em Tabela"
+              >
+                <List size={15} />
+              </button>
+            </div>
 
             {/* Redirect button to the separate Consignado Loans Page */}
             <Link
@@ -806,67 +1051,108 @@ export default function PeoplePage() {
             </div>
           )}
 
-          {/* ── 5 HR KPI Cards (Dianna Focused) ── */}
+          {/* Banner Indicador de Base Filtrada */}
+          {hasActiveFilters && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 px-4 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-amber-800 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <Filter size={14} className="animate-pulse" />
+                  Visualização Filtrada (Base Filtrada)
+                </span>
+                <span className="text-[10px] font-medium text-amber-600">
+                  Os KPIs abaixo estão refletindo apenas os critérios de filtros ativos.
+                </span>
+              </div>
+              <button 
+                onClick={handleClearFilters}
+                className="text-[10px] font-black text-amber-700 bg-white border border-amber-200 hover:bg-amber-100 hover:border-amber-300 rounded-xl px-4 py-1.5 uppercase transition-all active:scale-95 shadow-sm"
+              >
+                Limpar Todos os Filtros
+              </button>
+            </div>
+          )}
+
+          {/* ── 10 HR Cockpit KPI Cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <PeopleKpiCard
-              title="Headcount Ativo"
-              value={hrKpis.headcount}
+              title="Integrantes Cockpit"
+              value={cockpitKpis.totalCount}
               icon={<Users size={20} />}
-              color="emerald"
-              onClick={() => { setActiveKpiMode('headcount'); setIsKpiDrawerOpen(true); }}
-              breakdown={[
-                { label: 'MarBR', value: hrKpis.marBR.toString() },
-                { label: 'DZM', value: hrKpis.dzm.toString() },
-                { label: 'G2', value: hrKpis.g2.toString() },
-              ]}
+              color="slate"
+              sub="Total de pessoas e entidades"
             />
             <PeopleKpiCard
-                title="Custo da Folha"
-                value={showValues ? formatCurrency(payrollCosts.total) : '••••••'}
-                icon={<Coins size={20} />}
-                color="blue"
-                onClick={() => { setActiveKpiMode('payroll'); setIsKpiDrawerOpen(true); }}
-                sub="Consolidado (Ativos/Férias/Provisão)"
-                breakdown={[
-                  { label: 'Valor Base', value: showValues ? formatCurrency(payrollCosts.base) : '•••' },
-                  { label: 'Bônus', value: showValues ? formatCurrency(payrollCosts.bonus) : '•••' },
-                ]}
-              />
+              title="Headcount CLT / PF"
+              value={cockpitKpis.cltCount}
+              icon={<UserCog size={20} />}
+              color="blue"
+              sub="Integradores internos CLT/Estágio"
+            />
             <PeopleKpiCard
-              title="Saldo Devedor Ativo"
-              value={showValues ? formatCurrency(hrKpis.saldoDevedorTotal) : '••••••'}
+              title="Prestadores & PJ"
+              value={cockpitKpis.pjCount}
               icon={<Landmark size={20} />}
               color="amber"
-              onClick={() => { setActiveKpiMode('loans'); setIsKpiDrawerOpen(true); }}
-              sub="Capital sob risco em empréstimos"
+              sub="Parceiros, fornecedores e consultores"
+            />
+            <PeopleKpiCard
+              title="Custo CLT (Mensal)"
+              value={showValues ? formatCurrency(cockpitKpis.cltCostTotal) : '••••••'}
+              icon={<Coins size={20} />}
+              color="emerald"
+              sub="Soma das remunerações CLT/Estágio"
+            />
+            <PeopleKpiCard
+              title="Custo PJ (Mensal)"
+              value={showValues ? formatCurrency(cockpitKpis.pjCostTotal) : '••••••'}
+              icon={<Coins size={20} />}
+              color="purple"
+              sub="Soma dos contratos PJ/MEI ativos"
+            />
+            <PeopleKpiCard
+              title="Saldo Consignado"
+              value={showValues ? formatCurrency(cockpitKpis.totalLoansDebt) : '••••••'}
+              icon={<HandCoins size={20} />}
+              color="slate"
+              sub="Capital ativo sob risco em empréstimos"
+            />
+            <PeopleKpiCard
+              title="Saúde Crítica"
+              value={cockpitKpis.criticalHealthCount}
+              icon={<HeartPulse size={20} />}
+              color="red"
+              sub="Cadastros com qualidade Crítica (<50%)"
             />
             <PeopleKpiCard
               title="Alertas Auditoria"
-              value={totalAuditIssuesCount}
+              value={cockpitKpis.totalAuditIssues}
               icon={<AlertCircle size={20} />}
-              color={totalAuditIssuesCount > 0 ? "red" : "emerald"}
+              color={cockpitKpis.totalAuditIssues > 0 ? "rose" : "emerald"}
               onClick={() => { setActiveKpiMode('audit' as any); setIsKpiDrawerOpen(true); }}
-              sub={totalAuditIssuesCount > 0 ? "Incoerências de data/regime" : "Todos os prontuários limpos"}
+              sub="Erros de datas/regime de trabalho"
             />
             <PeopleKpiCard
-              title="Vínculos Ativos"
-              value={hrKpis.headcount}
-              icon={<UserCog size={20} />}
-              color="slate"
-              breakdown={[
-                { label: 'CLT', value: hrKpis.clt.toString() },
-                { label: 'MEI/PJ', value: hrKpis.mei.toString() },
-                { label: 'EST', value: hrKpis.est.toString() },
-              ]}
+              title="Estratégico (E)"
+              value={cockpitKpis.strategicCount}
+              icon={<Target size={20} />}
+              color="indigo"
+              sub="Mapeamento de cadeiras E1, E2, E3"
+            />
+            <PeopleKpiCard
+              title="Sem PB-ID"
+              value={cockpitKpis.noPbIdCount}
+              icon={<ShieldAlert size={20} />}
+              color="amber"
+              sub="Cadastros sem ID Diana PB associado"
             />
           </div>
 
-          {/* 🌟 Alertas & Filtros Transformados em Cards 🌟 */}
+          {/* 🌟 Alertas & Filtros de Insights 🌟 */}
           <div className="mt-8 flex flex-col gap-4">
              <div className="flex items-center justify-between gap-4">
                <div className="flex items-center gap-2">
                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                   <Target size={18} className="text-purple-600"/> Monitoramento & Alertas
+                   <Target size={18} className="text-purple-600"/> Monitoramento de Pessoas
                  </h3>
                  {filterInsight && (
                    <button onClick={() => setFilterInsight(null)} className="ml-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-200 hover:text-slate-800 transition-colors uppercase">
@@ -937,12 +1223,12 @@ export default function PeoplePage() {
              </div>
           </div>
 
-          {/* ── Main HR / Employee Table ── */}
+          {/* ── Main List/Grid rendering ── */}
           {isLoadingEmployees ? (
             <div className="p-12 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm mt-6">
               <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
             </div>
-          ) : (
+          ) : viewMode === 'table' ? (
             <PeopleTable
               employees={filteredEmployees}
               onEdit={handleEmployeeClick}
@@ -953,6 +1239,92 @@ export default function PeoplePage() {
               noRaiseMonths={noRaiseMonths}
               noPromoMonths={noPromoMonths}
             />
+          ) : (
+            <div>
+              {/* Grid de Cards responsivo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-6">
+                {paginatedGridEmployees.length === 0 ? (
+                  <p className="py-12 text-center text-slate-400 text-sm italic col-span-full bg-white rounded-2xl border border-slate-200 shadow-sm">
+                    Nenhum colaborador encontrado para os filtros selecionados.
+                  </p>
+                ) : (
+                  paginatedGridEmployees.map(emp => {
+                    const empIssues = allAuditIssues[emp.id] || [];
+                    const now = new Date();
+                    const hasGlosa = !!emp.has_invoice_glosa;
+                    const hasLoan = (emp.balance || 0) > 0;
+                    let hasNoRaise = false;
+                    let hasNoPromo = false;
+
+                    if (noRaiseMonths) {
+                      const dRaise = new Date((emp.last_raise_date || emp.start_date || '') + 'T00:00:00');
+                      if (!isNaN(dRaise.getTime())) {
+                        const diffMonths = (now.getFullYear() - dRaise.getFullYear()) * 12 + (now.getMonth() - dRaise.getMonth());
+                        hasNoRaise = diffMonths >= noRaiseMonths;
+                      }
+                    }
+                    
+                    if (noPromoMonths) {
+                      const dPromo = new Date((emp.department_start_date || emp.start_date || '') + 'T00:00:00');
+                      if (!isNaN(dPromo.getTime())) {
+                        const diffMonths = (now.getFullYear() - dPromo.getFullYear()) * 12 + (now.getMonth() - dPromo.getMonth());
+                        hasNoPromo = diffMonths >= noPromoMonths;
+                      }
+                    }
+
+                    return (
+                      <PeopleMobileCard
+                        key={emp.id}
+                        employee={emp}
+                        onClick={handleEmployeeClick}
+                        onEdit={handleEmployeeClick}
+                        onDelete={(e) => setDeleteTarget(e)}
+                        showValues={showValues}
+                        hasAuditIssues={empIssues.length > 0}
+                        hasGlosa={hasGlosa}
+                        hasLoan={hasLoan}
+                        hasNoRaise={hasNoRaise}
+                        hasNoPromo={hasNoPromo}
+                        noRaiseMonths={noRaiseMonths}
+                        noPromoMonths={noPromoMonths}
+                      />
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Controles de Paginação do Grid */}
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mt-6 flex-wrap gap-2">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-tight">
+                  Exibição em Cards
+                  <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500 font-bold ml-2">
+                    {filteredEmployees.length} REGISTROS
+                  </span>
+                </h3>
+                
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-1.5 px-4 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                    >
+                      ANTERIOR
+                    </button>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">
+                      Pág {currentPage} de {totalPages}
+                    </span>
+                    <button 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-1.5 px-4 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                    >
+                      PRÓXIMO
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
         </div>
@@ -1004,3 +1376,4 @@ export default function PeoplePage() {
     </div>
   );
 }
+

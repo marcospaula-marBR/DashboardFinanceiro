@@ -58,6 +58,7 @@ interface RawEmployeeDb {
   commission_plan?: string;
   remuneration_connectivity?: number;
   remuneration_incentives?: number;
+  nivel?: string;
 }
 
 export const PeopleHRService = {
@@ -253,7 +254,16 @@ export const PeopleHRService = {
         commission_plan: emp.commission_plan,
         has_invoice_glosa: emp.metadata?.has_invoice_glosa || false,
         last_raise_date: emp.metadata?.last_raise_date || null,
-        grau: emp.metadata?.grau || ''
+        grau: emp.metadata?.grau || '',
+        nivel: emp.nivel,
+        pbId: emp.metadata?.pbId || emp.metadata?.pb_id || '',
+        entityType: emp.metadata?.entityType || emp.metadata?.entity_type || undefined,
+        relationshipNature: emp.metadata?.relationshipNature || emp.metadata?.relationship_nature || undefined,
+        relationships: Array.isArray(emp.metadata?.relationships) ? emp.metadata.relationships : [],
+        aiAgents: Array.isArray(emp.metadata?.aiAgents || emp.metadata?.ai_agents) ? (emp.metadata.aiAgents || emp.metadata.ai_agents) : [],
+        permissions: Array.isArray(emp.metadata?.permissions) ? emp.metadata.permissions : [],
+        temporaryDelegations: Array.isArray(emp.metadata?.temporaryDelegations || emp.metadata?.temporary_delegations) ? (emp.metadata.temporaryDelegations || emp.metadata.temporary_delegations) : [],
+        metadata: emp.metadata || {}
       };
       
       if (employee.status === 'Ativo' && employee.status_end_date) {
