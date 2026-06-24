@@ -16,6 +16,43 @@ export interface DreSimulationParams {
   investmentsMultiplier: number;
 }
 
+export type SimulatorScenarioType =
+  | 'revenue_increase'
+  | 'revenue_decrease'
+  | 'costs_cut'
+  | 'expenses_cut'
+  | 'contract_loss'
+  | 'goal_seek'
+  | 'custom';
+
+export type SimulatorImpactMode = 'percent' | 'absolute';
+
+export interface DreAdvancedSimParams extends DreSimulationParams {
+  scenarioType: SimulatorScenarioType;
+  impactMode: SimulatorImpactMode;
+  impactValue: number; // percentage (e.g. 10 = 10%) or absolute value in BRL
+  targetDepartamento?: string;  // For contract loss scenario
+  rescisaoDate?: string;        // 'YYYY-MM' for future projection
+  includeRateio: boolean;
+  granularExpenses?: Record<string, number>; // category -> multiplier
+}
+
+export interface RevenueRecoveryPoint {
+  mes: string;           // e.g. "Jul/26"
+  receitaBase: number;   // average base revenue
+  impactoMensal: number; // the monthly loss
+  aReconquistar: number; // remaining to recover by this month
+  metaMensal: number;    // how much to add per month
+  percAcumulado: number; // % recovered
+}
+
+export interface SimulatorAiQuestion {
+  id: string;
+  label: string;
+  prompt: string;
+  icon: string;
+}
+
 export interface DreRow {
   Empresa: string;
   Departamento: string;    // Rebatizado de 'Projeto'

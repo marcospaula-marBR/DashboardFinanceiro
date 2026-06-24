@@ -9,7 +9,7 @@ import { DreCharts } from '@/components/dre/DreCharts';
 import { DreTable } from '@/components/dre/DreTable';
 import { DreDetailsModal } from '@/components/dre/DreDetailsModal';
 import { SmartAlerts } from '@/components/dre/SmartAlerts';
-import { DreSimulator } from '@/components/dre/DreSimulator';
+import { DreSimulatorV2 } from '@/components/dre/DreSimulatorV2';
 import { DreEquipmentsModal } from '@/components/dre/DreEquipmentsModal';
 import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
@@ -664,21 +664,18 @@ export default function DrePage() {
           </div>
         </div>
 
-        {/* Coluna Direita: Simulador (Side Panel Persistente) */}
-        {isSimulatorOpen && (
-          <div className="w-full md:w-[450px] flex-shrink-0 border-l border-slate-200 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.03)] h-screen overflow-hidden animate-in slide-in-from-right duration-300 z-40">
-            <DreSimulator
-              isOpen={isSimulatorOpen}
-              onClose={() => setIsSimulatorOpen(false)}
-              params={simParams}
-              onChange={setSimParams}
-              onReset={() => setSimParams({ revenueMultiplier: 1, costsMultiplier: 1, expensesMultiplier: 1, taxesMultiplier: 1, investmentsMultiplier: 1 })}
-              originalResults={originalResults}
-              simulatedFcl={results?.kpis.fcl || 0}
-              empresaContext={filters.empresas.length === 1 ? filters.empresas[0] : (filters.empresas.length > 1 ? "Múltiplas" : "Todas as Empresas")}
-            />
-          </div>
-        )}
+        {/* Simulador V2 — Painel Lateral Fullscreen */}
+        <DreSimulatorV2
+          isOpen={isSimulatorOpen}
+          onClose={() => setIsSimulatorOpen(false)}
+          originalResults={originalResults}
+          simulatedResults={results}
+          rawData={rawData}
+          metadata={metadata}
+          onParamsChange={setSimParams}
+          empresaContext={filters.empresas.length === 1 ? filters.empresas[0] : (filters.empresas.length > 1 ? 'Múltiplas' : 'Todas as Empresas')}
+          periodoContext={filters.periodos.length > 0 ? filters.periodos.join(', ') : 'Todos os Períodos'}
+        />
       </div>
 
       <DreDetailsModal

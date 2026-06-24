@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.46.76";
-export const VERSION_DATE = "2026-06-23";
+export const APP_VERSION = "v.02.47.00";
+export const VERSION_DATE = "2026-06-24";
 export const VERSION_CHANGELOG = [
+  "v.02.47.00 - Feat: Implementa DreSimulatorV2 completo — painel fullscreen com 4 abas (Cenários Rápidos, Granular, Reposição de Receita e Projeção & IA), botões de cenário pré-definidos (Crescimento, Queda, Corte de Custos, Redução de Despesas, Perda de Contrato, Meta de FCL), cronograma mensal de reposição de receita com tabela e gráfico, toggle de despesas rateadas independente do filtro global, modo percentual ou valor absoluto, gráficos comparativos Original vs. Simulado, e 6 botões de análise BrisinhAI pré-programados. Substitui DreSimulator.tsx legado.",
   "v.02.46.76 - Feat: Adiciona rótulo de texto visível 'Voltar ao Início' ao lado do ícone Chevron em todos os botões de retorno nas páginas React (Comissões, DRE, People e DRE customizado) e inclui o botão no gate de senha da DRE.",
   "v.02.46.75 - Feat: Padroniza o botão de voltar ao início apontando para a raiz '/' em todas as páginas (incluindo rotas do Next.js e templates HTML legados) e adiciona regra permanente no GEMINI.md.",
   "v.02.46.74 - Refactor: Elimina Outras Entradas do racional de cálculo e do modal de conciliação de 'Lucro antes do FCL' (o Lucro antes do FCL agora é estritamente Receitas - Impostos - Custos - Despesas Rateadas, garantindo que a soma dos cartões de despesas/impostos + margem de lucro some exatamente 100%).",
