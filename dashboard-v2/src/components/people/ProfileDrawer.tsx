@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
@@ -9,6 +9,7 @@ import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
 import { formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
+import { isExternalEntity } from "./PeopleBadges";
 
 interface HistoryItem {
   id: string;
@@ -108,6 +109,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchingExisting, setIsSearchingExisting] = useState(false);
+  const [newRelEmployeeId, setNewRelEmployeeId] = useState("");
+  const [newRelType, setNewRelType] = useState<"equivalent" | "orientadora" | "apoiada">("equivalent");
 
   // Estados para mesclagem de dados (PDF vs Banco)
   const [pendingMerge, setPendingMerge] = useState<{
@@ -155,14 +158,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   }, [isOpen, isTestMode]);
 
   useEffect(() => {
-    if (isSearchExistingOpen) {
+    if (isOpen) {
       setIsSearchingExisting(true);
-      PeopleHRService.getEmployeesForPeople({ mostrarInativos: true })
+      PeopleHRService.getEmployeesForPeople({ mostrarInativos: true, isTestMode })
         .then(setAllEmployees)
-        .catch(err => console.error("Erro ao buscar colaboradores para pesquisa", err))
+        .catch(err => console.error("Erro ao buscar colaboradores", err))
         .finally(() => setIsSearchingExisting(false));
     }
-  }, [isSearchExistingOpen]);
+  }, [isOpen, isTestMode]);
 
   const handleLoadExistingEmployee = async (id: string) => {
     setIsLoading(true);
@@ -367,9 +370,36 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           next.tax_regime = isMei ? 'MEI' : 'Simples Nacional';
         }
       }
-      
       return next;
     });
+  };
+
+  const handleAddRelationship = () => {
+    if (!newRelEmployeeId) return;
+    const currentRels = profile.relationships || [];
+    if (currentRels.some(r => r.employee_id === newRelEmployeeId)) {
+      alert("Este colaborador já está relacionado a este perfil.");
+      return;
+    }
+    const updated = [
+      ...currentRels,
+      { employee_id: newRelEmployeeId, relation_type: newRelType }
+    ];
+    setProfile(prev => ({
+      ...prev,
+      relationships: updated
+    }));
+    setNewRelEmployeeId("");
+    setNewRelType("equivalent");
+  };
+
+  const handleRemoveRelationship = (targetId: string) => {
+    const currentRels = profile.relationships || [];
+    const updated = currentRels.filter(r => r.employee_id !== targetId);
+    setProfile(prev => ({
+      ...prev,
+      relationships: updated
+    }));
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2328,51 +2358,175 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                   {/* ------------- ABA FICHA EXECUTIVA ------------- */}
                   {activeTab === 'fichaExecutiva' && (
                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                       
-                       <div className="border-b pb-2">
-                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
-                           <UserRound size={16} className="text-emerald-600" /> Ficha Executiva
-                         </h4>
-                       </div>
+                        
+                        <div className="border-b pb-2">
+                          <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                            <UserRound size={16} className="text-emerald-600" /> Ficha Executiva
+                          </h4>
+                        </div>
 
-                       <div className="grid grid-cols-2 gap-4">
-                         <div className="col-span-2 md:col-span-1">
-                           <label className={labelClass}>Função / Cargo (Sincronizado)</label>
-                           <input 
-                             type="text" 
-                             value={profile.job_role || ''} 
-                             readOnly 
-                             className={`${inputClass} bg-slate-50 cursor-not-allowed`} 
-                             placeholder="Preencha na aba Info Pessoal" 
-                           />
-                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2 md:col-span-1">
+                            <label className={labelClass}>Função / Cargo (Sincronizado)</label>
+                            <input 
+                              type="text" 
+                              value={profile.job_role || ''} 
+                              readOnly 
+                              className={`${inputClass} bg-slate-50 cursor-not-allowed`} 
+                              placeholder="Preencha na aba Info Pessoal" 
+                            />
+                          </div>
 
-                         <div className="col-span-2 md:col-span-1">
-                           <label className={labelClass}>Link / Anexo da Ficha Executiva Completa</label>
-                           <input 
-                             type="text" 
-                             value={profile.executive_link || ''} 
-                             onChange={e => handleChange('executive_link', e.target.value)} 
-                             readOnly={!isEditMode} 
-                             className={inputClass} 
-                             placeholder="Ex: https://drive.google.com/..." 
-                           />
-                         </div>
+                          <div className="col-span-2 md:col-span-1">
+                            <label className={labelClass}>Link / Anexo da Ficha Executiva Completa</label>
+                            <input 
+                              type="text" 
+                              value={profile.executive_link || ''} 
+                              onChange={e => handleChange('executive_link', e.target.value)} 
+                              readOnly={!isEditMode} 
+                              className={inputClass} 
+                              placeholder="Ex: https://drive.google.com/..." 
+                            />
+                          </div>
 
-                         <div className="col-span-2">
-                           <label className={labelClass}>Resumo das Atividades</label>
-                           <textarea 
-                             value={profile.executive_summary || ''} 
-                             onChange={e => handleChange('executive_summary', e.target.value)} 
-                             readOnly={!isEditMode} 
-                             className={`${inputClass} min-h-[140px] resize-y`} 
-                             placeholder="Descreva detalhadamente o escopo e as principais responsabilidades desempenhadas pelo colaborador..." 
-                           />
-                         </div>
-                       </div>
+                          <div className="col-span-2">
+                            <label className={labelClass}>Resumo das Atividades</label>
+                            <textarea 
+                              value={profile.executive_summary || ''} 
+                              onChange={e => handleChange('executive_summary', e.target.value)} 
+                              readOnly={!isEditMode} 
+                              className={`${inputClass} min-h-[140px] resize-y`} 
+                              placeholder="Descreva detalhadamente o escopo e as principais responsabilidades desempenhadas pelo colaborador..." 
+                            />
+                          </div>
+                        </div>
 
-                     </motion.div>
-                  )}
+                        {/* Seção de Vínculos e Interfaces Organizacionais */}
+                        <div className="border-t pt-6 mt-6">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-1.5">
+                            <Network size={14} className="text-emerald-600" /> Interfaces e Vínculos Organizacionais
+                          </h4>
+
+                          {/* Listagem de Vínculos Atuais */}
+                          <div className="space-y-2 mb-4">
+                            {(!profile.relationships || profile.relationships.length === 0) ? (
+                              <p className="text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                                Nenhum vínculo ou interface cadastrada para esta cadeira.
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {profile.relationships.map((rel, idx) => {
+                                  const targetEmp = allEmployees.find(e => e.id === rel.employee_id);
+                                  const targetName = targetEmp ? (isExternalEntity(targetEmp.entityType) && targetEmp.corporate_name ? targetEmp.corporate_name : targetEmp.name) : "Colaborador não encontrado";
+                                  const targetRole = targetEmp ? (targetEmp.job_role || "Sem Cadeira") : "";
+                                  
+                                  return (
+                                    <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-150 dark:border-slate-800 transition-all hover:bg-slate-100/55">
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate uppercase">
+                                          {targetName}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 font-semibold truncate">
+                                          {targetRole}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-2 ml-2 shrink-0">
+                                        {rel.relation_type === 'orientadora' && (
+                                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-100">
+                                            <ArrowUpRight size={8} className="stroke-[3]" /> Acima
+                                          </span>
+                                        )}
+                                        {rel.relation_type === 'apoiada' && (
+                                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-sky-50 text-sky-700 border border-sky-100">
+                                            <ArrowDownRight size={8} className="stroke-[3]" /> Abaixo
+                                          </span>
+                                        )}
+                                        {rel.relation_type === 'equivalent' && (
+                                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-slate-100 text-slate-750 border border-slate-200">
+                                            <ArrowLeftRight size={8} className="stroke-[3]" /> Equivalente
+                                          </span>
+                                        )}
+                                        
+                                        {isEditMode && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveRelationship(rel.employee_id)}
+                                            className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-md transition-colors"
+                                            title="Remover relacionamento"
+                                          >
+                                            <X size={12} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Formulário para Adicionar Novo Vínculo */}
+                          {isEditMode && (
+                            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-150 dark:border-slate-800 space-y-3">
+                              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                                Adicionar Nova Interface / Vínculo
+                              </p>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                <div className="md:col-span-6">
+                                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                                    Selecionar Integrante
+                                  </label>
+                                  <select
+                                    value={newRelEmployeeId}
+                                    onChange={e => setNewRelEmployeeId(e.target.value)}
+                                    className="w-full text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-700 dark:text-slate-200"
+                                  >
+                                    <option value="">Selecione...</option>
+                                    {allEmployees
+                                      .filter(e => e.id !== profile.id && e.status !== 'Inativo')
+                                      .map(e => {
+                                        const name = isExternalEntity(e.entityType) && e.corporate_name ? e.corporate_name : e.name;
+                                        return (
+                                          <option key={e.id} value={e.id}>
+                                            {name.toUpperCase()} ({e.job_role || 'Sem Cadeira'})
+                                          </option>
+                                        );
+                                      })}
+                                  </select>
+                                </div>
+
+                                <div className="md:col-span-4">
+                                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                                    Grau do Vínculo
+                                  </label>
+                                  <select
+                                    value={newRelType}
+                                    onChange={e => setNewRelType(e.target.value as any)}
+                                    className="w-full text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-700 dark:text-slate-200"
+                                  >
+                                    <option value="equivalent">Equivalente (Interface Lateral)</option>
+                                    <option value="orientadora">Acima (Orientadora / Liderança)</option>
+                                    <option value="apoiada">Abaixo (Apoiada / Liderados)</option>
+                                  </select>
+                                </div>
+
+                                <div className="md:col-span-2">
+                                  <button
+                                    type="button"
+                                    onClick={handleAddRelationship}
+                                    className="w-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2 px-3 rounded-xl transition-all uppercase active:scale-95 shadow-sm"
+                                  >
+                                    Adicionar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                      </motion.div>
+                   )}
 
                  {/* ------------- ABA TRAJETÓRIA ------------- */}
                  {activeTab === 'trajetoria' && (

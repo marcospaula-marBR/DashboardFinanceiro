@@ -27,6 +27,7 @@ import {
 } from "@/components/people/PeopleBadges";
 import { getPBClassification, inferEntityType } from "@/types/loans";
 import { PeopleMobileCard } from "@/components/people/PeopleMobileCard";
+import { PeopleEcosystemMap } from "@/components/people/PeopleEcosystemMap";
 
 // Custom MultiSelect Dropdown Component
 const MultiSelectDropdown = ({ 
@@ -94,7 +95,7 @@ export default function PeoplePage() {
 
   // UI states
   const [showValues, setShowValues] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'map'>('grid');
   
   // Pagination for grid mode
   const [currentPage, setCurrentPage] = useState(1);
@@ -989,7 +990,7 @@ export default function PeoplePage() {
               {showValues ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
 
-            {/* Toggle view mode Cards vs Table */}
+            {/* Toggle view mode Cards vs Table vs Map */}
             <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0 shadow-inner">
               <button
                 onClick={() => setViewMode('grid')}
@@ -1012,6 +1013,17 @@ export default function PeoplePage() {
                 title="Exibição em Tabela"
               >
                 <List size={15} />
+              </button>
+              <button
+                onClick={() => setViewMode('map')}
+                className={`p-1.5 rounded-lg transition-all flex items-center justify-center ${
+                  viewMode === 'map'
+                    ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Mapa de Ecossistema (Órbitas & Vínculos)"
+              >
+                <Target size={15} />
               </button>
             </div>
 
@@ -1228,6 +1240,12 @@ export default function PeoplePage() {
             <div className="p-12 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm mt-6">
               <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
             </div>
+          ) : viewMode === 'map' ? (
+            <PeopleEcosystemMap
+              employees={filteredEmployees}
+              onEmployeeClick={handleEmployeeClick}
+              showValues={showValues}
+            />
           ) : viewMode === 'table' ? (
             <PeopleTable
               employees={filteredEmployees}
