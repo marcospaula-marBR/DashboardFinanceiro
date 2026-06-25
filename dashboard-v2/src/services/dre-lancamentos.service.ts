@@ -12,7 +12,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
-import { DreRow } from '@/types/dre';
+import { DreRow, DreMetadata } from '@/types/dre';
 
 export interface DreLancamento {
   id?: string;
@@ -326,5 +326,58 @@ export class DreLancamentosService {
     }
 
     return { total, errors };
+  }
+
+  /**
+   * Extrai os metadados (empresas, departamentos, contasDRE, etc.) de uma lista
+   * de DreRow de forma dinâmica para preencher os filtros do dashboard.
+   */
+  static generateMetadataFromRows(rows: DreRow[]): DreMetadata {
+    const empresasSet = new Set<string>();
+    const departamentosSet = new Set<string>();
+    const contasDreSet = new Set<string>();
+    const projetosSet = new Set<string>();
+    const categoriasSet = new Set<string>();
+    const allPeriodsSet = new Set<string>();
+
+    for (const r of rows) {
+      if (r.Empresa) empresasSet.add(r.Empresa);
+      if (r.Departamento) departamentosSet.add(r.Departamento);
+      if (r.ContaDRE) contasDreSet.add(r.ContaDRE);
+      if (r.Projeto) projetosSet.add(r.Projeto);
+      if (r.Categoria) categoriasSet.add(r.Categoria);
+
+      for (const key of Object.keys(r)) {
+        if (key.includes('/')) {
+          allPeriodsSet.add(key);
+        }
+      }
+    }
+
+    const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const periodosList = Array.from(allPeriodsSet).sort((a, b) => {
+      const [mesA, anoA] = a.split('/');
+      const [mesB, anoB] = b.split('/');
+      const yA = parseInt(anoA) < 100 ? 2000 + parseInt(anoA) : parseInt(anoA);
+      const yB = parseInt(anoB) < 100 ? 2000 + parseInt(anoB) : parseInt(anoB);
+      if (yA !== yB) return yA - yB;
+      return MESES_ORDEM.indexOf(mesA) - MESES_ORDEM.indexOf(mesB);
+    });
+
+    const mapaMeses: Record<string, string> = {};
+    for (const p of periodosList) {
+      const [mes] = p.split('/');
+      mapaMeses[p] = mes;
+    }
+
+    return {
+      empresas: Array.from(empresasSet).sort(),
+      departamentos: Array.from(departamentosSet).sort(),
+      contasDre: Array.from(contasDreSet).sort(),
+      projetos: Array.from(projetosSet).sort(),
+      categorias: Array.from(categoriasSet).sort(),
+      periodos: periodosList,
+      mapaMeses
+    };
   }
 }

@@ -12,6 +12,7 @@ import { SmartAlerts } from '@/components/dre/SmartAlerts';
 import { DreSimulatorV2 } from '@/components/dre/DreSimulatorV2';
 import { DreEquipmentsModal } from '@/components/dre/DreEquipmentsModal';
 import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
+import { DreLancamentosService } from '@/services/dre-lancamentos.service';
 import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
@@ -101,9 +102,7 @@ export default function DrePage() {
       .catch(err => console.warn("Template remoto indisponível, usando padrão embutido:", err));
   }, []);
 
-  // Função para carregar do banco de dados remoto
-  const loadLatestSnapshotFromDb = async () => {
-    setIsUploading(true);
+  const loadFallbackSnapshot = async () => {
     try {
       const { data, error } = await supabase
         .from('dre_snapshots')
@@ -111,21 +110,49 @@ export default function DrePage() {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       if (data && data.length > 0) {
         const snapshot = data[0];
         setRawData(snapshot.raw_data);
         setMetadata(snapshot.metadata);
-        setFileName(snapshot.filename || 'Banco de Dados Nuvem');
+        setFileName(snapshot.filename || 'Banco de Dados Nuvem (Legacy Snapshot)');
         
         const timestamp = new Date(snapshot.created_at);
         setLastUpdate(timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString());
       }
     } catch (err: any) {
-      console.warn("Erro ao buscar dados remotos:", err.message);
+      console.warn("Erro no fallback de snapshots:", err.message);
+    }
+  };
+
+  // Função para carregar do banco de dados remoto (nova tabela dre_lancamentos)
+  const loadLatestSnapshotFromDb = async () => {
+    setIsUploading(true);
+    try {
+      const { rows, error } = await DreLancamentosService.fetchAllForDashboard();
+
+      if (error) {
+        throw new Error(error);
+      }
+
+      if (rows && rows.length > 0) {
+        setRawData(rows);
+        
+        // Gerar metadados de forma dinâmica a partir das colunas e valores atuais
+        const generatedMetadata = DreLancamentosService.generateMetadataFromRows(rows);
+        setMetadata(generatedMetadata);
+        setFileName('Banco de Dados Nuvem (dre_lancamentos)');
+        
+        const timestamp = new Date();
+        setLastUpdate(timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString());
+      } else {
+        console.warn("Tabela dre_lancamentos vazia. Tentando fallback para dre_snapshots...");
+        await loadFallbackSnapshot();
+      }
+    } catch (err: any) {
+      console.warn("Erro ao buscar dados de dre_lancamentos, tentando fallback:", err.message);
+      await loadFallbackSnapshot();
     } finally {
       setIsUploading(false);
     }
@@ -190,24 +217,36 @@ export default function DrePage() {
     }
   };
 
-  // Enviar a DRE para o Supabase (Cloud Sync)
+  // Enviar a DRE para o Supabase (Cloud Sync via upsert na tabela dre_lancamentos)
   const handlePublishSnapshot = async () => {
     if (rawData.length === 0 || !metadata) return;
     setIsPublishing(true);
     try {
-      const { error } = await supabase
-        .from('dre_snapshots')
-        .insert({
-          filename: fileName || 'Upload Manual',
-          raw_data: rawData,
-          metadata: metadata
-        });
+      const { total, errors } = await DreLancamentosService.upsertOmieRows(rawData);
 
-      if (error) throw error;
+      if (errors.length > 0) {
+        throw new Error(`Erros nos lotes: ${errors.join(', ')}`);
+      }
+
+      // Além de salvar na tabela principal dre_lancamentos, também salvamos um snapshot legado em dre_snapshots como backup
+      try {
+        await supabase
+          .from('dre_snapshots')
+          .insert({
+            filename: fileName || 'Upload Manual',
+            raw_data: rawData,
+            metadata: metadata
+          });
+      } catch (errSnap) {
+        console.warn("Erro ao salvar backup legado em dre_snapshots:", errSnap);
+      }
       
       const newTimestamp = new Date();
       setLastUpdate(newTimestamp.toLocaleDateString() + ' ' + newTimestamp.toLocaleTimeString());
-      alert("Snapshot DRE publicado no Supabase com sucesso! A partir de agora, ao carregar a página ela será carregada automaticamente com essa base.");
+      alert(`Dados da DRE salvos com sucesso! (${total} registros importados/atualizados). A base de dados unificada foi atualizada.`);
+      
+      // Recarrega os dados unificados (Omie + Manuais) do banco
+      await loadLatestSnapshotFromDb();
     } catch (err: any) {
       alert("Falha ao salvar dados no Supabase: " + err.message);
     } finally {
@@ -744,10 +783,7 @@ export default function DrePage() {
       <DreManualEntryModal
         isOpen={isManualEntryOpen}
         onClose={() => setIsManualEntryOpen(false)}
-        onSaved={() => {
-          // Notificação silenciosa — dados foram salvos no Supabase
-          console.info('[DRE] Lançamento manual salvo. Recarregue o snapshot para incluir na DRE.');
-        }}
+        onSaved={loadLatestSnapshotFromDb}
       />
 
       {/* Off-screen renderer for high-quality PDF charts */}
