@@ -149,14 +149,11 @@ export class PeopleService {
    */
   static async syncBidirectionalRelationships(
     sourceEmployeeId: string, 
+    oldRelationships: PeopleRelationship[],
     newRelationships: PeopleRelationship[], 
     isTestMode?: boolean
   ): Promise<void> {
     const table = isTestMode ? 'employees_test' : 'employees';
-    
-    // 1. Busca os relacionamentos antigos para comparar
-    const oldProfile = await this.getEmployeeProfile(sourceEmployeeId, isTestMode);
-    const oldRelationships = oldProfile?.relationships || [];
 
     // 2. Identifica removidos
     const removed = oldRelationships.filter(oldRel => 

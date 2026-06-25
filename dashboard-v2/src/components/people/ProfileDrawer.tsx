@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
@@ -317,13 +317,17 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
       }
       
+      // Guarda os vínculos antigos antes de salvar, pois salvar sobrescreve a base de dados
+      const oldProfile = employeeId ? await PeopleService.getEmployeeProfile(employeeId, isTestMode) : null;
+      const oldRels = oldProfile?.relationships || [];
+
       const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode, !employeeId);
       
       // Sincronização bidirecional de relacionamentos (Organograma)
       if (profile.relationships !== undefined) {
         // Envolvemos num try/catch para não quebrar o salvamento principal em caso de erro na sync
         try {
-          await PeopleService.syncBidirectionalRelationships(saved.id, profile.relationships, isTestMode);
+          await PeopleService.syncBidirectionalRelationships(saved.id, oldRels, profile.relationships, isTestMode);
         } catch (syncErr) {
           console.error("Erro ao sincronizar vínculos bidirecionais:", syncErr);
         }
@@ -2413,9 +2417,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                         {/* Seção de Vínculos e Interfaces Organizacionais */}
                         <div className="border-t pt-6 mt-6">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-1.5">
-                            <Network size={14} className="text-emerald-600" /> Interfaces e Vínculos Organizacionais
-                          </h4>
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                              <Network size={14} className="text-emerald-600" /> Interfaces e Vínculos Organizacionais
+                            </h4>
+                            {!isEditMode && (
+                              <button 
+                                type="button" 
+                                onClick={() => setIsEditMode(true)} 
+                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] rounded uppercase font-bold transition-colors flex items-center gap-1.5"
+                              >
+                                <Edit3 size={12} /> Editar Vínculos
+                              </button>
+                            )}
+                          </div>
 
                           {/* Listagem de Vínculos Atuais */}
                           <div className="space-y-2 mb-4">
