@@ -74,7 +74,10 @@ export function PeopleEcosystemMap({
   };
 
   const sortEcosystem = (list: Employee[]) => {
-    if (!activeEmployee) return list;
+    // Evitar tremulação (flicker): se for apenas hover (não travado por clique), não reordenamos o DOM.
+    // O reordenamento afasta o card do mouse, causando loop infinito de onMouseLeave/onMouseEnter.
+    if (!activeEmployee || !isLocked) return list;
+
     return [...list].sort((a, b) => {
       // 1º O elemento ativo em si sempre em primeiro
       if (a.id === activeId) return -1;
