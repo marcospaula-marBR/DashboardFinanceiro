@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.10";
+export const APP_VERSION = "v.02.48.11";
 export const VERSION_DATE = "2026-06-25";
 export const VERSION_CHANGELOG = [
+  "v.02.48.11 - Feat/UX: Adiciona data de início e tempo de empresa nos cards das órbitas do Ecosystem Map. Substitui 'RT' por 'RL' (Representante Legal) em todos os cards (órbitas e página principal). Adiciona Custo Histórico Total e Médio Mensal nos cards da página principal (quando disponível nos dados de custo mensal).",
   "v.02.48.10 - Style: Aplica destaque visual aprimorado ao 'Tempo de Empresa' em todos os contextos (Listagem, Card Mobile, Ficha Executiva) com pill indigo bold e fundo colorido.",
   "v.02.48.09 - Feat/UX: Adiciona cálculo dinâmico de tempo de empresa (anos e meses) ao lado da Data de Admissão na Ficha Executiva, Listagem (tabela) e Card Mobile. Altera o comportamento do Link Executivo para abrir a Ficha diretamente na aba 'Ficha Executiva' através de parâmetro via URL.",
   "v.02.48.08 - Fix/UX: Corrige a sincronização bidirecional de organograma para utilizar o snapshot correto (pré-salvamento) dos vínculos, garantindo a replicação automática em ambas as fichas. Adiciona botão explícito 'Editar Vínculos' na interface de leitura da Ficha Executiva para facilitar o acesso à edição/exclusão.",

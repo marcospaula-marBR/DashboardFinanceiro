@@ -1290,6 +1290,10 @@ export default function PeoplePage() {
                       }
                     }
 
+                    const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
+                    const historicoCustoTotal = empCosts.reduce((sum, c) => sum + (c.valor_liquido || 0), 0);
+                    const historicoCustoMedio = empCosts.length > 0 ? historicoCustoTotal / empCosts.length : 0;
+
                     return (
                       <PeopleMobileCard
                         key={emp.id}
@@ -1305,6 +1309,8 @@ export default function PeoplePage() {
                         hasNoPromo={hasNoPromo}
                         noRaiseMonths={noRaiseMonths}
                         noPromoMonths={noPromoMonths}
+                        historicoCustoTotal={historicoCustoTotal}
+                        historicoCustoMedio={historicoCustoMedio}
                       />
                     );
                   })

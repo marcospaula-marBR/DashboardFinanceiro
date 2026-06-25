@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { Employee, getRemunerationLabel, getPBClassification } from "@/types/loans";
 import { Building2, UserRound, ArrowUpRight, ArrowDownRight, ArrowLeftRight, HelpCircle, Network, Users } from "lucide-react";
-import { isExternalEntity, PeopleClassificationBadge, RelationshipNatureBadge, PeopleHealthBadge } from "./PeopleBadges";
+import { isExternalEntity, PeopleClassificationBadge, RelationshipNatureBadge, PeopleHealthBadge, formatCompanyTime } from "./PeopleBadges";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface PeopleEcosystemMapProps {
@@ -217,7 +217,9 @@ export function PeopleEcosystemMap({
             </h4>
             
             <p className="text-[10px] text-slate-400 font-semibold truncate mt-0.5">
-              {isExternal ? `RT: ${emp.responsible_name || 'Indefinido'}` : (emp.job_role || 'Sem Cadeira')}
+              {isExternal
+                ? `RL: ${emp.responsible_name || 'Indefinido'}`
+                : (emp.job_role || 'Sem Cadeira')}
             </p>
 
             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
@@ -227,16 +229,30 @@ export function PeopleEcosystemMap({
           </div>
         </div>
 
-        {/* Rodapé Interno do Card */}
-        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[9px] text-slate-400 font-bold">
-          <span>{emp.company}</span>
-          {showValues && (emp.remuneration_fixed || emp.remuneration) > 0 ? (
-            <span className="text-slate-600 font-black tabular-nums">
-              {BRL.format(emp.remuneration_fixed || emp.remuneration)}
-            </span>
-          ) : (
-            <span>••••••</span>
+        {/* Rodé Interno do Card */}
+        <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2">
+          {/* Data de início + Tempo de empresa */}
+          {emp.start_date && (
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[9px] text-slate-400 tabular-nums">
+                {new Date(emp.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+              </span>
+              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                {formatCompanyTime(emp.start_date)}
+              </span>
+            </div>
           )}
+          {/* Empresa + Rem */}
+          <div className="flex items-center justify-between gap-1 text-[9px] text-slate-400 font-bold">
+            <span>{emp.company}</span>
+            {showValues && (emp.remuneration_fixed || emp.remuneration) > 0 ? (
+              <span className="text-slate-600 font-black tabular-nums">
+                {BRL.format(emp.remuneration_fixed || emp.remuneration)}
+              </span>
+            ) : (
+              <span>••••••</span>
+            )}
+          </div>
         </div>
       </motion.div>
     );

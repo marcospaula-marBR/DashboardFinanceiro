@@ -25,6 +25,8 @@ interface PeopleMobileCardProps {
   hasNoPromo?: boolean;
   noRaiseMonths?: number;
   noPromoMonths?: number;
+  historicoCustoTotal?: number; // Soma total do custo histórico
+  historicoCustoMedio?: number; // Média mensal do custo histórico
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -52,6 +54,8 @@ export function PeopleMobileCard({
   hasNoPromo,
   noRaiseMonths,
   noPromoMonths,
+  historicoCustoTotal,
+  historicoCustoMedio,
 }: PeopleMobileCardProps) {
   const [copied, setCopied] = useState(false);
 
@@ -140,7 +144,7 @@ export function PeopleMobileCard({
               {employee.responsible_name && (
                 <p className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
                   <UserRound size={10} className="text-slate-400" />
-                  RT: {employee.responsible_name}
+                  RL: {employee.responsible_name}
                 </p>
               )}
               {employee.pj_type && (
@@ -199,6 +203,21 @@ export function PeopleMobileCard({
             <p className="text-sm font-black text-emerald-600 tabular-nums">
               {BRL.format(employee.remuneration)}
             </p>
+            {/* Custo Histórico */}
+            {showValues && (historicoCustoTotal !== undefined || historicoCustoMedio !== undefined) && (
+              <div className="mt-1 space-y-0.5">
+                {historicoCustoTotal !== undefined && historicoCustoTotal > 0 && (
+                  <p className="text-[9px] text-slate-400">
+                    Total hist. <span className="font-bold text-slate-600 tabular-nums">{BRL.format(historicoCustoTotal)}</span>
+                  </p>
+                )}
+                {historicoCustoMedio !== undefined && historicoCustoMedio > 0 && (
+                  <p className="text-[9px] text-slate-400">
+                    Média/mês <span className="font-bold text-slate-600 tabular-nums">{BRL.format(historicoCustoMedio)}</span>
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-right">
