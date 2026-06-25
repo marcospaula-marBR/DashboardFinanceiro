@@ -107,18 +107,35 @@ export class DreLancamentosService {
     rows: DreRow[];
     error: string | null;
   }> {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .order('empresa')
-      .order('periodo');
+    let allData: DreLancamento[] = [];
+    let start = 0;
+    const limit = 2000;
+    let hasMore = true;
 
-    if (error) {
-      console.error('[DreLancamentosService] fetchAll error:', error);
-      return { rows: [], error: error.message };
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select('*')
+        .order('id')
+        .range(start, start + limit - 1);
+
+      if (error) {
+        console.error('[DreLancamentosService] fetchAll error:', error);
+        return { rows: [], error: error.message };
+      }
+
+      if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        allData = allData.concat(data as DreLancamento[]);
+        start += limit;
+        if (data.length < limit) {
+          hasMore = false;
+        }
+      }
     }
 
-    if (!data || data.length === 0) {
+    if (allData.length === 0) {
       return { rows: [], error: null };
     }
 
@@ -135,7 +152,7 @@ export class DreLancamentosService {
       }
     >();
 
-    for (const rec of data as DreLancamento[]) {
+    for (const rec of allData) {
       const key = `${rec.empresa}|${rec.departamento}|${rec.conta_dre}|${rec.projeto}|${rec.categoria}`;
 
       if (!pivotMap.has(key)) {
@@ -197,18 +214,49 @@ export class DreLancamentosService {
    * Retorna todos os lançamentos manuais (todas as empresas).
    */
   static async fetchAllManual(): Promise<DreLancamento[]> {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('fonte', 'manual')
-      .order('empresa')
-      .order('periodo', { ascending: false });
+    let allData: DreLancamento[] = [];
+    let start = 0;
+    const limit = 2000;
+    let hasMore = true;
 
-    if (error) {
-      console.error('[DreLancamentosService] fetchAllManual error:', error);
-      return [];
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select('*')
+        .eq('fonte', 'manual')
+        .order('id')
+        .range(start, start + limit - 1);
+
+      if (error) {
+        console.error('[DreLancamentosService] fetchAllManual error:', error);
+        return [];
+      }
+
+      if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        allData = allData.concat(data as DreLancamento[]);
+        start += limit;
+        if (data.length < limit) {
+          hasMore = false;
+        }
+      }
     }
-    return (data || []) as DreLancamento[];
+
+    const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    allData.sort((a, b) => {
+      const empComp = a.empresa.localeCompare(b.empresa);
+      if (empComp !== 0) return empComp;
+      
+      const [mesA, anoA] = a.periodo.split('/');
+      const [mesB, anoB] = b.periodo.split('/');
+      const yA = parseInt(anoA) < 100 ? 2000 + parseInt(anoA) : parseInt(anoA);
+      const yB = parseInt(anoB) < 100 ? 2000 + parseInt(anoB) : parseInt(anoB);
+      if (yA !== yB) return yB - yA; // decrescente por ano
+      return MESES_ORDEM.indexOf(mesB) - MESES_ORDEM.indexOf(mesA); // decrescente por mês
+    });
+
+    return allData;
   }
 
   /**
