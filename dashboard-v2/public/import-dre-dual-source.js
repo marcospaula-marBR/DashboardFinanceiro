@@ -1,16 +1,31 @@
 /**
- * Importação de Dados DRE de Duas Fontes
+ * Importação de Dados DRE de Duas Fontes e Upload para Supabase
  * 
- * Importa dados DRE de dois arquivos CSV baseado em data:
- * - dados_mai25.csv: Jan/2024 até Mai/2025
- * - dados_tratado_jun25_em_diante.csv: Jun/2025 em diante
+ * - Fonte 1: base_manual_dre.csv (Master/Histórico)
+ * - Fonte 2: dados_tratado_jun25_em_diante.csv (Omie export)
  */
 
 import fs from 'fs';
 import iconv from 'iconv-lite';
+import path from 'path';
+
+// Supabase REST endpoint e chave (Lido do .env na raiz do projeto)
+const ENV_PATH = path.join(process.cwd(), '../../.env');
+let SUPABASE_URL = '';
+let SUPABASE_KEY = '';
+
+try {
+    const envFile = fs.readFileSync(ENV_PATH, 'utf-8');
+    envFile.split('\n').forEach(line => {
+        if (line.startsWith('SUPABASE_URL=')) SUPABASE_URL = line.split('=')[1].trim();
+        if (line.startsWith('SUPABASE_SERVICE_KEY=')) SUPABASE_KEY = line.split('=')[1].trim();
+    });
+} catch (e) {
+    console.warn("⚠️ Não foi possível carregar o arquivo .env da raiz do projeto.");
+}
 
 // Configuração
-const FILE_MAI25 = 'dados_mai25.csv';
+const FILE_MAI25 = 'base_manual_dre.csv';
 const FILE_JUN25 = 'dados_tratado_jun25_em_diante.csv';
 
 // Função para ler CSV com encoding correto (Windows-1252)
@@ -37,130 +52,176 @@ function parseCSV(content, delimiter = ';') {
         });
         data.push(row);
     }
-
     return { headers, data };
 }
 
-// Função para converter "jan/24" em "2024-01"
-function parseCompetencia(comp) {
-    if (!comp || !comp.includes('/')) return null;
-
-    const meses = {
-        'jan': '01', 'fev': '02', 'mar': '03', 'abr': '04',
-        'mai': '05', 'jun': '06', 'jul': '07', 'ago': '08',
-        'set': '09', 'out': '10', 'nov': '11', 'dez': '12'
-    };
-
-    const [mes, ano] = comp.split('/');
-    const anoCompleto = ano.length === 2 ? '20' + ano : ano;
-    return `${anoCompleto}-${meses[mes.toLowerCase()]}`;
+// Para padronizar nomes de meses no metadata
+const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+function normalizeMes(mes) {
+    return mes.trim().charAt(0).toUpperCase() + mes.trim().slice(1).toLowerCase();
 }
 
-// Função para mesclar dados de ambos os arquivos
 function mergeDataSources() {
     console.log('📊 Lendo arquivos DRE...\n');
 
-    // Ler arquivo 1 (até mai/25) - ENCODING Windows-1252
     const content1 = readCSVFile(FILE_MAI25);
     const { headers: headers1, data: data1 } = parseCSV(content1);
     console.log(`✅ ${FILE_MAI25}: ${data1.length} registros`);
 
-    // Ler arquivo 2 (jun/25 em diante) - ENCODING Windows-1252
     const content2 = readCSVFile(FILE_JUN25);
     const { headers: headers2, data: data2 } = parseCSV(content2);
     console.log(`✅ ${FILE_JUN25}: ${data2.length} registros\n`);
 
-    // Extrair meses de cada arquivo
-    const meses1 = headers1.filter(h => h.includes('/')).map(parseCompetencia).filter(Boolean);
-    const meses2 = headers2.filter(h => h.includes('/')).map(parseCompetencia).filter(Boolean);
+    const dataMap = new Map(); // key: empresa|departamento|contaDRE|projeto|categoria
 
-    console.log(`📅 Períodos identificados:`);
-    console.log(`   Arquivo 1: ${meses1[0]} até ${meses1[meses1.length - 1]}`);
-    console.log(`   Arquivo 2: ${meses2[0]} até ${meses2[meses2.length - 1]}\n`);
+    const getKey = (row) => {
+        const emp = row['Empresa'] || 'Geral';
+        const dep = row['Departamento'] || 'Sem Departamento';
+        const conta = row['ContaDRE'] || row['Conta do DRE'] || 'Sem Conta DRE';
+        const proj = row['Projeto'] || 'Sem Projeto';
+        const cat = row['Categoria'] || 'Sem Categoria';
+        return `${emp}|${dep}|${conta}|${proj}|${cat}`;
+    };
 
-    // Normalizar dados (transformar colunas mensais em linhas)
-    // Estratégia: Carregar TUDO de arquivo 1, depois arquivo 2 sobrescreve períodos duplicados
-    const dataMap = new Map(); // key: empresa|projeto|categoria|competencia
-
-    // Processar arquivo 1 (TODOS os períodos)
+    // Carregar Base Manual (Arquivo 1)
     data1.forEach(row => {
-        meses1.forEach((compNorm, idx) => {
-            const mesHeader = headers1.find(h => parseCompetencia(h) === compNorm);
-            const valor = parseFloat(row[mesHeader]?.replace(',', '.')) || 0;
-
-            if (valor !== 0) {
-                const key = `${row['Empresa']}|${row['Projeto']}|${row['Categoria']}|${compNorm}`;
-                dataMap.set(key, {
-                    empresa: row['Empresa'],
-                    projeto: row['Projeto'],
-                    categoria: row['Categoria'],
-                    competencia: compNorm,
-                    valor: valor,
-                    fonte: 'arquivo1'
-                });
-            }
+        const key = getKey(row);
+        if (!dataMap.has(key)) {
+            dataMap.set(key, { 
+                Empresa: row['Empresa'] || 'Geral',
+                Departamento: row['Departamento'] || 'Sem Departamento',
+                ContaDRE: row['ContaDRE'] || row['Conta do DRE'] || 'Sem Conta DRE',
+                Projeto: row['Projeto'] || 'Sem Projeto',
+                Categoria: row['Categoria'] || 'Sem Categoria'
+            });
+        }
+        const item = dataMap.get(key);
+        // Puxar todas as colunas de meses (que contém '/')
+        headers1.filter(h => h.includes('/')).forEach(mesHeader => {
+            const valor = parseFloat(row[mesHeader]?.replace(/\./g, '').replace(',', '.')) || 0;
+            if (valor !== 0) item[mesHeader] = valor;
         });
     });
 
-    // Processar arquivo 2 (SOBRESCREVE se competência já existir)
+    // Aplicar Upsert do Omie (Arquivo 2)
     data2.forEach(row => {
-        meses2.forEach((compNorm, idx) => {
-            const mesHeader = headers2.find(h => parseCompetencia(h) === compNorm);
-            const valor = parseFloat(row[mesHeader]?.replace(',', '.')) || 0;
-
+        const key = getKey(row);
+        if (!dataMap.has(key)) {
+            dataMap.set(key, { 
+                Empresa: row['Empresa'] || 'Geral',
+                Departamento: row['Departamento'] || 'Sem Departamento',
+                ContaDRE: row['ContaDRE'] || row['Conta do DRE'] || 'Sem Conta DRE',
+                Projeto: row['Projeto'] || 'Sem Projeto',
+                Categoria: row['Categoria'] || 'Sem Categoria'
+            });
+        }
+        const item = dataMap.get(key);
+        // Sobrescrever com valores do Omie para as competências que vieram
+        headers2.filter(h => h.includes('/')).forEach(mesHeader => {
+            const valor = parseFloat(row[mesHeader]?.replace(/\./g, '').replace(',', '.')) || 0;
             if (valor !== 0) {
-                const key = `${row['Empresa']}|${row['Projeto']}|${row['Categoria']}|${compNorm}`;
-                dataMap.set(key, {
-                    empresa: row['Empresa'],
-                    projeto: row['Projeto'],
-                    categoria: row['Categoria'],
-                    competencia: compNorm,
-                    valor: valor,
-                    fonte: 'arquivo2'
-                });
+                item[mesHeader] = valor; // Omie PREVALECE
             }
         });
     });
 
-    // Converter Map para Array e remover campo 'fonte'
-    const normalized = Array.from(dataMap.values()).map(({ fonte, ...item }) => item);
+    const finalData = Array.from(dataMap.values());
+    console.log(`✅ Total de linhas consolidadas: ${finalData.length}\n`);
 
-    // Ordenar por competência
-    normalized.sort((a, b) => a.competencia.localeCompare(b.competencia));
+    return finalData;
+}
 
-    console.log(`✅ Total de lançamentos processados: ${normalized.length}\n`);
+function extractMetadata(data) {
+    const empresas = Array.from(new Set(data.map(d => d.Empresa))).sort();
+    const departamentos = Array.from(new Set(data.map(d => d.Departamento))).sort();
+    const contasDre = Array.from(new Set(data.map(d => d.ContaDRE))).sort();
+    const projetos = Array.from(new Set(data.map(d => d.Projeto))).sort();
+    const categorias = Array.from(new Set(data.map(d => d.Categoria))).sort();
 
-    // Estatísticas
-    const porCompetencia = {};
-    normalized.forEach(item => {
-        porCompetencia[item.competencia] = (porCompetencia[item.competencia] || 0) + 1;
+    const allKeysSet = new Set();
+    data.forEach(row => {
+        Object.keys(row).forEach(key => {
+            if (key.includes('/')) allKeysSet.add(key);
+        });
+    });
+    
+    const validCols = Array.from(allKeysSet);
+    const periodos = [];
+    const mapaMeses = {};
+
+    validCols.forEach(col => {
+        const partes = col.split('/');
+        if (partes.length === 2) {
+            const mesNormalizado = normalizeMes(partes[0].trim());
+            mapaMeses[col] = mesNormalizado;
+            periodos.push({ col, mes: mesNormalizado, ano: partes[1].trim() });
+        }
     });
 
-    console.log('📈 Lançamentos por competência:');
-    Object.keys(porCompetencia).sort().forEach(comp => {
-        console.log(`   ${comp}: ${porCompetencia[comp]} lançamentos`);
+    periodos.sort((a, b) => {
+        const yA = parseInt(a.ano) < 100 ? 2000 + parseInt(a.ano) : parseInt(a.ano);
+        const yB = parseInt(b.ano) < 100 ? 2000 + parseInt(b.ano) : parseInt(b.ano);
+        if (yA !== yB) return yA - yB;
+        return MESES_ORDEM.indexOf(a.mes) - MESES_ORDEM.indexOf(b.mes);
     });
 
-    return normalized;
+    return {
+        empresas,
+        departamentos,
+        contasDre,
+        projetos,
+        categorias,
+        periodos: periodos.map(p => `${p.mes}/${p.ano}`),
+        mapaMeses
+    };
 }
 
-// Salvar dados mesclados
-function saveMergedData(data) {
-    const outputFile = 'dados_dre_merged.json';
-    fs.writeFileSync(outputFile, JSON.stringify(data, null, 2), 'utf-8');
-    console.log(`\n💾 Dados salvos em: ${outputFile}`);
+async function uploadToSupabase(rawData, metadata) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+        throw new Error("Credenciais do Supabase não configuradas no .env");
+    }
+
+    console.log('🚀 Enviando snapshot consolidado para o Supabase...');
+    
+    const payload = {
+        filename: "Consolidado Híbrido Automático",
+        raw_data: rawData,
+        metadata: metadata
+    };
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/dre_snapshots`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Falha no Supabase [${res.status}]: ${errText}`);
+    }
 }
 
-// Executar
-try {
-    const mergedData = mergeDataSources();
-    saveMergedData(mergedData);
-    console.log('\n=========================================');
-    console.log('✨ IMPORTAÇÃO CONCLUÍDA COM SUCESSO!');
-    console.log('   O sistema agora usará os novos dados.');
-    console.log('=========================================\n');
-} catch (error) {
-    console.error('\n❌ ERRO DURANTE A IMPORTAÇÃO:');
-    console.error(`   ${error.message}`);
-    process.exit(1);
+async function run() {
+    try {
+        const rawData = mergeDataSources();
+        const metadata = extractMetadata(rawData);
+        
+        await uploadToSupabase(rawData, metadata);
+        
+        console.log('\n=========================================');
+        console.log('✨ INTEGRAÇÃO HÍBRIDA CONCLUÍDA COM SUCESSO!');
+        console.log('   O Dashboard já está atualizado na nuvem.');
+        console.log('=========================================\n');
+    } catch (error) {
+        console.error('\n❌ ERRO DURANTE A INTEGRAÇÃO:');
+        console.error(`   ${error.message}`);
+        process.exit(1);
+    }
 }
+
+run();

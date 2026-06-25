@@ -14,6 +14,8 @@
 import { supabase } from '@/lib/supabase';
 import { DreRow, DreMetadata } from '@/types/dre';
 
+const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+
 export interface DreLancamento {
   id?: string;
   empresa: string;
@@ -109,7 +111,7 @@ export class DreLancamentosService {
   }> {
     let allData: DreLancamento[] = [];
     let start = 0;
-    const limit = 2000;
+    const limit = 1000;
     let hasMore = true;
 
     while (hasMore) {
@@ -153,15 +155,21 @@ export class DreLancamentosService {
     >();
 
     for (const rec of allData) {
-      const key = `${rec.empresa}|${rec.departamento}|${rec.conta_dre}|${rec.projeto}|${rec.categoria}`;
+      const emp          = rec.empresa ? rec.empresa.trim() : 'Geral';
+      const departamento = toTitleCase(rec.departamento.trim());
+      const conta_dre    = rec.conta_dre.trim().replace(/^\d+\.\s*/, '');
+      const projeto      = toTitleCase(rec.projeto.trim());
+      const categoria    = rec.categoria.trim();
+
+      const key = `${emp}|${departamento}|${conta_dre}|${projeto}|${categoria}`;
 
       if (!pivotMap.has(key)) {
         pivotMap.set(key, {
-          Empresa:      rec.empresa,
-          Departamento: rec.departamento,
-          ContaDRE:     rec.conta_dre,
-          Projeto:      rec.projeto,
-          Categoria:    rec.categoria,
+          Empresa:      emp,
+          Departamento: departamento,
+          ContaDRE:     conta_dre,
+          Projeto:      projeto,
+          Categoria:    categoria,
           valores:      {},
         });
       }
@@ -216,7 +224,7 @@ export class DreLancamentosService {
   static async fetchAllManual(): Promise<DreLancamento[]> {
     let allData: DreLancamento[] = [];
     let start = 0;
-    const limit = 2000;
+    const limit = 1000;
     let hasMore = true;
 
     while (hasMore) {

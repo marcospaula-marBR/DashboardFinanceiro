@@ -121,13 +121,13 @@ def supabase_upsert(records: list, dry_run: bool = False) -> tuple:
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 enviados += len(batch)
-                print(f"  ✓ Batch {i+1}/{batches}: {len(batch)} registros enviados")
+                print(f"  [OK] Batch {i+1}/{batches}: {len(batch)} registros enviados")
         except urllib.error.HTTPError as e:
             body = e.read().decode()
-            print(f"  ✗ Batch {i+1}/{batches} ERRO HTTP {e.code}: {body[:300]}")
+            print(f"  [ERROR] Batch {i+1}/{batches} ERRO HTTP {e.code}: {body[:300]}")
             erros += len(batch)
         except Exception as ex:
-            print(f"  ✗ Batch {i+1}/{batches} ERRO: {ex}")
+            print(f"  [ERROR] Batch {i+1}/{batches} ERRO: {ex}")
             erros += len(batch)
 
         time.sleep(0.1)  # Rate-limit gentil
@@ -135,21 +135,49 @@ def supabase_upsert(records: list, dry_run: bool = False) -> tuple:
     return enviados, erros
 
 
+def clear_source_data(fonte: str, dry_run: bool = False) -> bool:
+    """
+    Remove todos os registros de uma determinada fonte da tabela dre_lancamentos.
+    """
+    if dry_run:
+        print(f"  [DRY-RUN] Limparia registros de fonte='{fonte}' da tabela dre_lancamentos")
+        return True
+
+    print(f"\nLimpando registros de fonte='{fonte}' na tabela dre_lancamentos no Supabase...")
+    url = f"{SUPABASE_URL}/rest/v1/{TABLE}?fonte=eq.{fonte}"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+    req = urllib.request.Request(url, headers=headers, method="DELETE")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            print(f"  [OK] Registros de fonte='{fonte}' limpos com sucesso.")
+            return True
+    except Exception as e:
+        print(f"  [ERROR] Erro ao limpar a tabela para fonte '{fonte}': {e}")
+        return False
+
+
 # ── Fase 2A: Seed dados-foraOmie.csv → fonte='manual' ──────────────────────
 def seed_manual(dry_run: bool = False) -> int:
     print("\n" + "="*60)
-    print("FASE 2A — dados-foraOmie.csv → fonte='manual'")
+    print("FASE 2A — dados-foraOmie.csv -> fonte='manual'")
     print("="*60)
 
     if not os.path.exists(FILE_MANUAL):
-        print(f"  ✗ Arquivo não encontrado: {FILE_MANUAL}")
+        print(f"  [ERROR] Arquivo não encontrado: {FILE_MANUAL}")
         return 0
+
+    # Limpa dados anteriores da mesma fonte antes do novo seed
+    clear_source_data("manual", dry_run)
 
     records = []
     skipped = 0
 
-    for enc in ["latin-1", "utf-8-sig", "cp1252"]:
+    for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
         try:
+            print(f"  [DEBUG] Tentando encoding '{enc}' para FILE_MANUAL...")
             with open(FILE_MANUAL, "r", encoding=enc) as f:
                 reader = csv.DictReader(f, delimiter=";")
                 headers = reader.fieldnames or []
@@ -192,7 +220,7 @@ def seed_manual(dry_run: bool = False) -> int:
             print(f"    {r}")
 
     if not records:
-        print("  ⚠ Nenhum registro para enviar.")
+        print("  [WARNING] Nenhum registro para enviar.")
         return 0
 
     enviados, erros = supabase_upsert(records, dry_run)
@@ -203,12 +231,15 @@ def seed_manual(dry_run: bool = False) -> int:
 # ── Fase 2B: Seed dados_tratado_jun25_em_diante.csv → fonte='omie' ──────────
 def seed_omie(dry_run: bool = False) -> int:
     print("\n" + "="*60)
-    print("FASE 2B — dados_tratado_jun25_em_diante.csv → fonte='omie'")
+    print("FASE 2B — dados_tratado_jun25_em_diante.csv -> fonte='omie'")
     print("="*60)
 
     if not os.path.exists(FILE_OMIE):
-        print(f"  ✗ Arquivo não encontrado: {FILE_OMIE}")
+        print(f"  [ERROR] Arquivo não encontrado: {FILE_OMIE}")
         return 0
+
+    # Limpa dados anteriores da mesma fonte antes do novo seed
+    clear_source_data("omie", dry_run)
 
     # Mapeamento de colunas do CSV Omie (transacional) → campos da tabela
     pivot_map: dict = defaultdict(float)
@@ -217,8 +248,9 @@ def seed_omie(dry_run: bool = False) -> int:
     linhas_lidas = 0
     linhas_ignoradas = 0
 
-    for enc in ["latin-1", "utf-8-sig", "cp1252"]:
+    for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
         try:
+            print(f"  [DEBUG] Tentando encoding '{enc}' para FILE_OMIE...")
             with open(FILE_OMIE, "r", encoding=enc) as f:
                 reader = csv.DictReader(f, delimiter=";")
 
@@ -306,7 +338,7 @@ def seed_omie(dry_run: bool = False) -> int:
             print(f"    {r}")
 
     if not records:
-        print("  ⚠ Nenhum registro para enviar.")
+        print("  [WARNING] Nenhum registro para enviar.")
         return 0
 
     enviados, erros = supabase_upsert(records, dry_run)
