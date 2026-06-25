@@ -8,7 +8,8 @@ import {
   formatWhatsAppLink, 
   PeopleClassificationBadge, 
   RelationshipNatureBadge, 
-  PeopleHealthBadge 
+  PeopleHealthBadge,
+  formatCompanyTime
 } from "./PeopleBadges";
 
 interface PeopleMobileCardProps {
@@ -76,7 +77,7 @@ export function PeopleMobileCard({
 
   const handleCopyLink = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const link = employee.executive_link || `${window.location.origin}/people?employeeId=${employee.id}`;
+    const link = employee.executive_link || `${window.location.origin}/people?employeeId=${employee.id}&tab=fichaExecutiva`;
     navigator.clipboard.writeText(link).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -175,11 +176,18 @@ export function PeopleMobileCard({
               {employee.department || "Sem Setor"}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-slate-400">
-            <Clock size={12} />
-            <span className="text-[11px] text-slate-500">
-              Admitido em: {startFormatted}
-            </span>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1.5 text-slate-400">
+              <Clock size={12} />
+              <span className="text-[11px] text-slate-500">
+                {startFormatted}
+              </span>
+            </div>
+            {employee.start_date && (
+              <span className="text-[9px] font-medium text-slate-400 ml-4">
+                {formatCompanyTime(employee.start_date)}
+              </span>
+            )}
           </div>
         </div>
 

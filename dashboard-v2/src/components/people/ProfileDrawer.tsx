@@ -9,7 +9,7 @@ import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
 import { formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
-import { isExternalEntity } from "./PeopleBadges";
+import { isExternalEntity, formatCompanyTime } from "./PeopleBadges";
 
 interface HistoryItem {
   id: string;
@@ -142,7 +142,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         setCosts([]);
         setIsEditMode(true);
       }
-      setActiveTab('pessoal');
+
+      // Abre na tab correta se especificado na URL
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) {
+          setActiveTab(tab as any);
+        } else {
+          setActiveTab('pessoal');
+        }
+      } else {
+        setActiveTab('pessoal');
+      }
     } else {
       // Limpar estado qnd fecha
       setProfile({});
@@ -1887,7 +1899,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                            <input type="text" value={profile.pix_key || ''} onChange={e => handleChange('pix_key', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                          </div>
                          <div>
-                           <label className={labelClass}>Data de Admissão</label>
+                           <div className="flex items-center justify-between">
+                             <label className={labelClass}>Data de Admissão</label>
+                             {!isEditMode && profile.start_date && (
+                               <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                 {formatCompanyTime(profile.start_date)}
+                               </span>
+                             )}
+                           </div>
                            <input type="date" name="start_date" value={profile.start_date || ''} onChange={e => handleChange('start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                          </div>
                          <div>

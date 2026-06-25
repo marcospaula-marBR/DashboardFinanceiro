@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.08";
+export const APP_VERSION = "v.02.48.09";
 export const VERSION_DATE = "2026-06-25";
 export const VERSION_CHANGELOG = [
+  "v.02.48.09 - Feat/UX: Adiciona cálculo dinâmico de tempo de empresa (anos e meses) ao lado da Data de Admissão na Ficha Executiva, Listagem (tabela) e Card Mobile. Altera o comportamento do Link Executivo para abrir a Ficha diretamente na aba 'Ficha Executiva' através de parâmetro via URL.",
   "v.02.48.08 - Fix/UX: Corrige a sincronização bidirecional de organograma para utilizar o snapshot correto (pré-salvamento) dos vínculos, garantindo a replicação automática em ambas as fichas. Adiciona botão explícito 'Editar Vínculos' na interface de leitura da Ficha Executiva para facilitar o acesso à edição/exclusão.",
   "v.02.48.07 - Fix/UX: Corrige o bug de tremulação (flicker) no mapa de ecossistema. Devido à limitação técnica de eventos de mouse na Web, reordenar elementos do DOM sob o cursor cria um loop infinito de MouseLeave/MouseEnter. A reordenação espacial (trazer itens para perto) agora ocorre exclusivamente ao CLICAR no card (lock), enquanto o HOVER se concentra apenas no destaque visual e ofuscamento do restante.",
   "v.02.48.06 - Feat/Peopleboard Ecosystem Map: Conclui a Entrega 4. Implementa UX de reordenação dinâmica (hover sorting) no Ecossistema com animações framer-motion, priorizando cards vinculados no início das órbitas e evitando cortes visuais. Adiciona sincronização bidirecional em tempo real para os vínculos da Ficha Executiva (ProfileDrawer), atualizando automaticamente o Organograma no banco (Supabase) na ficha de origem e destino (ex: Apoiada gera Orientadora no reverso).",

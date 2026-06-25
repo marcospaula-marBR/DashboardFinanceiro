@@ -22,6 +22,31 @@ export function formatWhatsAppLink(phone?: string): string | null {
   return `https://wa.me/${normalized}`;
 }
 
+export function formatCompanyTime(startDateStr?: string): string | null {
+  if (!startDateStr) return null;
+  const start = new Date(startDateStr + "T12:00:00");
+  const now = new Date();
+  
+  let months = (now.getFullYear() - start.getFullYear()) * 12;
+  months -= start.getMonth();
+  months += now.getMonth();
+  
+  if (now.getDate() < start.getDate()) {
+    months--;
+  }
+
+  if (months < 0) return "Admissão futura";
+  if (months === 0) return "Menos de 1 mês";
+  
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  
+  const yStr = y > 0 ? `${y} ${y === 1 ? 'ano' : 'anos'}` : '';
+  const mStr = m > 0 ? `${m} ${m === 1 ? 'mês' : 'meses'}` : '';
+  
+  if (yStr && mStr) return `${yStr} e ${mStr}`;
+  return yStr || mStr;
+}
 
 // ─── Classification Badge (E1 to O3 with Stars) ──────────────────────────────
 

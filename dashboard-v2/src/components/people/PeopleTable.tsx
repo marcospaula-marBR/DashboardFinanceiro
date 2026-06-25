@@ -11,7 +11,8 @@ import {
   formatWhatsAppLink, 
   PeopleClassificationBadge, 
   RelationshipNatureBadge, 
-  PeopleHealthBadge 
+  PeopleHealthBadge,
+  formatCompanyTime
 } from "./PeopleBadges";
 
 interface PeopleTableProps {
@@ -53,7 +54,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
 
   const handleCopyLink = (e: React.MouseEvent, emp: Employee) => {
     e.stopPropagation();
-    const link = emp.executive_link || `${window.location.origin}/people?employeeId=${emp.id}`;
+    const link = emp.executive_link || `${window.location.origin}/people?employeeId=${emp.id}&tab=fichaExecutiva`;
     navigator.clipboard.writeText(link).then(() => {
       setCopiedId(emp.id);
       setTimeout(() => setCopiedId(null), 2000);
@@ -237,8 +238,19 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                         <span className="text-slate-300 font-normal">••••••</span>
                       )}
                     </td>
-                    <td className="py-4 px-4 text-center text-xs text-slate-500 tabular-nums">
-                      {emp.start_date ? new Date(emp.start_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                    <td className="py-4 px-4 text-center">
+                      {emp.start_date ? (
+                        <div className="flex flex-col items-center justify-center">
+                          <span className="text-xs text-slate-500 tabular-nums">
+                            {new Date(emp.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {formatCompanyTime(emp.start_date)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
                     </td>
                     <td className="py-4 px-4 text-center">
                       {emp.contract_expiry_date ? (
