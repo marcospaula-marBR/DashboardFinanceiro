@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.09";
+export const APP_VERSION = "v.02.48.10";
 export const VERSION_DATE = "2026-06-25";
 export const VERSION_CHANGELOG = [
+  "v.02.48.10 - Style: Aplica destaque visual aprimorado ao 'Tempo de Empresa' em todos os contextos (Listagem, Card Mobile, Ficha Executiva) com pill indigo bold e fundo colorido.",
   "v.02.48.09 - Feat/UX: Adiciona cálculo dinâmico de tempo de empresa (anos e meses) ao lado da Data de Admissão na Ficha Executiva, Listagem (tabela) e Card Mobile. Altera o comportamento do Link Executivo para abrir a Ficha diretamente na aba 'Ficha Executiva' através de parâmetro via URL.",
   "v.02.48.08 - Fix/UX: Corrige a sincronização bidirecional de organograma para utilizar o snapshot correto (pré-salvamento) dos vínculos, garantindo a replicação automática em ambas as fichas. Adiciona botão explícito 'Editar Vínculos' na interface de leitura da Ficha Executiva para facilitar o acesso à edição/exclusão.",
   "v.02.48.07 - Fix/UX: Corrige o bug de tremulação (flicker) no mapa de ecossistema. Devido à limitação técnica de eventos de mouse na Web, reordenar elementos do DOM sob o cursor cria um loop infinito de MouseLeave/MouseEnter. A reordenação espacial (trazer itens para perto) agora ocorre exclusivamente ao CLICAR no card (lock), enquanto o HOVER se concentra apenas no destaque visual e ofuscamento do restante.",

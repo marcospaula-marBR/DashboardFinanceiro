@@ -1902,7 +1902,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                            <div className="flex items-center justify-between">
                              <label className={labelClass}>Data de Admissão</label>
                              {!isEditMode && profile.start_date && (
-                               <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                               <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
                                  {formatCompanyTime(profile.start_date)}
                                </span>
                              )}

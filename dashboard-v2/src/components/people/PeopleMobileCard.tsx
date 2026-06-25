@@ -176,15 +176,15 @@ export function PeopleMobileCard({
               {employee.department || "Sem Setor"}
             </span>
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5 text-slate-400">
               <Clock size={12} />
-              <span className="text-[11px] text-slate-500">
+              <span className="text-[10px] text-slate-400">
                 {startFormatted}
               </span>
             </div>
             {employee.start_date && (
-              <span className="text-[9px] font-medium text-slate-400 ml-4">
+              <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full ml-4 self-start">
                 {formatCompanyTime(employee.start_date)}
               </span>
             )}
