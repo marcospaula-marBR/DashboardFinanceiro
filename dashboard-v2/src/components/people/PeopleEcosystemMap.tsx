@@ -136,7 +136,8 @@ export function PeopleEcosystemMap({
   // Renderizar o card no mapa
   const renderEcosystemCard = (emp: Employee) => {
     const isExternal = isExternalEntity(emp.entityType);
-    const displayName = isExternal && emp.corporate_name ? emp.corporate_name : emp.name;
+    // Razão Social prevalece sempre que preenchida; name é o fallback
+    const displayName = emp.corporate_name || emp.name;
     const avatarSrc = emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e2e8f0&color=475569&bold=true`;
     
     // Determinar classes com base no estado de destaque

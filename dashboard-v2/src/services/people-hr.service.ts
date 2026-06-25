@@ -59,6 +59,9 @@ interface RawEmployeeDb {
   remuneration_connectivity?: number;
   remuneration_incentives?: number;
   nivel?: string;
+  responsible_name?: string;
+  responsible_cpf?: string;
+  responsible_rg?: string;
 }
 
 export const PeopleHRService = {
@@ -197,7 +200,7 @@ export const PeopleHRService = {
         id: emp.id,
         name: emp.full_name,
         company: emp.company || 'MarBR',
-        linkType: emp.employment_type || 'CLT',
+        linkType: emp.employment_type || undefined,
         remuneration: parseFloat(String(emp.remuneration)) || 0,
         totalTaken: l ? l.totalTaken : (parseFloat(String(emp.loan_amount)) || 0),
         totalReceived: l ? l.totalReceived : 0,
@@ -232,6 +235,9 @@ export const PeopleHRService = {
         emergency_contact_phone: emp.emergency_contact_phone,
         emergency_contact_relation: emp.emergency_contact_relation,
         avatar: emp.photo_url,
+        responsible_name: emp.responsible_name,
+        responsible_cpf: emp.responsible_cpf,
+        responsible_rg: emp.responsible_rg,
         remuneration_fixed: emp.remuneration_fixed ? parseFloat(String(emp.remuneration_fixed)) : 0,
         remuneration_bonus: emp.remuneration_bonus ? parseFloat(String(emp.remuneration_bonus)) : 0,
         remuneration_commission: emp.remuneration_commission ? parseFloat(String(emp.remuneration_commission)) : 0,

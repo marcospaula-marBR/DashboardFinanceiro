@@ -63,7 +63,8 @@ export function PeopleMobileCard({
   const remLabel = getRemunerationLabel(employee.linkType);
   const isExternal = isExternalEntity(employee.entityType);
 
-  const displayName = isExternal && employee.corporate_name ? employee.corporate_name : employee.name;
+  // Razão Social prevalece sempre que preenchida; name é o fallback
+  const displayName = employee.corporate_name || employee.name;
 
   const avatarSrc =
     employee.photo_url ||

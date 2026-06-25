@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.11";
+export const APP_VERSION = "v.02.48.12";
 export const VERSION_DATE = "2026-06-25";
 export const VERSION_CHANGELOG = [
+  "v.02.48.12 - Fix: Corrige mapeamento de 'responsible_name/cpf/rg' que não era carregado pelo getEmployeesForPeople (motivo do RL sumir nos cards). Corrige displayName para usar 'corporate_name' como nome principal em TODOS os cards independente do entityType (não mais dependente da flag isExternal). Remove fallback falso 'CLT' do linkType para que o vínculo real do banco seja exibido (ou '—' quando vazio). Troca 'RT' por 'RL' na Listagem (PeopleTable).",
   "v.02.48.11 - Feat/UX: Adiciona data de início e tempo de empresa nos cards das órbitas do Ecosystem Map. Substitui 'RT' por 'RL' (Representante Legal) em todos os cards (órbitas e página principal). Adiciona Custo Histórico Total e Médio Mensal nos cards da página principal (quando disponível nos dados de custo mensal).",
   "v.02.48.10 - Style: Aplica destaque visual aprimorado ao 'Tempo de Empresa' em todos os contextos (Listagem, Card Mobile, Ficha Executiva) com pill indigo bold e fundo colorido.",
   "v.02.48.09 - Feat/UX: Adiciona cálculo dinâmico de tempo de empresa (anos e meses) ao lado da Data de Admissão na Ficha Executiva, Listagem (tabela) e Card Mobile. Altera o comportamento do Link Executivo para abrir a Ficha diretamente na aba 'Ficha Executiva' através de parâmetro via URL.",

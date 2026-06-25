@@ -151,7 +151,8 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                 }
 
                 const isExternal = isExternalEntity(emp.entityType);
-                const displayName = isExternal && emp.corporate_name ? emp.corporate_name : emp.name;
+                // Razão Social prevalece sempre que preenchida; name é o fallback
+                const displayName = emp.corporate_name || emp.name;
                 const avatarSrc = emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e2e8f0&color=475569&bold=true`;
                 const waLink = formatWhatsAppLink(emp.phone_professional);
 
@@ -198,7 +199,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                             {isExternal ? (
                               emp.responsible_name && (
                                 <span className="text-[10px] font-semibold text-slate-400 truncate max-w-[150px] flex items-center gap-0.5">
-                                  <UserRound size={8} /> RT: {emp.responsible_name}
+                                  <UserRound size={8} /> RL: {emp.responsible_name}
                                 </span>
                               )
                             ) : (
@@ -218,7 +219,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                     <td className="py-4 px-4 text-center">
                       <div className="flex flex-col items-center gap-0.5">
                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">
-                          {emp.linkType}
+                          {emp.linkType || <span className="text-slate-300 font-normal">—</span>}
                         </span>
                         <RelationshipNatureBadge nature={emp.relationshipNature} />
                       </div>
