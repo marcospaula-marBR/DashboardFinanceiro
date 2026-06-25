@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import { Employee, getRemunerationLabel, getPBClassification } from "@/types/loans";
 import { Building2, UserRound, ArrowUpRight, ArrowDownRight, ArrowLeftRight, HelpCircle, Network, Users } from "lucide-react";
 import { isExternalEntity, PeopleClassificationBadge, RelationshipNatureBadge, PeopleHealthBadge } from "./PeopleBadges";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface PeopleEcosystemMapProps {
   employees: Employee[];
@@ -47,11 +48,7 @@ export function PeopleEcosystemMap({
   // Agrupamento por órbita (apenas Ativos por padrão na tela)
   const activeMembers = useMemo(() => employees.filter(e => e.status !== 'Inativo'), [employees]);
 
-  const strategic = useMemo(() => activeMembers.filter(e => getOrbit(e) === 'E'), [activeMembers]);
-  const tactical = useMemo(() => activeMembers.filter(e => getOrbit(e) === 'T'), [activeMembers]);
-  const operational = useMemo(() => activeMembers.filter(e => getOrbit(e) === 'O'), [activeMembers]);
-
-  // Função de relacionamento bidirecional
+  // Função de relacionamento bidirecional (movida para cima para poder ser usada na ordenação)
   const getConnectionType = (a: Employee, b: Employee): 'above' | 'below' | 'equivalent' | null => {
     if (a.id === b.id) return null;
 
@@ -75,6 +72,28 @@ export function PeopleEcosystemMap({
 
     return null;
   };
+
+  const sortEcosystem = (list: Employee[]) => {
+    if (!activeEmployee) return list;
+    return [...list].sort((a, b) => {
+      // 1º O elemento ativo em si sempre em primeiro
+      if (a.id === activeId) return -1;
+      if (b.id === activeId) return 1;
+      // 2º Quem está relacionado vem logo depois
+      const connA = getConnectionType(activeEmployee, a) !== null;
+      const connB = getConnectionType(activeEmployee, b) !== null;
+      if (connA && !connB) return -1;
+      if (!connA && connB) return 1;
+      // 3º Ordem alfabética
+      const nameA = (a.corporate_name || a.name || "").toLowerCase();
+      const nameB = (b.corporate_name || b.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  };
+
+  const strategic = useMemo(() => sortEcosystem(activeMembers.filter(e => getOrbit(e) === 'E')), [activeMembers, activeEmployee, activeId]);
+  const tactical = useMemo(() => sortEcosystem(activeMembers.filter(e => getOrbit(e) === 'T')), [activeMembers, activeEmployee, activeId]);
+  const operational = useMemo(() => sortEcosystem(activeMembers.filter(e => getOrbit(e) === 'O')), [activeMembers, activeEmployee, activeId]);
 
   // Tratar interação
   const handleMouseEnter = (id: string) => {
@@ -140,7 +159,12 @@ export function PeopleEcosystemMap({
     }
 
     return (
-      <div
+      <motion.div
+        layout
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 350, damping: 25 }}
         key={emp.id}
         onMouseEnter={() => handleMouseEnter(emp.id)}
         onMouseLeave={handleMouseLeave}
@@ -211,7 +235,7 @@ export function PeopleEcosystemMap({
             <span>••••••</span>
           )}
         </div>
-      </div>
+      </motion.div>
     );
   };
 
@@ -260,9 +284,11 @@ export function PeopleEcosystemMap({
         {strategic.length === 0 ? (
           <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {strategic.map(renderEcosystemCard)}
-          </div>
+          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <AnimatePresence mode="popLayout">
+              {strategic.map(renderEcosystemCard)}
+            </AnimatePresence>
+          </motion.div>
         )}
       </div>
 
@@ -281,9 +307,11 @@ export function PeopleEcosystemMap({
         {tactical.length === 0 ? (
           <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {tactical.map(renderEcosystemCard)}
-          </div>
+          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <AnimatePresence mode="popLayout">
+              {tactical.map(renderEcosystemCard)}
+            </AnimatePresence>
+          </motion.div>
         )}
       </div>
 
@@ -302,9 +330,11 @@ export function PeopleEcosystemMap({
         {operational.length === 0 ? (
           <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {operational.map(renderEcosystemCard)}
-          </div>
+          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <AnimatePresence mode="popLayout">
+              {operational.map(renderEcosystemCard)}
+            </AnimatePresence>
+          </motion.div>
         )}
       </div>
     </div>

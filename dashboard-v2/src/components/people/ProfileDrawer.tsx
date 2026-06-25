@@ -319,6 +319,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       
       const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode, !employeeId);
       
+      // Sincronização bidirecional de relacionamentos (Organograma)
+      if (profile.relationships !== undefined) {
+        // Envolvemos num try/catch para não quebrar o salvamento principal em caso de erro na sync
+        try {
+          await PeopleService.syncBidirectionalRelationships(saved.id, profile.relationships, isTestMode);
+        } catch (syncErr) {
+          console.error("Erro ao sincronizar vínculos bidirecionais:", syncErr);
+        }
+      }
+      
       // Se houver itens de histórico pendentes do merge, salvamos agora
       if (pendingHistoryItems.length > 0 && saved.id) {
         await Promise.all(

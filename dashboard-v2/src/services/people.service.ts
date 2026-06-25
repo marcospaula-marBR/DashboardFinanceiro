@@ -144,6 +144,69 @@ export class PeopleService {
   }
 
   /**
+   * Sincroniza automaticamente os relacionamentos bidirecionais (Organograma).
+   * A ser chamado sempre que uma ficha for salva com alterações nos vínculos.
+   */
+  static async syncBidirectionalRelationships(
+    sourceEmployeeId: string, 
+    newRelationships: PeopleRelationship[], 
+    isTestMode?: boolean
+  ): Promise<void> {
+    const table = isTestMode ? 'employees_test' : 'employees';
+    
+    // 1. Busca os relacionamentos antigos para comparar
+    const oldProfile = await this.getEmployeeProfile(sourceEmployeeId, isTestMode);
+    const oldRelationships = oldProfile?.relationships || [];
+
+    // 2. Identifica removidos
+    const removed = oldRelationships.filter(oldRel => 
+      !newRelationships.some(newRel => newRel.employee_id === oldRel.employee_id)
+    );
+
+    // 3. Identifica adicionados ou alterados (tipo de relação mudou)
+    const addedOrUpdated = newRelationships.filter(newRel => {
+      const oldRel = oldRelationships.find(r => r.employee_id === newRel.employee_id);
+      return !oldRel || oldRel.relation_type !== newRel.relation_type;
+    });
+
+    const getInverseRelation = (type: string | 'orientadora' | 'apoiada' | 'equivalent') => {
+      if (type === 'orientadora') return 'apoiada';
+      if (type === 'apoiada') return 'orientadora';
+      return 'equivalent';
+    };
+
+    // 4. Processa remoções: remove sourceEmployeeId da ficha do target
+    for (const rel of removed) {
+      if (!rel.employee_id) continue;
+      const targetProfile = await this.getEmployeeProfile(rel.employee_id, isTestMode);
+      if (targetProfile) {
+        const targetRels = targetProfile.relationships || [];
+        const newTargetRels = targetRels.filter(r => r.employee_id !== sourceEmployeeId);
+        
+        // Atualiza apenas a chave metadata
+        const metadata = mergePeopleMetadata(targetProfile.metadata || {}, { relationships: newTargetRels });
+        await supabase.from(table).update({ metadata }).eq('id', rel.employee_id);
+      }
+    }
+
+    // 5. Processa adições/atualizações: insere/atualiza sourceEmployeeId na ficha do target com a relação inversa
+    for (const rel of addedOrUpdated) {
+      if (!rel.employee_id) continue;
+      const targetProfile = await this.getEmployeeProfile(rel.employee_id, isTestMode);
+      if (targetProfile) {
+        let targetRels = targetProfile.relationships || [];
+        // Remove vínculo existente se houver (para evitar duplicatas em caso de update)
+        targetRels = targetRels.filter(r => r.employee_id !== sourceEmployeeId);
+        // Adiciona o inverso
+        targetRels.push({ employee_id: sourceEmployeeId, relation_type: getInverseRelation(rel.relation_type) });
+        
+        const metadata = mergePeopleMetadata(targetProfile.metadata || {}, { relationships: targetRels });
+        await supabase.from(table).update({ metadata }).eq('id', rel.employee_id);
+      }
+    }
+  }
+
+  /**
    * Atualização cirúrgica apenas da foto de perfil — não toca em nenhum outro campo.
    */
   static async updatePhotoUrl(employeeId: string, photoUrl: string, isTestMode?: boolean): Promise<void> {
