@@ -11,6 +11,7 @@ import { DreDetailsModal } from '@/components/dre/DreDetailsModal';
 import { SmartAlerts } from '@/components/dre/SmartAlerts';
 import { DreSimulatorV2 } from '@/components/dre/DreSimulatorV2';
 import { DreEquipmentsModal } from '@/components/dre/DreEquipmentsModal';
+import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
 import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
@@ -22,7 +23,7 @@ import { DreSimulatorEngine } from '@/services/dre-simulator.engine';
 import { DreExportModal, ExportSelections } from '@/components/dre/DreExportModal';
 import { DrePrintCharts } from '@/components/dre/DrePrintCharts';
 import { DreCustomCardModal } from '@/components/dre/DreCustomCardModal';
-import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles, Filter, ChevronLeft } from 'lucide-react';
+import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles, Filter, ChevronLeft, ClipboardEdit } from 'lucide-react';
 
 export default function DrePage() {
   const [isUploading, setIsUploading] = useState(false);
@@ -50,6 +51,7 @@ export default function DrePage() {
   const [showTable, setShowTable] = useState(false);
   const [equipamentoCounts, setEquipamentoCounts] = useState<Record<string, Record<string, number>>>({});
   const [isEquipmentsModalOpen, setIsEquipmentsModalOpen] = useState(false);
+  const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
   const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
   const [simParams, setSimParams] = useState<DreSimulationParams>({
     revenueMultiplier: 1.0,
@@ -616,6 +618,19 @@ export default function DrePage() {
               onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             />
 
+            {/* Botão de entrada manual — Conectius / Ybox / Histórico */}
+            <div className="flex justify-end mt-3 mb-1">
+              <button
+                id="btn-manual-entry-dre"
+                onClick={() => setIsManualEntryOpen(true)}
+                className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-amber-400 border border-slate-700 hover:border-amber-500/50 bg-slate-800/50 hover:bg-slate-800 px-3 py-2 rounded-lg transition-all duration-200"
+                title="Inserir dados manuais de Conectius, Ybox ou histórico fora do Omie"
+              >
+                <ClipboardEdit size={13} />
+                Dados Manuais
+              </button>
+            </div>
+
             <div className="space-y-8 mt-8">
               {/* Alertas Inteligentes */}
               <SmartAlerts alerts={alerts} />
@@ -724,6 +739,15 @@ export default function DrePage() {
         availableCategories={metadata?.categorias || []}
         selectedCategories={customCardCategories}
         onSave={setCustomCardCategories}
+      />
+
+      <DreManualEntryModal
+        isOpen={isManualEntryOpen}
+        onClose={() => setIsManualEntryOpen(false)}
+        onSaved={() => {
+          // Notificação silenciosa — dados foram salvos no Supabase
+          console.info('[DRE] Lançamento manual salvo. Recarregue o snapshot para incluir na DRE.');
+        }}
       />
 
       {/* Off-screen renderer for high-quality PDF charts */}
