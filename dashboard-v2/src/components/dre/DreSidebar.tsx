@@ -73,7 +73,7 @@ function MultiSelectDropdown({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-slate-850 border border-slate-700 rounded-xl shadow-2xl w-full min-w-[240px] max-h-[320px] overflow-hidden flex flex-col">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl w-full min-w-[240px] max-h-[320px] overflow-hidden flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-700 flex-shrink-0">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
@@ -337,7 +337,7 @@ export function DreSidebar({
         {onToggleSidebar && (
           <button 
             onClick={onToggleSidebar}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-850 hover:border-slate-700 text-slate-300 hover:text-white transition-all duration-200 active:scale-95 shadow-sm"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all duration-200 active:scale-95 shadow-sm"
             title="Recolher Filtros"
           >
             <ChevronLeft size={14} />
@@ -412,7 +412,7 @@ export function DreSidebar({
         </div>
 
         {rawData.length === 0 ? (
-          <div className="text-center py-8 px-4 bg-slate-950/20 rounded-xl border border-slate-850">
+          <div className="text-center py-8 px-4 bg-slate-950/20 rounded-xl border border-slate-800">
             <p className="text-xs text-slate-500">Envie um arquivo CSV para habilitar os filtros interativos.</p>
           </div>
         ) : (

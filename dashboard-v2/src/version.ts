@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.25";
+export const APP_VERSION = "v.02.48.26";
 export const VERSION_DATE = "2026-06-26";
 export const VERSION_CHANGELOG = [
+  "v.02.48.26 - Fix/UI: Corrige transparência e sobreposição de filtros no DreSidebar.tsx. A causa raiz era o uso do seletor bg-slate-850 que não existe no Tailwind CSS padrão, fazendo o dropdown herdar fundo transparente e sobrepor textualmente os outros filtros. Atualizado para bg-slate-950, um tom sólido opaco escuro, com borda e sombra acentuadas para maior contraste visual.",
+
   "v.02.48.25 - Feat/UI: Implementa melhoria nos filtros da barra lateral da DRE (DreSidebar.tsx). Substitui todas as listas de checkboxes estáticas por seletores dropdown compactos e elegantes (MultiSelectDropdown) com campo de busca interna por texto para listas extensas. Implementa também a Hierarquia Temporal (seleção de Ano de Referência primeiro, e dropdown de seleção múltipla de Mês contendo apenas os meses filtrados por aquele ano), reduzindo a poluição visual na barra lateral.",
 
   "v.02.48.24 - Fix/DRE+Feat/UI: Corrige duplicação de valores no DRE após uso do simulador. A causa raiz era o activeScenario não ser resetado ao recarregar dados do banco (loadLatestSnapshotFromDb), fazendo o motor de simulação aplicar premissas antigas sobre novos dados. A correção adiciona setActiveScenario(null) no início do carregamento. Também corrige null safety em fileName?.includes(). Melhora o modal 'Dados Manuais' com filtros avançados na tabela de lançamentos: filtro por Ano (hierárquico), multi-select para Empresa, Mês e Categoria com checkbox, campo de busca por texto, e seletor de Período no formulário dividido em Ano+Mês para facilitar a seleção em listas extensas.",
