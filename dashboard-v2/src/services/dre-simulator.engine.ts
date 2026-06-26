@@ -117,6 +117,7 @@ export class DreSimulatorEngine {
     // Agrupar linhas por conta DRE e departamento para facilitar cálculos granulares
     const baselineMensal: Record<string, Record<string, number>> = {}; // groupKey -> month -> value
     const rowDetails: DreRow[] = [];
+    const rowMap = new Map<string, DreRow>();
 
     df.forEach(row => {
       let cat = row.ContaDRE;
@@ -128,7 +129,9 @@ export class DreSimulatorEngine {
       const groupKey = `${row.Empresa}|${row.Departamento}|${cat}|${row.Projeto || 'Sem Projeto'}`;
       if (!baselineMensal[groupKey]) {
         baselineMensal[groupKey] = {};
-        rowDetails.push({ ...row, Categoria: cat } as any); // Normalizado
+        const normalizedRow = { ...row, Categoria: cat } as any;
+        rowDetails.push(normalizedRow);
+        rowMap.set(groupKey, normalizedRow);
       }
 
       validColumns.forEach(col => {
@@ -342,6 +345,17 @@ export class DreSimulatorEngine {
 
         catTotals[cat] += val;
         catMonthly[cat][col] += val;
+
+        if (val !== 0) {
+          const baseRow = rowMap.get(groupKey);
+          if (baseRow) {
+            const rowCopy = {
+              ...baseRow,
+              [col]: val
+            };
+            catSourceRows[cat][col].push(rowCopy);
+          }
+        }
       });
     });
 
@@ -371,13 +385,17 @@ export class DreSimulatorEngine {
         sourceRows[item.titulo] = {};
         validColumns.forEach(col => {
           let mesTotal = 0;
+          let rowsForMonth: DreRow[] = [];
           if (!isExcludedShared) {
             item.categorias?.forEach(cat => {
               mesTotal += getCatMonthly(cat, col);
+              if (catSourceRows[cat] && catSourceRows[cat][col]) {
+                rowsForMonth.push(...catSourceRows[cat][col]);
+              }
             });
           }
           valoresMensal[item.titulo][col] = mesTotal;
-          sourceRows[item.titulo][col] = []; // Para manter compatibilidade
+          sourceRows[item.titulo][col] = rowsForMonth;
         });
       } else if (item.tipo === 'linha_calc' && item.formula === 'servicos_menos_consorcios') {
         valoresTotal[item.titulo] = servicosBaseTotal >= consorciosTotal ? servicosBaseTotal - consorciosTotal : 0;
@@ -388,7 +406,13 @@ export class DreSimulatorEngine {
           const s = getCatMonthly('Serviços', col);
           const c = getCatMonthly('Consórcios - a contemplar', col);
           valoresMensal[item.titulo][col] = s >= c ? s - c : 0;
-          sourceRows[item.titulo][col] = [];
+          
+          let rowsForMonth: DreRow[] = [];
+          if (s >= c) {
+            if (catSourceRows['Serviços'] && catSourceRows['Serviços'][col]) rowsForMonth.push(...catSourceRows['Serviços'][col]);
+            if (catSourceRows['Consórcios - a contemplar'] && catSourceRows['Consórcios - a contemplar'][col]) rowsForMonth.push(...catSourceRows['Consórcios - a contemplar'][col]);
+          }
+          sourceRows[item.titulo][col] = rowsForMonth;
         });
       }
     });
@@ -455,22 +479,52 @@ export class DreSimulatorEngine {
     valoresMensal["FCL s/ Receita Operacional"] = {};
     valoresMensal["Equipamentos"] = {};
 
+    sourceRows["Total Entradas Operacionais"] = {};
+    sourceRows["Outras Entradas"] = {};
+    sourceRows["Total de Impostos"] = {};
+    sourceRows["Total Custos Operacionais"] = {};
+    sourceRows["Total Despesas Rateadas"] = {};
+    sourceRows["Total Investimentos"] = {};
+    sourceRows["Total Saídas"] = {};
+    sourceRows["Lucro antes do FCL"] = {};
+    sourceRows["Fluxo de Caixa Livre FCL"] = {};
+    sourceRows["Equipamentos"] = {};
+
+    const getSourceRowsMensal = (key: string, col: string) => {
+      return (sourceRows[key] && sourceRows[key][col]) ? sourceRows[key][col] : [];
+    };
+    const getCatSourceRowsSafe = (cat: string, col: string) => {
+      const key = Object.keys(catSourceRows).find(k => k.trim().toLowerCase() === cat.trim().toLowerCase());
+      return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
+    };
+
     validColumns.forEach(col => {
       const recOp = getValMensal("Receita Bruta de Vendas", col);
       const recInd = getValMensal("Receitas Indiretas", col);
       const totEnt = recOp + recInd;
       valoresMensal["Total Entradas Operacionais"][col] = totEnt;
+      sourceRows["Total Entradas Operacionais"][col] = [...getSourceRowsMensal("Receita Bruta de Vendas", col), ...getSourceRowsMensal("Receitas Indiretas", col)];
 
       const outrasEnt = getValMensal("Outras Receitas", col) + getValMensal("Receitas Financeiras", col) + getValMensal("Honorários", col) + getValMensal("Juros e Devoluções", col) + getValMensal("Recuperação de Despesas Variáveis", col);
       valoresMensal["Outras Entradas"][col] = outrasEnt;
+      sourceRows["Outras Entradas"][col] = [
+        ...getSourceRowsMensal("Outras Receitas", col), ...getSourceRowsMensal("Receitas Financeiras", col),
+        ...getSourceRowsMensal("Honorários", col), ...getSourceRowsMensal("Juros e Devoluções", col), ...getSourceRowsMensal("Recuperação de Despesas Variáveis", col)
+      ];
 
       const totImp = getValMensal("Impostos", col) + getValMensal("Provisão IRPJ e CSSL Trimestral", col);
       valoresMensal["Total de Impostos"][col] = totImp;
+      sourceRows["Total de Impostos"][col] = [...getSourceRowsMensal("Impostos", col), ...getSourceRowsMensal("Provisão IRPJ e CSSL Trimestral", col)];
 
       const totCust = getCatMonthly("Credenciado Operacional", col) + getCatMonthly("Adiantamento - Credenciado Operacional", col) +
         getValMensal("Terceirização de Mão de Obra", col) + getValMensal("CLTs", col) + getValMensal("Custo dos Serviços Prestados", col) +
         getValMensal("Preventiva - B2G", col) + getValMensal("Corretiva - B2G", col) + getValMensal("Outros Custos", col);
       valoresMensal["Total Custos Operacionais"][col] = totCust;
+      sourceRows["Total Custos Operacionais"][col] = [
+        ...getCatSourceRowsSafe("Credenciado Operacional", col), ...getCatSourceRowsSafe("Adiantamento - Credenciado Operacional", col),
+        ...getSourceRowsMensal("Terceirização de Mão de Obra", col), ...getSourceRowsMensal("CLTs", col), ...getSourceRowsMensal("Custo dos Serviços Prestados", col),
+        ...getSourceRowsMensal("Preventiva - B2G", col), ...getSourceRowsMensal("Corretiva - B2G", col), ...getSourceRowsMensal("Outros Custos", col)
+      ];
 
       const totDesp = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses)
         ? 0
@@ -479,23 +533,52 @@ export class DreSimulatorEngine {
            getValMensal("Outros Tributos", col) + getValMensal("Despesas Eventuais", col) + getValMensal("Despesas Variáveis", col) + getValMensal("Intermediação de Negócios", col) +
            getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col));
       valoresMensal["Total Despesas Rateadas"][col] = totDesp;
+      sourceRows["Total Despesas Rateadas"][col] = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses)
+        ? []
+        : [
+            ...getSourceRowsMensal("Credenciado Administrativo", col), ...getSourceRowsMensal("Credenciado TI", col),
+            ...getSourceRowsMensal("Despesas Administrativas", col), ...getSourceRowsMensal("Despesas de Vendas e Marketing", col), ...getSourceRowsMensal("Despesas Financeiras", col),
+            ...getSourceRowsMensal("Outros Tributos", col), ...getSourceRowsMensal("Despesas Eventuais", col), ...getSourceRowsMensal("Despesas Variáveis", col), ...getSourceRowsMensal("Intermediação de Negócios", col),
+            ...getCatSourceRowsSafe("Distribuição de Dividendos", col), ...getCatSourceRowsSafe("Dividendos", col)
+          ];
 
       const totInv = getCatMonthly("Consórcios - a contemplar", col) + getValMensal("Serviços", col) + getCatMonthly("Ativos", col);
       valoresMensal["Total Investimentos"][col] = totInv;
+      sourceRows["Total Investimentos"][col] = [
+        ...getCatSourceRowsSafe("Consórcios - a contemplar", col), ...getSourceRowsMensal("Serviços", col), ...getCatSourceRowsSafe("Ativos", col)
+      ];
 
       const totSai = totImp + totCust + totDesp + totInv;
       valoresMensal["Total Saídas"][col] = totSai;
+      sourceRows["Total Saídas"][col] = [
+        ...sourceRows["Total de Impostos"][col],
+        ...sourceRows["Total Custos Operacionais"][col],
+        ...sourceRows["Total Despesas Rateadas"][col],
+        ...sourceRows["Total Investimentos"][col]
+      ];
 
       const resCol = totEnt - totImp - totCust - totDesp;
       const fclCol = totEnt + outrasEnt - totSai;
 
       valoresMensal["Lucro antes do FCL"][col] = resCol;
+      sourceRows["Lucro antes do FCL"][col] = [
+        ...sourceRows["Total Entradas Operacionais"][col],
+        ...sourceRows["Outras Entradas"][col],
+        ...sourceRows["Total Saídas"][col]
+      ];
+
       valoresMensal["Fluxo de Caixa Livre FCL"][col] = fclCol;
+      sourceRows["Fluxo de Caixa Livre FCL"][col] = [
+        ...sourceRows["Total Entradas Operacionais"][col],
+        ...sourceRows["Outras Entradas"][col],
+        ...sourceRows["Total Saídas"][col]
+      ];
 
       valoresMensal["Lucro s/ Receita Operacional"][col] = totEnt !== 0 ? (resCol / totEnt * 100) : 0;
       valoresMensal["FCL s/ Receita Operacional"][col] = totEnt !== 0 ? (fclCol / totEnt * 100) : 0;
       
       valoresMensal["Equipamentos"][col] = getCatMonthly("Equipamentos", col);
+      sourceRows["Equipamentos"][col] = getCatSourceRowsSafe("Equipamentos", col);
     });
 
     const activeMachinesList = validColumns.map(col => {
@@ -518,7 +601,7 @@ export class DreSimulatorEngine {
       mensal: valoresMensal,
       estrutura: estrutura,
       validColumns,
-      sourceRows: {}, // Esvazia para economizar payload
+      sourceRows,
       kpis: {
         receitaOperacional,
         receitaIndireta,
