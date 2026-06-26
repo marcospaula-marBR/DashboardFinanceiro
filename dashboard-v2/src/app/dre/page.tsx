@@ -129,6 +129,9 @@ export default function DrePage() {
   // Função para carregar do banco de dados remoto (nova tabela dre_lancamentos)
   const loadLatestSnapshotFromDb = async () => {
     setIsUploading(true);
+    // Resetar cenário simulado ao recarregar dados — evita que premissas antigas
+    // do simulador sejam aplicadas sobre novos dados, causando valores duplicados.
+    setActiveScenario(null);
     try {
       const { rows, error } = await DreLancamentosService.fetchAllForDashboard();
 
@@ -650,7 +653,7 @@ export default function DrePage() {
               isPrivacyMode={isPrivacyMode}
               onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
               onOpenEquipmentsManager={() => setIsEquipmentsModalOpen(true)}
-              hasData={rawData.length > 0}
+              hasData={rawData.length > 0 && !(fileName ?? '').includes('Banco de Dados Nuvem')}
               isPublishing={isPublishing}
               onPublish={handlePublishSnapshot}
               isSidebarCollapsed={isSidebarCollapsed}
