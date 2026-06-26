@@ -84,8 +84,11 @@ export const DEPARTAMENTOS_MAP: Record<string, string> = {
 };
 
 export const PROJETOS_MAP: Record<string, string> = {
-  "Bertioga Seduc 378/2024 (Inativo)": "Bertioga Seduc 378/2024",
-  "Bertioga Seduc 378/2024": "Bertioga Seduc 378/2024",
+  "Bertioga Seduc 378/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
+  "Bertioga Seduc 378/2024 54/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
+  "Bertioga Seduc 378/2024": "Bertioga Seduc 378/2024 54/2024",
+  "Bertioga SEDUC 378/2024 54/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
+  "Bertioga Seduc 378/2024 54/2024": "Bertioga Seduc 378/2024 54/2024",
   "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024",
   "Bertioga Sesap 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024"
 };
