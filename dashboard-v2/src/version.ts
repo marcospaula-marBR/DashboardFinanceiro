@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.29";
+export const APP_VERSION = "v.02.48.30";
 export const VERSION_DATE = "2026-06-26";
 export const VERSION_CHANGELOG = [
+  "v.02.48.30 - Fix/Fluxo-Caixa: Corrige o problema onde a busca por lançamentos da Mar Brasil (e DZM/Ambas) retornava apenas dados com data de alteração correspondente ao dia de hoje (HOJE). A rota /api/omie/fluxo-caixa foi re-arquitetada para consultar a tabela consolidada 'omie_financas_unificado' do Supabase usando filtros SQL eficientes por vencimento/pagamento e realizando filtragem estrita por data de alocação em memória. Adiciona sincronização assíncrona leve em segundo plano (background sync) para capturar alterações dos últimos 7 dias na Omie a cada requisição. Corrige bug de filtragem de departamentos no frontend mapeando departamento_name para departamento_nome.",
+
   "v.02.48.29 - Fix/Fluxo-Caixa: Corrige resolução de nomes de Categorias, Projetos e Clientes/Fornecedores no Fluxo de Caixa carregando as dimensões correspondentes diretamente do Supabase e associando-as em memória por Empresa+Código. Corrige vazamento de lançamentos fora do horizonte de datas aplicando filtragem estrita de data de alocação (pagamento para realizados, vencimento para previstos) no backend antes de retornar a resposta ao frontend.",
 
   "v.02.48.28 - Feat/Fluxo-Caixa: Transforma a página de Lançamentos em um painel de Fluxo de Caixa em tempo real integrado às APIs do Omie. Elimina o banco de dados (Supabase) do fluxo, realizando consultas em paralelo e consolidando os lançamentos (CP, CR e MOV) in memória. Adota a data de vencimento (para abertos) e pagamento (para realizados) como regra unificada de alocação no tempo, resolvendo a inconsistência da data de competência/registro. Adiciona tela inicial de seleção de horizonte (semana, 15d, 30d, personalizado), KPIs de resultado (sem saldo inicial), gráfico interativo e simulação em tempo real local (checkboxes reativos).",

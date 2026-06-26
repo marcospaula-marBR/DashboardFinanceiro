@@ -142,7 +142,7 @@ export default function FluxoCaixaPage() {
 
     // 5. Departamento
     if (activeFilters.departamento !== "TODOS") {
-      result = result.filter(item => item.departamento_name === activeFilters.departamento);
+      result = result.filter(item => item.departamento_nome === activeFilters.departamento);
     }
 
     // 6. Busca
@@ -188,7 +188,7 @@ export default function FluxoCaixaPage() {
     return {
       categorias: Array.from(new Set(allRecords.map(r => r.categoria_nome).filter(Boolean))).sort() as string[],
       projetos: Array.from(new Set(allRecords.map(r => r.projeto_nome).filter(Boolean))).sort() as string[],
-      departamentos: Array.from(new Set(allRecords.map(r => r.departamento_name).filter(Boolean))).sort() as string[]
+      departamentos: Array.from(new Set(allRecords.map(r => r.departamento_nome).filter(Boolean))).sort() as string[]
     };
   }, [allRecords]);
 
