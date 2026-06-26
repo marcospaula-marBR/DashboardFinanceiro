@@ -89,6 +89,17 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
     setForm(prev => ({ ...prev, categoria: '' }));
   }, [form.conta_dre]);
 
+  // ── Registros filtrados para a tabela ─────────────────────────────────────
+  const filteredRecords = useMemo(() => {
+    if (filterEmpresa === 'Todos') return records;
+    return records.filter(r => r.empresa === filterEmpresa);
+  }, [records, filterEmpresa]);
+
+  const empresasNaTabela = useMemo(() => {
+    const all = Array.from(new Set(records.map(r => r.empresa))).sort();
+    return ['Todos', ...all];
+  }, [records]);
+
   if (!isOpen) return null;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -150,16 +161,6 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
     }
   };
 
-  // ── Registros filtrados para a tabela ─────────────────────────────────────
-  const filteredRecords = useMemo(() => {
-    if (filterEmpresa === 'Todos') return records;
-    return records.filter(r => r.empresa === filterEmpresa);
-  }, [records, filterEmpresa]);
-
-  const empresasNaTabela = useMemo(() => {
-    const all = Array.from(new Set(records.map(r => r.empresa))).sort();
-    return ['Todos', ...all];
-  }, [records]);
 
   // ── Formatação de valor ──────────────────────────────────────────────────
   const fmt = (v: any) => {
