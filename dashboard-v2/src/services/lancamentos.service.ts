@@ -270,6 +270,22 @@ export class LancamentosService {
       dimDRE 
     };
   }
+
+  static async getFluxoCaixaRealTime(startDate: string, endDate: string, company: string): Promise<any[]> {
+    const response = await fetch('/api/omie/fluxo-caixa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startDate, endDate, company })
+    });
+    
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.message || 'Erro ao carregar dados do Fluxo de Caixa.');
+    }
+    
+    const res = await response.json();
+    return res.data;
+  }
 }
 
 
