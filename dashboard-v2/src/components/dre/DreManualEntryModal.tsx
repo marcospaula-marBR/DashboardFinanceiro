@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Plus, Trash2, Loader2, AlertCircle, CheckCircle2,
-  Building2, CalendarDays, DollarSign, FileText, RefreshCw
+  Building2, CalendarDays, DollarSign, FileText, RefreshCw, Pencil
 } from 'lucide-react';
 import {
   DreLancamentosService,
@@ -51,6 +51,7 @@ const EMPTY_FORM: DreManualEntryForm = {
 export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntryModalProps) {
   const [form, setForm] = useState<DreManualEntryForm>(EMPTY_FORM);
   const [records, setRecords] = useState<DreLancamento[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -79,15 +80,13 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
   useEffect(() => {
     if (isOpen) {
       setForm(EMPTY_FORM);
+      setEditingId(null);
       setFeedback(null);
       loadRecords();
     }
   }, [isOpen]);
 
-  // Reset categoria quando Conta DRE muda
-  useEffect(() => {
-    setForm(prev => ({ ...prev, categoria: '' }));
-  }, [form.conta_dre]);
+
 
   // ── Registros filtrados para a tabela ─────────────────────────────────────
   const filteredRecords = useMemo(() => {
@@ -107,10 +106,16 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setForm(prev => ({
-      ...prev,
-      [name]: name === 'valor' ? parseFloat(value) || 0 : value,
-    }));
+    setForm(prev => {
+      const updated = {
+        ...prev,
+        [name]: name === 'valor' ? parseFloat(value) || 0 : value,
+      };
+      if (name === 'conta_dre') {
+        updated.categoria = '';
+      }
+      return updated;
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -128,17 +133,35 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
 
     setIsSaving(true);
     try {
-      const { error } = await DreLancamentosService.insertManualRow(form);
-      if (error) {
-        setFeedback({ type: 'error', message: `Erro ao salvar: ${error}` });
+      if (editingId) {
+        // Modo Edição
+        const { error } = await DreLancamentosService.updateManualRow(editingId, form);
+        if (error) {
+          setFeedback({ type: 'error', message: `Erro ao atualizar: ${error}` });
+        } else {
+          setFeedback({
+            type: 'success',
+            message: `Lançamento de ${form.empresa} em ${form.periodo} atualizado com sucesso!`,
+          });
+          setForm(EMPTY_FORM);
+          setEditingId(null);
+          await loadRecords();
+          onSaved?.();
+        }
       } else {
-        setFeedback({
-          type: 'success',
-          message: `Lançamento de ${form.empresa} em ${form.periodo} salvo com sucesso!`,
-        });
-        setForm(prev => ({ ...prev, valor: 0, periodo: '' }));
-        await loadRecords();
-        onSaved?.();
+        // Modo Inserção
+        const { error } = await DreLancamentosService.insertManualRow(form);
+        if (error) {
+          setFeedback({ type: 'error', message: `Erro ao salvar: ${error}` });
+        } else {
+          setFeedback({
+            type: 'success',
+            message: `Lançamento de ${form.empresa} em ${form.periodo} salvo com sucesso!`,
+          });
+          setForm(prev => ({ ...prev, valor: 0, periodo: '' }));
+          await loadRecords();
+          onSaved?.();
+        }
       }
     } finally {
       setIsSaving(false);
@@ -203,10 +226,22 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
         {/* ── Corpo ── */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* Formulário de inserção */}
+           {/* Formulário de inserção / edição */}
           <form onSubmit={handleSave} className="p-6 border-b border-slate-700/50">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
-              Novo Lançamento
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+              <span>{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</span>
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId(null);
+                    setForm(EMPTY_FORM);
+                  }}
+                  className="text-[10px] text-amber-500 hover:underline hover:text-amber-400 font-semibold"
+                >
+                  Cancelar Edição
+                </button>
+              )}
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -337,15 +372,30 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
               </div>
             )}
 
-            {/* Botão salvar */}
-            <div className="mt-4 flex justify-end">
+            {/* Botão salvar / atualizar */}
+            <div className="mt-4 flex justify-end gap-2">
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId(null);
+                    setForm(EMPTY_FORM);
+                  }}
+                  disabled={isSaving}
+                  className="border border-slate-600 hover:border-slate-500 text-slate-300 font-bold text-sm px-5 py-2.5 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={isSaving}
                 className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-bold text-sm px-5 py-2.5 rounded-lg transition-colors"
               >
                 {isSaving
-                  ? <><Loader2 size={14} className="animate-spin" /> Salvando...</>
+                  ? <><Loader2 size={14} className="animate-spin" /> {editingId ? 'Atualizando...' : 'Salvando...'}</>
+                  : editingId
+                  ? <><CheckCircle2 size={14} /> Atualizar Lançamento</>
                   : <><Plus size={14} /> Salvar Lançamento</>
                 }
               </button>
@@ -446,8 +496,34 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
                           <td className="px-3 py-2.5 text-right font-semibold text-emerald-400 font-mono">
                             {fmt(valor)}
                           </td>
-                          <td className="px-3 py-2.5 text-center">
+                          <td className="px-3 py-2.5 text-center flex items-center justify-center gap-1.5">
                             <button
+                              type="button"
+                              onClick={() => {
+                                if (rec.id) {
+                                  setEditingId(rec.id);
+                                  setForm({
+                                    empresa: rec.empresa,
+                                    departamento: rec.departamento || '',
+                                    conta_dre: rec.conta_dre,
+                                    projeto: rec.projeto || 'N/D',
+                                    categoria: rec.categoria,
+                                    periodo: rec.periodo,
+                                    valor: rec.valor,
+                                  });
+                                  const modalBody = document.querySelector('.overflow-y-auto');
+                                  if (modalBody) {
+                                    modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+                                  }
+                                }
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-amber-400 p-1 rounded"
+                              title="Editar lançamento"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => rec.id && handleDelete(rec.id)}
                               disabled={isDeleting === rec.id}
                               className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-red-400 p-1 rounded"

@@ -311,6 +311,40 @@ export class DreLancamentosService {
   }
 
   /**
+   * Atualiza um lançamento manual existente pelo ID.
+   * Retorna { data, error }.
+   */
+  static async updateManualRow(
+    id: string,
+    form: DreManualEntryForm
+  ): Promise<{ data: DreLancamento | null; error: string | null }> {
+    const record: Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'> = {
+      empresa:      form.empresa.trim(),
+      departamento: form.departamento.trim(),
+      conta_dre:    form.conta_dre.trim(),
+      projeto:      form.projeto.trim() || 'N/D',
+      categoria:    form.categoria.trim(),
+      periodo:      form.periodo.trim(),
+      valor:        Math.abs(form.valor),
+      fonte:        'manual',
+    };
+
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update(record)
+      .eq('id', id)
+      .eq('fonte', 'manual')
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DreLancamentosService] updateManual error:', error);
+      return { data: null, error: error.message };
+    }
+    return { data: data as DreLancamento, error: null };
+  }
+
+  /**
    * Remove um lançamento manual pelo ID.
    */
   static async deleteManualRow(id: string): Promise<{ error: string | null }> {
