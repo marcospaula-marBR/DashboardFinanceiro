@@ -254,19 +254,20 @@ export function DreCharts({ results, isPrivacyMode }: DreChartsProps) {
         {activeTab === 'radar' && (
           <div>
             <p className="text-xs text-slate-400 mb-4">Proporção de cada componente sobre o Total de Entradas Operacionais (%)</p>
-            <div className="h-72 w-full">
+            <div className="h-[360px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData} margin={{ top: 10, right: 40, left: 40, bottom: 10 }}>
-                  <PolarGrid stroke="#e2e8f0" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData} margin={{ top: 10, right: 40, left: 40, bottom: 10 }}>
+                  <PolarGrid stroke="#cbd5e1" strokeWidth={0.7} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#334155', fontSize: 11, fontWeight: 700 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 9 }} tickFormatter={v => `${v}%`} />
                   <Radar
                     name="% sobre Receita"
                     dataKey="value"
                     stroke={PALETTE.fcl}
                     fill={PALETTE.fcl}
-                    fillOpacity={0.15}
-                    strokeWidth={2}
+                    fillOpacity={0.25}
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#ffffff', stroke: PALETTE.fcl, strokeWidth: 2 }}
                   />
                   <Tooltip formatter={(v: any) => [`${v}%`, '% sobre Receita']} contentStyle={tooltipStyle} />
                 </RadarChart>

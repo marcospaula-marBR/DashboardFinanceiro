@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.26";
+export const APP_VERSION = "v.02.48.27";
 export const VERSION_DATE = "2026-06-26";
 export const VERSION_CHANGELOG = [
+  "v.02.48.27 - Style/Charts: Melhora a legibilidade do gráfico de radar (DreCharts.tsx) aumentando a altura do canvas para h-[360px] (90px adicionais) e definindo outerRadius de 80%. Aplica rótulos mais contrastantes em bold, preenchimento com 25% de opacidade, linha de borda mais espessa e marcadores de ponto (dots) de alta definição.",
+
   "v.02.48.26 - Fix/UI: Corrige transparência e sobreposição de filtros no DreSidebar.tsx. A causa raiz era o uso do seletor bg-slate-850 que não existe no Tailwind CSS padrão, fazendo o dropdown herdar fundo transparente e sobrepor textualmente os outros filtros. Atualizado para bg-slate-950, um tom sólido opaco escuro, com borda e sombra acentuadas para maior contraste visual.",
 
   "v.02.48.25 - Feat/UI: Implementa melhoria nos filtros da barra lateral da DRE (DreSidebar.tsx). Substitui todas as listas de checkboxes estáticas por seletores dropdown compactos e elegantes (MultiSelectDropdown) com campo de busca interna por texto para listas extensas. Implementa também a Hierarquia Temporal (seleção de Ano de Referência primeiro, e dropdown de seleção múltipla de Mês contendo apenas os meses filtrados por aquele ano), reduzindo a poluição visual na barra lateral.",
