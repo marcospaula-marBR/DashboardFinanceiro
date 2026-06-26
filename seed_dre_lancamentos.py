@@ -75,6 +75,43 @@ def normalize_empresa(raw: str) -> str:
     return s
 
 
+DEPARTAMENTOS_MAP = {
+    "Capina Eltrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+    "Capina Eletrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+    "DZM - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
+    "DZM - Terceirizao": "DZM - Terceirização",
+    "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
+}
+
+PROJETOS_MAP = {
+    "Bertioga Seduc 378/2024 (Inativo)": "Bertioga Seduc 378/2024",
+    "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024"
+}
+
+CATEGORIAS_MAP = {
+    "Cursos e treinamentos (inativo)": "Cursos e treinamentos",
+    "Honorários Jurídico": "Honorários advocatícios",
+    "Manutenção de Veículos": "Manutenção de veículos",
+    "Pedágio": "Pedágio e/ou Cobrança automática (TAG)",
+    "Pedágio / TAG": "Pedágio e/ou Cobrança automática (TAG)",
+    "Pedágio e/ou Cobrança automática (TAG)": "Pedágio e/ou Cobrança automática (TAG)",
+    "Telefonia Móvel e/ou Fixa": "Telefonia móvel e/ou fixa",
+    "Táxi e/ou Aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
+}
+
+def normalize_departamento(raw: str) -> str:
+    s = str(raw).strip()
+    return DEPARTAMENTOS_MAP.get(s, s)
+
+def normalize_projeto(raw: str) -> str:
+    s = str(raw).strip()
+    return PROJETOS_MAP.get(s, s)
+
+def normalize_categoria(raw: str) -> str:
+    s = str(raw).strip()
+    return CATEGORIAS_MAP.get(s, s)
+
+
 def clean_valor(raw) -> float:
     """Converte valor string para float, retornando 0 em caso de vazio."""
     try:
@@ -185,9 +222,9 @@ def seed_manual(dry_run: bool = False) -> int:
 
                 for row in reader:
                     empresa     = normalize_empresa(row.get("Empresa", ""))
-                    departamento = str(row.get("Departamento", "") or "").strip()
+                    departamento = normalize_departamento(row.get("Departamento", ""))
                     conta_dre   = str(row.get("Conta DRE", "") or "").strip()
-                    categoria   = str(row.get("Categoria", "") or "").strip()
+                    categoria   = normalize_categoria(row.get("Categoria", ""))
 
                     if not empresa or not categoria:
                         skipped += 1
@@ -267,10 +304,10 @@ def seed_omie(dry_run: bool = False) -> int:
                         linhas_ignoradas += 1
                         continue
 
-                    departamento = str(row.get("Departamento") or "").strip()
+                    departamento = normalize_departamento(row.get("Departamento", ""))
                     conta_dre    = str(row.get("Conta do DRE") or "").strip()
-                    projeto      = str(row.get("Projeto") or "").strip() or "N/D"
-                    categoria    = str(row.get("Categoria") or "").strip()
+                    projeto      = normalize_projeto(row.get("Projeto", "")) or "N/D"
+                    categoria    = normalize_categoria(row.get("Categoria", ""))
 
                     if not categoria:
                         linhas_ignoradas += 1

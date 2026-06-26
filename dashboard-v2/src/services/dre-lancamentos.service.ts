@@ -86,7 +86,7 @@ export const CATEGORIAS_MANUAL: Record<string, string[]> = {
   'Despesas Variáveis':                 ['Despesas Variáveis'],
   'Despesas com Pessoal':               ['Despesas com Pessoal'],
   'Distribuição Lucro':                 ['Distribuição Lucro'],
-  'Honorários':                         ['Honorários Jurídico'],
+  'Honorários':                         ['Honorários advocatícios'],
   'Impostos':                           ['Impostos', 'Provisão - IRPJ e CSSL Trimestral'],
   'Juros e devoluções':                 ['Juros e devoluções'],
   'Outras Receitas':                    ['Outras Receitas'],

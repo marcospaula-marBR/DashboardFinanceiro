@@ -67,6 +67,30 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
 const normalizeMes = (mes: string) => mes.trim().charAt(0).toUpperCase() + mes.trim().slice(1).toLowerCase();
 const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
 
+const DEPARTAMENTOS_MAP: Record<string, string> = {
+  "Capina Eltrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "Capina Eletrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "DZM - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
+  "DZM - Terceirizao": "DZM - Terceirização",
+  "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
+};
+
+const PROJETOS_MAP: Record<string, string> = {
+  "Bertioga Seduc 378/2024 (Inativo)": "Bertioga Seduc 378/2024",
+  "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024"
+};
+
+const CATEGORIAS_MAP: Record<string, string> = {
+  "Cursos e treinamentos (inativo)": "Cursos e treinamentos",
+  "Honorários Jurídico": "Honorários advocatícios",
+  "Manutenção de Veículos": "Manutenção de veículos",
+  "Pedágio": "Pedágio e/ou Cobrança automática (TAG)",
+  "Pedágio / TAG": "Pedágio e/ou Cobrança automática (TAG)",
+  "Pedágio e/ou Cobrança automática (TAG)": "Pedágio e/ou Cobrança automática (TAG)",
+  "Telefonia Móvel e/ou Fixa": "Telefonia móvel e/ou fixa",
+  "Táxi e/ou Aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
+};
+
 export class DreService {
   /**
    * LAYER 1: PARSING
@@ -332,10 +356,19 @@ export class DreService {
 
     data.forEach(row => {
       row['Empresa'] = row['Empresa'] ? row['Empresa'].toString().trim() : 'Geral';
-      row['Departamento'] = toTitleCase(row['Departamento'].toString().trim());
+      
+      const rawDept = row['Departamento'] ? row['Departamento'].toString().trim() : 'Sem Departamento';
+      const mappedDept = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
+      row['Departamento'] = toTitleCase(mappedDept);
+      
       row['ContaDRE'] = row['ContaDRE'].toString().trim().replace(/^\d+\.\s*/, '');
-      row['Projeto'] = toTitleCase(row['Projeto'].toString().trim());
-      row['Categoria'] = row['Categoria'].toString().trim();
+      
+      const rawProj = row['Projeto'] ? row['Projeto'].toString().trim() : 'Sem Projeto';
+      const mappedProj = PROJETOS_MAP[rawProj] || PROJETOS_MAP[toTitleCase(rawProj)] || rawProj;
+      row['Projeto'] = toTitleCase(mappedProj);
+      
+      const rawCat = row['Categoria'] ? row['Categoria'].toString().trim() : 'Sem Categoria';
+      row['Categoria'] = CATEGORIAS_MAP[rawCat] || rawCat;
     });
 
     // Coleta todas as chaves de meses únicas existentes em todas as linhas da tabela
