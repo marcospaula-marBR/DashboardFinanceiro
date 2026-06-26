@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.24";
+export const APP_VERSION = "v.02.48.25";
 export const VERSION_DATE = "2026-06-26";
 export const VERSION_CHANGELOG = [
+  "v.02.48.25 - Feat/UI: Implementa melhoria nos filtros da barra lateral da DRE (DreSidebar.tsx). Substitui todas as listas de checkboxes estáticas por seletores dropdown compactos e elegantes (MultiSelectDropdown) com campo de busca interna por texto para listas extensas. Implementa também a Hierarquia Temporal (seleção de Ano de Referência primeiro, e dropdown de seleção múltipla de Mês contendo apenas os meses filtrados por aquele ano), reduzindo a poluição visual na barra lateral.",
+
   "v.02.48.24 - Fix/DRE+Feat/UI: Corrige duplicação de valores no DRE após uso do simulador. A causa raiz era o activeScenario não ser resetado ao recarregar dados do banco (loadLatestSnapshotFromDb), fazendo o motor de simulação aplicar premissas antigas sobre novos dados. A correção adiciona setActiveScenario(null) no início do carregamento. Também corrige null safety em fileName?.includes(). Melhora o modal 'Dados Manuais' com filtros avançados na tabela de lançamentos: filtro por Ano (hierárquico), multi-select para Empresa, Mês e Categoria com checkbox, campo de busca por texto, e seletor de Período no formulário dividido em Ano+Mês para facilitar a seleção em listas extensas.",
 
   "v.02.48.22 - Fix/React Hooks: Corrige a violação da regra de Hooks no componente DreManualEntryModal.tsx. Move as declarações de useMemo (para filteredRecords e empresasNaTabela) para cima do retorno condicional (isOpen), evitando crashes de renderização no React ao inicializar ou fechar o modal.",

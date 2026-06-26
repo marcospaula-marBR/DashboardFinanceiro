@@ -1,9 +1,136 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft } from 'lucide-react';
+import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft, ChevronDown, Search } from 'lucide-react';
 import { DreFilters, DreMetadata, DreRow } from '@/types/dre';
+
+// ── Extrai anos únicos de uma lista de períodos (ex: "Jan/24" → "2024") ───────
+function extractYears(periodos: string[]): string[] {
+  const years = new Set<string>();
+  periodos.forEach(p => {
+    const match = p.match(/\/(\d{2})$/);
+    if (match) years.add(`20${match[1]}`);
+  });
+  return Array.from(years).sort();
+}
+
+// ── Multi-select dropdown genérico para a Sidebar ──────────────────────────────
+interface MultiSelectProps {
+  label: string;
+  icon?: React.ReactNode;
+  options: string[];
+  selected: string[];
+  onToggle: (val: string) => void;
+  onClear: () => void;
+  searchable?: boolean;
+  placeholder?: string;
+  compact?: boolean;
+  fullWidth?: boolean;
+}
+
+function MultiSelectDropdown({
+  label, icon, options, selected, onToggle, onClear,
+  searchable = false, placeholder = 'Buscar...', compact = false, fullWidth = false
+}: MultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = searchable
+    ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+    : options;
+
+  const displayLabel = selected.length === 0
+    ? 'Todos'
+    : selected.length === 1
+    ? selected[0]
+    : `${selected.length} selecionados`;
+
+  return (
+    <div ref={ref} className={`relative ${fullWidth ? 'w-full' : ''}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`flex items-center justify-between gap-1.5 bg-slate-800 border border-slate-700 text-white rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-amber-500 hover:border-slate-600 hover:bg-slate-750 transition-all duration-200 ${compact ? 'text-xs px-2.5 py-1.5' : 'text-sm'} ${fullWidth ? 'w-full' : ''} text-left shadow-sm`}
+      >
+        <div className="flex items-center gap-2 truncate">
+          {icon && <span className="text-slate-400 flex-shrink-0">{icon}</span>}
+          <span className="font-bold text-slate-350 text-xs uppercase tracking-wider">{label}:</span>
+          <span className={`truncate text-sm font-semibold ${selected.length > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
+            {displayLabel}
+          </span>
+        </div>
+        <ChevronDown size={14} className={`text-slate-400 transition-transform flex-shrink-0 duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-slate-850 border border-slate-700 rounded-xl shadow-2xl w-full min-w-[240px] max-h-[320px] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-700 flex-shrink-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
+            {selected.length > 0 && (
+              <button type="button" onClick={onClear} className="text-[10px] text-amber-500 hover:text-amber-400 font-semibold cursor-pointer">
+                Limpar ({selected.length})
+              </button>
+            )}
+          </div>
+          {/* Search */}
+          {searchable && (
+            <div className="px-2 py-1.5 border-b border-slate-700 flex-shrink-0">
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5">
+                <Search size={12} className="text-slate-500 flex-shrink-0" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder={placeholder}
+                  className="bg-transparent text-white text-xs w-full focus:outline-none placeholder:text-slate-600"
+                />
+              </div>
+            </div>
+          )}
+          {/* Options */}
+          <div className="overflow-y-auto py-1 flex-1 scrollbar-thin">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-slate-500 px-3 py-2">Nenhum resultado</p>
+            ) : (
+              filtered.map(opt => (
+                <button
+                  type="button"
+                  key={opt}
+                  onClick={() => onToggle(opt)}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-slate-700 transition-colors flex items-center gap-2"
+                >
+                  <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center
+                    ${selected.includes(opt) ? 'bg-amber-500 border-amber-500' : 'border-slate-600 bg-slate-900'}`}
+                  >
+                    {selected.includes(opt) && (
+                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                        <path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                  <span className={`truncate ${selected.includes(opt) ? 'text-amber-300 font-semibold' : 'text-slate-350'}`}>
+                    {opt}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface DreSidebarProps {
   metadata: DreMetadata | null;
@@ -34,6 +161,35 @@ export function DreSidebar({
       onFileUpload(e.target.files[0]);
     }
   };
+
+  const [selectedYear, setSelectedYear] = useState<string>(() => {
+    if (filters.periodos && filters.periodos.length > 0) {
+      const match = filters.periodos[0].match(/\/(\d{2})$/);
+      if (match) {
+        const year2d = match[1];
+        const allSameYear = filters.periodos.every(p => p.endsWith(`/${year2d}`));
+        if (allSameYear) return `20${year2d}`;
+      }
+    }
+    return 'Todos';
+  });
+
+  useEffect(() => {
+    if (!filters.periodos || filters.periodos.length === 0) {
+      setSelectedYear('Todos');
+    } else {
+      const match = filters.periodos[0].match(/\/(\d{2})$/);
+      if (match) {
+        const year2d = match[1];
+        const allSameYear = filters.periodos.every(p => p.endsWith(`/${year2d}`));
+        if (allSameYear) {
+          setSelectedYear(`20${year2d}`);
+        } else {
+          setSelectedYear('Todos');
+        }
+      }
+    }
+  }, [filters.periodos]);
 
   // CASCADING FILTERS LOGIC
   
@@ -295,283 +451,165 @@ export function DreSidebar({
             </div>
 
             {/* 1. EMPRESAS */}
-            <div>
-              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
-                <span className="flex items-center gap-1.5">
-                  <Building2 size={13} className="text-slate-400" />
-                  Empresa ({availableEmpresas.length})
-                </span>
-                <div className="flex gap-2 items-center">
-                  {availableEmpresas.length > 0 && (
-                    <button 
-                      onClick={() => toggleAll('empresas', availableEmpresas)}
-                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
-                    >
-                      {filters.empresas.length === availableEmpresas.length ? 'Nenhum' : 'Todos'}
-                    </button>
-                  )}
-                  {filters.empresas.length > 0 && (
-                    <button 
-                      onClick={() => clearGroup('empresas')}
-                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-              </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
-                {availableEmpresas.map(emp => {
-                  const isSelected = filters.empresas.includes(emp);
-                  return (
-                    <label key={emp} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
-                      <input 
-                        type="checkbox" 
-                        checked={isSelected}
-                        onChange={() => toggleFilter('empresas', emp)}
-                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
-                      />
-                      <span className="truncate">{emp}</span>
-                    </label>
-                  );
-                })}
-              </div>
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Empresas"
+                icon={<Building2 size={13} />}
+                options={availableEmpresas}
+                selected={filters.empresas}
+                onToggle={(v) => toggleFilter('empresas', v)}
+                onClear={() => clearGroup('empresas')}
+                searchable={availableEmpresas.length > 5}
+                placeholder="Buscar empresa..."
+                fullWidth
+              />
             </div>
 
-            {/* 2. PERÍODOS */}
-            <div>
-              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
-                <span className="flex items-center gap-1.5">
-                  <Calendar size={13} className="text-slate-400" />
-                  Período ({availablePeriodos.length})
-                </span>
-                <div className="flex gap-2 items-center">
-                  {availablePeriodos.length > 0 && (
-                    <button 
-                      onClick={() => toggleAll('periodos', availablePeriodos)}
-                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
-                    >
-                      {filters.periodos.length === availablePeriodos.length ? 'Nenhum' : 'Todos'}
-                    </button>
-                  )}
-                  {filters.periodos.length > 0 && (
-                    <button 
-                      onClick={() => clearGroup('periodos')}
-                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-              </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
-                {availablePeriodos.map(per => {
-                  const isSelected = filters.periodos.includes(per);
-                  return (
-                    <label key={per} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
-                      <input 
-                        type="checkbox" 
-                        checked={isSelected}
-                        onChange={() => toggleFilter('periodos', per)}
-                        className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
-                      />
-                      <span>{per}</span>
-                    </label>
-                  );
-                })}
+            {/* 2. HIERARQUIA TEMPORAL (Ano/Mês) */}
+            <div className="space-y-3">
+              {/* Seletor de Ano */}
+              <div className="w-full">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5 select-none">
+                  <Calendar size={12} />
+                  Ano de Referência
+                </label>
+                <select
+                  value={selectedYear}
+                  onChange={e => {
+                    const ano = e.target.value;
+                    setSelectedYear(ano);
+                    if (ano === 'Todos') {
+                      onFilterChange({
+                        ...filters,
+                        periodos: []
+                      });
+                    } else {
+                      const ano2d = ano.slice(2);
+                      const periodsOfYear = availablePeriodos.filter(p => p.endsWith(`/${ano2d}`));
+                      onFilterChange({
+                        ...filters,
+                        periodos: periodsOfYear
+                      });
+                    }
+                  }}
+                  className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-amber-500 hover:border-slate-600 transition-colors cursor-pointer shadow-sm font-semibold"
+                >
+                  <option value="Todos">Todos os Anos</option>
+                  {extractYears(availablePeriodos).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
               </div>
+
+              {/* Seletor de Mês (exibido apenas se um Ano específico for selecionado) */}
+              {selectedYear !== 'Todos' && (
+                <div className="w-full">
+                  <MultiSelectDropdown
+                    label="Meses"
+                    icon={<Calendar size={13} />}
+                    options={(() => {
+                      const ano2d = selectedYear.slice(2);
+                      return availablePeriodos.filter(p => p.endsWith(`/${ano2d}`));
+                    })()}
+                    selected={filters.periodos}
+                    onToggle={(v) => {
+                      let current = [...filters.periodos];
+                      const ano2d = selectedYear.slice(2);
+                      const periodsOfYear = availablePeriodos.filter(p => p.endsWith(`/${ano2d}`));
+                      
+                      const isAllYearSelected = periodsOfYear.every(p => current.includes(p)) && current.length === periodsOfYear.length;
+                      
+                      if (isAllYearSelected) {
+                        current = [v];
+                      } else {
+                        const idx = current.indexOf(v);
+                        if (idx > -1) {
+                          current.splice(idx, 1);
+                          if (current.length === 0) {
+                            current = periodsOfYear;
+                          }
+                        } else {
+                          current.push(v);
+                        }
+                      }
+                      
+                      onFilterChange({
+                        ...filters,
+                        periodos: current
+                      });
+                    }}
+                    onClear={() => {
+                      const ano2d = selectedYear.slice(2);
+                      const periodsOfYear = availablePeriodos.filter(p => p.endsWith(`/${ano2d}`));
+                      onFilterChange({
+                        ...filters,
+                        periodos: periodsOfYear
+                      });
+                    }}
+                    fullWidth
+                  />
+                </div>
+              )}
             </div>
 
             {/* 3. DEPARTAMENTO */}
-            <div>
-              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
-                <span className="flex items-center gap-1.5">
-                  <FolderTree size={13} className="text-slate-400" />
-                  Departamento ({availableDepartamentos.length})
-                </span>
-                <div className="flex gap-2 items-center">
-                  {availableDepartamentos.length > 0 && (
-                    <button 
-                      onClick={() => toggleAll('departamentos', availableDepartamentos)}
-                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
-                    >
-                      {filters.departamentos.length === availableDepartamentos.length ? 'Nenhum' : 'Todos'}
-                    </button>
-                  )}
-                  {filters.departamentos.length > 0 && (
-                    <button 
-                      onClick={() => clearGroup('departamentos')}
-                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-              </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
-                {availableDepartamentos.length === 0 ? (
-                  <p className="text-xs text-slate-500 p-1">Nenhum disponível</p>
-                ) : (
-                  availableDepartamentos.map(dept => {
-                    const isSelected = filters.departamentos.includes(dept);
-                    return (
-                      <label key={dept} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected}
-                          onChange={() => toggleFilter('departamentos', dept)}
-                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
-                        />
-                        <span className="truncate" title={dept}>{dept}</span>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Departamento"
+                icon={<FolderTree size={13} />}
+                options={availableDepartamentos}
+                selected={filters.departamentos}
+                onToggle={(v) => toggleFilter('departamentos', v)}
+                onClear={() => clearGroup('departamentos')}
+                searchable={availableDepartamentos.length > 5}
+                placeholder="Buscar departamento..."
+                fullWidth
+              />
             </div>
 
             {/* 4. CONTA DRE */}
-            <div>
-              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
-                <span className="flex items-center gap-1.5">
-                  <Landmark size={13} className="text-slate-400" />
-                  Conta DRE ({availableContasDre.length})
-                </span>
-                <div className="flex gap-2 items-center">
-                  {availableContasDre.length > 0 && (
-                    <button 
-                      onClick={() => toggleAll('contasDre', availableContasDre)}
-                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
-                    >
-                      {filters.contasDre.length === availableContasDre.length ? 'Nenhum' : 'Todos'}
-                    </button>
-                  )}
-                  {filters.contasDre.length > 0 && (
-                    <button 
-                      onClick={() => clearGroup('contasDre')}
-                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-              </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
-                {availableContasDre.length === 0 ? (
-                  <p className="text-xs text-slate-500 p-1">Nenhuma disponível</p>
-                ) : (
-                  availableContasDre.map(conta => {
-                    const isSelected = filters.contasDre.includes(conta);
-                    return (
-                      <label key={conta} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected}
-                          onChange={() => toggleFilter('contasDre', conta)}
-                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
-                        />
-                        <span className="truncate" title={conta}>{conta}</span>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Conta DRE"
+                icon={<Landmark size={13} />}
+                options={availableContasDre}
+                selected={filters.contasDre}
+                onToggle={(v) => toggleFilter('contasDre', v)}
+                onClear={() => clearGroup('contasDre')}
+                searchable={availableContasDre.length > 5}
+                placeholder="Buscar conta..."
+                fullWidth
+              />
             </div>
 
             {/* 5. PROJETO */}
-            <div>
-              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
-                <span className="flex items-center gap-1.5">
-                  <Target size={13} className="text-slate-400" />
-                  Projeto ({availableProjetos.length})
-                </span>
-                <div className="flex gap-2 items-center">
-                  {availableProjetos.length > 0 && (
-                    <button 
-                      onClick={() => toggleAll('projetos', availableProjetos)}
-                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
-                    >
-                      {filters.projetos.length === availableProjetos.length ? 'Nenhum' : 'Todos'}
-                    </button>
-                  )}
-                  {filters.projetos.length > 0 && (
-                    <button 
-                      onClick={() => clearGroup('projetos')}
-                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-              </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
-                {availableProjetos.length === 0 ? (
-                  <p className="text-xs text-slate-500 p-1">Nenhum disponível</p>
-                ) : (
-                  availableProjetos.map(proj => {
-                    const isSelected = filters.projetos.includes(proj);
-                    return (
-                      <label key={proj} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected}
-                          onChange={() => toggleFilter('projetos', proj)}
-                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
-                        />
-                        <span className="truncate" title={proj}>{proj}</span>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Projeto"
+                icon={<Target size={13} />}
+                options={availableProjetos}
+                selected={filters.projetos}
+                onToggle={(v) => toggleFilter('projetos', v)}
+                onClear={() => clearGroup('projetos')}
+                searchable={availableProjetos.length > 5}
+                placeholder="Buscar projeto..."
+                fullWidth
+              />
             </div>
 
             {/* 6. CATEGORIA */}
-            <div>
-              <label className="text-[13px] font-bold text-slate-200 flex items-center justify-between mb-2 select-none">
-                <span className="flex items-center gap-1.5">
-                  <Tags size={13} className="text-slate-400" />
-                  Categoria ({availableCategorias.length})
-                </span>
-                <div className="flex gap-2 items-center">
-                  {availableCategorias.length > 0 && (
-                    <button 
-                      onClick={() => toggleAll('categorias', availableCategorias)}
-                      className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors cursor-pointer"
-                    >
-                      {filters.categorias.length === availableCategorias.length ? 'Nenhum' : 'Todos'}
-                    </button>
-                  )}
-                  {filters.categorias.length > 0 && (
-                    <button 
-                      onClick={() => clearGroup('categorias')}
-                      className="text-[10px] text-slate-400 hover:text-amber-500 font-bold transition-colors border-l border-slate-700 pl-1.5 cursor-pointer"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-              </label>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
-                {availableCategorias.length === 0 ? (
-                  <p className="text-xs text-slate-500 p-1">Nenhuma disponível</p>
-                ) : (
-                  availableCategorias.map(cat => {
-                    const isSelected = filters.categorias.includes(cat);
-                    return (
-                      <label key={cat} className="flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-slate-800/40 text-sm font-medium cursor-pointer text-slate-250 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected}
-                          onChange={() => toggleFilter('categorias', cat)}
-                          className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
-                        />
-                        <span className="truncate" title={cat}>{cat}</span>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Categoria"
+                icon={<Tags size={13} />}
+                options={availableCategorias}
+                selected={filters.categorias}
+                onToggle={(v) => toggleFilter('categorias', v)}
+                onClear={() => clearGroup('categorias')}
+                searchable={availableCategorias.length > 5}
+                placeholder="Buscar categoria..."
+                fullWidth
+              />
             </div>
 
           </div>
