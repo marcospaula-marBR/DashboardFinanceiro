@@ -162,8 +162,11 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
   }, [records]);
 
   // ── Formatação de valor ──────────────────────────────────────────────────
-  const fmt = (v: number) =>
-    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  const fmt = (v: any) => {
+    const val = typeof v === 'string' ? parseFloat(v) : v;
+    if (val === undefined || val === null || isNaN(val)) return 'R$ 0';
+    return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -408,48 +411,56 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/50">
-                    {filteredRecords.map(rec => (
-                      <tr
-                        key={rec.id}
-                        className="hover:bg-slate-800/50 transition-colors group"
-                      >
-                        <td className="px-3 py-2.5 text-white font-medium">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold
-                            ${rec.empresa === 'Conectius'
-                              ? 'bg-sky-500/15 text-sky-300'
-                              : rec.empresa === 'Ybox'
-                              ? 'bg-violet-500/15 text-violet-300'
-                              : 'bg-amber-500/15 text-amber-300'
-                            }`}
-                          >
-                            {rec.empresa}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-300 font-mono">{rec.periodo}</td>
-                        <td className="px-3 py-2.5 text-slate-300 max-w-[180px] truncate" title={rec.categoria}>
-                          {rec.categoria}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-400 hidden sm:table-cell max-w-[140px] truncate" title={rec.departamento}>
-                          {rec.departamento || '—'}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-semibold text-emerald-400 font-mono">
-                          {fmt(rec.valor)}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <button
-                            onClick={() => rec.id && handleDelete(rec.id)}
-                            disabled={isDeleting === rec.id}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-red-400 p-1 rounded"
-                            title="Excluir lançamento"
-                          >
-                            {isDeleting === rec.id
-                              ? <Loader2 size={12} className="animate-spin" />
-                              : <Trash2 size={12} />
-                            }
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredRecords.map(rec => {
+                      if (!rec) return null;
+                      const empresa = rec.empresa || 'Sem Empresa';
+                      const periodo = rec.periodo || 'N/D';
+                      const categoria = rec.categoria || 'Sem Categoria';
+                      const departamento = rec.departamento || 'Sem Departamento';
+                      const valor = rec.valor || 0;
+                      return (
+                        <tr
+                          key={rec.id}
+                          className="hover:bg-slate-800/50 transition-colors group"
+                        >
+                          <td className="px-3 py-2.5 text-white font-medium">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold
+                              ${empresa === 'Conectius'
+                                ? 'bg-sky-500/15 text-sky-300'
+                                : empresa === 'Ybox'
+                                ? 'bg-violet-500/15 text-violet-300'
+                                : 'bg-amber-500/15 text-amber-300'
+                              }`}
+                            >
+                              {empresa}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-300 font-mono">{periodo}</td>
+                          <td className="px-3 py-2.5 text-slate-300 max-w-[180px] truncate" title={categoria}>
+                            {categoria}
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-400 hidden sm:table-cell max-w-[140px] truncate" title={departamento}>
+                            {departamento || '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-semibold text-emerald-400 font-mono">
+                            {fmt(valor)}
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            <button
+                              onClick={() => rec.id && handleDelete(rec.id)}
+                              disabled={isDeleting === rec.id}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-red-400 p-1 rounded"
+                              title="Excluir lançamento"
+                            >
+                              {isDeleting === rec.id
+                                ? <Loader2 size={12} className="animate-spin" />
+                                : <Trash2 size={12} />
+                              }
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
