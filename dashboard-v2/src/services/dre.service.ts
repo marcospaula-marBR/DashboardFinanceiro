@@ -67,28 +67,45 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
 const normalizeMes = (mes: string) => mes.trim().charAt(0).toUpperCase() + mes.trim().slice(1).toLowerCase();
 const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
 
-const DEPARTAMENTOS_MAP: Record<string, string> = {
+export const DEPARTAMENTOS_MAP: Record<string, string> = {
+  "Capina Eltrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "Capina Elétrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
   "Capina Eltrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
   "Capina Eletrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "Capina Elétrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
   "DZM - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
+  "DZM - Imóveis Guilhermina": "DZM - Imóveis Guilhermina",
   "DZM - Terceirizao": "DZM - Terceirização",
-  "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
+  "DZM - Terceirização": "DZM - Terceirização",
+  "So Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "São Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "São Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
 };
 
-const PROJETOS_MAP: Record<string, string> = {
+export const PROJETOS_MAP: Record<string, string> = {
   "Bertioga Seduc 378/2024 (Inativo)": "Bertioga Seduc 378/2024",
-  "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024"
+  "Bertioga Seduc 378/2024": "Bertioga Seduc 378/2024",
+  "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024",
+  "Bertioga Sesap 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024"
 };
 
-const CATEGORIAS_MAP: Record<string, string> = {
+export const CATEGORIAS_MAP: Record<string, string> = {
   "Cursos e treinamentos (inativo)": "Cursos e treinamentos",
+  "Cursos e treinamentos (inativa)": "Cursos e treinamentos",
+  "Cursos e Treinamentos (inativa)": "Cursos e treinamentos",
+  "Cursos e Treinamentos": "Cursos e treinamentos",
   "Honorários Jurídico": "Honorários advocatícios",
+  "Honorórios advocatícios": "Honorários advocatícios",
   "Manutenção de Veículos": "Manutenção de veículos",
+  "Manutenção de veiculos": "Manutenção de veículos",
   "Pedágio": "Pedágio e/ou Cobrança automática (TAG)",
   "Pedágio / TAG": "Pedágio e/ou Cobrança automática (TAG)",
   "Pedágio e/ou Cobrança automática (TAG)": "Pedágio e/ou Cobrança automática (TAG)",
   "Telefonia Móvel e/ou Fixa": "Telefonia móvel e/ou fixa",
-  "Táxi e/ou Aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
+  "Telefonia móvel e/ou fixa": "Telefonia móvel e/ou fixa",
+  "Táxi e/ou Aplicativos de transporte": "Táxi e/ou aplicativos de transporte",
+  "Táxi e/ou aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
 };
 
 export class DreService {

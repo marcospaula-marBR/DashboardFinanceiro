@@ -76,40 +76,81 @@ def normalize_empresa(raw: str) -> str:
 
 
 DEPARTAMENTOS_MAP = {
+    # Capina
+    "Capina Eltrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+    "Capina Elétrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
     "Capina Eltrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
     "Capina Eletrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+    "Capina Elétrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+    # DZM Imóveis
     "DZM - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
+    "DZM - Imóveis Guilhermina": "DZM - Imóveis Guilhermina",
+    # DZM Terceirização
     "DZM - Terceirizao": "DZM - Terceirização",
-    "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
+    "DZM - Terceirização": "DZM - Terceirização",
+    # São Paulo CMSP
+    "So Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+    "São Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+    "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+    "São Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+    # Ybox Terceirização
+    "Ybox - Terceirizao": "Ybox - Terceirização",
+    "Ybox - Terceirização": "Ybox - Terceirização"
 }
 
 PROJETOS_MAP = {
     "Bertioga Seduc 378/2024 (Inativo)": "Bertioga Seduc 378/2024",
-    "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024"
+    "Bertioga Seduc 378/2024": "Bertioga Seduc 378/2024",
+    "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024",
+    "Bertioga Sesap 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024",
+    "Bertioga SESAP 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024",
+    "Bertioga SESAP 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024",
 }
 
 CATEGORIAS_MAP = {
     "Cursos e treinamentos (inativo)": "Cursos e treinamentos",
+    "Cursos e treinamentos (inativa)": "Cursos e treinamentos",
+    "Cursos e Treinamentos (inativa)": "Cursos e treinamentos",
+    "Cursos e Treinamentos": "Cursos e treinamentos",
     "Honorários Jurídico": "Honorários advocatícios",
+    "Honorórios advocatícios": "Honorários advocatícios",
     "Manutenção de Veículos": "Manutenção de veículos",
+    "Manutenção de veiculos": "Manutenção de veículos",
     "Pedágio": "Pedágio e/ou Cobrança automática (TAG)",
     "Pedágio / TAG": "Pedágio e/ou Cobrança automática (TAG)",
     "Pedágio e/ou Cobrança automática (TAG)": "Pedágio e/ou Cobrança automática (TAG)",
     "Telefonia Móvel e/ou Fixa": "Telefonia móvel e/ou fixa",
-    "Táxi e/ou Aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
+    "Telefonia móvel e/ou fixa": "Telefonia móvel e/ou fixa",
+    "Táxi e/ou Aplicativos de transporte": "Táxi e/ou aplicativos de transporte",
+    "Táxi e/ou aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
 }
 
 def normalize_departamento(raw: str) -> str:
     s = str(raw).strip()
-    return DEPARTAMENTOS_MAP.get(s, s)
+    if s in DEPARTAMENTOS_MAP:
+        return DEPARTAMENTOS_MAP[s]
+    for k, v in DEPARTAMENTOS_MAP.items():
+        if k.lower() == s.lower():
+            return v
+    return s
 
 def normalize_projeto(raw: str) -> str:
     s = str(raw).strip()
-    return PROJETOS_MAP.get(s, s)
+    if s in PROJETOS_MAP:
+        return PROJETOS_MAP[s]
+    for k, v in PROJETOS_MAP.items():
+        if k.lower() == s.lower():
+            return v
+    return s
 
 def normalize_categoria(raw: str) -> str:
     s = str(raw).strip()
-    return CATEGORIAS_MAP.get(s, s)
+    if s in CATEGORIAS_MAP:
+        return CATEGORIAS_MAP[s]
+    for k, v in CATEGORIAS_MAP.items():
+        if k.lower() == s.lower():
+            return v
+    return s
 
 
 def clean_valor(raw) -> float:

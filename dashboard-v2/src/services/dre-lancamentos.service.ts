@@ -13,6 +13,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { DreRow, DreMetadata } from '@/types/dre';
+import { DEPARTAMENTOS_MAP, PROJETOS_MAP, CATEGORIAS_MAP } from './dre.service';
 
 const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
 
@@ -156,10 +157,19 @@ export class DreLancamentosService {
 
     for (const rec of allData) {
       const emp          = rec.empresa ? rec.empresa.trim() : 'Geral';
-      const departamento = toTitleCase(rec.departamento.trim());
+      
+      const rawDept      = rec.departamento ? rec.departamento.trim() : '';
+      const mappedDept   = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
+      const departamento = toTitleCase(mappedDept);
+      
       const conta_dre    = rec.conta_dre.trim().replace(/^\d+\.\s*/, '');
-      const projeto      = toTitleCase(rec.projeto.trim());
-      const categoria    = rec.categoria.trim();
+      
+      const rawProj      = rec.projeto ? rec.projeto.trim() : '';
+      const mappedProj   = PROJETOS_MAP[rawProj] || PROJETOS_MAP[toTitleCase(rawProj)] || rawProj;
+      const projeto      = toTitleCase(mappedProj);
+      
+      const rawCat       = rec.categoria ? rec.categoria.trim() : '';
+      const categoria    = CATEGORIAS_MAP[rawCat] || rawCat;
 
       const key = `${emp}|${departamento}|${conta_dre}|${projeto}|${categoria}`;
 
