@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
 // Interface de saída unificada para o Fluxo de Caixa
 interface FluxoLancamento {
@@ -34,11 +35,41 @@ export async function POST(req: Request) {
 
     const companyName = company || 'Ambas';
 
-    // Formatar datas ISO YYYY-MM-DD para BR DD/MM/YYYY
+    // Formatar datas ISO YYYY-MM-DD para BR DD/MM/YYYY para a chamada da Omie
     const brStart = startDate.split('-').reverse().join('/');
     const brEnd = endDate.split('-').reverse().join('/');
 
-    // Identificar quais empresas consultar
+    // 1. Buscar Dimensões do Supabase para tradução rápida de códigos em descrições
+    const [catData, projData, fornData] = await Promise.all([
+      supabase.from('omie_dim_categorias').select('codigo_categoria, descricao_categoria, empresa_nome'),
+      supabase.from('omie_dim_projetos').select('codigo_projeto, descricao_projeto, empresa_nome'),
+      supabase.from('omie_dim_fornecedores').select('codigo_cliente_omie, nome_fantasia, razao_social, empresa_nome')
+    ]);
+
+    // Criar mapas indexados por `${empresa}-${codigo}` para resolução instantânea
+    const dimCategorias = new Map<string, string>();
+    (catData.data || []).forEach(c => {
+      const emp = String(c.empresa_nome || '').toUpperCase().trim();
+      const cod = String(c.codigo_categoria || '').trim();
+      if (emp && cod) dimCategorias.set(`${emp}-${cod}`, c.descricao_categoria);
+    });
+
+    const dimProjetos = new Map<string, string>();
+    (projData.data || []).forEach(p => {
+      const emp = String(p.empresa_nome || '').toUpperCase().trim();
+      const cod = String(p.codigo_projeto || '').trim();
+      if (emp && cod) dimProjetos.set(`${emp}-${cod}`, p.descricao_projeto);
+    });
+
+    const dimFornecedores = new Map<string, string>();
+    (fornData.data || []).forEach(f => {
+      const emp = String(f.empresa_nome || '').toUpperCase().trim();
+      const cod = String(f.codigo_cliente_omie || '').trim();
+      const nome = f.nome_fantasia || f.razao_social || '';
+      if (emp && cod && nome) dimFornecedores.set(`${emp}-${cod}`, nome);
+    });
+
+    // Identificar quais empresas consultar na Omie
     const companiesToSync: { name: string; key: string | undefined; secret: string | undefined }[] = [];
     
     if (companyName === 'Ambas' || companyName.toUpperCase().includes('MAR BRASIL')) {
@@ -68,23 +99,23 @@ export async function POST(req: Request) {
       }
 
       try {
-        // Buscar em paralelo: CP, CR e Movimentos
+        // Buscar em paralelo no Omie: CP, CR e Movimentos
         const [cpRaw, crRaw, movRaw] = await Promise.all([
           fetchOmieCP(comp.key, comp.secret, brStart, brEnd),
           fetchOmieCR(comp.key, comp.secret, brStart, brEnd),
           fetchOmieMovimentos(comp.key, comp.secret, brStart, brEnd)
         ]);
 
-        // 1. Processar Contas a Pagar (Saídas)
-        const cpProcessed = processCPCR(cpRaw, comp.name, 'PAGAR');
+        // 1. Processar Contas a Pagar
+        const cpProcessed = processCPCR(cpRaw, comp.name, 'PAGAR', dimCategorias, dimProjetos, dimFornecedores);
         allRecords.push(...cpProcessed);
 
-        // 2. Processar Contas a Receber (Entradas)
-        const crProcessed = processCPCR(crRaw, comp.name, 'RECEBER');
+        // 2. Processar Contas a Receber
+        const crProcessed = processCPCR(crRaw, comp.name, 'RECEBER', dimCategorias, dimProjetos, dimFornecedores);
         allRecords.push(...crProcessed);
 
         // 3. Processar Movimentos (Apenas avulsos, sem vínculo com títulos para evitar duplicidades)
-        const movProcessed = processMovimentos(movRaw, comp.name);
+        const movProcessed = processMovimentos(movRaw, comp.name, dimCategorias, dimProjetos);
         allRecords.push(...movProcessed);
 
       } catch (err: any) {
@@ -92,13 +123,20 @@ export async function POST(req: Request) {
       }
     }
 
-    // Ordenar do mais recente para o mais antigo de acordo com a data de alocação
-    allRecords.sort((a, b) => b.data_alocacao.localeCompare(a.data_alocacao));
+    // REGRA DE OURO / PROTEÇÃO DE DATA:
+    // Filtrar estritamente o resultado final para manter apenas transações cuja data de alocação 
+    // (pagamento para realizados, vencimento para previstos) esteja dentro do período solicitado!
+    const strictlyFilteredRecords = allRecords.filter(item => {
+      return item.data_alocacao >= startDate && item.data_alocacao <= endDate;
+    });
+
+    // Ordenar do mais recente para o mais antigo
+    strictlyFilteredRecords.sort((a, b) => b.data_alocacao.localeCompare(a.data_alocacao));
 
     return NextResponse.json({
-      status: errors.length > 0 && allRecords.length === 0 ? 'error' : errors.length > 0 ? 'partial' : 'success',
-      count: allRecords.length,
-      data: allRecords,
+      status: errors.length > 0 && strictlyFilteredRecords.length === 0 ? 'error' : errors.length > 0 ? 'partial' : 'success',
+      count: strictlyFilteredRecords.length,
+      data: strictlyFilteredRecords,
       errors: errors.length > 0 ? errors : undefined
     });
 
@@ -146,7 +184,7 @@ async function fetchOmieCP(appKey: string, appSecret: string, brStart: string, b
   const limit = 100;
   const results: any[] = [];
 
-  while (pagina <= 10) { // Limite preventivo de 10 páginas para evitar loops
+  while (pagina <= 10) {
     const data = await callOmieAPI(url, 'ListarContasPagar', appKey, appSecret, {
       pagina,
       registros_por_pagina: limit,
@@ -236,7 +274,14 @@ function formatOmieDateToISO(dateStr: string | null | undefined): string | null 
   }
 }
 
-function processCPCR(records: any[], companyName: string, tipo: 'PAGAR' | 'RECEBER'): FluxoLancamento[] {
+function processCPCR(
+  records: any[], 
+  companyName: string, 
+  tipo: 'PAGAR' | 'RECEBER',
+  dimCategorias: Map<string, string>,
+  dimProjetos: Map<string, string>,
+  dimFornecedores: Map<string, string>
+): FluxoLancamento[] {
   const list: FluxoLancamento[] = [];
   const sign = tipo === 'PAGAR' ? -1 : 1;
 
@@ -271,6 +316,24 @@ function processCPCR(records: any[], companyName: string, tipo: 'PAGAR' | 'RECEB
 
     const valorDocumento = Number(r.valor_documento || 0);
 
+    // Resolução de Dimensões usando os mapas locais carregados do Supabase
+    const cleanCompany = companyName.toUpperCase().trim();
+    
+    const catCode = String(r.codigo_categoria || '').trim();
+    const catKey = `${cleanCompany}-${catCode}`;
+    const categoriaNome = dimCategorias.get(catKey) || r.descricao_categoria || `Categoria: ${catCode}`;
+
+    const projCode = String(r.codigo_projeto || '').trim();
+    const projKey = `${cleanCompany}-${projCode}`;
+    const projetoNome = dimProjetos.get(projKey) || r.nome_projeto || (projCode ? `Projeto: ${projCode}` : 'Sem Projeto');
+
+    const fornCode = String(r.codigo_cliente_fornecedor || '').trim();
+    const fornKey = `${cleanCompany}-${fornCode}`;
+    const clienteFornecedor = dimFornecedores.get(fornKey) || 
+                              r.nm_cliente || 
+                              r.cnab_integracao_bancaria?.nome_transferencia || 
+                              (fornCode ? `Cód. Cliente: ${fornCode}` : 'Fornecedor/Cliente');
+
     // Mapear rateio por departamentos
     const dist = r.distribuicao || [];
     if (dist.length > 0) {
@@ -289,11 +352,11 @@ function processCPCR(records: any[], companyName: string, tipo: 'PAGAR' | 'RECEB
           data_vencimento: dtVencimento,
           data_pagamento: dtPagamento,
           data_alocacao: dataAlocacao,
-          categoria_codigo: r.codigo_categoria || '',
-          categoria_nome: r.descricao_categoria || 'Sem Categoria',
-          projeto_nome: r.nome_projeto || 'Sem Projeto',
+          categoria_codigo: catCode,
+          categoria_nome: categoriaNome,
+          projeto_nome: projetoNome,
           departamento_nome: d.cDesDep || 'Sem Departamento',
-          cliente_fornecedor: r.nm_cliente || r.cnab_integracao_bancaria?.nome_transferencia || 'Fornecedor/Cliente',
+          cliente_fornecedor: clienteFornecedor,
           numero_documento: r.numero_documento || null,
           observacao: r.observacao || null
         });
@@ -312,11 +375,11 @@ function processCPCR(records: any[], companyName: string, tipo: 'PAGAR' | 'RECEB
         data_vencimento: dtVencimento,
         data_pagamento: dtPagamento,
         data_alocacao: dataAlocacao,
-        categoria_codigo: r.codigo_categoria || '',
-        categoria_nome: r.descricao_categoria || 'Sem Categoria',
-        projeto_nome: r.nome_projeto || 'Sem Projeto',
+        categoria_codigo: catCode,
+        categoria_nome: categoriaNome,
+        projeto_nome: projetoNome,
         departamento_nome: 'Sem Departamento',
-        cliente_fornecedor: r.nm_cliente || r.cnab_integracao_bancaria?.nome_transferencia || 'Fornecedor/Cliente',
+        cliente_fornecedor: clienteFornecedor,
         numero_documento: r.numero_documento || null,
         observacao: r.observacao || null
       });
@@ -326,7 +389,12 @@ function processCPCR(records: any[], companyName: string, tipo: 'PAGAR' | 'RECEB
   return list;
 }
 
-function processMovimentos(records: any[], companyName: string): FluxoLancamento[] {
+function processMovimentos(
+  records: any[], 
+  companyName: string,
+  dimCategorias: Map<string, string>,
+  dimProjetos: Map<string, string>
+): FluxoLancamento[] {
   const list: FluxoLancamento[] = [];
 
   for (const m of records) {
@@ -356,11 +424,21 @@ function processMovimentos(records: any[], companyName: string): FluxoLancamento
     // Como são movimentos de extrato, representam caixa realizado (PAGO)
     const dataAlocacao = dtPagto || dtReg || dtVenc || new Date().toISOString().split('T')[0];
 
+    const cleanCompany = companyName.toUpperCase().trim();
+    
+    const catCode = String(det.cCodCateg || '').trim();
+    const catKey = `${cleanCompany}-${catCode}`;
+    const categoriaNome = dimCategorias.get(catKey) || det.cDesCateg || `Categoria: ${catCode}`;
+
+    const projCode = String(det.nCodProjeto || '').trim();
+    const projKey = `${cleanCompany}-${projCode}`;
+    const projetoNome = dimProjetos.get(projKey) || det.cDesProjeto || (projCode ? `Projeto: ${projCode}` : 'Sem Projeto');
+
     list.push({
       id_global: `mov_${omieId}`,
       omie_id: omieId,
       empresa: companyName,
-      tipo: 'MOVIMENTO', // Mantemos tipo_registro MOVIMENTO para diferenciar visualmente na tabela
+      tipo: 'MOVIMENTO',
       status: 'PAGO',
       valor_total: valor * sign,
       valor_alocado: valor * sign,
@@ -369,9 +447,9 @@ function processMovimentos(records: any[], companyName: string): FluxoLancamento
       data_vencimento: dtVenc,
       data_pagamento: dtPagto || dataAlocacao,
       data_alocacao: dataAlocacao,
-      categoria_codigo: det.cCodCateg || '',
-      categoria_nome: det.cDesCateg || 'Sem Categoria',
-      projeto_nome: det.cDesProjeto || 'Sem Projeto',
+      categoria_codigo: catCode,
+      categoria_nome: categoriaNome,
+      projeto_nome: projetoNome,
       departamento_nome: det.cDesDep || 'Principal',
       cliente_fornecedor: det.cNomeCliente || det.cDesMov || det.cFavorecido || 'Banco / Tarifa',
       numero_documento: det.cNumDocFiscal || null,

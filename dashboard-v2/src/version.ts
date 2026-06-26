@@ -1,7 +1,9 @@
-export const APP_VERSION = "v.02.48.28";
+export const APP_VERSION = "v.02.48.29";
 export const VERSION_DATE = "2026-06-26";
 export const VERSION_CHANGELOG = [
-  "v.02.48.28 - Feat/Fluxo-Caixa: Transforma a página de Lançamentos em um painel de Fluxo de Caixa em tempo real integrado às APIs do Omie. Elimina o banco de dados (Supabase) do fluxo, realizando consultas em paralelo e consolidando os lançamentos (CP, CR e MOV) em memória. Adota a data de vencimento (para abertos) e pagamento (para realizados) como regra unificada de alocação no tempo, resolvendo a inconsistência da data de competência/registro. Adiciona tela inicial de seleção de horizonte (semana, 15d, 30d, personalizado), KPIs de resultado (sem saldo inicial), gráfico interativo e simulação em tempo real local (checkboxes reativos).",
+  "v.02.48.29 - Fix/Fluxo-Caixa: Corrige resolução de nomes de Categorias, Projetos e Clientes/Fornecedores no Fluxo de Caixa carregando as dimensões correspondentes diretamente do Supabase e associando-as em memória por Empresa+Código. Corrige vazamento de lançamentos fora do horizonte de datas aplicando filtragem estrita de data de alocação (pagamento para realizados, vencimento para previstos) no backend antes de retornar a resposta ao frontend.",
+
+  "v.02.48.28 - Feat/Fluxo-Caixa: Transforma a página de Lançamentos em um painel de Fluxo de Caixa em tempo real integrado às APIs do Omie. Elimina o banco de dados (Supabase) do fluxo, realizando consultas em paralelo e consolidando os lançamentos (CP, CR e MOV) in memória. Adota a data de vencimento (para abertos) e pagamento (para realizados) como regra unificada de alocação no tempo, resolvendo a inconsistência da data de competência/registro. Adiciona tela inicial de seleção de horizonte (semana, 15d, 30d, personalizado), KPIs de resultado (sem saldo inicial), gráfico interativo e simulação em tempo real local (checkboxes reativos).",
 
   "v.02.48.27 - Style/Charts: Melhora a legibilidade do gráfico de radar (DreCharts.tsx) aumentando a altura do canvas para h-[360px] (90px adicionais) e definindo outerRadius de 80%. Aplica rótulos mais contrastantes em bold, preenchimento com 25% de opacidade, linha de borda mais espessa e marcadores de ponto (dots) de alta definição.",
 
