@@ -271,16 +271,33 @@ class OmieSync:
 def push_to_supabase(rows):
     if not rows: return
     log(f"Enviando {len(rows)} registros para o Supabase...")
-    # Chunking
-    size = 100
-    for i in range(0, len(rows), size):
-        chunk = rows[i:i+size]
-        # Usamos upsert baseado em omie_id e tipo_registro e empresa_nome
-        # Mas para garantir rateio, o ideal é usar uma chave composta ou deletar/inserir
-        # Por simplicidade e segurança de unificação:
-        resp = requests.post(f"{SUPABASE_URL}/rest/v1/omie_financas_unificado", headers=HEADERS_SB, json=chunk)
-        if resp.status_code not in [200, 201, 204]:
-            log(f"Erro Supabase: {resp.text}")
+    
+    # Agrupar por empresa_nome e tipo_registro para fazer delete e insert seguros em lote
+    groups = {}
+    for r in rows:
+        key = (r["empresa_nome"], r["tipo_registro"])
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(r)
+        
+    for (empresa, tipo), group_rows in groups.items():
+        size = 100
+        for i in range(0, len(group_rows), size):
+            chunk = group_rows[i:i+size]
+            ids = [r["omie_id"] for r in chunk]
+            
+            # 1. Deletar os antigos correspondentes
+            ids_str = ",".join(map(str, ids))
+            del_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?empresa_nome=eq.{empresa}&tipo_registro=eq.{tipo}&omie_id=in.({ids_str})"
+            
+            del_resp = requests.delete(del_url, headers=HEADERS_SB)
+            if del_resp.status_code not in [200, 204]:
+                log(f"Erro ao deletar registros antigos: {del_resp.text}")
+                
+            # 2. Inserir os novos registros atualizados
+            post_resp = requests.post(f"{SUPABASE_URL}/rest/v1/omie_financas_unificado", headers=HEADERS_SB, json=chunk)
+            if post_resp.status_code not in [200, 201, 204]:
+                log(f"Erro ao inserir novos registros: {post_resp.text}")
 
 def main():
     start_date = "01/05/2025"

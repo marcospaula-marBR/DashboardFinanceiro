@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.32";
+export const APP_VERSION = "v.02.48.33";
 export const VERSION_DATE = "2026-06-27";
 export const VERSION_CHANGELOG = [
+  "v.02.48.33 - Fix/Fluxo-Caixa: Atualiza o script principal de sincronização 'sync_omie_unified_v4.py' para utilizar o método delete-and-insert na persistência do Supabase, contornando a ausência de restrição de unicidade e evitando duplicatas. Garante também que o status 'RECEBIDO' seja mapeado com sua respectiva data de pagamento no script principal.",
+
   "v.02.48.32 - Fix/Fluxo-Caixa: Corrige falha na sincronização rápida em segundo plano (background sync) provocada pela ausência de restrição de unicidade na tabela do banco de dados (erro ON CONFLICT). Adota a abordagem robusta de delete-and-insert em lote para contornar essa ausência e garantir que atualizações dos últimos 7 dias da Omie sejam persistidas no Supabase com sucesso. Mapeia também o status 'RECEBIDO' na data de pagamento no mapeador CPCR do sync.",
 
   "v.02.48.31 - Fix/Fluxo-Caixa: Corrige a classificação de lançamentos de contas a receber pagos (status 'RECEBIDO' no banco) que estavam aparecendo indevidamente como atrasados. Implementa paginação completa de resultados no Supabase usando batches de 1000 em 1000 registros com a cláusula range(), evitando que buscas por períodos passados sofressem truncamento padrão do PostgREST.",
