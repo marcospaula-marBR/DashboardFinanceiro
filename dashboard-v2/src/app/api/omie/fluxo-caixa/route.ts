@@ -80,36 +80,57 @@ export async function POST(req: Request) {
 
     const companyName = company || 'Ambas';
 
-    console.log(`[Fluxo Caixa API] Consultando DB: Start=${isoStart}, End=${isoEnd}, Company=${companyName}`);
+    console.log(`[Fluxo Caixa API] Consultando DB com paginação: Start=${isoStart}, End=${isoEnd}, Company=${companyName}`);
 
-    // 1. Consultar a tabela unificada no Supabase (que possui todo o histórico e projeções futuras)
-    let query = supabase
-      .from('omie_financas_unificado')
-      .select('*')
-      .neq('status', 'CANCELADO')
-      .neq('categoria_codigo', '0.01'); // Ocultar transferências internas
+    // 1. Consultar a tabela unificada no Supabase de forma paginada para não limitar em 1000 registros
+    const allDbRecords: any[] = [];
+    let from = 0;
+    const limit = 1000;
+    let hasMore = true;
 
-    if (companyName !== 'Ambas') {
-      query = query.eq('empresa_nome', companyName);
+    while (hasMore) {
+      let query = supabase
+        .from('omie_financas_unificado')
+        .select('*')
+        .neq('status', 'CANCELADO')
+        .neq('categoria_codigo', '0.01') // Ocultar transferências internas
+        .range(from, from + limit - 1);
+
+      if (companyName !== 'Ambas') {
+        query = query.eq('empresa_nome', companyName);
+      }
+
+      // Filtrar data_vencimento ou data_pagamento no range amplo para depois filtrar estritamente em memória
+      query = query.or(`and(data_vencimento.gte.${isoStart},data_vencimento.lte.${isoEnd}),and(data_pagamento.gte.${isoStart},data_pagamento.lte.${isoEnd})`);
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error(`[Fluxo Caixa API] Erro ao consultar Supabase na faixa ${from}-${from+limit}:`, error);
+        return NextResponse.json({ status: 'error', message: `Erro no banco: ${error.message}` }, { status: 500 });
+      }
+
+      if (data && data.length > 0) {
+        allDbRecords.push(...data);
+        from += limit;
+        if (data.length < limit) {
+          hasMore = false;
+        }
+      } else {
+        hasMore = false;
+      }
     }
 
-    // Filtrar data_vencimento ou data_pagamento no range amplo para depois filtrar estritamente em memória pela alocação
-    query = query.or(`and(data_vencimento.gte.${isoStart},data_vencimento.lte.${isoEnd}),and(data_pagamento.gte.${isoStart},data_pagamento.lte.${isoEnd})`);
-
-    const { data: dbRecords, error: dbError } = await query;
-
-    if (dbError) {
-      console.error(`[Fluxo Caixa API] Erro ao consultar Supabase:`, dbError);
-      return NextResponse.json({ status: 'error', message: `Erro no banco: ${dbError.message}` }, { status: 500 });
-    }
+    console.log(`[Fluxo Caixa API] Registros brutos carregados do DB: ${allDbRecords.length}`);
 
     // Data de referência de Hoje (para cálculo de Atrasados)
     const todayStr = new Date().toISOString().split('T')[0];
     const allRecords: FluxoLancamento[] = [];
 
-    (dbRecords || []).forEach(r => {
+    allDbRecords.forEach(r => {
       const statusRaw = String(r.status || 'ABERTO').toUpperCase();
-      const isPaid = statusRaw.includes('PAGO') || statusRaw.includes('LIQUIDADO');
+      // Correção crucial: RECEBER tem status RECEBIDO no banco de dados, que precisa ser mapeado como pago!
+      const isPaid = statusRaw.includes('PAGO') || statusRaw.includes('LIQUIDADO') || statusRaw.includes('RECEBIDO');
       
       let status: 'PAGO' | 'ABERTO' | 'ATRASADO' = 'ABERTO';
       if (isPaid) {
@@ -151,7 +172,7 @@ export async function POST(req: Request) {
       }
     });
 
-    console.log(`[Fluxo Caixa API] Retornando ${allRecords.length} lançamentos a partir do DB (filtrados em memória).`);
+    console.log(`[Fluxo Caixa API] Retornando ${allRecords.length} lançamentos após filtragem de alocação.`);
 
     // Ordenar do mais recente para o mais antigo de acordo com a alocação
     allRecords.sort((a, b) => b.data_alocacao.localeCompare(a.data_alocacao));
@@ -419,7 +440,7 @@ function mapCPCRToDb(
     const dtBaixa = formatToISODate(r.data_baixa || r.data_liquidacao);
     const dtPrevisao = formatToISODate(r.data_previsao);
     let dtPagamento = dtBaixa;
-    if (!dtPagamento && status === 'PAGO') {
+    if (!dtPagamento && (status === 'PAGO' || status === 'RECEBIDO')) {
       dtPagamento = dtPrevisao;
     }
 
