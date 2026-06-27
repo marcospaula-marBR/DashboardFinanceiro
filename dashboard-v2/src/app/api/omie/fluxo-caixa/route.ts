@@ -300,18 +300,20 @@ async function triggerBackgroundSync(companyName: string) {
           const BATCH_SIZE = 100;
           for (let i = 0; i < groupRows.length; i += BATCH_SIZE) {
             const batch = groupRows.slice(i, i + BATCH_SIZE);
-            const omieIds = batch.map(r => r.omie_id);
+            const omieIds = batch.map(r => r.omie_id).filter(id => id !== null && id !== undefined && String(id) !== 'None' && String(id) !== '');
 
-            // 1. Deletar os antigos correspondentes
-            const { error: deleteError } = await supabase
-              .from('omie_financas_unificado')
-              .delete()
-              .eq('empresa_nome', empresaNome)
-              .eq('tipo_registro', tipoRegistro)
-              .in('omie_id', omieIds);
+            if (omieIds.length > 0) {
+              // 1. Deletar os antigos correspondentes
+              const { error: deleteError } = await supabase
+                .from('omie_financas_unificado')
+                .delete()
+                .eq('empresa_nome', empresaNome)
+                .eq('tipo_registro', tipoRegistro)
+                .in('omie_id', omieIds);
 
-            if (deleteError) {
-              console.error(`[Background Sync] Erro no delete de ${empresaNome} - ${tipoRegistro}:`, deleteError);
+              if (deleteError) {
+                console.error(`[Background Sync] Erro no delete de ${empresaNome} - ${tipoRegistro}:`, deleteError);
+              }
             }
 
             // 2. Inserir os novos/atualizados

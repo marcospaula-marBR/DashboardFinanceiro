@@ -284,15 +284,16 @@ def push_to_supabase(rows):
         size = 100
         for i in range(0, len(group_rows), size):
             chunk = group_rows[i:i+size]
-            ids = [r["omie_id"] for r in chunk]
+            ids = [r["omie_id"] for r in chunk if r.get("omie_id") not in [None, "None", ""]]
             
-            # 1. Deletar os antigos correspondentes
-            ids_str = ",".join(map(str, ids))
-            del_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?empresa_nome=eq.{empresa}&tipo_registro=eq.{tipo}&omie_id=in.({ids_str})"
-            
-            del_resp = requests.delete(del_url, headers=HEADERS_SB)
-            if del_resp.status_code not in [200, 204]:
-                log(f"Erro ao deletar registros antigos: {del_resp.text}")
+            if ids:
+                # 1. Deletar os antigos correspondentes
+                ids_str = ",".join(map(str, ids))
+                del_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?empresa_nome=eq.{empresa}&tipo_registro=eq.{tipo}&omie_id=in.({ids_str})"
+                
+                del_resp = requests.delete(del_url, headers=HEADERS_SB)
+                if del_resp.status_code not in [200, 204]:
+                    log(f"Erro ao deletar registros antigos: {del_resp.text}")
                 
             # 2. Inserir os novos registros atualizados
             post_resp = requests.post(f"{SUPABASE_URL}/rest/v1/omie_financas_unificado", headers=HEADERS_SB, json=chunk)
