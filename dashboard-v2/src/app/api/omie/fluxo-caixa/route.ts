@@ -129,7 +129,7 @@ export async function POST(req: Request) {
 
     allDbRecords.forEach(r => {
       const statusRaw = String(r.status || 'ABERTO').toUpperCase();
-      // Correção crucial: RECEBER tem status RECEBIDO no banco de dados, que precisa ser mapeado como pago!
+      // Mapeamento correto do status RECEBIDO de contas a receber como pago/realizado
       const isPaid = statusRaw.includes('PAGO') || statusRaw.includes('LIQUIDADO') || statusRaw.includes('RECEBIDO');
       
       let status: 'PAGO' | 'ABERTO' | 'ATRASADO' = 'ABERTO';
@@ -285,16 +285,43 @@ async function triggerBackgroundSync(companyName: string) {
       if (rowsToUpsert.length > 0) {
         console.log(`[Background Sync] ${comp.name}: Atualizando ${rowsToUpsert.length} linhas em omie_financas_unificado...`);
         
-        // Fazer upload em lotes para o Supabase
-        const BATCH_SIZE = 100;
-        for (let i = 0; i < rowsToUpsert.length; i += BATCH_SIZE) {
-          const batch = rowsToUpsert.slice(i, i + BATCH_SIZE);
-          const { error } = await supabase
-            .from('omie_financas_unificado')
-            .upsert(batch, { onConflict: 'empresa_nome,omie_id,tipo_registro,departamento_nome' });
+        // Agrupar por tipo_registro e empresa_nome para fazer delete e insert seguros em lote (sem depender de unique constraint)
+        const groups = new Map<string, any[]>();
+        rowsToUpsert.forEach(row => {
+          const key = `${row.empresa_nome}-${row.tipo_registro}`;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(row);
+        });
 
-          if (error) {
-            console.error(`[Background Sync] Erro no upsert para ${comp.name}:`, error);
+        for (const [key, groupRows] of groups.entries()) {
+          const [empresaNome, tipoRegistro] = key.split('-');
+          
+          // Fazer upload em lotes de 100
+          const BATCH_SIZE = 100;
+          for (let i = 0; i < groupRows.length; i += BATCH_SIZE) {
+            const batch = groupRows.slice(i, i + BATCH_SIZE);
+            const omieIds = batch.map(r => r.omie_id);
+
+            // 1. Deletar os antigos correspondentes
+            const { error: deleteError } = await supabase
+              .from('omie_financas_unificado')
+              .delete()
+              .eq('empresa_nome', empresaNome)
+              .eq('tipo_registro', tipoRegistro)
+              .in('omie_id', omieIds);
+
+            if (deleteError) {
+              console.error(`[Background Sync] Erro no delete de ${empresaNome} - ${tipoRegistro}:`, deleteError);
+            }
+
+            // 2. Inserir os novos/atualizados
+            const { error: insertError } = await supabase
+              .from('omie_financas_unificado')
+              .insert(batch);
+
+            if (insertError) {
+              console.error(`[Background Sync] Erro no insert de ${empresaNome} - ${tipoRegistro}:`, insertError);
+            }
           }
         }
       } else {

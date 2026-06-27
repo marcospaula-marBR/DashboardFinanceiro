@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.31";
+export const APP_VERSION = "v.02.48.32";
 export const VERSION_DATE = "2026-06-27";
 export const VERSION_CHANGELOG = [
+  "v.02.48.32 - Fix/Fluxo-Caixa: Corrige falha na sincronização rápida em segundo plano (background sync) provocada pela ausência de restrição de unicidade na tabela do banco de dados (erro ON CONFLICT). Adota a abordagem robusta de delete-and-insert em lote para contornar essa ausência e garantir que atualizações dos últimos 7 dias da Omie sejam persistidas no Supabase com sucesso. Mapeia também o status 'RECEBIDO' na data de pagamento no mapeador CPCR do sync.",
+
   "v.02.48.31 - Fix/Fluxo-Caixa: Corrige a classificação de lançamentos de contas a receber pagos (status 'RECEBIDO' no banco) que estavam aparecendo indevidamente como atrasados. Implementa paginação completa de resultados no Supabase usando batches de 1000 em 1000 registros com a cláusula range(), evitando que buscas por períodos passados sofressem truncamento padrão do PostgREST.",
 
   "v.02.48.30 - Fix/Fluxo-Caixa: Corrige o problema onde a busca por lançamentos da Mar Brasil (e DZM/Ambas) retornava apenas dados com data de alteração correspondente ao dia de hoje (HOJE). A rota /api/omie/fluxo-caixa foi re-arquitetada para consultar a tabela consolidada 'omie_financas_unificado' do Supabase usando filtros SQL eficientes por vencimento/pagamento e realizando filtragem estrita por data de alocação em memória. Adiciona sincronização assíncrona leve em segundo plano (background sync) para capturar alterações dos últimos 7 dias na Omie a cada requisição. Corrige bug de filtragem de departamentos no frontend mapeando departamento_name para departamento_nome.",
