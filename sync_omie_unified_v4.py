@@ -154,7 +154,7 @@ class OmieSync:
             dt_previsao = format_date_iso_to_iso(r.get("data_previsao"))
             
             data_pagamento = dt_baixa
-            if not data_pagamento and status == "PAGO":
+            if not data_pagamento and (status == "PAGO" or status == "RECEBIDO"):
                 data_pagamento = dt_previsao # Conforme regra do usuário: previsao vira pagamento na liquidação
             
             raw_dist = r.get("distribuicao", [])
