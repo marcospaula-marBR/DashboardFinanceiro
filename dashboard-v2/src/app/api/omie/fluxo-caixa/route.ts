@@ -88,6 +88,7 @@ export async function POST(req: Request) {
       data_vencimento: r.data_vencimento,
       data_pagamento: null,
       data_alocacao: r.data_previsao, // Usamos data_previsao como data de alocação
+      conta_dre: r.conta_dre,
       categoria_codigo: '',
       categoria_nome: r.categoria,
       projeto_nome: r.projeto,

@@ -25,6 +25,7 @@ interface FluxoLancamento {
   numero_documento: string | null;
   observacao: string | null;
   selecionado?: boolean;
+  conta_dre: string;
 }
 
 interface FluxoDetalhadoTableProps {
