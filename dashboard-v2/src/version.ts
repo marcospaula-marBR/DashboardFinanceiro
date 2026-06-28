@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.33";
-export const VERSION_DATE = "2026-06-27";
+export const APP_VERSION = "v.02.48.34";
+export const VERSION_DATE = "2026-06-28";
 export const VERSION_CHANGELOG = [
+  "v.02.48.34 - Feat/Fluxo-Caixa: Reestrutura a arquitetura da página de Fluxo de Caixa para ser 100% orientada ao Supabase como cache e persistência segura. Cria as tabelas 'fluxo_caixa_projetado' e 'logs_sincronizacao_fluxo', e cria os endpoints de consulta e sincronização manual (/api/omie/fluxo-caixa e /api/omie/fluxo-caixa/sync). Atualiza o frontend para exibir um banner informativo do status da última sincronização com opção de atualização manual rápida. Reformula a tabela de lançamentos detalhados ('FluxoDetalhadoTable') em um formato expansível e hierárquico moderno agrupado por Conta DRE e Categoria, removendo as colunas status, fornecedor/cliente, tipo e ações.",
+
   "v.02.48.33 - Fix/Fluxo-Caixa: Atualiza o script principal de sincronização 'sync_omie_unified_v4.py' para utilizar o método delete-and-insert na persistência do Supabase, contornando a ausência de restrição de unicidade e evitando duplicatas. Garante também que o status 'RECEBIDO' seja mapeado com sua respectiva data de pagamento no script principal.",
 
   "v.02.48.32 - Fix/Fluxo-Caixa: Corrige falha na sincronização rápida em segundo plano (background sync) provocada pela ausência de restrição de unicidade na tabela do banco de dados (erro ON CONFLICT). Adota a abordagem robusta de delete-and-insert em lote para contornar essa ausência e garantir que atualizações dos últimos 7 dias da Omie sejam persistidas no Supabase com sucesso. Mapeia também o status 'RECEBIDO' na data de pagamento no mapeador CPCR do sync.",

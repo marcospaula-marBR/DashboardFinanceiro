@@ -19,9 +19,9 @@ import {
   Calendar,
   Layers,
   Search,
-  Filter,
   RefreshCw,
-  PlusCircle
+  CheckCircle2,
+  Clock
 } from "lucide-react";
 
 // Interface para Filtros Locais
@@ -30,17 +30,17 @@ interface FluxoFilters {
   status: string;
   categoria: string;
   projeto: string;
-  departamento: string;
   search: string;
 }
 
 export default function FluxoCaixaPage() {
-  // Query Params da Busca Omie
+  // Query Params da Busca
   const [searchParams, setSearchParams] = useState<{ startDate: string; endDate: string; company: string } | null>(null);
 
   // Data States
   const [allRecords, setAllRecords] = useState<any[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<any[]>([]);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
 
   // Configuração de Visualização
   const [activeTab, setActiveTab] = useState<'consolidado' | 'detalhado'>('consolidado');
@@ -48,7 +48,9 @@ export default function FluxoCaixaPage() {
   
   // Loading & Error
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
 
   // Filtros Locais
   const [filters, setFilters] = useState<FluxoFilters>({
@@ -56,7 +58,6 @@ export default function FluxoCaixaPage() {
     status: "TODOS",
     categoria: "TODAS",
     projeto: "TODOS",
-    departamento: "TODOS",
     search: ""
   });
 
@@ -65,21 +66,55 @@ export default function FluxoCaixaPage() {
     applyFilters(allRecords, filters);
   }, [allRecords, filters]);
 
-  // Executar busca de dados na API Omie
+  // Limpar mensagem de sucesso do sync após 5 segundos
+  useEffect(() => {
+    if (syncSuccessMessage) {
+      const timer = setTimeout(() => setSyncSuccessMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [syncSuccessMessage]);
+
+  // Executar busca de dados no Supabase
   const handleGenerate = async (params: { startDate: string; endDate: string; company: string }) => {
     setError(null);
     setIsLoading(true);
     setSearchParams(params);
     try {
-      const data = await LancamentosService.getFluxoCaixaRealTime(params.startDate, params.endDate, params.company);
+      const res = await LancamentosService.getFluxoCaixaRealTime(params.startDate, params.endDate, params.company);
       // Inicializar selecionado = true para simulações locais
-      const initialized = data.map((item: any) => ({ ...item, selecionado: true }));
+      const initialized = res.data.map((item: any) => ({ ...item, selecionado: item.selecionado !== false }));
       setAllRecords(initialized);
+      setLastSyncAt(res.lastSyncAt);
     } catch (err: any) {
-      setError(err.message || "Erro ao carregar dados do fluxo de caixa do Omie.");
+      setError(err.message || "Erro ao carregar dados do fluxo de caixa do Supabase.");
       setAllRecords([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Disparar sincronização manual com o Omie
+  const handleSync = async () => {
+    if (!searchParams) return;
+    setIsSyncing(true);
+    setError(null);
+    setSyncSuccessMessage(null);
+    try {
+      const res = await LancamentosService.syncFluxoCaixa(searchParams.startDate, searchParams.endDate, searchParams.company);
+      if (res.status === 'success') {
+        const summary = res.summary;
+        setSyncSuccessMessage(
+          `Sincronização concluída! Retornados: ${summary.returned} | Adicionados: ${summary.inserted} | Atualizados: ${summary.updated} | Removidos: ${summary.deactivated}`
+        );
+        // Recarregar os dados do Supabase
+        await handleGenerate(searchParams);
+      } else {
+        throw new Error(res.message || 'Falha na sincronização.');
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao sincronizar dados com o Omie.");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -92,9 +127,7 @@ export default function FluxoCaixaPage() {
 
   // Marcar ou desmarcar todos os itens filtrados na tela de simulação
   const handleToggleAll = (selectAll: boolean) => {
-    // Obter o conjunto de IDs atualmente visíveis após os filtros
     const visibleIds = new Set(filteredRecords.map(r => r.id_global));
-    
     setAllRecords(prev => prev.map(item => 
       visibleIds.has(item.id_global) ? { ...item, selecionado: selectAll } : item
     ));
@@ -105,13 +138,13 @@ export default function FluxoCaixaPage() {
     setSearchParams(null);
     setAllRecords([]);
     setFilteredRecords([]);
+    setLastSyncAt(null);
     setError(null);
     setFilters({
       tipo: "TODOS",
       status: "TODOS",
       categoria: "TODAS",
       projeto: "TODOS",
-      departamento: "TODOS",
       search: ""
     });
   };
@@ -120,12 +153,12 @@ export default function FluxoCaixaPage() {
   const applyFilters = (base: any[], activeFilters: FluxoFilters) => {
     let result = [...base];
 
-    // 1. Tipo
+    // 1. Tipo (RECEBER / PAGAR)
     if (activeFilters.tipo !== "TODOS") {
       result = result.filter(item => item.tipo === activeFilters.tipo);
     }
 
-    // 2. Status
+    // 2. Status (ABERTO / ATRASADO)
     if (activeFilters.status !== "TODOS") {
       result = result.filter(item => item.status === activeFilters.status);
     }
@@ -140,19 +173,13 @@ export default function FluxoCaixaPage() {
       result = result.filter(item => item.projeto_nome === activeFilters.projeto);
     }
 
-    // 5. Departamento
-    if (activeFilters.departamento !== "TODOS") {
-      result = result.filter(item => item.departamento_nome === activeFilters.departamento);
-    }
-
-    // 6. Busca
+    // 5. Busca
     if (activeFilters.search) {
       const term = activeFilters.search.toLowerCase();
       result = result.filter(item => 
         (item.cliente_fornecedor || "").toLowerCase().includes(term) ||
         (item.observacao || "").toLowerCase().includes(term) ||
-        (item.categoria_nome || "").toLowerCase().includes(term) ||
-        (item.numero_documento || "").toLowerCase().includes(term)
+        (item.categoria_nome || "").toLowerCase().includes(term)
       );
     }
 
@@ -164,7 +191,6 @@ export default function FluxoCaixaPage() {
     let totalIn = 0;
     let totalOut = 0;
     
-    // Consideramos apenas os itens que estão com selecionado = true (ou undefined/não falso)
     const activeRecords = allRecords.filter(r => r.selecionado !== false);
 
     activeRecords.forEach(item => {
@@ -187,10 +213,25 @@ export default function FluxoCaixaPage() {
   const filterOptions = useMemo(() => {
     return {
       categorias: Array.from(new Set(allRecords.map(r => r.categoria_nome).filter(Boolean))).sort() as string[],
-      projetos: Array.from(new Set(allRecords.map(r => r.projeto_nome).filter(Boolean))).sort() as string[],
-      departamentos: Array.from(new Set(allRecords.map(r => r.departamento_nome).filter(Boolean))).sort() as string[]
+      projetos: Array.from(new Set(allRecords.map(r => r.projeto_nome).filter(Boolean))).sort() as string[]
     };
   }, [allRecords]);
+
+  const formatDateTimeBR = (isoStr: string | null) => {
+    if (!isoStr) return '';
+    try {
+      const date = new Date(isoStr);
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return isoStr;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -206,7 +247,7 @@ export default function FluxoCaixaPage() {
               Fluxo de Caixa
             </h1>
             <p className="text-sm text-slate-500 font-medium mt-1">
-              Análise e Projeção de Recursos em Tempo Real (Omie API)
+              Análise e Projeção de Contas a Receber e Pagar em Aberto
               <span className="ml-2 text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
                 {APP_VERSION}
               </span>
@@ -215,7 +256,7 @@ export default function FluxoCaixaPage() {
           {searchParams && (
             <button
               onClick={handleReset}
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 shadow-sm transition-all"
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 shadow-sm transition-all self-start md:self-auto"
             >
               <ArrowLeft size={14} />
               Nova Consulta
@@ -225,17 +266,17 @@ export default function FluxoCaixaPage() {
 
         {/* Erro */}
         {error && (
-          <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700">
+          <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700 animate-in fade-in duration-200">
             <AlertCircle size={20} className="shrink-0" />
             <span className="text-sm font-medium">{error}</span>
-            {searchParams && (
-              <button 
-                onClick={() => handleGenerate(searchParams)} 
-                className="ml-auto text-xs font-bold bg-white px-3 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-100 transition-colors flex items-center gap-1.5"
-              >
-                <RefreshCw size={12} /> Tentar novamente
-              </button>
-            )}
+          </div>
+        )}
+
+        {/* Mensagem de Sucesso na Sincronização */}
+        {syncSuccessMessage && (
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-emerald-700 animate-in fade-in slide-in-from-top-2 duration-300">
+            <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
+            <span className="text-sm font-semibold">{syncSuccessMessage}</span>
           </div>
         )}
 
@@ -246,19 +287,19 @@ export default function FluxoCaixaPage() {
           </div>
         )}
 
-        {/* Carregamento */}
+        {/* Carregamento da Busca Local */}
         {isLoading && (
           <div className="flex-1 flex items-center justify-center py-24 bg-white rounded-3xl border border-slate-200 shadow-sm">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="w-12 h-12 text-emerald-600 animate-spin" />
-              <p className="text-sm font-bold text-slate-800">Sincronizando em tempo real com Omie...</p>
-              <p className="text-xs text-slate-400 font-medium">Buscando contas a pagar, receber e extratos de conta</p>
+              <p className="text-sm font-bold text-slate-800">Carregando dados do Supabase...</p>
+              <p className="text-xs text-slate-400 font-medium">Buscando lançamentos previstos e em aberto</p>
             </div>
           </div>
         )}
 
         {/* Tela de Resultados: Dados Carregados */}
-        {searchParams && !isLoading && allRecords.length > 0 && (
+        {searchParams && !isLoading && (
           <div className="space-y-6">
             {/* Seletor Compacto no Topo */}
             <PeriodSelector 
@@ -268,22 +309,54 @@ export default function FluxoCaixaPage() {
               initialParams={searchParams} 
             />
 
+            {/* Banner de Status de Sincronização */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl ${lastSyncAt ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                  <Clock size={18} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-700">
+                    {lastSyncAt 
+                      ? `Período atualizado com Omie em: ${formatDateTimeBR(lastSyncAt)}` 
+                      : "Este período ainda não foi sincronizado com o Omie."}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                    {lastSyncAt 
+                      ? "Os dados são carregados rapidamente do Supabase. Para obter dados em tempo real da Omie, clique ao lado."
+                      : "Os dados exibidos podem estar incompletos ou desatualizados."}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-150 disabled:text-slate-400 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/10 hover:shadow-emerald-600/20 transition-all disabled:shadow-none min-w-[170px]"
+              >
+                {isSyncing ? (
+                  <><Loader2 size={14} className="animate-spin" /> Sincronizando...</>
+                ) : (
+                  <><RefreshCw size={14} /> Sincronizar com Omie</>
+                )}
+              </button>
+            </div>
+
             {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <StatCard 
-                title="Total Entradas (Recebido/Previsto)" 
+                title="Total Entradas (Previsto)" 
                 value={formatCurrency(stats.totalEntradas)} 
                 icon={<TrendingUp size={24} />} 
                 color="emerald" 
               />
               <StatCard 
-                title="Total Saídas (Pago/Previsto)" 
+                title="Total Saídas (Previsto)" 
                 value={`-${formatCurrency(stats.totalSaidas)}`} 
                 icon={<TrendingDown size={24} />} 
                 color="slate" 
               />
               <StatCard 
-                title="Resultado Líquido do Período" 
+                title="Resultado Projetado do Período" 
                 value={stats.resultadoLiquido >= 0 ? `+${formatCurrency(stats.resultadoLiquido)}` : formatCurrency(stats.resultadoLiquido)} 
                 icon={<Activity size={24} />} 
                 color={stats.resultadoLiquido >= 0 ? "blue" : "red"} 
@@ -291,7 +364,9 @@ export default function FluxoCaixaPage() {
             </div>
 
             {/* Gráfico de Evolução */}
-            <FluxoCharts lancamentos={allRecords} groupBy={groupBy} />
+            {allRecords.length > 0 && (
+              <FluxoCharts lancamentos={allRecords} groupBy={groupBy} />
+            )}
 
             {/* Filtros e Controles das Visualizações */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
@@ -313,7 +388,7 @@ export default function FluxoCaixaPage() {
                       activeTab === 'detalhado' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800"
                     }`}
                   >
-                    Lançamentos Detalhados
+                    Lançamentos Detalhados (DRE)
                   </button>
                 </div>
 
@@ -344,7 +419,7 @@ export default function FluxoCaixaPage() {
               </div>
 
               {/* Filtros Locais (Busca + Filtros Avançados) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="relative lg:col-span-2">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                   <input
@@ -365,7 +440,6 @@ export default function FluxoCaixaPage() {
                     <option value="TODOS">Todos Lançamentos</option>
                     <option value="RECEBER">Receber (Entradas)</option>
                     <option value="PAGAR">Pagar (Saídas)</option>
-                    <option value="MOVIMENTO">Movimentos Extrato</option>
                   </select>
                 </div>
 
@@ -376,7 +450,6 @@ export default function FluxoCaixaPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer"
                   >
                     <option value="TODOS">Todos Status</option>
-                    <option value="PAGO">Realizados (Pagos)</option>
                     <option value="ABERTO">Projetados (A vencer)</option>
                     <option value="ATRASADO">Atrasados</option>
                   </select>
@@ -394,34 +467,31 @@ export default function FluxoCaixaPage() {
                     ))}
                   </select>
                 </div>
-
-                <div>
-                  <select
-                    value={filters.projeto}
-                    onChange={(e) => setFilters(prev => ({ ...prev, projeto: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer"
-                  >
-                    <option value="TODOS">Todos Projetos</option>
-                    {filterOptions.projetos.map(proj => (
-                      <option key={proj} value={proj}>{proj}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
             </div>
 
             {/* Renderização das Tabelas com base na Aba ativa */}
-            {activeTab === 'consolidado' ? (
-              <FluxoConsolidadoTable 
-                lancamentos={filteredRecords} 
-                groupBy={groupBy} 
-              />
+            {allRecords.length > 0 ? (
+              activeTab === 'consolidado' ? (
+                <FluxoConsolidadoTable 
+                  lancamentos={filteredRecords} 
+                  groupBy={groupBy} 
+                />
+              ) : (
+                <FluxoDetalhadoTable 
+                  lancamentos={filteredRecords} 
+                  onToggleSelection={handleToggleSelection}
+                  onToggleAll={handleToggleAll}
+                />
+              )
             ) : (
-              <FluxoDetalhadoTable 
-                lancamentos={filteredRecords} 
-                onToggleSelection={handleToggleSelection}
-                onToggleAll={handleToggleAll}
-              />
+              <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-200 p-8 text-center">
+                <AlertCircle size={40} className="text-slate-300 mb-4" />
+                <h3 className="text-lg font-bold text-slate-800 mb-1 font-black">Nenhum lançamento no período</h3>
+                <p className="text-sm text-slate-400 mb-6 max-w-sm font-medium">
+                  Não existem dados salvos no Supabase para este período. Clique no botão de sincronização acima para carregar da Omie.
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -430,16 +500,29 @@ export default function FluxoCaixaPage() {
         {searchParams && !isLoading && allRecords.length === 0 && !error && (
           <div className="flex-1 flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-200 p-8 text-center">
             <AlertCircle size={40} className="text-slate-300 mb-4" />
-            <h3 className="text-lg font-bold text-slate-800 mb-1">Nenhum lançamento encontrado</h3>
-            <p className="text-sm text-slate-400 mb-6 max-w-sm">
-              Não encontramos contas a pagar, contas a receber ou movimentos no período selecionado de {formatDateBR(searchParams.startDate)} a {formatDateBR(searchParams.endDate)}.
+            <h3 className="text-lg font-bold text-slate-800 mb-1 font-black">Nenhum lançamento cadastrado</h3>
+            <p className="text-sm text-slate-400 mb-6 max-w-sm font-medium">
+              Não encontramos contas a pagar ou a receber em aberto no período selecionado de {formatDateBR(searchParams.startDate)} a {formatDateBR(searchParams.endDate)}.
             </p>
-            <button
-              onClick={handleReset}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all"
-            >
-              Fazer Nova Consulta
-            </button>
+            <div className="flex items-center gap-3 justify-center">
+              <button
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              >
+                {isSyncing ? (
+                  <><Loader2 size={12} className="animate-spin" /> Sincronizando...</>
+                ) : (
+                  <><RefreshCw size={12} /> Sincronizar Omie agora</>
+                )}
+              </button>
+              <button
+                onClick={handleReset}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Fazer Nova Consulta
+              </button>
+            </div>
           </div>
         )}
       </main>

@@ -271,7 +271,7 @@ export class LancamentosService {
     };
   }
 
-  static async getFluxoCaixaRealTime(startDate: string, endDate: string, company: string): Promise<any[]> {
+  static async getFluxoCaixaRealTime(startDate: string, endDate: string, company: string): Promise<{ data: any[], lastSyncAt: string | null }> {
     const response = await fetch('/api/omie/fluxo-caixa', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -284,7 +284,22 @@ export class LancamentosService {
     }
     
     const res = await response.json();
-    return res.data;
+    return { data: res.data, lastSyncAt: res.lastSyncAt };
+  }
+
+  static async syncFluxoCaixa(startDate: string, endDate: string, company: string): Promise<any> {
+    const response = await fetch('/api/omie/fluxo-caixa/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startDate, endDate, company })
+    });
+    
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.message || 'Erro ao sincronizar dados com o Omie.');
+    }
+    
+    return await response.json();
   }
 }
 
