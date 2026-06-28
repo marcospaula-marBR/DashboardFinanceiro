@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.36";
+export const APP_VERSION = "v.02.48.37";
 export const VERSION_DATE = "2026-06-28";
 export const VERSION_CHANGELOG = [
+  "v.02.48.37 - Feat/Fluxo-Caixa: Substitui o filtro local de Status (que não era mais relevante) por um filtro de Conta DRE na página principal do Fluxo de Caixa, permitindo filtrar todos os KPIs, gráficos e tabelas por uma conta DRE específica selecionada pelo usuário.",
+
   "v.02.48.36 - Fix/Fluxo-Caixa: Corrige o mapeamento de retorno do endpoint de consulta do fluxo de caixa (/api/omie/fluxo-caixa) adicionando o campo 'conta_dre' que estava ausente no objeto mappedRecords. Adiciona também o campo 'conta_dre' à interface FluxoLancamento no componente 'FluxoDetalhadoTable' para resolver o agrupamento correto das categorias dentro das respectivas contas DRE no frontend.",
 
   "v.02.48.35 - Fix/Fluxo-Caixa: Corrige o bug de sincronização que retornava 0 registros para períodos futuros. Como a Omie API não possui filtro direto por data de vencimento (vencimento/previsão), a sincronização foi ajustada para buscar títulos criados ou alterados a partir de 365 dias antes do início do período solicitado, e então realizar a filtragem estrita por data de vencimento em memória no backend.",

@@ -27,7 +27,7 @@ import {
 // Interface para Filtros Locais
 interface FluxoFilters {
   tipo: string;
-  status: string;
+  contaDre: string;
   categoria: string;
   projeto: string;
   search: string;
@@ -55,7 +55,7 @@ export default function FluxoCaixaPage() {
   // Filtros Locais
   const [filters, setFilters] = useState<FluxoFilters>({
     tipo: "TODOS",
-    status: "TODOS",
+    contaDre: "TODAS",
     categoria: "TODAS",
     projeto: "TODOS",
     search: ""
@@ -142,7 +142,7 @@ export default function FluxoCaixaPage() {
     setError(null);
     setFilters({
       tipo: "TODOS",
-      status: "TODOS",
+      contaDre: "TODAS",
       categoria: "TODAS",
       projeto: "TODOS",
       search: ""
@@ -158,9 +158,9 @@ export default function FluxoCaixaPage() {
       result = result.filter(item => item.tipo === activeFilters.tipo);
     }
 
-    // 2. Status (ABERTO / ATRASADO)
-    if (activeFilters.status !== "TODOS") {
-      result = result.filter(item => item.status === activeFilters.status);
+    // 2. Conta DRE
+    if (activeFilters.contaDre !== "TODAS") {
+      result = result.filter(item => item.conta_dre === activeFilters.contaDre);
     }
 
     // 3. Categoria
@@ -212,6 +212,7 @@ export default function FluxoCaixaPage() {
   // Listas exclusivas para os filtros dinâmicos
   const filterOptions = useMemo(() => {
     return {
+      contasDre: Array.from(new Set(allRecords.map(r => r.conta_dre).filter(Boolean))).sort() as string[],
       categorias: Array.from(new Set(allRecords.map(r => r.categoria_nome).filter(Boolean))).sort() as string[],
       projetos: Array.from(new Set(allRecords.map(r => r.projeto_nome).filter(Boolean))).sort() as string[]
     };
@@ -445,13 +446,14 @@ export default function FluxoCaixaPage() {
 
                 <div>
                   <select
-                    value={filters.status}
-                    onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                    value={filters.contaDre}
+                    onChange={(e) => setFilters(prev => ({ ...prev, contaDre: e.target.value }))}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer"
                   >
-                    <option value="TODOS">Todos Status</option>
-                    <option value="ABERTO">Projetados (A vencer)</option>
-                    <option value="ATRASADO">Atrasados</option>
+                    <option value="TODAS">Todas Contas DRE</option>
+                    {filterOptions.contasDre.map(dre => (
+                      <option key={dre} value={dre}>{dre}</option>
+                    ))}
                   </select>
                 </div>
 
