@@ -36,9 +36,9 @@ export function PeriodSelector({ onGenerate, isLoading, compact = false, initial
     switch (selectedPreset) {
       case "semana":
         const dayOfWeek = today.getDay(); // 0 (Dom) a 6 (Sab)
-        const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        start.setDate(today.getDate() + distanceToMonday);
-        end.setDate(start.getDate() + 6);
+        // A semana começa no domingo (dia 0). Distância para o domingo é simplesmente -dayOfWeek.
+        start.setDate(today.getDate() - dayOfWeek);
+        end.setDate(start.getDate() + 6); // Sábado
         break;
       case "15dias":
         // Hoje até hoje + 14 dias
@@ -195,7 +195,7 @@ export function PeriodSelector({ onGenerate, isLoading, compact = false, initial
               }`}
             >
               <div className="text-sm">Esta Semana</div>
-              <div className="text-[10px] text-slate-400 mt-1">Segunda a Domingo</div>
+              <div className="text-[10px] text-slate-400 mt-1">Domingo a Sábado</div>
             </button>
             <button
               type="button"

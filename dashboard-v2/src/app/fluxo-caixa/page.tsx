@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { HeaderFinanceiro } from "@/components/layout/HeaderFinanceiro";
 import { StatCard } from "@/components/loans/StatCard";
 import { PeriodSelector } from "@/components/fluxo-caixa/PeriodSelector";
@@ -27,10 +27,150 @@ import {
 // Interface para Filtros Locais
 interface FluxoFilters {
   tipo: string;
-  contaDre: string;
-  categoria: string;
-  projeto: string;
+  contasDre: string[];
+  categorias: string[];
+  projetos: string[];
   search: string;
+}
+
+// Componente MultiSelectDropdown Light Mode para os filtros do Fluxo de Caixa
+interface MultiSelectProps {
+  label: string;
+  options: string[];
+  selected: string[];
+  onToggle: (val: string) => void;
+  onSelectAll: () => void;
+  onClear: () => void;
+  placeholder?: string;
+}
+
+function MultiSelectDropdown({
+  label,
+  options,
+  selected,
+  onToggle,
+  onSelectAll,
+  onClear,
+  placeholder = "Buscar..."
+}: MultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = options.filter(o => 
+    String(o || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const displayLabel = selected.length === 0
+    ? "Nenhum"
+    : selected.length === options.length
+    ? "Todos"
+    : selected.length === 1
+    ? selected[0]
+    : `${selected.length} selecionados`;
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center justify-between gap-1.5 bg-slate-50 border border-slate-200 text-slate-850 rounded-xl px-3 py-2.5 text-xs font-semibold hover:bg-slate-100/75 transition-all cursor-pointer w-full text-left shadow-sm h-[38px]"
+      >
+        <div className="flex items-center gap-1.5 truncate">
+          <span className="font-bold text-slate-400 text-[10px] uppercase tracking-wider">{label}:</span>
+          <span className={`truncate text-xs ${selected.length > 0 ? "text-emerald-700 font-bold" : "text-slate-400 font-medium"}`}>
+            {displayLabel}
+          </span>
+        </div>
+        <svg
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 flex-shrink-0 ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-full min-w-[220px] max-h-[280px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1 duration-150">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-105 bg-slate-50 flex-shrink-0">
+            <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">{label}</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onSelectAll}
+                className="text-[9px] text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer"
+              >
+                Marcar Todos
+              </button>
+              <button
+                type="button"
+                onClick={onClear}
+                className="text-[9px] text-slate-500 hover:text-rose-600 font-bold cursor-pointer"
+              >
+                Desmarcar Todos
+              </button>
+            </div>
+          </div>
+          {/* Search */}
+          {options.length > 5 && (
+            <div className="px-2 py-1.5 border-b border-slate-100 flex-shrink-0">
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={placeholder}
+                className="bg-slate-50 border border-slate-150 rounded-lg px-2 py-1 w-full focus:outline-none text-xs placeholder:text-slate-400"
+              />
+            </div>
+          )}
+          {/* Options */}
+          <div className="overflow-y-auto py-1 flex-1 scrollbar-thin">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-slate-400 px-3 py-2 italic">Nenhum resultado</p>
+            ) : (
+              filtered.map(opt => {
+                const isSelected = selected.includes(opt);
+                return (
+                  <button
+                    type="button"
+                    key={opt}
+                    onClick={() => onToggle(opt)}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-all
+                      ${isSelected ? 'bg-emerald-600 border-emerald-600' : 'border-slate-300 bg-white'}`}
+                    >
+                      {isSelected && (
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                          <path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                    <span className={`truncate ${isSelected ? 'text-slate-950 font-bold' : 'text-slate-600 font-medium'}`}>
+                      {opt}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function FluxoCaixaPage() {
@@ -55,16 +195,54 @@ export default function FluxoCaixaPage() {
   // Filtros Locais
   const [filters, setFilters] = useState<FluxoFilters>({
     tipo: "TODOS",
-    contaDre: "TODAS",
-    categoria: "TODAS",
-    projeto: "TODOS",
+    contasDre: [],
+    categorias: [],
+    projetos: [],
     search: ""
   });
+
+  // Inicializar filtros locais com todos os itens disponíveis quando os registros mudam
+  useEffect(() => {
+    if (allRecords.length > 0) {
+      const uniqueDREs = Array.from(new Set(allRecords.map(r => r.conta_dre).filter(Boolean))) as string[];
+      const uniqueCats = Array.from(new Set(allRecords.map(r => r.categoria_nome).filter(Boolean))) as string[];
+      const uniqueProjs = Array.from(new Set(allRecords.map(r => r.projeto_nome).filter(Boolean))) as string[];
+      
+      setFilters(prev => ({
+        ...prev,
+        contasDre: uniqueDREs,
+        categorias: uniqueCats,
+        projetos: uniqueProjs
+      }));
+    }
+  }, [allRecords]);
 
   // Gatilho de filtro quando as regras mudam
   useEffect(() => {
     applyFilters(allRecords, filters);
   }, [allRecords, filters]);
+
+  // Handlers para os filtros de seleção múltipla
+  const handleToggleFilter = (key: 'contasDre' | 'categorias' | 'projetos', val: string) => {
+    setFilters(prev => {
+      const current = [...prev[key]];
+      const idx = current.indexOf(val);
+      if (idx > -1) {
+        current.splice(idx, 1);
+      } else {
+        current.push(val);
+      }
+      return { ...prev, [key]: current };
+    });
+  };
+
+  const handleSelectAllFilter = (key: 'contasDre' | 'categorias' | 'projetos', options: string[]) => {
+    setFilters(prev => ({ ...prev, [key]: [...options] }));
+  };
+
+  const handleClearFilter = (key: 'contasDre' | 'categorias' | 'projetos') => {
+    setFilters(prev => ({ ...prev, [key]: [] }));
+  };
 
   // Limpar mensagem de sucesso do sync após 5 segundos
   useEffect(() => {
@@ -142,9 +320,9 @@ export default function FluxoCaixaPage() {
     setError(null);
     setFilters({
       tipo: "TODOS",
-      contaDre: "TODAS",
-      categoria: "TODAS",
-      projeto: "TODOS",
+      contasDre: [],
+      categorias: [],
+      projetos: [],
       search: ""
     });
   };
@@ -158,19 +336,25 @@ export default function FluxoCaixaPage() {
       result = result.filter(item => item.tipo === activeFilters.tipo);
     }
 
-    // 2. Conta DRE
-    if (activeFilters.contaDre !== "TODAS") {
-      result = result.filter(item => item.conta_dre === activeFilters.contaDre);
+    // 2. Contas DRE
+    if (activeFilters.contasDre.length > 0) {
+      result = result.filter(item => activeFilters.contasDre.includes(item.conta_dre));
+    } else {
+      result = [];
     }
 
-    // 3. Categoria
-    if (activeFilters.categoria !== "TODAS") {
-      result = result.filter(item => item.categoria_nome === activeFilters.categoria);
+    // 3. Categorias
+    if (activeFilters.categorias.length > 0) {
+      result = result.filter(item => activeFilters.categorias.includes(item.categoria_nome));
+    } else {
+      result = [];
     }
 
-    // 4. Projeto
-    if (activeFilters.projeto !== "TODOS") {
-      result = result.filter(item => item.projeto_nome === activeFilters.projeto);
+    // 4. Projetos
+    if (activeFilters.projetos.length > 0) {
+      result = result.filter(item => activeFilters.projetos.includes(item.projeto_nome));
+    } else {
+      result = [];
     }
 
     // 5. Busca
@@ -420,7 +604,7 @@ export default function FluxoCaixaPage() {
               </div>
 
               {/* Filtros Locais (Busca + Filtros Avançados) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                 <div className="relative lg:col-span-2">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                   <input
@@ -428,7 +612,7 @@ export default function FluxoCaixaPage() {
                     placeholder="Pesquisar fornecedor, obs..."
                     value={filters.search}
                     onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-9 pr-4 text-xs font-semibold outline-none focus:border-emerald-500 h-[38px]"
                   />
                 </div>
 
@@ -436,7 +620,7 @@ export default function FluxoCaixaPage() {
                   <select
                     value={filters.tipo}
                     onChange={(e) => setFilters(prev => ({ ...prev, tipo: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer h-[38px] shadow-sm"
                   >
                     <option value="TODOS">Todos Lançamentos</option>
                     <option value="RECEBER">Receber (Entradas)</option>
@@ -445,29 +629,36 @@ export default function FluxoCaixaPage() {
                 </div>
 
                 <div>
-                  <select
-                    value={filters.contaDre}
-                    onChange={(e) => setFilters(prev => ({ ...prev, contaDre: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer"
-                  >
-                    <option value="TODAS">Todas Contas DRE</option>
-                    {filterOptions.contasDre.map(dre => (
-                      <option key={dre} value={dre}>{dre}</option>
-                    ))}
-                  </select>
+                  <MultiSelectDropdown
+                    label="Contas DRE"
+                    options={filterOptions.contasDre}
+                    selected={filters.contasDre}
+                    onToggle={(val) => handleToggleFilter('contasDre', val)}
+                    onSelectAll={() => handleSelectAllFilter('contasDre', filterOptions.contasDre)}
+                    onClear={() => handleClearFilter('contasDre')}
+                  />
                 </div>
 
                 <div>
-                  <select
-                    value={filters.categoria}
-                    onChange={(e) => setFilters(prev => ({ ...prev, categoria: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer"
-                  >
-                    <option value="TODAS">Todas Categorias</option>
-                    {filterOptions.categorias.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                  <MultiSelectDropdown
+                    label="Categorias"
+                    options={filterOptions.categorias}
+                    selected={filters.categorias}
+                    onToggle={(val) => handleToggleFilter('categorias', val)}
+                    onSelectAll={() => handleSelectAllFilter('categorias', filterOptions.categorias)}
+                    onClear={() => handleClearFilter('categorias')}
+                  />
+                </div>
+
+                <div>
+                  <MultiSelectDropdown
+                    label="Projetos"
+                    options={filterOptions.projetos}
+                    selected={filters.projetos}
+                    onToggle={(val) => handleToggleFilter('projetos', val)}
+                    onSelectAll={() => handleSelectAllFilter('projetos', filterOptions.projetos)}
+                    onClear={() => handleClearFilter('projetos')}
+                  />
                 </div>
               </div>
             </div>

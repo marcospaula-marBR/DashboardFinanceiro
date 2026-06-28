@@ -60,14 +60,14 @@ export function FluxoCharts({ lancamentos, groupBy }: FluxoChartsProps) {
       } else if (groupBy === "semanal") {
         const dateObj = new Date(dateStr + "T12:00:00");
         const day = dateObj.getDay();
-        const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
-        const monday = new Date(dateObj.setDate(diff));
-        const mondayStr = monday.toISOString().split("T")[0];
+        const diff = dateObj.getDate() - day; // Domingo
+        const sunday = new Date(dateObj.setDate(diff));
+        const sundayStr = sunday.toISOString().split("T")[0];
         
-        key = mondayStr;
-        const parts = mondayStr.split("-");
-        label = `${parts[2]}/${parts[1]}`; // DD/MM da segunda-feira
-        dateSort = mondayStr;
+        key = sundayStr;
+        const parts = sundayStr.split("-");
+        label = `${parts[2]}/${parts[1]}`; // DD/MM do domingo
+        dateSort = sundayStr;
       } else {
         const [year, month] = dateStr.split("-");
         key = `${year}-${month}`;
@@ -171,20 +171,8 @@ export function FluxoCharts({ lancamentos, groupBy }: FluxoChartsProps) {
             />
             <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
             
-            {/* Barras de Entradas e Saídas agrupadas */}
-            <Bar dataKey="Entradas" name="Entradas" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
-            <Bar dataKey="Saídas" name="Saídas" fill="#64748b" radius={[4, 4, 0, 0]} maxBarSize={30} />
-            
-            {/* Linha do Resultado Líquido */}
-            <Line 
-              type="monotone" 
-              dataKey="Resultado" 
-              name="Resultado Líquido" 
-              stroke="#2563eb" 
-              strokeWidth={3} 
-              dot={{ r: 4, strokeWidth: 2, fill: "#fff" }}
-              activeDot={{ r: 6 }}
-            />
+            {/* Barras de Saídas */}
+            <Bar dataKey="Saídas" name="Saídas (Saída de Caixa)" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={35} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

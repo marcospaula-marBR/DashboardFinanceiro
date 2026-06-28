@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.37";
+export const APP_VERSION = "v.02.48.38";
 export const VERSION_DATE = "2026-06-28";
 export const VERSION_CHANGELOG = [
+  "v.02.48.38 - Feat/Fluxo-Caixa: Altera o agrupamento semanal para iniciar sempre no domingo e terminar no sábado no seletor de período, tabela consolidada e gráficos. Refatora o gráfico de evolução para exibir apenas as saídas (saídas de caixa) em barras com cor rose, otimizando o visual. Substitui os seletores dropdown comuns por componentes MultiSelectDropdown customizados (com checkboxes) para Contas DRE, Categorias e Projetos, iniciando com todos os itens marcados por padrão e permitindo marcar/desmarcar de forma massiva ou individual.",
+
   "v.02.48.37 - Feat/Fluxo-Caixa: Substitui o filtro local de Status (que não era mais relevante) por um filtro de Conta DRE na página principal do Fluxo de Caixa, permitindo filtrar todos os KPIs, gráficos e tabelas por uma conta DRE específica selecionada pelo usuário.",
 
   "v.02.48.36 - Fix/Fluxo-Caixa: Corrige o mapeamento de retorno do endpoint de consulta do fluxo de caixa (/api/omie/fluxo-caixa) adicionando o campo 'conta_dre' que estava ausente no objeto mappedRecords. Adiciona também o campo 'conta_dre' à interface FluxoLancamento no componente 'FluxoDetalhadoTable' para resolver o agrupamento correto das categorias dentro das respectivas contas DRE no frontend.",

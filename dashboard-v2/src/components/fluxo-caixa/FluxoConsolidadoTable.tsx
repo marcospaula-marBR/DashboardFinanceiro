@@ -44,16 +44,16 @@ export function FluxoConsolidadoTable({ lancamentos, groupBy }: FluxoConsolidado
         label = dateStr.split("-").reverse().join("/");
         dateSort = dateStr;
       } else if (groupBy === "semanal") {
-        // Obter segunda-feira correspondente à data
+        // Obter domingo correspondente à data
         const dateObj = new Date(dateStr + "T12:00:00");
         const day = dateObj.getDay();
-        const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1); // Segunda-feira
-        const monday = new Date(dateObj.setDate(diff));
-        const mondayStr = monday.toISOString().split("T")[0];
+        const diff = dateObj.getDate() - day; // Domingo
+        const sunday = new Date(dateObj.setDate(diff));
+        const sundayStr = sunday.toISOString().split("T")[0];
         
-        key = mondayStr;
-        label = `Semana de ${mondayStr.split("-").reverse().join("/")}`;
-        dateSort = mondayStr;
+        key = sundayStr;
+        label = `Semana de ${sundayStr.split("-").reverse().join("/")}`;
+        dateSort = sundayStr;
       } else {
         // Mensal
         const [year, month] = dateStr.split("-");
