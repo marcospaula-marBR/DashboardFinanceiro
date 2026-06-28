@@ -115,9 +115,10 @@ export async function POST(req: Request) {
     }
 
     // 2. Carregar dimensões do Supabase para tradução (Categorias, Projetos e DRE)
-    const [catData, dreData] = await Promise.all([
+    const [catData, dreData, projData] = await Promise.all([
       supabase.from('omie_dim_categorias').select('codigo_categoria, descricao_categoria, codigo_conta_dre, empresa_nome'),
-      supabase.from('omie_dim_dre').select('codigo_conta_dre, descricao_conta_dre')
+      supabase.from('omie_dim_dre').select('codigo_conta_dre, descricao_conta_dre'),
+      supabase.from('omie_dim_projetos').select('codigo_projeto, descricao_projeto')
     ]);
 
     // Mapeamentos de dimensões
@@ -133,6 +134,11 @@ export async function POST(req: Request) {
     const dimDRE = new Map<string, string>();
     (dreData.data || []).forEach(d => {
       dimDRE.set(String(d.codigo_conta_dre).trim(), d.descricao_conta_dre);
+    });
+
+    const dimProjetos = new Map<string, string>();
+    (projData.data || []).forEach(p => {
+      dimProjetos.set(String(p.codigo_projeto).trim(), p.descricao_projeto);
     });
 
     let totalReturned = 0;
@@ -230,6 +236,9 @@ export async function POST(req: Request) {
         const codigoDre = catInfo?.codigo_dre || '';
         const contaDreNome = codigoDre ? (dimDRE.get(codigoDre) || `Conta ${codigoDre}`) : 'Outras Despesas';
 
+        const projCode = String(r.codigo_projeto || '').trim();
+        const projetoNome = projCode ? (dimProjetos.get(projCode) || `Projeto ${projCode}`) : 'Sem Projeto';
+
         rowsToUpsert.push({
           origem: 'omie',
           omie_id: omieId,
@@ -240,7 +249,7 @@ export async function POST(req: Request) {
           valor: Number(r.valor_documento || 0) * -1, // Negativo para pagar
           conta_dre: contaDreNome,
           categoria: categoriaNome,
-          projeto: r.nome_projeto || 'Sem Projeto',
+          projeto: projetoNome,
           empresa: comp.name,
           fornecedor: r.nm_cliente || 'Fornecedor',
           observacao: r.observacao || null,
@@ -265,6 +274,9 @@ export async function POST(req: Request) {
         const codigoDre = catInfo?.codigo_dre || '';
         const contaDreNome = codigoDre ? (dimDRE.get(codigoDre) || `Conta ${codigoDre}`) : 'Receita Operacional';
 
+        const projCode = String(r.codigo_projeto || '').trim();
+        const projetoNome = projCode ? (dimProjetos.get(projCode) || `Projeto ${projCode}`) : 'Sem Projeto';
+
         rowsToUpsert.push({
           origem: 'omie',
           omie_id: omieId,
@@ -275,7 +287,7 @@ export async function POST(req: Request) {
           valor: Number(r.valor_documento || 0), // Positivo para receber
           conta_dre: contaDreNome,
           categoria: categoriaNome,
-          projeto: r.nome_projeto || 'Sem Projeto',
+          projeto: projetoNome,
           empresa: comp.name,
           fornecedor: r.nm_cliente || 'Cliente',
           observacao: r.observacao || null,

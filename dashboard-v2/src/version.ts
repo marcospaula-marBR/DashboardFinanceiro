@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.38";
+export const APP_VERSION = "v.02.48.39";
 export const VERSION_DATE = "2026-06-28";
 export const VERSION_CHANGELOG = [
+  "v.02.48.39 - Fix/Fluxo-Caixa: Corrige o mapeamento de projetos na sincronização (/api/omie/fluxo-caixa/sync). Como a Omie API apenas retorna o 'codigo_projeto', implementa a consulta à tabela 'omie_dim_projetos' no Supabase para traduzir os IDs de projetos para seus respectivos nomes descritivos, preenchendo corretamente o novo filtro de projetos do painel.",
+
   "v.02.48.38 - Feat/Fluxo-Caixa: Altera o agrupamento semanal para iniciar sempre no domingo e terminar no sábado no seletor de período, tabela consolidada e gráficos. Refatora o gráfico de evolução para exibir apenas as saídas (saídas de caixa) em barras com cor rose, otimizando o visual. Substitui os seletores dropdown comuns por componentes MultiSelectDropdown customizados (com checkboxes) para Contas DRE, Categorias e Projetos, iniciando com todos os itens marcados por padrão e permitindo marcar/desmarcar de forma massiva ou individual.",
 
   "v.02.48.37 - Feat/Fluxo-Caixa: Substitui o filtro local de Status (que não era mais relevante) por um filtro de Conta DRE na página principal do Fluxo de Caixa, permitindo filtrar todos os KPIs, gráficos e tabelas por uma conta DRE específica selecionada pelo usuário.",
