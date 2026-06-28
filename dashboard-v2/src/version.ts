@@ -1,6 +1,8 @@
-export const APP_VERSION = "v.02.48.34";
+export const APP_VERSION = "v.02.48.35";
 export const VERSION_DATE = "2026-06-28";
 export const VERSION_CHANGELOG = [
+  "v.02.48.35 - Fix/Fluxo-Caixa: Corrige o bug de sincronização que retornava 0 registros para períodos futuros. Como a Omie API não possui filtro direto por data de vencimento (vencimento/previsão), a sincronização foi ajustada para buscar títulos criados ou alterados a partir de 365 dias antes do início do período solicitado, e então realizar a filtragem estrita por data de vencimento em memória no backend.",
+
   "v.02.48.34 - Feat/Fluxo-Caixa: Reestrutura a arquitetura da página de Fluxo de Caixa para ser 100% orientada ao Supabase como cache e persistência segura. Cria as tabelas 'fluxo_caixa_projetado' e 'logs_sincronizacao_fluxo', e cria os endpoints de consulta e sincronização manual (/api/omie/fluxo-caixa e /api/omie/fluxo-caixa/sync). Atualiza o frontend para exibir um banner informativo do status da última sincronização com opção de atualização manual rápida. Reformula a tabela de lançamentos detalhados ('FluxoDetalhadoTable') em um formato expansível e hierárquico moderno agrupado por Conta DRE e Categoria, removendo as colunas status, fornecedor/cliente, tipo e ações.",
 
   "v.02.48.33 - Fix/Fluxo-Caixa: Atualiza o script principal de sincronização 'sync_omie_unified_v4.py' para utilizar o método delete-and-insert na persistência do Supabase, contornando a ausência de restrição de unicidade e evitando duplicatas. Garante também que o status 'RECEBIDO' seja mapeado com sua respectiva data de pagamento no script principal.",

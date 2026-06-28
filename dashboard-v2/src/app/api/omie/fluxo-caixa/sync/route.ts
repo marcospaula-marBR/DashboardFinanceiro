@@ -81,8 +81,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'error', message: 'Formato de data inválido.' }, { status: 400 });
     }
 
-    const brStart = formatDateToBR(isoStart);
-    const brEnd = formatDateToBR(isoEnd);
+    // Regra de Ouro: Como a Omie não filtra por data de vencimento, buscamos registros
+    // alterados/criados a partir de 365 dias antes do início do período selecionado até a data atual.
+    const dateDe = new Date(isoStart);
+    dateDe.setDate(dateDe.getDate() - 365);
+    const brSyncStart = formatDateToBR(dateDe.toISOString().split('T')[0]);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const maxEnd = isoEnd > todayStr ? isoEnd : todayStr;
+    const brSyncEnd = formatDateToBR(maxEnd);
+
+    console.log(`[Sync Fluxo] Chamando Omie: Alterações de ${brSyncStart} até ${brSyncEnd} para filtrar vencimentos entre ${startDate} e ${endDate}`);
 
     // 1. Identificar quais empresas serão sincronizadas
     const companiesToSync: { name: string; key: string | undefined; secret: string | undefined }[] = [];
@@ -138,10 +147,10 @@ export async function POST(req: Request) {
         continue;
       }
 
-      // Buscar Contas a Pagar (CP) da Omie no período
+      // Buscar Contas a Pagar (CP) da Omie
       let cpPage = 1;
       const cpRecords: any[] = [];
-      while (true) {
+      while (cpPage <= 40) {
         const data = await callOmieAPI(
           'https://app.omie.com.br/api/v1/financas/contapagar/',
           'ListarContasPagar',
@@ -150,8 +159,8 @@ export async function POST(req: Request) {
           {
             pagina: cpPage,
             registros_por_pagina: 100,
-            filtrar_por_data_de: brStart,
-            filtrar_por_data_ate: brEnd,
+            filtrar_por_data_de: brSyncStart,
+            filtrar_por_data_ate: brSyncEnd,
             exibir_obs: 'S'
           }
         );
@@ -162,10 +171,10 @@ export async function POST(req: Request) {
         cpPage++;
       }
 
-      // Buscar Contas a Receber (CR) da Omie no período
+      // Buscar Contas a Receber (CR) da Omie
       let crPage = 1;
       const crRecords: any[] = [];
-      while (true) {
+      while (crPage <= 40) {
         const data = await callOmieAPI(
           'https://app.omie.com.br/api/v1/financas/contareceber/',
           'ListarContasReceber',
@@ -174,8 +183,8 @@ export async function POST(req: Request) {
           {
             pagina: crPage,
             registros_por_pagina: 100,
-            filtrar_por_data_de: brStart,
-            filtrar_por_data_ate: brEnd,
+            filtrar_por_data_de: brSyncStart,
+            filtrar_por_data_ate: brSyncEnd,
             exibir_obs: 'S'
           }
         );
@@ -194,8 +203,18 @@ export async function POST(req: Request) {
         return s !== 'PAGO' && s !== 'LIQUIDADO' && s !== 'RECEBIDO' && s !== 'EXCLUIDO' && s !== 'CANCELADO';
       };
 
-      const activeCP = cpRecords.filter(r => isOpen(r.status_titulo));
-      const activeCR = crRecords.filter(r => isOpen(r.status_titulo));
+      // Filtrar também pela data de previsão (vencimento do fluxo) estar dentro de [isoStart, isoEnd]
+      const activeCP = cpRecords.filter(r => {
+        if (!isOpen(r.status_titulo)) return false;
+        const dtPrevisao = formatToISODate(r.data_previsao) || formatToISODate(r.data_vencimento);
+        return dtPrevisao && dtPrevisao >= isoStart && dtPrevisao <= isoEnd;
+      });
+
+      const activeCR = crRecords.filter(r => {
+        if (!isOpen(r.status_titulo)) return false;
+        const dtPrevisao = formatToISODate(r.data_previsao) || formatToISODate(r.data_vencimento);
+        return dtPrevisao && dtPrevisao >= isoStart && dtPrevisao <= isoEnd;
+      });
 
       const rowsToUpsert: any[] = [];
 
@@ -271,7 +290,6 @@ export async function POST(req: Request) {
 
       // Executar Upsert no Supabase
       if (rowsToUpsert.length > 0) {
-        // Deletar os registros com a mesma chave composta antes do insert para simular um upsert limpo
         for (const row of rowsToUpsert) {
           const { data: existing } = await supabase
             .from('fluxo_caixa_projetado')
@@ -301,8 +319,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Exclusão lógica: Identificar registros no Supabase para este período que não vieram na resposta ativa da Omie
-    // E marcá-los como ativo = false e excluido_no_omie = true
+    // 3. Exclusão lógica para este período
     let querySupabase = supabase
       .from('fluxo_caixa_projetado')
       .select('id, omie_id, empresa, tipo_registro')
@@ -373,7 +390,6 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('[Sync Fluxo] Erro crítico na sincronização:', error);
     
-    // Salvar log de erro
     const elapsedTime = Date.now() - startTime;
     await supabase
       .from('logs_sincronizacao_fluxo')
