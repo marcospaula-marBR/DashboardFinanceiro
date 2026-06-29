@@ -489,7 +489,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Data Loading
     loadStateFromStorage();
-    tryAutoLoad();
+    if (!state.rawData || state.rawData.length === 0) {
+        tryAutoLoad();
+    }
 
     // Version UI
     const vEl = document.getElementById('appVersion');

@@ -102,10 +102,28 @@ export default function DrePage() {
       .catch(err => console.warn("Template remoto indisponível, usando padrão embutido:", err));
   }, []);
 
-  // 4. Sincroniza dados brutos e filtros no localStorage para que a página estática de Indicadores os utilize
+  // 4. Sincroniza dados filtrados e filtros no localStorage para que a página estática de Indicadores os utilize
   useEffect(() => {
     if (typeof window !== 'undefined' && rawData.length > 0) {
-      localStorage.setItem('dre_raw_data', JSON.stringify(rawData));
+      // Pré-filtra as linhas de acordo com os filtros ativos na tela da DRE
+      let filteredRows = rawData;
+      if (filters.empresas && filters.empresas.length > 0) {
+        filteredRows = filteredRows.filter(row => filters.empresas.includes(row.Empresa));
+      }
+      if (filters.departamentos && filters.departamentos.length > 0) {
+        filteredRows = filteredRows.filter(row => filters.departamentos.includes(row.Departamento));
+      }
+      if (filters.contasDre && filters.contasDre.length > 0) {
+        filteredRows = filteredRows.filter(row => filters.contasDre.includes(row.ContaDRE));
+      }
+      if (filters.projetos && filters.projetos.length > 0) {
+        filteredRows = filteredRows.filter(row => filters.projetos.includes(row.Projeto));
+      }
+      if (filters.categorias && filters.categorias.length > 0) {
+        filteredRows = filteredRows.filter(row => filters.categorias.includes(row.Categoria));
+      }
+
+      localStorage.setItem('dre_raw_data', JSON.stringify(filteredRows));
       localStorage.setItem('dre_filters', JSON.stringify(filters));
     }
   }, [rawData, filters]);

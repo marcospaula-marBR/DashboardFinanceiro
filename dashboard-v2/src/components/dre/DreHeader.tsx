@@ -83,6 +83,8 @@ export function DreHeader({
 
         <Link 
           href="/indicadores_v2.html" 
+          target="_blank"
+          rel="noopener noreferrer"
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all duration-200 shadow-sm active:scale-95"
           title="Indicadores Estratégicos"
         >

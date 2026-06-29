@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.43";
+export const APP_VERSION = "v.02.48.44";
 export const VERSION_DATE = "2026-06-29";
 export const VERSION_CHANGELOG = [
+  "v.02.48.44 - Feat/Indicadores: Abre a página de Indicadores em uma nova aba ao clicar no botão. Altera o botão de retorno da página de Indicadores para apontar para a DRE (/dre) em vez da raiz. Corrige o carregamento de dados pré-filtrados, evitando que o auto-load de dados estáticos limpe o cache do localStorage.",
   "v.02.48.43 - Feat/Indicadores: Reativa e exibe o botão 'Indicadores' no cabeçalho superior direito da página DRE, posicionado ao lado dos botões de simulação e privacidade, facilitando a navegação direta e rápida para os Indicadores Estratégicos.",
   "v.02.48.42 - Feat/Indicadores: Sincroniza a página de Indicadores estática (indicadores_v2.html) com os dados e filtros ativos da nova DRE em tempo real via localStorage. Corrige também a formatação visual do cabeçalho da página de Indicadores adicionando o arquivo de estilos base styles.css (que estava ausente) e redimensionando o logotipo para 45px para alinhamento correto com o título.",
   "v.02.48.41 - Feat/Emprestimos: Implementa componente de busca e filtro por texto (Single-Select Autocomplete) no seletor de colaboradores do modal de novos empréstimos. Isso melhora a usabilidade e facilita a localização rápida de colaboradores em uma lista expandida com todos os funcionários ativos da empresa.",
