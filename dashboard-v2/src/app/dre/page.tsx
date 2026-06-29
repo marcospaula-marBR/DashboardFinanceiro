@@ -12,6 +12,7 @@ import { SmartAlerts } from '@/components/dre/SmartAlerts';
 import { DreSimulatorV2 } from '@/components/dre/DreSimulatorV2';
 import { DreEquipmentsModal } from '@/components/dre/DreEquipmentsModal';
 import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
+import { DreIndicatorsModal } from '@/components/dre/DreIndicatorsModal';
 import { DreLancamentosService } from '@/services/dre-lancamentos.service';
 import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
@@ -53,6 +54,7 @@ export default function DrePage() {
   const [equipamentoCounts, setEquipamentoCounts] = useState<Record<string, Record<string, number>>>({});
   const [isEquipmentsModalOpen, setIsEquipmentsModalOpen] = useState(false);
   const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
+  const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false);
   const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
   const [simParams, setSimParams] = useState<DreSimulationParams>({
     revenueMultiplier: 1.0,
@@ -684,6 +686,7 @@ export default function DrePage() {
               onPublish={handlePublishSnapshot}
               isSidebarCollapsed={isSidebarCollapsed}
               onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              onOpenIndicators={() => setIsIndicatorsOpen(true)}
             />
 
             {/* Botão de entrada manual — Conectius / Ybox / Histórico */}
@@ -813,6 +816,13 @@ export default function DrePage() {
         isOpen={isManualEntryOpen}
         onClose={() => setIsManualEntryOpen(false)}
         onSaved={loadLatestSnapshotFromDb}
+      />
+
+      <DreIndicatorsModal
+        isOpen={isIndicatorsOpen}
+        onClose={() => setIsIndicatorsOpen(false)}
+        results={results}
+        filters={filters}
       />
 
       {/* Off-screen renderer for high-quality PDF charts */}

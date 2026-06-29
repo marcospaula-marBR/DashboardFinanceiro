@@ -17,6 +17,7 @@ interface DreHeaderProps {
   // Sidebar toggle
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  onOpenIndicators: () => void;
 }
 
 export function DreHeader({ 
@@ -30,7 +31,8 @@ export function DreHeader({
   isPublishing,
   onPublish,
   isSidebarCollapsed,
-  onToggleSidebar
+  onToggleSidebar,
+  onOpenIndicators
 }: DreHeaderProps) {
   return (
     <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4 select-none">
@@ -81,16 +83,14 @@ export function DreHeader({
           <Eye size={18} />
         </button>
 
-        <Link 
-          href="/indicadores_v2.html" 
-          target="_blank"
-          rel="noopener noreferrer"
+        <button 
+          onClick={onOpenIndicators}
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all duration-200 shadow-sm active:scale-95"
           title="Indicadores Estratégicos"
         >
           <Gauge size={16} className="text-amber-500" />
           <span>Indicadores</span>
-        </Link>
+        </button>
         
         {/* Botão Máquinas Ocultado 
         <button
