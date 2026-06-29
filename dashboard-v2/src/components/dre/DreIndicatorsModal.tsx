@@ -369,7 +369,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
                     className={`group relative border p-4.5 rounded-2xl flex flex-col justify-between shadow-sm transition-all duration-300 hover:shadow-md cursor-help ${kpi.color}`}
                   >
                     {/* Hover Tooltip */}
-                    <div className="absolute z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-250 bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-4 bg-slate-900 text-white rounded-2xl shadow-xl border border-slate-800 text-xs leading-relaxed">
+                    <div className="absolute z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-250 top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-4 bg-slate-900 text-white rounded-2xl shadow-xl border border-slate-800 text-xs leading-relaxed">
                       <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-slate-850">
                         <span className="p-1 bg-slate-800 rounded text-amber-400">
                           {kpi.icon}
@@ -382,7 +382,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
                         <p className="text-slate-350 font-medium">{kpi.assessmentHelp}</p>
                       </div>
                       {/* Tooltip Arrow */}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-900" />
                     </div>
 
                     <div>
