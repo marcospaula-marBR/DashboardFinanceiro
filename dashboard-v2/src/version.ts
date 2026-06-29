@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.42";
+export const APP_VERSION = "v.02.48.43";
 export const VERSION_DATE = "2026-06-29";
 export const VERSION_CHANGELOG = [
+  "v.02.48.43 - Feat/Indicadores: Reativa e exibe o botão 'Indicadores' no cabeçalho superior direito da página DRE, posicionado ao lado dos botões de simulação e privacidade, facilitando a navegação direta e rápida para os Indicadores Estratégicos.",
   "v.02.48.42 - Feat/Indicadores: Sincroniza a página de Indicadores estática (indicadores_v2.html) com os dados e filtros ativos da nova DRE em tempo real via localStorage. Corrige também a formatação visual do cabeçalho da página de Indicadores adicionando o arquivo de estilos base styles.css (que estava ausente) e redimensionando o logotipo para 45px para alinhamento correto com o título.",
   "v.02.48.41 - Feat/Emprestimos: Implementa componente de busca e filtro por texto (Single-Select Autocomplete) no seletor de colaboradores do modal de novos empréstimos. Isso melhora a usabilidade e facilita a localização rápida de colaboradores em uma lista expandida com todos os funcionários ativos da empresa.",
   "v.02.48.40 - Fix/Emprestimos: Altera a elegibilidade de novos empréstimos (isEligibleForNewLoan) para considerar o status do colaborador (ativo, férias ou provisão) em vez do tipo de vínculo (internal_person). Isso permite que colaboradores ativos sob regime PJ ou MEI, que historicamente possuem contratos de empréstimo, apareçam corretamente na listagem de seleção para novos empréstimos no modal, enquanto exclui colaboradores inativos.",
