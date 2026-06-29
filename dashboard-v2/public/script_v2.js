@@ -3207,6 +3207,39 @@ function loadStateFromStorage() {
             window.FULL_CSV_DATA = data;
 
             extractMetadata(data);
+
+            // NOVO: Carrega os filtros salvos no localStorage a partir da página Next.js
+            const savedFilters = localStorage.getItem('dre_filters');
+            if (savedFilters) {
+                try {
+                    const parsedFilters = JSON.parse(savedFilters);
+                    state.filters.empresas = parsedFilters.empresas || [];
+                    state.filters.periodos = parsedFilters.periodos || [];
+                    state.filters.projetos = parsedFilters.projetos || [];
+                    state.filters.categorias = parsedFilters.categorias || [];
+
+                    // Atualiza a seleção visual dos filtros na UI
+                    const filterMappings = [
+                        { id: 'filterPeriodo', key: 'periodos' },
+                        { id: 'filterEmpresa', key: 'empresas' },
+                        { id: 'filterProjeto', key: 'projetos' },
+                        { id: 'filterCategoria', key: 'categorias' }
+                    ];
+
+                    filterMappings.forEach(mapping => {
+                        const el = document.getElementById(mapping.id);
+                        if (el) {
+                            const values = state.filters[mapping.key] || [];
+                            Array.from(el.options).forEach(opt => {
+                                opt.selected = values.includes(opt.value);
+                            });
+                        }
+                    });
+                } catch (filterErr) {
+                    console.warn("Erro ao processar filtros do localStorage:", filterErr);
+                }
+            }
+
             applyFilters();
 
             const fileStatus = document.getElementById('fileStatus');
@@ -3214,7 +3247,7 @@ function loadStateFromStorage() {
 
             const lastUpdate = document.getElementById('lastUpdate');
             if (lastUpdate && lastUpdate.textContent.includes('Aguardando')) {
-                lastUpdate.textContent = `Vibrando do cache local`;
+                lastUpdate.textContent = `Sincronizado com a nova DRE`;
             }
 
         } catch (e) {

@@ -102,6 +102,14 @@ export default function DrePage() {
       .catch(err => console.warn("Template remoto indisponível, usando padrão embutido:", err));
   }, []);
 
+  // 4. Sincroniza dados brutos e filtros no localStorage para que a página estática de Indicadores os utilize
+  useEffect(() => {
+    if (typeof window !== 'undefined' && rawData.length > 0) {
+      localStorage.setItem('dre_raw_data', JSON.stringify(rawData));
+      localStorage.setItem('dre_filters', JSON.stringify(filters));
+    }
+  }, [rawData, filters]);
+
   const loadFallbackSnapshot = async () => {
     try {
       const { data, error } = await supabase
