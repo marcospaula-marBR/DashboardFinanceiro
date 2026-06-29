@@ -162,37 +162,6 @@ export function DreSidebar({
     }
   };
 
-  const [selectedYear, setSelectedYear] = useState<string>(() => {
-    if (filters.periodos && filters.periodos.length > 0) {
-      const match = filters.periodos[0].match(/\/(\d{2})$/);
-      if (match) {
-        const year2d = match[1];
-        const allSameYear = filters.periodos.every(p => p.endsWith(`/${year2d}`));
-        if (allSameYear) return `20${year2d}`;
-      }
-    }
-    return 'Todos';
-  });
-
-  useEffect(() => {
-    if (!filters.periodos || filters.periodos.length === 0) {
-      setSelectedYear('Todos');
-    } else {
-      const match = filters.periodos[0].match(/\/(\d{2})$/);
-      if (match) {
-        const year2d = match[1];
-        const allSameYear = filters.periodos.every(p => p.endsWith(`/${year2d}`));
-        if (allSameYear) {
-          setSelectedYear(`20${year2d}`);
-        } else {
-          setSelectedYear('Todos');
-        }
-      }
-    }
-  }, [filters.periodos]);
-
-  // CASCADING FILTERS LOGIC
-  
   // 1. Available Empresas (global metadata)
   const availableEmpresas = useMemo(() => {
     return metadata?.empresas || [];
@@ -202,6 +171,53 @@ export function DreSidebar({
   const availablePeriodos = useMemo(() => {
     return metadata?.periodos || [];
   }, [metadata]);
+
+  const availableYears = useMemo(() => {
+    return extractYears(availablePeriodos);
+  }, [availablePeriodos]);
+
+  const selectedYears = useMemo(() => {
+    const years = new Set<string>();
+    filters.periodos.forEach(p => {
+      const match = p.match(/\/(\d{2})$/);
+      if (match) years.add(`20${match[1]}`);
+    });
+    return Array.from(years);
+  }, [filters.periodos]);
+
+  const visiblePeriodos = useMemo(() => {
+    if (selectedYears.length === 0) return availablePeriodos;
+    return availablePeriodos.filter(p => {
+      const match = p.match(/\/(\d{2})$/);
+      return match ? selectedYears.includes(`20${match[1]}`) : false;
+    });
+  }, [availablePeriodos, selectedYears]);
+
+  const handleToggleYear = (year: string) => {
+    const year2d = year.slice(2);
+    const monthsOfYear = availablePeriodos.filter(p => p.endsWith(`/${year2d}`));
+    
+    const isYearSelected = monthsOfYear.some(p => filters.periodos.includes(p));
+    
+    let newPeriodos = [...filters.periodos];
+    if (isYearSelected) {
+      newPeriodos = newPeriodos.filter(p => !p.endsWith(`/${year2d}`));
+    } else {
+      newPeriodos = [...newPeriodos, ...monthsOfYear];
+    }
+    
+    onFilterChange({
+      ...filters,
+      periodos: newPeriodos
+    });
+  };
+
+  const handleClearYears = () => {
+    onFilterChange({
+      ...filters,
+      periodos: []
+    });
+  };
 
   // 3. Filter raw data based on selected Empresa
   const rowsFilteredByEmpresa = useMemo(() => {
@@ -471,85 +487,31 @@ export function DreSidebar({
               <div className="w-full">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5 select-none">
                   <Calendar size={12} />
-                  Ano de Referência
+                  Anos de Referência
                 </label>
-                <select
-                  value={selectedYear}
-                  onChange={e => {
-                    const ano = e.target.value;
-                    setSelectedYear(ano);
-                    if (ano === 'Todos') {
-                      onFilterChange({
-                        ...filters,
-                        periodos: []
-                      });
-                    } else {
-                      const ano2d = ano.slice(2);
-                      const periodsOfYear = availablePeriodos.filter(p => p.endsWith(`/${ano2d}`));
-                      onFilterChange({
-                        ...filters,
-                        periodos: periodsOfYear
-                      });
-                    }
-                  }}
-                  className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-amber-500 hover:border-slate-600 transition-colors cursor-pointer shadow-sm font-semibold"
-                >
-                  <option value="Todos">Todos os Anos</option>
-                  {extractYears(availablePeriodos).map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
+                <MultiSelectDropdown
+                  label="Anos"
+                  icon={<Calendar size={13} />}
+                  options={availableYears}
+                  selected={selectedYears}
+                  onToggle={handleToggleYear}
+                  onClear={handleClearYears}
+                  fullWidth
+                />
               </div>
 
-              {/* Seletor de Mês (exibido apenas se um Ano específico for selecionado) */}
-              {selectedYear !== 'Todos' && (
-                <div className="w-full">
-                  <MultiSelectDropdown
-                    label="Meses"
-                    icon={<Calendar size={13} />}
-                    options={(() => {
-                      const ano2d = selectedYear.slice(2);
-                      return availablePeriodos.filter(p => p.endsWith(`/${ano2d}`));
-                    })()}
-                    selected={filters.periodos}
-                    onToggle={(v) => {
-                      let current = [...filters.periodos];
-                      const ano2d = selectedYear.slice(2);
-                      const periodsOfYear = availablePeriodos.filter(p => p.endsWith(`/${ano2d}`));
-                      
-                      const isAllYearSelected = periodsOfYear.every(p => current.includes(p)) && current.length === periodsOfYear.length;
-                      
-                      if (isAllYearSelected) {
-                        current = [v];
-                      } else {
-                        const idx = current.indexOf(v);
-                        if (idx > -1) {
-                          current.splice(idx, 1);
-                          if (current.length === 0) {
-                            current = periodsOfYear;
-                          }
-                        } else {
-                          current.push(v);
-                        }
-                      }
-                      
-                      onFilterChange({
-                        ...filters,
-                        periodos: current
-                      });
-                    }}
-                    onClear={() => {
-                      const ano2d = selectedYear.slice(2);
-                      const periodsOfYear = availablePeriodos.filter(p => p.endsWith(`/${ano2d}`));
-                      onFilterChange({
-                        ...filters,
-                        periodos: periodsOfYear
-                      });
-                    }}
-                    fullWidth
-                  />
-                </div>
-              )}
+              {/* Seletor de Mês */}
+              <div className="w-full">
+                <MultiSelectDropdown
+                  label="Meses"
+                  icon={<Calendar size={13} />}
+                  options={visiblePeriodos}
+                  selected={filters.periodos}
+                  onToggle={(v) => toggleFilter('periodos', v)}
+                  onClear={() => clearGroup('periodos')}
+                  fullWidth
+                />
+              </div>
             </div>
 
             {/* 3. DEPARTAMENTO */}
