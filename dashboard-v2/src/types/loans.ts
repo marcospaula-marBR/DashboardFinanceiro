@@ -483,7 +483,9 @@ export function inferEntityType(employee: Partial<Employee>): EntityType {
 }
 
 export function isEligibleForNewLoan(employee: Employee): boolean {
-  return inferEntityType(employee) === "internal_person";
+  if (!employee.status) return false;
+  const statusLower = employee.status.toLowerCase();
+  return statusLower === 'ativo' || statusLower === 'férias' || statusLower === 'ferias' || statusLower === 'provisão' || statusLower === 'provisao';
 }
 
 export function shouldDisplayExistingLoan(employee: Employee, hasExistingLoan: boolean): boolean {

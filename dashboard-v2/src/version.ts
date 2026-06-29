@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.39";
-export const VERSION_DATE = "2026-06-28";
+export const APP_VERSION = "v.02.48.40";
+export const VERSION_DATE = "2026-06-29";
 export const VERSION_CHANGELOG = [
+  "v.02.48.40 - Fix/Emprestimos: Altera a elegibilidade de novos empréstimos (isEligibleForNewLoan) para considerar o status do colaborador (ativo, férias ou provisão) em vez do tipo de vínculo (internal_person). Isso permite que colaboradores ativos sob regime PJ ou MEI, que historicamente possuem contratos de empréstimo, apareçam corretamente na listagem de seleção para novos empréstimos no modal, enquanto exclui colaboradores inativos.",
   "v.02.48.39 - Fix/Fluxo-Caixa: Corrige o mapeamento de projetos na sincronização (/api/omie/fluxo-caixa/sync). Como a Omie API apenas retorna o 'codigo_projeto', implementa a consulta à tabela 'omie_dim_projetos' no Supabase para traduzir os IDs de projetos para seus respectivos nomes descritivos, preenchendo corretamente o novo filtro de projetos do painel.",
 
   "v.02.48.38 - Feat/Fluxo-Caixa: Altera o agrupamento semanal para iniciar sempre no domingo e terminar no sábado no seletor de período, tabela consolidada e gráficos. Refatora o gráfico de evolução para exibir apenas as saídas (saídas de caixa) em barras com cor rose, otimizando o visual. Substitui os seletores dropdown comuns por componentes MultiSelectDropdown customizados (com checkboxes) para Contas DRE, Categorias e Projetos, iniciando com todos os itens marcados por padrão e permitindo marcar/desmarcar de forma massiva ou individual.",
