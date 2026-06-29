@@ -81,6 +81,52 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
   // 10. GAO
   const gao = ebit !== 0 ? margem_contribuicao_valor / ebit : 0;
 
+  // --- EVALUATION / STATUS BENCHMARKS ---
+  const getStatus = (title: string, value: number) => {
+    switch (title) {
+      case '1. Margem Bruta':
+        if (value >= 35) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value >= 25) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '2. Margem de Contribuição':
+        if (value >= 40) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value >= 30) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '3. Margem Operacional':
+        if (value >= 15) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value >= 8) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '4. EBITDA':
+        if (value > 0) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '5. Margem EBITDA':
+        if (value >= 20) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value >= 10) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '6. Resultado Financeiro':
+        if (value >= 0) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+      case '7. Margem Antes do IR/CSLL':
+        if (value >= 12) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value >= 6) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '8. Margem Líquida':
+        if (value >= 10) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value >= 5) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '9. Índ. Despesas Operacionais':
+        if (value <= 20) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value <= 25) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '10. GAO (Alavancagem Op.)':
+        if (value >= 1 && value <= 2.5) return { label: 'Equilibrado', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value > 2.5 && value <= 3.5) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Alto Risco', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      default:
+        return null;
+    }
+  };
+
   // --- THE 10 FINANCIAL INDICATORS CARDS ---
   const financialIndicators = [
     {
@@ -91,6 +137,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Eficiência da atividade principal',
       icon: <BarChart3 className="text-amber-500" size={16} />,
       color: 'border-amber-100 bg-amber-50/10 text-amber-950',
+      explanation: 'Mede o lucro da atividade principal após pagar os custos diretos da prestação dos serviços.',
+      assessmentHelp: 'Bom: acima de 35%. Preocupante: abaixo de 25%. Valores baixos indicam que os custos do serviço estão altos ou o preço de venda está baixo.',
     },
     {
       title: '2. Margem de Contribuição',
@@ -100,6 +148,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Cobertura de custos fixos e lucro',
       icon: <PieChart className="text-blue-500" size={16} />,
       color: 'border-blue-100 bg-blue-50/10 text-blue-950',
+      explanation: 'Quanto sobra das vendas para pagar os custos fixos (estrutura) e gerar lucro, após tirar os impostos e gastos variáveis.',
+      assessmentHelp: 'Bom: acima de 40%. Preocupante: abaixo de 30%. Se for baixa, a empresa precisa vender muito mais para não ter prejuízo.',
     },
     {
       title: '3. Margem Operacional',
@@ -109,6 +159,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Resultado da operação principal',
       icon: <Activity className="text-emerald-500" size={16} />,
       color: 'border-emerald-100 bg-emerald-50/10 text-emerald-950',
+      explanation: 'Rentabilidade operacional pura (EBIT), ou seja, a saúde financeira da operação antes dos custos financeiros e impostos.',
+      assessmentHelp: 'Bom: acima de 15%. Preocupante: abaixo de 8%. Mostra se o negócio é sustentável no seu dia a dia.',
     },
     {
       title: '4. EBITDA',
@@ -118,6 +170,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Geração de caixa operacional',
       icon: <Activity className="text-emerald-600" size={16} />,
       color: 'border-emerald-200 bg-emerald-50/20 text-emerald-950',
+      explanation: 'Geração de caixa operacional bruta. Mostra o potencial de caixa que a operação gera, sem considerar juros, impostos e depreciações.',
+      assessmentHelp: 'Bom: maior que zero. Negativo indica que a operação está consumindo caixa e acumulando prejuízo operacional.',
     },
     {
       title: '5. Margem EBITDA',
@@ -127,6 +181,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Eficiência operacional (Caixa)',
       icon: <ArrowUpRight className="text-emerald-500" size={16} />,
       color: 'border-emerald-100 bg-emerald-50/10 text-emerald-950',
+      explanation: 'Mede a eficiência operacional convertida em caixa. Indica a porcentagem da receita que vira caixa operacional bruto.',
+      assessmentHelp: 'Bom: acima de 20%. Preocupante: abaixo de 10%. Valores baixos sugerem problemas de eficiência na operação.',
     },
     {
       title: '6. Resultado Financeiro',
@@ -136,6 +192,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Impacto de receitas e desp. fin.',
       icon: <Landmark className="text-slate-500" size={16} />,
       color: 'border-slate-200 bg-slate-50 text-slate-950',
+      explanation: 'Diferença entre o que a empresa ganha com aplicações financeiras e o que gasta com juros, tarifas bancárias e empréstimos.',
+      assessmentHelp: 'Bom: maior ou igual a zero. Negativo indica que despesas com juros e tarifas estão pesando no caixa.',
     },
     {
       title: '7. Margem Antes do IR/CSLL',
@@ -145,6 +203,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Desempenho antes de impostos s/ lucro',
       icon: <FileText className="text-indigo-500" size={16} />,
       color: 'border-indigo-100 bg-indigo-50/10 text-indigo-950',
+      explanation: 'O resultado da empresa considerando toda a operação e o resultado financeiro, logo antes de pagar o imposto de renda.',
+      assessmentHelp: 'Bom: acima de 12%. Preocupante: abaixo de 6%. É a base real do lucro corporativo antes dos impostos finais.',
     },
     {
       title: '8. Margem Líquida',
@@ -154,6 +214,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Quanto efetivamente sobra',
       icon: <Coins className="text-amber-650" size={16} />,
       color: 'border-amber-200/60 bg-amber-50/10 text-amber-950',
+      explanation: 'O lucro líquido final que sobra de fato para os sócios, comparado ao total faturado pela empresa.',
+      assessmentHelp: 'Bom: acima de 10%. Preocupante: abaixo de 5%. Margem muito baixa deixa a empresa vulnerável a qualquer queda de faturamento.',
     },
     {
       title: '9. Índ. Despesas Operacionais',
@@ -163,6 +225,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Peso das despesas sobre a receita',
       icon: <Percent className="text-rose-500" size={16} />,
       color: 'border-rose-100 bg-rose-50/10 text-rose-950',
+      explanation: 'Representa o peso da estrutura administrativa e de vendas sobre a receita líquida.',
+      assessmentHelp: 'Bom: abaixo de 20%. Preocupante: acima de 25%. Valores altos indicam que a estrutura de suporte está cara e pesada.',
     },
     {
       title: '10. GAO (Alavancagem Op.)',
@@ -172,6 +236,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       desc: 'Sensibilidade do lucro à receita',
       icon: <Zap className="text-yellow-650" size={16} />,
       color: 'border-slate-800 bg-slate-900 text-white',
+      explanation: 'Mede o risco operacional: se as vendas caírem 1%, quantos % o lucro vai cair. Quanto maior, mais volátil é o lucro.',
+      assessmentHelp: 'Bom: entre 1,0x e 2,5x. Alto Risco: acima de 3,0x. Valores altos indicam que pequenas quedas nas vendas podem gerar grandes prejuízos.',
     },
   ];
 
@@ -227,8 +293,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           <div>
             <div className="flex items-center gap-3 mb-1.5">
               <h2 className="text-xl font-black text-slate-900 tracking-tight">Indicadores Estratégicos Financeiros</h2>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-850 px-2.5 py-1 rounded-full border border-amber-200/50">
-                Performance
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-855 px-2.5 py-1 rounded-full border border-amber-200/50 animate-pulse">
+                Performance e Avaliação Activa
               </span>
             </div>
             <p className="text-xs text-slate-450 font-medium">
@@ -283,40 +349,69 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           
           {/* Section 1: The 10 Financial Indicators */}
           <div>
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
-              <span className="w-1.5 h-3 bg-amber-500 rounded-full" />
-              Indicadores de Performance e Margens (DRE Gerencial)
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {financialIndicators.map((kpi, idx) => (
-                <div
-                  key={idx}
-                  className={`border p-4.5 rounded-2xl flex flex-col justify-between shadow-sm relative overflow-hidden transition-all duration-305 hover:shadow-md ${kpi.color}`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-3 mb-2.5">
-                      <div className="p-1.5 bg-white/80 border border-slate-200/50 rounded-lg shadow-sm text-slate-750 flex items-center justify-center">
-                        {kpi.icon}
-                      </div>
-                      <span className="text-[9px] font-extrabold uppercase tracking-wider bg-white/75 px-2 py-0.5 rounded border border-slate-200/20 text-slate-500">
-                        {kpi.formula}
-                      </span>
-                    </div>
-                    <h4 className="text-xs font-bold leading-tight opacity-90">
-                      {kpi.title}
-                    </h4>
-                  </div>
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-3 bg-amber-500 rounded-full" />
+                Indicadores de Performance e Margens (DRE Gerencial)
+              </h3>
+              <span className="text-[9px] text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
+                <Info size={10} /> Passe o mouse no card para ler a explicação
+              </span>
+            </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-200/30">
-                    <p className="text-2xl font-black tracking-tight">
-                      {formatValue(kpi.value, kpi.type)}
-                    </p>
-                    <p className="text-[10px] opacity-70 mt-1 leading-snug">
-                      {kpi.desc}
-                    </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {financialIndicators.map((kpi, idx) => {
+                const status = getStatus(kpi.title, kpi.value);
+
+                return (
+                  <div
+                    key={idx}
+                    className={`group relative border p-4.5 rounded-2xl flex flex-col justify-between shadow-sm transition-all duration-300 hover:shadow-md cursor-help ${kpi.color}`}
+                  >
+                    {/* Hover Tooltip */}
+                    <div className="absolute z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-250 bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-4 bg-slate-900 text-white rounded-2xl shadow-xl border border-slate-800 text-xs leading-relaxed">
+                      <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-slate-850">
+                        <span className="p-1 bg-slate-800 rounded text-amber-400">
+                          {kpi.icon}
+                        </span>
+                        <p className="font-black text-slate-100 text-xs">{kpi.title}</p>
+                      </div>
+                      <p className="text-slate-300 mb-2.5">{kpi.explanation}</p>
+                      <div className="border-t border-slate-800/80 pt-2">
+                        <p className="font-bold text-slate-400 uppercase text-[9px] tracking-wider mb-1">Guia de Avaliação</p>
+                        <p className="text-slate-350 font-medium">{kpi.assessmentHelp}</p>
+                      </div>
+                      {/* Tooltip Arrow */}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between gap-3 mb-2.5">
+                        <div className="p-1.5 bg-white/85 border border-slate-200/50 rounded-lg shadow-sm text-slate-750 flex items-center justify-center">
+                          {kpi.icon}
+                        </div>
+                        {status && (
+                          <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border shadow-sm ${status.color}`}>
+                            {status.label}
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-xs font-bold leading-tight opacity-90">
+                        {kpi.title}
+                      </h4>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-200/30">
+                      <p className="text-2xl font-black tracking-tight">
+                        {formatValue(kpi.value, kpi.type)}
+                      </p>
+                      <p className="text-[10px] opacity-70 mt-1 leading-snug font-medium flex items-center gap-1">
+                        Fórmula: <span className="font-bold font-mono text-[9px] bg-white/40 px-1 py-0.5 rounded">{kpi.formula}</span>
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
