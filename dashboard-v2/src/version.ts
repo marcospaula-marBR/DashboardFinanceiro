@@ -1,8 +1,8 @@
-export const APP_VERSION = "v.02.48.50";
-export const VERSION_DATE = "2026-06-29";
+export const APP_VERSION = "v.02.48.51";
+export const VERSION_DATE = "2026-06-30";
 export const VERSION_CHANGELOG = [
+  "v.02.48.51 - Fix/Upload: Altera o fluxo de upload de CSV da Omie para limpar (deletar) os registros antigos da fonte 'omie' correspondentes aos períodos sendo importados antes de realizar o novo upsert. Isso evita duplicações de valores decorrentes de reclassificações ou alterações dimensionais de lançamentos.",
   "v.02.48.50 - Feat/Indicadores: Implementa gráfico de evolução mensal interativo ao clicar nos cards dos indicadores e adiciona um modal de composição de cálculo com detalhamento de fórmulas e valores reais passo a passo.",
-  "v.02.48.48 - Fix/Indicadores: Reposiciona os balões explicativos (tooltips) para abrir abaixo dos cards (top-full), evitando que as explicações dos cards superiores fiquem encobertas ou cortadas pelo cabeçalho do modal.",
   "v.02.48.43 - Feat/Indicadores: Reativa e exibe o botão 'Indicadores' no cabeçalho superior direito da página DRE, posicionado ao lado dos botões de simulação e privacidade, facilitando a navegação direta e rápida para os Indicadores Estratégicos.",
   "v.02.48.41 - Feat/Emprestimos: Implementa componente de busca e filtro por texto (Single-Select Autocomplete) no seletor de colaboradores do modal de novos empréstimos. Isso melhora a usabilidade e facilita a localização rápida de colaboradores em uma lista expandida com todos os funcionários ativos da empresa.",
   "v.02.48.40 - Fix/Emprestimos: Altera a elegibilidade de novos empréstimos (isEligibleForNewLoan) para considerar o status do colaborador (ativo, férias ou provisão) em vez do tipo de vínculo (internal_person). Isso permite que colaboradores ativos sob regime PJ ou MEI, que historicamente possuem contratos de empréstimo, apareçam corretamente na listagem de seleção para novos empréstimos no modal, enquanto exclui colaboradores inativos.",

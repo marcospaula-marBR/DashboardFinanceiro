@@ -374,6 +374,7 @@ export class DreLancamentosService {
   }> {
     const records: Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'>[] = [];
     const mesesPattern = /^[A-Z][a-z]{2}\/\d{2}$/;
+    const periodsToDelete = new Set<string>();
 
     for (const row of rows) {
       const empresa      = (row.Empresa      as string) || '';
@@ -388,6 +389,8 @@ export class DreLancamentosService {
         if (!mesesPattern.test(key)) continue;
         const numVal = typeof valor === 'number' ? valor : parseFloat(String(valor)) || 0;
         if (numVal === 0) continue;
+
+        periodsToDelete.add(key);
 
         records.push({
           empresa,
@@ -404,6 +407,22 @@ export class DreLancamentosService {
 
     if (records.length === 0) {
       return { total: 0, errors: [] };
+    }
+
+    // Limpa os dados antigos da fonte 'omie' apenas para os períodos contidos no novo upload.
+    // Isso evita duplicados decorrentes de reclassificações ou alterações de dados no Omie.
+    if (periodsToDelete.size > 0) {
+      const periodsArray = Array.from(periodsToDelete);
+      const { error: deleteError } = await supabase
+        .from(TABLE)
+        .delete()
+        .eq('fonte', 'omie')
+        .in('periodo', periodsArray);
+
+      if (deleteError) {
+        console.error('[DreLancamentosService] Error clearing old Omie records:', deleteError);
+        return { total: 0, errors: [`Erro ao limpar dados antigos: ${deleteError.message}`] };
+      }
     }
 
     const BATCH = 500;
