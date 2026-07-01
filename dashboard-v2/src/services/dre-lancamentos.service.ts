@@ -170,7 +170,11 @@ export class DreLancamentosService {
       const projeto      = toTitleCase(mappedProj);
       
       const rawCat       = rec.categoria ? rec.categoria.trim() : '';
-      const categoria    = CATEGORIAS_MAP[rawCat] || rawCat;
+      let categoria      = CATEGORIAS_MAP[rawCat] || rawCat;
+      const cleanCat     = categoria.trim().toUpperCase();
+      if (!cleanCat || cleanCat === 'N/D' || cleanCat === 'ND' || cleanCat === 'SEM CATEGORIA') {
+        categoria = conta_dre;
+      }
 
       const key = `${emp}|${departamento}|${conta_dre}|${projeto}|${categoria}`;
 

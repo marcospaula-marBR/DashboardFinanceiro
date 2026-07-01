@@ -429,7 +429,7 @@ export class DreSimulatorEngine {
 
     const totalCustos = getCatTotal("Credenciado Operacional") + getCatTotal("Adiantamento - Credenciado Operacional") +
       getVal("Terceirização de Mão de Obra") + getVal("CLTs") + getVal("Custo dos Serviços Prestados") +
-      getVal("Preventiva - B2G") + getVal("Corretiva - B2G") + getVal("Outros Custos");
+      getVal("Preventiva - B2G") + getVal("Corretiva - B2G") + getVal("Outros Custos") + getVal("Deduções de Receita");
 
     const totalDespesas = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses)
       ? 0
@@ -518,12 +518,13 @@ export class DreSimulatorEngine {
 
       const totCust = getCatMonthly("Credenciado Operacional", col) + getCatMonthly("Adiantamento - Credenciado Operacional", col) +
         getValMensal("Terceirização de Mão de Obra", col) + getValMensal("CLTs", col) + getValMensal("Custo dos Serviços Prestados", col) +
-        getValMensal("Preventiva - B2G", col) + getValMensal("Corretiva - B2G", col) + getValMensal("Outros Custos", col);
+        getValMensal("Preventiva - B2G", col) + getValMensal("Corretiva - B2G", col) + getValMensal("Outros Custos", col) + getValMensal("Deduções de Receita", col);
       valoresMensal["Total Custos Operacionais"][col] = totCust;
       sourceRows["Total Custos Operacionais"][col] = [
         ...getCatSourceRowsSafe("Credenciado Operacional", col), ...getCatSourceRowsSafe("Adiantamento - Credenciado Operacional", col),
         ...getSourceRowsMensal("Terceirização de Mão de Obra", col), ...getSourceRowsMensal("CLTs", col), ...getSourceRowsMensal("Custo dos Serviços Prestados", col),
-        ...getSourceRowsMensal("Preventiva - B2G", col), ...getSourceRowsMensal("Corretiva - B2G", col), ...getSourceRowsMensal("Outros Custos", col)
+        ...getSourceRowsMensal("Preventiva - B2G", col), ...getSourceRowsMensal("Corretiva - B2G", col), ...getSourceRowsMensal("Outros Custos", col),
+        ...getSourceRowsMensal("Deduções de Receita", col)
       ];
 
       const totDesp = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses)

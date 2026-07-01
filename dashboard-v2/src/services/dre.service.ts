@@ -31,6 +31,7 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Terceirização de Mão de Obra', tipo: 'linha', categorias: ['Terceirização de Mão de Obra'] },
   { titulo: 'CLTs', tipo: 'linha', categorias: ['Despesas com Pessoal'] },
   { titulo: 'Custo dos Serviços Prestados', tipo: 'linha', categorias: ['Custo dos Serviços Prestados', 'Custo Médio (CMC) das Vendas'] },
+  { titulo: 'Deduções de Receita', tipo: 'linha', categorias: ['Deduções de Receita', 'Deduções de Receitas'] },
   { titulo: 'Preventiva - B2G', tipo: 'linha', categorias: ['Preventiva - B2G', 'Manutenção Preventiva'] },
   { titulo: 'Corretiva - B2G', tipo: 'linha', categorias: ['Corretiva - B2G', 'Manutenção Corretiva'] },
   { titulo: 'Outros Custos', tipo: 'linha', categorias: ['Outros Custos'] },
@@ -397,7 +398,12 @@ export class DreService {
       row['Projeto'] = toTitleCase(mappedProj);
       
       const rawCat = row['Categoria'] ? row['Categoria'].toString().trim() : 'Sem Categoria';
-      row['Categoria'] = CATEGORIAS_MAP[rawCat] || rawCat;
+      let normalizedCat = CATEGORIAS_MAP[rawCat] || rawCat;
+      const cleanCat = normalizedCat.trim().toUpperCase();
+      if (!cleanCat || cleanCat === 'N/D' || cleanCat === 'ND' || cleanCat === 'SEM CATEGORIA') {
+        normalizedCat = row['ContaDRE'];
+      }
+      row['Categoria'] = normalizedCat;
     });
 
     // Coleta todas as chaves de meses únicas existentes em todas as linhas da tabela
@@ -648,7 +654,7 @@ export class DreService {
 
     const totalCustos = getCatTotal("Credenciado Operacional") + getCatTotal("Adiantamento - Credenciado Operacional") +
       getVal("Terceirização de Mão de Obra") + getVal("CLTs") + getVal("Custo dos Serviços Prestados") +
-      getVal("Preventiva - B2G") + getVal("Corretiva - B2G") + getVal("Outros Custos");
+      getVal("Preventiva - B2G") + getVal("Corretiva - B2G") + getVal("Outros Custos") + getVal("Deduções de Receita");
 
     const totalDespesas = filters.excludeSharedExpenses
       ? 0
@@ -736,12 +742,13 @@ export class DreService {
 
       const totCust = getCatMonthly("Credenciado Operacional", col) + getCatMonthly("Adiantamento - Credenciado Operacional", col) +
         getValMensal("Terceirização de Mão de Obra", col) + getValMensal("CLTs", col) + getValMensal("Custo dos Serviços Prestados", col) +
-        getValMensal("Preventiva - B2G", col) + getValMensal("Corretiva - B2G", col) + getValMensal("Outros Custos", col);
+        getValMensal("Preventiva - B2G", col) + getValMensal("Corretiva - B2G", col) + getValMensal("Outros Custos", col) + getValMensal("Deduções de Receita", col);
       valoresMensal["Total Custos Operacionais"][col] = totCust;
       sourceRows["Total Custos Operacionais"][col] = [
         ...getCatSourceRowsSafe("Credenciado Operacional", col), ...getCatSourceRowsSafe("Adiantamento - Credenciado Operacional", col),
         ...getSourceRowsMensal("Terceirização de Mão de Obra", col), ...getSourceRowsMensal("CLTs", col), ...getSourceRowsMensal("Custo dos Serviços Prestados", col),
-        ...getSourceRowsMensal("Preventiva - B2G", col), ...getSourceRowsMensal("Corretiva - B2G", col), ...getSourceRowsMensal("Outros Custos", col)
+        ...getSourceRowsMensal("Preventiva - B2G", col), ...getSourceRowsMensal("Corretiva - B2G", col), ...getSourceRowsMensal("Outros Custos", col),
+        ...getSourceRowsMensal("Deduções de Receita", col)
       ];
 
       const totDesp = filters.excludeSharedExpenses
