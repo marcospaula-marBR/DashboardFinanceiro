@@ -75,6 +75,32 @@ export const PeopleHRService = {
     return data || [];
   },
 
+  async insertEmploymentContract(contract: any): Promise<any> {
+    const { data, error } = await supabase
+      .from('employment_contracts')
+      .insert([contract])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateEmploymentContract(id: string, updates: any): Promise<void> {
+    const { error } = await supabase
+      .from('employment_contracts')
+      .update(updates)
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  async deleteEmploymentContract(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('employment_contracts')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  },
+
   async getContractAllocations(contractId: string): Promise<ContractAllocation[]> {
     const { data, error } = await supabase
       .from('contract_allocations')

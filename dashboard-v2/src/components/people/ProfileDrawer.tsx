@@ -125,6 +125,90 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [selectedMergeFields, setSelectedMergeFields] = useState<Record<string, 'existing' | 'incoming'>>({});
   const [pendingHistoryItems, setPendingHistoryItems] = useState<any[]>([]);
 
+  // Vínculos & Histórico CRUD
+  const [editingBond, setEditingBond] = useState<Partial<EmploymentContract> | null>(null);
+  const [isSavingBond, setIsSavingBond] = useState(false);
+  const [editingHistoryItem, setEditingHistoryItem] = useState<Partial<HistoryItem> | null>(null);
+  const [isSavingHistoryItem, setIsSavingHistoryItem] = useState(false);
+
+  const handleSaveBond = async (bondData: Partial<EmploymentContract>) => {
+    if (!profile.id) {
+      alert("Salve a ficha cadastral do colaborador antes de gerenciar vínculos.");
+      return;
+    }
+    setIsSavingBond(true);
+    try {
+      if (bondData.id) {
+        await PeopleHRService.updateEmploymentContract(bondData.id, bondData);
+      } else {
+        await PeopleHRService.insertEmploymentContract({
+          ...bondData,
+          employee_id: profile.id
+        });
+      }
+      const updatedBonds = await PeopleHRService.getEmploymentContracts(profile.id);
+      setBonds(updatedBonds || []);
+      setEditingBond(null);
+    } catch (err: any) {
+      alert("Erro ao salvar vínculo: " + err.message);
+    } finally {
+      setIsSavingBond(false);
+    }
+  };
+
+  const handleDeleteBond = async (bondId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta transição de vínculo? Isso poderá alterar a linha do tempo do colaborador.")) return;
+    try {
+      await PeopleHRService.deleteEmploymentContract(bondId);
+      if (profile.id) {
+        const updatedBonds = await PeopleHRService.getEmploymentContracts(profile.id);
+        setBonds(updatedBonds || []);
+      }
+    } catch (err: any) {
+      alert("Erro ao excluir vínculo: " + err.message);
+    }
+  };
+
+  const handleSaveHistoryItem = async (histData: Partial<HistoryItem>) => {
+    if (!profile.id) {
+      alert("Salve a ficha cadastral do colaborador antes de gerenciar o histórico.");
+      return;
+    }
+    setIsSavingHistoryItem(true);
+    try {
+      if (histData.id) {
+        await PeopleService.updateHistoryItem(histData.id, histData, isTestMode);
+      } else {
+        await PeopleService.insertHistoryItem({
+          employee_id: profile.id,
+          event_type: histData.event_type || 'Outro',
+          change_date: histData.change_date || new Date().toISOString().split('T')[0],
+          observations: histData.observations
+        }, isTestMode);
+      }
+      const updatedHistory = await PeopleService.getEmployeeHistory(profile.id, isTestMode);
+      setHistory(updatedHistory || []);
+      setEditingHistoryItem(null);
+    } catch (err: any) {
+      alert("Erro ao salvar item do histórico: " + err.message);
+    } finally {
+      setIsSavingHistoryItem(false);
+    }
+  };
+
+  const handleDeleteHistoryItem = async (histId: string) => {
+    if (!confirm("Tem certeza que deseja excluir este evento do histórico?")) return;
+    try {
+      await PeopleService.deleteHistoryItem(histId, isTestMode);
+      if (profile.id) {
+        const updatedHistory = await PeopleService.getEmployeeHistory(profile.id, isTestMode);
+        setHistory(updatedHistory || []);
+      }
+    } catch (err: any) {
+      alert("Erro ao excluir item do histórico: " + err.message);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       if (employeeId) {
@@ -2643,13 +2727,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                    )}
 
                  {/* ------------- ABA TRAJETÓRIA ------------- */}
-                 {activeTab === 'trajetoria' && (
+                  {activeTab === 'trajetoria' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                       <div className="flex justify-between items-center border-b pb-2">
                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                           <Briefcase size={16} className="text-emerald-600" /> Trajetória Profissional
                         </h4>
                       </div>
+                      
                       <EmploymentBondTimeline 
                         bonds={bonds} 
                         startDate={profile.start_date} 
@@ -2658,6 +2743,129 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                         links_aditivos={profile.links_aditivos}
                         status_end_date={profile.status_end_date}
                       />
+
+                      {/* Gestão de Vínculos e Histórico visíveis apenas no modo de edição */}
+                      {isEditMode && (
+                        <div className="space-y-6 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-4 duration-300">
+                          {/* Vínculos Contratuais */}
+                          <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 p-4">
+                            <div className="flex justify-between items-center mb-3">
+                              <h5 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-300">
+                                Transições de Vínculos (Contratos)
+                              </h5>
+                              <button
+                                type="button"
+                                onClick={() => setEditingBond({ regime: 'CLT', remuneration_base: 0, remuneration_bonus: 0, remuneration_incentives: 0, status: 'Ativo', start_date: new Date().toISOString().split('T')[0] })}
+                                className="text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-700 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg shadow-sm transition-all"
+                              >
+                                + Adicionar Vínculo
+                              </button>
+                            </div>
+                            {bonds.length === 0 ? (
+                              <p className="text-xs text-slate-400 italic py-2">Nenhum vínculo registrado.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {bonds.map(b => (
+                                  <div key={b.id} className="p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center justify-between gap-3 hover:border-slate-200 dark:hover:border-slate-700 transition-all">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-black text-slate-800 dark:text-slate-200">{b.regime}</span>
+                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded border dark:border-slate-700 uppercase">{b.contracting_company || 'MarBR'}</span>
+                                        {b.status === 'Ativo' ? (
+                                          <span className="text-[9px] bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40 px-1 rounded uppercase font-bold">Ativo</span>
+                                        ) : (
+                                          <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 px-1 rounded uppercase font-bold">{b.status}</span>
+                                        )}
+                                      </div>
+                                      <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">
+                                        Início: {b.start_date ? new Date(b.start_date + "T12:00:00").toLocaleDateString('pt-BR') : '—'} 
+                                        {b.end_date ? ` | Fim: ${new Date(b.end_date + "T12:00:00").toLocaleDateString('pt-BR')}` : ''}
+                                        {b.trigger_reason ? ` • Motivo: ${b.trigger_reason}` : ''}
+                                      </p>
+                                      {b.remuneration_base > 0 && (
+                                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 mt-0.5">
+                                          Base: {formatCurrency(b.remuneration_base)}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingBond(b)}
+                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                                        title="Editar Vínculo"
+                                      >
+                                        <Edit3 size={14} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteBond(b.id)}
+                                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
+                                        title="Excluir Vínculo"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Histórico de Alterações */}
+                          <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 p-4">
+                            <div className="flex justify-between items-center mb-3">
+                              <h5 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-300">
+                                Histórico de Alterações Cadastrais
+                              </h5>
+                              <button
+                                type="button"
+                                onClick={() => setEditingHistoryItem({ event_type: 'Cargo', change_date: new Date().toISOString().split('T')[0] })}
+                                className="text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-700 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg shadow-sm transition-all"
+                              >
+                                + Adicionar Evento
+                              </button>
+                            </div>
+                            {history.length === 0 ? (
+                              <p className="text-xs text-slate-400 italic py-2">Nenhum evento registrado.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {[...history].sort((a,b) => new Date(b.change_date).getTime() - new Date(a.change_date).getTime()).map(h => (
+                                  <div key={h.id} className="p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center justify-between gap-3 hover:border-slate-200 dark:hover:border-slate-700 transition-all">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 px-1.5 py-0.2 rounded uppercase font-bold">{h.event_type}</span>
+                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-medium">{new Date(h.change_date + "T12:00:00").toLocaleDateString('pt-BR')}</span>
+                                      </div>
+                                      <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mt-1.5 break-words">
+                                        {h.observations}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingHistoryItem(h)}
+                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                                        title="Editar Evento"
+                                      >
+                                        <Edit3 size={14} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteHistoryItem(h.id)}
+                                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
+                                        title="Excluir Evento"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </motion.div>
                   )}
 
@@ -3718,6 +3926,296 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                   Aplicar Mesclagem
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Vínculo Contratual (Trajetória) */}
+      {editingBond && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg p-6 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4 shrink-0">
+              {editingBond.id ? 'Editar Vínculo Contratual' : 'Novo Vínculo Contratual'}
+            </h4>
+            
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-slate-800 dark:text-slate-200">
+              {/* Regime e Empresa Contratante */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Regime de Contrato</label>
+                  <select
+                    value={editingBond.regime || 'CLT'}
+                    onChange={e => setEditingBond(prev => ({ ...prev, regime: e.target.value as any }))}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    <option value="CLT">CLT</option>
+                    <option value="PJ">PJ</option>
+                    <option value="MEI">MEI</option>
+                    <option value="Estagiário">Estagiário</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Empresa Contratante</label>
+                  <input
+                    type="text"
+                    value={editingBond.contracting_company || ''}
+                    onChange={e => setEditingBond(prev => ({ ...prev, contracting_company: e.target.value }))}
+                    placeholder="Ex: Mar Brasil Serviços"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Se for PJ ou MEI, exibe campos adicionais */}
+              {(editingBond.regime === 'PJ' || editingBond.regime === 'MEI') && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800 rounded-2xl space-y-3">
+                  <h5 className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Dados PJ/MEI</h5>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">CNPJ PJ/MEI</label>
+                      <input
+                        type="text"
+                        value={editingBond.pj_cnpj || ''}
+                        onChange={e => setEditingBond(prev => ({ ...prev, pj_cnpj: e.target.value }))}
+                        placeholder="00.000.000/0000-00"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-2.5 outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Razão Social</label>
+                      <input
+                        type="text"
+                        value={editingBond.pj_razao_social || ''}
+                        onChange={e => setEditingBond(prev => ({ ...prev, pj_razao_social: e.target.value }))}
+                        placeholder="Razão Social Ltda"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-2.5 outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Nome Fantasia</label>
+                      <input
+                        type="text"
+                        value={editingBond.pj_nome_fantasia || ''}
+                        onChange={e => setEditingBond(prev => ({ ...prev, pj_nome_fantasia: e.target.value }))}
+                        placeholder="Nome Fantasia"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-2.5 outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Endereço Comercial</label>
+                      <input
+                        type="text"
+                        value={editingBond.pj_endereco_completo || ''}
+                        onChange={e => setEditingBond(prev => ({ ...prev, pj_endereco_completo: e.target.value }))}
+                        placeholder="Rua, Número, Bairro, CEP"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-2.5 outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Datas de Vigência */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Data Início</label>
+                  <input
+                    type="date"
+                    value={editingBond.start_date || ''}
+                    onChange={e => setEditingBond(prev => ({ ...prev, start_date: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-2 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Vencimento (Opcional)</label>
+                  <input
+                    type="date"
+                    value={editingBond.expiration_date || ''}
+                    onChange={e => setEditingBond(prev => ({ ...prev, expiration_date: e.target.value || undefined }))}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-2 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Rescisão (Opcional)</label>
+                  <input
+                    type="date"
+                    value={editingBond.end_date || ''}
+                    onChange={e => setEditingBond(prev => ({ ...prev, end_date: e.target.value || undefined }))}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-2 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Valores Financeiros */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800 rounded-2xl space-y-3">
+                <h5 className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Detalhamento Financeiro (Mensal)</h5>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Remuneração Base</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingBond.remuneration_base ?? 0}
+                      onChange={e => setEditingBond(prev => ({ ...prev, remuneration_base: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-2.5 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Bônus Variável</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingBond.remuneration_bonus ?? 0}
+                      onChange={e => setEditingBond(prev => ({ ...prev, remuneration_bonus: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-2.5 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Incentivos Fixos</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingBond.remuneration_incentives ?? 0}
+                      onChange={e => setEditingBond(prev => ({ ...prev, remuneration_incentives: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-1.5 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Ajudas de Custo</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingBond.remuneration_allowances ?? 0}
+                      onChange={e => setEditingBond(prev => ({ ...prev, remuneration_allowances: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-1.5 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Comissões</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingBond.remuneration_commissions ?? 0}
+                      onChange={e => setEditingBond(prev => ({ ...prev, remuneration_commissions: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs py-1.5 px-1.5 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Motivo e Status */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Motivo do Gatilho</label>
+                  <input
+                    type="text"
+                    value={editingBond.trigger_reason || ''}
+                    onChange={e => setEditingBond(prev => ({ ...prev, trigger_reason: e.target.value }))}
+                    placeholder="Ex: Admissão, Promoção de Cargo"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Status</label>
+                  <select
+                    value={editingBond.status || 'Ativo'}
+                    onChange={e => setEditingBond(prev => ({ ...prev, status: e.target.value as any }))}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    <option value="Ativo">Ativo</option>
+                    <option value="Vencido">Vencido</option>
+                    <option value="Encerrado">Encerrado</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 mt-6 shrink-0 border-t border-slate-100 dark:border-slate-800 pt-4 bg-white dark:bg-slate-900 rounded-b-[24px]">
+              <button
+                type="button"
+                onClick={() => setEditingBond(null)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850 hover:text-slate-600 transition-all uppercase"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSavingBond}
+                onClick={() => handleSaveBond(editingBond)}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase flex items-center gap-1.5"
+              >
+                {isSavingBond && <Loader2 size={12} className="animate-spin" />}
+                Salvar Vínculo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Evento de Histórico (Timeline) */}
+      {editingHistoryItem && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+            <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4 shrink-0">
+              {editingHistoryItem.id ? 'Editar Evento do Histórico' : 'Novo Evento do Histórico'}
+            </h4>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Tipo de Evento</label>
+                <select
+                  value={editingHistoryItem.event_type || 'Cargo'}
+                  onChange={e => setEditingHistoryItem(prev => ({ ...prev, event_type: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors text-slate-800 dark:text-slate-200"
+                >
+                  <option value="Cargo">Cargo (Função)</option>
+                  <option value="Setor">Setor (Departamento)</option>
+                  <option value="Remuneração">Remuneração (Salário/Benefícios)</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Data da Alteração</label>
+                <input
+                  type="date"
+                  value={editingHistoryItem.change_date || ''}
+                  onChange={e => setEditingHistoryItem(prev => ({ ...prev, change_date: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors text-slate-800 dark:text-slate-200"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Observações / Descrição</label>
+                <textarea
+                  value={editingHistoryItem.observations || ''}
+                  onChange={e => setEditingHistoryItem(prev => ({ ...prev, observations: e.target.value }))}
+                  placeholder="Ex: Mudança de cargo de Estagiário para CLT"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3.5 outline-none focus:border-emerald-500 transition-colors text-slate-800 dark:text-slate-200 h-24 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 mt-6 shrink-0 border-t border-slate-100 dark:border-slate-800 pt-4 bg-white dark:bg-slate-900 rounded-b-[24px]">
+              <button
+                type="button"
+                onClick={() => setEditingHistoryItem(null)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850 hover:text-slate-600 transition-all uppercase"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSavingHistoryItem}
+                onClick={() => handleSaveHistoryItem(editingHistoryItem)}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase flex items-center gap-1.5"
+              >
+                {isSavingHistoryItem && <Loader2 size={12} className="animate-spin" />}
+                Salvar Evento
+              </button>
             </div>
           </div>
         </div>
