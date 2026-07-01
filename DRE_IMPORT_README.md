@@ -29,5 +29,4 @@ Para que o Dashboard mostre as informações mais recentes, você deve garantir 
 ## Dicas Adicionais
 
 - **Consórcios**: O app agrupa automaticamente "Consórcios - a contemplar" e "Consórcios - contemplados" em uma única linha visual.
-- **Equipamentos**: Itens na categoria "Equipamentos" são somados automaticamente à linha de **Ativos**.
 - **Limpeza de Filtros**: Use o botão "Limpar" no menu lateral se as opções parecerem travadas.

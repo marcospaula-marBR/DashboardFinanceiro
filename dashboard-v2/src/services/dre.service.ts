@@ -498,7 +498,7 @@ export class DreService {
       'Despesas com Pessoal', 'Manutenção Preventiva', 'Preventiva - B2G', 'Manutenção Corretiva',
       'Corretiva - B2G', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
       'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
-      'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas', 'Equipamentos',
+      'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas',
       'Jurídico', 'Intermediação de Negócios'
     ];
 

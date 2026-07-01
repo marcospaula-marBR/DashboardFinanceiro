@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.52";
+export const APP_VERSION = "v.02.48.53";
 export const VERSION_DATE = "2026-07-01";
 export const VERSION_CHANGELOG = [
+  "v.02.48.53 - Fix/DRE: Remove a categoria 'Equipamentos' da lista de subcategorias específicas no processamento do DRE e no simulador, permitindo que lançamentos dessa categoria herdem e computem corretamente seu valor sob a conta DRE original ('Custo dos Serviços Prestados') em Custos Operacionais.",
   "v.02.48.52 - Fix/DRE: Padroniza dinamicamente as grafias das empresas nos filtros e no processamento de dados do painel DRE (ex: 'Mar Brasil', 'Mar BR' -> 'MarBR' e 'D.Z.M', 'D.Z.M Ltda' -> 'DZM'), prevenindo duplicidades e inconsistências de exibição nos seletores e visualizações.",
   "v.02.48.51 - Fix/Upload: Altera o fluxo de upload de CSV da Omie para limpar (deletar) os registros antigos da fonte 'omie' correspondentes aos períodos sendo importados antes de realizar o novo upsert. Isso evita duplicações de valores decorrentes de reclassificações ou alterações dimensionais de lançamentos.",
   "v.02.48.50 - Feat/Indicadores: Implementa gráfico de evolução mensal interativo ao clicar nos cards dos indicadores e adiciona um modal de composição de cálculo com detalhamento de fórmulas e valores reais passo a passo.",

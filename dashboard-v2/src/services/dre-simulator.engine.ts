@@ -100,7 +100,7 @@ export class DreSimulatorEngine {
       'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva',
       'Corretiva - B2G', 'Manutenção Corretiva', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
       'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
-      'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas', 'Equipamentos',
+      'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas',
       'Jurídico', 'Intermediação de Negócios'
     ];
 
