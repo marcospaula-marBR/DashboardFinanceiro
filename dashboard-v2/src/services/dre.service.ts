@@ -50,6 +50,7 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Consórcios a contemplar', tipo: 'linha', categorias: ['Consórcios - a contemplar'] },
   { titulo: 'Serviços', tipo: 'linha_calc', formula: 'servicos_menos_consorcios', categorias: ['Serviços'] },
   { titulo: 'Ativos', tipo: 'linha', categorias: ['Ativos'] },
+  { titulo: 'Aplicações Financeiras', tipo: 'linha', categorias: ['Renda Fixa'] },
   { titulo: 'Total Investimentos', tipo: 'card', var: 'total_investimentos' },
   { titulo: '', tipo: 'divisor' },
   { titulo: 'Total Saídas', tipo: 'card', var: 'total_saidas' },
@@ -499,7 +500,7 @@ export class DreService {
       'Corretiva - B2G', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
       'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
       'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas',
-      'Jurídico', 'Intermediação de Negócios'
+      'Jurídico', 'Intermediação de Negócios', 'Renda Fixa'
     ];
 
     df.forEach(row => {
@@ -656,7 +657,7 @@ export class DreService {
          getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios") +
          getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos"));
 
-    const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos");
+    const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos") + getVal("Aplicações Financeiras");
     const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
 
     const resultado = totalEntradas - totalImpostos - totalCustos - totalDespesas;

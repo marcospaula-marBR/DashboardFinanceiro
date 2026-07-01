@@ -101,7 +101,7 @@ export class DreSimulatorEngine {
       'Corretiva - B2G', 'Manutenção Corretiva', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
       'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
       'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas',
-      'Jurídico', 'Intermediação de Negócios'
+      'Jurídico', 'Intermediação de Negócios', 'Renda Fixa'
     ];
 
     // Mapeamos a estrutura de DRE por linha
@@ -438,7 +438,7 @@ export class DreSimulatorEngine {
          getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios") +
          getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos"));
 
-    const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos");
+    const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos") + getVal("Aplicações Financeiras");
     const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
 
     const resultado = totalEntradas - totalImpostos - totalCustos - totalDespesas;
