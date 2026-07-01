@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.55";
+export const APP_VERSION = "v.02.48.56";
 export const VERSION_DATE = "2026-07-01";
 export const VERSION_CHANGELOG = [
+  "v.02.48.56 - Feat/DRE: Implementa recurso de 'Calculadora Express' interativa acoplada aos cards KPI, permitindo acumular receitas e deduzir despesas/saídas dinamicamente de forma self-contained na interface.",
   "v.02.48.55 - Fix/DRE: Corrige a consolidação das transações de origem (sourceRows) e totalizações mensais do card 'Total Investimentos' no DRE e simulador, incluindo a nova linha 'Aplicações Financeiras' (Renda Fixa) no demonstrativo detalhado.",
   "v.02.48.54 - Feat/DRE: Cria a linha 'Aplicações Financeiras' sob Investimentos e adiciona a categoria 'Renda Fixa' às subcategorias específicas. Isso impede que os valores de aplicações em Renda Fixa sejam indevidamente subtraídos na conta de Serviços/Consórcios, consolidando-os corretamente no DRE.",
   "v.02.48.53 - Fix/DRE: Remove a categoria 'Equipamentos' da lista de subcategorias específicas no processamento do DRE e no simulador, permitindo que lançamentos dessa categoria herdem e computem corretamente seu valor sob a conta DRE original ('Custo dos Serviços Prestados') em Custos Operacionais.",
