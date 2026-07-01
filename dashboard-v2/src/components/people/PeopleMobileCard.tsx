@@ -114,7 +114,7 @@ export function PeopleMobileCard({
 
       <div className="flex items-start gap-3">
         {/* Avatar / Logo */}
-        {isExternal ? (
+        {isExternal && !(employee.photo_url || employee.avatar) ? (
           <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-inner">
             <Building2 size={22} />
           </div>

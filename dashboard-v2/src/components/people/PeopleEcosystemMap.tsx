@@ -200,7 +200,7 @@ export function PeopleEcosystemMap({
         )}
 
         <div className="flex items-start gap-3">
-          {isExternal ? (
+          {isExternal && !(emp.photo_url || emp.avatar) ? (
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-inner">
               <Building2 size={18} />
             </div>

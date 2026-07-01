@@ -164,7 +164,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                   >
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        {isExternal ? (
+                        {isExternal && !(emp.photo_url || emp.avatar) ? (
                           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
                             <Building2 size={18} />
                           </div>
