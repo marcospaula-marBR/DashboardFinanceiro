@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.61";
+export const APP_VERSION = "v.02.48.62";
 export const VERSION_DATE = "2026-07-01";
 export const VERSION_CHANGELOG = [
+  "v.02.48.62 - Feat/People: Adiciona exibição destacada e botão de cópia rápida para a Chave PIX nos cards da listagem (PeopleMobileCard) e na visualização em tabela (PeopleTable) de colaboradores, facilitando consultas de pagamento rápidas.",
   "v.02.48.61 - Fix/People: Corrige renderização das fotos de perfil de colaboradores externos/PJ. O sistema ocultava as fotos de perfil de prestadores PJ substituindo-as incondicionalmente pelo ícone de empresa (Building2); a condição foi ajustada para renderizar o ícone de empresa apenas se o colaborador PJ não possuir foto cadastrada.",
   "v.02.48.60 - Fix/People: Corrige a exibição de 'Vínculo Indefinido' nos cards e tabelas de colaboradores. Adiciona o seletor 'Natureza da Relação' na aba Info Pessoal do ProfileDrawer e implementa fallback de inferência automática a partir do Vínculo (CLT/PJ) nos mapeadores de banco de dados (PeopleService e PeopleHRService) para compatibilidade retroativa com cadastros legados.",
   "v.02.48.59 - Fix/DRE: Define e utiliza a função 'getCatSourceRowsSafe' de forma precoce nos loops de montagem da DRE e do simulador. Isso garante que a consolidação de transações de origem (sourceRows) para o detalhamento de cards seja 100% resiliente a variações de grafias/espaços das categorias.",

@@ -37,6 +37,16 @@ const STATUS_STYLES: Record<string, string> = {
 export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, showValues, auditIssues = {}, noRaiseMonths, noPromoMonths }: PeopleTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedPixId, setCopiedPixId] = useState<string | null>(null);
+  
+  const handleCopyPix = (e: React.MouseEvent, emp: Employee) => {
+    e.stopPropagation();
+    if (!emp.pix_key) return;
+    navigator.clipboard.writeText(emp.pix_key).then(() => {
+      setCopiedPixId(emp.id);
+      setTimeout(() => setCopiedPixId(null), 2000);
+    });
+  };
   
   const itemsPerPage = 10;
   
@@ -192,7 +202,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                               {hasNoPromo && <span title={`Sem Nível/Função há mais de ${noPromoMonths} meses`} className="text-[11px] cursor-help">🎯</span>}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <span className={`text-[8px] px-1.5 py-0.5 rounded border font-black uppercase tracking-wider ${statusStyle}`}>
                               {emp.status}
                             </span>
@@ -208,6 +218,22 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                                   {emp.job_role}
                                 </span>
                               )
+                            )}
+                            {emp.pix_key && (
+                              <span 
+                                onClick={(e) => handleCopyPix(e, emp)}
+                                className={`text-[9px] font-mono font-bold transition-all px-1.5 py-0.5 rounded border cursor-copy inline-flex items-center gap-1 shrink-0 ${
+                                  copiedPixId === emp.id 
+                                    ? "bg-emerald-500 text-white border-emerald-500 shadow-sm" 
+                                    : "bg-slate-50 hover:bg-slate-100 text-slate-500 border-slate-100 hover:text-slate-700"
+                                }`}
+                                title="Chave PIX (Clique para copiar)"
+                              >
+                                <span className={copiedPixId === emp.id ? "text-emerald-100" : "text-slate-400 font-sans font-black text-[8px]"}>
+                                  {copiedPixId === emp.id ? "Copiado!" : "PIX:"}
+                                </span> 
+                                {copiedPixId !== emp.id && emp.pix_key}
+                              </span>
                             )}
                           </div>
                         </div>

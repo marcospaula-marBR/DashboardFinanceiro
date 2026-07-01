@@ -58,6 +58,16 @@ export function PeopleMobileCard({
   historicoCustoMedio,
 }: PeopleMobileCardProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedPix, setCopiedPix] = useState(false);
+
+  const handleCopyPix = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!employee.pix_key) return;
+    navigator.clipboard.writeText(employee.pix_key).then(() => {
+      setCopiedPix(true);
+      setTimeout(() => setCopiedPix(false), 2000);
+    });
+  };
 
   const statusStyle = STATUS_STYLES[employee.status] ?? "bg-slate-50 text-slate-600 border-slate-200";
   const remLabel = getRemunerationLabel(employee.linkType);
@@ -228,6 +238,28 @@ export function PeopleMobileCard({
           </div>
         )}
       </div>
+
+      {/* Chave PIX se cadastrada */}
+      {employee.pix_key && (
+        <div className="mt-3 p-2 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between gap-2 group/pix hover:bg-slate-100/50 hover:border-slate-200 transition-all">
+          <div className="min-w-0 flex-1 flex items-center gap-2 pl-1">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider bg-slate-200/50 px-1.5 py-0.5 rounded shrink-0">PIX</span>
+            <span className="text-[10px] font-mono font-bold text-slate-700 truncate block">{employee.pix_key}</span>
+          </div>
+          <button 
+            onClick={handleCopyPix}
+            className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[9px] font-black shrink-0 shadow-sm ${
+              copiedPix
+                ? "bg-emerald-500 text-white border-emerald-500"
+                : "bg-white hover:bg-slate-50 text-slate-500 border-slate-200"
+            }`}
+            title="Copiar Chave PIX"
+          >
+            {copiedPix ? <Check size={11} /> : <Copy size={11} />}
+            {copiedPix ? "Copiado!" : "Copiar"}
+          </button>
+        </div>
+      )}
 
       {/* Rodapé: Indicador de Saúde Cadastral e Ações Rápidas */}
       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
