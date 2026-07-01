@@ -758,10 +758,10 @@ export class DreService {
         ...getCatSourceRowsSafe("Distribuição de Dividendos", col), ...getCatSourceRowsSafe("Dividendos", col)
       ];
 
-      const totInv = getCatMonthly("Consórcios - a contemplar", col) + getValMensal("Serviços", col) + getCatMonthly("Ativos", col);
+      const totInv = getCatMonthly("Consórcios - a contemplar", col) + getValMensal("Serviços", col) + getCatMonthly("Ativos", col) + getValMensal("Aplicações Financeiras", col);
       valoresMensal["Total Investimentos"][col] = totInv;
       sourceRows["Total Investimentos"][col] = [
-        ...getCatSourceRowsSafe("Consórcios - a contemplar", col), ...getSourceRowsMensal("Serviços", col), ...getCatSourceRowsSafe("Ativos", col)
+        ...getCatSourceRowsSafe("Consórcios - a contemplar", col), ...getSourceRowsMensal("Serviços", col), ...getCatSourceRowsSafe("Ativos", col), ...getSourceRowsMensal("Aplicações Financeiras", col)
       ];
 
       const totSai = totImp + totCust + totDesp + totInv;
