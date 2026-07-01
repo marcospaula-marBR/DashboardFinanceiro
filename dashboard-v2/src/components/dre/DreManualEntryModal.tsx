@@ -446,7 +446,7 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
                   {EMPRESAS_MANUAL_ONLY.map(e => (
                     <option key={e} value={e}>{e}</option>
                   ))}
-                  <option value="Mar Brasil">Mar Brasil (histórico)</option>
+                  <option value="MarBR">MarBR (histórico)</option>
                   <option value="DZM">DZM (histórico)</option>
                 </select>
               </div>

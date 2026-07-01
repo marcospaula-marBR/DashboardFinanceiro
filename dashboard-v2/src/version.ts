@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.51";
-export const VERSION_DATE = "2026-06-30";
+export const APP_VERSION = "v.02.48.52";
+export const VERSION_DATE = "2026-07-01";
 export const VERSION_CHANGELOG = [
+  "v.02.48.52 - Fix/DRE: Padroniza dinamicamente as grafias das empresas nos filtros e no processamento de dados do painel DRE (ex: 'Mar Brasil', 'Mar BR' -> 'MarBR' e 'D.Z.M', 'D.Z.M Ltda' -> 'DZM'), prevenindo duplicidades e inconsistências de exibição nos seletores e visualizações.",
   "v.02.48.51 - Fix/Upload: Altera o fluxo de upload de CSV da Omie para limpar (deletar) os registros antigos da fonte 'omie' correspondentes aos períodos sendo importados antes de realizar o novo upsert. Isso evita duplicações de valores decorrentes de reclassificações ou alterações dimensionais de lançamentos.",
   "v.02.48.50 - Feat/Indicadores: Implementa gráfico de evolução mensal interativo ao clicar nos cards dos indicadores e adiciona um modal de composição de cálculo com detalhamento de fórmulas e valores reais passo a passo.",
   "v.02.48.43 - Feat/Indicadores: Reativa e exibe o botão 'Indicadores' no cabeçalho superior direito da página DRE, posicionado ao lado dos botões de simulação e privacidade, facilitando a navegação direta e rápida para os Indicadores Estratégicos.",

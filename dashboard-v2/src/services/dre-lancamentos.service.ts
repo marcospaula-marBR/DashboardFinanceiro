@@ -13,7 +13,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { DreRow, DreMetadata } from '@/types/dre';
-import { DEPARTAMENTOS_MAP, PROJETOS_MAP, CATEGORIAS_MAP } from './dre.service';
+import { DEPARTAMENTOS_MAP, PROJETOS_MAP, CATEGORIAS_MAP, normalizeEmpresa } from './dre.service';
 
 const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
 
@@ -156,7 +156,8 @@ export class DreLancamentosService {
     >();
 
     for (const rec of allData) {
-      const emp          = rec.empresa ? rec.empresa.trim() : 'Geral';
+      const rawEmp       = rec.empresa ? rec.empresa.trim() : 'Geral';
+      const emp          = normalizeEmpresa(rawEmp);
       
       const rawDept      = rec.departamento ? rec.departamento.trim() : '';
       const mappedDept   = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
@@ -285,7 +286,7 @@ export class DreLancamentosService {
     form: DreManualEntryForm
   ): Promise<{ data: DreLancamento | null; error: string | null }> {
     const record: Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'> = {
-      empresa:      form.empresa.trim(),
+      empresa:      normalizeEmpresa(form.empresa.trim()),
       departamento: form.departamento.trim(),
       conta_dre:    form.conta_dre.trim(),
       projeto:      form.projeto.trim() || 'N/D',
@@ -319,7 +320,7 @@ export class DreLancamentosService {
     form: DreManualEntryForm
   ): Promise<{ data: DreLancamento | null; error: string | null }> {
     const record: Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'> = {
-      empresa:      form.empresa.trim(),
+      empresa:      normalizeEmpresa(form.empresa.trim()),
       departamento: form.departamento.trim(),
       conta_dre:    form.conta_dre.trim(),
       projeto:      form.projeto.trim() || 'N/D',

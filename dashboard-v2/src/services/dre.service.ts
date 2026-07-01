@@ -111,6 +111,13 @@ export const CATEGORIAS_MAP: Record<string, string> = {
   "Táxi e/ou aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
 };
 
+export const normalizeEmpresa = (empresa: string): string => {
+  const norm = (empresa || '').trim().toUpperCase();
+  if (norm.includes('MAR BRASIL') || norm.includes('MARBR') || norm.includes('MAR BR')) return 'MarBR';
+  if (norm.includes('DZM') || norm.includes('D.Z.M') || norm.includes('D Z M')) return 'DZM';
+  return empresa || 'Geral';
+};
+
 export class DreService {
   /**
    * LAYER 1: PARSING
@@ -375,7 +382,8 @@ export class DreService {
     );
 
     data.forEach(row => {
-      row['Empresa'] = row['Empresa'] ? row['Empresa'].toString().trim() : 'Geral';
+      const rawEmp = row['Empresa'] ? row['Empresa'].toString().trim() : 'Geral';
+      row['Empresa'] = normalizeEmpresa(rawEmp);
       
       const rawDept = row['Departamento'] ? row['Departamento'].toString().trim() : 'Sem Departamento';
       const mappedDept = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
