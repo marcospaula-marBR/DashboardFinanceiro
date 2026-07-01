@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Employee, getRemunerationLabel } from "@/types/loans";
-import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound } from "lucide-react";
+import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar } from "lucide-react";
 import { 
   isExternalEntity, 
   formatWhatsAppLink, 
@@ -87,6 +87,18 @@ export function PeopleMobileCard({
         year: "numeric",
       })
     : "—";
+
+  const expiryFormatted = employee.contract_expiry_date
+    ? new Date(employee.contract_expiry_date + "T12:00:00").toLocaleDateString("pt-BR")
+    : null;
+
+  const isExpiringSoon = employee.contract_expiry_date ? (() => {
+    const expiry = new Date(employee.contract_expiry_date + 'T12:00:00');
+    const now = new Date();
+    const diffTime = expiry.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 10;
+  })() : false;
 
   const waLink = formatWhatsAppLink(employee.phone_professional);
 
@@ -201,6 +213,29 @@ export function PeopleMobileCard({
             {employee.start_date && (
               <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full ml-4 self-start">
                 {formatCompanyTime(employee.start_date)}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 text-slate-400 mt-1">
+            <Calendar size={12} className={isExpiringSoon ? "text-amber-500" : "text-slate-400"} />
+            {employee.contract_expiry_date ? (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className={`text-[10px] font-semibold ${isExpiringSoon ? "text-amber-600 font-bold" : "text-slate-500"}`}>
+                  Vence: {expiryFormatted}
+                </span>
+                {isExpiringSoon && (
+                  <span className="text-[8px] font-black bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded animate-pulse">
+                    EXPIRANDO
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className={`text-[10px] font-bold ${
+                employee.linkType === 'PJ' 
+                  ? "text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded text-[8px]" 
+                  : "text-slate-500 font-medium"
+              }`}>
+                {employee.linkType === 'PJ' ? "Falta Vencimento" : "Vence: Indeterminado"}
               </span>
             )}
           </div>
