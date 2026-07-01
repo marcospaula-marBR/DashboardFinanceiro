@@ -500,6 +500,11 @@ export class DreService {
     const catMonthly: Record<string, Record<string, number>> = {};
     const catSourceRows: Record<string, Record<string, DreRow[]>> = {};
 
+    const getCatSourceRowsSafe = (cat: string, col: string) => {
+      const key = Object.keys(catSourceRows).find(k => k.trim().toLowerCase() === cat.trim().toLowerCase());
+      return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
+    };
+
     const subCategoriasEspecificas = [
       'Terceirização de Mão de Obra', 'Credenciado Operacional', 'Adiantamento - Credenciado Operacional',
       'Despesas com Pessoal', 'Manutenção Preventiva', 'Preventiva - B2G', 'Manutenção Corretiva',
@@ -609,9 +614,7 @@ export class DreService {
           if (!isSharedExpense) {
             item.categorias?.forEach(cat => {
               mesTotal += getCatMonthly(cat, col);
-              if (catSourceRows[cat] && catSourceRows[cat][col]) {
-                rowsForMonth.push(...catSourceRows[cat][col]);
-              }
+              rowsForMonth.push(...getCatSourceRowsSafe(cat, col));
             });
           }
           valoresMensal[item.titulo][col] = mesTotal;
@@ -693,10 +696,6 @@ export class DreService {
 
     const getValMensal = (key: string, col: string) => (valoresMensal[key] && valoresMensal[key][col]) ? valoresMensal[key][col] : 0;
     const getSourceRowsMensal = (key: string, col: string) => (sourceRows[key] && sourceRows[key][col]) ? sourceRows[key][col] : [];
-    const getCatSourceRowsSafe = (cat: string, col: string) => {
-      const key = Object.keys(catSourceRows).find(k => k.trim().toLowerCase() === cat.trim().toLowerCase());
-      return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
-    };
 
     valoresMensal["Total Entradas Operacionais"] = {};
     valoresMensal["Outras Entradas"] = {};

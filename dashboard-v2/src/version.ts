@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.58";
+export const APP_VERSION = "v.02.48.59";
 export const VERSION_DATE = "2026-07-01";
 export const VERSION_CHANGELOG = [
+  "v.02.48.59 - Fix/DRE: Define e utiliza a função 'getCatSourceRowsSafe' de forma precoce nos loops de montagem da DRE e do simulador. Isso garante que a consolidação de transações de origem (sourceRows) para o detalhamento de cards seja 100% resiliente a variações de grafias/espaços das categorias.",
   "v.02.48.58 - Fix/DRE: Adiciona a conta 'Deduções de Receita' sob Custos Operacionais na estrutura do DRE. Implementa fallback automático de categoria para que registros cadastrados com categoria 'N/D' ou 'ND' adotem o nome da respectiva Conta DRE.",
   "v.02.48.57 - Fix/DRE: Agrupa a categoria 'Custo Médio (CMC) das Vendas' sob a linha de 'Custo dos Serviços Prestados' na estrutura do DRE. Isso garante que seus valores sejam exibidos na DRE, somados aos Custos Operacionais e incluídos em suas respectivas transações de origem.",
   "v.02.48.56 - Feat/DRE: Implementa recurso de 'Calculadora Express' interativa acoplada aos cards KPI, permitindo acumular receitas e deduzir despesas/saídas dinamicamente de forma self-contained na interface.",

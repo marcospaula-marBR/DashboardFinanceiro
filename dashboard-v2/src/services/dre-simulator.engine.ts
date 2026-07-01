@@ -109,6 +109,11 @@ export class DreSimulatorEngine {
     const catMonthly: Record<string, Record<string, number>> = {};
     const catSourceRows: Record<string, Record<string, DreRow[]>> = {};
 
+    const getCatSourceRowsSafe = (cat: string, col: string) => {
+      const key = Object.keys(catSourceRows).find(k => k.trim().toLowerCase() === cat.trim().toLowerCase());
+      return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
+    };
+
     // 4. Calcular o Baseline das Categorias
     // Para meses históricos, o baseline é o valor real filtrado.
     // Para meses futuros, o baseline é a média do período base filtrado (scenario.basePeriod).
@@ -389,9 +394,7 @@ export class DreSimulatorEngine {
           if (!isExcludedShared) {
             item.categorias?.forEach(cat => {
               mesTotal += getCatMonthly(cat, col);
-              if (catSourceRows[cat] && catSourceRows[cat][col]) {
-                rowsForMonth.push(...catSourceRows[cat][col]);
-              }
+              rowsForMonth.push(...getCatSourceRowsSafe(cat, col));
             });
           }
           valoresMensal[item.titulo][col] = mesTotal;
@@ -492,10 +495,6 @@ export class DreSimulatorEngine {
 
     const getSourceRowsMensal = (key: string, col: string) => {
       return (sourceRows[key] && sourceRows[key][col]) ? sourceRows[key][col] : [];
-    };
-    const getCatSourceRowsSafe = (cat: string, col: string) => {
-      const key = Object.keys(catSourceRows).find(k => k.trim().toLowerCase() === cat.trim().toLowerCase());
-      return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
     };
 
     validColumns.forEach(col => {
