@@ -662,6 +662,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       return cleanStr(existingVal) !== cleanStr(incomingVal);
     };
 
+    const isFieldOlderThanCurrentActive = (fieldKey: string, contractDateStr?: string) => {
+      if (!contractDateStr) return false;
+      if (fieldKey === 'job_role' || fieldKey === 'department' || fieldKey === 'department_start_date') {
+        const activeDate = existing.department_start_date || existing.start_date;
+        return !!(activeDate && contractDateStr < activeDate);
+      }
+      if (fieldKey.startsWith('remuneration_') || fieldKey === 'remuneration') {
+        const activeDate = existing.last_raise_date || existing.start_date;
+        return !!(activeDate && contractDateStr < activeDate);
+      }
+      if (fieldKey === 'start_date') {
+        const activeDate = existing.start_date;
+        return !!(activeDate && contractDateStr > activeDate);
+      }
+      return false;
+    };
+
     const defaults: Record<string, 'existing' | 'incoming'> = {};
     
     MERGE_FIELDS.forEach(field => {
@@ -671,6 +688,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       if (isDifferent(field.key, existingVal, incomingVal)) {
         if (!existingVal && incomingVal) {
           defaults[field.key] = 'incoming';
+        } else if (isFieldOlderThanCurrentActive(field.key, contractDate)) {
+          defaults[field.key] = 'existing';
         } else if (field.key === 'start_date') {
           const d1 = existing.start_date;
           const d2 = incoming.start_date;
@@ -732,6 +751,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
       } else {
         (mergedProfile as any)[field.key] = existingVal !== undefined ? existingVal : incomingVal;
+        
+        // Se a seleção foi manter o existente (porque o contrato é antigo), ainda assim registramos a trajetória do valor antigo se ele for diferente!
+        if (existingVal !== incomingVal && incomingVal !== undefined && incomingVal !== null && incomingVal !== '') {
+          if (field.key === 'job_role') {
+            historyChanges.push(`Cargo registrado como '${incomingVal}'`);
+          } else if (field.key === 'department') {
+            historyChanges.push(`Setor/Departamento registrado como '${incomingVal}'`);
+          } else if (field.key === 'remuneration_fixed') {
+            historyChanges.push(`Remuneração registrada como ${formatCurrency(Number(incomingVal))}`);
+          } else if (field.key === 'remuneration_incentives') {
+            historyChanges.push(`Incentivos registrados como ${formatCurrency(Number(incomingVal))}`);
+          } else if (field.key === 'remuneration_connectivity') {
+            historyChanges.push(`Conectividade registrada como ${formatCurrency(Number(incomingVal))}`);
+          }
+        }
       }
     });
 
@@ -831,7 +865,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         name: data.name
       }, isTestMode);
 
-      if (existing && existing.id !== profile.id) {
+      if (existing) {
         setIsLoading(true);
         try {
           const [existingProfile, hist, bondsData, costsData] = await Promise.all([
@@ -3521,6 +3555,31 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 <X size={18} />
               </button>
             </div>
+
+            {/* Warning Banner for older contracts */}
+            {(() => {
+              const existing = pendingMerge.existingProfile;
+              const contractDate = pendingMerge.contractDate;
+              const activeDate = existing.last_raise_date || existing.department_start_date || existing.start_date;
+              const isIncomingOlder = !!(contractDate && activeDate && contractDate < activeDate);
+
+              if (!isIncomingOlder) return null;
+
+              return (
+                <div className="mx-6 mt-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl flex items-start gap-2.5 shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                  <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
+                      Contrato Histórico / Antigo Detectado
+                    </p>
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium mt-0.5">
+                      Este documento possui data de assinatura/início ({new Date(contractDate + "T12:00:00").toLocaleDateString('pt-BR')}) anterior à última atualização cadastral do colaborador no banco ({new Date(activeDate + "T12:00:00").toLocaleDateString('pt-BR')}).
+                      Por padrão, os dados mais recentes do banco foram mantidos para evitar o retrocesso de cargos ou salários atuais. O histórico e o documento serão anexados normalmente na trajetória do colaborador.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Legenda */}
             <div className="flex items-center gap-6 px-6 py-3 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40 text-[10px] font-bold uppercase tracking-wider shrink-0">

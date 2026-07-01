@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.63";
+export const APP_VERSION = "v.02.48.64";
 export const VERSION_DATE = "2026-07-01";
 export const VERSION_CHANGELOG = [
+  "v.02.48.64 - Fix/People: Corrige fluxo de importação e mesclagem de contratos antigos. O sistema agora sempre exibe o modal de mesclagem seletiva de dados caso o colaborador já esteja cadastrado no banco (mesmo que seja a própria ficha aberta no drawer). Implementa detecção e tratamento de contratos históricos/antigos: por padrão, os dados mais recentes do banco são mantidos (regra default 'existing' na comparação) e exibe um banner de alerta no modal, enquanto registra o valor antigo e sua respectiva data de assinatura/início cronologicamente no histórico da trajetória.",
   "v.02.48.63 - Feat/People: Adiciona exibição da Data de Vencimento do contrato nos cards da listagem (PeopleMobileCard). Exibe alerta de expiração iminente (EXPIRANDO) se faltarem até 10 dias, sinaliza de forma destacada se faltar a data para colaboradores PJ (Falta Vencimento) e indica prazo indeterminado para os regimes CLT.",
   "v.02.48.62 - Feat/People: Adiciona exibição destacada e botão de cópia rápida para a Chave PIX nos cards da listagem (PeopleMobileCard) e na visualização em tabela (PeopleTable) de colaboradores, facilitando consultas de pagamento rápidas.",
   "v.02.48.61 - Fix/People: Corrige renderização das fotos de perfil de colaboradores externos/PJ. O sistema ocultava as fotos de perfil de prestadores PJ substituindo-as incondicionalmente pelo ícone de empresa (Building2); a condição foi ajustada para renderizar o ícone de empresa apenas se o colaborador PJ não possuir foto cadastrada.",
