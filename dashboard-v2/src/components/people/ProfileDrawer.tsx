@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react";
 import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue } from "@/types/loans";
+import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
 import { formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
-import { isExternalEntity, formatCompanyTime } from "./PeopleBadges";
+import { isExternalEntity, formatCompanyTime, RELATIONSHIP_NATURE_LABELS } from "./PeopleBadges";
 
 interface HistoryItem {
   id: string;
@@ -378,6 +378,17 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     setProfile(prev => {
       const next = { ...prev, [field]: value };
       
+      // Se mudar o Vínculo (linkType), atualizar reativamente a Natureza da Relação (relationshipNature)
+      if (field === 'linkType') {
+        if (value === 'CLT') {
+          next.relationshipNature = 'clt_internal';
+        } else if (value === 'PJ') {
+          next.relationshipNature = 'pj_specialized';
+        } else if (value === 'Estagiário') {
+          next.relationshipNature = 'clt_internal';
+        }
+      }
+
       // Se o vínculo for ou mudar para PJ, sincronizar de forma reativa os dados do responsável legal
       if (next.linkType === 'PJ') {
         if (field === 'name' || field === 'linkType') {
@@ -1741,6 +1752,31 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.grau || '-'}</span>
                               )}
                              </div>
+                          </div>
+                          <div>
+                            <label className={labelClass}>Natureza da Relação (Diana PB)</label>
+                            {isEditMode ? (
+                              <select 
+                                value={profile.relationshipNature || ''} 
+                                onChange={e => handleChange('relationshipNature', e.target.value as RelationshipNature)} 
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2 outline-none focus:border-emerald-500"
+                              >
+                                <option value="">Selecione...</option>
+                                <option value="clt_internal">Integrante Interno (CLT)</option>
+                                <option value="pj_specialized">Prestador Especializado (PJ)</option>
+                                <option value="accredited_company">Empresa Credenciada</option>
+                                <option value="strategic_partner">Parceiro Estratégico</option>
+                                <option value="approved_supplier">Fornecedor Homologado</option>
+                                <option value="external_consultancy">Consultoria Externa</option>
+                                <option value="council_member">Membro do Conselho</option>
+                                <option value="shareholder">Acionista</option>
+                                <option value="founder">Fundador / Sócio</option>
+                              </select>
+                            ) : (
+                              <div className="text-xs font-semibold bg-slate-100 px-2 py-1 rounded text-slate-700 mt-1 self-start inline-block uppercase">
+                                {profile.relationshipNature ? (RELATIONSHIP_NATURE_LABELS[profile.relationshipNature] || profile.relationshipNature) : 'Não Definido'}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

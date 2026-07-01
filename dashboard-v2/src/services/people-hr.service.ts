@@ -264,7 +264,8 @@ export const PeopleHRService = {
         nivel: emp.nivel,
         pbId: emp.metadata?.pbId || emp.metadata?.pb_id || '',
         entityType: emp.metadata?.entityType || emp.metadata?.entity_type || undefined,
-        relationshipNature: emp.metadata?.relationshipNature || emp.metadata?.relationship_nature || undefined,
+        relationshipNature: emp.metadata?.relationshipNature || emp.metadata?.relationship_nature || 
+          (emp.employment_type === 'PJ' || emp.employment_type === 'MEI' ? 'pj_specialized' : (emp.employment_type ? 'clt_internal' : undefined)),
         relationships: Array.isArray(emp.metadata?.relationships) ? emp.metadata.relationships : [],
         aiAgents: Array.isArray(emp.metadata?.aiAgents || emp.metadata?.ai_agents) ? (emp.metadata.aiAgents || emp.metadata.ai_agents) : [],
         permissions: Array.isArray(emp.metadata?.permissions) ? emp.metadata.permissions : [],

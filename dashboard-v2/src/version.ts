@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.59";
+export const APP_VERSION = "v.02.48.60";
 export const VERSION_DATE = "2026-07-01";
 export const VERSION_CHANGELOG = [
+  "v.02.48.60 - Fix/People: Corrige a exibição de 'Vínculo Indefinido' nos cards e tabelas de colaboradores. Adiciona o seletor 'Natureza da Relação' na aba Info Pessoal do ProfileDrawer e implementa fallback de inferência automática a partir do Vínculo (CLT/PJ) nos mapeadores de banco de dados (PeopleService e PeopleHRService) para compatibilidade retroativa com cadastros legados.",
   "v.02.48.59 - Fix/DRE: Define e utiliza a função 'getCatSourceRowsSafe' de forma precoce nos loops de montagem da DRE e do simulador. Isso garante que a consolidação de transações de origem (sourceRows) para o detalhamento de cards seja 100% resiliente a variações de grafias/espaços das categorias.",
   "v.02.48.58 - Fix/DRE: Adiciona a conta 'Deduções de Receita' sob Custos Operacionais na estrutura do DRE. Implementa fallback automático de categoria para que registros cadastrados com categoria 'N/D' ou 'ND' adotem o nome da respectiva Conta DRE.",
   "v.02.48.57 - Fix/DRE: Agrupa a categoria 'Custo Médio (CMC) das Vendas' sob a linha de 'Custo dos Serviços Prestados' na estrutura do DRE. Isso garante que seus valores sejam exibidos na DRE, somados aos Custos Operacionais e incluídos em suas respectivas transações de origem.",

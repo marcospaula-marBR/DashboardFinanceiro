@@ -424,7 +424,8 @@ export class PeopleService {
       grau: raw.metadata?.grau || '',
       pbId: raw.metadata?.pbId || raw.metadata?.pb_id || '',
       entityType: raw.metadata?.entityType || raw.metadata?.entity_type || undefined,
-      relationshipNature: raw.metadata?.relationshipNature || raw.metadata?.relationship_nature || undefined,
+      relationshipNature: raw.metadata?.relationshipNature || raw.metadata?.relationship_nature || 
+        ((raw.employment_type || raw.link_type) === 'PJ' || (raw.employment_type || raw.link_type) === 'MEI' ? 'pj_specialized' : ((raw.employment_type || raw.link_type) ? 'clt_internal' : undefined)),
       relationships: Array.isArray(raw.metadata?.relationships) ? raw.metadata.relationships : [],
       aiAgents: Array.isArray(raw.metadata?.aiAgents || raw.metadata?.ai_agents) ? (raw.metadata.aiAgents || raw.metadata.ai_agents) : [],
       permissions: Array.isArray(raw.metadata?.permissions) ? raw.metadata.permissions : [],

@@ -107,7 +107,7 @@ export function PeopleClassificationBadge({
 
 // ─── Relationship Nature Badge ───────────────────────────────────────────────
 
-const RELATIONSHIP_NATURE_LABELS: Record<RelationshipNature, string> = {
+export const RELATIONSHIP_NATURE_LABELS: Record<RelationshipNature, string> = {
   clt_internal: "Integrante Interno (CLT)",
   pj_specialized: "Prestador Especializado (PJ)",
   accredited_company: "Empresa Credenciada",
