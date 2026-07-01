@@ -30,7 +30,7 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Credenciado Operacional', tipo: 'linha', categorias: ['Credenciado Operacional', 'Adiantamento - Credenciado Operacional'] },
   { titulo: 'Terceirização de Mão de Obra', tipo: 'linha', categorias: ['Terceirização de Mão de Obra'] },
   { titulo: 'CLTs', tipo: 'linha', categorias: ['Despesas com Pessoal'] },
-  { titulo: 'Custo dos Serviços Prestados', tipo: 'linha', categorias: ['Custo dos Serviços Prestados'] },
+  { titulo: 'Custo dos Serviços Prestados', tipo: 'linha', categorias: ['Custo dos Serviços Prestados', 'Custo Médio (CMC) das Vendas'] },
   { titulo: 'Preventiva - B2G', tipo: 'linha', categorias: ['Preventiva - B2G', 'Manutenção Preventiva'] },
   { titulo: 'Corretiva - B2G', tipo: 'linha', categorias: ['Corretiva - B2G', 'Manutenção Corretiva'] },
   { titulo: 'Outros Custos', tipo: 'linha', categorias: ['Outros Custos'] },
