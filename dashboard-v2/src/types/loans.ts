@@ -470,6 +470,11 @@ export function mergePeopleMetadata(currentMetadata: any, patch: Partial<PeopleM
 }
 
 export function inferEntityType(employee: Partial<Employee>): EntityType {
+  const linkType = employee.linkType || '';
+  if (linkType === 'CLT' || linkType === 'Estagiário') {
+    return "internal_person";
+  }
+
   if (employee.metadata?.entityType) return employee.metadata.entityType;
   if (employee.entityType) return employee.entityType;
 
@@ -477,7 +482,6 @@ export function inferEntityType(employee: Partial<Employee>): EntityType {
   const hasCorporateName = typeof employee.corporate_name === 'string' && employee.corporate_name.trim().length > 0;
   const hasPjType = typeof employee.pj_type === 'string' && employee.pj_type.trim().length > 0;
   const hasTaxRegime = typeof employee.tax_regime === 'string' && employee.tax_regime.trim().length > 0;
-  const linkType = employee.linkType || '';
 
   const isPJ = linkType === 'PJ' || linkType === 'MEI' || hasCorporateName || hasPjType || hasTaxRegime || isOutsourced;
 

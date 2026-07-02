@@ -1165,12 +1165,12 @@ export default function PeoplePage() {
               sub="Erros de datas/regime de trabalho"
             />
             <PeopleKpiCard
-              title="Estratégico (E)"
+              title="Níveis"
               value={cockpitKpis.strategicCount}
               icon={<Target size={20} />}
               color="indigo"
               onClick={() => { setActiveKpiMode('strategic'); setIsKpiDrawerOpen(true); }}
-              sub="Mapeamento de cadeiras E1, E2, E3"
+              sub="Estrutura de Níveis E, T, O"
             />
             <PeopleKpiCard
               title="Sem PB-ID"

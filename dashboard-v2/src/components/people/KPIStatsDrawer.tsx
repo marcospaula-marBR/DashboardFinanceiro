@@ -210,23 +210,38 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     return { criticalList, incompleteList, completeList, missingCpf, missingRole, missingPix, missingPhone, missingEmail };
   })();
 
-  // --- Calculations for Strategic ---
+  // --- Calculations for Levels (E, T, O) ---
   const strategicStats = (() => {
     const activeFiltered = filteredEmployees.filter(e => e.status !== 'Inativo');
-    const strategicList = activeFiltered.filter(e => {
-      const classification = getPBClassification(e.nivel, e.grau);
-      return classification.startsWith("E");
-    });
+    
+    const eList = activeFiltered.filter(e => getPBClassification(e.nivel, e.grau).startsWith("E"));
+    const tList = activeFiltered.filter(e => getPBClassification(e.nivel, e.grau).startsWith("T"));
+    const oList = activeFiltered.filter(e => getPBClassification(e.nivel, e.grau).startsWith("O"));
 
-    const e1Count = strategicList.filter(e => getPBClassification(e.nivel, e.grau) === "E1").length;
-    const e2Count = strategicList.filter(e => getPBClassification(e.nivel, e.grau) === "E2").length;
-    const e3Count = strategicList.filter(e => getPBClassification(e.nivel, e.grau) === "E3").length;
+    const e1Count = eList.filter(e => getPBClassification(e.nivel, e.grau) === "E1").length;
+    const e2Count = eList.filter(e => getPBClassification(e.nivel, e.grau) === "E2").length;
+    const e3Count = eList.filter(e => getPBClassification(e.nivel, e.grau) === "E3").length;
 
-    const marBR = strategicList.filter(e => e.company === "MarBR").length;
-    const dzm = strategicList.filter(e => e.company === "DZM").length;
-    const g2 = strategicList.filter(e => e.company === "G2").length;
+    const t1Count = tList.filter(e => getPBClassification(e.nivel, e.grau) === "T1").length;
+    const t2Count = tList.filter(e => getPBClassification(e.nivel, e.grau) === "T2").length;
+    const t3Count = tList.filter(e => getPBClassification(e.nivel, e.grau) === "T3").length;
 
-    return { strategicList, e1Count, e2Count, e3Count, marBR, dzm, g2 };
+    const o1Count = oList.filter(e => getPBClassification(e.nivel, e.grau) === "O1").length;
+    const o2Count = oList.filter(e => getPBClassification(e.nivel, e.grau) === "O2").length;
+    const o3Count = oList.filter(e => getPBClassification(e.nivel, e.grau) === "O3").length;
+
+    const marBR = eList.filter(e => e.company === "MarBR").length;
+    const dzm = eList.filter(e => e.company === "DZM").length;
+    const g2 = eList.filter(e => e.company === "G2").length;
+
+    return {
+      eList, tList, oList,
+      eCount: eList.length, tCount: tList.length, oCount: oList.length,
+      e1Count, e2Count, e3Count,
+      t1Count, t2Count, t3Count,
+      o1Count, o2Count, o3Count,
+      marBR, dzm, g2
+    };
   })();
 
   // --- Calculations for Sem PB-ID ---
@@ -246,7 +261,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     loans: { text: "Exposição de Empréstimos Consignados", icon: <Landmark className="text-amber-500" size={24} /> },
     health: { text: "Saúde da Base & Qualidade do Cadastro", icon: <HeartPulse className="text-rose-500" size={24} /> },
     audit: { text: "Auditoria & Incoerências", icon: <AlertCircle className="text-red-500" size={24} /> },
-    strategic: { text: "Mapeamento Estratégico (Cadeiras E)", icon: <Target className="text-indigo-500" size={24} /> },
+    strategic: { text: "Estrutura de Níveis Organizacionais (E, T, O)", icon: <Target className="text-indigo-500" size={24} /> },
     nopbid: { text: "Cadastros Sem PB-ID Associado", icon: <ShieldAlert className="text-amber-500" size={24} /> }
   };
 
@@ -789,39 +804,120 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
               {/* --- STRATEGIC MODE --- */}
               {mode === "strategic" && (
                 <>
+                  {/* Summary of Levels */}
                   <div className="grid grid-cols-3 gap-6">
                     <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cadeiras E1</p>
-                      <p className="text-3xl font-black text-indigo-400">{strategicStats.e1Count} Diretores</p>
+                      <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Estratégico (E)</p>
+                      <p className="text-3xl font-black text-indigo-300">{strategicStats.eCount} Lideranças</p>
                     </div>
                     <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cadeiras E2</p>
-                      <p className="text-3xl font-black text-indigo-400">{strategicStats.e2Count} Gestores</p>
+                      <p className="text-xs font-bold text-sky-400 uppercase tracking-wider">Tático (T)</p>
+                      <p className="text-3xl font-black text-sky-300">{strategicStats.tCount} Especialistas</p>
                     </div>
                     <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cadeiras E3</p>
-                      <p className="text-3xl font-black text-indigo-400">{strategicStats.e3Count} Coord/Superv</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Operacional (O)</p>
+                      <p className="text-3xl font-black text-slate-300">{strategicStats.oCount} Operacionais</p>
                     </div>
                   </div>
 
-                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Distribuição Estratégica por Empresa</h3>
-                    <div className="flex justify-between items-center text-sm font-bold text-slate-200">
-                      <span>MarBR: {strategicStats.marBR} ({Math.round((strategicStats.marBR / (strategicStats.strategicList.length || 1)) * 100)}%)</span>
-                      <span>DZM: {strategicStats.dzm} ({Math.round((strategicStats.dzm / (strategicStats.strategicList.length || 1)) * 100)}%)</span>
-                      <span>G2: {strategicStats.g2} ({Math.round((strategicStats.g2 / (strategicStats.strategicList.length || 1)) * 100)}%)</span>
+                  {/* Level distributions */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Estratégico (E) */}
+                    <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-indigo-400 border-b border-slate-800 pb-2">Estratégico (E)</h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>E1 (Direção):</span>
+                          <span>{strategicStats.e1Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500" style={{ width: `${(strategicStats.e1Count / (strategicStats.eCount || 1)) * 100}%` }} />
+                        </div>
+                        
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>E2 (Gerência):</span>
+                          <span>{strategicStats.e2Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-400" style={{ width: `${(strategicStats.e2Count / (strategicStats.eCount || 1)) * 100}%` }} />
+                        </div>
+                        
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>E3 (Coordenação/Superv):</span>
+                          <span>{strategicStats.e3Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-300" style={{ width: `${(strategicStats.e3Count / (strategicStats.eCount || 1)) * 100}%` }} />
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex">
-                      <div className="h-full bg-indigo-500" style={{ width: `${(strategicStats.marBR / (strategicStats.strategicList.length || 1)) * 100}%` }} />
-                      <div className="h-full bg-violet-400" style={{ width: `${(strategicStats.dzm / (strategicStats.strategicList.length || 1)) * 100}%` }} />
-                      <div className="h-full bg-blue-500" style={{ width: `${(strategicStats.g2 / (strategicStats.strategicList.length || 1)) * 100}%` }} />
+
+                    {/* Tático (T) */}
+                    <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-sky-400 border-b border-slate-800 pb-2">Tático (T)</h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>T1 (Sênior):</span>
+                          <span>{strategicStats.t1Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-sky-500" style={{ width: `${(strategicStats.t1Count / (strategicStats.tCount || 1)) * 100}%` }} />
+                        </div>
+                        
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>T2 (Pleno):</span>
+                          <span>{strategicStats.t2Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-sky-400" style={{ width: `${(strategicStats.t2Count / (strategicStats.tCount || 1)) * 100}%` }} />
+                        </div>
+                        
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>T3 (Júnior):</span>
+                          <span>{strategicStats.t3Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-sky-300" style={{ width: `${(strategicStats.t3Count / (strategicStats.tCount || 1)) * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Operacional (O) */}
+                    <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-800 pb-2">Operacional (O)</h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>O1 (Grau III):</span>
+                          <span>{strategicStats.o1Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-slate-500" style={{ width: `${(strategicStats.o1Count / (strategicStats.oCount || 1)) * 100}%` }} />
+                        </div>
+                        
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>O2 (Grau II):</span>
+                          <span>{strategicStats.o2Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-slate-600" style={{ width: `${(strategicStats.o2Count / (strategicStats.oCount || 1)) * 100}%` }} />
+                        </div>
+                        
+                        <div className="flex justify-between text-xs font-bold text-slate-300">
+                          <span>O3 (Grau I):</span>
+                          <span>{strategicStats.o3Count}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-slate-700" style={{ width: `${(strategicStats.o3Count / (strategicStats.oCount || 1)) * 100}%` }} />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
+                  {/* List of leadership E */}
                   <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Mapeamento de Liderança Estratégica ({strategicStats.strategicList.length})</h3>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Mapeamento de Lideranças (Nível E - {strategicStats.eCount})</h3>
                     <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-2">
-                      {strategicStats.strategicList.map((emp, i) => {
+                      {strategicStats.eList.map((emp, i) => {
                         const level = getPBClassification(emp.nivel, emp.grau);
                         return (
                           <div key={i} className="py-3 flex justify-between items-center text-sm">
