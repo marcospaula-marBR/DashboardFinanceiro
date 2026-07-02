@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.68";
+export const APP_VERSION = "v.02.48.69";
 export const VERSION_DATE = "2026-07-02";
 export const VERSION_CHANGELOG = [
+  "v.02.48.69 - Feat/People: Exibe o detalhamento de custos do colaborador nos cards mobile (PeopleMobileCard) e na tabela desktop (PeopleTable), apresentando o valor total em destaque e a respectiva subdivisão (Base, Bônus, Comissão) em tamanho reduzido logo abaixo, quando existirem.",
   "v.02.48.68 - Fix/People: Corrige erro na classificação de PJ (colaboradora CLT Deuzelina no setor Rancho constava como PJ devido a valor errôneo em pj_type na base); ajusta inferEntityType para forçar PF caso linkType seja CLT/Estagiário e corrige a base. Renomeia card 'Estratégico' para 'Níveis' e redesenha o detalhamento (KPIStatsDrawer) para expor a distribuição consolidada de todos os níveis (E, T, O).",
   "v.02.48.67 - Feat/People: Vincula todos os 10 cards do painel HR Cockpit a modais/drawers de estatísticas detalhadas (KPIStatsDrawer). Adiciona relatórios executivos sob medida para cada card (headcount total, CLT, PJ, faturamento CLT, contratos PJ, empréstimos, saúde crítica dos cadastros, auditoria, cadeiras de liderança E, e cadastros sem PB-ID), exibindo dados estruturados de forma altamente visual e explicativa.",
   "v.02.48.66 - Feat/People: Renomeia cards de monitoramento ('Sem Revisão (Base)' -> 'Mesmo Valor Base', 'Sem Nível/Função' -> 'Mesmo Nível') e adiciona o novo card de monitoramento 'Mesmo Grau'. Substitui os seletores de janelas de meses por inputs numéricos livres atrelados às janelas correspondentes. Adiciona suporte à data de alteração do grau (last_grade_date) atualizada automaticamente ao mudar o Grau e editável na Ficha Pessoal (ProfileDrawer).",

@@ -247,13 +247,25 @@ export function PeopleMobileCard({
         </div>
 
         {showValues && employee.remuneration > 0 ? (
-          <div className="text-right">
+          <div className="text-right flex flex-col items-end">
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
               {remLabel.short}
             </p>
             <p className="text-sm font-black text-emerald-600 tabular-nums">
               {BRL.format(employee.remuneration)}
             </p>
+            {/* Detalhamento de Base e Bônus */}
+            <div className="mt-0.5 flex flex-col items-end text-[10px] text-slate-400 font-medium">
+              {employee.remuneration_fixed !== undefined && employee.remuneration_fixed > 0 && (
+                <span className="tabular-nums">Base: {BRL.format(employee.remuneration_fixed)}</span>
+              )}
+              {employee.remuneration_bonus !== undefined && employee.remuneration_bonus > 0 && (
+                <span className="tabular-nums text-indigo-500 font-semibold">Bônus: {BRL.format(employee.remuneration_bonus)}</span>
+              )}
+              {employee.remuneration_commission !== undefined && employee.remuneration_commission > 0 && (
+                <span className="tabular-nums text-purple-500 font-semibold">Comissão: {BRL.format(employee.remuneration_commission)}</span>
+              )}
+            </div>
             {/* Custo Histórico */}
             {showValues && (historicoCustoTotal !== undefined || historicoCustoMedio !== undefined) && (
               <div className="mt-1 space-y-0.5">

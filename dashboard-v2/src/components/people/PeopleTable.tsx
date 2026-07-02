@@ -269,9 +269,28 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                         {emp.company}
                       </span>
                     </td>
-                    <td className="py-4 px-4 text-right text-sm font-bold text-slate-700 tabular-nums">
+                    <td className="py-4 px-4 text-right tabular-nums">
                       {showValues ? (
-                        emp.remuneration_fixed && emp.remuneration_fixed > 0 ? formatCurrency(emp.remuneration_fixed) : (emp.remuneration > 0 ? formatCurrency(emp.remuneration) : '—')
+                        emp.remuneration > 0 ? (
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-bold text-slate-700">
+                              {formatCurrency(emp.remuneration)}
+                            </span>
+                            <div className="text-[10px] text-slate-400 font-medium leading-tight">
+                              {emp.remuneration_fixed !== undefined && emp.remuneration_fixed > 0 && (
+                                <div>Base: {formatCurrency(emp.remuneration_fixed)}</div>
+                              )}
+                              {emp.remuneration_bonus !== undefined && emp.remuneration_bonus > 0 && (
+                                <div className="text-indigo-500 font-semibold">Bônus: {formatCurrency(emp.remuneration_bonus)}</div>
+                              )}
+                              {emp.remuneration_commission !== undefined && emp.remuneration_commission > 0 && (
+                                <div className="text-purple-500 font-semibold">Comissão: {formatCurrency(emp.remuneration_commission)}</div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )
                       ) : (
                         <span className="text-slate-300 font-normal">••••••</span>
                       )}
