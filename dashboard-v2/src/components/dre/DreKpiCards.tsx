@@ -407,10 +407,17 @@ export function DreKpiCards({
               <h3 className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1 flex items-center gap-1 pr-6">
                 ⚙️ {customCardTitle || 'Monte seu Card'}
               </h3>
-              <p className="text-xl font-black text-indigo-900 tracking-tight mt-1">
-                {customCardCategoriesCount && customCardCategoriesCount > 0 
-                  ? displayValue(customCardTotal || 0) 
-                  : 'R$ 0,00'}
+              <p className="text-xl font-black text-indigo-900 tracking-tight mt-1 flex items-baseline gap-2 flex-wrap">
+                <span>
+                  {customCardCategoriesCount && customCardCategoriesCount > 0 
+                    ? displayValue(customCardTotal || 0) 
+                    : 'R$ 0,00'}
+                </span>
+                {customCardCategoriesCount && customCardCategoriesCount > 0 && (
+                  <span className="text-xs font-bold text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-full border border-indigo-200/50" title="Representação em relação à receita operacional bruta/entradas">
+                    {calcPercent(customCardTotal || 0)}
+                  </span>
+                )}
               </p>
             </div>
             <div className="mt-2 flex flex-col gap-1.5 relative z-10 w-full">
