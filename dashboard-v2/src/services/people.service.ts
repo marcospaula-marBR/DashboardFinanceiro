@@ -505,7 +505,7 @@ export class PeopleService {
       executive_link: profile.executive_link || '',
       metadata: mergePeopleMetadata(profile.metadata, {
         pbId: profile.pbId,
-        entityType: profile.entityType || inferEntityType(profile),
+        entityType: inferEntityType(profile),
         relationshipNature: profile.relationshipNature,
         aiAgents: profile.aiAgents,
         permissions: profile.permissions,

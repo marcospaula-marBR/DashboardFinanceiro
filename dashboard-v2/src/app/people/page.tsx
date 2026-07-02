@@ -344,7 +344,7 @@ export default function PeoplePage() {
     // Filtro por Tipo de Entidade (PF vs PJ)
     if (filterEntityType.length > 0) {
       result = result.filter(e => {
-        const type = e.entityType || inferEntityType(e);
+        const type = inferEntityType(e);
         const isPF = !isExternalEntity(type);
         return (
           (filterEntityType.includes("internal_person") && isPF) ||

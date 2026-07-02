@@ -444,7 +444,7 @@ export class LoansService {
         pj_type: emp.pj_type,
         tax_regime: emp.tax_regime,
         metadata: emp.metadata || {},
-        entityType: emp.metadata?.entityType || inferEntityType(emp as any),
+        entityType: inferEntityType(emp as any),
         nextInstallmentValue,
         nextInstallmentDate
       });

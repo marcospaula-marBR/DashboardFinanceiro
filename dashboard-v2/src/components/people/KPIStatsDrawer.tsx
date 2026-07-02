@@ -51,7 +51,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
 
   // --- Calculations for Headcount CLT / PF ---
   const headcountCltStats = (() => {
-    const cltList = activeEmployees.filter(e => !isExternalEntity(e.entityType || inferEntityType(e)) && (e.linkType === "CLT" || e.linkType === "Estagiário"));
+    const cltList = activeEmployees.filter(e => !isExternalEntity(inferEntityType(e)) && (e.linkType === "CLT" || e.linkType === "Estagiário"));
     const cltCount = cltList.filter(e => e.linkType === "CLT").length;
     const estCount = cltList.filter(e => e.linkType === "Estagiário").length;
     const avgSalary = cltList.length > 0 
@@ -65,7 +65,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
 
   // --- Calculations for Headcount PJ / Prestadores ---
   const headcountPjStats = (() => {
-    const pjList = activeEmployees.filter(e => isExternalEntity(e.entityType || inferEntityType(e)));
+    const pjList = activeEmployees.filter(e => isExternalEntity(inferEntityType(e)));
     const avgContract = pjList.length > 0
       ? Math.round(pjList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0) / pjList.length)
       : 0;
@@ -77,7 +77,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
 
   // --- Calculations for Payroll CLT ---
   const payrollCltStats = (() => {
-    const cltList = activeEmployees.filter(e => !isExternalEntity(e.entityType || inferEntityType(e)) && (e.linkType === "CLT" || e.linkType === "Estagiário"));
+    const cltList = activeEmployees.filter(e => !isExternalEntity(inferEntityType(e)) && (e.linkType === "CLT" || e.linkType === "Estagiário"));
     const totalFixed = cltList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
     const totalBonus = cltList.reduce((sum, e) => sum + (e.remuneration_bonus || 0), 0);
     const totalCommission = cltList.reduce((sum, e) => sum + (e.remuneration_commission || 0), 0);
@@ -109,7 +109,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
 
   // --- Calculations for Payroll PJ ---
   const payrollPjStats = (() => {
-    const pjList = activeEmployees.filter(e => isExternalEntity(e.entityType || inferEntityType(e)));
+    const pjList = activeEmployees.filter(e => isExternalEntity(inferEntityType(e)));
     const totalFixed = pjList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
     const totalBonus = pjList.reduce((sum, e) => sum + (e.remuneration_bonus || 0), 0);
     const totalCommission = pjList.reduce((sum, e) => sum + (e.remuneration_commission || 0), 0);
@@ -193,7 +193,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     let missingEmail = 0;
 
     activeFiltered.forEach(e => {
-      const isPF = !isExternalEntity(e.entityType || inferEntityType(e));
+      const isPF = !isExternalEntity(inferEntityType(e));
       if (isPF) {
         if (!e.document_id) missingCpf++;
         if (!e.job_role) missingRole++;

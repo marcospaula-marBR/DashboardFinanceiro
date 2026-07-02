@@ -135,7 +135,7 @@ export function PeopleEcosystemMap({
 
   // Renderizar o card no mapa
   const renderEcosystemCard = (emp: Employee) => {
-    const resolvedEntityType = emp.entityType || inferEntityType(emp);
+    const resolvedEntityType = inferEntityType(emp);
     const isExternal = isExternalEntity(resolvedEntityType);
     // Razão Social prevalece sempre que preenchida; name é o fallback
     const displayName = emp.corporate_name || emp.name;

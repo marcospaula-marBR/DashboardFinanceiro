@@ -81,7 +81,7 @@ export function PeopleMobileCard({
 
   const statusStyle = STATUS_STYLES[employee.status] ?? "bg-slate-50 text-slate-600 border-slate-200";
   const remLabel = getRemunerationLabel(employee.linkType);
-  const resolvedEntityType = employee.entityType || inferEntityType(employee);
+  const resolvedEntityType = inferEntityType(employee);
   const isExternal = isExternalEntity(resolvedEntityType);
 
   // Razão Social prevalece sempre que preenchida; name é o fallback
