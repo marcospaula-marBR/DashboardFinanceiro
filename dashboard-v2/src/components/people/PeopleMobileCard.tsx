@@ -29,6 +29,7 @@ interface PeopleMobileCardProps {
   noGradeMonths?: number;
   historicoCustoTotal?: number; // Soma total do custo histórico
   historicoCustoMedio?: number; // Média mensal do custo histórico
+  expandAll?: boolean;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -48,6 +49,7 @@ export function PeopleMobileCard({
   employee,
   onClick,
   onDelete,
+  onEdit,
   showValues,
   hasAuditIssues = false,
   hasGlosa,
@@ -60,9 +62,11 @@ export function PeopleMobileCard({
   noGradeMonths,
   historicoCustoTotal,
   historicoCustoMedio,
+  expandAll = false,
 }: PeopleMobileCardProps) {
   const [copied, setCopied] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleCopyPix = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -115,12 +119,16 @@ export function PeopleMobileCard({
     });
   };
 
+  const isExpanded = expandAll || isHovered;
+
   return (
     <div
       className={`bg-white rounded-2xl border transition-all hover:shadow-md p-4 active:scale-[0.99] cursor-pointer relative ${
         isExternal ? "border-amber-200/60 bg-gradient-to-br from-white to-amber-50/10" : "border-slate-200"
       }`}
       onClick={() => onClick(employee.id)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick(employee.id)}
@@ -199,169 +207,177 @@ export function PeopleMobileCard({
         </div>
       </div>
 
-      {/* Meio: Setor, Cadeira, Custo */}
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-end justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5 text-slate-400">
-            <Building2 size={12} />
-            <span className="text-[11px] font-semibold text-slate-600">
-              {employee.department || "Sem Setor"}
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
+      {/* Detalhes expansíveis (Setor, Início, Vencimento, Custo, PIX, Rodapé) */}
+      <div 
+        className={`transition-all duration-300 ease-in-out overflow-hidden ${
+          isExpanded 
+            ? "max-h-[500px] opacity-100 mt-4 pt-3 border-t border-slate-100" 
+            : "max-h-0 opacity-0 mt-0 pt-0 border-t-0 border-transparent"
+        }`}
+      >
+        <div className="flex items-end justify-between">
+          <div className="space-y-1">
             <div className="flex items-center gap-1.5 text-slate-400">
-              <Clock size={12} />
-              <span className="text-[10px] text-slate-400">
-                {startFormatted}
+              <Building2 size={12} />
+              <span className="text-[11px] font-semibold text-slate-600">
+                {employee.department || "Sem Setor"}
               </span>
             </div>
-            {employee.start_date && (
-              <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full ml-4 self-start">
-                {formatCompanyTime(employee.start_date)}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 text-slate-400 mt-1">
-            <Calendar size={12} className={isExpiringSoon ? "text-amber-500" : "text-slate-400"} />
-            {employee.contract_expiry_date ? (
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className={`text-[10px] font-semibold ${isExpiringSoon ? "text-amber-600 font-bold" : "text-slate-500"}`}>
-                  Vence: {expiryFormatted}
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <Clock size={12} />
+                <span className="text-[10px] text-slate-400">
+                  {startFormatted}
                 </span>
-                {isExpiringSoon && (
-                  <span className="text-[8px] font-black bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded animate-pulse">
-                    EXPIRANDO
+              </div>
+              {employee.start_date && (
+                <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full ml-4 self-start">
+                  {formatCompanyTime(employee.start_date)}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-slate-400 mt-1">
+              <Calendar size={12} className={isExpiringSoon ? "text-amber-500" : "text-slate-400"} />
+              {employee.contract_expiry_date ? (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className={`text-[10px] font-semibold ${isExpiringSoon ? "text-amber-600 font-bold" : "text-slate-500"}`}>
+                    Vence: {expiryFormatted}
                   </span>
+                  {isExpiringSoon && (
+                    <span className="text-[8px] font-black bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded animate-pulse">
+                      EXPIRANDO
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <span className={`text-[10px] font-bold ${
+                  employee.linkType === 'PJ' 
+                    ? "text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded text-[8px]" 
+                    : "text-slate-500 font-medium"
+                }`}>
+                  {employee.linkType === 'PJ' ? "Falta Vencimento" : "Vence: Indeterminado"}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {showValues && employee.remuneration > 0 ? (
+            <div className="text-right flex flex-col items-end">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                {remLabel.short}
+              </p>
+              <p className="text-sm font-black text-emerald-600 tabular-nums">
+                {BRL.format(employee.remuneration)}
+              </p>
+              {/* Detalhamento de Base e Bônus */}
+              <div className="mt-0.5 flex flex-col items-end text-[10px] text-slate-400 font-medium">
+                {employee.remuneration_fixed !== undefined && employee.remuneration_fixed > 0 && (
+                  <span className="tabular-nums">Base: {BRL.format(employee.remuneration_fixed)}</span>
+                )}
+                {employee.remuneration_bonus !== undefined && employee.remuneration_bonus > 0 && (
+                  <span className="tabular-nums text-indigo-500 font-semibold">Bônus: {BRL.format(employee.remuneration_bonus)}</span>
+                )}
+                {employee.remuneration_commission !== undefined && employee.remuneration_commission > 0 && (
+                  <span className="tabular-nums text-purple-500 font-semibold">Comissão: {BRL.format(employee.remuneration_commission)}</span>
                 )}
               </div>
-            ) : (
-              <span className={`text-[10px] font-bold ${
-                employee.linkType === 'PJ' 
-                  ? "text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded text-[8px]" 
-                  : "text-slate-500 font-medium"
-              }`}>
-                {employee.linkType === 'PJ' ? "Falta Vencimento" : "Vence: Indeterminado"}
+              {/* Custo Histórico */}
+              {showValues && (historicoCustoTotal !== undefined || historicoCustoMedio !== undefined) && (
+                <div className="mt-1 space-y-0.5">
+                  {historicoCustoTotal !== undefined && historicoCustoTotal > 0 && (
+                    <p className="text-[9px] text-slate-400">
+                      Total hist. <span className="font-bold text-slate-600 tabular-nums">{BRL.format(historicoCustoTotal)}</span>
+                    </p>
+                  )}
+                  {historicoCustoMedio !== undefined && historicoCustoMedio > 0 && (
+                    <p className="text-[9px] text-slate-400">
+                      Média/mês <span className="font-bold text-slate-600 tabular-nums">{BRL.format(historicoCustoMedio)}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 italic">
+                {showValues ? "Sem custos" : "Valores ocultos"}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {showValues && employee.remuneration > 0 ? (
-          <div className="text-right flex flex-col items-end">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-              {remLabel.short}
-            </p>
-            <p className="text-sm font-black text-emerald-600 tabular-nums">
-              {BRL.format(employee.remuneration)}
-            </p>
-            {/* Detalhamento de Base e Bônus */}
-            <div className="mt-0.5 flex flex-col items-end text-[10px] text-slate-400 font-medium">
-              {employee.remuneration_fixed !== undefined && employee.remuneration_fixed > 0 && (
-                <span className="tabular-nums">Base: {BRL.format(employee.remuneration_fixed)}</span>
-              )}
-              {employee.remuneration_bonus !== undefined && employee.remuneration_bonus > 0 && (
-                <span className="tabular-nums text-indigo-500 font-semibold">Bônus: {BRL.format(employee.remuneration_bonus)}</span>
-              )}
-              {employee.remuneration_commission !== undefined && employee.remuneration_commission > 0 && (
-                <span className="tabular-nums text-purple-500 font-semibold">Comissão: {BRL.format(employee.remuneration_commission)}</span>
-              )}
+        {/* Chave PIX se cadastrada */}
+        {employee.pix_key && (
+          <div className="mt-3 p-2 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between gap-2 group/pix hover:bg-slate-100/50 hover:border-slate-200 transition-all">
+            <div className="min-w-0 flex-1 flex items-center gap-2 pl-1">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider bg-slate-200/50 px-1.5 py-0.5 rounded shrink-0">PIX</span>
+              <span className="text-[10px] font-mono font-bold text-slate-700 truncate block">{employee.pix_key}</span>
             </div>
-            {/* Custo Histórico */}
-            {showValues && (historicoCustoTotal !== undefined || historicoCustoMedio !== undefined) && (
-              <div className="mt-1 space-y-0.5">
-                {historicoCustoTotal !== undefined && historicoCustoTotal > 0 && (
-                  <p className="text-[9px] text-slate-400">
-                    Total hist. <span className="font-bold text-slate-600 tabular-nums">{BRL.format(historicoCustoTotal)}</span>
-                  </p>
-                )}
-                {historicoCustoMedio !== undefined && historicoCustoMedio > 0 && (
-                  <p className="text-[9px] text-slate-400">
-                    Média/mês <span className="font-bold text-slate-600 tabular-nums">{BRL.format(historicoCustoMedio)}</span>
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-right">
-            <span className="text-[10px] text-slate-400 italic">
-              {showValues ? "Sem custos" : "Valores ocultos"}
-            </span>
+            <button 
+              onClick={handleCopyPix}
+              className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[9px] font-black shrink-0 shadow-sm ${
+                copiedPix
+                  ? "bg-emerald-500 text-white border-emerald-500"
+                  : "bg-white hover:bg-slate-50 text-slate-500 border-slate-200"
+              }`}
+              title="Copiar Chave PIX"
+            >
+              {copiedPix ? <Check size={11} /> : <Copy size={11} />}
+              {copiedPix ? "Copiado!" : "Copiar"}
+            </button>
           </div>
         )}
-      </div>
 
-      {/* Chave PIX se cadastrada */}
-      {employee.pix_key && (
-        <div className="mt-3 p-2 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between gap-2 group/pix hover:bg-slate-100/50 hover:border-slate-200 transition-all">
-          <div className="min-w-0 flex-1 flex items-center gap-2 pl-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider bg-slate-200/50 px-1.5 py-0.5 rounded shrink-0">PIX</span>
-            <span className="text-[10px] font-mono font-bold text-slate-700 truncate block">{employee.pix_key}</span>
+        {/* Rodapé: Indicador de Saúde Cadastral e Ações Rápidas */}
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <PeopleHealthBadge employee={employee} />
           </div>
-          <button 
-            onClick={handleCopyPix}
-            className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[9px] font-black shrink-0 shadow-sm ${
-              copiedPix
-                ? "bg-emerald-500 text-white border-emerald-500"
-                : "bg-white hover:bg-slate-50 text-slate-500 border-slate-200"
-            }`}
-            title="Copiar Chave PIX"
-          >
-            {copiedPix ? <Check size={11} /> : <Copy size={11} />}
-            {copiedPix ? "Copiado!" : "Copiar"}
-          </button>
-        </div>
-      )}
 
-      {/* Rodapé: Indicador de Saúde Cadastral e Ações Rápidas */}
-      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <PeopleHealthBadge employee={employee} />
-        </div>
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            {/* Botão WhatsApp */}
+            {waLink ? (
+              <a
+                href={waLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 rounded-lg transition-all border border-emerald-100"
+                title={`Chamar no WhatsApp Profissional: ${employee.phone_professional}`}
+              >
+                <Phone size={13} className="fill-emerald-600/10" />
+              </a>
+            ) : (
+              <span 
+                className="p-1.5 bg-slate-50 text-slate-300 rounded-lg border border-slate-100 cursor-not-allowed"
+                title="WhatsApp indisponível (Telefone Profissional ausente)"
+              >
+                <Phone size={13} />
+              </span>
+            )}
 
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {/* Botão WhatsApp */}
-          {waLink ? (
-            <a
-              href={waLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 rounded-lg transition-all border border-emerald-100"
-              title={`Chamar no WhatsApp Profissional: ${employee.phone_professional}`}
+            {/* Copiar Link Executivo */}
+            <button
+              onClick={handleCopyLink}
+              className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[10px] font-black ${
+                copied
+                  ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
+                  : "bg-white hover:bg-slate-50 text-slate-600 border-slate-200"
+              }`}
+              title="Copiar Link Executivo"
             >
-              <Phone size={13} className="fill-emerald-600/10" />
-            </a>
-          ) : (
-            <span 
-              className="p-1.5 bg-slate-50 text-slate-300 rounded-lg border border-slate-100 cursor-not-allowed"
-              title="WhatsApp indisponível (Telefone Profissional ausente)"
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+              {copied ? "Copiado!" : "Link"}
+            </button>
+
+            {/* Excluir */}
+            <button
+              onClick={() => onDelete(employee)}
+              className="text-[10px] text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent hover:border-red-100"
+              aria-label={`Excluir ${displayName}`}
             >
-              <Phone size={13} />
-            </span>
-          )}
-
-          {/* Copiar Link Executivo */}
-          <button
-            onClick={handleCopyLink}
-            className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[10px] font-black ${
-              copied
-                ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
-                : "bg-white hover:bg-slate-50 text-slate-600 border-slate-200"
-            }`}
-            title="Copiar Link Executivo"
-          >
-            {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? "Copiado!" : "Link"}
-          </button>
-
-          {/* Excluir */}
-          <button
-            onClick={() => onDelete(employee)}
-            className="text-[10px] text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent hover:border-red-100"
-            aria-label={`Excluir ${displayName}`}
-          >
-            Excluir
-          </button>
+              Excluir
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -99,12 +99,13 @@ export default function PeoplePage() {
   
   // Pagination for grid mode
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 12;
+  const [itemsPerPage, setItemsPerPage] = useState(12);
+  const [expandAllCards, setExpandAllCards] = useState(false);
 
   // Filters state
   const [filterSearch, setFilterSearch] = useState('');
   const [filterEmpresa, setFilterEmpresa] = useState<string[]>([]);
-  const [filterStatus, setFilterStatus] = useState<string[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string[]>(['Ativo']);
   const [filterVinculo, setFilterVinculo] = useState<string[]>([]);
   const [filterSetor, setFilterSetor] = useState<string[]>([]);
   const [filterGrau, setFilterGrau] = useState<string[]>([]);
@@ -193,10 +194,27 @@ export default function PeoplePage() {
     };
   }, [employees, monthlyCosts, showValues]);
 
-  // Reset pagination when filter changes
+  // Reset pagination when filter values change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filteredEmployees]);
+  }, [
+    filterSearch,
+    filterEmpresa,
+    filterStatus,
+    filterVinculo,
+    filterSetor,
+    filterGrau,
+    filterTerceirizado,
+    filterLocalPrestacao,
+    filterRegimeTributario,
+    filterEntityType,
+    filterRelationshipNature,
+    filterLevel,
+    filterQuality,
+    filterHasPbId,
+    showInativos,
+    filterInsight
+  ]);
 
   // Verificar se há filtros ativos
   const hasActiveFilters = useMemo(() => {
@@ -434,7 +452,7 @@ export default function PeoplePage() {
   const paginatedGridEmployees = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredEmployees.slice(start, start + itemsPerPage);
-  }, [filteredEmployees, currentPage]);
+  }, [filteredEmployees, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage) || 1;
 
@@ -1004,6 +1022,41 @@ export default function PeoplePage() {
               {showValues ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
 
+            {/* Itens por Página selector */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-sm text-xs text-slate-500 font-bold shrink-0">
+              <span className="text-[9px] text-slate-400 uppercase tracking-tight">Exibir:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setItemsPerPage(val);
+                  setCurrentPage(1);
+                }}
+                className="bg-transparent border-none text-slate-700 font-extrabold focus:ring-0 p-0 text-xs cursor-pointer focus:outline-none"
+              >
+                <option value={10}>10</option>
+                <option value={12}>12</option>
+                <option value={24}>24</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            {/* Grid Expand All toggle */}
+            {viewMode === 'grid' && (
+              <button
+                onClick={() => setExpandAllCards(!expandAllCards)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 uppercase shadow-sm ${
+                  expandAllCards
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+                title={expandAllCards ? 'Recolher detalhes de todos os cards' : 'Expandir detalhes de todos os cards'}
+              >
+                <span>{expandAllCards ? 'Recolher Cards' : 'Expandir Cards'}</span>
+              </button>
+            )}
+
             {/* Toggle view mode Cards vs Table vs Map */}
             <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0 shadow-inner">
               <button
@@ -1310,6 +1363,7 @@ export default function PeoplePage() {
               noRaiseMonths={noRaiseMonths}
               noPromoMonths={noPromoMonths}
               noGradeMonths={noGradeMonths}
+              itemsPerPage={itemsPerPage}
             />
           ) : (
             <div>
@@ -1376,6 +1430,7 @@ export default function PeoplePage() {
                         noGradeMonths={noGradeMonths}
                         historicoCustoTotal={historicoCustoTotal}
                         historicoCustoMedio={historicoCustoMedio}
+                        expandAll={expandAllCards}
                       />
                     );
                   })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Trash2, UserCog, AlertCircle, Phone, Copy, Check, Building2, UserRound } from "lucide-react";
 import { Employee, AuditIssue } from "@/types/loans";
 import { getRemunerationLabel } from "@/types/loans";
@@ -25,6 +25,7 @@ interface PeopleTableProps {
   noRaiseMonths?: number;
   noPromoMonths?: number;
   noGradeMonths?: number;
+  itemsPerPage?: number;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -35,10 +36,53 @@ const STATUS_STYLES: Record<string, string> = {
   default: 'bg-slate-50 text-slate-600 border-slate-200',
 };
 
-export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, showValues, auditIssues = {}, noRaiseMonths, noPromoMonths, noGradeMonths }: PeopleTableProps) {
+export function PeopleTable({ 
+  employees, 
+  onEdit, 
+  onDelete, 
+  onEmployeeClick, 
+  showValues, 
+  auditIssues = {}, 
+  noRaiseMonths, 
+  noPromoMonths, 
+  noGradeMonths,
+  itemsPerPage = 10
+}: PeopleTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedPixId, setCopiedPixId] = useState<string | null>(null);
+  const [scrollWidth, setScrollWidth] = useState(1200);
+
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  // Sync scroll handlers
+  const handleTopScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleTableScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    }
+  };
+
+  // Reset page when itemsPerPage changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [itemsPerPage]);
+
+  // Dynamically calculate table width for scrollbar helper
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (tableScrollRef.current) {
+        setScrollWidth(tableScrollRef.current.scrollWidth);
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [employees, currentPage, itemsPerPage]);
   
   const handleCopyPix = (e: React.MouseEvent, emp: Employee) => {
     e.stopPropagation();
@@ -48,8 +92,6 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
       setTimeout(() => setCopiedPixId(null), 2000);
     });
   };
-  
-  const itemsPerPage = 10;
   
   const totalPages = Math.ceil(employees.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -105,8 +147,22 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
         )}
       </div>
 
-      <div className="overflow-x-auto hidden md:block">
-        <table className="w-full text-left border-collapse">
+      {/* Synced top scrollbar */}
+      <div 
+        ref={topScrollRef} 
+        onScroll={handleTopScroll}
+        className="overflow-x-auto hidden md:block bg-slate-50/50 border-b border-slate-100 scrollbar-thin scrollbar-thumb-slate-300"
+        style={{ height: '8px' }}
+      >
+        <div style={{ width: `${scrollWidth}px`, height: '1px' }} />
+      </div>
+
+      <div 
+        ref={tableScrollRef}
+        onScroll={handleTableScroll}
+        className="overflow-x-auto hidden md:block"
+      >
+        <table className="w-full text-left border-collapse" style={{ minWidth: '1150px' }}>
           <thead>
             <tr className="bg-slate-50/80 text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
               <th className="py-4 px-6 min-w-[280px]">Integrante / Perfil</th>
@@ -197,7 +253,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-bold text-slate-800 truncate group-hover:text-emerald-600 transition-colors">
+                            <p className="text-sm font-bold text-slate-800 truncate group-hover:text-emerald-600 transition-colors max-w-[150px]" title={displayName}>
                               {displayName}
                             </p>
                             {empIssues.length > 0 && (
@@ -412,6 +468,29 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
           })
         )}
       </div>
+
+      {/* Bottom pagination */}
+      {totalPages > 1 && (
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-center md:justify-end items-center gap-2">
+          <button 
+            onClick={handlePrevPage}
+            disabled={currentPage === 1}
+            className="p-1.5 px-4 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            ANTERIOR
+          </button>
+          <span className="text-[10px] font-bold text-slate-500 uppercase">
+            Pág {currentPage} de {totalPages}
+          </span>
+          <button 
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
+            className="p-1.5 px-4 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            PRÓXIMO
+          </button>
+        </div>
+      )}
     </div>
   );
 }
