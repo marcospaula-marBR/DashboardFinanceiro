@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.71";
+export const APP_VERSION = "v.02.48.72";
 export const VERSION_DATE = "2026-07-02";
 export const VERSION_CHANGELOG = [
+  "v.02.48.72 - Feat/People: Nome do representante legal (RL) exibido em caixa alta. Alerta de emojis (glosa, empréstimos, revisões) reposicionado logo abaixo das fotos dos colaboradores no card. Adicionado o botão master 'Expandir/Recolher Cards' e a barra de paginação (Anterior/Próximo) na parte superior do grid de Cards. Implementada filtragem interativa por clique direto em elementos textuais e crachás nos cards (Nome, Setor, Cargo, RL, Nível/Grau e Natureza de Relação).",
   "v.02.48.71 - Feat/People: Como padrão, exibe apenas colaboradores ativos ao abrir. Preserva os filtros e o estado de paginação atual ao salvar/atualizar os dados no ProfileDrawer. Adiciona seletor de quantidade de itens visíveis por página (Itens por Página) e botão master 'Expandir/Recolher Cards'. Otimiza a visualização em tabela (reduz largura da coluna de nomes e adiciona barra de rolagem horizontal dupla sincronizada por JS no desktop). Repete botões de paginação (Anterior/Próximo) no rodapé do container da tabela. Implementa recolhimento dinâmico de dados com expansão suave (hover) nos cards.",
   "v.02.48.70 - Feat/DRE: Exibe a porcentagem que a soma do Card Personalizado representa em relação à Receita Operacional Bruta (Entradas) logo ao lado do valor total, formatado como um badge arredondado.",
   "v.02.48.69 - Feat/People: Exibe o detalhamento de custos do colaborador nos cards mobile (PeopleMobileCard) e na tabela desktop (PeopleTable), apresentando o valor total in destaque e a respectiva subdivisão (Base, Bônus, Comissão) em tamanho reduzido logo abaixo, quando existirem.",

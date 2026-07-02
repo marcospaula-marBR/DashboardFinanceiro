@@ -551,6 +551,18 @@ export default function PeoplePage() {
     setIsProfileDrawerOpen(true);
   };
 
+  const handleFilterSelect = (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level', value: string) => {
+    if (type === 'name' || type === 'responsible_name' || type === 'job_role') {
+      setFilterSearch(value);
+    } else if (type === 'department') {
+      setFilterSetor([value]);
+    } else if (type === 'nature') {
+      setFilterRelationshipNature([value]);
+    } else if (type === 'level') {
+      setFilterLevel([value]);
+    }
+  };
+
   const handleCreateEmployeeClick = () => {
     setSelectedEmployee(undefined);
     setIsProfileDrawerOpen(true);
@@ -1042,21 +1054,6 @@ export default function PeoplePage() {
               </select>
             </div>
 
-            {/* Grid Expand All toggle */}
-            {viewMode === 'grid' && (
-              <button
-                onClick={() => setExpandAllCards(!expandAllCards)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 uppercase shadow-sm ${
-                  expandAllCards
-                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-                title={expandAllCards ? 'Recolher detalhes de todos os cards' : 'Expandir detalhes de todos os cards'}
-              >
-                <span>{expandAllCards ? 'Recolher Cards' : 'Expandir Cards'}</span>
-              </button>
-            )}
-
             {/* Toggle view mode Cards vs Table vs Map */}
             <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0 shadow-inner">
               <button
@@ -1364,11 +1361,59 @@ export default function PeoplePage() {
               noPromoMonths={noPromoMonths}
               noGradeMonths={noGradeMonths}
               itemsPerPage={itemsPerPage}
+              onFilterSelect={handleFilterSelect}
             />
           ) : (
             <div>
+              {/* Top controls/pagination for Grid View */}
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mt-6 flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-tight">
+                    Exibição em Cards
+                    <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500 font-bold ml-2">
+                      {filteredEmployees.length} REGISTROS
+                    </span>
+                  </h3>
+                  
+                  {/* Expand All Toggle inside the card view bar */}
+                  <button
+                    onClick={() => setExpandAllCards(!expandAllCards)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 uppercase shadow-sm ${
+                      expandAllCards
+                        ? 'border-indigo-300 bg-indigo-50 text-indigo-700 font-black'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold'
+                    }`}
+                    title={expandAllCards ? 'Recolher detalhes de todos os cards' : 'Expandir detalhes de todos os cards'}
+                  >
+                    <span>{expandAllCards ? 'Recolher Cards' : 'Expandir Cards'}</span>
+                  </button>
+                </div>
+                
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-1.5 px-4 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                    >
+                      ANTERIOR
+                    </button>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">
+                      Pág {currentPage} de {totalPages}
+                    </span>
+                    <button 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-1.5 px-4 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                    >
+                      PRÓXIMO
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Grid de Cards responsivo */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
                 {paginatedGridEmployees.length === 0 ? (
                   <p className="py-12 text-center text-slate-400 text-sm italic col-span-full bg-white rounded-2xl border border-slate-200 shadow-sm">
                     Nenhum colaborador encontrado para os filtros selecionados.
@@ -1431,6 +1476,7 @@ export default function PeoplePage() {
                         historicoCustoTotal={historicoCustoTotal}
                         historicoCustoMedio={historicoCustoMedio}
                         expandAll={expandAllCards}
+                        onFilterSelect={handleFilterSelect}
                       />
                     );
                   })

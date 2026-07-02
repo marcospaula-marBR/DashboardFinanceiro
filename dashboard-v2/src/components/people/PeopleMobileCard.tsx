@@ -30,6 +30,7 @@ interface PeopleMobileCardProps {
   historicoCustoTotal?: number; // Soma total do custo histórico
   historicoCustoMedio?: number; // Média mensal do custo histórico
   expandAll?: boolean;
+  onFilterSelect?: (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level', value: string) => void;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -63,6 +64,7 @@ export function PeopleMobileCard({
   historicoCustoTotal,
   historicoCustoMedio,
   expandAll = false,
+  onFilterSelect,
 }: PeopleMobileCardProps) {
   const [copied, setCopied] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
@@ -121,6 +123,8 @@ export function PeopleMobileCard({
 
   const isExpanded = expandAll || isHovered;
 
+  const hasAnyAlert = hasGlosa || hasLoan || hasNoRaise || hasNoPromo || hasNoGrade;
+
   return (
     <div
       className={`bg-white rounded-2xl border transition-all hover:shadow-md p-4 active:scale-[0.99] cursor-pointer relative ${
@@ -147,40 +151,59 @@ export function PeopleMobileCard({
       </div>
 
       <div className="flex items-start gap-3">
-        {/* Avatar / Logo */}
-        {isExternal && !(employee.photo_url || employee.avatar) ? (
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-inner">
-            <Building2 size={22} />
-          </div>
-        ) : (
-          <img
-            src={avatarSrc}
-            alt={displayName}
-            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 shadow-sm"
-          />
-        )}
-
-        <div className="flex-1 min-w-0 pr-16">
-          <div className="flex items-center gap-1">
-            <p className="font-black text-sm text-slate-900 truncate tracking-tight">
-              {displayName}
-            </p>
-            <div className="flex items-center gap-0.5 shrink-0">
+        {/* Avatar / Logo & Alerts Row beneath */}
+        <div className="flex flex-col items-center gap-1.5 shrink-0">
+          {isExternal && !(employee.photo_url || employee.avatar) ? (
+            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-inner">
+              <Building2 size={22} />
+            </div>
+          ) : (
+            <img
+              src={avatarSrc}
+              alt={displayName}
+              className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 shadow-sm"
+            />
+          )}
+          {/* Emojis do nível e grau (alertas) */}
+          {hasAnyAlert && (
+            <div className="flex items-center gap-0.5 justify-center flex-wrap max-w-[48px] bg-slate-50/80 px-1 py-0.5 rounded border border-slate-100/50">
               {hasGlosa && <span title="Houve Glosa na NF" className="text-[11px] cursor-help">⚠️</span>}
               {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[11px] cursor-help">💸</span>}
               {hasNoRaise && <span title={`Mesmo Valor Base há mais de ${noRaiseMonths} meses`} className="text-[11px] cursor-help">⏳</span>}
               {hasNoPromo && <span title={`Mesmo Nível há mais de ${noPromoMonths} meses`} className="text-[11px] cursor-help">🎯</span>}
               {hasNoGrade && <span title={`Mesmo Grau há mais de ${noGradeMonths} meses`} className="text-[11px] cursor-help">⭐</span>}
             </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 pr-16">
+          <div className="flex items-center gap-1">
+            <p 
+              onClick={(e) => {
+                e.stopPropagation();
+                onFilterSelect?.('name', displayName);
+              }}
+              className="font-black text-sm text-slate-900 truncate tracking-tight hover:underline cursor-pointer"
+              title="Filtrar por este integrante"
+            >
+              {displayName}
+            </p>
           </div>
 
           {/* Subtítulos */}
           {isExternal ? (
             <div className="mt-0.5 space-y-0.5">
               {employee.responsible_name && (
-                <p className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                <p 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFilterSelect?.('responsible_name', employee.responsible_name || '');
+                  }}
+                  className="text-[10px] text-slate-500 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+                  title="Filtrar por este representante"
+                >
                   <UserRound size={10} className="text-slate-400" />
-                  RL: {employee.responsible_name}
+                  RL: {employee.responsible_name.toUpperCase()}
                 </p>
               )}
               {employee.pj_type && (
@@ -192,7 +215,14 @@ export function PeopleMobileCard({
           ) : (
             <div className="mt-0.5">
               {employee.job_role && (
-                <p className="text-[10px] text-slate-500 font-medium truncate">
+                <p 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFilterSelect?.('job_role', employee.job_role || '');
+                  }}
+                  className="text-[10px] text-slate-500 font-medium truncate hover:underline cursor-pointer"
+                  title="Filtrar por este cargo"
+                >
                   {employee.job_role}
                 </p>
               )}
@@ -201,8 +231,26 @@ export function PeopleMobileCard({
 
           {/* Badges do Cockpit */}
           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
-            <RelationshipNatureBadge nature={employee.relationshipNature} />
+            <span 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (employee.nivel) onFilterSelect?.('level', employee.nivel);
+              }}
+              className="cursor-pointer hover:scale-105 transition-transform"
+              title="Filtrar por este nível"
+            >
+              <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
+            </span>
+            <span 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (employee.relationshipNature) onFilterSelect?.('nature', employee.relationshipNature);
+              }}
+              className="cursor-pointer hover:scale-105 transition-transform"
+              title="Filtrar por esta natureza de relação"
+            >
+              <RelationshipNatureBadge nature={employee.relationshipNature} />
+            </span>
           </div>
         </div>
       </div>
@@ -217,9 +265,16 @@ export function PeopleMobileCard({
       >
         <div className="flex items-end justify-between">
           <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <Building2 size={12} />
-              <span className="text-[11px] font-semibold text-slate-600">
+            <div 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (employee.department) onFilterSelect?.('department', employee.department);
+              }}
+              className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-600 cursor-pointer group/dept"
+              title="Filtrar por este setor"
+            >
+              <Building2 size={12} className="group-hover/dept:text-indigo-600" />
+              <span className="text-[11px] font-semibold text-slate-600 group-hover/dept:underline">
                 {employee.department || "Sem Setor"}
               </span>
             </div>

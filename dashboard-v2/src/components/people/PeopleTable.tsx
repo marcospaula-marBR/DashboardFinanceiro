@@ -26,6 +26,7 @@ interface PeopleTableProps {
   noPromoMonths?: number;
   noGradeMonths?: number;
   itemsPerPage?: number;
+  onFilterSelect?: (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level', value: string) => void;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -46,7 +47,8 @@ export function PeopleTable({
   noRaiseMonths, 
   noPromoMonths, 
   noGradeMonths,
-  itemsPerPage = 10
+  itemsPerPage = 10,
+  onFilterSelect
 }: PeopleTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -457,6 +459,7 @@ export function PeopleTable({
                   noRaiseMonths={noRaiseMonths}
                   noPromoMonths={noPromoMonths}
                   noGradeMonths={noGradeMonths}
+                  onFilterSelect={onFilterSelect}
                 />
                 <div className="absolute top-4 right-20 flex gap-1" onClick={e => e.stopPropagation()}>
                   <button onClick={() => onEdit(emp.id)} className="p-1.5 bg-white/95 backdrop-blur border border-slate-200 text-slate-500 hover:text-slate-800 rounded-lg shadow-sm active:scale-90 transition-transform" title="Editar Ficha">
