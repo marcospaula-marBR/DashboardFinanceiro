@@ -151,7 +151,7 @@ export function PeopleMobileCard({
       </div>
 
       <div className="flex items-start gap-3">
-        {/* Avatar / Logo & Alerts Row beneath */}
+        {/* Avatar / Logo & Classification Badge beneath */}
         <div className="flex flex-col items-center gap-1.5 shrink-0">
           {isExternal && !(employee.photo_url || employee.avatar) ? (
             <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-inner">
@@ -164,16 +164,17 @@ export function PeopleMobileCard({
               className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 shadow-sm"
             />
           )}
-          {/* Emojis do nível e grau (alertas) */}
-          {hasAnyAlert && (
-            <div className="flex items-center gap-0.5 justify-center flex-wrap max-w-[48px] bg-slate-50/80 px-1 py-0.5 rounded border border-slate-100/50">
-              {hasGlosa && <span title="Houve Glosa na NF" className="text-[11px] cursor-help">⚠️</span>}
-              {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[11px] cursor-help">💸</span>}
-              {hasNoRaise && <span title={`Mesmo Valor Base há mais de ${noRaiseMonths} meses`} className="text-[11px] cursor-help">⏳</span>}
-              {hasNoPromo && <span title={`Mesmo Nível há mais de ${noPromoMonths} meses`} className="text-[11px] cursor-help">🎯</span>}
-              {hasNoGrade && <span title={`Mesmo Grau há mais de ${noGradeMonths} meses`} className="text-[11px] cursor-help">⭐</span>}
-            </div>
-          )}
+          {/* Nível e Grau (letra+número+estrelas) abaixo da foto */}
+          <span 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (employee.nivel) onFilterSelect?.('level', employee.nivel);
+            }}
+            className="cursor-pointer hover:scale-105 transition-transform"
+            title="Filtrar por este nível"
+          >
+            <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
+          </span>
         </div>
 
         <div className="flex-1 min-w-0 pr-16">
@@ -229,18 +230,19 @@ export function PeopleMobileCard({
             </div>
           )}
 
-          {/* Badges do Cockpit */}
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            <span 
-              onClick={(e) => {
-                e.stopPropagation();
-                if (employee.nivel) onFilterSelect?.('level', employee.nivel);
-              }}
-              className="cursor-pointer hover:scale-105 transition-transform"
-              title="Filtrar por este nível"
-            >
-              <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
-            </span>
+          {/* Emojis dos indicadores (alertas) acima do vínculo */}
+          {hasAnyAlert && (
+            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+              {hasGlosa && <span title="Houve Glosa na NF" className="text-[11px] cursor-help">⚠️</span>}
+              {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[11px] cursor-help">💸</span>}
+              {hasNoRaise && <span title={`Mesmo Valor Base há mais de ${noRaiseMonths} meses`} className="text-[11px] cursor-help">⏳</span>}
+              {hasNoPromo && <span title={`Mesmo Nível há mais de ${noPromoMonths} meses`} className="text-[11px] cursor-help">🎯</span>}
+              {hasNoGrade && <span title={`Mesmo Grau há mais de ${noGradeMonths} meses`} className="text-[11px] cursor-help">⭐</span>}
+            </div>
+          )}
+
+          {/* Badges do Cockpit (apenas Vínculo) */}
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
             <span 
               onClick={(e) => {
                 e.stopPropagation();
