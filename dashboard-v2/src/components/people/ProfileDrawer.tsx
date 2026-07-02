@@ -473,6 +473,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
       }
 
+      // Se mudar o Grau, atualizar a data de alteração do grau
+      if (field === 'grau') {
+        next.last_grade_date = new Date().toISOString().split('T')[0];
+      }
+
       // Se o vínculo for ou mudar para PJ, sincronizar de forma reativa os dados do responsável legal
       if (next.linkType === 'PJ') {
         if (field === 'name' || field === 'linkType') {
@@ -2071,6 +2076,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                          <div>
                            <label className={labelClass}>Vencimento Contrato/Aditivo</label>
                            <input type="date" value={profile.contract_expiry_date || ''} onChange={e => handleChange('contract_expiry_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                         </div>
+                         <div>
+                            <label className={labelClass}>Data Alteração Grau</label>
+                            <input type="date" name="last_grade_date" value={profile.last_grade_date || ''} onChange={e => handleChange('last_grade_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                            <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
                          </div>
                         
                         <div className="col-span-2 mt-4">

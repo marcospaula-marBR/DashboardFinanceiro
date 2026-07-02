@@ -421,6 +421,7 @@ export class PeopleService {
       links_emprestimos: raw.links_emprestimos,
       has_invoice_glosa: raw.metadata?.has_invoice_glosa || false,
       last_raise_date: raw.metadata?.last_raise_date || null,
+      last_grade_date: raw.metadata?.last_grade_date || null,
       grau: raw.metadata?.grau || '',
       pbId: raw.metadata?.pbId || raw.metadata?.pb_id || '',
       entityType: raw.metadata?.entityType || raw.metadata?.entity_type || undefined,
@@ -512,6 +513,7 @@ export class PeopleService {
         relationships: profile.relationships,
         has_invoice_glosa: profile.has_invoice_glosa || false,
         last_raise_date: profile.last_raise_date || null,
+        last_grade_date: profile.last_grade_date || null,
         grau: profile.grau || '',
         remuneration_connectivity: profile.remuneration_connectivity || 0,
         remuneration_incentives: profile.remuneration_incentives || 0

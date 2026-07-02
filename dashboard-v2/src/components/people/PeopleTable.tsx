@@ -24,6 +24,7 @@ interface PeopleTableProps {
   auditIssues?: Record<string, AuditIssue[]>;
   noRaiseMonths?: number;
   noPromoMonths?: number;
+  noGradeMonths?: number;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -34,7 +35,7 @@ const STATUS_STYLES: Record<string, string> = {
   default: 'bg-slate-50 text-slate-600 border-slate-200',
 };
 
-export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, showValues, auditIssues = {}, noRaiseMonths, noPromoMonths }: PeopleTableProps) {
+export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, showValues, auditIssues = {}, noRaiseMonths, noPromoMonths, noGradeMonths }: PeopleTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedPixId, setCopiedPixId] = useState<string | null>(null);
@@ -143,6 +144,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                 const hasLoan = (emp.balance || 0) > 0;
                 let hasNoRaise = false;
                 let hasNoPromo = false;
+                let hasNoGrade = false;
 
                 if (noRaiseMonths) {
                   const dRaise = new Date((emp.last_raise_date || emp.start_date || '') + 'T00:00:00');
@@ -157,6 +159,14 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                   if (!isNaN(dPromo.getTime())) {
                     const diffMonths = (now.getFullYear() - dPromo.getFullYear()) * 12 + (now.getMonth() - dPromo.getMonth());
                     hasNoPromo = diffMonths >= noPromoMonths;
+                  }
+                }
+
+                if (noGradeMonths) {
+                  const dGrade = new Date((emp.last_grade_date || emp.start_date || '') + 'T00:00:00');
+                  if (!isNaN(dGrade.getTime())) {
+                    const diffMonths = (now.getFullYear() - dGrade.getFullYear()) * 12 + (now.getMonth() - dGrade.getMonth());
+                    hasNoGrade = diffMonths >= noGradeMonths;
                   }
                 }
 
@@ -198,8 +208,9 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                             <div className="flex items-center gap-0.5 ml-1 shrink-0">
                               {hasGlosa && <span title="Houve Glosa na NF" className="text-[11px] cursor-help">⚠️</span>}
                               {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[11px] cursor-help">💸</span>}
-                              {hasNoRaise && <span title={`Sem Revisão Valor Base há mais de ${noRaiseMonths} meses`} className="text-[11px] cursor-help">⏳</span>}
-                              {hasNoPromo && <span title={`Sem Nível/Função há mais de ${noPromoMonths} meses`} className="text-[11px] cursor-help">🎯</span>}
+                              {hasNoRaise && <span title={`Mesmo Valor Base há mais de ${noRaiseMonths} meses`} className="text-[11px] cursor-help">⏳</span>}
+                              {hasNoPromo && <span title={`Mesmo Nível há mais de ${noPromoMonths} meses`} className="text-[11px] cursor-help">🎯</span>}
+                              {hasNoGrade && <span title={`Mesmo Grau há mais de ${noGradeMonths} meses`} className="text-[11px] cursor-help">⭐</span>}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -330,6 +341,7 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
             const now = new Date();
             let hasNoRaise = false;
             let hasNoPromo = false;
+            let hasNoGrade = false;
 
             if (noRaiseMonths) {
               const dRaise = new Date((emp.last_raise_date || emp.start_date || '') + 'T00:00:00');
@@ -343,6 +355,13 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
               if (!isNaN(dPromo.getTime())) {
                 const diffMonths = (now.getFullYear() - dPromo.getFullYear()) * 12 + (now.getMonth() - dPromo.getMonth());
                 hasNoPromo = diffMonths >= noPromoMonths;
+              }
+            }
+            if (noGradeMonths) {
+              const dGrade = new Date((emp.last_grade_date || emp.start_date || '') + 'T00:00:00');
+              if (!isNaN(dGrade.getTime())) {
+                const diffMonths = (now.getFullYear() - dGrade.getFullYear()) * 12 + (now.getMonth() - dGrade.getMonth());
+                hasNoGrade = diffMonths >= noGradeMonths;
               }
             }
 
@@ -359,8 +378,10 @@ export function PeopleTable({ employees, onEdit, onDelete, onEmployeeClick, show
                   hasLoan={(emp.balance || 0) > 0}
                   hasNoRaise={hasNoRaise}
                   hasNoPromo={hasNoPromo}
+                  hasNoGrade={hasNoGrade}
                   noRaiseMonths={noRaiseMonths}
                   noPromoMonths={noPromoMonths}
+                  noGradeMonths={noGradeMonths}
                 />
                 <div className="absolute top-4 right-20 flex gap-1" onClick={e => e.stopPropagation()}>
                   <button onClick={() => onEdit(emp.id)} className="p-1.5 bg-white/95 backdrop-blur border border-slate-200 text-slate-500 hover:text-slate-800 rounded-lg shadow-sm active:scale-90 transition-transform" title="Editar Ficha">

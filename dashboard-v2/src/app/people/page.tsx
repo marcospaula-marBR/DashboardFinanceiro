@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, AlertCircle, Users, Eye, EyeOff, Search, Filter, X, 
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
-  ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert
+  ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -123,6 +123,7 @@ export default function PeoplePage() {
   // Insights & Alerts states
   const [noRaiseMonths, setNoRaiseMonths] = useState(6);
   const [noPromoMonths, setNoPromoMonths] = useState(6);
+  const [noGradeMonths, setNoGradeMonths] = useState(6);
   const [filterInsight, setFilterInsight] = useState<string | null>(null);
 
   // Data states
@@ -416,12 +417,18 @@ export default function PeoplePage() {
           const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
           return diffMonths >= noPromoMonths;
         }
+        if (filterInsight === 'grau') {
+          const d = new Date((e.last_grade_date || e.start_date || '') + 'T00:00:00');
+          if (isNaN(d.getTime())) return false;
+          const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+          return diffMonths >= noGradeMonths;
+        }
         return true;
       });
     }
     
     setFilteredEmployees(result);
-  }, [baseFilteredEmployees, filterInsight, noRaiseMonths, noPromoMonths]);
+  }, [baseFilteredEmployees, filterInsight, noRaiseMonths, noPromoMonths, noGradeMonths]);
 
   // Pagination slice for grid view
   const paginatedGridEmployees = useMemo(() => {
@@ -494,6 +501,7 @@ export default function PeoplePage() {
     let emprestimo = 0;
     let aumento = 0;
     let promocao = 0;
+    let grau = 0;
 
     baseFilteredEmployees.forEach(e => {
       if (e.has_invoice_glosa) glosa++;
@@ -510,9 +518,15 @@ export default function PeoplePage() {
         const diffMonths = (now.getFullYear() - dPromo.getFullYear()) * 12 + (now.getMonth() - dPromo.getMonth());
         if (diffMonths >= noPromoMonths) promocao++;
       }
+
+      const dGrade = new Date((e.last_grade_date || e.start_date || '') + 'T00:00:00');
+      if (!isNaN(dGrade.getTime())) {
+        const diffMonths = (now.getFullYear() - dGrade.getFullYear()) * 12 + (now.getMonth() - dGrade.getMonth());
+        if (diffMonths >= noGradeMonths) grau++;
+      }
     });
-    return { glosa, emprestimo, aumento, promocao };
-  }, [baseFilteredEmployees, noRaiseMonths, noPromoMonths]);
+    return { glosa, emprestimo, aumento, promocao, grau };
+  }, [baseFilteredEmployees, noRaiseMonths, noPromoMonths, noGradeMonths]);
 
   const handleEmployeeClick = (employeeId: string) => {
     setSelectedEmployee(employeeId);
@@ -1173,29 +1187,50 @@ export default function PeoplePage() {
                  )}
                </div>
 
-               <div className="flex items-center gap-4">
-                 <div className="flex flex-col">
-                    <label className="text-[9px] font-bold text-slate-500 uppercase">Janela Base</label>
-                    <select value={noRaiseMonths} onChange={e => setNoRaiseMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
-                       <option value={3}>3 meses</option>
-                       <option value={6}>6 meses</option>
-                       <option value={12}>12 meses</option>
-                       <option value={24}>24 meses</option>
-                    </select>
-                 </div>
-                 <div className="flex flex-col">
-                    <label className="text-[9px] font-bold text-slate-500 uppercase">Janela Nível</label>
-                    <select value={noPromoMonths} onChange={e => setNoPromoMonths(Number(e.target.value))} className="bg-slate-50 border border-slate-200 rounded text-xs font-bold py-1 px-2 outline-none cursor-pointer">
-                       <option value={3}>3 meses</option>
-                       <option value={6}>6 meses</option>
-                       <option value={12}>12 meses</option>
-                       <option value={24}>24 meses</option>
-                    </select>
-                 </div>
-               </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex flex-col">
+                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Base</label>
+                     <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 shadow-sm">
+                       <input
+                         type="number"
+                         min={1}
+                         value={noRaiseMonths}
+                         onChange={e => setNoRaiseMonths(Math.max(1, parseInt(e.target.value) || 1))}
+                         className="w-10 bg-transparent text-xs font-black outline-none text-slate-800 dark:text-slate-200"
+                       />
+                       <span className="text-[9px] font-bold text-slate-400 uppercase">Meses</span>
+                     </div>
+                  </div>
+                  <div className="flex flex-col">
+                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Nível</label>
+                     <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 shadow-sm">
+                       <input
+                         type="number"
+                         min={1}
+                         value={noPromoMonths}
+                         onChange={e => setNoPromoMonths(Math.max(1, parseInt(e.target.value) || 1))}
+                         className="w-10 bg-transparent text-xs font-black outline-none text-slate-800 dark:text-slate-200"
+                       />
+                       <span className="text-[9px] font-bold text-slate-400 uppercase">Meses</span>
+                     </div>
+                  </div>
+                  <div className="flex flex-col">
+                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Grau</label>
+                     <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 shadow-sm">
+                       <input
+                         type="number"
+                         min={1}
+                         value={noGradeMonths}
+                         onChange={e => setNoGradeMonths(Math.max(1, parseInt(e.target.value) || 1))}
+                         className="w-10 bg-transparent text-xs font-black outline-none text-slate-800 dark:text-slate-200"
+                       />
+                       <span className="text-[9px] font-bold text-slate-400 uppercase">Meses</span>
+                     </div>
+                  </div>
+                </div>
              </div>
 
-             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
                <PeopleKpiCard
                  title="Glosa na NF"
                  value={insightCounts.glosa}
@@ -1215,7 +1250,7 @@ export default function PeoplePage() {
                  sub="Saldo devedor ativo"
                />
                <PeopleKpiCard
-                 title="Sem Revisão (Base)"
+                 title="Mesmo Valor Base"
                  value={insightCounts.aumento}
                  icon={<UserCog size={20} />}
                  color="rose"
@@ -1224,13 +1259,22 @@ export default function PeoplePage() {
                  sub={`Há mais de ${noRaiseMonths} meses`}
                />
                <PeopleKpiCard
-                 title="Sem Nível/Função"
+                 title="Mesmo Nível"
                  value={insightCounts.promocao}
                  icon={<Target size={20} />}
                  color="indigo"
                  onClick={() => setFilterInsight(filterInsight === 'promocao' ? null : 'promocao')}
                  isActive={filterInsight === 'promocao'}
                  sub={`Há mais de ${noPromoMonths} meses`}
+               />
+               <PeopleKpiCard
+                 title="Mesmo Grau"
+                 value={insightCounts.grau}
+                 icon={<Award size={20} />}
+                 color="emerald"
+                 onClick={() => setFilterInsight(filterInsight === 'grau' ? null : 'grau')}
+                 isActive={filterInsight === 'grau'}
+                 sub={`Há mais de ${noGradeMonths} meses`}
                />
              </div>
           </div>
@@ -1256,6 +1300,7 @@ export default function PeoplePage() {
               auditIssues={allAuditIssues}
               noRaiseMonths={noRaiseMonths}
               noPromoMonths={noPromoMonths}
+              noGradeMonths={noGradeMonths}
             />
           ) : (
             <div>
@@ -1273,6 +1318,7 @@ export default function PeoplePage() {
                     const hasLoan = (emp.balance || 0) > 0;
                     let hasNoRaise = false;
                     let hasNoPromo = false;
+                    let hasNoGrade = false;
 
                     if (noRaiseMonths) {
                       const dRaise = new Date((emp.last_raise_date || emp.start_date || '') + 'T00:00:00');
@@ -1287,6 +1333,14 @@ export default function PeoplePage() {
                       if (!isNaN(dPromo.getTime())) {
                         const diffMonths = (now.getFullYear() - dPromo.getFullYear()) * 12 + (now.getMonth() - dPromo.getMonth());
                         hasNoPromo = diffMonths >= noPromoMonths;
+                      }
+                    }
+
+                    if (noGradeMonths) {
+                      const dGrade = new Date((emp.last_grade_date || emp.start_date || '') + 'T00:00:00');
+                      if (!isNaN(dGrade.getTime())) {
+                        const diffMonths = (now.getFullYear() - dGrade.getFullYear()) * 12 + (now.getMonth() - dGrade.getMonth());
+                        hasNoGrade = diffMonths >= noGradeMonths;
                       }
                     }
 
@@ -1307,8 +1361,10 @@ export default function PeoplePage() {
                         hasLoan={hasLoan}
                         hasNoRaise={hasNoRaise}
                         hasNoPromo={hasNoPromo}
+                        hasNoGrade={hasNoGrade}
                         noRaiseMonths={noRaiseMonths}
                         noPromoMonths={noPromoMonths}
+                        noGradeMonths={noGradeMonths}
                         historicoCustoTotal={historicoCustoTotal}
                         historicoCustoMedio={historicoCustoMedio}
                       />

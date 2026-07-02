@@ -23,8 +23,10 @@ interface PeopleMobileCardProps {
   hasLoan?: boolean;
   hasNoRaise?: boolean;
   hasNoPromo?: boolean;
+  hasNoGrade?: boolean;
   noRaiseMonths?: number;
   noPromoMonths?: number;
+  noGradeMonths?: number;
   historicoCustoTotal?: number; // Soma total do custo histórico
   historicoCustoMedio?: number; // Média mensal do custo histórico
 }
@@ -52,8 +54,10 @@ export function PeopleMobileCard({
   hasLoan,
   hasNoRaise,
   hasNoPromo,
+  hasNoGrade,
   noRaiseMonths,
   noPromoMonths,
+  noGradeMonths,
   historicoCustoTotal,
   historicoCustoMedio,
 }: PeopleMobileCardProps) {
@@ -156,8 +160,9 @@ export function PeopleMobileCard({
             <div className="flex items-center gap-0.5 shrink-0">
               {hasGlosa && <span title="Houve Glosa na NF" className="text-[11px] cursor-help">⚠️</span>}
               {hasLoan && <span title="Possui Empréstimo Ativo" className="text-[11px] cursor-help">💸</span>}
-              {hasNoRaise && <span title={`Sem Revisão Valor Base há mais de ${noRaiseMonths} meses`} className="text-[11px] cursor-help">⏳</span>}
-              {hasNoPromo && <span title={`Sem Nível/Função há mais de ${noPromoMonths} meses`} className="text-[11px] cursor-help">🎯</span>}
+              {hasNoRaise && <span title={`Mesmo Valor Base há mais de ${noRaiseMonths} meses`} className="text-[11px] cursor-help">⏳</span>}
+              {hasNoPromo && <span title={`Mesmo Nível há mais de ${noPromoMonths} meses`} className="text-[11px] cursor-help">🎯</span>}
+              {hasNoGrade && <span title={`Mesmo Grau há mais de ${noGradeMonths} meses`} className="text-[11px] cursor-help">⭐</span>}
             </div>
           </div>
 

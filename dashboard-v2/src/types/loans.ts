@@ -73,6 +73,7 @@ export interface Employee {
   metadata?: any; // JSONB do DB V2
   has_invoice_glosa?: boolean; // INSIGHTS
   last_raise_date?: string; // INSIGHTS
+  last_grade_date?: string; // INSIGHTS: data do último ajuste de Grau
   
   // External Responsible (PJ normally)
   responsible_name?: string;
@@ -363,6 +364,7 @@ export interface PeopleMetadata {
   // Legacy metadata fields
   has_invoice_glosa?: boolean;
   last_raise_date?: string | null;
+  last_grade_date?: string | null;
   grau?: string;
   remuneration_connectivity?: number;
   remuneration_incentives?: number;
