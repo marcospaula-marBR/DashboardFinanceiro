@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Trash2, UserCog, AlertCircle, Phone, Copy, Check, Building2, UserRound } from "lucide-react";
-import { Employee, AuditIssue } from "@/types/loans";
+import { Employee, AuditIssue, inferEntityType } from "@/types/loans";
 import { getRemunerationLabel } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
 import { PeopleMobileCard } from "./PeopleMobileCard";
@@ -228,7 +228,8 @@ export function PeopleTable({
                   }
                 }
 
-                const isExternal = isExternalEntity(emp.entityType);
+                const resolvedEntityType = emp.entityType || inferEntityType(emp);
+                const isExternal = isExternalEntity(resolvedEntityType);
                 // Razão Social prevalece sempre que preenchida; name é o fallback
                 const displayName = emp.corporate_name || emp.name;
                 const avatarSrc = emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e2e8f0&color=475569&bold=true`;

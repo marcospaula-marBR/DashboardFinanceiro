@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Employee, getRemunerationLabel } from "@/types/loans";
+import { Employee, getRemunerationLabel, inferEntityType } from "@/types/loans";
 import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -81,7 +81,8 @@ export function PeopleMobileCard({
 
   const statusStyle = STATUS_STYLES[employee.status] ?? "bg-slate-50 text-slate-600 border-slate-200";
   const remLabel = getRemunerationLabel(employee.linkType);
-  const isExternal = isExternalEntity(employee.entityType);
+  const resolvedEntityType = employee.entityType || inferEntityType(employee);
+  const isExternal = isExternalEntity(resolvedEntityType);
 
   // Razão Social prevalece sempre que preenchida; name é o fallback
   const displayName = employee.corporate_name || employee.name;
@@ -130,13 +131,13 @@ export function PeopleMobileCard({
       className={`bg-white rounded-2xl border transition-all hover:shadow-md p-4 active:scale-[0.99] cursor-pointer relative ${
         isExternal ? "border-amber-200/60 bg-gradient-to-br from-white to-amber-50/10" : "border-slate-200"
       }`}
-      onClick={() => onClick(employee.id)}
+      onClick={() => setIsHovered(!isHovered)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && onClick(employee.id)}
-      aria-label={`Abrir perfil de ${displayName}`}
+      onKeyDown={(e) => e.key === "Enter" && setIsHovered(!isHovered)}
+      aria-label={`Alternar detalhes de ${displayName}`}
     >
       {/* Indicadores de Status & Alertas no topo */}
       <div className="absolute top-4 right-4 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -151,30 +152,28 @@ export function PeopleMobileCard({
       </div>
 
       <div className="flex items-start gap-3">
-        {/* Avatar / Logo & Classification Badge beneath */}
-        <div className="flex flex-col items-center gap-1.5 shrink-0">
+        {/* Avatar / Logo & Classification Badge beneath (Tapping/Clicking opens ProfileDrawer) */}
+        <div 
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick(employee.id);
+          }}
+          className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
+          title="Clique na foto para abrir a Ficha do integrante"
+        >
           {isExternal && !(employee.photo_url || employee.avatar) ? (
-            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-inner">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-inner hover:scale-105 transition-transform">
               <Building2 size={22} />
             </div>
           ) : (
             <img
               src={avatarSrc}
               alt={displayName}
-              className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 shadow-sm"
+              className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 shadow-sm hover:scale-105 transition-transform"
             />
           )}
           {/* Nível e Grau (letra+número+estrelas) abaixo da foto */}
-          <span 
-            onClick={(e) => {
-              e.stopPropagation();
-              if (employee.nivel) onFilterSelect?.('level', employee.nivel);
-            }}
-            className="cursor-pointer hover:scale-105 transition-transform"
-            title="Filtrar por este nível"
-          >
-            <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
-          </span>
+          <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
         </div>
 
         <div className="flex-1 min-w-0 pr-16">
@@ -424,6 +423,15 @@ export function PeopleMobileCard({
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
               {copied ? "Copiado!" : "Link"}
+            </button>
+
+            {/* Abrir Ficha */}
+            <button
+              onClick={() => onClick(employee.id)}
+              className="text-[10px] text-indigo-600 hover:text-indigo-850 font-black hover:bg-indigo-50 px-2.5 py-1.5 rounded-lg transition-colors border border-indigo-100 hover:border-indigo-200 shadow-sm"
+              title="Abrir a Ficha completa deste integrante"
+            >
+              Ficha
             </button>
 
             {/* Excluir */}
