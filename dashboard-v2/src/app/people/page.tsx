@@ -89,7 +89,7 @@ export default function PeoplePage() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
   // C-Level Executive Drawer States
-  const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "payroll" | "loans" | "audit" | null>(null);
+  const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "headcount_clt" | "headcount_pj" | "payroll_clt" | "payroll_pj" | "loans" | "health" | "audit" | "strategic" | "nopbid" | null>(null);
   const [isKpiDrawerOpen, setIsKpiDrawerOpen] = useState(false);
   const [loanStats, setLoanStats] = useState<LoanStats | null>(null);
 
@@ -1105,6 +1105,7 @@ export default function PeoplePage() {
               value={cockpitKpis.totalCount}
               icon={<Users size={20} />}
               color="slate"
+              onClick={() => { setActiveKpiMode('headcount'); setIsKpiDrawerOpen(true); }}
               sub="Total de pessoas e entidades"
             />
             <PeopleKpiCard
@@ -1112,6 +1113,7 @@ export default function PeoplePage() {
               value={cockpitKpis.cltCount}
               icon={<UserCog size={20} />}
               color="blue"
+              onClick={() => { setActiveKpiMode('headcount_clt'); setIsKpiDrawerOpen(true); }}
               sub="Integradores internos CLT/Estágio"
             />
             <PeopleKpiCard
@@ -1119,6 +1121,7 @@ export default function PeoplePage() {
               value={cockpitKpis.pjCount}
               icon={<Landmark size={20} />}
               color="amber"
+              onClick={() => { setActiveKpiMode('headcount_pj'); setIsKpiDrawerOpen(true); }}
               sub="Parceiros, fornecedores e consultores"
             />
             <PeopleKpiCard
@@ -1126,6 +1129,7 @@ export default function PeoplePage() {
               value={showValues ? formatCurrency(cockpitKpis.cltCostTotal) : '••••••'}
               icon={<Coins size={20} />}
               color="emerald"
+              onClick={() => { setActiveKpiMode('payroll_clt'); setIsKpiDrawerOpen(true); }}
               sub="Soma das remunerações CLT/Estágio"
             />
             <PeopleKpiCard
@@ -1133,6 +1137,7 @@ export default function PeoplePage() {
               value={showValues ? formatCurrency(cockpitKpis.pjCostTotal) : '••••••'}
               icon={<Coins size={20} />}
               color="purple"
+              onClick={() => { setActiveKpiMode('payroll_pj'); setIsKpiDrawerOpen(true); }}
               sub="Soma dos contratos PJ/MEI ativos"
             />
             <PeopleKpiCard
@@ -1140,6 +1145,7 @@ export default function PeoplePage() {
               value={showValues ? formatCurrency(cockpitKpis.totalLoansDebt) : '••••••'}
               icon={<HandCoins size={20} />}
               color="slate"
+              onClick={() => { setActiveKpiMode('loans'); setIsKpiDrawerOpen(true); }}
               sub="Capital ativo sob risco em empréstimos"
             />
             <PeopleKpiCard
@@ -1147,6 +1153,7 @@ export default function PeoplePage() {
               value={cockpitKpis.criticalHealthCount}
               icon={<HeartPulse size={20} />}
               color="red"
+              onClick={() => { setActiveKpiMode('health'); setIsKpiDrawerOpen(true); }}
               sub="Cadastros com qualidade Crítica (<50%)"
             />
             <PeopleKpiCard
@@ -1154,7 +1161,7 @@ export default function PeoplePage() {
               value={cockpitKpis.totalAuditIssues}
               icon={<AlertCircle size={20} />}
               color={cockpitKpis.totalAuditIssues > 0 ? "rose" : "emerald"}
-              onClick={() => { setActiveKpiMode('audit' as any); setIsKpiDrawerOpen(true); }}
+              onClick={() => { setActiveKpiMode('audit'); setIsKpiDrawerOpen(true); }}
               sub="Erros de datas/regime de trabalho"
             />
             <PeopleKpiCard
@@ -1162,6 +1169,7 @@ export default function PeoplePage() {
               value={cockpitKpis.strategicCount}
               icon={<Target size={20} />}
               color="indigo"
+              onClick={() => { setActiveKpiMode('strategic'); setIsKpiDrawerOpen(true); }}
               sub="Mapeamento de cadeiras E1, E2, E3"
             />
             <PeopleKpiCard
@@ -1169,6 +1177,7 @@ export default function PeoplePage() {
               value={cockpitKpis.noPbIdCount}
               icon={<ShieldAlert size={20} />}
               color="amber"
+              onClick={() => { setActiveKpiMode('nopbid'); setIsKpiDrawerOpen(true); }}
               sub="Cadastros sem ID Diana PB associado"
             />
           </div>

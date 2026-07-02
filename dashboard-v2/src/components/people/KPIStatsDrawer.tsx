@@ -1,14 +1,16 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Users, Coins, AlertCircle, Building2, UserCheck, Calendar, ShieldAlert, Award, Landmark, Percent } from "lucide-react";
+import { X, Users, Coins, AlertCircle, Building2, UserCheck, Calendar, ShieldAlert, Award, Landmark, Percent, Target, HeartPulse, HelpCircle, ArrowUpRight, Info } from "lucide-react";
 import { Employee, MonthlyCost, LoanStats, AuditIssue } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
+import { isExternalEntity, calculateEmployeeHealth } from "@/components/people/PeopleBadges";
+import { getPBClassification, inferEntityType } from "@/types/loans";
 
 interface KPIStatsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  mode: "headcount" | "payroll" | "loans" | "audit" | null;
+  mode: "headcount" | "headcount_clt" | "headcount_pj" | "payroll_clt" | "payroll_pj" | "loans" | "health" | "audit" | "strategic" | "nopbid" | null;
   employees: Employee[];
   monthlyCosts: MonthlyCost[];
   loanStats: LoanStats | null;
@@ -18,9 +20,10 @@ interface KPIStatsDrawerProps {
 export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts, loanStats, auditIssues = {} }: KPIStatsDrawerProps) {
   if (!mode) return null;
 
+  const filteredEmployees = employees;
   const activeEmployees = employees.filter(e => e.status === "Ativo" || e.status === "Férias" || e.status === "Provisão");
 
-  // --- Calculations for Headcount ---
+  // --- Calculations for Headcount (Total) ---
   const headcountStats = (() => {
     const clt = activeEmployees.filter(e => e.linkType === "CLT").length;
     const mei = activeEmployees.filter(e => e.linkType === "MEI" || e.linkType === "PJ").length;
@@ -46,16 +49,75 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     return { clt, mei, est, marBR, dzm, g2, ferias, avgTenure };
   })();
 
-  // --- Calculations for Payroll ---
-  const payrollStats = (() => {
-    const totalFixed = activeEmployees.reduce((sum, e) => sum + (e.remuneration_fixed || 0), 0);
-    const totalBonus = activeEmployees.reduce((sum, e) => sum + (e.remuneration_bonus || 0), 0);
-    const totalCommission = activeEmployees.reduce((sum, e) => sum + (e.remuneration_commission || 0), 0);
+  // --- Calculations for Headcount CLT / PF ---
+  const headcountCltStats = (() => {
+    const cltList = activeEmployees.filter(e => !isExternalEntity(e.entityType || inferEntityType(e)) && (e.linkType === "CLT" || e.linkType === "Estagiário"));
+    const cltCount = cltList.filter(e => e.linkType === "CLT").length;
+    const estCount = cltList.filter(e => e.linkType === "Estagiário").length;
+    const avgSalary = cltList.length > 0 
+      ? Math.round(cltList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0) / cltList.length)
+      : 0;
+    const marBR = cltList.filter(e => e.company === "MarBR").length;
+    const dzm = cltList.filter(e => e.company === "DZM").length;
+    const g2 = cltList.filter(e => e.company === "G2").length;
+    return { cltList, cltCount, estCount, avgSalary, marBR, dzm, g2 };
+  })();
+
+  // --- Calculations for Headcount PJ / Prestadores ---
+  const headcountPjStats = (() => {
+    const pjList = activeEmployees.filter(e => isExternalEntity(e.entityType || inferEntityType(e)));
+    const avgContract = pjList.length > 0
+      ? Math.round(pjList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0) / pjList.length)
+      : 0;
+    const meiCount = pjList.filter(e => e.tax_regime === "MEI" || e.linkType === "MEI").length;
+    const simplesCount = pjList.filter(e => e.tax_regime === "Simples Nacional").length;
+    const otherTaxCount = pjList.length - meiCount - simplesCount;
+    return { pjList, avgContract, meiCount, simplesCount, otherTaxCount };
+  })();
+
+  // --- Calculations for Payroll CLT ---
+  const payrollCltStats = (() => {
+    const cltList = activeEmployees.filter(e => !isExternalEntity(e.entityType || inferEntityType(e)) && (e.linkType === "CLT" || e.linkType === "Estagiário"));
+    const totalFixed = cltList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
+    const totalBonus = cltList.reduce((sum, e) => sum + (e.remuneration_bonus || 0), 0);
+    const totalCommission = cltList.reduce((sum, e) => sum + (e.remuneration_commission || 0), 0);
     const sumTotal = totalFixed + totalBonus + totalCommission;
 
     // Sector costs
     const sectorTotals: Record<string, { total: number; count: number }> = {};
-    activeEmployees.forEach(e => {
+    cltList.forEach(e => {
+      const sector = e.department?.trim() || "Não Informado";
+      const remuneration = e.remuneration || (e.remuneration_fixed || 0) + (e.remuneration_bonus || 0) + (e.remuneration_commission || 0);
+      if (!sectorTotals[sector]) {
+        sectorTotals[sector] = { total: 0, count: 0 };
+      }
+      sectorTotals[sector].total += remuneration;
+      sectorTotals[sector].count += 1;
+    });
+
+    const sectorsSorted = Object.entries(sectorTotals)
+      .map(([name, data]) => ({
+        name,
+        total: data.total,
+        average: Math.round(data.total / data.count),
+        count: data.count
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    return { totalFixed, totalBonus, totalCommission, sumTotal, sectorsSorted };
+  })();
+
+  // --- Calculations for Payroll PJ ---
+  const payrollPjStats = (() => {
+    const pjList = activeEmployees.filter(e => isExternalEntity(e.entityType || inferEntityType(e)));
+    const totalFixed = pjList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
+    const totalBonus = pjList.reduce((sum, e) => sum + (e.remuneration_bonus || 0), 0);
+    const totalCommission = pjList.reduce((sum, e) => sum + (e.remuneration_commission || 0), 0);
+    const sumTotal = totalFixed + totalBonus + totalCommission;
+
+    // Sector costs
+    const sectorTotals: Record<string, { total: number; count: number }> = {};
+    pjList.forEach(e => {
       const sector = e.department?.trim() || "Não Informado";
       const remuneration = e.remuneration || (e.remuneration_fixed || 0) + (e.remuneration_bonus || 0) + (e.remuneration_commission || 0);
       if (!sectorTotals[sector]) {
@@ -105,15 +167,92 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     return { totalBalance, totalTaken, monthlyReceivable, expiringSoonWithLoans, highCommitment, activeDebtors };
   })();
 
+  // --- Calculations for Critical Health ---
+  const healthStats = (() => {
+    const activeFiltered = filteredEmployees.filter(e => e.status !== 'Inativo');
+    const criticalList = activeFiltered.filter(e => {
+      const health = calculateEmployeeHealth(e);
+      return health.status === "Crítico";
+    }).map(e => ({ employee: e, health: calculateEmployeeHealth(e) }))
+      .sort((a, b) => a.health.score - b.health.score);
+
+    const incompleteList = activeFiltered.filter(e => {
+      const health = calculateEmployeeHealth(e);
+      return health.status === "Incompleto";
+    });
+
+    const completeList = activeFiltered.filter(e => {
+      const health = calculateEmployeeHealth(e);
+      return health.status === "Completo" || health.status === "Atenção";
+    });
+
+    let missingCpf = 0;
+    let missingRole = 0;
+    let missingPix = 0;
+    let missingPhone = 0;
+    let missingEmail = 0;
+
+    activeFiltered.forEach(e => {
+      const isPF = !isExternalEntity(e.entityType || inferEntityType(e));
+      if (isPF) {
+        if (!e.document_id) missingCpf++;
+        if (!e.job_role) missingRole++;
+        if (!e.pix_key) missingPix++;
+        if (!e.phone_professional) missingPhone++;
+        if (!e.email_professional) missingEmail++;
+      } else {
+        if (!e.corporate_name) missingRole++;
+        if (!e.pj_type) missingCpf++;
+        if (!e.responsible_name) missingEmail++;
+      }
+    });
+
+    return { criticalList, incompleteList, completeList, missingCpf, missingRole, missingPix, missingPhone, missingEmail };
+  })();
+
+  // --- Calculations for Strategic ---
+  const strategicStats = (() => {
+    const activeFiltered = filteredEmployees.filter(e => e.status !== 'Inativo');
+    const strategicList = activeFiltered.filter(e => {
+      const classification = getPBClassification(e.nivel, e.grau);
+      return classification.startsWith("E");
+    });
+
+    const e1Count = strategicList.filter(e => getPBClassification(e.nivel, e.grau) === "E1").length;
+    const e2Count = strategicList.filter(e => getPBClassification(e.nivel, e.grau) === "E2").length;
+    const e3Count = strategicList.filter(e => getPBClassification(e.nivel, e.grau) === "E3").length;
+
+    const marBR = strategicList.filter(e => e.company === "MarBR").length;
+    const dzm = strategicList.filter(e => e.company === "DZM").length;
+    const g2 = strategicList.filter(e => e.company === "G2").length;
+
+    return { strategicList, e1Count, e2Count, e3Count, marBR, dzm, g2 };
+  })();
+
+  // --- Calculations for Sem PB-ID ---
+  const nopbidStats = (() => {
+    const activeFiltered = filteredEmployees.filter(e => e.status !== 'Inativo');
+    const nopbidList = activeFiltered.filter(e => !(e.pbId || e.metadata?.pbId));
+    return { nopbidList };
+  })();
+
   // Render variables depending on mode
   const titleMap = {
     headcount: { text: "Força de Trabalho & Headcount", icon: <Users className="text-emerald-500" size={24} /> },
-    payroll: { text: "Custo de Folha & Verbas", icon: <Coins className="text-emerald-500" size={24} /> },
-    loans: { text: "Exposição de Empréstimos", icon: <Landmark className="text-amber-500" size={24} /> },
-    audit: { text: "Auditoria & Incoerências", icon: <AlertCircle className="text-red-500" size={24} /> }
+    headcount_clt: { text: "Integradores Internos CLT / PF", icon: <UserCheck className="text-blue-500" size={24} /> },
+    headcount_pj: { text: "Prestadores de Serviços & PJ", icon: <Building2 className="text-amber-500" size={24} /> },
+    payroll_clt: { text: "Custos de Folha CLT / Estágio", icon: <Coins className="text-emerald-500" size={24} /> },
+    payroll_pj: { text: "Custos de Prestação PJ / MEI", icon: <Coins className="text-purple-500" size={24} /> },
+    loans: { text: "Exposição de Empréstimos Consignados", icon: <Landmark className="text-amber-500" size={24} /> },
+    health: { text: "Saúde da Base & Qualidade do Cadastro", icon: <HeartPulse className="text-rose-500" size={24} /> },
+    audit: { text: "Auditoria & Incoerências", icon: <AlertCircle className="text-red-500" size={24} /> },
+    strategic: { text: "Mapeamento Estratégico (Cadeiras E)", icon: <Target className="text-indigo-500" size={24} /> },
+    nopbid: { text: "Cadastros Sem PB-ID Associado", icon: <ShieldAlert className="text-amber-500" size={24} /> }
   };
 
   const { text: drawerTitle, icon: drawerIcon } = titleMap[mode];
+
+
 
   return (
     <AnimatePresence>
@@ -214,59 +353,220 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                 </>
               )}
 
-              {/* --- PAYROLL MODE --- */}
-              {mode === "payroll" && (
+              {/* --- HEADCOUNT CLT MODE --- */}
+              {mode === "headcount_clt" && (
                 <>
-                  {/* Detailed Verbas Grid */}
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Integrantes CLT</p>
+                      <p className="text-3xl font-black text-blue-400">{headcountCltStats.cltCount} CLT</p>
+                    </div>
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Estagiários</p>
+                      <p className="text-3xl font-black text-blue-400">{headcountCltStats.estCount} Ativos</p>
+                    </div>
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Salário CLT Médio</p>
+                      <p className="text-3xl font-black text-emerald-400">{formatCurrency(headcountCltStats.avgSalary)}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Distribuição CLT por Empresa</h3>
+                    <div className="flex justify-between items-center text-sm font-bold text-slate-200">
+                      <span>MarBR: {headcountCltStats.marBR} ({Math.round((headcountCltStats.marBR / (headcountCltStats.cltList.length || 1)) * 100)}%)</span>
+                      <span>DZM: {headcountCltStats.dzm} ({Math.round((headcountCltStats.dzm / (headcountCltStats.cltList.length || 1)) * 100)}%)</span>
+                      <span>G2: {headcountCltStats.g2} ({Math.round((headcountCltStats.g2 / (headcountCltStats.cltList.length || 1)) * 100)}%)</span>
+                    </div>
+                    <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex">
+                      <div className="h-full bg-blue-500" style={{ width: `${(headcountCltStats.marBR / (headcountCltStats.cltList.length || 1)) * 100}%` }} />
+                      <div className="h-full bg-sky-400" style={{ width: `${(headcountCltStats.dzm / (headcountCltStats.cltList.length || 1)) * 100}%` }} />
+                      <div className="h-full bg-indigo-500" style={{ width: `${(headcountCltStats.g2 / (headcountCltStats.cltList.length || 1)) * 100}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Lista de Integradores CLT & Estagiários ({headcountCltStats.cltList.length})</h3>
+                    <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-2">
+                      {headcountCltStats.cltList.map((emp, i) => (
+                        <div key={i} className="py-3 flex justify-between items-center text-sm">
+                          <div>
+                            <p className="font-bold text-slate-200">{emp.name}</p>
+                            <p className="text-xs text-slate-500">{emp.company} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Cargo"}</p>
+                          </div>
+                          <span className="text-xs font-black text-slate-300 bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700">
+                            {emp.linkType}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* --- HEADCOUNT PJ MODE --- */}
+              {mode === "headcount_pj" && (
+                <>
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Prestadores PJ / MEI</p>
+                      <p className="text-3xl font-black text-amber-400">{headcountPjStats.pjList.length} Ativos</p>
+                    </div>
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Regime MEI</p>
+                      <p className="text-3xl font-black text-amber-400">{headcountPjStats.meiCount} MEI</p>
+                    </div>
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Contrato Médio</p>
+                      <p className="text-3xl font-black text-emerald-400">{formatCurrency(headcountPjStats.avgContract)}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Distribuição por Regime Tributário</h3>
+                    <div className="flex justify-between items-center text-sm font-bold text-slate-200">
+                      <span>MEI: {headcountPjStats.meiCount} ({Math.round((headcountPjStats.meiCount / (headcountPjStats.pjList.length || 1)) * 100)}%)</span>
+                      <span>Simples Nacional: {headcountPjStats.simplesCount} ({Math.round((headcountPjStats.simplesCount / (headcountPjStats.pjList.length || 1)) * 100)}%)</span>
+                      <span>Outros / Incompleto: {headcountPjStats.otherTaxCount} ({Math.round((headcountPjStats.otherTaxCount / (headcountPjStats.pjList.length || 1)) * 100)}%)</span>
+                    </div>
+                    <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex">
+                      <div className="h-full bg-amber-500" style={{ width: `${(headcountPjStats.meiCount / (headcountPjStats.pjList.length || 1)) * 100}%` }} />
+                      <div className="h-full bg-emerald-500" style={{ width: `${(headcountPjStats.simplesCount / (headcountPjStats.pjList.length || 1)) * 100}%` }} />
+                      <div className="h-full bg-slate-600" style={{ width: `${(headcountPjStats.otherTaxCount / (headcountPjStats.pjList.length || 1)) * 100}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Lista de Prestadores PJ ({headcountPjStats.pjList.length})</h3>
+                    <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-2">
+                      {headcountPjStats.pjList.map((emp, i) => (
+                        <div key={i} className="py-3 flex justify-between items-center text-sm">
+                          <div>
+                            <p className="font-bold text-slate-200">{emp.corporate_name || emp.name}</p>
+                            <p className="text-xs text-slate-500">
+                              CNPJ: {emp.pj_type || "Não Informado"} • RL: {emp.responsible_name || emp.name} • {emp.department || "Sem Setor"}
+                            </p>
+                          </div>
+                          <span className="text-xs font-black text-slate-300 bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700 uppercase">
+                            {emp.tax_regime || "Indefinido"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* --- PAYROLL CLT MODE --- */}
+              {mode === "payroll_clt" && (
+                <>
                   <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-5">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Composição de Gastos Corrente</h3>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Composição de Gastos CLT/Estágio Corrente</h3>
 
                     <div className="space-y-4">
                       <div>
                         <div className="flex justify-between text-sm font-bold text-slate-200">
                           <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Salário Fixo/Base</span>
-                          <span className="font-extrabold">{formatCurrency(payrollStats.totalFixed)} ({Math.round((payrollStats.totalFixed / (payrollStats.sumTotal || 1)) * 100)}%)</span>
+                          <span className="font-extrabold">{formatCurrency(payrollCltStats.totalFixed)} ({Math.round((payrollCltStats.totalFixed / (payrollCltStats.sumTotal || 1)) * 100)}%)</span>
                         </div>
                       </div>
                       <div>
                         <div className="flex justify-between text-sm font-bold text-slate-200">
                           <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> Bônus Variável</span>
-                          <span className="font-extrabold">{formatCurrency(payrollStats.totalBonus)} ({Math.round((payrollStats.totalBonus / (payrollStats.sumTotal || 1)) * 100)}%)</span>
+                          <span className="font-extrabold">{formatCurrency(payrollCltStats.totalBonus)} ({Math.round((payrollCltStats.totalBonus / (payrollCltStats.sumTotal || 1)) * 100)}%)</span>
                         </div>
                       </div>
                       <div>
                         <div className="flex justify-between text-sm font-bold text-slate-200">
                           <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Comissão Variável</span>
-                          <span className="font-extrabold">{formatCurrency(payrollStats.totalCommission)} ({Math.round((payrollStats.totalCommission / (payrollStats.sumTotal || 1)) * 100)}%)</span>
+                          <span className="font-extrabold">{formatCurrency(payrollCltStats.totalCommission)} ({Math.round((payrollCltStats.totalCommission / (payrollCltStats.sumTotal || 1)) * 100)}%)</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex">
-                      <div className="h-full bg-emerald-500" style={{ width: `${(payrollStats.totalFixed / (payrollStats.sumTotal || 1)) * 100}%` }} />
-                      <div className="h-full bg-sky-500" style={{ width: `${(payrollStats.totalBonus / (payrollStats.sumTotal || 1)) * 100}%` }} />
-                      <div className="h-full bg-amber-500" style={{ width: `${(payrollStats.totalCommission / (payrollStats.sumTotal || 1)) * 100}%` }} />
+                      <div className="h-full bg-emerald-500" style={{ width: `${(payrollCltStats.totalFixed / (payrollCltStats.sumTotal || 1)) * 100}%` }} />
+                      <div className="h-full bg-sky-500" style={{ width: `${(payrollCltStats.totalBonus / (payrollCltStats.sumTotal || 1)) * 100}%` }} />
+                      <div className="h-full bg-amber-500" style={{ width: `${(payrollCltStats.totalCommission / (payrollCltStats.sumTotal || 1)) * 100}%` }} />
                     </div>
 
                     <div className="pt-4 border-t border-slate-800 flex justify-between items-center text-sm font-black text-slate-200">
-                      <span>SOMA TOTAL DE SALÁRIOS:</span>
-                      <span className="text-emerald-400 text-xl font-extrabold">{formatCurrency(payrollStats.sumTotal)}</span>
+                      <span>SOMA TOTAL DE SALÁRIOS CLT:</span>
+                      <span className="text-emerald-400 text-xl font-extrabold">{formatCurrency(payrollCltStats.sumTotal)}</span>
                     </div>
                   </div>
 
-                  {/* Sectors Expenditure ranking */}
                   <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-5">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Gastos por Setor (Remunerações Consolidadas)</h3>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Gastos CLT por Setor</h3>
 
                     <div className="space-y-4">
-                      {payrollStats.sectorsSorted.slice(0, 5).map((sec, i) => (
+                      {payrollCltStats.sectorsSorted.map((sec, i) => (
                         <div key={i} className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="text-slate-200 font-bold">{sec.name} <span className="text-[10px] text-slate-500 font-bold uppercase ml-1">({sec.count} colaboradores)</span></span>
+                            <span className="text-slate-200 font-bold">{sec.name} <span className="text-[10px] text-slate-500 font-bold uppercase ml-1">({sec.count} CLT)</span></span>
                             <span className="text-slate-100 font-black">{formatCurrency(sec.total)}</span>
                           </div>
                           <div className="w-full h-3 bg-slate-800 rounded-md overflow-hidden">
-                            <div className="h-full bg-emerald-600/70" style={{ width: `${(sec.total / (payrollStats.sectorsSorted[0]?.total || 1)) * 100}%` }} />
+                            <div className="h-full bg-emerald-600/70" style={{ width: `${(sec.total / (payrollCltStats.sectorsSorted[0]?.total || 1)) * 100}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* --- PAYROLL PJ MODE --- */}
+              {mode === "payroll_pj" && (
+                <>
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-5">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Composição de Gastos de Contratos PJ Corrente</h3>
+
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm font-bold text-slate-200">
+                          <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Contrato Fixo</span>
+                          <span className="font-extrabold">{formatCurrency(payrollPjStats.totalFixed)} ({Math.round((payrollPjStats.totalFixed / (payrollPjStats.sumTotal || 1)) * 100)}%)</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm font-bold text-slate-200">
+                          <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> Bônus Variável PJ</span>
+                          <span className="font-extrabold">{formatCurrency(payrollPjStats.totalBonus)} ({Math.round((payrollPjStats.totalBonus / (payrollPjStats.sumTotal || 1)) * 100)}%)</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm font-bold text-slate-200">
+                          <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Comissão Variável PJ</span>
+                          <span className="font-extrabold">{formatCurrency(payrollPjStats.totalCommission)} ({Math.round((payrollPjStats.totalCommission / (payrollPjStats.sumTotal || 1)) * 100)}%)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex">
+                      <div className="h-full bg-purple-500" style={{ width: `${(payrollPjStats.totalFixed / (payrollPjStats.sumTotal || 1)) * 100}%` }} />
+                      <div className="h-full bg-sky-500" style={{ width: `${(payrollPjStats.totalBonus / (payrollPjStats.sumTotal || 1)) * 100}%` }} />
+                      <div className="h-full bg-amber-500" style={{ width: `${(payrollPjStats.totalCommission / (payrollPjStats.sumTotal || 1)) * 100}%` }} />
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-800 flex justify-between items-center text-sm font-black text-slate-200">
+                      <span>SOMA TOTAL DE CONTRATOS PJ:</span>
+                      <span className="text-purple-400 text-xl font-extrabold">{formatCurrency(payrollPjStats.sumTotal)}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-5">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Gastos PJ por Setor</h3>
+
+                    <div className="space-y-4">
+                      {payrollPjStats.sectorsSorted.map((sec, i) => (
+                        <div key={i} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-200 font-bold">{sec.name} <span className="text-[10px] text-slate-500 font-bold uppercase ml-1">({sec.count} PJ)</span></span>
+                            <span className="text-slate-100 font-black">{formatCurrency(sec.total)}</span>
+                          </div>
+                          <div className="w-full h-3 bg-slate-800 rounded-md overflow-hidden">
+                            <div className="h-full bg-purple-600/70" style={{ width: `${(sec.total / (payrollPjStats.sectorsSorted[0]?.total || 1)) * 100}%` }} />
                           </div>
                         </div>
                       ))}
@@ -345,6 +645,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                       </div>
                     )}
                   </div>
+
                   {/* List of all active debtors */}
                   <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -369,6 +670,74 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                               <p className="font-black text-emerald-400">{formatCurrency(emp.balance)}</p>
                               <p className="text-[10px] text-slate-500 font-bold uppercase">SALDO ATUAL</p>
                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* --- HEALTH MODE --- */}
+              {mode === "health" && (
+                <>
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-rose-400 uppercase tracking-wider">Qualidade Crítica (&lt;50%)</p>
+                      <p className="text-3xl font-black text-rose-500">{healthStats.criticalList.length} Fichas</p>
+                    </div>
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-orange-400 uppercase tracking-wider">Regular (50%-80%)</p>
+                      <p className="text-3xl font-black text-orange-500">{healthStats.incompleteList.length} Fichas</p>
+                    </div>
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Completa / Alta (&gt;80%)</p>
+                      <p className="text-3xl font-black text-emerald-500">{healthStats.completeList.length} Fichas</p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Campos Faltantes mais Comuns</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      <div className="p-4 bg-slate-950/30 border border-slate-800 rounded-lg flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">CPF / CNPJ</span>
+                        <span className="text-xs font-black text-rose-400">{healthStats.missingCpf} pendentes</span>
+                      </div>
+                      <div className="p-4 bg-slate-950/30 border border-slate-800 rounded-lg flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">Cargo / Cadeira</span>
+                        <span className="text-xs font-black text-rose-400">{healthStats.missingRole} pendentes</span>
+                      </div>
+                      <div className="p-4 bg-slate-950/30 border border-slate-800 rounded-lg flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">Chave PIX</span>
+                        <span className="text-xs font-black text-rose-400">{healthStats.missingPix} pendentes</span>
+                      </div>
+                      <div className="p-4 bg-slate-950/30 border border-slate-800 rounded-lg flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">Telefone</span>
+                        <span className="text-xs font-black text-rose-400">{healthStats.missingPhone} pendentes</span>
+                      </div>
+                      <div className="p-4 bg-slate-950/30 border border-slate-800 rounded-lg flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">E-mail</span>
+                        <span className="text-xs font-black text-rose-400">{healthStats.missingEmail} pendentes</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Cadastros Críticos que Necessitam Revisão ({healthStats.criticalList.length})</h3>
+                    {healthStats.criticalList.length === 0 ? (
+                      <p className="text-sm text-slate-500 italic text-center py-4">Nenhum cadastro com saúde crítica.</p>
+                    ) : (
+                      <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-2">
+                        {healthStats.criticalList.map(({ employee, health: result }, i) => (
+                          <div key={i} className="py-3 flex justify-between items-start text-sm gap-4">
+                            <div>
+                              <p className="font-bold text-slate-200">{employee.name}</p>
+                              <p className="text-xs text-slate-500">{employee.company} • {employee.linkType} • {employee.department || "Sem Setor"}</p>
+                              <p className="text-[10px] text-red-400 mt-1 font-bold">Faltantes: {result.missingFields.join(", ")}</p>
+                            </div>
+                            <span className="px-2.5 py-1 bg-rose-950 border border-rose-800 text-rose-400 font-bold rounded-lg text-xs shrink-0">
+                              {result.score}%
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -416,6 +785,97 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                   </div>
                 </>
               )}
+
+              {/* --- STRATEGIC MODE --- */}
+              {mode === "strategic" && (
+                <>
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cadeiras E1</p>
+                      <p className="text-3xl font-black text-indigo-400">{strategicStats.e1Count} Diretores</p>
+                    </div>
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cadeiras E2</p>
+                      <p className="text-3xl font-black text-indigo-400">{strategicStats.e2Count} Gestores</p>
+                    </div>
+                    <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cadeiras E3</p>
+                      <p className="text-3xl font-black text-indigo-400">{strategicStats.e3Count} Coord/Superv</p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Distribuição Estratégica por Empresa</h3>
+                    <div className="flex justify-between items-center text-sm font-bold text-slate-200">
+                      <span>MarBR: {strategicStats.marBR} ({Math.round((strategicStats.marBR / (strategicStats.strategicList.length || 1)) * 100)}%)</span>
+                      <span>DZM: {strategicStats.dzm} ({Math.round((strategicStats.dzm / (strategicStats.strategicList.length || 1)) * 100)}%)</span>
+                      <span>G2: {strategicStats.g2} ({Math.round((strategicStats.g2 / (strategicStats.strategicList.length || 1)) * 100)}%)</span>
+                    </div>
+                    <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden flex">
+                      <div className="h-full bg-indigo-500" style={{ width: `${(strategicStats.marBR / (strategicStats.strategicList.length || 1)) * 100}%` }} />
+                      <div className="h-full bg-violet-400" style={{ width: `${(strategicStats.dzm / (strategicStats.strategicList.length || 1)) * 100}%` }} />
+                      <div className="h-full bg-blue-500" style={{ width: `${(strategicStats.g2 / (strategicStats.strategicList.length || 1)) * 100}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Mapeamento de Liderança Estratégica ({strategicStats.strategicList.length})</h3>
+                    <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-2">
+                      {strategicStats.strategicList.map((emp, i) => {
+                        const level = getPBClassification(emp.nivel, emp.grau);
+                        return (
+                          <div key={i} className="py-3 flex justify-between items-center text-sm">
+                            <div>
+                              <p className="font-bold text-slate-200">{emp.name}</p>
+                              <p className="text-xs text-slate-500">{emp.company} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Cargo"}</p>
+                            </div>
+                            <span className="text-xs font-black text-indigo-400 bg-indigo-950/50 px-3 py-1 rounded-lg border border-indigo-900/50">
+                              Cadeira {level}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* --- SEM PB-ID MODE --- */}
+              {mode === "nopbid" && (
+                <>
+                  <div className="p-5 bg-amber-950/20 border-l-4 border-amber-500 text-sm text-amber-300 leading-relaxed rounded-r-xl flex gap-3">
+                    <Info size={20} className="shrink-0 text-amber-400 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Importância do ID Diana PB</p>
+                      <p className="text-xs text-amber-400/90 mt-1">
+                        O PB-ID é o código único identificador que conecta a ficha do colaborador nos demais sistemas e planilhas financeiras de folha consolidada. Cadastros sem ID Diana PB não são exportados nos relatórios estruturados de conciliação.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-950/20 border border-slate-800 rounded-xl space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Fichas Cadastrais Sem ID Vinculado ({nopbidStats.nopbidList.length})</h3>
+                    {nopbidStats.nopbidList.length === 0 ? (
+                      <p className="text-sm text-emerald-400 font-bold italic text-center py-4">Excelente! Todos os cadastros possuem um PB-ID ativo.</p>
+                    ) : (
+                      <div className="divide-y divide-slate-800 max-h-96 overflow-y-auto pr-2">
+                        {nopbidStats.nopbidList.map((emp, i) => (
+                          <div key={i} className="py-3 flex justify-between items-center text-sm">
+                            <div>
+                              <p className="font-bold text-slate-200">{emp.name}</p>
+                              <p className="text-xs text-slate-500">{emp.company} • {emp.linkType} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Cargo"}</p>
+                            </div>
+                            <span className="text-[10px] font-bold text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-900/50 uppercase tracking-widest">
+                              Sem ID
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
             </div>
 
             {/* Footer */}
