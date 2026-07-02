@@ -459,7 +459,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                           <div>
                             <p className="font-bold text-slate-200">{emp.corporate_name || emp.name}</p>
                             <p className="text-xs text-slate-500">
-                              CNPJ: {emp.pj_type || "Não Informado"} • RL: {emp.responsible_name || emp.name} • {emp.department || "Sem Setor"}
+                              CNPJ: {emp.pj_type || "Não Informado"} • RL: {(emp.responsible_name || emp.name).toUpperCase()} • {emp.department || "Sem Setor"}
                             </p>
                           </div>
                           <span className="text-xs font-black text-slate-300 bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700 uppercase">

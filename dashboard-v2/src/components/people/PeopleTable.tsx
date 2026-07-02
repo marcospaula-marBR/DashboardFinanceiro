@@ -279,7 +279,7 @@ export function PeopleTable({
                             {isExternal ? (
                               emp.responsible_name && (
                                 <span className="text-[10px] font-semibold text-slate-400 truncate max-w-[150px] flex items-center gap-0.5">
-                                  <UserRound size={8} /> RL: {emp.responsible_name}
+                                  <UserRound size={8} /> RL: {emp.responsible_name.toUpperCase()}
                                 </span>
                               )
                             ) : (
