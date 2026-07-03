@@ -1484,27 +1484,33 @@ export default function PeoplePage() {
                               <tr className="text-left border-b border-slate-800">
                                 <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
                                 <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Colaborador</th>
-                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Valor</th>
+                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Total Acumulado</th>
                                 <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">% do Total</th>
-                                {costDetailMode === 'total' && (
-                                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Mêses</th>
-                                )}
                               </tr>
                             </thead>
                             <tbody>
                               {costByEmployee.map((row, idx) => (
                                 <tr key={row.emp.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                                  <td className="px-6 py-3 text-slate-500 text-xs font-bold">{idx + 1}</td>
-                                  <td className="px-4 py-3">
+                                  <td className="px-6 py-3 text-slate-500 text-xs font-bold align-top">{idx + 1}</td>
+                                  <td className="px-4 py-3 align-top">
                                     <p className="font-bold text-slate-100 text-sm">{row.emp.name}</p>
                                     <p className="text-[10px] text-slate-500">{row.emp.job_role || row.emp.linkType}</p>
                                   </td>
-                                  <td className="px-4 py-3 text-right">
+                                  <td className="px-4 py-3 text-right align-top">
                                     <span className={`font-black tabular-nums ${modalColor}`}>
                                       {showValues ? formatCurrency(row.value) : '••••••'}
                                     </span>
+                                    {row.months > 0 && (
+                                      <p className="text-[10px] text-slate-500 mt-0.5">
+                                        Média: {showValues ? formatCurrency(row.value / row.months) : '•••'}/mês
+                                        <span className="ml-1 text-slate-600">· {row.months}mês{row.months !== 1 ? 'es' : ''}</span>
+                                      </p>
+                                    )}
+                                    {row.months === 0 && costDetailMode === 'conectividade' && (
+                                      <p className="text-[10px] text-slate-500 mt-0.5">Valor mensal fixo</p>
+                                    )}
                                   </td>
-                                  <td className="px-4 py-3 text-right">
+                                  <td className="px-4 py-3 text-right align-top">
                                     <div className="flex flex-col items-end gap-1">
                                       <span className="text-xs font-bold text-slate-300">
                                         {grandTotal > 0 ? ((row.value / grandTotal) * 100).toFixed(1) : '0.0'}%
@@ -1524,42 +1530,40 @@ export default function PeoplePage() {
                                       </div>
                                     </div>
                                   </td>
-                                  {costDetailMode === 'total' && (
-                                    <td className="px-4 py-3 text-right text-slate-400 text-xs font-bold">
-                                      {row.months}m
-                                    </td>
-                                  )}
                                 </tr>
                               ))}
                             </tbody>
                             <tfoot>
                               <tr className="border-t-2 border-slate-700 bg-slate-950/40">
-                                <td colSpan={2} className="px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-300">Total</td>
+                                <td colSpan={2} className="px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-300">Total Acumulado</td>
                                 <td className="px-4 py-3 text-right">
                                   <span className={`text-base font-black tabular-nums ${modalColor}`}>
                                     {showValues ? formatCurrency(grandTotal) : '••••••'}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right text-xs font-bold text-slate-400">100%</td>
-                                {costDetailMode === 'total' && <td />}
                               </tr>
                               <tr className="bg-slate-950/20">
                                 <td colSpan={2} className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                  Média por colaborador
+                                  Média por colaborador / mês
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <span className="text-sm font-bold tabular-nums text-slate-400">
-                                    {showValues && costByEmployee.length > 0
-                                      ? formatCurrency(grandTotal / costByEmployee.length)
-                                      : '•••'}
+                                    {showValues && costByEmployee.length > 0 ? (() => {
+                                      const totalMonths = costByEmployee.reduce((s, r) => s + (r.months || 1), 0);
+                                      return formatCurrency(grandTotal / (totalMonths || costByEmployee.length));
+                                    })() : '•••'}
                                   </span>
+                                  <p className="text-[10px] text-slate-600 mt-0.5">
+                                    {costByEmployee.length} colab. · {costByEmployee.reduce((s, r) => s + r.months, 0)} meses no total
+                                  </p>
                                 </td>
                                 <td className="px-4 py-3 text-right text-[10px] text-slate-500">
-                                  {costByEmployee.length} colab.
+                                  Média geral
                                 </td>
-                                {costDetailMode === 'total' && <td />}
                               </tr>
                             </tfoot>
+
 
                           </table>
                         )}
