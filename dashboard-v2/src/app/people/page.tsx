@@ -1534,16 +1534,33 @@ export default function PeoplePage() {
                             </tbody>
                             <tfoot>
                               <tr className="border-t-2 border-slate-700 bg-slate-950/40">
-                                <td colSpan={2} className="px-6 py-4 text-xs font-black uppercase tracking-widest text-slate-300">Total</td>
-                                <td className="px-4 py-4 text-right">
+                                <td colSpan={2} className="px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-300">Total</td>
+                                <td className="px-4 py-3 text-right">
                                   <span className={`text-base font-black tabular-nums ${modalColor}`}>
                                     {showValues ? formatCurrency(grandTotal) : '••••••'}
                                   </span>
                                 </td>
-                                <td className="px-4 py-4 text-right text-xs font-bold text-slate-400">100%</td>
+                                <td className="px-4 py-3 text-right text-xs font-bold text-slate-400">100%</td>
+                                {costDetailMode === 'total' && <td />}
+                              </tr>
+                              <tr className="bg-slate-950/20">
+                                <td colSpan={2} className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                  Média por colaborador
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <span className="text-sm font-bold tabular-nums text-slate-400">
+                                    {showValues && costByEmployee.length > 0
+                                      ? formatCurrency(grandTotal / costByEmployee.length)
+                                      : '•••'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right text-[10px] text-slate-500">
+                                  {costByEmployee.length} colab.
+                                </td>
                                 {costDetailMode === 'total' && <td />}
                               </tr>
                             </tfoot>
+
                           </table>
                         )}
                       </div>
