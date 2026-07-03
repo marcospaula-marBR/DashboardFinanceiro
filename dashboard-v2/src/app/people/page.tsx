@@ -16,7 +16,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, AlertCircle, Users, Eye, EyeOff, Search, Filter, X, 
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
-  ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award
+  ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
+  ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -123,6 +124,7 @@ export default function PeoplePage() {
   
   // Insights & Alerts states
   const [noRaiseMonths, setNoRaiseMonths] = useState(6);
+  const [isCostSectionOpen, setIsCostSectionOpen] = useState(false);
   const [noPromoMonths, setNoPromoMonths] = useState(6);
   const [noGradeMonths, setNoGradeMonths] = useState(6);
   const [filterInsight, setFilterInsight] = useState<string | null>(null);
@@ -299,6 +301,31 @@ export default function PeoplePage() {
       noPbIdCount
     };
   }, [filteredEmployees, allAuditIssues]);
+
+  // 💰 Custos Históricos — agrega monthlyCosts dos colaboradores filtrados
+  const historicalCostsSummary = useMemo(() => {
+    const filteredIds = new Set(filteredEmployees.map(e => e.id));
+    const relevantCosts = monthlyCosts.filter(c => filteredIds.has(c.employee_id));
+    const count = filteredEmployees.length || 1;
+
+    const totalFixo = relevantCosts.reduce((s, c) => s + (c.valor_fixo || 0), 0);
+    const totalBonus = relevantCosts.reduce((s, c) => s + (c.valor_bonus || 0), 0);
+    const totalComissao = relevantCosts.reduce((s, c) => s + (c.valor_comissao || 0), 0);
+    const totalIncentivos = relevantCosts.reduce((s, c) => s + (c.valor_incentivos || 0), 0);
+    // Conectividade: calculada a partir do campo remuneration_connectivity dos colaboradores filtrados
+    const totalConectividade = filteredEmployees.reduce((s, e) => s + (e.remuneration_connectivity || 0), 0);
+    const totalGeral = totalFixo + totalBonus + totalComissao + totalIncentivos + totalConectividade;
+
+    return {
+      totalFixo,    avgFixo: totalFixo / count,
+      totalBonus,   avgBonus: totalBonus / count,
+      totalComissao, avgComissao: totalComissao / count,
+      totalIncentivos, avgIncentivos: totalIncentivos / count,
+      totalConectividade, avgConectividade: totalConectividade / count,
+      totalGeral,   avgGeral: totalGeral / count,
+      count,
+    };
+  }, [filteredEmployees, monthlyCosts]);
 
   // Unique filter options from data
   const setores = useMemo(() => {
@@ -1230,6 +1257,125 @@ export default function PeoplePage() {
               onClick={() => { setActiveKpiMode('nopbid'); setIsKpiDrawerOpen(true); }}
               sub="Cadastros sem ID Diana PB associado"
             />
+          </div>
+
+          {/* 💰 Custos Históricos — Expansível */}
+          <div className="mt-6">
+            <button
+              onClick={() => setIsCostSectionOpen(v => !v)}
+              className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 hover:border-slate-500 transition-all shadow-lg group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <BarChart3 size={16} className="text-emerald-400" />
+                </div>
+                <div className="text-left">
+                  <span className="text-sm font-bold text-white">Custos Históricos</span>
+                  <span className="ml-3 text-[11px] text-slate-400">
+                    {historicalCostsSummary.count} colaborador{historicalCostsSummary.count !== 1 ? 'es' : ''} filtrado{historicalCostsSummary.count !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {!isCostSectionOpen && showValues && (
+                  <span className="ml-2 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
+                    Total: {formatCurrency(historicalCostsSummary.totalGeral)}
+                  </span>
+                )}
+              </div>
+              <ChevronDown
+                size={18}
+                className={`text-slate-400 transition-transform duration-300 group-hover:text-white ${
+                  isCostSectionOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {isCostSectionOpen && (
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 px-1">
+                {/* Card: Fixo */}
+                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <DollarSign size={14} className="text-blue-400" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fixo</span>
+                  </div>
+                  <span className="text-base font-black text-white tabular-nums">
+                    {showValues ? formatCurrency(historicalCostsSummary.totalFixo) : '••••••'}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgFixo) : '•••'}
+                  </span>
+                </div>
+
+                {/* Card: Bônus */}
+                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingUp size={14} className="text-emerald-400" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bônus</span>
+                  </div>
+                  <span className="text-base font-black text-white tabular-nums">
+                    {showValues ? formatCurrency(historicalCostsSummary.totalBonus) : '••••••'}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgBonus) : '•••'}
+                  </span>
+                </div>
+
+                {/* Card: Comissões */}
+                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Coins size={14} className="text-amber-400" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Comissões</span>
+                  </div>
+                  <span className="text-base font-black text-white tabular-nums">
+                    {showValues ? formatCurrency(historicalCostsSummary.totalComissao) : '••••••'}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgComissao) : '•••'}
+                  </span>
+                </div>
+
+                {/* Card: Incentivos */}
+                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap size={14} className="text-violet-400" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Incentivos</span>
+                  </div>
+                  <span className="text-base font-black text-white tabular-nums">
+                    {showValues ? formatCurrency(historicalCostsSummary.totalIncentivos) : '••••••'}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgIncentivos) : '•••'}
+                  </span>
+                </div>
+
+                {/* Card: Conectividade */}
+                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Wifi size={14} className="text-cyan-400" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Conectividade</span>
+                  </div>
+                  <span className="text-base font-black text-white tabular-nums">
+                    {showValues ? formatCurrency(historicalCostsSummary.totalConectividade) : '••••••'}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgConectividade) : '•••'}
+                  </span>
+                </div>
+
+                {/* Card: Total Geral */}
+                <div className="flex flex-col gap-1 bg-gradient-to-br from-emerald-900/40 to-slate-800/60 border border-emerald-700/40 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Wallet size={14} className="text-emerald-300" />
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Total Geral</span>
+                  </div>
+                  <span className="text-base font-black text-emerald-300 tabular-nums">
+                    {showValues ? formatCurrency(historicalCostsSummary.totalGeral) : '••••••'}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgGeral) : '•••'}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 🌟 Alertas & Filtros de Insights 🌟 */}
