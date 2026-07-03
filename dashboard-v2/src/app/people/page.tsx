@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ProfileDrawer } from "@/components/people/ProfileDrawer";
 import { PeopleKpiCard } from "@/components/people/PeopleKpiCard";
@@ -125,6 +126,7 @@ export default function PeoplePage() {
   // Insights & Alerts states
   const [noRaiseMonths, setNoRaiseMonths] = useState(6);
   const [isCostSectionOpen, setIsCostSectionOpen] = useState(false);
+  const [costDetailMode, setCostDetailMode] = useState<'fixo'|'bonus'|'comissao'|'incentivos'|'conectividade'|'total'|null>(null);
   const [noPromoMonths, setNoPromoMonths] = useState(6);
   const [noGradeMonths, setNoGradeMonths] = useState(6);
   const [filterInsight, setFilterInsight] = useState<string | null>(null);
@@ -1261,122 +1263,296 @@ export default function PeoplePage() {
 
           {/* 💰 Custos Históricos — Expansível */}
           <div className="mt-6">
+            {/* Banner Toggle */}
             <button
               onClick={() => setIsCostSectionOpen(v => !v)}
-              className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 hover:border-slate-500 transition-all shadow-lg group"
+              className="w-full flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-md transition-all shadow-sm group"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <BarChart3 size={16} className="text-emerald-400" />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-100 text-emerald-600 shrink-0">
+                  <BarChart3 size={18} />
                 </div>
                 <div className="text-left">
-                  <span className="text-sm font-bold text-white">Custos Históricos</span>
-                  <span className="ml-3 text-[11px] text-slate-400">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Custos Históricos</p>
+                  <p className="text-sm font-bold text-slate-700">
                     {historicalCostsSummary.count} colaborador{historicalCostsSummary.count !== 1 ? 'es' : ''} filtrado{historicalCostsSummary.count !== 1 ? 's' : ''}
-                  </span>
+                  </p>
                 </div>
                 {!isCostSectionOpen && showValues && (
-                  <span className="ml-2 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
+                  <span className="ml-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
                     Total: {formatCurrency(historicalCostsSummary.totalGeral)}
                   </span>
                 )}
               </div>
               <ChevronDown
                 size={18}
-                className={`text-slate-400 transition-transform duration-300 group-hover:text-white ${
+                className={`text-slate-400 transition-transform duration-300 group-hover:text-emerald-600 ${
                   isCostSectionOpen ? 'rotate-180' : ''
                 }`}
               />
             </button>
 
             {isCostSectionOpen && (
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 px-1">
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+
                 {/* Card: Fixo */}
-                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <DollarSign size={14} className="text-blue-400" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fixo</span>
+                <div
+                  onClick={() => setCostDetailMode('fixo')}
+                  className="flex flex-col gap-3 p-5 rounded-2xl border border-blue-100 bg-blue-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-100 text-blue-600 shrink-0">
+                      <DollarSign size={20} />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fixo</p>
                   </div>
-                  <span className="text-base font-black text-white tabular-nums">
+                  <p className="text-2xl font-black leading-tight text-blue-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalFixo) : '••••••'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgFixo) : '•••'}
-                  </span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgFixo) : '•••'}</p>
                 </div>
 
                 {/* Card: Bônus */}
-                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <TrendingUp size={14} className="text-emerald-400" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bônus</span>
+                <div
+                  onClick={() => setCostDetailMode('bonus')}
+                  className="flex flex-col gap-3 p-5 rounded-2xl border border-emerald-100 bg-emerald-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-100 text-emerald-600 shrink-0">
+                      <TrendingUp size={20} />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bônus</p>
                   </div>
-                  <span className="text-base font-black text-white tabular-nums">
+                  <p className="text-2xl font-black leading-tight text-emerald-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalBonus) : '••••••'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgBonus) : '•••'}
-                  </span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgBonus) : '•••'}</p>
                 </div>
 
                 {/* Card: Comissões */}
-                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Coins size={14} className="text-amber-400" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Comissões</span>
+                <div
+                  onClick={() => setCostDetailMode('comissao')}
+                  className="flex flex-col gap-3 p-5 rounded-2xl border border-amber-100 bg-amber-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-100 text-amber-600 shrink-0">
+                      <Coins size={20} />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Comissões</p>
                   </div>
-                  <span className="text-base font-black text-white tabular-nums">
+                  <p className="text-2xl font-black leading-tight text-amber-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalComissao) : '••••••'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgComissao) : '•••'}
-                  </span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgComissao) : '•••'}</p>
                 </div>
 
                 {/* Card: Incentivos */}
-                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap size={14} className="text-violet-400" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Incentivos</span>
+                <div
+                  onClick={() => setCostDetailMode('incentivos')}
+                  className="flex flex-col gap-3 p-5 rounded-2xl border border-indigo-100 bg-indigo-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-indigo-100 text-indigo-600 shrink-0">
+                      <Zap size={20} />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Incentivos</p>
                   </div>
-                  <span className="text-base font-black text-white tabular-nums">
+                  <p className="text-2xl font-black leading-tight text-indigo-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalIncentivos) : '••••••'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgIncentivos) : '•••'}
-                  </span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgIncentivos) : '•••'}</p>
                 </div>
 
                 {/* Card: Conectividade */}
-                <div className="flex flex-col gap-1 bg-slate-800/60 border border-slate-700 rounded-2xl p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Wifi size={14} className="text-cyan-400" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Conectividade</span>
+                <div
+                  onClick={() => setCostDetailMode('conectividade')}
+                  className="flex flex-col gap-3 p-5 rounded-2xl border border-cyan-100 bg-cyan-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-cyan-100 text-cyan-600 shrink-0">
+                      <Wifi size={20} />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Conectividade</p>
                   </div>
-                  <span className="text-base font-black text-white tabular-nums">
+                  <p className="text-2xl font-black leading-tight text-cyan-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalConectividade) : '••••••'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgConectividade) : '•••'}
-                  </span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgConectividade) : '•••'}</p>
                 </div>
 
                 {/* Card: Total Geral */}
-                <div className="flex flex-col gap-1 bg-gradient-to-br from-emerald-900/40 to-slate-800/60 border border-emerald-700/40 rounded-2xl p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Wallet size={14} className="text-emerald-300" />
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Total Geral</span>
+                <div
+                  onClick={() => setCostDetailMode('total')}
+                  className="flex flex-col gap-3 p-5 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-200 text-emerald-700 shrink-0">
+                      <Wallet size={20} />
+                    </div>
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Total Geral</p>
                   </div>
-                  <span className="text-base font-black text-emerald-300 tabular-nums">
+                  <p className="text-2xl font-black leading-tight text-emerald-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalGeral) : '••••••'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    Média: {showValues ? formatCurrency(historicalCostsSummary.avgGeral) : '•••'}
-                  </span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgGeral) : '•••'}</p>
                 </div>
               </div>
             )}
           </div>
+
+          {/* 📄 Modal Auditoria de Custos */}
+          {costDetailMode && (
+            <div
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6"
+              onClick={() => setCostDetailMode(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 15 }}
+                transition={{ type: 'spring', damping: 30, stiffness: 240 }}
+                className="w-full max-w-2xl h-[80vh] bg-slate-900 text-slate-100 flex flex-col border border-slate-800 shadow-2xl rounded-2xl overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                {(() => {
+                  const modeLabels: Record<string, { title: string; icon: ReactNode; color: string }> = {
+                    fixo:          { title: 'Custo Fixo por Colaborador',       icon: <DollarSign size={20} />, color: 'text-blue-400' },
+                    bonus:         { title: 'Bônus por Colaborador',            icon: <TrendingUp size={20} />, color: 'text-emerald-400' },
+                    comissao:      { title: 'Comissões por Colaborador',        icon: <Coins size={20} />,     color: 'text-amber-400' },
+                    incentivos:    { title: 'Incentivos por Colaborador',       icon: <Zap size={20} />,       color: 'text-indigo-400' },
+                    conectividade: { title: 'Conectividade por Colaborador',   icon: <Wifi size={20} />,      color: 'text-cyan-400' },
+                    total:         { title: 'Total de Custos por Colaborador', icon: <Wallet size={20} />,    color: 'text-emerald-400' },
+                  };
+                  const { title: modalTitle, icon: modalIcon, color: modalColor } = modeLabels[costDetailMode];
+
+                  // Build per-employee data
+                  const filteredIds = new Set(filteredEmployees.map(e => e.id));
+                  const costsForFiltered = monthlyCosts.filter(c => filteredIds.has(c.employee_id));
+
+                  // Group by employee_id
+                  const costByEmployee = filteredEmployees.map(emp => {
+                    const empCosts = costsForFiltered.filter(c => c.employee_id === emp.id);
+                    const totalFixoEmp   = empCosts.reduce((s, c) => s + (c.valor_fixo || 0), 0);
+                    const totalBonusEmp  = empCosts.reduce((s, c) => s + (c.valor_bonus || 0), 0);
+                    const totalComEmp    = empCosts.reduce((s, c) => s + (c.valor_comissao || 0), 0);
+                    const totalIncEmp    = empCosts.reduce((s, c) => s + (c.valor_incentivos || 0), 0);
+                    const totalConEmp    = emp.remuneration_connectivity || 0;
+                    const totalGeralEmp  = totalFixoEmp + totalBonusEmp + totalComEmp + totalIncEmp + totalConEmp;
+                    const value = costDetailMode === 'fixo'          ? totalFixoEmp
+                                : costDetailMode === 'bonus'         ? totalBonusEmp
+                                : costDetailMode === 'comissao'      ? totalComEmp
+                                : costDetailMode === 'incentivos'    ? totalIncEmp
+                                : costDetailMode === 'conectividade' ? totalConEmp
+                                : totalGeralEmp;
+                    return { emp, value, totalGeralEmp, months: empCosts.length };
+                  }).filter(r => r.value > 0).sort((a, b) => b.value - a.value);
+
+                  const grandTotal = costByEmployee.reduce((s, r) => s + r.value, 0);
+
+                  return (
+                    <>
+                      <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/20 shrink-0">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700 ${modalColor}`}>
+                            {modalIcon}
+                          </div>
+                          <div>
+                            <h2 className="text-sm font-black tracking-widest uppercase text-slate-100">{modalTitle}</h2>
+                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                              {costByEmployee.length} colaborador{costByEmployee.length !== 1 ? 'es' : ''} com lançamentos &bull; Total: {showValues ? formatCurrency(grandTotal) : '••••••'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setCostDetailMode(null)}
+                          className="w-9 h-9 rounded-xl border border-slate-800 bg-slate-900/50 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 hover:bg-slate-800 transition-all"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto">
+                        {costByEmployee.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-500">
+                            <BarChart3 size={40} className="opacity-30" />
+                            <p className="text-sm font-bold uppercase tracking-wider">Nenhum lançamento encontrado</p>
+                          </div>
+                        ) : (
+                          <table className="w-full text-sm">
+                            <thead className="sticky top-0 bg-slate-950 z-10">
+                              <tr className="text-left border-b border-slate-800">
+                                <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
+                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Colaborador</th>
+                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Valor</th>
+                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">% do Total</th>
+                                {costDetailMode === 'total' && (
+                                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Mêses</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {costByEmployee.map((row, idx) => (
+                                <tr key={row.emp.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                                  <td className="px-6 py-3 text-slate-500 text-xs font-bold">{idx + 1}</td>
+                                  <td className="px-4 py-3">
+                                    <p className="font-bold text-slate-100 text-sm">{row.emp.name}</p>
+                                    <p className="text-[10px] text-slate-500">{row.emp.job_role || row.emp.linkType}</p>
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    <span className={`font-black tabular-nums ${modalColor}`}>
+                                      {showValues ? formatCurrency(row.value) : '••••••'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    <div className="flex flex-col items-end gap-1">
+                                      <span className="text-xs font-bold text-slate-300">
+                                        {grandTotal > 0 ? ((row.value / grandTotal) * 100).toFixed(1) : '0.0'}%
+                                      </span>
+                                      <div className="w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full ${
+                                            costDetailMode === 'fixo'          ? 'bg-blue-500'
+                                          : costDetailMode === 'bonus'         ? 'bg-emerald-500'
+                                          : costDetailMode === 'comissao'      ? 'bg-amber-500'
+                                          : costDetailMode === 'incentivos'    ? 'bg-indigo-500'
+                                          : costDetailMode === 'conectividade' ? 'bg-cyan-500'
+                                          : 'bg-teal-500'
+                                          }`}
+                                          style={{ width: `${grandTotal > 0 ? (row.value / grandTotal) * 100 : 0}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  {costDetailMode === 'total' && (
+                                    <td className="px-4 py-3 text-right text-slate-400 text-xs font-bold">
+                                      {row.months}m
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 border-slate-700 bg-slate-950/40">
+                                <td colSpan={2} className="px-6 py-4 text-xs font-black uppercase tracking-widest text-slate-300">Total</td>
+                                <td className="px-4 py-4 text-right">
+                                  <span className={`text-base font-black tabular-nums ${modalColor}`}>
+                                    {showValues ? formatCurrency(grandTotal) : '••••••'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4 text-right text-xs font-bold text-slate-400">100%</td>
+                                {costDetailMode === 'total' && <td />}
+                              </tr>
+                            </tfoot>
+                          </table>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </motion.div>
+            </div>
+          )}
 
           {/* 🌟 Alertas & Filtros de Insights 🌟 */}
           <div className="mt-8 flex flex-col gap-4">
