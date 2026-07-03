@@ -87,9 +87,11 @@ export function PeopleEcosystemMap({
       const connB = getConnectionType(activeEmployee, b) !== null;
       if (connA && !connB) return -1;
       if (!connA && connB) return 1;
-      // 3º Ordem alfabética
-      const nameA = (a.corporate_name || a.name || "").toLowerCase();
-      const nameB = (b.corporate_name || b.name || "").toLowerCase();
+      // Ordem alfabética — usa Razão Social só para PJ/externos
+      const resolvedA = inferEntityType(a);
+      const resolvedB = inferEntityType(b);
+      const nameA = ((isExternalEntity(resolvedA) && a.corporate_name ? a.corporate_name : a.name) || '').toLowerCase();
+      const nameB = ((isExternalEntity(resolvedB) && b.corporate_name ? b.corporate_name : b.name) || '').toLowerCase();
       return nameA.localeCompare(nameB);
     });
   };
@@ -137,8 +139,8 @@ export function PeopleEcosystemMap({
   const renderEcosystemCard = (emp: Employee) => {
     const resolvedEntityType = inferEntityType(emp);
     const isExternal = isExternalEntity(resolvedEntityType);
-    // Razão Social prevalece sempre que preenchida; name é o fallback
-    const displayName = emp.corporate_name || emp.name;
+    // Razão Social só para entidades externas (PJ/MEI); CLT usa sempre nome pessoal
+    const displayName = isExternal && emp.corporate_name ? emp.corporate_name : emp.name;
     const avatarSrc = emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e2e8f0&color=475569&bold=true`;
     
     // Determinar classes com base no estado de destaque
@@ -269,7 +271,7 @@ export function PeopleEcosystemMap({
           <span>
             {activeEmployee ? (
               <>
-                Interfaces conectadas a <strong className="uppercase text-slate-800">{activeEmployee.corporate_name || activeEmployee.name}</strong> destacadas. 
+                Interfaces conectadas a <strong className="uppercase text-slate-800">{isExternalEntity(inferEntityType(activeEmployee)) && activeEmployee.corporate_name ? activeEmployee.corporate_name : activeEmployee.name}</strong> destacadas. 
                 {isLocked ? " (Destaque travado. Clique no card selecionado para ver os detalhes completos)." : ""}
               </>
             ) : (

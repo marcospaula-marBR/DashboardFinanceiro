@@ -457,7 +457,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                       {headcountPjStats.pjList.map((emp, i) => (
                         <div key={i} className="py-3 flex justify-between items-center text-sm">
                           <div>
-                            <p className="font-bold text-slate-200">{emp.corporate_name || emp.name}</p>
+                            <p className="font-bold text-slate-200">{isExternalEntity(inferEntityType(emp)) && emp.corporate_name ? emp.corporate_name : emp.name}</p>
                             <p className="text-xs text-slate-500">
                               CNPJ: {emp.pj_type || "Não Informado"} • RL: {(emp.responsible_name || emp.name).toUpperCase()} • {emp.department || "Sem Setor"}
                             </p>

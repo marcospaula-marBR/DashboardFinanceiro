@@ -230,8 +230,8 @@ export function PeopleTable({
 
                 const resolvedEntityType = inferEntityType(emp);
                 const isExternal = isExternalEntity(resolvedEntityType);
-                // Razão Social prevalece sempre que preenchida; name é o fallback
-                const displayName = emp.corporate_name || emp.name;
+                // Razão Social só aparece para entidades externas (PJ/MEI); CLT usa sempre o nome pessoal
+                const displayName = isExternal && emp.corporate_name ? emp.corporate_name : emp.name;
                 const avatarSrc = emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e2e8f0&color=475569&bold=true`;
                 const waLink = formatWhatsAppLink(emp.phone_professional);
 

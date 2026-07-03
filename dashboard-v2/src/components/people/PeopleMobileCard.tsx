@@ -84,8 +84,8 @@ export function PeopleMobileCard({
   const resolvedEntityType = inferEntityType(employee);
   const isExternal = isExternalEntity(resolvedEntityType);
 
-  // Razão Social prevalece sempre que preenchida; name é o fallback
-  const displayName = employee.corporate_name || employee.name;
+  // Razão Social só aparece para entidades externas (PJ/MEI); CLT usa sempre o nome pessoal
+  const displayName = isExternal && employee.corporate_name ? employee.corporate_name : employee.name;
 
   const avatarSrc =
     employee.photo_url ||
