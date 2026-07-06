@@ -33,6 +33,11 @@ interface DreManualEntryModalProps {
   onClose: () => void;
   /** Callback chamado após salvar, para notificar o dashboard */
   onSaved?: () => void;
+  dbContasDre?: string[];
+  dbCategorias?: string[];
+  dbDepartamentos?: string[];
+  dbProjetos?: string[];
+  rawData?: any[];
 }
 
 type FeedbackState = {
@@ -175,7 +180,16 @@ function MultiSelectDropdown({
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntryModalProps) {
+export function DreManualEntryModal({
+  isOpen,
+  onClose,
+  onSaved,
+  dbContasDre = [],
+  dbCategorias = [],
+  dbDepartamentos = [],
+  dbProjetos = [],
+  rawData = []
+}: DreManualEntryModalProps) {
   const [form, setForm] = useState<DreManualEntryForm>(EMPTY_FORM);
   const [records, setRecords] = useState<DreLancamento[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -191,11 +205,54 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
   const [filterCategorias, setFilterCategorias] = useState<string[]>([]);
   const [filterText, setFilterText] = useState<string>('');
 
+  // ── Contas DRE disponíveis (DB + hardcoded) ──
+  const contasDreDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    dbContasDre.forEach(c => { if (c) set.add(c.trim()); });
+    CONTAS_DRE_MANUAL.forEach(c => { if (c) set.add(c.trim()); });
+    return Array.from(set).sort();
+  }, [dbContasDre]);
+
   // ── Categorias disponíveis conforme Conta DRE selecionada ──
   const categoriasDisponiveis = useMemo(() => {
     if (!form.conta_dre) return [];
-    return CATEGORIAS_MANUAL[form.conta_dre] || [form.conta_dre];
-  }, [form.conta_dre]);
+    
+    const set = new Set<string>();
+    
+    // 1. Extrair dos dados do banco para a Conta DRE selecionada
+    if (rawData && rawData.length > 0) {
+      rawData.forEach(row => {
+        if (
+          row.ContaDRE && 
+          row.ContaDRE.toString().trim().toLowerCase() === form.conta_dre.trim().toLowerCase()
+        ) {
+          if (row.Categoria) {
+            set.add(row.Categoria.toString().trim());
+          }
+        }
+      });
+    }
+    
+    // 2. Mesclar com as categorias mapeadas estaticamente
+    const hardcoded = CATEGORIAS_MANUAL[form.conta_dre] || [];
+    hardcoded.forEach(c => { if (c) set.add(c.trim()); });
+    
+    // 3. Fallback se não houver nenhuma
+    if (set.size === 0) {
+      set.add(form.conta_dre);
+      dbCategorias.forEach(c => { if (c) set.add(c.trim()); });
+    }
+    
+    return Array.from(set).sort();
+  }, [form.conta_dre, rawData, dbCategorias]);
+
+  // ── Departamentos e Projetos consolidados para a listagem ──
+  const departamentosProjetosDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    dbDepartamentos.forEach(d => { if (d) set.add(d.trim()); });
+    dbProjetos.forEach(p => { if (p) set.add(p.trim()); });
+    return Array.from(set).filter(Boolean).sort();
+  }, [dbDepartamentos, dbProjetos]);
 
   // ── Anos disponíveis na lista de períodos ──
   const anosDisponiveis = useMemo(() => ['Todos', ...extractYears(PERIODOS_DISPONIVEIS)], []);
@@ -508,7 +565,7 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
                   className="w-full bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-amber-500"
                 >
                   <option value="">— Selecione —</option>
-                  {CONTAS_DRE_MANUAL.map(c => (
+                  {contasDreDisponiveis.map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -543,9 +600,15 @@ export function DreManualEntryModal({ isOpen, onClose, onSaved }: DreManualEntry
                   name="departamento"
                   value={form.departamento}
                   onChange={handleChange}
-                  placeholder="ex: Conectius - Rateio"
+                  list="db-departamentos-projetos"
+                  placeholder="Selecione ou digite..."
                   className="w-full bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-slate-500"
                 />
+                <datalist id="db-departamentos-projetos">
+                  {departamentosProjetosDisponiveis.map(dp => (
+                    <option key={dp} value={dp} />
+                  ))}
+                </datalist>
               </div>
 
               {/* Valor */}

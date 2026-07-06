@@ -816,6 +816,11 @@ export default function DrePage() {
         isOpen={isManualEntryOpen}
         onClose={() => setIsManualEntryOpen(false)}
         onSaved={loadLatestSnapshotFromDb}
+        dbContasDre={metadata?.contasDre}
+        dbCategorias={metadata?.categorias}
+        dbDepartamentos={metadata?.departamentos}
+        dbProjetos={metadata?.projetos}
+        rawData={rawData}
       />
 
       <DreIndicatorsModal
