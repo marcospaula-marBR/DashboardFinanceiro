@@ -36,14 +36,21 @@ export function DreDetailsModal({
   if (!isOpen) return null;
 
   const isLucroAntesFcl = title === 'Lucro antes do FCL';
+  const isFcl = title === 'Fluxo de Caixa Livre FCL';
 
-  if (isLucroAntesFcl && allResults) {
+  if ((isLucroAntesFcl || isFcl) && allResults) {
     const cols = [...allResults.validColumns].reverse();
     
     const getValMensal = (key: string, col: string) => allResults.mensal[key]?.[col] || 0;
     const getValTotal = (key: string) => allResults.totais[key] || 0;
     
-    const auditRows = [
+    let auditRows: any[] = [];
+    let modalTitle = title;
+    let modalDesc = 'Demonstrativo de Composição para Auditoria';
+    let infoBox = null;
+
+    if (isLucroAntesFcl) {
+      auditRows = [
       { 
         label: '(+) Receita (Entradas Operacionais)', 
         key: 'Total Entradas Operacionais', 
@@ -74,7 +81,91 @@ export function DreDetailsModal({
         isResult: true,
         className: 'font-bold text-slate-900'
       }
-    ];
+      ];
+      infoBox = (
+        <div className="mt-4 bg-amber-50/60 border border-amber-200/50 rounded-2xl p-4 text-slate-700 text-[12px] leading-relaxed">
+          <p className="font-bold text-amber-800 mb-1">Entendendo o Lucro antes do FCL:</p>
+          <p>
+            Este card representa o resultado líquido gerado pelas operações no período antes de deduzir investimentos de capital em <strong>Ativos, Consórcios</strong> e <strong>Serviços</strong>. Retiradas dos sócios não afetam este cálculo.
+          </p>
+          <p className="mt-2 font-semibold">
+            Fórmula de Cálculo: Receitas - Impostos - Custos Operacionais - Despesas Rateadas = Lucro antes do FCL
+          </p>
+        </div>
+      );
+    } else if (isFcl) {
+      auditRows = [
+        { 
+          label: '(+) Total Entradas Operacionais', 
+          key: 'Total Entradas Operacionais', 
+          isSubtracted: false,
+          className: 'font-semibold text-slate-700'
+        },
+        { 
+          label: '(+) Outras Entradas', 
+          key: 'Outras Entradas', 
+          isSubtracted: false,
+          className: 'font-semibold text-slate-700'
+        },
+        { 
+          label: '(+) Intermediação de Negócios - Receitas', 
+          key: 'Intermediação de Negócios - Receitas', 
+          isSubtracted: false,
+          className: 'font-semibold text-emerald-600'
+        },
+        { 
+          label: '(+) Mútuo - Entradas', 
+          key: 'Mútuo - Entradas', 
+          isSubtracted: false,
+          className: 'font-semibold text-emerald-600'
+        },
+        { 
+          label: '(-) Total Saídas (Impostos + Custos + Despesas + Investimentos)', 
+          key: 'Total Saídas', 
+          isSubtracted: true,
+          className: 'text-rose-600 font-medium'
+        },
+        { 
+          label: '(=) Fluxo de Caixa Livre (FCL)', 
+          key: 'Fluxo de Caixa Livre FCL', 
+          isResult: true,
+          className: 'font-bold text-slate-900 bg-amber-100/50'
+        },
+        {
+          label: 'USO DO FCL (RETIRADAS DOS SÓCIOS)',
+          key: 'HEADER_USO_FCL',
+          isHeader: true,
+          className: 'font-black text-amber-700 bg-amber-50'
+        },
+        { 
+          label: 'Distribuição de Dividendos', 
+          key: 'Distribuição de Dividendos', 
+          isSubtracted: false,
+          className: 'text-slate-600'
+        },
+        { 
+          label: 'Intermediação de Negócios (Saídas)', 
+          key: 'Intermediação de Negócios', 
+          isSubtracted: false,
+          className: 'text-slate-600'
+        },
+        { 
+          label: 'Mútuo - Saídas', 
+          key: 'Mútuo - Saídas', 
+          isSubtracted: false,
+          className: 'text-slate-600'
+        }
+      ];
+      infoBox = (
+        <div className="mt-4 bg-emerald-50/60 border border-emerald-200/50 rounded-2xl p-4 text-slate-700 text-[12px] leading-relaxed">
+          <p className="font-bold text-emerald-800 mb-1">Entendendo o Fluxo de Caixa Livre (FCL):</p>
+          <p>
+            O FCL representa o caixa gerado pela operação (Entradas + Outras Entradas + Intermediação de Negócios - Receitas + Mútuo - Entradas) menos todas as saídas (Impostos, Custos, Despesas Rateadas e Investimentos). 
+            Na tabela de <strong>USO DO FCL</strong> é possível visualizar onde este caixa livre foi utilizado.
+          </p>
+        </div>
+      );
+    }
 
     const formatValue = (value: number, isSubtracted = false) => {
       if (isPrivacyMode) return 'R$ ****';
@@ -98,9 +189,9 @@ export function DreDetailsModal({
                   <TrendingUp size={20} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-slate-800">{title}</h2>
+                  <h2 className="text-xl font-black text-slate-800">{modalTitle}</h2>
                   <p className="text-sm font-medium text-slate-500">
-                    Demonstrativo de Composição para Auditoria
+                    {modalDesc}
                   </p>
                 </div>
               </div>
@@ -112,15 +203,7 @@ export function DreDetailsModal({
               </button>
             </div>
             
-            <div className="mt-4 bg-amber-50/60 border border-amber-200/50 rounded-2xl p-4 text-slate-700 text-[12px] leading-relaxed">
-              <p className="font-bold text-amber-800 mb-1">Entendendo o Lucro antes do FCL:</p>
-              <p>
-                Este card representa o resultado líquido gerado pelas operações no período antes de deduzir investimentos de capital em <strong>Ativos, Consórcios</strong> e <strong>Serviços</strong>, bem como a distribuição de <strong>Dividendos</strong>.
-              </p>
-              <p className="mt-2 font-semibold">
-                Fórmula de Cálculo: Receitas - Impostos - Custos Operacionais - Despesas Rateadas = Lucro antes do FCL
-              </p>
-            </div>
+            {infoBox}
           </div>
 
           {/* Content */}
@@ -143,6 +226,16 @@ export function DreDetailsModal({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {auditRows.map((row, idx) => {
+                      if (row.isHeader) {
+                        return (
+                          <tr key={idx} className="bg-slate-100/80">
+                            <td colSpan={cols.length + 3} className={`px-4 py-3 sticky left-0 z-10 font-bold text-[11px] uppercase tracking-widest ${row.className}`}>
+                              {row.label}
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       const totalVal = getValTotal(row.key);
                       const avgVal = getAverage(row);
                       

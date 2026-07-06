@@ -60,6 +60,9 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Lucro s/ Receita Operacional', tipo: 'card_percentual', var: 'perc_lucro' },
   { titulo: 'FCL s/ Receita Operacional', tipo: 'card_percentual', var: 'perc_fcl' },
   { titulo: 'Distribuição de Dividendos', tipo: 'hidden', var: 'dividendos', categorias: ['Distribuição de Dividendos', 'Dividendos'] },
+  { titulo: 'Mútuo - Saídas', tipo: 'hidden', categorias: ['Mútuo - Saídas'] },
+  { titulo: 'Mútuo - Entradas', tipo: 'hidden', categorias: ['Mútuo - Entradas'] },
+  { titulo: 'Intermediação de Negócios - Receitas', tipo: 'hidden', categorias: ['Intermediação de Negócios - Receitas'] },
   { titulo: 'Pessoal', tipo: 'card', var: 'pessoal', categorias: ['Despesas com Pessoal', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo', 'Credenciado TI', 'Adiantamento - Credenciado TI', 'Credenciado Operacional', 'Adiantamento - Credenciado Operacional'] },
   { titulo: 'Corretiva', tipo: 'card', var: 'corretiva', categorias: ['Corretiva - B2G', 'Manutenção Corretiva'] },
   { titulo: 'Preventiva', tipo: 'card', var: 'preventiva', categorias: ['Preventiva - B2G', 'Manutenção Preventiva'] },
@@ -511,7 +514,7 @@ export class DreService {
       'Corretiva - B2G', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
       'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
       'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas',
-      'Jurídico', 'Intermediação de Negócios', 'Renda Fixa'
+      'Jurídico', 'Intermediação de Negócios', 'Intermediação de Negócios - Receitas', 'Renda Fixa'
     ];
 
     df.forEach(row => {
@@ -593,10 +596,7 @@ export class DreService {
         'Outros Tributos',
         'Despesas Eventuais',
         'Despesas Variáveis',
-        'Intermediação de Negócios',
-        'Total Despesas Rateadas',
-        'Distribuição de Dividendos',
-        'Dividendos'
+        'Total Despesas Rateadas'
       ].includes(item.titulo);
 
       if (item.tipo === 'linha' || item.tipo === 'hidden' || (item.tipo === 'card' && item.categorias)) {
@@ -663,14 +663,13 @@ export class DreService {
       ? 0
       : (getVal("Credenciado Administrativo") + getVal("Credenciado TI") +
          getVal("Despesas Administrativas") + getVal("Despesas de Vendas e Marketing") + getVal("Despesas Financeiras") +
-         getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios") +
-         getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos"));
+         getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis"));
 
     const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos") + getVal("Aplicações Financeiras");
     const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
 
     const resultado = totalEntradas - totalImpostos - totalCustos - totalDespesas;
-    const fcl = totalEntradas + outrasEntradas - totalSaidas;
+    const fcl = totalEntradas + outrasEntradas - totalSaidas + getVal("Intermediação de Negócios - Receitas") + getVal("Mútuo - Entradas");
 
     // Novo: Equipamentos
     const totalEquipamentos = getCatTotal("Equipamentos");
@@ -754,14 +753,12 @@ export class DreService {
         ? 0
         : (getValMensal("Credenciado Administrativo", col) + getValMensal("Credenciado TI", col) +
            getValMensal("Despesas Administrativas", col) + getValMensal("Despesas de Vendas e Marketing", col) + getValMensal("Despesas Financeiras", col) +
-           getValMensal("Outros Tributos", col) + getValMensal("Despesas Eventuais", col) + getValMensal("Despesas Variáveis", col) + getValMensal("Intermediação de Negócios", col) +
-           getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col));
+           getValMensal("Outros Tributos", col) + getValMensal("Despesas Eventuais", col) + getValMensal("Despesas Variáveis", col));
       valoresMensal["Total Despesas Rateadas"][col] = totDesp;
       sourceRows["Total Despesas Rateadas"][col] = [
         ...getSourceRowsMensal("Credenciado Administrativo", col), ...getSourceRowsMensal("Credenciado TI", col),
         ...getSourceRowsMensal("Despesas Administrativas", col), ...getSourceRowsMensal("Despesas de Vendas e Marketing", col), ...getSourceRowsMensal("Despesas Financeiras", col),
-        ...getSourceRowsMensal("Outros Tributos", col), ...getSourceRowsMensal("Despesas Eventuais", col), ...getSourceRowsMensal("Despesas Variáveis", col), ...getSourceRowsMensal("Intermediação de Negócios", col),
-        ...getCatSourceRowsSafe("Distribuição de Dividendos", col), ...getCatSourceRowsSafe("Dividendos", col)
+        ...getSourceRowsMensal("Outros Tributos", col), ...getSourceRowsMensal("Despesas Eventuais", col), ...getSourceRowsMensal("Despesas Variáveis", col)
       ];
 
       const totInv = getCatMonthly("Consórcios - a contemplar", col) + getValMensal("Serviços", col) + getCatMonthly("Ativos", col) + getValMensal("Aplicações Financeiras", col);
@@ -780,7 +777,7 @@ export class DreService {
       ];
 
       const resCol = totEnt - totImp - totCust - totDesp;
-      const fclCol = totEnt + outrasEnt - totSai;
+      const fclCol = totEnt + outrasEnt - totSai + getValMensal("Intermediação de Negócios - Receitas", col) + getValMensal("Mútuo - Entradas", col);
 
       valoresMensal["Lucro antes do FCL"][col] = resCol;
       sourceRows["Lucro antes do FCL"][col] = [
