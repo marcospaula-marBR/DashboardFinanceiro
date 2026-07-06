@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.88";
+export const APP_VERSION = "v.02.48.89";
 export const VERSION_DATE = "2026-07-06";
 export const VERSION_CHANGELOG = [
+  "v.02.48.89 - Fix/DRE: Transforma o campo Categoria no modal DreManualEntryModal em um combo box flexível (input com datalist). Permite ao usuário tanto selecionar as categorias existentes no banco de dados para a Conta DRE quanto digitar uma nova categoria sob demanda caso não exista.",
   "v.02.48.88 - Fix/DRE: Dinamiza os campos de inserção de dados manuais (Conta DRE, Categoria e Departamento/Projeto) no modal DreManualEntryModal. Passa os metadados dinâmicos do banco de dados (contasDRE, categorias, departamentos e projetos) e o rawData como props para o modal a partir da página principal da DRE. Integra datalist de sugestão flexível no campo de Departamento/Projeto.",
   "v.02.48.87 - Feat/Institucional: Adiciona a nova página institucional do Grupo Mar Brasil (/institucional) contendo a navegação orbital para as duas empresas (Mar Brasil e DZM), ficha cadastral completa com downloads de documentos públicos em PDF, player de vídeo corporativo e um gerador de cartão de visitas digital com QR Code personalizado.",
   "v.02.48.86 - Fix/DRE: Implementa mapeamento canônico de categorias especiais com suporte a variações de singular/plural, acentuação e lucros (ex: Intermediação de Negócios - Receita, Distribuição de Lucro, etc.) nos motores DreService e DreSimulatorEngine. Atualiza a Categoria na própria linha (row) durante df.forEach e pós-coleta para assegurar agrupamento perfeito nos modais de auditoria.",

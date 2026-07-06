@@ -576,18 +576,21 @@ export function DreManualEntryModal({
                 <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
                   <FileText size={11} /> Categoria *
                 </label>
-                <select
+                <input
+                  type="text"
                   name="categoria"
                   value={form.categoria}
                   onChange={handleChange}
                   disabled={!form.conta_dre}
+                  list="db-categorias-list"
+                  placeholder={form.conta_dre ? "Selecione ou digite..." : "Selecione a Conta DRE primeiro"}
                   className="w-full bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-40"
-                >
-                  <option value="">— Selecione a Conta DRE primeiro —</option>
+                />
+                <datalist id="db-categorias-list">
                   {categoriasDisponiveis.map(c => (
-                    <option key={c} value={c}>{c}</option>
+                    <option key={c} value={c} />
                   ))}
-                </select>
+                </datalist>
               </div>
 
               {/* Departamento */}
