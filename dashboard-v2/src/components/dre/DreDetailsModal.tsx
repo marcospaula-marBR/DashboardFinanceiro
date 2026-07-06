@@ -132,7 +132,7 @@ export function DreDetailsModal({
           className: 'font-bold text-slate-900 bg-amber-100/50'
         },
         {
-          label: 'USO DO FCL (RETIRADAS DOS SÓCIOS)',
+          label: 'USO DO FCL — RETIRADAS DOS SÓCIOS',
           key: 'HEADER_USO_FCL',
           isHeader: true,
           className: 'font-black text-amber-700 bg-amber-50'
@@ -154,6 +154,12 @@ export function DreDetailsModal({
           key: 'Mútuo - Saídas', 
           isSubtracted: false,
           className: 'text-slate-600'
+        },
+        { 
+          label: '(=) Total Retiradas dos Sócios', 
+          key: 'Total Retiradas dos Sócios', 
+          isResult: true,
+          className: 'font-bold text-amber-900 bg-amber-50'
         }
       ];
       infoBox = (
@@ -161,11 +167,12 @@ export function DreDetailsModal({
           <p className="font-bold text-emerald-800 mb-1">Entendendo o Fluxo de Caixa Livre (FCL):</p>
           <p>
             O FCL representa o caixa gerado pela operação (Entradas + Outras Entradas + Intermediação de Negócios - Receitas + Mútuo - Entradas) menos todas as saídas (Impostos, Custos, Despesas Rateadas e Investimentos). 
-            Na tabela de <strong>USO DO FCL</strong> é possível visualizar onde este caixa livre foi utilizado.
+            Na tabela de <strong>USO DO FCL</strong> é possível visualizar onde este caixa livre foi utilizado pelas retiradas dos sócios.
           </p>
         </div>
       );
     }
+
 
     const formatValue = (value: number, isSubtracted = false) => {
       if (isPrivacyMode) return 'R$ ****';

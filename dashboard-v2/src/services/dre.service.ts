@@ -668,8 +668,16 @@ export class DreService {
     const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos") + getVal("Aplicações Financeiras");
     const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
 
+    // Categorias especiais FCL: mapear direto do catTotals para valoresTotal
+    const totalIntermediReceitas = getCatTotal("Intermediação de Negócios - Receitas");
+    const totalMutuoEntradas = getCatTotal("Mútuo - Entradas");
+    const totalDividendos = getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos");
+    const totalIntermedioSaidas = getCatTotal("Intermediação de Negócios");
+    const totalMutuoSaidas = getCatTotal("Mútuo - Saídas");
+    const totalRetiradas = totalDividendos + totalIntermedioSaidas + totalMutuoSaidas;
+
     const resultado = totalEntradas - totalImpostos - totalCustos - totalDespesas;
-    const fcl = totalEntradas + outrasEntradas - totalSaidas + getVal("Intermediação de Negócios - Receitas") + getVal("Mútuo - Entradas");
+    const fcl = totalEntradas + outrasEntradas - totalSaidas + totalIntermediReceitas + totalMutuoEntradas;
 
     // Novo: Equipamentos
     const totalEquipamentos = getCatTotal("Equipamentos");
@@ -686,6 +694,14 @@ export class DreService {
     valoresTotal["Fluxo de Caixa Livre FCL"] = fcl;
     valoresTotal["Resultado Liquido Final"] = resultado;
     valoresTotal["Impostos Gerais"] = totalImpostos;
+
+    // Mapear categorias FCL especiais para valoresTotal (acesso pelo modal)
+    valoresTotal["Intermediação de Negócios - Receitas"] = totalIntermediReceitas;
+    valoresTotal["Mútuo - Entradas"] = totalMutuoEntradas;
+    valoresTotal["Distribuição de Dividendos"] = totalDividendos;
+    valoresTotal["Intermediação de Negócios"] = totalIntermedioSaidas;
+    valoresTotal["Mútuo - Saídas"] = totalMutuoSaidas;
+    valoresTotal["Total Retiradas dos Sócios"] = totalRetiradas;
 
     const percLucro = totalEntradas !== 0 ? (resultado / totalEntradas * 100) : 0;
     const percFcl = totalEntradas !== 0 ? (fcl / totalEntradas * 100) : 0;
@@ -708,6 +724,12 @@ export class DreService {
     valoresMensal["Lucro s/ Receita Operacional"] = {};
     valoresMensal["FCL s/ Receita Operacional"] = {};
     valoresMensal["Equipamentos"] = {};
+    valoresMensal["Intermediação de Negócios - Receitas"] = {};
+    valoresMensal["Mútuo - Entradas"] = {};
+    valoresMensal["Distribuição de Dividendos"] = {};
+    valoresMensal["Intermediação de Negócios"] = {};
+    valoresMensal["Mútuo - Saídas"] = {};
+    valoresMensal["Total Retiradas dos Sócios"] = {};
 
     sourceRows["Total Entradas Operacionais"] = {};
     sourceRows["Outras Entradas"] = {};
@@ -719,6 +741,12 @@ export class DreService {
     sourceRows["Lucro antes do FCL"] = {};
     sourceRows["Fluxo de Caixa Livre FCL"] = {};
     sourceRows["Equipamentos"] = {};
+    sourceRows["Intermediação de Negócios - Receitas"] = {};
+    sourceRows["Mútuo - Entradas"] = {};
+    sourceRows["Distribuição de Dividendos"] = {};
+    sourceRows["Intermediação de Negócios"] = {};
+    sourceRows["Mútuo - Saídas"] = {};
+    sourceRows["Total Retiradas dos Sócios"] = {};
 
     validColumns.forEach(col => {
       const recOp = getValMensal("Receita Bruta de Vendas", col);
@@ -777,7 +805,33 @@ export class DreService {
       ];
 
       const resCol = totEnt - totImp - totCust - totDesp;
-      const fclCol = totEnt + outrasEnt - totSai + getValMensal("Intermediação de Negócios - Receitas", col) + getValMensal("Mútuo - Entradas", col);
+      
+      // Categorias especiais FCL - popular por coluna via catMonthly
+      const intermReceitasCol = getCatMonthly("Intermediação de Negócios - Receitas", col);
+      const mutuoEntradasCol = getCatMonthly("Mútuo - Entradas", col);
+      const dividendosCol = getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col);
+      const intermedioSaidasCol = getCatMonthly("Intermediação de Negócios", col);
+      const mutuoSaidasCol = getCatMonthly("Mútuo - Saídas", col);
+      const retiradasCol = dividendosCol + intermedioSaidasCol + mutuoSaidasCol;
+      
+      valoresMensal["Intermediação de Negócios - Receitas"][col] = intermReceitasCol;
+      sourceRows["Intermediação de Negócios - Receitas"][col] = getCatSourceRowsSafe("Intermediação de Negócios - Receitas", col);
+      valoresMensal["Mútuo - Entradas"][col] = mutuoEntradasCol;
+      sourceRows["Mútuo - Entradas"][col] = getCatSourceRowsSafe("Mútuo - Entradas", col);
+      valoresMensal["Distribuição de Dividendos"][col] = dividendosCol;
+      sourceRows["Distribuição de Dividendos"][col] = [...getCatSourceRowsSafe("Distribuição de Dividendos", col), ...getCatSourceRowsSafe("Dividendos", col)];
+      valoresMensal["Intermediação de Negócios"][col] = intermedioSaidasCol;
+      sourceRows["Intermediação de Negócios"][col] = getCatSourceRowsSafe("Intermediação de Negócios", col);
+      valoresMensal["Mútuo - Saídas"][col] = mutuoSaidasCol;
+      sourceRows["Mútuo - Saídas"][col] = getCatSourceRowsSafe("Mútuo - Saídas", col);
+      valoresMensal["Total Retiradas dos Sócios"][col] = retiradasCol;
+      sourceRows["Total Retiradas dos Sócios"][col] = [
+        ...sourceRows["Distribuição de Dividendos"][col],
+        ...sourceRows["Intermediação de Negócios"][col],
+        ...sourceRows["Mútuo - Saídas"][col]
+      ];
+      
+      const fclCol = totEnt + outrasEnt - totSai + intermReceitasCol + mutuoEntradasCol;
 
       valoresMensal["Lucro antes do FCL"][col] = resCol;
       sourceRows["Lucro antes do FCL"][col] = [
@@ -799,6 +853,7 @@ export class DreService {
       valoresMensal["Equipamentos"][col] = getCatMonthly("Equipamentos", col);
       sourceRows["Equipamentos"][col] = getCatSourceRowsSafe("Equipamentos", col);
     });
+
 
     const activeMachinesList = validColumns.map(col => {
       const monthCounts = equipamentoCounts?.[col] || {};
