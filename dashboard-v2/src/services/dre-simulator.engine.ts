@@ -22,6 +22,7 @@ import {
   isColInPeriod,
   sortColList
 } from '@/lib/date-utils';
+import { normalizeForCompare } from './dre.service';
 
 const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -95,13 +96,41 @@ export class DreSimulatorEngine {
     }
 
     // 3. Identificar Categorias e Subcategorias Únicas
+    const canonicalSpecialMap: Record<string, string> = {
+      'intermediacao de negocios - receita': 'Intermediação de Negócios - Receitas',
+      'intermediacao de negocio - receita': 'Intermediação de Negócios - Receitas',
+      'intermediacao de negocios - receitas': 'Intermediação de Negócios - Receitas',
+      'intermediacao de negocio - receitas': 'Intermediação de Negócios - Receitas',
+      
+      'mutuo - entrada': 'Mútuo - Entradas',
+      'mutuo - entradas': 'Mútuo - Entradas',
+      
+      'distribuicao de dividendos': 'Distribuição de Dividendos',
+      'distribuicao de dividendo': 'Distribuição de Dividendos',
+      'dividendos': 'Distribuição de Dividendos',
+      'dividendo': 'Distribuição de Dividendos',
+      'distribuicao lucro': 'Distribuição de Dividendos',
+      'distribuicao de lucro': 'Distribuição de Dividendos',
+      'distribuicao de lucros': 'Distribuição de Dividendos',
+      'distribuicao lucros': 'Distribuição de Dividendos',
+      
+      'intermediacao de negocios': 'Intermediação de Negócios',
+      'intermediacao de negocio': 'Intermediação de Negócios',
+      
+      'mutuo - saida': 'Mútuo - Saídas',
+      'mutuo - saidas': 'Mútuo - Saídas'
+    };
+
     const subCategoriasEspecificas = [
       'Terceirização de Mão de Obra', 'Credenciado Operacional', 'Adiantamento - Credenciado Operacional',
       'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva',
       'Corretiva - B2G', 'Manutenção Corretiva', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
       'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
       'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas',
-      'Jurídico', 'Intermediação de Negócios', 'Renda Fixa'
+      'Jurídico', 'Intermediação de Negócios', 'Renda Fixa',
+      'Intermediação de Negócios - Receita', 'Intermediação de Negócio - Receita', 'Intermediação de Negócio - Receitas',
+      'Mútuo - Entrada', 'Mútuo - Saída', 'Distribuição de Dividendo', 'Dividendo',
+      'Distribuição Lucro', 'Distribuição de Lucro', 'Distribuição de Lucros', 'Intermediação de Negócio'
     ];
 
     // Mapeamos a estrutura de DRE por linha
@@ -110,7 +139,11 @@ export class DreSimulatorEngine {
     const catSourceRows: Record<string, Record<string, DreRow[]>> = {};
 
     const getCatSourceRowsSafe = (cat: string, col: string) => {
-      const key = Object.keys(catSourceRows).find(k => k.trim().toLowerCase() === cat.trim().toLowerCase());
+      const normCat = normalizeForCompare(cat);
+      const key = Object.keys(catSourceRows).find(k => 
+        k.trim().toLowerCase() === cat.trim().toLowerCase() ||
+        normalizeForCompare(k) === normCat
+      );
       return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
     };
 
@@ -126,8 +159,18 @@ export class DreSimulatorEngine {
 
     df.forEach(row => {
       let cat = row.ContaDRE;
-      if (row.Categoria && subCategoriasEspecificas.some(sub => sub.toLowerCase() === row.Categoria.toString().trim().toLowerCase())) {
-        cat = subCategoriasEspecificas.find(sub => sub.toLowerCase() === row.Categoria.toString().trim().toLowerCase()) || row.Categoria;
+      const catNorm = normalizeForCompare(row.Categoria?.toString() || '');
+      const canonicalTarget = canonicalSpecialMap[catNorm];
+      if (canonicalTarget) {
+        cat = canonicalTarget;
+        row.Categoria = canonicalTarget; // Atualiza a categoria na própria linha para auditoria correta no modal
+      } else {
+        const matchedSpecial = row.Categoria
+          ? subCategoriasEspecificas.find(sub => normalizeForCompare(sub) === catNorm)
+          : undefined;
+        if (matchedSpecial) {
+          cat = matchedSpecial;
+        }
       }
       if (!cat) return;
 
@@ -364,6 +407,67 @@ export class DreSimulatorEngine {
       });
     });
 
+    // ══════════════════════════════════════════════════════════════════════
+    // PÓS-COLETA: Extração de categorias especiais que caíram no bucket errado
+    // ══════════════════════════════════════════════════════════════════════
+    const SPECIAL_EXTRACTIONS: { target: string; norm: string }[] = Object.entries(canonicalSpecialMap).map(([norm, target]) => ({
+      target,
+      norm
+    }));
+
+    Object.keys(catSourceRows).forEach(catKey => {
+      const catKeyNorm = normalizeForCompare(catKey);
+      // Pular buckets que já são categorias especiais (já estão no lugar certo)
+      if (Object.values(canonicalSpecialMap).map(normalizeForCompare).includes(catKeyNorm)) return;
+
+      validColumns.forEach(col => {
+        const rows = catSourceRows[catKey]?.[col] || [];
+        if (rows.length === 0) return;
+
+        const toKeep: DreRow[] = [];
+
+        rows.forEach(r => {
+          const rowCatNorm = normalizeForCompare(r.Categoria?.toString() || '');
+          const matched = SPECIAL_EXTRACTIONS.find(s => s.norm === rowCatNorm);
+
+          if (matched) {
+            const val = parseFloat(r[col]?.toString().replace(',', '.') || '0');
+            if (!isNaN(val) && val !== 0) {
+              const targetCanonical = matched.target;
+              r.Categoria = targetCanonical; // Atualiza a categoria na própria linha para exibição no modal
+
+              // Inicializar bucket especial se ainda não existir
+              if (!catMonthly[targetCanonical]) {
+                catMonthly[targetCanonical] = {};
+                catSourceRows[targetCanonical] = {};
+                catTotals[targetCanonical] = 0;
+                validColumns.forEach(c => {
+                  catMonthly[targetCanonical][c] = 0;
+                  catSourceRows[targetCanonical][c] = [];
+                });
+              }
+              // Mover valor para o bucket correto
+              catMonthly[catKey][col] = (catMonthly[catKey][col] || 0) - val;
+              catMonthly[targetCanonical][col] = (catMonthly[targetCanonical][col] || 0) + val;
+              catSourceRows[targetCanonical][col].push(r);
+              // NÃO adicionar ao toKeep (extraído)
+            } else {
+              toKeep.push(r);
+            }
+          } else {
+            toKeep.push(r);
+          }
+        });
+
+        catSourceRows[catKey][col] = toKeep;
+      });
+    });
+
+    // Reconstruir catTotals a partir de catMonthly após extração
+    Object.keys(catMonthly).forEach(cat => {
+      catTotals[cat] = validColumns.reduce((sum, col) => sum + (catMonthly[cat][col] || 0), 0);
+    });
+
     // 7. Consolidação Final da Estrutura DRE e KPIs
     const valoresTotal: Record<string, number> = {};
     const valoresMensal: Record<string, Record<string, number>> = {};
@@ -438,14 +542,21 @@ export class DreSimulatorEngine {
       ? 0
       : (getVal("Credenciado Administrativo") + getVal("Credenciado TI") +
          getVal("Despesas Administrativas") + getVal("Despesas de Vendas e Marketing") + getVal("Despesas Financeiras") +
-         getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis") + getVal("Intermediação de Negócios") +
-         getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos"));
+         getVal("Outros Tributos") + getVal("Despesas Eventuais") + getVal("Despesas Variáveis"));
 
     const totalInvestimentos = getCatTotal("Consórcios - a contemplar") + getVal("Serviços") + getCatTotal("Ativos") + getVal("Aplicações Financeiras");
     const totalSaidas = totalImpostos + totalCustos + totalDespesas + totalInvestimentos;
 
+    // Categorias especiais FCL: mapear direto do catTotals para valoresTotal
+    const totalIntermediReceitas = getCatTotal("Intermediação de Negócios - Receitas");
+    const totalMutuoEntradas = getCatTotal("Mútuo - Entradas");
+    const totalDividendos = getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos");
+    const totalIntermedioSaidas = getCatTotal("Intermediação de Negócios");
+    const totalMutuoSaidas = getCatTotal("Mútuo - Saídas");
+    const totalRetiradas = totalDividendos + totalIntermedioSaidas + totalMutuoSaidas;
+
     const resultado = totalEntradas - totalImpostos - totalCustos - totalDespesas;
-    const fcl = totalEntradas + outrasEntradas - totalSaidas;
+    const fcl = totalEntradas + outrasEntradas - totalSaidas + totalIntermediReceitas + totalMutuoEntradas;
 
     // Equipamentos
     const totalEquipamentos = getCatTotal("Equipamentos");
@@ -462,6 +573,15 @@ export class DreSimulatorEngine {
     valoresTotal["Fluxo de Caixa Livre FCL"] = fcl;
     valoresTotal["Resultado Liquido Final"] = resultado;
     valoresTotal["Impostos Gerais"] = totalImpostos;
+
+    // Mapear categorias FCL especiais para valoresTotal (acesso pelo modal)
+    valoresTotal["Intermediação de Negócios - Receitas"] = totalIntermediReceitas;
+    valoresTotal["Mútuo - Entradas"] = totalMutuoEntradas;
+    valoresTotal["Distribuição de Dividendos"] = totalDividendos;
+    valoresTotal["Intermediação de Negócios"] = totalIntermedioSaidas;
+    valoresTotal["Mútuo - Saídas"] = totalMutuoSaidas;
+    valoresTotal["Total Retiradas dos Sócios"] = totalRetiradas;
+    valoresTotal["FCL após Retiradas dos Sócios"] = fcl - totalRetiradas;
 
     const percLucro = totalEntradas !== 0 ? (resultado / totalEntradas * 100) : 0;
     const percFcl = totalEntradas !== 0 ? (fcl / totalEntradas * 100) : 0;
@@ -481,6 +601,13 @@ export class DreSimulatorEngine {
     valoresMensal["Lucro s/ Receita Operacional"] = {};
     valoresMensal["FCL s/ Receita Operacional"] = {};
     valoresMensal["Equipamentos"] = {};
+    valoresMensal["Intermediação de Negócios - Receitas"] = {};
+    valoresMensal["Mútuo - Entradas"] = {};
+    valoresMensal["Distribuição de Dividendos"] = {};
+    valoresMensal["Intermediação de Negócios"] = {};
+    valoresMensal["Mútuo - Saídas"] = {};
+    valoresMensal["Total Retiradas dos Sócios"] = {};
+    valoresMensal["FCL após Retiradas dos Sócios"] = {};
 
     sourceRows["Total Entradas Operacionais"] = {};
     sourceRows["Outras Entradas"] = {};
@@ -492,6 +619,12 @@ export class DreSimulatorEngine {
     sourceRows["Lucro antes do FCL"] = {};
     sourceRows["Fluxo de Caixa Livre FCL"] = {};
     sourceRows["Equipamentos"] = {};
+    sourceRows["Intermediação de Negócios - Receitas"] = {};
+    sourceRows["Mútuo - Entradas"] = {};
+    sourceRows["Distribuição de Dividendos"] = {};
+    sourceRows["Intermediação de Negócios"] = {};
+    sourceRows["Mútuo - Saídas"] = {};
+    sourceRows["Total Retiradas dos Sócios"] = {};
 
     const getSourceRowsMensal = (key: string, col: string) => {
       return (sourceRows[key] && sourceRows[key][col]) ? sourceRows[key][col] : [];
@@ -530,16 +663,14 @@ export class DreSimulatorEngine {
         ? 0
         : (getValMensal("Credenciado Administrativo", col) + getValMensal("Credenciado TI", col) +
            getValMensal("Despesas Administrativas", col) + getValMensal("Despesas de Vendas e Marketing", col) + getValMensal("Despesas Financeiras", col) +
-           getValMensal("Outros Tributos", col) + getValMensal("Despesas Eventuais", col) + getValMensal("Despesas Variáveis", col) + getValMensal("Intermediação de Negócios", col) +
-           getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col));
+           getValMensal("Outros Tributos", col) + getValMensal("Despesas Eventuais", col) + getValMensal("Despesas Variáveis", col));
       valoresMensal["Total Despesas Rateadas"][col] = totDesp;
       sourceRows["Total Despesas Rateadas"][col] = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses)
         ? []
         : [
             ...getSourceRowsMensal("Credenciado Administrativo", col), ...getSourceRowsMensal("Credenciado TI", col),
             ...getSourceRowsMensal("Despesas Administrativas", col), ...getSourceRowsMensal("Despesas de Vendas e Marketing", col), ...getSourceRowsMensal("Despesas Financeiras", col),
-            ...getSourceRowsMensal("Outros Tributos", col), ...getSourceRowsMensal("Despesas Eventuais", col), ...getSourceRowsMensal("Despesas Variáveis", col), ...getSourceRowsMensal("Intermediação de Negócios", col),
-            ...getCatSourceRowsSafe("Distribuição de Dividendos", col), ...getCatSourceRowsSafe("Dividendos", col)
+            ...getSourceRowsMensal("Outros Tributos", col), ...getSourceRowsMensal("Despesas Eventuais", col), ...getSourceRowsMensal("Despesas Variáveis", col)
           ];
 
       const totInv = getCatMonthly("Consórcios - a contemplar", col) + getValMensal("Serviços", col) + getCatMonthly("Ativos", col) + getValMensal("Aplicações Financeiras", col);
@@ -558,7 +689,32 @@ export class DreSimulatorEngine {
       ];
 
       const resCol = totEnt - totImp - totCust - totDesp;
-      const fclCol = totEnt + outrasEnt - totSai;
+
+      const intermReceitasCol = getCatMonthly("Intermediação de Negócios - Receitas", col);
+      const mutuoEntradasCol = getCatMonthly("Mútuo - Entradas", col);
+      const dividendosCol = getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col);
+      const intermedioSaidasCol = getCatMonthly("Intermediação de Negócios", col);
+      const mutuoSaidasCol = getCatMonthly("Mútuo - Saídas", col);
+      const retiradasCol = dividendosCol + intermedioSaidasCol + mutuoSaidasCol;
+
+      valoresMensal["Intermediação de Negócios - Receitas"][col] = intermReceitasCol;
+      sourceRows["Intermediação de Negócios - Receitas"][col] = getCatSourceRowsSafe("Intermediação de Negócios - Receitas", col);
+      valoresMensal["Mútuo - Entradas"][col] = mutuoEntradasCol;
+      sourceRows["Mútuo - Entradas"][col] = getCatSourceRowsSafe("Mútuo - Entradas", col);
+      valoresMensal["Distribuição de Dividendos"][col] = dividendosCol;
+      sourceRows["Distribuição de Dividendos"][col] = [...getCatSourceRowsSafe("Distribuição de Dividendos", col), ...getCatSourceRowsSafe("Dividendos", col)];
+      valoresMensal["Intermediação de Negócios"][col] = intermedioSaidasCol;
+      sourceRows["Intermediação de Negócios"][col] = getCatSourceRowsSafe("Intermediação de Negócios", col);
+      valoresMensal["Mútuo - Saídas"][col] = mutuoSaidasCol;
+      sourceRows["Mútuo - Saídas"][col] = getCatSourceRowsSafe("Mútuo - Saídas", col);
+      valoresMensal["Total Retiradas dos Sócios"][col] = retiradasCol;
+      sourceRows["Total Retiradas dos Sócios"][col] = [
+        ...sourceRows["Distribuição de Dividendos"][col],
+        ...sourceRows["Intermediação de Negócios"][col],
+        ...sourceRows["Mútuo - Saídas"][col]
+      ];
+
+      const fclCol = totEnt + outrasEnt - totSai + intermReceitasCol + mutuoEntradasCol;
 
       valoresMensal["Lucro antes do FCL"][col] = resCol;
       sourceRows["Lucro antes do FCL"][col] = [
@@ -574,9 +730,11 @@ export class DreSimulatorEngine {
         ...sourceRows["Total Saídas"][col]
       ];
 
+      valoresMensal["FCL após Retiradas dos Sócios"][col] = fclCol - retiradasCol;
+
       valoresMensal["Lucro s/ Receita Operacional"][col] = totEnt !== 0 ? (resCol / totEnt * 100) : 0;
       valoresMensal["FCL s/ Receita Operacional"][col] = totEnt !== 0 ? (fclCol / totEnt * 100) : 0;
-      
+
       valoresMensal["Equipamentos"][col] = getCatMonthly("Equipamentos", col);
       sourceRows["Equipamentos"][col] = getCatSourceRowsSafe("Equipamentos", col);
     });

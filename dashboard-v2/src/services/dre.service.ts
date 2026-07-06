@@ -71,10 +71,13 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
 
 const normalizeMes = (mes: string) => mes.trim().charAt(0).toUpperCase() + mes.trim().slice(1).toLowerCase();
 const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
-// Normaliza string para comparação: remove acentos (NFD) e converte para minúsculas
-// Resolve incompatibilidades de encoding entre dados do banco (sem acento) e constantes do código (com acento)
-const normalizeForCompare = (s: string): string =>
-  (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+// Normaliza string para comparação: remove acentos (NFD), converte para minúsculas e remove sufixo 's' no final da string.
+// Resolve incompatibilidades de acentos/encodings e variações de singular/plural (ex: receita/receitas, entrada/entradas).
+export const normalizeForCompare = (s: string): string => {
+  let norm = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (norm.endsWith('s')) norm = norm.slice(0, -1);
+  return norm;
+};
 
 export const DEPARTAMENTOS_MAP: Record<string, string> = {
   "Capina Eltrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
@@ -516,27 +519,60 @@ export class DreService {
       return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
     };
 
+    const canonicalSpecialMap: Record<string, string> = {
+      'intermediacao de negocios - receita': 'Intermediação de Negócios - Receitas',
+      'intermediacao de negocio - receita': 'Intermediação de Negócios - Receitas',
+      'intermediacao de negocios - receitas': 'Intermediação de Negócios - Receitas',
+      'intermediacao de negocio - receitas': 'Intermediação de Negócios - Receitas',
+      
+      'mutuo - entrada': 'Mútuo - Entradas',
+      'mutuo - entradas': 'Mútuo - Entradas',
+      
+      'distribuicao de dividendos': 'Distribuição de Dividendos',
+      'distribuicao de dividendo': 'Distribuição de Dividendos',
+      'dividendos': 'Distribuição de Dividendos',
+      'dividendo': 'Distribuição de Dividendos',
+      'distribuicao lucro': 'Distribuição de Dividendos',
+      'distribuicao de lucro': 'Distribuição de Dividendos',
+      'distribuicao de lucros': 'Distribuição de Dividendos',
+      'distribuicao lucros': 'Distribuição de Dividendos',
+      
+      'intermediacao de negocios': 'Intermediação de Negócios',
+      'intermediacao de negocio': 'Intermediação de Negócios',
+      
+      'mutuo - saida': 'Mútuo - Saídas',
+      'mutuo - saidas': 'Mútuo - Saídas'
+    };
+
     const subCategoriasEspecificas = [
       'Terceirização de Mão de Obra', 'Credenciado Operacional', 'Adiantamento - Credenciado Operacional',
       'Despesas com Pessoal', 'Manutenção Preventiva', 'Preventiva - B2G', 'Manutenção Corretiva',
       'Corretiva - B2G', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
       'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
       'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas',
-      'Jurídico', 'Intermediação de Negócios', 'Intermediação de Negócios - Receitas', 'Renda Fixa'
+      'Jurídico', 'Intermediação de Negócios', 'Intermediação de Negócios - Receitas', 'Renda Fixa',
+      'Intermediação de Negócios - Receita', 'Intermediação de Negócio - Receita', 'Intermediação de Negócio - Receitas',
+      'Mútuo - Entrada', 'Mútuo - Saída', 'Distribuição de Dividendo', 'Dividendo',
+      'Distribuição Lucro', 'Distribuição de Lucro', 'Distribuição de Lucros', 'Intermediação de Negócio'
     ];
 
     df.forEach(row => {
       let cat = row.ContaDRE;
       
-      // Se a subcategoria da linha do CSV estiver na lista de classificações específicas da estrutura do DRE,
-      // nós priorizamos a Categoria para que ela apareça na linha e no card correto do dashboard!
-      // Usamos normalizeForCompare para garantir compatibilidade com dados sem acentos (export Omie/Supabase)
+      // Se a subcategoria da linha do CSV estiver na lista de classificações específicas ou mapeamento canônico,
+      // nós a direcionamos para a categoria correspondente.
       const catNorm = normalizeForCompare(row.Categoria?.toString() || '');
-      const matchedSpecial = row.Categoria
-        ? subCategoriasEspecificas.find(sub => normalizeForCompare(sub) === catNorm)
-        : undefined;
-      if (matchedSpecial) {
-        cat = matchedSpecial;
+      const canonicalTarget = canonicalSpecialMap[catNorm];
+      if (canonicalTarget) {
+        cat = canonicalTarget;
+        row.Categoria = canonicalTarget; // Atualiza a categoria na própria linha para auditoria correta no modal
+      } else {
+        const matchedSpecial = row.Categoria
+          ? subCategoriasEspecificas.find(sub => normalizeForCompare(sub) === catNorm)
+          : undefined;
+        if (matchedSpecial) {
+          cat = matchedSpecial;
+        }
       }
 
       if (!cat) return;
@@ -582,19 +618,15 @@ export class DreService {
     // Categoria="Intermediação de Negócios - Receitas"). Movemos esses rows
     // para o bucket canônico correto usando normalizeForCompare.
     // ══════════════════════════════════════════════════════════════════════
-    const SPECIAL_EXTRACTIONS: { canonical: string; norm: string }[] = [
-      "Intermediação de Negócios - Receitas",
-      "Mútuo - Entradas",
-      "Distribuição de Dividendos",
-      "Dividendos",
-      "Intermediação de Negócios",
-      "Mútuo - Saídas"
-    ].map(s => ({ canonical: s, norm: normalizeForCompare(s) }));
+    const SPECIAL_EXTRACTIONS: { target: string; norm: string }[] = Object.entries(canonicalSpecialMap).map(([norm, target]) => ({
+      target,
+      norm
+    }));
 
     Object.keys(catSourceRows).forEach(catKey => {
       const catKeyNorm = normalizeForCompare(catKey);
       // Pular buckets que já são categorias especiais (já estão no lugar certo)
-      if (SPECIAL_EXTRACTIONS.some(s => s.norm === catKeyNorm)) return;
+      if (Object.values(canonicalSpecialMap).map(normalizeForCompare).includes(catKeyNorm)) return;
 
       validColumns.forEach(col => {
         const rows = catSourceRows[catKey]?.[col] || [];
@@ -609,20 +641,23 @@ export class DreService {
           if (matched) {
             const val = parseFloat(r[col]?.toString().replace(',', '.') || '0');
             if (!isNaN(val) && val !== 0) {
+              const targetCanonical = matched.target;
+              r.Categoria = targetCanonical; // Atualiza a categoria na própria linha para exibição no modal
+
               // Inicializar bucket especial se ainda não existir
-              if (!catMonthly[matched.canonical]) {
-                catMonthly[matched.canonical] = {};
-                catSourceRows[matched.canonical] = {};
-                catTotals[matched.canonical] = 0;
+              if (!catMonthly[targetCanonical]) {
+                catMonthly[targetCanonical] = {};
+                catSourceRows[targetCanonical] = {};
+                catTotals[targetCanonical] = 0;
                 validColumns.forEach(c => {
-                  catMonthly[matched.canonical][c] = 0;
-                  catSourceRows[matched.canonical][c] = [];
+                  catMonthly[targetCanonical][c] = 0;
+                  catSourceRows[targetCanonical][c] = [];
                 });
               }
               // Mover valor para o bucket correto
               catMonthly[catKey][col] = (catMonthly[catKey][col] || 0) - val;
-              catMonthly[matched.canonical][col] = (catMonthly[matched.canonical][col] || 0) + val;
-              catSourceRows[matched.canonical][col].push(r);
+              catMonthly[targetCanonical][col] = (catMonthly[targetCanonical][col] || 0) + val;
+              catSourceRows[targetCanonical][col].push(r);
               // NÃO adicionar ao toKeep (extraído)
             } else {
               toKeep.push(r);
