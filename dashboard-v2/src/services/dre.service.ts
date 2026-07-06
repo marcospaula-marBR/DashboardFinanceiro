@@ -71,6 +71,10 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
 
 const normalizeMes = (mes: string) => mes.trim().charAt(0).toUpperCase() + mes.trim().slice(1).toLowerCase();
 const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+// Normaliza string para comparação: remove acentos (NFD) e converte para minúsculas
+// Resolve incompatibilidades de encoding entre dados do banco (sem acento) e constantes do código (com acento)
+const normalizeForCompare = (s: string): string =>
+  (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
 export const DEPARTAMENTOS_MAP: Record<string, string> = {
   "Capina Eltrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
@@ -504,7 +508,11 @@ export class DreService {
     const catSourceRows: Record<string, Record<string, DreRow[]>> = {};
 
     const getCatSourceRowsSafe = (cat: string, col: string) => {
-      const key = Object.keys(catSourceRows).find(k => k.trim().toLowerCase() === cat.trim().toLowerCase());
+      const normCat = normalizeForCompare(cat);
+      const key = Object.keys(catSourceRows).find(k =>
+        k.trim().toLowerCase() === cat.trim().toLowerCase() ||
+        normalizeForCompare(k) === normCat
+      );
       return key && catSourceRows[key] && catSourceRows[key][col] ? catSourceRows[key][col] : [];
     };
 
@@ -522,8 +530,13 @@ export class DreService {
       
       // Se a subcategoria da linha do CSV estiver na lista de classificações específicas da estrutura do DRE,
       // nós priorizamos a Categoria para que ela apareça na linha e no card correto do dashboard!
-      if (row.Categoria && subCategoriasEspecificas.some(sub => sub.toLowerCase() === row.Categoria.toString().trim().toLowerCase())) {
-        cat = subCategoriasEspecificas.find(sub => sub.toLowerCase() === row.Categoria.toString().trim().toLowerCase()) || row.Categoria;
+      // Usamos normalizeForCompare para garantir compatibilidade com dados sem acentos (export Omie/Supabase)
+      const catNorm = normalizeForCompare(row.Categoria?.toString() || '');
+      const matchedSpecial = row.Categoria
+        ? subCategoriasEspecificas.find(sub => normalizeForCompare(sub) === catNorm)
+        : undefined;
+      if (matchedSpecial) {
+        cat = matchedSpecial;
       }
 
       if (!cat) return;
@@ -567,7 +580,11 @@ export class DreService {
       if (!targetCat) return 0;
       const exact = catTotals[targetCat];
       if (exact !== undefined) return exact;
-      const key = Object.keys(catTotals).find(k => k.trim().toLowerCase() === targetCat.trim().toLowerCase());
+      const normTarget = normalizeForCompare(targetCat);
+      const key = Object.keys(catTotals).find(k =>
+        k.trim().toLowerCase() === targetCat.trim().toLowerCase() ||
+        normalizeForCompare(k) === normTarget
+      );
       return key ? catTotals[key] : 0;
     };
 
@@ -575,7 +592,11 @@ export class DreService {
       if (!targetCat) return 0;
       const exact = catMonthly[targetCat]?.[col];
       if (exact !== undefined) return exact;
-      const key = Object.keys(catMonthly).find(k => k.trim().toLowerCase() === targetCat.trim().toLowerCase());
+      const normTarget = normalizeForCompare(targetCat);
+      const key = Object.keys(catMonthly).find(k =>
+        k.trim().toLowerCase() === targetCat.trim().toLowerCase() ||
+        normalizeForCompare(k) === normTarget
+      );
       return key ? (catMonthly[key][col] || 0) : 0;
     };
 
