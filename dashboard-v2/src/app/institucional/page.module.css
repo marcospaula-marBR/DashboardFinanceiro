@@ -1,0 +1,1052 @@
+.pageContainer {
+    font-family: 'Outfit', 'Inter', sans-serif;
+    background-color: #060606;
+    background-image:
+        radial-gradient(circle at 50% 50%, rgba(242, 145, 27, 0.1) 0%, transparent 60%),
+        radial-gradient(circle at 10% 10%, rgba(0, 71, 122, 0.15) 0%, transparent 40%);
+    color: #ffffff;
+    min-height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    position: relative;
+    padding-bottom: 80px;
+}
+
+/* Header & Back Button */
+.headerBar {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 100;
+}
+
+.backBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.backBtn:hover {
+    background: #F2911B;
+    color: #000;
+    border-color: #fff;
+    box-shadow: 0 0 20px rgba(242, 145, 27, 0.4);
+    transform: translateY(-2px);
+}
+
+.backBtn svg {
+    transition: transform 0.3s ease;
+}
+
+.backBtn:hover svg {
+    transform: translateX(-3px);
+}
+
+/* Page Layout Grid */
+.mainContent {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 40px;
+    align-items: start;
+    z-index: 10;
+    flex: 1;
+}
+
+/* Orbit Section Styles (Left Column on Desktop) */
+.orbitArea {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 550px;
+    position: relative;
+}
+
+.orbitTitle {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.orbitTitle h2 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #fff 30%, #F2911B 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0 0 8px 0;
+}
+
+.orbitTitle p {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0;
+    letter-spacing: 1px;
+}
+
+.scene {
+    position: relative;
+    width: 500px;
+    height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.core {
+    position: relative;
+    z-index: 10;
+    width: 160px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: coreFloat 4s ease-in-out infinite;
+    cursor: pointer;
+}
+
+.coreImg {
+    width: 130%;
+    height: 130%;
+    object-fit: contain;
+    filter: drop-shadow(0 0 40px rgba(242, 145, 27, 0.6));
+    transition: all 0.4s ease;
+}
+
+.core:hover .coreImg {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 50px rgba(242, 145, 27, 0.8));
+}
+
+.coreGlow {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: #F2911B;
+    border-radius: 50%;
+    filter: blur(50px);
+    opacity: 0.15;
+    animation: pulse 4s infinite alternate;
+}
+
+.orbitalRing {
+    position: absolute;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.ring1 {
+    width: 360px;
+    height: 360px;
+    border-style: solid;
+    border-color: rgba(242, 145, 27, 0.15);
+}
+
+.satelliteWrapper {
+    position: absolute;
+    width: 0;
+    height: 0;
+    top: 50%;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: orbitalMove 30s linear infinite;
+    z-index: 20;
+}
+
+.satelliteWrapper:hover {
+    animation-play-state: paused;
+    z-index: 100;
+}
+
+.satellite {
+    width: 130px;
+    height: 130px;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: white;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    text-align: center;
+    padding: 10px;
+    cursor: pointer;
+}
+
+.satellite:hover {
+    border-color: #fff;
+    transform: scale(1.15);
+}
+
+.satMarBR:hover {
+    background: #F2911B;
+    color: #000 !important;
+    box-shadow: 0 0 45px rgba(242, 145, 27, 0.8);
+}
+
+.satDZM:hover {
+    background: #00477A;
+    color: #fff !important;
+    box-shadow: 0 0 45px rgba(0, 71, 122, 0.8);
+    border-color: #00a2ff;
+}
+
+.satellite svg {
+    margin-bottom: 6px;
+    transition: all 0.3s;
+}
+
+.satMarBR svg { color: #F2911B; }
+.satDZM svg { color: #0088ff; }
+
+.satellite:hover svg {
+    transform: translateY(-3px) scale(1.05);
+}
+
+.satMarBR:hover svg { color: #000 !important; }
+.satDZM:hover svg { color: #fff !important; }
+
+.satellite span {
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    line-height: 1.2;
+    margin: 0;
+}
+
+.satellite p {
+    font-size: 0.6rem;
+    opacity: 0.7;
+    margin: 3px 0 0 0;
+    font-weight: 400;
+}
+
+.sat1 { --start-angle: 0deg; }
+.sat2 { --start-angle: 180deg; }
+
+/* Business Card Section (Right Column on Desktop) */
+.cardPanel {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 30px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.panelTitle {
+    font-size: 1.25rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #fff;
+    margin: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.panelTitle svg {
+    color: #F2911B;
+}
+
+/* Glassmorphism Business Card Preview */
+.businessCardPreview {
+    width: 100%;
+    aspect-ratio: 1.586 / 1; /* Credit Card Ratio */
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+    box-sizing: border-box;
+}
+
+.businessCardPreview::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(242, 145, 27, 0.15) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    z-index: 2;
+}
+
+.cardLogo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logoIcon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #F2911B, #ff7b00);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.95rem;
+    box-shadow: 0 4px 10px rgba(242, 145, 27, 0.3);
+}
+
+.logoText {
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #fff;
+    line-height: 1;
+}
+
+.logoText span {
+    font-size: 0.55rem;
+    color: rgba(255, 255, 255, 0.5);
+    display: block;
+    letter-spacing: 1px;
+    margin-top: 2px;
+}
+
+.chip {
+    width: 32px;
+    height: 24px;
+    background: rgba(242, 145, 27, 0.25);
+    border: 1px solid rgba(242, 145, 27, 0.4);
+    border-radius: 4px;
+}
+
+.cardBody {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    z-index: 2;
+}
+
+.userInfo {
+    display: flex;
+    flex-direction: column;
+}
+
+.userName {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.userRole {
+    font-size: 0.72rem;
+    color: #F2911B;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    margin-top: 4px;
+}
+
+.qrContainer {
+    width: 68px;
+    height: 68px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 4px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease;
+}
+
+.qrContainer:hover {
+    transform: scale(1.05);
+}
+
+.qrImg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Form Styles */
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.formGroup label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.formGroup input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: #fff;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.formGroup input:focus {
+    outline: none;
+    border-color: #F2911B;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 15px rgba(242, 145, 27, 0.25);
+}
+
+.cardInstructions {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.4);
+    line-height: 1.4;
+    margin: 0;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.cardInstructions svg {
+    color: #F2911B;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* Video Section (Full Width Banner) */
+.videoSection {
+    width: 100%;
+    max-width: 1200px;
+    margin: 40px auto 0;
+    padding: 0 20px;
+    z-index: 10;
+}
+
+.videoWrapper {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 24px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.videoTitle {
+    font-size: 1.15rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.videoTitle svg { color: #F2911B; }
+
+.videoPlayerContainer {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+}
+
+.videoPlaceholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, #161616 0%, #000 100%);
+    gap: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.videoPlaceholder:hover {
+    background: radial-gradient(circle, #202020 0%, #000 100%);
+}
+
+.videoPlaceholder:hover svg {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 15px rgba(242, 145, 27, 0.6));
+}
+
+.videoPlaceholder svg {
+    color: #F2911B;
+    transition: all 0.3s ease;
+}
+
+.videoPlaceholder p {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Company Drawer Details */
+.companyContainer {
+    width: 100%;
+    max-width: 1200px;
+    margin: 40px auto 0;
+    padding: 0 20px;
+    z-index: 10;
+}
+
+.companyPanel {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 30px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    animation: fadeIn 0.4s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.companyHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 20px;
+}
+
+.companyTitle {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.companyBadge {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 800;
+    font-size: 1.25rem;
+}
+
+.badgeMarBR {
+    background: linear-gradient(135deg, #F2911B, #ff7b00);
+    box-shadow: 0 4px 15px rgba(242, 145, 27, 0.3);
+}
+
+.badgeDZM {
+    background: linear-gradient(135deg, #00477A, #0077cc);
+    box-shadow: 0 4px 15px rgba(0, 71, 122, 0.3);
+}
+
+.companyTitleInfo h3 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.companyTitleInfo p {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin: 4px 0 0 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.closeBtn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.closeBtn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: rgb(239, 68, 68);
+}
+
+/* Company Content Details Split */
+.companyGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.fichaCadastral {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.sectionSubtitle {
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #fff;
+    margin: 0 0 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sectionSubtitle svg {
+    color: #F2911B;
+}
+
+.infoList {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.infoItem {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    padding-bottom: 12px;
+}
+
+.infoItem:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.infoKey {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+    letter-spacing: 0.5px;
+}
+
+.infoValue {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #fff;
+    text-align: right;
+}
+
+/* Document Downloads List */
+.documentsArea {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.docList {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.docItem {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    color: #fff;
+    cursor: pointer;
+}
+
+.docItem:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(242, 145, 27, 0.3);
+}
+
+.docInfo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.docIcon {
+    width: 38px;
+    height: 38px;
+    background: rgba(242, 145, 27, 0.1);
+    border: 1px solid rgba(242, 145, 27, 0.2);
+    color: #F2911B;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.docMeta h4 {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+}
+
+.docMeta span {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.4);
+    display: block;
+    margin-top: 3px;
+}
+
+.downloadBtn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.6);
+    transition: all 0.25s ease;
+}
+
+.docItem:hover .downloadBtn {
+    background: #F2911B;
+    color: #000;
+    border-color: #fff;
+    transform: translateY(-1px);
+}
+
+/* User Referral Banner */
+.referralBanner {
+    width: 100%;
+    max-width: 1200px;
+    margin: 20px auto 0;
+    padding: 0 20px;
+    z-index: 10;
+}
+
+.bannerContent {
+    background: linear-gradient(90deg, rgba(242, 145, 27, 0.15) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(242, 145, 27, 0.3);
+    border-radius: 16px;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    animation: fadeIn 0.4s ease;
+}
+
+.bannerText {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.bannerText svg {
+    color: #F2911B;
+    flex-shrink: 0;
+}
+
+.bannerText p {
+    font-size: 0.85rem;
+    color: #fff;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.bannerText strong {
+    color: #F2911B;
+}
+
+.bannerClose {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.bannerClose:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Keyframes animations */
+@keyframes coreFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+@keyframes pulse {
+    from { opacity: 0.1; transform: scale(0.95); }
+    to { opacity: 0.25; transform: scale(1.05); }
+}
+
+@keyframes orbitalMove {
+    from { transform: rotate(var(--start-angle)) translateY(-180px) rotate(calc(-1 * var(--start-angle))); }
+    to { transform: rotate(calc(var(--start-angle) + 360deg)) translateY(-180px) rotate(calc(-1 * (var(--start-angle) + 360deg))); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── HUD footer (same as main landing) ── */
+.hudInfo {
+    position: absolute;
+    bottom: 30px;
+    left: 40px;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.4);
+    border-left: 2px solid #F2911B;
+    padding-left: 15px;
+}
+
+.hudVersion {
+    position: absolute;
+    bottom: 30px;
+    right: 40px;
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Mobile-only layout sections (collapsed orbits) ── */
+.mobileCompaniesArea {
+    display: none;
+}
+
+/* ── Design Responsive (Media Queries) ── */
+@media (max-width: 950px) {
+    .mainContent {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+
+    .orbitArea {
+        min-height: auto;
+    }
+
+    .scene {
+        width: 400px;
+        height: 400px;
+    }
+
+    @keyframes orbitalMove {
+        from { transform: rotate(var(--start-angle)) translateY(-140px) rotate(calc(-1 * var(--start-angle))); }
+        to { transform: rotate(calc(var(--start-angle) + 360deg)) translateY(-140px) rotate(calc(-1 * (var(--start-angle) + 360deg))); }
+    }
+
+    .ring1 {
+        width: 280px;
+        height: 280px;
+    }
+
+    .hudInfo, .hudVersion {
+        display: none;
+    }
+
+    .pageContainer {
+        padding-bottom: 40px;
+    }
+}
+
+@media (max-width: 850px) {
+    .scene {
+        display: none;
+    }
+
+    .orbitArea {
+        display: none;
+    }
+
+    /* Mobile alternative to orbit layout: display companies as premium horizontal slider or distinct list */
+    .mobileCompaniesArea {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        width: 100%;
+        margin-top: 10px;
+    }
+
+    .mobileCompaniesGrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+
+    .mobileCompanyCard {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobileCompanyCard:active {
+        transform: scale(0.96);
+    }
+
+    .cardMarBR {
+        border-color: rgba(242, 145, 27, 0.3);
+    }
+
+    .cardMarBR:active {
+        background: rgba(242, 145, 27, 0.15);
+        box-shadow: 0 0 20px rgba(242, 145, 27, 0.3);
+    }
+
+    .cardDZM {
+        border-color: rgba(0, 71, 122, 0.3);
+    }
+
+    .cardDZM:active {
+        background: rgba(0, 71, 122, 0.15);
+        box-shadow: 0 0 20px rgba(0, 71, 122, 0.3);
+    }
+
+    .mobileCompanyCard h4 {
+        font-size: 0.95rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #fff;
+        margin: 0;
+    }
+
+    .mobileCompanyCard p {
+        font-size: 0.65rem;
+        color: rgba(255, 255, 255, 0.4);
+        margin: 0;
+    }
+
+    .companyGrid {
+        grid-template-columns: 1fr;
+        gap: 25px;
+    }
+}
+
+@media (max-width: 480px) {
+    .mobileCompaniesGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .businessCardPreview {
+        padding: 16px;
+    }
+
+    .userName {
+        font-size: 1rem;
+    }
+
+    .userRole {
+        font-size: 0.65rem;
+    }
+
+    .companyPanel {
+        padding: 20px;
+    }
+
+    .companyTitleInfo h3 {
+        font-size: 1.15rem;
+    }
+}
