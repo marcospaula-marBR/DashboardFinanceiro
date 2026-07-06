@@ -576,6 +576,71 @@ export class DreService {
       });
     });
 
+    // ══════════════════════════════════════════════════════════════════════
+    // PÓS-COLETA: Extração de categorias especiais que caíram no bucket errado
+    // Acontece quando ContaDRE ≠ Categoria (ex: ContaDRE="Outras Receitas",
+    // Categoria="Intermediação de Negócios - Receitas"). Movemos esses rows
+    // para o bucket canônico correto usando normalizeForCompare.
+    // ══════════════════════════════════════════════════════════════════════
+    const SPECIAL_EXTRACTIONS: { canonical: string; norm: string }[] = [
+      "Intermediação de Negócios - Receitas",
+      "Mútuo - Entradas",
+      "Distribuição de Dividendos",
+      "Dividendos",
+      "Intermediação de Negócios",
+      "Mútuo - Saídas"
+    ].map(s => ({ canonical: s, norm: normalizeForCompare(s) }));
+
+    Object.keys(catSourceRows).forEach(catKey => {
+      const catKeyNorm = normalizeForCompare(catKey);
+      // Pular buckets que já são categorias especiais (já estão no lugar certo)
+      if (SPECIAL_EXTRACTIONS.some(s => s.norm === catKeyNorm)) return;
+
+      validColumns.forEach(col => {
+        const rows = catSourceRows[catKey]?.[col] || [];
+        if (rows.length === 0) return;
+
+        const toKeep: DreRow[] = [];
+
+        rows.forEach(r => {
+          const rowCatNorm = normalizeForCompare(r.Categoria?.toString() || '');
+          const matched = SPECIAL_EXTRACTIONS.find(s => s.norm === rowCatNorm);
+
+          if (matched) {
+            const val = parseFloat(r[col]?.toString().replace(',', '.') || '0');
+            if (!isNaN(val) && val !== 0) {
+              // Inicializar bucket especial se ainda não existir
+              if (!catMonthly[matched.canonical]) {
+                catMonthly[matched.canonical] = {};
+                catSourceRows[matched.canonical] = {};
+                catTotals[matched.canonical] = 0;
+                validColumns.forEach(c => {
+                  catMonthly[matched.canonical][c] = 0;
+                  catSourceRows[matched.canonical][c] = [];
+                });
+              }
+              // Mover valor para o bucket correto
+              catMonthly[catKey][col] = (catMonthly[catKey][col] || 0) - val;
+              catMonthly[matched.canonical][col] = (catMonthly[matched.canonical][col] || 0) + val;
+              catSourceRows[matched.canonical][col].push(r);
+              // NÃO adicionar ao toKeep (extraído)
+            } else {
+              toKeep.push(r);
+            }
+          } else {
+            toKeep.push(r);
+          }
+        });
+
+        catSourceRows[catKey][col] = toKeep;
+      });
+    });
+
+    // Reconstruir catTotals a partir de catMonthly após extração
+    Object.keys(catMonthly).forEach(cat => {
+      catTotals[cat] = validColumns.reduce((sum, col) => sum + (catMonthly[cat][col] || 0), 0);
+    });
+
     const getCatTotal = (targetCat: string) => {
       if (!targetCat) return 0;
       const exact = catTotals[targetCat];
@@ -723,6 +788,8 @@ export class DreService {
     valoresTotal["Intermediação de Negócios"] = totalIntermedioSaidas;
     valoresTotal["Mútuo - Saídas"] = totalMutuoSaidas;
     valoresTotal["Total Retiradas dos Sócios"] = totalRetiradas;
+    valoresTotal["FCL após Retiradas dos Sócios"] = fcl - totalRetiradas;
+
 
     const percLucro = totalEntradas !== 0 ? (resultado / totalEntradas * 100) : 0;
     const percFcl = totalEntradas !== 0 ? (fcl / totalEntradas * 100) : 0;
@@ -751,6 +818,7 @@ export class DreService {
     valoresMensal["Intermediação de Negócios"] = {};
     valoresMensal["Mútuo - Saídas"] = {};
     valoresMensal["Total Retiradas dos Sócios"] = {};
+    valoresMensal["FCL após Retiradas dos Sócios"] = {};
 
     sourceRows["Total Entradas Operacionais"] = {};
     sourceRows["Outras Entradas"] = {};
@@ -867,6 +935,9 @@ export class DreService {
         ...sourceRows["Outras Entradas"][col],
         ...sourceRows["Total Saídas"][col]
       ];
+
+      valoresMensal["FCL após Retiradas dos Sócios"][col] = fclCol - retiradasCol;
+
 
       valoresMensal["Lucro s/ Receita Operacional"][col] = totEnt !== 0 ? (resCol / totEnt * 100) : 0;
       valoresMensal["FCL s/ Receita Operacional"][col] = totEnt !== 0 ? (fclCol / totEnt * 100) : 0;

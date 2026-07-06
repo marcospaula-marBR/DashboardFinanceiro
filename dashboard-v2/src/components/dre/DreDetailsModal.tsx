@@ -160,6 +160,18 @@ export function DreDetailsModal({
           key: 'Total Retiradas dos Sócios', 
           isResult: true,
           className: 'font-bold text-amber-900 bg-amber-50'
+        },
+        {
+          label: 'FCL LÍQUIDO APÓS RETIRADAS',
+          key: 'HEADER_FCL_LIQ',
+          isHeader: true,
+          className: 'font-black text-emerald-700 bg-emerald-50'
+        },
+        { 
+          label: '(=) FCL após Retiradas dos Sócios', 
+          key: 'FCL após Retiradas dos Sócios', 
+          isResult: true,
+          className: 'font-bold text-emerald-900 bg-emerald-100/70'
         }
       ];
       infoBox = (
