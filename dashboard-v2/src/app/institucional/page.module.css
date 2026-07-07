@@ -444,7 +444,7 @@
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
-    padding: 12px 16px;
+    padding: 12px 16px 12px 42px;
     color: #fff;
     font-size: 0.9rem;
     transition: all 0.3s ease;
@@ -898,9 +898,10 @@
 .hudVersion {
     position: absolute;
     bottom: 30px;
-    right: 40px;
+    right: 120px;
     font-size: 0.68rem;
     color: rgba(255, 255, 255, 0.4);
+    z-index: 50;
 }
 
 /* ── Mobile-only layout sections (collapsed orbits) ── */
