@@ -8,6 +8,7 @@ import {
 import { DreCalculatedResult } from '@/types/dre';
 import { BarChart2, PieChart as PieIcon, GitFork, Layers } from 'lucide-react';
 
+interface DreChartsProps {
   results: DreCalculatedResult | null;
   isPrivacyMode: boolean;
   isRevenuePrivacyMode?: boolean;
@@ -122,7 +123,7 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
       <div style={tooltipStyle} className="bg-white px-4 py-3">
         <p className="font-bold text-slate-700 mb-1">{label}</p>
         <p className={`font-mono font-black text-base ${raw >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-          {fmt(raw, isPrivacyMode || (isRevenuePrivacyMode && isRevenue))}
+          {fmt(raw, isPrivacyMode || (isRevenuePrivacyMode === true && isRevenue))}
         </p>
       </div>
     );
@@ -160,7 +161,7 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => fmtK(v, isPrivacyMode)} />
-                  <Tooltip formatter={(v: any, name: string) => [fmt(Number(v), isPrivacyMode || (isRevenuePrivacyMode && name === 'Receitas')), name]} contentStyle={tooltipStyle} />
+                  <Tooltip formatter={(v: any, name: any) => [fmt(Number(v), isPrivacyMode || (isRevenuePrivacyMode === true && name === 'Receitas')), name]} contentStyle={tooltipStyle} />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                   <Bar dataKey="Receitas" fill={PALETTE.receita} radius={[5, 5, 0, 0]} maxBarSize={36} />
                   <Bar dataKey="Saídas"   fill={PALETTE.saidas}  radius={[5, 5, 0, 0]} maxBarSize={36} />
