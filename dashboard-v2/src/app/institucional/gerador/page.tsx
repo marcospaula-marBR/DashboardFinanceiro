@@ -22,6 +22,8 @@ import { supabase } from '@/lib/supabase';
 interface ActiveEmployee {
   id: string;
   name: string;
+  corporateName?: string;
+  responsibleName?: string;
   role: string;
   department: string;
   phone: string;
@@ -46,7 +48,7 @@ export default function CardGeneratorPage() {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select('id, full_name, job_role, department, phone, phone_professional, email, email_professional, company, status')
+        .select('id, full_name, corporate_name, responsible_name, job_role, department, phone, phone_professional, email, email_professional, company, status')
         .neq('status', 'Inativo')
         .order('full_name');
 
@@ -56,6 +58,8 @@ export default function CardGeneratorPage() {
         const mapped = data.map((e: any) => ({
           id: e.id,
           name: e.full_name,
+          corporateName: e.corporate_name,
+          responsibleName: e.responsible_name,
           role: e.job_role || 'Colaborador',
           department: e.department || 'Operações',
           phone: e.phone_professional || e.phone || '',
@@ -97,7 +101,7 @@ export default function CardGeneratorPage() {
 
   const referralLink = getReferralLink();
   const qrCodeUrl = selectedEmp 
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=000000&bgcolor=FFFFFF&data=${encodeURIComponent(referralLink)}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&color=000000&bgcolor=FFFFFF&data=${encodeURIComponent(referralLink)}`
     : '';
 
   const handleShare = () => {
@@ -229,8 +233,8 @@ export default function CardGeneratorPage() {
 
               <div className={styles.cardBody}>
                 <div className={styles.userInfo}>
-                  <h4 className={styles.userName}>{selectedEmp.name}</h4>
-                  <span className={styles.userRole}>{selectedEmp.role}</span>
+                  <h4 className={styles.userName}>{selectedEmp.corporateName || selectedEmp.name}</h4>
+                  <span className={styles.userRole}>{selectedEmp.responsibleName || selectedEmp.role}</span>
                   <span className="text-[9px] text-slate-400 tracking-wider mt-1">{selectedEmp.department}</span>
                 </div>
 
