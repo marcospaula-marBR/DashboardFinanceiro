@@ -26,77 +26,23 @@ import styles from './page.module.css';
 import { APP_VERSION } from '@/version';
 import { supabase } from '@/lib/supabase';
 
-// Cadastro de Canais de Atendimento Setorizados das Empresas
-const CONTATOS_SETORIZADOS = {
-  MarBR: [
-    { setor: 'Comercial & Novos Negócios', fone: '1332215000', email: 'comercial@marbrasil.com.br' },
-    { setor: 'Recursos Humanos & Vagas', fone: '1332215001', email: 'vagas@marbrasil.com.br' },
-    { setor: 'Financeiro & Faturamento', fone: '1332215002', email: 'financeiro@marbrasil.com.br' },
-    { setor: 'Ouvidoria & Suporte', fone: '1332215003', email: 'ouvidoria@marbrasil.com.br' }
-  ],
-  DZM: [
-    { setor: 'Comercial & Vendas', fone: '1332894000', email: 'vendas@dzm.com.br' },
-    { setor: 'Recursos Humanos & Vagas', fone: '1332894001', email: 'rh@dzm.com.br' },
-    { setor: 'Financeiro & Contabilidade', fone: '1332894002', email: 'financeiro@dzm.com.br' },
-    { setor: 'Suporte & Ouvidoria', fone: '1332894003', email: 'ouvidoria@dzm.com.br' }
-  ]
-};
-
-// Links do OneDrive para as CNDs (Atualização dinâmica pelo depto de Licitações)
-const ONEDRIVE_CNDS = {
-  MarBR: [
-    { titulo: 'Certidão Conjunta Federal (Receita/PGFN)', url: 'https://onedrive.live.com/placeholder-federal-marbr' },
-    { titulo: 'Certidão de Regularidade do FGTS (CRF)', url: 'https://onedrive.live.com/placeholder-fgts-marbr' },
-    { titulo: 'Certidão Negativa Trabalhista (BNDT)', url: 'https://onedrive.live.com/placeholder-bndt-marbr' },
-    { titulo: 'Certidão Negativa Estadual (SEFAZ SP)', url: 'https://onedrive.live.com/placeholder-estadual-marbr' },
-    { titulo: 'Certidão Negativa Municipal (Santos)', url: 'https://onedrive.live.com/placeholder-municipal-marbr' }
-  ],
-  DZM: [
-    { titulo: 'Certidão Conjunta Federal (Receita/PGFN)', url: 'https://onedrive.live.com/placeholder-federal-dzm' },
-    { titulo: 'Certidão de Regularidade do FGTS (CRF)', url: 'https://onedrive.live.com/placeholder-fgts-dzm' },
-    { titulo: 'Certidão Negativa Trabalhista (BNDT)', url: 'https://onedrive.live.com/placeholder-bndt-dzm' },
-    { titulo: 'Certidão Negativa Estadual (SEFAZ SP)', url: 'https://onedrive.live.com/placeholder-estadual-dzm' },
-    { titulo: 'Certidão Negativa Municipal (Santos)', url: 'https://onedrive.live.com/placeholder-municipal-dzm' }
-  ]
-};
-
-// Cadastro Fixo das Fichas Cadastrais
-const EMPRESAS_DATA = {
-  MarBR: {
-    name: 'Mar Brasil',
-    razaoSocial: 'Mar Brasil Serviços Terceirizados e Logística Ltda',
-    cnpj: '24.891.127/0001-45',
-    inscEstadual: '144.592.831.110',
-    inscMunicipal: '4.892.110-3',
-    endereco: 'Av. Conselheiro Nébias, 754 - Boqueirão, Santos - SP, CEP 11045-002',
-    atividade: 'Prestação de Serviços Terceirizados, Limpeza Urbana e Apoio Logístico',
-    email: 'contato@marbrasil.com.br',
-    telefone: '(13) 3221-5000',
-    documentos: [
-      { titulo: 'Contrato Social Consolidado', tipo: 'PDF', tamanho: '2.4 MB', url: '/Manual_de_Cultura.pdf' },
-      { titulo: 'Cartão CNPJ Ativo', tipo: 'PDF', tamanho: '180 KB', url: '/Manual_de_Cultura.pdf' },
-      { titulo: 'Manual de Cultura do Grupo', tipo: 'PDF', tamanho: '12.0 MB', url: '/Manual_de_Cultura.pdf' }
-    ],
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  },
-  DZM: {
-    name: 'DZM',
-    razaoSocial: 'DZM Empreendimentos e Construções Civis Ltda',
-    cnpj: '38.412.923/0001-88',
-    inscEstadual: 'Isento',
-    inscMunicipal: '8.412.302-9',
-    endereco: 'Av. Ana Costa, 291 - Gonzaga, Santos - SP, CEP 11060-001',
-    atividade: 'Incorporação de Empreendimentos Imobiliários e Construção Civil',
-    email: 'diretoria@dzm.com.br',
-    telefone: '(13) 3289-4000',
-    documentos: [
-      { titulo: 'Contrato Social Consolidado', tipo: 'PDF', tamanho: '1.9 MB', url: '/Manual_de_Cultura.pdf' },
-      { titulo: 'Cartão CNPJ Ativo', tipo: 'PDF', tamanho: '175 KB', url: '/Manual_de_Cultura.pdf' },
-      { titulo: 'Manual de Cultura do Grupo', tipo: 'PDF', tamanho: '12.0 MB', url: '/Manual_de_Cultura.pdf' }
-    ],
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  }
-};
+interface CompanyData {
+  id: string;
+  slug: string;
+  name: string;
+  razao_social: string;
+  cnpj: string;
+  insc_estadual: string;
+  insc_municipal: string;
+  endereco: string;
+  atividade: string;
+  email: string;
+  telefone: string;
+  video_url: string;
+  contatos_setorizados: any[];
+  links_cnds: any[];
+  documentos_oficiais: any[];
+}
 
 interface ReferrerData {
   id: string;
@@ -111,6 +57,35 @@ interface ReferrerData {
 export default function InstitutionalPage() {
   const [selectedCompany, setSelectedCompany] = useState<'MarBR' | 'DZM' | null>(null);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  const [companiesData, setCompaniesData] = useState<Record<string, CompanyData>>({});
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('companies')
+          .select('*')
+          .not('slug', 'is', null);
+          
+        if (error) throw error;
+        
+        if (data) {
+          const map: Record<string, CompanyData> = {};
+          data.forEach(c => {
+            map[c.slug] = c;
+          });
+          setCompaniesData(map);
+        }
+      } catch (err: any) {
+        console.error('[Institucional] Erro ao carregar empresas:', err.message);
+      } finally {
+        setLoadingCompanies(false);
+      }
+    };
+    
+    fetchCompanies();
+  }, []);
 
   // Estados do Referenciador (Modo Visitante)
   const [referrerId, setReferrerId] = useState<string | null>(null);
@@ -375,8 +350,8 @@ export default function InstitutionalPage() {
                   {selectedCompany === 'MarBR' ? 'M' : 'D'}
                 </div>
                 <div className={styles.companyTitleInfo}>
-                  <h3>{EMPRESAS_DATA[selectedCompany].razaoSocial}</h3>
-                  <p>CNPJ: {EMPRESAS_DATA[selectedCompany].cnpj}</p>
+                  <h3>{companiesData[selectedCompany]?.razao_social}</h3>
+                  <p>CNPJ: {companiesData[selectedCompany]?.cnpj}</p>
                 </div>
               </div>
 
@@ -400,32 +375,32 @@ export default function InstitutionalPage() {
                 <div className={styles.infoList}>
                   <div className={styles.infoItem}>
                     <span className={styles.infoKey}>Nome Fantasia</span>
-                    <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].name}</span>
+                    <span className={styles.infoValue}>{companiesData[selectedCompany]?.name}</span>
                   </div>
 
                   <div className={styles.infoItem}>
                     <span className={styles.infoKey}>CNPJ</span>
-                    <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].cnpj}</span>
+                    <span className={styles.infoValue}>{companiesData[selectedCompany]?.cnpj}</span>
                   </div>
 
                   <div className={styles.infoItem}>
                     <span className={styles.infoKey}>Inscrição Estadual</span>
-                    <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].inscEstadual}</span>
+                    <span className={styles.infoValue}>{companiesData[selectedCompany]?.insc_estadual}</span>
                   </div>
 
                   <div className={styles.infoItem}>
                     <span className={styles.infoKey}>Inscrição Municipal</span>
-                    <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].inscMunicipal}</span>
+                    <span className={styles.infoValue}>{companiesData[selectedCompany]?.insc_municipal}</span>
                   </div>
 
                   <div className={styles.infoItem}>
                     <span className={styles.infoKey}>Endereço Comercial</span>
-                    <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].endereco}</span>
+                    <span className={styles.infoValue}>{companiesData[selectedCompany]?.endereco}</span>
                   </div>
 
                   <div className={styles.infoItem}>
                     <span className={styles.infoKey}>Atividade Principal</span>
-                    <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].atividade}</span>
+                    <span className={styles.infoValue}>{companiesData[selectedCompany]?.atividade}</span>
                   </div>
                 </div>
 
@@ -440,7 +415,7 @@ export default function InstitutionalPage() {
                   </p>
 
                   <div className="grid grid-cols-1 gap-2">
-                    {CONTATOS_SETORIZADOS[selectedCompany].map((cont, idx) => (
+                    {(companiesData[selectedCompany]?.contatos_setorizados || []).map((cont: any, idx: number) => (
                       <div key={idx} className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                           <h5 className="text-xs font-bold text-white">{cont.setor}</h5>
@@ -480,7 +455,7 @@ export default function InstitutionalPage() {
                 </h4>
 
                 <div className={styles.docList}>
-                  {EMPRESAS_DATA[selectedCompany].documentos.map((doc, idx) => (
+                  {(companiesData[selectedCompany]?.documentos_oficiais || []).map((doc: any, idx: number) => (
                     <a 
                       key={idx} 
                       href={doc.url} 
@@ -515,7 +490,7 @@ export default function InstitutionalPage() {
                   </p>
 
                   <div className="grid grid-cols-1 gap-2">
-                    {ONEDRIVE_CNDS[selectedCompany].map((cnd, idx) => (
+                    {(companiesData[selectedCompany]?.links_cnds || []).map((cnd: any, idx: number) => (
                       <a 
                         key={idx}
                         href={cnd.url}
@@ -554,8 +529,8 @@ export default function InstitutionalPage() {
                       <iframe 
                         width="100%" 
                         height="100%" 
-                        src={EMPRESAS_DATA[selectedCompany].videoUrl}
-                        title={`Vídeo Institucional ${EMPRESAS_DATA[selectedCompany].name}`}
+                        src={companiesData[selectedCompany]?.video_url}
+                        title={`Vídeo Institucional ${companiesData[selectedCompany]?.name}`}
                         frameBorder="0" 
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                         allowFullScreen
@@ -563,7 +538,7 @@ export default function InstitutionalPage() {
                     ) : (
                       <div className={styles.videoPlaceholder} onClick={() => setActiveVideo(selectedCompany)}>
                         <Play size={44} fill="#F2911B" strokeWidth={1} />
-                        <p>Assistir Vídeo {EMPRESAS_DATA[selectedCompany].name}</p>
+                        <p>Assistir Vídeo {companiesData[selectedCompany]?.name}</p>
                       </div>
                     )}
                   </div>
