@@ -116,14 +116,18 @@ function calcReceivedForLoan(ln: RawLoan, contractPayments?: { status: string, a
 
 export function calcInstallmentForMonth(ln: RawLoan, monthStr: string, contractPayments?: { status: string, amount: number, due_date: string, paid_date?: string }[]): number {
   if (contractPayments && contractPayments.length > 0) {
-    const paidAmount = contractPayments
-      .filter(p => p.status === 'PAGO')
+    const monthExpected = contractPayments
       .filter(p => {
-        const dateStr = p.paid_date || p.due_date;
-        return dateStr && dateStr.substring(0, 7) === monthStr;
+        if (p.status === 'PAGO') {
+          const dateStr = p.paid_date || p.due_date;
+          return dateStr && dateStr.substring(0, 7) === monthStr;
+        } else if (p.status === 'PENDENTE') {
+          return p.due_date && p.due_date.substring(0, 7) === monthStr;
+        }
+        return false;
       })
       .reduce((sum, p) => sum + p.amount, 0);
-    return paidAmount;
+    return monthExpected;
   }
 
   // Fallback se não existirem parcelas no banco
@@ -150,10 +154,10 @@ export function calcInstallmentForMonth(ln: RawLoan, monthStr: string, contractP
     if (posFromStart >= elapsed + 1 && posFromStart <= elapsed + postponed) return 0;
   }
 
-  // Assumimos que parcelas passadas foram pagas/recebidas
+  // Considera tanto parcelas passadas quanto a do mês atual
   const now = new Date();
   const nowAbs = now.getFullYear() * 12 + (now.getMonth() + 1);
-  if (targetAbs < nowAbs) {
+  if (targetAbs <= nowAbs) {
     return amount / inst;
   }
   return 0;

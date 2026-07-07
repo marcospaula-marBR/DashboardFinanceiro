@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.92";
+export const APP_VERSION = "v.02.48.93";
 export const VERSION_DATE = "2026-07-07";
 export const VERSION_CHANGELOG = [
+  "v.02.48.93 - Fix/Emprestimos: Ajusta o cálculo do card 'Recebível Mês' para considerar também as parcelas pendentes com vencimento no mês atual, corrigindo o erro onde apenas os valores já pagos (ex: 590,00) eram somados, ignorando o total real a receber.",
   "v.02.48.92 - Fix/UI: Ajusta posição do número da versão (hudVersion) na página institucional para não sobrepor o widget do BrisinhAI e corrige padding esquerdo do input de busca no gerador de crachá para que o ícone de lupa não encubra o texto digitado.",
   "v.02.48.91 - Feat/Institucional: Atualiza o Gerador de Crachá Virtual para exibir a Razão Social (corporate_name) como título e o nome do Representante Legal (responsible_name) logo abaixo. Aumenta o tamanho do QR Code gerado e da UI para melhorar a captura.",
   "v.02.48.90 - Feat/Institucional: Implementa Fase 2 da página institucional (/institucional). Adiciona a rota de gerador interno de crachás virtuais (/institucional/gerador) com busca e validação de colaboradores ativos no banco de dados (tabela employees). Cria Modo Visitante (?ref=colaborador-uuid) que carrega dinamicamente contatos profissionais da base e oculta o gerador. Adiciona contatos setorizados (Comercial, RH, Financeiro e Ouvidoria) com atalhos para WhatsApp e E-mail, e integra atalhos de CNDs no OneDrive.",
