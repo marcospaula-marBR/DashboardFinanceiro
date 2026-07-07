@@ -1050,3 +1050,31 @@
         font-size: 1.15rem;
     }
 }
+
+/* Satélites Orbitais Ativos */
+.satActive {
+    border-color: #fff !important;
+    transform: scale(1.15) !important;
+    box-shadow: 0 0 35px rgba(255, 255, 255, 0.4) !important;
+}
+
+.satMarBR.satActive {
+    background: #F2911B !important;
+    color: #000 !important;
+    box-shadow: 0 0 45px rgba(242, 145, 27, 0.8) !important;
+}
+
+.satMarBR.satActive svg {
+    color: #000 !important;
+}
+
+.satDZM.satActive {
+    background: #00477A !important;
+    color: #fff !important;
+    box-shadow: 0 0 45px rgba(0, 71, 122, 0.8) !important;
+    border-color: #00a2ff !important;
+}
+
+.satDZM.satActive svg {
+    color: #fff !important;
+}

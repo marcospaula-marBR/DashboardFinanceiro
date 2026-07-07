@@ -15,15 +15,52 @@ import {
   Share2,
   Info,
   ExternalLink,
-  MapPin,
-  FileSpreadsheet,
-  Layers,
+  Phone,
+  Mail,
+  Building,
+  CheckCircle,
+  FileCheck2,
   ArrowRight
 } from 'lucide-react';
 import styles from './page.module.css';
 import { APP_VERSION } from '@/version';
+import { supabase } from '@/lib/supabase';
 
-// Cadastro de Dados das Empresas
+// Cadastro de Canais de Atendimento Setorizados das Empresas
+const CONTATOS_SETORIZADOS = {
+  MarBR: [
+    { setor: 'Comercial & Novos Negócios', fone: '1332215000', email: 'comercial@marbrasil.com.br' },
+    { setor: 'Recursos Humanos & Vagas', fone: '1332215001', email: 'vagas@marbrasil.com.br' },
+    { setor: 'Financeiro & Faturamento', fone: '1332215002', email: 'financeiro@marbrasil.com.br' },
+    { setor: 'Ouvidoria & Suporte', fone: '1332215003', email: 'ouvidoria@marbrasil.com.br' }
+  ],
+  DZM: [
+    { setor: 'Comercial & Vendas', fone: '1332894000', email: 'vendas@dzm.com.br' },
+    { setor: 'Recursos Humanos & Vagas', fone: '1332894001', email: 'rh@dzm.com.br' },
+    { setor: 'Financeiro & Contabilidade', fone: '1332894002', email: 'financeiro@dzm.com.br' },
+    { setor: 'Suporte & Ouvidoria', fone: '1332894003', email: 'ouvidoria@dzm.com.br' }
+  ]
+};
+
+// Links do OneDrive para as CNDs (Atualização dinâmica pelo depto de Licitações)
+const ONEDRIVE_CNDS = {
+  MarBR: [
+    { titulo: 'Certidão Conjunta Federal (Receita/PGFN)', url: 'https://onedrive.live.com/placeholder-federal-marbr' },
+    { titulo: 'Certidão de Regularidade do FGTS (CRF)', url: 'https://onedrive.live.com/placeholder-fgts-marbr' },
+    { titulo: 'Certidão Negativa Trabalhista (BNDT)', url: 'https://onedrive.live.com/placeholder-bndt-marbr' },
+    { titulo: 'Certidão Negativa Estadual (SEFAZ SP)', url: 'https://onedrive.live.com/placeholder-estadual-marbr' },
+    { titulo: 'Certidão Negativa Municipal (Santos)', url: 'https://onedrive.live.com/placeholder-municipal-marbr' }
+  ],
+  DZM: [
+    { titulo: 'Certidão Conjunta Federal (Receita/PGFN)', url: 'https://onedrive.live.com/placeholder-federal-dzm' },
+    { titulo: 'Certidão de Regularidade do FGTS (CRF)', url: 'https://onedrive.live.com/placeholder-fgts-dzm' },
+    { titulo: 'Certidão Negativa Trabalhista (BNDT)', url: 'https://onedrive.live.com/placeholder-bndt-dzm' },
+    { titulo: 'Certidão Negativa Estadual (SEFAZ SP)', url: 'https://onedrive.live.com/placeholder-estadual-dzm' },
+    { titulo: 'Certidão Negativa Municipal (Santos)', url: 'https://onedrive.live.com/placeholder-municipal-dzm' }
+  ]
+};
+
+// Cadastro Fixo das Fichas Cadastrais
 const EMPRESAS_DATA = {
   MarBR: {
     name: 'Mar Brasil',
@@ -38,11 +75,9 @@ const EMPRESAS_DATA = {
     documentos: [
       { titulo: 'Contrato Social Consolidado', tipo: 'PDF', tamanho: '2.4 MB', url: '/Manual_de_Cultura.pdf' },
       { titulo: 'Cartão CNPJ Ativo', tipo: 'PDF', tamanho: '180 KB', url: '/Manual_de_Cultura.pdf' },
-      { titulo: 'Certidão Conjunta Federal (CND)', tipo: 'PDF', tamanho: '340 KB', url: '/Manual_de_Cultura.pdf' },
-      { titulo: 'Alvará de Funcionamento MarBR', tipo: 'PDF', tamanho: '950 KB', url: '/Manual_de_Cultura.pdf' },
       { titulo: 'Manual de Cultura do Grupo', tipo: 'PDF', tamanho: '12.0 MB', url: '/Manual_de_Cultura.pdf' }
     ],
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' // Exemplo placeholder limpo
+    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
   },
   DZM: {
     name: 'DZM',
@@ -57,68 +92,98 @@ const EMPRESAS_DATA = {
     documentos: [
       { titulo: 'Contrato Social Consolidado', tipo: 'PDF', tamanho: '1.9 MB', url: '/Manual_de_Cultura.pdf' },
       { titulo: 'Cartão CNPJ Ativo', tipo: 'PDF', tamanho: '175 KB', url: '/Manual_de_Cultura.pdf' },
-      { titulo: 'Certidão Negativa de Débitos Mobiliários', tipo: 'PDF', tamanho: '280 KB', url: '/Manual_de_Cultura.pdf' },
-      { titulo: 'Alvará de Execução de Obras', tipo: 'PDF', tamanho: '1.1 MB', url: '/Manual_de_Cultura.pdf' },
       { titulo: 'Manual de Cultura do Grupo', tipo: 'PDF', tamanho: '12.0 MB', url: '/Manual_de_Cultura.pdf' }
     ],
     videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
   }
 };
 
+interface ReferrerData {
+  id: string;
+  name: string;
+  role: string;
+  department: string;
+  phone: string;
+  email: string;
+  company: string;
+}
+
 export default function InstitutionalPage() {
   const [selectedCompany, setSelectedCompany] = useState<'MarBR' | 'DZM' | null>(null);
-  
-  // Dados do Cartão de Visitas Digital
-  const [cardName, setCardName] = useState('Marcos Paula');
-  const [cardRole, setCardRole] = useState('Sócio-Diretor');
-  
-  // Indicação por parâmetro da URL
-  const [referrer, setReferrer] = useState<{ name: string; role: string } | null>(null);
-  const [showReferrerBanner, setShowReferrerBanner] = useState(false);
-
-  // Vídeo em execução
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
 
-  // Efeito para capturar parâmetros da indicação
+  // Estados do Referenciador (Modo Visitante)
+  const [referrerId, setReferrerId] = useState<string | null>(null);
+  const [referrer, setReferrer] = useState<ReferrerData | null>(null);
+  const [loadingReferrer, setLoadingReferrer] = useState(false);
+  const [showReferrerBanner, setShowReferrerBanner] = useState(false);
+
+  // Efeito para extrair o uuid de ref da URL e carregar dados do colaborador
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const name = params.get('name');
-      const role = params.get('role');
-      if (name && role) {
-        setReferrer({ name, role });
-        setShowReferrerBanner(true);
+      const ref = params.get('ref');
+      if (ref) {
+        setReferrerId(ref);
+        fetchReferrer(ref);
       }
     }
   }, []);
 
-  // Geração do link de indicação para o QR Code
-  const getReferralLink = () => {
-    if (typeof window === 'undefined') return '';
-    const base = `${window.location.origin}${window.location.pathname}`;
-    return `${base}?name=${encodeURIComponent(cardName)}&role=${encodeURIComponent(cardRole)}`;
-  };
+  const fetchReferrer = async (id: string) => {
+    setLoadingReferrer(true);
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, full_name, job_role, department, phone, phone_professional, email, email_professional, company, status')
+        .eq('id', id)
+        .single();
 
-  const referralLink = getReferralLink();
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=000000&bgcolor=FFFFFF&data=${encodeURIComponent(referralLink)}`;
+      if (error) throw error;
 
-  // Compartilhamento / Copiar link
-  const handleShare = () => {
-    navigator.clipboard.writeText(referralLink);
-    alert('Link do seu Cartão de Visitas copiado com sucesso! Compartilhe onde desejar.');
+      if (data) {
+        if (data.status === 'Inativo') {
+          console.warn('[Institucional] Colaborador referenciado está Inativo.');
+          return;
+        }
+
+        const phoneNum = data.phone_professional || data.phone || '';
+        const emailAddress = data.email_professional || data.email || '';
+
+        setReferrer({
+          id: data.id,
+          name: data.full_name,
+          role: data.job_role || 'Colaborador',
+          department: data.department || 'Operações',
+          phone: phoneNum,
+          email: emailAddress,
+          company: data.company || 'MarBR'
+        });
+        setShowReferrerBanner(true);
+      }
+    } catch (err: any) {
+      console.error('[Institucional] Erro ao carregar indicador:', err.message);
+    } finally {
+      setLoadingReferrer(false);
+    }
   };
 
   const handleCompanyClick = (key: 'MarBR' | 'DZM') => {
     setSelectedCompany(key);
     setActiveVideo(null); // Reseta vídeo ao trocar de empresa
     
-    // Scroll suave para a ficha da empresa
+    // Scroll suave para o painel de detalhes
     setTimeout(() => {
       const element = document.getElementById('company-details-section');
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 100);
+  };
+
+  // Limpa o número de telefone de formatação para WhatsApp
+  const cleanPhoneForWa = (phone: string) => {
+    return phone.replace(/\D/g, '');
   };
 
   return (
@@ -130,7 +195,7 @@ export default function InstitutionalPage() {
           <img src="/mar-brasil-logo.png" alt="Logo Mar Brasil" className="h-10 w-auto object-contain" />
           <div className="hidden md:block">
             <span className="font-extrabold text-sm uppercase tracking-wider block text-white">Grupo Mar Brasil</span>
-            <span className="text-[10px] text-slate-400 font-bold block">PÁGINA INSTITUCIONAL & CARTÃO DIGITAL</span>
+            <span className="text-[10px] text-slate-400 font-bold block">PORTAL INSTITUCIONAL & DOCUMENTOS</span>
           </div>
         </div>
         
@@ -140,32 +205,57 @@ export default function InstitutionalPage() {
         </Link>
       </header>
 
-      {/* BANNER DE BOAS-VINDAS POR INDICAÇÃO */}
+      {/* BANNER DE INDICAÇÃO DO COLABORADOR (MODO VISITANTE) */}
       {showReferrerBanner && referrer && (
         <section className={styles.referralBanner}>
           <div className={styles.bannerContent}>
             <div className={styles.bannerText}>
-              <UserCheck size={28} className="animate-pulse" />
-              <p>
-                Você foi indicado por <strong>{referrer.name}</strong> ({referrer.role}) do <strong>Grupo Mar Brasil</strong>. 
-                Seja bem-vindo ao nosso portal institucional! Conheça nossas marcas e consulte nossos documentos públicos abaixo.
+              <div className="w-10 h-10 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 font-extrabold flex-shrink-0">
+                {referrer.name.substring(0, 2).toUpperCase()}
+              </div>
+              <p className="text-sm">
+                Você está visualizando o portal do <strong>Grupo Mar Brasil</strong> por indicação de:{' '}
+                <strong>{referrer.name}</strong> — <span className="text-amber-400 font-semibold">{referrer.role} ({referrer.department})</span>.
               </p>
             </div>
-            <button className={styles.bannerClose} onClick={() => setShowReferrerBanner(false)}>
-              <X size={16} />
-            </button>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              {referrer.phone && (
+                <a 
+                  href={`https://wa.me/55${cleanPhoneForWa(referrer.phone)}?text=Olá ${referrer.name}, estou visitando o portal institucional do Grupo Mar Brasil indicado por você.`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-4 rounded-lg transition-colors"
+                >
+                  <Phone size={12} />
+                  <span>WhatsApp</span>
+                </a>
+              )}
+              {referrer.email && (
+                <a 
+                  href={`mailto:${referrer.email}?subject=Contato - Portal Grupo Mar Brasil`}
+                  className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs py-2 px-4 rounded-lg transition-colors border border-slate-600"
+                >
+                  <Mail size={12} />
+                  <span>E-mail</span>
+                </a>
+              )}
+              <button className={styles.bannerClose} onClick={() => setShowReferrerBanner(false)}>
+                <X size={16} />
+              </button>
+            </div>
           </div>
         </section>
       )}
 
-      {/* GRID DE CONTEÚDO PRINCIPAL */}
-      <main className={styles.mainContent}>
+      {/* GRID DE CONTEÚDO PRINCIPAL (Diferente da v1, sem o formulário de criação de cartões se for visitante) */}
+      <main className={`${styles.mainContent} ${referrerId ? 'grid-cols-1 max-w-[900px]' : ''}`}>
         
         {/* COLUNA ESQUERDA: CENA ORBITAL (Desktop) / CARDS (Mobile) */}
         <section className={styles.orbitArea}>
           <div className={styles.orbitTitle}>
             <h2>Estrutura Corporativa</h2>
-            <p>Selecione uma empresa na órbita para acessar a ficha cadastral e documentos públicos</p>
+            <p>Selecione uma empresa na órbita para ver cadastros, contatos e CNDs do OneDrive</p>
           </div>
 
           <div className={styles.scene}>
@@ -188,7 +278,7 @@ export default function InstitutionalPage() {
             >
               <button 
                 onClick={() => handleCompanyClick('MarBR')} 
-                className={`${styles.satellite} ${styles.satMarBR}`}
+                className={`${styles.satellite} ${styles.satMarBR} ${selectedCompany === 'MarBR' ? styles.satActive : ''}`}
               >
                 <Building2 size={28} strokeWidth={1.5} />
                 <span>Mar Brasil</span>
@@ -203,7 +293,7 @@ export default function InstitutionalPage() {
             >
               <button 
                 onClick={() => handleCompanyClick('DZM')} 
-                className={`${styles.satellite} ${styles.satDZM}`}
+                className={`${styles.satellite} ${styles.satDZM} ${selectedCompany === 'DZM' ? styles.satActive : ''}`}
               >
                 <Building2 size={28} strokeWidth={1.5} />
                 <span>DZM</span>
@@ -217,12 +307,12 @@ export default function InstitutionalPage() {
         <section className={styles.mobileCompaniesArea}>
           <div className={styles.orbitTitle}>
             <h2>Nossas Empresas</h2>
-            <p>Selecione uma das empresas do grupo para ver a ficha e documentos públicos</p>
+            <p>Selecione uma das empresas do grupo para ver fichas, contatos e certidões</p>
           </div>
           <div className={styles.mobileCompaniesGrid}>
             <div 
               onClick={() => handleCompanyClick('MarBR')}
-              className={`${styles.mobileCompanyCard} ${styles.cardMarBR} ${selectedCompany === 'MarBR' ? 'bg-amber-500/10' : ''}`}
+              className={`${styles.mobileCompanyCard} ${styles.cardMarBR} ${selectedCompany === 'MarBR' ? 'bg-amber-500/10 border-amber-500' : ''}`}
             >
               <div className={`${styles.companyBadge} ${styles.badgeMarBR}`}>M</div>
               <h4>Mar Brasil</h4>
@@ -231,7 +321,7 @@ export default function InstitutionalPage() {
 
             <div 
               onClick={() => handleCompanyClick('DZM')}
-              className={`${styles.mobileCompanyCard} ${styles.cardDZM} ${selectedCompany === 'DZM' ? 'bg-indigo-500/10' : ''}`}
+              className={`${styles.mobileCompanyCard} ${styles.cardDZM} ${selectedCompany === 'DZM' ? 'bg-indigo-500/10 border-indigo-500' : ''}`}
             >
               <div className={`${styles.companyBadge} ${styles.badgeDZM}`}>D</div>
               <h4>DZM</h4>
@@ -240,89 +330,36 @@ export default function InstitutionalPage() {
           </div>
         </section>
 
-        {/* COLUNA DIREITA: GERADOR DE CARTÃO DE VISITAS */}
-        <section className={styles.cardPanel}>
-          <h3 className={styles.panelTitle}>
-            <QrCode size={20} />
-            Cartão de Visita Digital
-          </h3>
+        {/* VISUALIZAÇÃO DO SEU INDICAÇÃO DO CARTÃO - SE NÃO FOR VISITANTE (GERAL) */}
+        {!referrerId && (
+          <section className={styles.cardPanel}>
+            <h3 className={styles.panelTitle}>
+              <QrCode size={20} />
+              Crachá Virtual Corporativo
+            </h3>
 
-          <p className="text-xs text-slate-400 leading-relaxed -mt-2">
-            Insira seus dados abaixo para gerar um cartão com QR Code personalizado. O QR Code gerará um link de indicação para esta página, ideal para compartilhar com parceiros e clientes no smartphone.
-          </p>
+            <p className="text-xs text-slate-400 leading-relaxed -mt-2">
+              Se você é colaborador do Grupo Mar Brasil, utilize a nossa ferramenta corporativa para gerar seu cartão e QR Code com contatos oficiais.
+            </p>
 
-          {/* Cartão de Crédito Físico Simulado */}
-          <div className={styles.businessCardPreview}>
-            <div className={styles.cardHeader}>
-              <div className={styles.cardLogo}>
-                <div className={styles.logoIcon}>MB</div>
-                <div className={styles.logoText}>
-                  Mar Brasil
-                  <span>GRUPO CORPORATIVO</span>
-                </div>
+            <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-5 flex flex-col items-center justify-center text-center gap-4">
+              <Building size={34} className="text-amber-500" />
+              <div>
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider">Área Restrita a Colaboradores</h4>
+                <p className="text-xs text-slate-400 mt-1 max-w-[280px] mx-auto">
+                  A geração de QR codes e crachás corporativos exige validação ativa com sua matrícula na base global.
+                </p>
               </div>
-              <div className={styles.chip}></div>
+              <Link 
+                href="/institucional/gerador" 
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-900 font-bold py-2.5 px-6 rounded-xl transition-all text-xs uppercase tracking-wider"
+              >
+                <span>Acessar Gerador de Cartão</span>
+                <ArrowRight size={14} />
+              </Link>
             </div>
-
-            <div className={styles.cardBody}>
-              <div className={styles.userInfo}>
-                <h4 className={styles.userName}>{cardName || 'Seu Nome'}</h4>
-                <span className={styles.userRole}>{cardRole || 'Seu Cargo'}</span>
-              </div>
-
-              <div className={styles.qrContainer} title="Escaneie para acessar o portal institucional">
-                <img 
-                  src={qrCodeUrl} 
-                  alt="QR Code de Visitas" 
-                  className={styles.qrImg} 
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* inputs */}
-          <div className="space-y-4">
-            <div className={styles.formGroup}>
-              <label htmlFor="card-name-input">Seu Nome Completo</label>
-              <input
-                id="card-name-input"
-                type="text"
-                value={cardName}
-                onChange={(e) => setCardName(e.target.value)}
-                placeholder="Ex: Marcos Paula"
-                maxLength={25}
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="card-role-input">Seu Cargo / Função</label>
-              <input
-                id="card-role-input"
-                type="text"
-                value={cardRole}
-                onChange={(e) => setCardRole(e.target.value)}
-                placeholder="Ex: Sócio-Diretor"
-                maxLength={30}
-              />
-            </div>
-          </div>
-
-          <button 
-            type="button" 
-            onClick={handleShare}
-            className="flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-3.5 px-6 rounded-xl transition-all duration-200 shadow-md active:scale-98 text-sm cursor-pointer"
-          >
-            <Share2 size={16} />
-            Compartilhar Link do Cartão
-          </button>
-
-          <p className={styles.cardInstructions}>
-            <Info size={14} />
-            <span>
-              <strong>Como usar:</strong> Destaque este cartão em seu celular. O cliente pode apontar a câmera do smartphone para o QR Code para abrir diretamente os documentos e ficha cadastral das empresas sob sua indicação.
-            </span>
-          </p>
-        </section>
+          </section>
+        )}
 
       </main>
 
@@ -348,11 +385,13 @@ export default function InstitutionalPage() {
               </button>
             </div>
 
-            {/* Split Cadastral e Downloads */}
+            {/* Split Cadastral, Downloads, Contatos Setorizados e CNDs do OneDrive */}
             <div className={styles.companyGrid}>
               
-              {/* FICHA CADASTRAL */}
+              {/* COLUNA ESQUERDA: FICHA CADASTRAL & CANAIS DE ATENDIMENTO */}
               <div className={styles.fichaCadastral}>
+                
+                {/* FICHA */}
                 <h4 className={styles.sectionSubtitle}>
                   <Building2 size={16} />
                   Ficha Cadastral Simplificada
@@ -388,24 +427,56 @@ export default function InstitutionalPage() {
                     <span className={styles.infoKey}>Atividade Principal</span>
                     <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].atividade}</span>
                   </div>
+                </div>
 
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoKey}>E-mail Oficial</span>
-                    <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].email}</span>
-                  </div>
+                {/* CANAIS DE ATENDIMENTO SETORIZADOS */}
+                <div className="mt-4">
+                  <h4 className={styles.sectionSubtitle}>
+                    <Phone size={15} />
+                    Canais de Atendimento Direto
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mb-3">
+                    Fale diretamente com os responsáveis pelos setores da empresa:
+                  </p>
 
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoKey}>Contato Telefônico</span>
-                    <span className={styles.infoValue}>{EMPRESAS_DATA[selectedCompany].telefone}</span>
+                  <div className="grid grid-cols-1 gap-2">
+                    {CONTATOS_SETORIZADOS[selectedCompany].map((cont, idx) => (
+                      <div key={idx} className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h5 className="text-xs font-bold text-white">{cont.setor}</h5>
+                          <span className="text-[10px] text-slate-400">{cont.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <a 
+                            href={`https://wa.me/55${cont.fone}?text=Olá, estou no portal do Grupo Mar Brasil e gostaria de atendimento no setor ${cont.setor}.`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-emerald-600/10 hover:bg-emerald-600 border border-emerald-500/20 text-emerald-400 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5"
+                          >
+                            <Phone size={10} />
+                            <span>WhatsApp</span>
+                          </a>
+                          <a 
+                            href={`mailto:${cont.email}`}
+                            className="bg-slate-700/30 hover:bg-slate-600 border border-slate-600/40 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5"
+                          >
+                            <Mail size={10} />
+                            <span>E-mail</span>
+                          </a>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* DOCUMENTOS PÚBLICOS E VÍDEO */}
+              {/* COLUNA DIREITA: DOCUMENTOS, CERTIDÕES (ONEDRIVE) E VÍDEO */}
               <div className={styles.documentsArea}>
+                
+                {/* DOCUMENTOS */}
                 <h4 className={styles.sectionSubtitle}>
                   <FileText size={16} />
-                  Documentos Públicos Disponíveis
+                  Contrato Social e Atos Oficiais
                 </h4>
 
                 <div className={styles.docList}>
@@ -433,6 +504,44 @@ export default function InstitutionalPage() {
                   ))}
                 </div>
 
+                {/* CERTIDÕES NEGATIVAS DE DÉBITOS (ONEDRIVE) */}
+                <div className="mt-4">
+                  <h4 className={styles.sectionSubtitle}>
+                    <FileCheck2 size={16} />
+                    Certidões Negativas de Débitos (CNDs)
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mb-3">
+                    Certidões mantidas e atualizadas mensalmente pelo departamento de Licitações no OneDrive:
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {ONEDRIVE_CNDS[selectedCompany].map((cnd, idx) => (
+                      <a 
+                        key={idx}
+                        href={cnd.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${styles.docItem} hover:border-amber-500/40`}
+                        title="Abrir pasta de certidões no OneDrive"
+                      >
+                        <div className={styles.docInfo}>
+                          <div className="w-9 h-9 bg-slate-800 border border-slate-700 text-amber-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <FileCheck2 size={14} />
+                          </div>
+                          <div className={styles.docMeta}>
+                            <h4 className="text-[11px]">{cnd.titulo}</h4>
+                            <span className="text-[9px] uppercase font-bold text-amber-500/80">OneDrive Compartilhado</span>
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <span>Acessar</span>
+                          <ExternalLink size={10} />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Bloco de Vídeo Específico da Empresa */}
                 <div className="mt-4">
                   <h4 className={styles.sectionSubtitle}>
@@ -453,7 +562,7 @@ export default function InstitutionalPage() {
                       ></iframe>
                     ) : (
                       <div className={styles.videoPlaceholder} onClick={() => setActiveVideo(selectedCompany)}>
-                        <Play size={44} fill="#F2911B" strokeWidth={1} className="transition-transform duration-300" />
+                        <Play size={44} fill="#F2911B" strokeWidth={1} />
                         <p>Assistir Vídeo {EMPRESAS_DATA[selectedCompany].name}</p>
                       </div>
                     )}
