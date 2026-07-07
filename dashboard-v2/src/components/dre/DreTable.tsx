@@ -4,10 +4,11 @@ import { DreCalculatedResult } from '@/types/dre';
 interface DreTableProps {
   results: DreCalculatedResult | null;
   isPrivacyMode: boolean;
+  isRevenuePrivacyMode?: boolean;
   onRowClick?: (title: string) => void;
 }
 
-export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) {
+export function DreTable({ results, isPrivacyMode, isRevenuePrivacyMode, onRowClick }: DreTableProps) {
   if (!results) {
     return (
       <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-500 shadow-sm">
@@ -24,8 +25,8 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
   // Total de Entradas (Operacionais + Outras Entradas) para base da Análise Vertical
   const totalReceita = results.kpis.totalEntradas || 0;
 
-  const displayValue = (val: number, isPercent = false) => {
-    if (isPrivacyMode) return '****';
+  const displayValue = (val: number, isPercent = false, isRevenueItem = false) => {
+    if (isPrivacyMode || (isRevenuePrivacyMode && isRevenueItem)) return '****';
     if (isPercent) return `${val.toFixed(2).replace('.', ',')}%`;
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
   };
@@ -107,20 +108,20 @@ export function DreTable({ results, isPrivacyMode, onRowClick }: DreTableProps) 
                   <td className={`px-4 py-3 text-right font-mono font-bold text-[14px] sticky left-[260px] border-r border-b border-slate-300 transition-colors group-hover:bg-slate-100 ${
                     isCard ? 'bg-slate-100 z-10' : 'bg-slate-50 z-10'
                   }`}>
-                    {displayValue(totalVal, isPercent)}
+                    {displayValue(totalVal, isPercent, item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada'))}
                   </td>
 
                   <td className={`px-4 py-3 text-right font-mono text-[14px] sticky left-[390px] border-r border-b border-slate-200 transition-colors group-hover:bg-slate-100 ${
                     isCard ? 'bg-slate-50 font-bold z-10' : 'bg-white z-10'
                   }`}>
-                    {displayValue(avgVal, isPercent)}
+                    {displayValue(avgVal, isPercent, item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada'))}
                   </td>
 
                   {reversedColumns.map(col => {
                     const monthVal = mensal[item.titulo]?.[col] || 0;
                     return (
                       <td key={col} className="px-4 py-3 text-right font-mono text-[14px] border-b border-slate-100 transition-colors group-hover:bg-slate-50">
-                        {displayValue(monthVal, isPercent)}
+                        {displayValue(monthVal, isPercent, item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada'))}
                       </td>
                     );
                   })}

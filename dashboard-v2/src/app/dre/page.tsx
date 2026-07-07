@@ -33,6 +33,7 @@ export default function DrePage() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
+  const [isRevenuePrivacyMode, setIsRevenuePrivacyMode] = useState(false);
   
   // Security Passcode Shield
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -677,8 +678,10 @@ export default function DrePage() {
             <DreHeader
               lastUpdate={lastUpdate}
               onExportPDF={handleOpenExportModal}
-              onTogglePrivacy={() => setIsPrivacyMode(!isPrivacyMode)}
+              onTogglePrivacy={() => { setIsPrivacyMode(!isPrivacyMode); if(!isPrivacyMode) setIsRevenuePrivacyMode(false); }}
               isPrivacyMode={isPrivacyMode}
+              onToggleRevenuePrivacy={() => { setIsRevenuePrivacyMode(!isRevenuePrivacyMode); if(!isRevenuePrivacyMode) setIsPrivacyMode(false); }}
+              isRevenuePrivacyMode={isRevenuePrivacyMode}
               onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
               onOpenEquipmentsManager={() => setIsEquipmentsModalOpen(true)}
               hasData={rawData.length > 0 && !(fileName ?? '').includes('Banco de Dados Nuvem')}
@@ -710,6 +713,7 @@ export default function DrePage() {
               <DreKpiCards
                 results={results}
                 isPrivacyMode={isPrivacyMode}
+                isRevenuePrivacyMode={isRevenuePrivacyMode}
                 onCardClick={handleOpenDetails}
                 customCardTitle={customCardTitle}
                 customCardTotal={customCardTotal}
@@ -722,6 +726,7 @@ export default function DrePage() {
                 <DreCharts
                   results={results}
                   isPrivacyMode={isPrivacyMode}
+                  isRevenuePrivacyMode={isRevenuePrivacyMode}
                 />
               )}
 
@@ -745,6 +750,7 @@ export default function DrePage() {
                     <DreTable
                       results={results}
                       isPrivacyMode={isPrivacyMode}
+                      isRevenuePrivacyMode={isRevenuePrivacyMode}
                       onRowClick={handleOpenDetails}
                     />
                   </div>
@@ -784,6 +790,7 @@ export default function DrePage() {
         mensalData={modalData}
         sourceRows={modalSourceRows}
         isPrivacyMode={isPrivacyMode}
+        isRevenuePrivacyMode={isRevenuePrivacyMode}
         allResults={results}
       />
 

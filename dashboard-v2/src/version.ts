@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.94";
+export const APP_VERSION = "v.02.48.95";
 export const VERSION_DATE = "2026-07-07";
 export const VERSION_CHANGELOG = [
+  "v.02.48.95 - Feat/DRE: Adicionado botão específico para ocultar apenas os valores de receitas na página DRE.",
   "v.02.48.94 - Refactor/Institucional: Migra os dados fixos corporativos (razão social, CNPJ, contatos setorizados e links de CNDs) das empresas Mar Brasil e DZM para o banco de dados Supabase na tabela `companies`. A página Institucional passa a consultar essas informações em tempo real, permitindo a gestão segura e fácil dos dados via Supabase Studio, com base nas fichas cadastrais em PDF.",
   "v.02.48.93 - Fix/Emprestimos: Ajusta o cálculo do card 'Recebível Mês' para considerar também as parcelas pendentes com vencimento no mês atual, corrigindo o erro onde apenas os valores já pagos (ex: 590,00) eram somados, ignorando o total real a receber.",
   "v.02.48.92 - Fix/UI: Ajusta posição do número da versão (hudVersion) na página institucional para não sobrepor o widget do BrisinhAI e corrige padding esquerdo do input de busca no gerador de crachá para que o ícone de lupa não encubra o texto digitado.",

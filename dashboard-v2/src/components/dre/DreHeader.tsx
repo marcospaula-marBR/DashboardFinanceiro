@@ -8,6 +8,8 @@ interface DreHeaderProps {
   onExportPDF: () => void;
   onTogglePrivacy: () => void;
   isPrivacyMode: boolean;
+  onToggleRevenuePrivacy: () => void;
+  isRevenuePrivacyMode: boolean;
   onToggleSimulator: () => void;
   onOpenEquipmentsManager: () => void;
   // Supabase publishing properties
@@ -25,6 +27,8 @@ export function DreHeader({
   onExportPDF, 
   onTogglePrivacy, 
   isPrivacyMode, 
+  onToggleRevenuePrivacy,
+  isRevenuePrivacyMode,
   onToggleSimulator,
   onOpenEquipmentsManager,
   hasData,
@@ -71,17 +75,33 @@ export function DreHeader({
       </div>
 
       <div className="flex items-center gap-2.5 w-full md:w-auto">
-        <button 
-          onClick={onTogglePrivacy}
-          className={`p-2.5 rounded-xl border transition-all duration-200 shadow-sm active:scale-95 ${
-            isPrivacyMode 
-          ? "bg-slate-800 border-slate-800 text-amber-400" 
-              : "bg-white border-slate-200 text-slate-600 hover:border-slate-350 hover:bg-slate-50"
-          }`}
-          title="Ocultar Valores"
-        >
-          <Eye size={18} />
-        </button>
+        <div className="flex items-center bg-white border border-slate-200 rounded-xl shadow-sm p-0.5">
+          <button 
+            onClick={onToggleRevenuePrivacy}
+            className={`p-2 rounded-lg transition-all duration-200 active:scale-95 flex items-center gap-1.5 ${
+              isRevenuePrivacyMode && !isPrivacyMode
+                ? "bg-amber-50 text-amber-600 font-bold" 
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+            }`}
+            title="Ocultar Apenas Receitas"
+          >
+            <Eye size={16} />
+            <span className="text-[10px] hidden sm:inline uppercase tracking-wider font-bold">Receitas</span>
+          </button>
+          <div className="w-[1px] h-4 bg-slate-200 mx-0.5"></div>
+          <button 
+            onClick={onTogglePrivacy}
+            className={`p-2 rounded-lg transition-all duration-200 active:scale-95 flex items-center gap-1.5 ${
+              isPrivacyMode 
+                ? "bg-slate-800 text-amber-400 font-bold" 
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+            }`}
+            title="Ocultar Todos os Valores"
+          >
+            <Eye size={16} />
+            <span className="text-[10px] hidden sm:inline uppercase tracking-wider font-bold">Tudo</span>
+          </button>
+        </div>
 
         <button 
           onClick={onOpenIndicators}

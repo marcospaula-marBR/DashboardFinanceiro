@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Wallet, ArrowDownRight, ArrowUpRight, MonitorSm
 interface DreKpiCardsProps {
   results: DreCalculatedResult | null;
   isPrivacyMode: boolean;
+  isRevenuePrivacyMode?: boolean;
   onCardClick?: (title: string) => void;
   // Custom Card Props
   customCardTitle?: string;
@@ -16,6 +17,7 @@ interface DreKpiCardsProps {
 export function DreKpiCards({ 
   results, 
   isPrivacyMode, 
+  isRevenuePrivacyMode,
   onCardClick,
   customCardTitle,
   customCardTotal,
@@ -29,13 +31,14 @@ export function DreKpiCards({
 
   const { kpis } = results;
 
-  const displayValue = (val: number, isPercent = false) => {
-    if (isPrivacyMode) return 'R$ ****';
+  const displayValue = (val: number, isPercent = false, isRevenueItem = false) => {
+    if (isPrivacyMode || (isRevenuePrivacyMode && isRevenueItem)) return 'R$ ****';
     if (isPercent) return `${val.toFixed(2).replace('.', ',')}%`;
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
-  const calcPercent = (value: number) => {
+  const calcPercent = (value: number, isRevenueItem = false) => {
+    if (isPrivacyMode || (isRevenuePrivacyMode && isRevenueItem)) return '**,*%';
     if (kpis.totalEntradas === 0) return '0,00%';
     return `${((value / kpis.totalEntradas) * 100).toFixed(1).replace('.', ',')}%`;
   };
@@ -149,11 +152,11 @@ export function DreKpiCards({
           <div>
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pr-6">Entradas Operacionais</h3>
             <p className="text-2xl font-black text-slate-900 tracking-tight">
-              {displayValue(kpis.totalEntradas)}
+              {displayValue(kpis.totalEntradas, false, true)}
             </p>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100/70 w-fit px-2 py-1 rounded">
-            <span>Média: {displayValue(getAverageVal(kpis.totalEntradas))}</span>
+            <span>Média: {displayValue(getAverageVal(kpis.totalEntradas), false, true)}</span>
           </div>
         </div>
 
@@ -315,12 +318,12 @@ export function DreKpiCards({
             <div>
               <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 pr-6">Outras Entradas</h3>
               <p className="text-xl font-black text-slate-800 tracking-tight">
-                {displayValue(kpis.outrasEntradas)}
+                {displayValue(kpis.outrasEntradas, false, true)}
               </p>
             </div>
             <div className="mt-2 flex items-center gap-1 text-[9px] font-semibold text-slate-400">
               <ArrowUpRight size={10} className="text-emerald-500" />
-              <span>{calcPercent(kpis.outrasEntradas)} • Média: {displayValue(getAverageVal(kpis.outrasEntradas))}</span>
+              <span>{calcPercent(kpis.outrasEntradas, true)} • Média: {displayValue(getAverageVal(kpis.outrasEntradas), false, true)}</span>
             </div>
           </div>
 

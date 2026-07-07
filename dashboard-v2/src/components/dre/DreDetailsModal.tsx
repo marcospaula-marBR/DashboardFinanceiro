@@ -12,6 +12,7 @@ interface DreDetailsModalProps {
   mensalData: Record<string, number>;
   sourceRows?: Record<string, DreRow[]>;
   isPrivacyMode: boolean;
+  isRevenuePrivacyMode?: boolean;
   allResults?: DreCalculatedResult | null;
 }
 
@@ -22,6 +23,7 @@ export function DreDetailsModal({
   mensalData, 
   sourceRows,
   isPrivacyMode,
+  isRevenuePrivacyMode,
   allResults 
 }: DreDetailsModalProps) {
   
@@ -186,8 +188,10 @@ export function DreDetailsModal({
     }
 
 
+    const isRevenue = title.toLowerCase().includes('receita') || title.toLowerCase().includes('entrada');
+
     const formatValue = (value: number, isSubtracted = false) => {
-      if (isPrivacyMode) return 'R$ ****';
+      if (isPrivacyMode || (isRevenuePrivacyMode && isRevenue)) return 'R$ ****';
       const displayVal = isSubtracted ? -Math.abs(value) : value;
       return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(displayVal);
     };
