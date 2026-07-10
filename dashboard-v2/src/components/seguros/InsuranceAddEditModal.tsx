@@ -45,6 +45,12 @@ const EMPTY_FORM: InsurancePolicyInput = {
   email_corretor: '',
   indicador: '',
   ativo: true,
+  franquia: undefined,
+  franquia_reduzida: false,
+  cobertura_vidros: false,
+  cobertura_lanternas: false,
+  cobertura_farois: false,
+  coberturas_adicionais: '',
   observacoes: '',
 };
 
@@ -96,6 +102,12 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         email_corretor: policy.email_corretor || '',
         indicador: policy.indicador || '',
         ativo: policy.ativo ?? true,
+        franquia: policy.franquia || undefined,
+        franquia_reduzida: policy.franquia_reduzida ?? false,
+        cobertura_vidros: policy.cobertura_vidros ?? false,
+        cobertura_lanternas: policy.cobertura_lanternas ?? false,
+        cobertura_farois: policy.cobertura_farois ?? false,
+        coberturas_adicionais: policy.coberturas_adicionais || '',
         observacoes: policy.observacoes || '',
       });
     } else {
@@ -171,6 +183,12 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         email_corretor: prev.email_corretor || result.email_corretor || '',
         indicador: prev.indicador || result.indicador || '',
         ativo: prev.ativo,
+        franquia: prev.franquia || result.franquia,
+        franquia_reduzida: prev.franquia_reduzida ?? result.franquia_reduzida ?? false,
+        cobertura_vidros: prev.cobertura_vidros ?? result.cobertura_vidros ?? false,
+        cobertura_lanternas: prev.cobertura_lanternas ?? result.cobertura_lanternas ?? false,
+        cobertura_farois: prev.cobertura_farois ?? result.cobertura_farois ?? false,
+        coberturas_adicionais: prev.coberturas_adicionais || result.coberturas_adicionais || '',
         observacoes: prev.observacoes || result.observacoes || '',
       }));
     } catch (err: any) {
@@ -529,6 +547,78 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
                 value={form.email_corretor || ''}
                 onChange={(e) => setField('email_corretor', e.target.value)}
                 placeholder="corretor@email.com"
+              />
+            </div>
+
+            {/* Franquia & Coberturas */}
+            <div className={styles.formGroupSectionTitle}>
+              Franquia & Coberturas (Automóvel / Bens)
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel} htmlFor="ins-franquia">Valor da Franquia (R$)</label>
+              <input
+                id="ins-franquia"
+                type="number"
+                min={0}
+                step={0.01}
+                className={styles.formInput}
+                value={form.franquia ?? ''}
+                onChange={(e) => setField('franquia', e.target.value ? parseFloat(e.target.value) : undefined)}
+                placeholder="0,00"
+              />
+            </div>
+
+            <div className={styles.formGroup} style={{ justifyContent: 'center' }}>
+              <label className={styles.formToggleLabel}>
+                <input
+                  type="checkbox"
+                  checked={form.franquia_reduzida ?? false}
+                  onChange={(e) => setField('franquia_reduzida', e.target.checked)}
+                />
+                <span>Franquia Reduzida</span>
+              </label>
+            </div>
+
+            <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
+              <label className={styles.formLabel}>Coberturas Inclusas</label>
+              <div className={styles.checkboxGrid}>
+                <label className={styles.formToggleLabel}>
+                  <input
+                    type="checkbox"
+                    checked={form.cobertura_vidros ?? false}
+                    onChange={(e) => setField('cobertura_vidros', e.target.checked)}
+                  />
+                  <span>Vidros</span>
+                </label>
+                <label className={styles.formToggleLabel}>
+                  <input
+                    type="checkbox"
+                    checked={form.cobertura_lanternas ?? false}
+                    onChange={(e) => setField('cobertura_lanternas', e.target.checked)}
+                  />
+                  <span>Lanternas</span>
+                </label>
+                <label className={styles.formToggleLabel}>
+                  <input
+                    type="checkbox"
+                    checked={form.cobertura_farois ?? false}
+                    onChange={(e) => setField('cobertura_farois', e.target.checked)}
+                  />
+                  <span>Faróis</span>
+                </label>
+              </div>
+            </div>
+
+            <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
+              <label className={styles.formLabel} htmlFor="ins-coberturas-adicionais">Outras Coberturas / Detalhes</label>
+              <input
+                id="ins-coberturas-adicionais"
+                type="text"
+                className={styles.formInput}
+                value={form.coberturas_adicionais || ''}
+                onChange={(e) => setField('coberturas_adicionais', e.target.value)}
+                placeholder="ex: Cobertura de terceiros R$ 100k, reboque ilimitado..."
               />
             </div>
 

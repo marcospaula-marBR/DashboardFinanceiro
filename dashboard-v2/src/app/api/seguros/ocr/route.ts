@@ -33,6 +33,12 @@ Retorne APENAS o JSON, sem texto adicional, seguindo exatamente esta estrutura:
   "telefone_corretor": "telefone/WhatsApp do corretor com DDD",
   "email_corretor": "e-mail do corretor",
   "indicador": "quem indicou o corretor ou o seguro, se mencionado",
+  "franquia": número do valor da franquia em reais (apenas número, sem R$),
+  "franquia_reduzida": true se a franquia for reduzida ou false caso contrário (booleano),
+  "cobertura_vidros": true se possuir cobertura para vidros ou false caso contrário (booleano),
+  "cobertura_lanternas": true se possuir cobertura para lanternas ou false caso contrário (booleano),
+  "cobertura_farois": true se possuir cobertura para faróis ou false caso contrário (booleano),
+  "coberturas_adicionais": "detalhes de outras coberturas adicionais ou observações do plano",
   "observacoes": "informações relevantes não cobertas pelos campos acima",
   "confianca": "alta | media | baixa",
   "camposNaoEncontrados": ["lista", "de", "campos", "que", "não", "foram", "encontrados", "no", "documento"]

@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS insurance_policies (
   telefone_corretor TEXT DEFAULT '',      -- WhatsApp/Telefone do corretor
   email_corretor TEXT DEFAULT '',         -- E-mail do corretor
   indicador TEXT DEFAULT '',             -- Quem indicou o corretor/seguro
+
+  -- Franquia & Coberturas
+  franquia NUMERIC(12,2) DEFAULT 0,
+  franquia_reduzida BOOLEAN DEFAULT FALSE,
+  cobertura_vidros BOOLEAN DEFAULT FALSE,
+  cobertura_lanternas BOOLEAN DEFAULT FALSE,
+  cobertura_farois BOOLEAN DEFAULT FALSE,
+  coberturas_adicionais TEXT DEFAULT '',
   
   -- Controle
   ativo BOOLEAN DEFAULT TRUE,            -- Apólice ativa?

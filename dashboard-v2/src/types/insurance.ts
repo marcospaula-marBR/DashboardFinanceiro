@@ -38,6 +38,12 @@ export interface InsurancePolicy {
   telefone_corretor?: string;
   email_corretor?: string;
   indicador?: string;
+  franquia?: number;
+  franquia_reduzida?: boolean;
+  cobertura_vidros?: boolean;
+  cobertura_lanternas?: boolean;
+  cobertura_farois?: boolean;
+  coberturas_adicionais?: string;
   ativo: boolean;
   observacoes?: string;
   created_at?: string;
@@ -70,6 +76,12 @@ export interface InsurancePolicyInput {
   email_corretor?: string;
   indicador?: string;
   ativo?: boolean;
+  franquia?: number;
+  franquia_reduzida?: boolean;
+  cobertura_vidros?: boolean;
+  cobertura_lanternas?: boolean;
+  cobertura_farois?: boolean;
+  coberturas_adicionais?: string;
   observacoes?: string;
 }
 
@@ -113,6 +125,12 @@ export interface InsuranceOCRResult {
   telefone_corretor?: string;
   email_corretor?: string;
   indicador?: string;
+  franquia?: number;
+  franquia_reduzida?: boolean;
+  cobertura_vidros?: boolean;
+  cobertura_lanternas?: boolean;
+  cobertura_farois?: boolean;
+  coberturas_adicionais?: string;
   observacoes?: string;
   confianca?: 'alta' | 'media' | 'baixa';
   camposNaoEncontrados?: string[];

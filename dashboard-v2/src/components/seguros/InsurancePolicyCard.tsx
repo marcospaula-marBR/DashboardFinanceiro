@@ -21,6 +21,7 @@ import {
   Hash,
   Lock,
   Headphones,
+  ShieldCheck,
 } from 'lucide-react';
 import { InsurancePolicy } from '@/types/insurance';
 import {
@@ -201,6 +202,40 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete }: InsurancePolic
                 </div>
               )}
             </div>
+
+            {/* BLOCO: Franquia & Coberturas */}
+            {(policy.franquia !== undefined || policy.cobertura_vidros || policy.cobertura_lanternas || policy.cobertura_farois || policy.coberturas_adicionais) && (
+              <div className={styles.detailSection}>
+                <h4 className={styles.detailSectionTitle}>
+                  <ShieldCheck size={14} /> Coberturas & Franquia
+                </h4>
+                {policy.franquia !== undefined && (
+                  <div className={styles.detailRow}>
+                    <span className={styles.detailKey}>Franquia</span>
+                    <span className={styles.detailValue}>
+                      {formatInsuranceCurrency(policy.franquia)}
+                      {policy.franquia_reduzida && <span className={styles.formato}> · Reduzida</span>}
+                    </span>
+                  </div>
+                )}
+                {(policy.cobertura_vidros || policy.cobertura_lanternas || policy.cobertura_farois) && (
+                  <div className={styles.detailRow}>
+                    <span className={styles.detailKey}>Itens Inclusos</span>
+                    <span className={styles.detailValue} style={{ fontSize: '0.72rem', display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
+                      {policy.cobertura_vidros && <span className={styles.coberturaBadge}>Vidros</span>}
+                      {policy.cobertura_lanternas && <span className={styles.coberturaBadge}>Lanternas</span>}
+                      {policy.cobertura_farois && <span className={styles.coberturaBadge}>Faróis</span>}
+                    </span>
+                  </div>
+                )}
+                {policy.coberturas_adicionais && (
+                  <div className={styles.detailRow}>
+                    <span className={styles.detailKey}>Adicionais</span>
+                    <span className={styles.detailValue} style={{ fontSize: '0.72rem', lineHeight: '1.3' }}>{policy.coberturas_adicionais}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* BLOCO: Apólice */}
             <div className={styles.detailSection}>
