@@ -49,6 +49,11 @@ Depois da alteração:
 
 Nenhuma alteração deve ser feita sem rastreabilidade. Quando houver changelog, histórico interno, comentários de versão ou arquivo `version.ts` no projeto, o incremento da versão e o registro da alteração devem ser realizados obrigatoriamente ANTES do commit.
 
+**REGRA DE DESCRIÇÃO DO DEPLOY (COMMIT E CHANGELOG)**:
+É estritamente obrigatório que o **número da versão atualizada** (ex: `v.02.48.94`) conste SEMPRE no **começo** da descrição do deploy. Isso se aplica tanto ao registro no arquivo de changelog/versão quanto à **mensagem do commit** que será feito (`git commit`).
+- Exemplo de Changelog: `"v.02.48.94 - Feat: Adiciona nova funcionalidade"`
+- Exemplo de Commit: `git commit -m "v.02.48.94 - feat: adiciona nova funcionalidade"`
+
 Formato recomendado de registro:
 
 ```md

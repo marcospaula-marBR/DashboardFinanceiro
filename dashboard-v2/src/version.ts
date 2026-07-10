@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.96";
-export const VERSION_DATE = "2026-07-07";
+export const APP_VERSION = "v.02.48.97";
+export const VERSION_DATE = "2026-07-10";
 export const VERSION_CHANGELOG = [
+  "v.02.48.97 - Feat/Seguros: Migra página de Seguros do legado HTML/CSV para React/Next.js com Supabase. Cria tabela insurance_policies, serviço CRUD completo (fetchInsurancePolicies, create, update, deactivate), tipos TypeScript, 5 componentes React (KPICards, ExpiryAlert, FilterBar, PolicyCard, AddEditModal) e CSS module premium. Implementa OCR via Gemini API (/api/seguros/ocr) com drag-and-drop para leitura automática de apólices PDF/imagem. Cards expandíveis com senhas e nº de apólice visíveis (com botão copiar), links WhatsApp/email para corretores, alertas de vencimento ≤7 e ≤30 dias, soft-delete e importação dos 12 registros legados do CSV.",
   "v.02.48.96 - Fix: Corrige erro de sintaxe TypeScript na declaração de interface do DreCharts.",
   "v.02.48.95 - Feat/DRE: Adicionado botão específico para ocultar apenas os valores de receitas na página DRE.",
   "v.02.48.94 - Refactor/Institucional: Migra os dados fixos corporativos (razão social, CNPJ, contatos setorizados e links de CNDs) das empresas Mar Brasil e DZM para o banco de dados Supabase na tabela `companies`. A página Institucional passa a consultar essas informações em tempo real, permitindo a gestão segura e fácil dos dados via Supabase Studio, com base nas fichas cadastrais em PDF.",

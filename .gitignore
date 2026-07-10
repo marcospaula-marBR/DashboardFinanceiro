@@ -34,3 +34,8 @@ backup/
 !vercel.json
 !tsconfig.json
 !package-lock.json
+
+# Temporary drive upload folders
+.tmp.driveupload/
+.tmp.*/
+tmp/

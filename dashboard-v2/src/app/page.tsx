@@ -27,7 +27,7 @@ const SATELLITES = [
   { href: "/analise-setorial.html", icon: PieChart, title: "Análise Setorial", sub: "Custos por Área" },
   { href: "/parcelamentos.html", icon: CreditCard, title: "Parcelamentos", sub: "Controle de Dívidas" },
   { href: "/people", icon: Users, title: "People", sub: "Gestão Cockpit RH" },
-  { href: "/seguros.html", icon: ShieldCheck, title: "Seguros", sub: "Gestão de Apólices" },
+  { href: "/seguros", icon: ShieldCheck, title: "Seguros", sub: "Gestão de Apólices" },
   { href: "/indicadores_v2.html", icon: Gauge, title: "Indicadores", sub: "KPIs Estratégicos" },
   { href: "/contratos.html", icon: FileText, title: "Contratos", sub: "Vínculo Faturamento" },
   { href: "/comissoes-v1", icon: BadgeDollarSign, title: "Comissões", sub: "Divisão Equipe" },
