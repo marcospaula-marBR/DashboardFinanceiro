@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.48.98";
-export const VERSION_DATE = "2026-07-10";
+export const APP_VERSION = "v.02.48.99";
+export const VERSION_DATE = "2026-07-13";
 export const VERSION_CHANGELOG = [
+  "v.02.48.99 - Feat/Seguros: Adiciona botões explícitos de Inativar/Reativar nos cards de seguros, facilitando a gestão de apólices não renovadas sem perdê-las do histórico (soft-delete). Re-mapeia o botão Excluir definitivo para remoção física da linha (hard-delete) no banco de dados.",
   "v.02.48.98 - Feat/Seguros: Adiciona campos de Franquia (valor e tipo reduzida) e Coberturas (Vidros, Lanternas e Faróis) no banco de dados, na interface de cards de apólices e no formulário de criação/edição. Atualiza a extração automática OCR via Gemini para mapear e recuperar esses campos diretamente do documento anexado.",
   "v.02.48.97 - Feat/Seguros: Migra página de Seguros do legado HTML/CSV para React/Next.js com Supabase. Cria tabela insurance_policies, serviço CRUD completo (fetchInsurancePolicies, create, update, deactivate), tipos TypeScript, 5 componentes React (KPICards, ExpiryAlert, FilterBar, PolicyCard, AddEditModal) e CSS module premium. Implementa OCR via Gemini API (/api/seguros/ocr) com drag-and-drop para leitura automática de apólices PDF/imagem. Cards expandíveis com senhas e nº de apólice visíveis (com botão copiar), links WhatsApp/email para corretores, alertas de vencimento ≤7 e ≤30 dias, soft-delete e importação dos 12 registros legados do CSV.",
   "v.02.48.96 - Fix: Corrige erro de sintaxe TypeScript na declaração de interface do DreCharts.",

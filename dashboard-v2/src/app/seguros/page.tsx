@@ -22,6 +22,7 @@ import {
   createInsurancePolicy,
   updateInsurancePolicy,
   deactivateInsurancePolicy,
+  deleteInsurancePolicy,
   computeInsuranceKPIs,
 } from '@/services/insurance.service';
 
@@ -128,13 +129,22 @@ export default function SegurosPage() {
     if (!deletingPolicy) return;
     setIsDeleting(true);
     try {
-      await deactivateInsurancePolicy(deletingPolicy.id);
+      await deleteInsurancePolicy(deletingPolicy.id);
       setDeletingPolicy(null);
       await loadPolicies();
     } catch (err: any) {
       setError('Erro ao excluir: ' + (err.message || 'Tente novamente.'));
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleToggleActive = async (policy: InsurancePolicy) => {
+    try {
+      await updateInsurancePolicy(policy.id, { ativo: !policy.ativo });
+      await loadPolicies();
+    } catch (err: any) {
+      setError('Erro ao alterar status da apólice: ' + (err.message || 'Tente novamente.'));
     }
   };
 
@@ -252,6 +262,7 @@ export default function SegurosPage() {
                 policy={policy}
                 onEdit={handleEdit}
                 onDelete={handleDeleteRequest}
+                onToggleActive={handleToggleActive}
               />
             ))}
           </div>

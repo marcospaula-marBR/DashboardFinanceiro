@@ -15,6 +15,7 @@ import {
   Pencil,
   Trash2,
   Eye,
+  EyeOff,
   Calendar,
   CreditCard,
   User,
@@ -35,6 +36,7 @@ interface InsurancePolicyCardProps {
   policy: InsurancePolicy;
   onEdit: (policy: InsurancePolicy) => void;
   onDelete: (policy: InsurancePolicy) => void;
+  onToggleActive: (policy: InsurancePolicy) => void;
 }
 
 function CopyButton({ value }: { value: string }) {
@@ -82,7 +84,7 @@ function StatusBadge({ policy }: { policy: InsurancePolicy }) {
   return <span className={`${styles.statusBadge} ${styles.badgeAtiva}`}>Ativa</span>;
 }
 
-export function InsurancePolicyCard({ policy, onEdit, onDelete }: InsurancePolicyCardProps) {
+export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }: InsurancePolicyCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showSenha, setShowSenha] = useState(false);
 
@@ -337,6 +339,23 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete }: InsurancePolic
               <Pencil size={14} />
               Editar
             </button>
+            {policy.ativo ? (
+              <button
+                className={styles.btnDeactivate}
+                onClick={(e) => { e.stopPropagation(); onToggleActive(policy); }}
+              >
+                <EyeOff size={14} />
+                Inativar
+              </button>
+            ) : (
+              <button
+                className={styles.btnActivate}
+                onClick={(e) => { e.stopPropagation(); onToggleActive(policy); }}
+              >
+                <Eye size={14} />
+                Reativar
+              </button>
+            )}
             <button
               className={styles.btnDelete}
               onClick={(e) => { e.stopPropagation(); onDelete(policy); }}

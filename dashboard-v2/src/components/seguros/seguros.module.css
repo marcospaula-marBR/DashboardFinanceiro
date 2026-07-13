@@ -701,7 +701,7 @@
   justify-content: flex-end;
 }
 
-.btnEdit, .btnDelete {
+.btnEdit, .btnDelete, .btnDeactivate, .btnActivate {
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -720,6 +720,20 @@
   color: #93c5fd;
 }
 .btnEdit:hover { background: rgba(59, 130, 246, 0.15); }
+
+.btnDeactivate {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+.btnDeactivate:hover { background: rgba(245, 158, 11, 0.15); }
+
+.btnActivate {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+.btnActivate:hover { background: rgba(16, 185, 129, 0.15); }
 
 .btnDelete {
   background: rgba(239, 68, 68, 0.07);
