@@ -525,9 +525,50 @@ export default function DrePage() {
         ExportPdfService.exportToCsv(results, filters, empresa, periodo);
       }
 
-      if (selections.includeGamma && results) {
+        // Helper functions
         const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-        const kpis = results.kpis;
+        const formatPCT = (val: number) => `${(val).toFixed(1).replace('.', ',')}%`;
+        const formatDEC = (val: number) => `${val.toFixed(2).replace('.', ',')}x`;
+        const getTot = (key: string) => results.totais[key] || 0;
+
+        // Cálculos dos Indicadores (Idênticos ao DreIndicatorsModal)
+        const val_receita_bruta = getTot('Receita Bruta de Vendas');
+        const val_receitas_indiretas = getTot('Receitas Indiretas');
+        const val_impostos_vendas = getTot('Impostos') || getTot('Impostos sobre a Receita');
+        const val_irpj_csll = getTot('Provisão - IRPJ e CSSL Trimestral') || getTot('Provisão IRPJ e CSSL Trimestral');
+        
+        const receita_liquida = (val_receita_bruta + val_receitas_indiretas) - val_impostos_vendas;
+        const RL = receita_liquida !== 0 ? receita_liquida : 1;
+
+        const val_despesas_variaveis = getTot('Despesas Variáveis');
+        const val_intermediacao = getTot('Intermediação de Negócios');
+        const custos_despesas_variaveis = results.kpis.totalCustos + val_despesas_variaveis + val_intermediacao;
+
+        const lucro_bruto = receita_liquida - results.kpis.totalCustos;
+
+        const val_despesas_financeiras = getTot('Despesas Financeiras');
+        const val_dividendos = getTot('Distribuição de Dividendos') + getTot('Dividendos');
+        const despesas_operacionais = results.kpis.totalDespesas - val_despesas_financeiras - val_dividendos - val_despesas_variaveis - val_intermediacao;
+
+        const ebit = lucro_bruto - despesas_operacionais;
+        const ebitda = ebit;
+
+        const val_receitas_financeiras = getTot('Receitas Financeiras');
+        const resultado_financeiro = val_receitas_financeiras - val_despesas_financeiras;
+
+        const val_outras_receitas = getTot('Outras Receitas') + getTot('Honorários') + getTot('Juros e devoluções') + getTot('Recuperação de Despesas Variáveis');
+        const lair = ebit + resultado_financeiro + val_outras_receitas;
+
+        const lucro_liquido = lair - val_irpj_csll;
+        const margem_contribuicao_valor = receita_liquida - custos_despesas_variaveis;
+        const gao = ebit !== 0 ? margem_contribuicao_valor / ebit : 0;
+        
+        // Indicadores extra de fluxo e operação
+        const receitas_totais = val_receita_bruta + val_receitas_indiretas;
+        const total_saidas = (results.kpis.totalCustos + results.kpis.totalDespesas + val_impostos_vendas + val_irpj_csll);
+        const gastos_pessoal = getTot('Gastos com Pessoal');
+        const manut_preventiva = getTot('Manutenção Planejada B2G') || getTot('Manutenção Preventiva');
+        const manut_corretiva = getTot('Manutenção Corretiva B2G') || getTot('Manutenção Corretiva');
         
         // --- CONSTRUÇÃO DO RELATÓRIO MARKDOWN ---
         let markdownReport = `# Relatório Financeiro: ${empresa}\n\n`;
@@ -539,12 +580,26 @@ export default function DrePage() {
         if (filters.departamentos.length > 0) markdownReport += `- **Centros de Custo:** ${filters.departamentos.join(', ')}\n`;
         markdownReport += `\n`;
 
-        markdownReport += `## Indicadores Principais (KPIs)\n`;
-        markdownReport += `- **Receita Operacional:** ${formatBRL(kpis.receitaOperacional)}\n`;
-        markdownReport += `- **Custos Totais:** ${formatBRL(kpis.totalCustos)}\n`;
-        markdownReport += `- **Despesas Totais:** ${formatBRL(kpis.totalDespesas)}\n`;
-        markdownReport += `- **Lucro (Resultado Antes FCL):** ${formatBRL(kpis.resultado)}\n`;
-        markdownReport += `- **Fluxo de Caixa Livre (FCL):** ${formatBRL(kpis.fcl)}\n`;
+        markdownReport += `## 1. Indicadores Estratégicos Financeiros (KPIs Avançados)\n`;
+        markdownReport += `- **1. Margem Bruta:** ${formatPCT((lucro_bruto / RL) * 100)}\n`;
+        markdownReport += `- **2. Margem de Contribuição:** ${formatPCT((margem_contribuicao_valor / RL) * 100)}\n`;
+        markdownReport += `- **3. Margem Operacional:** ${formatPCT((ebit / RL) * 100)}\n`;
+        markdownReport += `- **4. EBITDA:** ${formatBRL(ebitda)}\n`;
+        markdownReport += `- **5. Margem EBITDA:** ${formatPCT((ebitda / RL) * 100)}\n`;
+        markdownReport += `- **6. Resultado Financeiro:** ${formatBRL(resultado_financeiro)}\n`;
+        markdownReport += `- **7. Margem Antes do IR/CSLL:** ${formatPCT((lair / RL) * 100)}\n`;
+        markdownReport += `- **8. Margem Líquida:** ${formatPCT((lucro_liquido / RL) * 100)}\n`;
+        markdownReport += `- **9. Índ. Despesas Operacionais:** ${formatPCT((despesas_operacionais / RL) * 100)}\n`;
+        markdownReport += `- **10. GAO (Alavancagem Op.):** ${formatDEC(gao)}\n`;
+        markdownReport += `\n`;
+
+        markdownReport += `## 2. Fluxo de Caixa e Eficiência Operacional\n`;
+        markdownReport += `- **Receitas Totais:** ${formatBRL(receitas_totais)}\n`;
+        markdownReport += `- **Total Saídas (Estimado):** ${formatBRL(total_saidas)}\n`;
+        markdownReport += `- **Fluxo de Caixa Livre (FCL):** ${formatBRL(results.kpis.fcl)} (Margem: ${formatPCT((results.kpis.fcl / RL) * 100)})\n`;
+        markdownReport += `- **Gastos com Pessoal:** ${formatBRL(gastos_pessoal)}\n`;
+        markdownReport += `- **Manutenção Preventiva:** ${formatBRL(manut_preventiva)}\n`;
+        markdownReport += `- **Manutenção Corretiva:** ${formatBRL(manut_corretiva)}\n`;
         markdownReport += `\n`;
 
         markdownReport += `## DRE Resumida (Acumulado do Período)\n`;

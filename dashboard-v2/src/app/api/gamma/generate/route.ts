@@ -19,14 +19,14 @@ export async function POST(req: Request) {
     const { markdownReport } = body;
 
     const promptText = `
-Aja como um analista financeiro (CFO) e crie slides profissionais, limpos e direto ao ponto. 
-Use a paleta de cores neutra (tons de cinza e laranja/âmbar, evite cores espalhafatosas).
-Seções recomendadas:
-1. Resumo Executivo
-2. Desempenho de Receitas
-3. Análise de Custos e Despesas
-4. Lucratividade e Fluxo de Caixa Livre
-5. Conclusões.
+Crie uma apresentação estritamente baseada em dados, com gráficos, tabelas de valores, percentuais e médias.
+NÃO crie textos de análise, opiniões, subjetividades ou "textões". Apenas exponha os números, os indicadores estratégicos e a DRE de forma limpa e direta.
+
+Seções obrigatórias:
+1. Resumo do Período (com KPIs consolidados)
+2. Indicadores Estratégicos Financeiros (tabela ou cartões)
+3. Fluxo de Caixa e Eficiência Operacional
+4. DRE Resumida
 
 Abaixo estão os dados financeiros do período e os filtros aplicados. Crie a apresentação baseada EXCLUSIVAMENTE nestes dados reais (não invente números):
 

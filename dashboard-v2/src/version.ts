@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.07";
+export const APP_VERSION = "v.02.50.08";
 export const VERSION_DATE = "2026-07-15";
 export const VERSION_CHANGELOG = [
+  "v.02.50.08 - Feat/DRE: Reconfigura o relatório de envio para o Gamma adicionando o cálculo exato dos 10 KPIs Avançados de Margem e 6 de Operação/Fluxo. Altera as diretrizes do prompt da IA para banir análises subjetivas ('textões') e focar exclusivamente na exibição de dados quantitativos em forma de tabelas, cartões e gráficos.",
   "v.02.50.07 - Feat/DRE: Refatora completamente o envio de contexto para a IA do Gamma. Em vez de enviar variáveis soltas, o frontend agora constrói antecipadamente um mini Relatório em Markdown (contendo Filtros Ativos, Tabela de KPIs e Tabela de Acumulado Resumido da DRE) e envia como input único para o Gamma usar como material de base (textMode: generate). Isso soluciona alucinações da IA sobre períodos ou valores ausentes.",
   "v.02.50.06 - Fix/DRE: Adiciona o parâmetro obrigatório 'textMode: generate' no payload de integração com a API do Gamma para validar a requisição de criação.",
   "v.02.50.05 - Fix/DRE: Corrige o corpo da requisição da API do Gamma, de 'prompt' para 'inputText', conforme a documentação oficial da versão 1.0 para gerar novas apresentações. Aprimora o tratamento de erro no frontend para exibir detalhes exatos do Gamma.",
