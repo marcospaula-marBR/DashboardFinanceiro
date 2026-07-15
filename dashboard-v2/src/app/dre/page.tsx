@@ -570,8 +570,22 @@ export default function DrePage() {
         const manut_preventiva = getTot('Manutenção Planejada B2G') || getTot('Manutenção Preventiva');
         const manut_corretiva = getTot('Manutenção Corretiva B2G') || getTot('Manutenção Corretiva');
         
+        // --- LÓGICA DO LOGO DINÂMICO ---
+        const getLogoUrl = (nomeEmpresa: string) => {
+          const baseUrl = 'https://dashboard-financeiro-mar-brasil.vercel.app/logos';
+          if (nomeEmpresa.includes('Mar Brasil')) return `${baseUrl}/Mar%20BR%20-%20Chap%C3%A9u.png`;
+          if (nomeEmpresa.includes('DZM')) return `${baseUrl}/DZM.png`;
+          if (nomeEmpresa.includes('Grupo 2') || nomeEmpresa.includes('G2')) return `${baseUrl}/Grupo%202.jpeg`;
+          if (nomeEmpresa.includes('Ybox')) return `${baseUrl}/Ybox.png`;
+          if (nomeEmpresa.includes('Conectius')) return `${baseUrl}/Conectius.png`;
+          if (nomeEmpresa.includes('Solucione')) return `${baseUrl}/Solucione.png`;
+          // Fallback para Global/Várias
+          return 'https://dashboard-financeiro-mar-brasil.vercel.app/mar-brasil-logo.png';
+        };
+        const logoUrl = getLogoUrl(empresa);
+
         // --- CONSTRUÇÃO DO RELATÓRIO MARKDOWN ---
-        let markdownReport = `![Logo Mar Brasil](https://dashboard-financeiro-mar-brasil.vercel.app/mar-brasil-logo.png)\n\n`;
+        let markdownReport = `![Logo](${logoUrl})\n\n`;
         markdownReport += `# Relatório Financeiro: ${empresa}\n\n`;
         
         markdownReport += `## Filtros Aplicados\n`;
