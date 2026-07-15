@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.01";
+export const APP_VERSION = "v.02.50.02";
 export const VERSION_DATE = "2026-07-15";
 export const VERSION_CHANGELOG = [
+  "v.02.50.02 - Fix/DRE: Corrige tipagem da interface DreKpis de receitaOperacionalBruta para receitaOperacional no prompt da integração com o Gamma.",
   "v.02.50.01 - Fix/Vercel: Corrige erro de compilação de tipagem em rotas dinâmicas do Next.js 15+ na rota de status da API do Gamma (params como Promise).",
   "v.02.50.00 - Feat/DRE: Integração nativa com a Inteligência Artificial do Gamma.app. Remoção completa da exportação estática em PDF. O sistema agora extrai todos os KPIs, receitas, custos, despesas, margens, DRE completa e constrói um prompt executivo inteligente, enviando para a API REST do Gamma em background. Um modal de carregamento trava a tela garantindo a integridade, e a apresentação de slides final é aberta automaticamente em uma nova aba.",
   "v.02.49.01 - Fix/DRE: Corrige falha de tipagem (DreKpis) que impedia o build no Vercel no arquivo exportPdf.service.ts e renomeia o botão 'Exportar PDF' para 'Gerar Relatório' no painel principal.",

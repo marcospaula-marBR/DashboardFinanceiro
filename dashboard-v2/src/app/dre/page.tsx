@@ -530,7 +530,7 @@ export default function DrePage() {
         const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
         const kpis = results.kpis;
         const indicadores = {
-          receita: formatBRL(kpis.receitaOperacionalBruta),
+          receita: formatBRL(kpis.receitaOperacional),
           custos: formatBRL(kpis.custosOperacionais),
           despesas: formatBRL(kpis.despesasRateadas),
           lucro: formatBRL(kpis.lucroAntesFcl),
