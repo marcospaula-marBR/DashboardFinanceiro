@@ -536,11 +536,21 @@ export default function DrePage() {
     }
 
     try {
-      // Chamada para o NOVO gerador nativo
-      await ExportPdfService.buildNativePdf(results!, selections, empresa, periodo, aiText);
+      const hasPdfModules = selections.includeAiAnalysis || selections.includeKpis || selections.includeEvolution || selections.includeWaterfall || selections.includeDonut || selections.includeTable;
+      
+      if (hasPdfModules && results) {
+        // Chamada para o gerador nativo com filtros ativos passados como parâmetro
+        await ExportPdfService.buildNativePdf(results!, selections, empresa, periodo, filters, aiText);
+      }
+      
+      if (selections.includeRawCsv && results) {
+        // Exporta diretamente para CSV estruturado
+        ExportPdfService.exportToCsv(results, filters, empresa, periodo);
+      }
+
       setIsExportModalOpen(false);
     } catch (error: any) {
-      alert("Falha ao gerar o PDF. Erro: " + (error?.message || String(error)));
+      alert("Falha ao exportar os dados. Erro: " + (error?.message || String(error)));
       console.error(error);
     } finally {
       setIsExportingPdf(false);
@@ -847,7 +857,8 @@ export default function DrePage() {
             includeDonut: true,
             includeAiAnalysis: false,
             includeKpis: false,
-            includeTable: false
+            includeTable: false,
+            includeRawCsv: false
           }}
         />
       )}

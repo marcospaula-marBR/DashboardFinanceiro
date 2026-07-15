@@ -111,13 +111,13 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && setExpanded(!expanded)}
       >
-        {/* Ícone + Tipo + Segurado */}
+        {/* Ícone + Segurado + Tipo */}
         <div className={styles.policyCardMain}>
           <span className={styles.policyTipoIcon} aria-hidden="true">{tipoIcon}</span>
           <div className={styles.policyCardInfo}>
-            <h3 className={styles.policyTipo}>{policy.tipo}</h3>
+            <h3 className={styles.policyTipo}>{policy.segurado || 'Objeto não especificado'}</h3>
             <p className={styles.policyMeta}>
-              {policy.segurado || '—'}
+              <span>{policy.tipo}</span>
               {policy.seguradora && <> · <span className={styles.seguradora}>{policy.seguradora}</span></>}
             </p>
           </div>

@@ -36,21 +36,31 @@ function getStatusVencimento(dias?: number): InsuranceStatusVencimento {
   return 'ok';
 }
 
-function getParcelasPagas(inicio?: string, total?: number): number {
+function getParcelasPagas(inicio?: string, total?: number, diaPgto?: string): number {
   if (!inicio || !total) return 0;
+  
   const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  
   const start = new Date(inicio + 'T00:00:00');
-  const meses =
-    (hoje.getFullYear() - start.getFullYear()) * 12 +
-    (hoje.getMonth() - start.getMonth()) +
-    1;
+  start.setHours(0, 0, 0, 0);
+  
+  if (hoje < start) return 0;
+
+  let meses = (hoje.getFullYear() - start.getFullYear()) * 12 + (hoje.getMonth() - start.getMonth());
+  
+  const diaVencimento = diaPgto ? parseInt(diaPgto, 10) : start.getDate();
+  if (hoje.getDate() >= (isNaN(diaVencimento) ? start.getDate() : diaVencimento)) {
+    meses += 1;
+  }
+  
   return Math.min(total, Math.max(0, meses));
 }
 
 /** Adiciona campos calculados a cada apólice */
 export function enrichPolicy(policy: InsurancePolicy): InsurancePolicy {
   const dias = getDiasParaVencer(policy.vencimento);
-  const parcelasPagas = getParcelasPagas(policy.inicio, policy.parcelas_total);
+  const parcelasPagas = getParcelasPagas(policy.inicio, policy.parcelas_total, policy.dia_pgto);
   const parcelasRestantes = Math.max(0, (policy.parcelas_total || 0) - parcelasPagas);
 
   return {

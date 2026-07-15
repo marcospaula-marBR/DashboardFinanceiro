@@ -153,6 +153,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Normalização e limpeza inteligente dos valores extraídos
+    if (result) {
+      result.premio = parseNumber(result.premio);
+      result.franquia = parseNumber(result.franquia);
+      result.valor_parcela = parseNumber(result.valor_parcela);
+      result.parcelas_total = parseInteger(result.parcelas_total);
+
+      // Autocompleta valor_parcela se tivermos premio e parcelas_total
+      if (result.premio && result.parcelas_total && !result.valor_parcela) {
+        result.valor_parcela = Math.round((result.premio / result.parcelas_total) * 100) / 100;
+      }
+
+      // Converte booleanos de franquia e coberturas
+      result.franquia_reduzida = result.franquia_reduzida === true || String(result.franquia_reduzida).toLowerCase() === 'true';
+      result.cobertura_vidros = result.cobertura_vidros === true || String(result.cobertura_vidros).toLowerCase() === 'true';
+      result.cobertura_lanternas = result.cobertura_lanternas === true || String(result.cobertura_lanternas).toLowerCase() === 'true';
+      result.cobertura_farois = result.cobertura_farois === true || String(result.cobertura_farois).toLowerCase() === 'true';
+    }
+
     return NextResponse.json({ success: true, data: result });
   } catch (error: any) {
     console.error('[OCR] Erro interno:', error.message);
@@ -161,4 +180,49 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// ──────────────────────────────────────────────────────────
+// AUXILIARY PARSING HELPERS
+// ──────────────────────────────────────────────────────────
+
+function parseNumber(val: any): number | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    let clean = val.replace(/R\$/gi, '').replace(/\s/g, '');
+    
+    // Se tiver vírgula e ponto, ex: 1.250,00 ou 1,250.00
+    if (clean.includes(',') && clean.includes('.')) {
+      if (clean.indexOf(',') > clean.indexOf('.')) {
+        // Formato brasileiro: 1.250,00
+        clean = clean.replace(/\./g, '').replace(/,/g, '.');
+      } else {
+        // Formato americano: 1,250.00
+        clean = clean.replace(/,/g, '');
+      }
+    } else if (clean.includes(',')) {
+      // Apenas vírgula: ex: 1250,00 ou 1,250 (se for milhar)
+      const parts = clean.split(',');
+      if (parts[1] && parts[1].length === 2) {
+        clean = clean.replace(/,/g, '.');
+      } else {
+        clean = clean.replace(/,/g, '');
+      }
+    }
+    const num = parseFloat(clean);
+    return isNaN(num) ? undefined : num;
+  }
+  return undefined;
+}
+
+function parseInteger(val: any): number | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (typeof val === 'number') return Math.round(val);
+  if (typeof val === 'string') {
+    const clean = val.replace(/\D/g, '');
+    const num = parseInt(clean, 10);
+    return isNaN(num) ? undefined : num;
+  }
+  return undefined;
 }

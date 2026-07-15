@@ -2,13 +2,20 @@ import React from 'react';
 import { DreCalculatedResult } from '@/types/dre';
 import { ExportSelections } from './DreExportModal';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
   PieChart, Pie, Cell, ComposedChart, Line
 } from 'recharts';
 
 interface DrePrintChartsProps {
   results: DreCalculatedResult;
   selections: ExportSelections;
+}
+
+interface WaterfallStep {
+  name: string;
+  value: number;
+  cumulative: number;
+  isFinal?: boolean;
 }
 
 const PALETTE = {
@@ -40,7 +47,7 @@ export function DrePrintCharts({ results, selections }: DrePrintChartsProps) {
   const d  = -kpis.totalDespesas;
   const inv = -kpis.totalInvestimentos;
 
-  const waterfallSteps = [
+  const waterfallSteps: WaterfallStep[] = [
     { name: 'Entradas Op.',    value: e,   cumulative: 0 },
     { name: 'Outras Ent.',     value: oe,  cumulative: e },
     { name: 'Impostos',        value: i,   cumulative: e + oe },
@@ -52,10 +59,10 @@ export function DrePrintCharts({ results, selections }: DrePrintChartsProps) {
 
   const waterfallData = waterfallSteps.map(s => ({
     name: s.name,
-    base: (s as any).isFinal ? Math.min(0, s.value) : (s.value >= 0 ? s.cumulative : s.cumulative + s.value),
+    base: s.isFinal ? Math.min(0, s.value) : (s.value >= 0 ? s.cumulative : s.cumulative + s.value),
     bar: Math.abs(s.value),
     positive: s.value >= 0,
-    isFinal: !!(s as any).isFinal,
+    isFinal: !!s.isFinal,
     rawValue: s.value,
   }));
 
@@ -80,9 +87,9 @@ export function DrePrintCharts({ results, selections }: DrePrintChartsProps) {
             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => fmtK(v)} />
             <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
-            <Bar dataKey="Receitas" fill={PALETTE.receita} radius={[5, 5, 0, 0]} maxBarSize={36} />
-            <Bar dataKey="Saídas"   fill={PALETTE.saidas}  radius={[5, 5, 0, 0]} maxBarSize={36} />
-            <Line type="monotone" dataKey="FCL" stroke={PALETTE.fcl} strokeWidth={2.5} dot={{ r: 4, fill: PALETTE.fcl }} />
+            <Bar dataKey="Receitas" fill={PALETTE.receita} radius={[5, 5, 0, 0]} maxBarSize={36} isAnimationActive={false} />
+            <Bar dataKey="Saídas"   fill={PALETTE.saidas}  radius={[5, 5, 0, 0]} maxBarSize={36} isAnimationActive={false} />
+            <Line type="monotone" dataKey="FCL" stroke={PALETTE.fcl} strokeWidth={2.5} dot={{ r: 4, fill: PALETTE.fcl }} isAnimationActive={false} />
           </ComposedChart>
         </div>
       )}
@@ -94,8 +101,8 @@ export function DrePrintCharts({ results, selections }: DrePrintChartsProps) {
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => fmtK(v)} />
-            <Bar dataKey="base" stackId="wf" fill="transparent" />
-            <Bar dataKey="bar" stackId="wf" radius={[5, 5, 0, 0]} maxBarSize={50}>
+            <Bar dataKey="base" stackId="wf" fill="transparent" isAnimationActive={false} />
+            <Bar dataKey="bar" stackId="wf" radius={[5, 5, 0, 0]} maxBarSize={50} isAnimationActive={false}>
               {waterfallData.map((entry, index) => (
                 <Cell key={`wf-${index}`} fill={entry.isFinal ? (entry.rawValue >= 0 ? PALETTE.fcl : PALETTE.saidas) : (entry.positive ? PALETTE.receita : PALETTE.saidas)} />
               ))}
@@ -108,7 +115,7 @@ export function DrePrintCharts({ results, selections }: DrePrintChartsProps) {
         <div id="print-chart-donut" style={{ width: '900px', height: '400px', marginBottom: '40px', backgroundColor: 'white', padding: '20px', borderRadius: '12px' }}>
           <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#334155', marginBottom: '20px' }}>Composição de Custos e Despesas</h3>
           <PieChart width={860} height={320}>
-            <Pie data={composicaoData} cx={430} cy={160} innerRadius={80} outerRadius={130} paddingAngle={3} dataKey="value" label>
+            <Pie data={composicaoData} cx={430} cy={160} innerRadius={80} outerRadius={130} paddingAngle={3} dataKey="value" label isAnimationActive={false}>
               {composicaoData.map((_, index) => (
                 <Cell key={`c-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} strokeWidth={0} />
               ))}
