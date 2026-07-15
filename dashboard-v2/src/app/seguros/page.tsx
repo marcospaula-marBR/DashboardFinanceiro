@@ -17,6 +17,7 @@ import { InsuranceFilterBar } from '@/components/seguros/InsuranceFilterBar';
 import { InsurancePolicyCard } from '@/components/seguros/InsurancePolicyCard';
 import { InsuranceAddEditModal } from '@/components/seguros/InsuranceAddEditModal';
 import { InsuranceExportModal, InsuranceExportSelections } from '@/components/seguros/InsuranceExportModal';
+import { InsuranceAnalyticsSection } from '@/components/seguros/InsuranceAnalyticsSection';
 
 import {
   fetchInsurancePolicies,
@@ -308,24 +309,64 @@ export default function SegurosPage() {
     setIsExporting(true);
     try {
       const markdownReport = customMarkdown || (await buildInsuranceMarkdown(selections));
-      const res = await fetch('/api/gamma/generate', {
+      const resGenerate = await fetch('/api/gamma/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markdownReport }),
       });
-      const data = await res.json();
-      if (data?.url) {
-        window.open(data.url, '_blank');
-      } else {
-        alert('Não foi possível obter o link da apresentação. Verifique os logs.');
+
+      if (!resGenerate.ok) {
+        const errData = await resGenerate.json().catch(() => ({}));
+        throw new Error(errData.error || 'Falha ao iniciar geração no Gamma');
       }
-    } catch {
-      alert('Erro ao gerar apresentação. Tente novamente.');
+
+      const genData = await resGenerate.json();
+      const generationId = genData.id || genData.generationId;
+
+      if (generationId) {
+        // Polling: aguarda o Gamma terminar
+        let isComplete = false;
+        let attempts = 0;
+        const MAX_ATTEMPTS = 20; // 20 × 3s = 60 segundos
+        while (!isComplete && attempts < MAX_ATTEMPTS) {
+          attempts++;
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          const resStatus = await fetch(`/api/gamma/status/${generationId}`);
+          if (resStatus.ok) {
+            const statusData = await resStatus.json();
+            if (statusData.status === 'completed' || statusData.state === 'completed') {
+              isComplete = true;
+              const finalUrl = statusData.url || statusData.gammaUrl || statusData.exportUrl;
+              if (finalUrl) {
+                window.open(finalUrl, '_blank');
+              } else {
+                alert('Apresentação gerada, mas a URL não foi retornada pelo Gamma.');
+              }
+            } else if (statusData.status === 'failed' || statusData.state === 'failed') {
+              throw new Error('Geração falhou no Gamma.');
+            }
+          }
+        }
+        if (!isComplete) {
+          alert('A geração está demorando mais que o esperado. Verifique o painel do Gamma.');
+        }
+      } else {
+        // Fallback: API retornou URL direta (modo síncrono)
+        const directUrl = genData.url || genData.gammaUrl || genData.exportUrl;
+        if (directUrl) {
+          window.open(directUrl, '_blank');
+        } else {
+          alert('Não foi possível obter o link da apresentação. Verifique os logs.');
+        }
+      }
+    } catch (err: any) {
+      alert('Erro ao gerar apresentação: ' + (err?.message || 'Tente novamente.'));
     } finally {
       setIsExporting(false);
       setIsExportModalOpen(false);
     }
   };
+
 
   // ──────────────────────────────────────────────────────────
   // RENDER
@@ -382,6 +423,11 @@ export default function SegurosPage() {
 
         {/* KPIs */}
         <InsuranceKPICards kpis={kpis} isLoading={isLoading} />
+
+        {/* Seção Analítica: gráficos e estatísticas avançadas */}
+        {!isLoading && allPolicies.length > 0 && (
+          <InsuranceAnalyticsSection kpis={kpis} allPolicies={allPolicies} />
+        )}
 
         {/* Filtros */}
         {!isLoading && allPolicies.length > 0 && (

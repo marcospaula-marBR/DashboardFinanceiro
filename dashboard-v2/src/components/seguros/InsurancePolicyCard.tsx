@@ -119,12 +119,28 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
             <p className={styles.policyMeta}>
               <span>{policy.tipo}</span>
               {policy.seguradora && <> · <span className={styles.seguradora}>{policy.seguradora}</span></>}
+              {policy.apolice && <> · <span style={{ color: '#64748b' }}>#{policy.apolice}</span></>}
             </p>
           </div>
         </div>
 
-        {/* Badge contratante + Status + Chevron */}
+        {/* Valores + Badge contratante + Status + Chevron */}
         <div className={styles.policyCardRight}>
+          {/* Valores financeiros — visíveis no card colapsado */}
+          {policy.premio > 0 && (
+            <div style={{ textAlign: 'right', display: 'none' }} className="policy-values">
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f1f5f9', lineHeight: 1.1 }}>
+                {formatInsuranceCurrency(policy.premio)}
+              </div>
+              <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
+                {policy.valor_parcela > 0
+                  ? `${formatInsuranceCurrency(policy.valor_parcela)}/mês`
+                  : 'prêmio anual'
+                }
+              </div>
+            </div>
+          )}
+          <style>{`.policy-values { display: block !important; }`}</style>
           <span className={styles.contratanteBadge}>{policy.contratante}</span>
           <StatusBadge policy={policy} />
           <div className={styles.policyCardChevron}>
@@ -132,6 +148,7 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
           </div>
         </div>
       </div>
+
 
       {/* ─── DETALHES (expansível) ─── */}
       {expanded && (
