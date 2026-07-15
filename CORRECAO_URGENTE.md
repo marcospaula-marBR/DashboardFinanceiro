@@ -6,7 +6,7 @@ O arquivo `script.js` está corrompido e faltam componentes essenciais:
 1. A função `loadFromGoogleSheets()` não existe
 2. O botão no HTML não está configurado
 
-## ✅ SOLUÇÃO RÁPIDA
+## ✅ SOLUÇÃO RAPIDISSIMA
 
 ### Passo 1: Adicionar a Função ao script.js
 
