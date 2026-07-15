@@ -123,7 +123,7 @@ export function HeaderDashboard({ activeFilters, isTestMode, onCreateEmployee, o
           <div className="flex flex-col">
             <div className="flex items-center gap-3">
               <Image
-                src="/mar-brasil-logo.png"
+                src="/Logos/Mar-Brasil-sem-fundo-preto.png"
                 alt="Mar Brasil"
                 width={140}
                 height={48}

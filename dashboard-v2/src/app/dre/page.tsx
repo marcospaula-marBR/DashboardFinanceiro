@@ -572,7 +572,7 @@ export default function DrePage() {
         
         // --- LÓGICA DO LOGO DINÂMICO ---
         const getLogoUrl = (nomeEmpresa: string) => {
-          const baseUrl = 'https://dashboard-financeiro-mar-brasil.vercel.app/logos';
+          const baseUrl = 'https://dashboard-financeiro-mar-brasil.vercel.app/Logos';
           if (nomeEmpresa.includes('Mar Brasil')) return `${baseUrl}/Mar%20BR%20-%20Chap%C3%A9u.png`;
           if (nomeEmpresa.includes('DZM')) return `${baseUrl}/DZM.png`;
           if (nomeEmpresa.includes('Grupo 2') || nomeEmpresa.includes('G2')) return `${baseUrl}/Grupo%202.jpeg`;
@@ -580,7 +580,7 @@ export default function DrePage() {
           if (nomeEmpresa.includes('Conectius')) return `${baseUrl}/Conectius.png`;
           if (nomeEmpresa.includes('Solucione')) return `${baseUrl}/Solucione.png`;
           // Fallback para Global/Várias
-          return 'https://dashboard-financeiro-mar-brasil.vercel.app/mar-brasil-logo.png';
+          return `${baseUrl}/Mar-Brasil-sem-fundo-preto.png`;
         };
         const logoUrl = getLogoUrl(empresa);
 

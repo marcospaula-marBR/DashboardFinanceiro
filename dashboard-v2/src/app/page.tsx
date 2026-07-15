@@ -47,7 +47,7 @@ export default function LandingPage() {
         <div className={styles.core}>
           <div className={styles.coreGlow}></div>
           <img
-            src="/mar-brasil-logo.png"
+            src="/Logos/Mar-Brasil-sem-fundo-preto.png"
             alt="Logo Mar Brasil"
             className={styles.coreImg}
           />
@@ -82,7 +82,7 @@ export default function LandingPage() {
 
       {/* ── MOBILE: Cockpit Card Grid ──────────────────────────────── */}
       <div className={styles.mobileHeader}>
-        <img src="/mar-brasil-logo.png" alt="Logo Mar Brasil" />
+        <img src="/Logos/Mar-Brasil-sem-fundo-preto.png" alt="Logo Mar Brasil" />
         <h1>Mar Brasil</h1>
         <p>Portal de Gestão Inteligente</p>
       </div>

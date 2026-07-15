@@ -163,7 +163,7 @@ export default function SegurosPage() {
       <header className={styles.pageHeader}>
         <div className={styles.headerLeft}>
           <Image
-            src="/mar-brasil-logo.png"
+            src="/Logos/Mar-Brasil-sem-fundo-preto.png"
             alt="Logo Mar Brasil"
             width={120}
             height={36}

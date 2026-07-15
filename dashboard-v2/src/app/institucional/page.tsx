@@ -167,7 +167,7 @@ export default function InstitutionalPage() {
       {/* HEADER SUPERIOR */}
       <header className={styles.headerBar}>
         <div className="flex items-center gap-3">
-          <img src="/mar-brasil-logo.png" alt="Logo Mar Brasil" className="h-10 w-auto object-contain" />
+          <img src="/Logos/Mar-Brasil-sem-fundo-preto.png" alt="Logo Mar Brasil" className="h-10 w-auto object-contain" />
           <div className="hidden md:block">
             <span className="font-extrabold text-sm uppercase tracking-wider block text-white">Grupo Mar Brasil</span>
             <span className="text-[10px] text-slate-400 font-bold block">PORTAL INSTITUCIONAL & DOCUMENTOS</span>
@@ -240,7 +240,7 @@ export default function InstitutionalPage() {
             <div className={styles.core} onClick={() => setSelectedCompany(null)}>
               <div className={styles.coreGlow}></div>
               <img
-                src="/mar-brasil-logo.png"
+                src="/Logos/Mar-Brasil-sem-fundo-preto.png"
                 alt="Logo Mar Brasil"
                 className={styles.coreImg}
               />

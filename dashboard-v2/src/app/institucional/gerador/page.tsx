@@ -116,7 +116,7 @@ export default function CardGeneratorPage() {
       {/* HEADER SUPERIOR */}
       <header className={styles.headerBar}>
         <div className="flex items-center gap-3">
-          <img src="/mar-brasil-logo.png" alt="Logo Mar Brasil" className="h-10 w-auto object-contain" />
+          <img src="/Logos/Mar-Brasil-sem-fundo-preto.png" alt="Logo Mar Brasil" className="h-10 w-auto object-contain" />
           <div>
             <span className="font-extrabold text-sm uppercase tracking-wider block text-white">Grupo Mar Brasil</span>
             <span className="text-[10px] text-slate-400 font-bold block">PAINEL DO COLABORADOR</span>
