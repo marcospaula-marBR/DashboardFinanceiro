@@ -139,7 +139,7 @@ export class ExportPdfService {
         };
 
         drawKpi("Faturamento Operacional", formatCurrency(results.totais['Total Entradas Operacionais'] || 0), margin);
-        const lucroLiquido = (results.kpis as Record<string, number>).lucroLiquido || results.kpis.resultado || 0;
+        const lucroLiquido = (results.kpis as any).lucroLiquido || (results.kpis as any).resultado || 0;
         drawKpi("Resultado Líquido", formatCurrency(lucroLiquido), margin + kpiBoxWidth + 5, lucroLiquido >= 0);
         drawKpi("Fluxo de Caixa Livre (FCL)", formatCurrency(results.kpis.fcl || 0), margin + (kpiBoxWidth * 2) + 10, (results.kpis.fcl || 0) >= 0);
         
