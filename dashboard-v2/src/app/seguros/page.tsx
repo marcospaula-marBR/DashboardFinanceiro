@@ -386,10 +386,25 @@ export default function SegurosPage() {
             priority
           />
           <div className={styles.headerTitleGroup}>
-            <span className={styles.headerTitle}>Gestão de Seguros</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span className={styles.headerTitle}>Gestão de Seguros</span>
+              <span style={{
+                fontSize: '9px',
+                fontWeight: 'bold',
+                letterSpacing: '0.05em',
+                background: 'rgba(255, 255, 255, 0.08)',
+                padding: '0.15rem 0.4rem',
+                borderRadius: '4px',
+                color: '#94a3b8',
+                fontFamily: 'monospace'
+              }}>
+                {APP_VERSION}
+              </span>
+            </div>
             <span className={styles.headerSub}>Apólices do Grupo Mar Brasil</span>
           </div>
         </div>
+
 
         <div className={styles.headerRight}>
           <Link href="/" className={styles.backBtn}>

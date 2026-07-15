@@ -1,7 +1,7 @@
-export const APP_VERSION = "v.02.50.19";
+export const APP_VERSION = "v.02.50.20";
 export const VERSION_DATE = "2026-07-15";
 export const VERSION_CHANGELOG = [
-  "v.02.50.19 - Fix/Seguros: Corrige visibilidade do OCR no modal de edição de apólice. A seção 'Enviar PDF' agora sempre aparece expandida ao abrir o modal (tanto em criação quanto edição). Subtítulo e título da seção OCR atualizados para deixar claro que é possível enviar o PDF mesmo ao editar. Dropzone com visual mais destacado e animação de hover.",
+  "v.02.50.20 - Feat/UI: Adiciona o número da versão do sistema de forma visível e legível no cabeçalho das páginas (Seguros e DRE) para permitir o acompanhamento rápido de novos deploys. Garante compatibilidade visual.",
   "v.02.50.12 - Feat/DRE: Cria o novo recurso de 'Pré-visualização e Edição' na geração de relatórios Gamma. Agora os usuários podem visualizar e alterar manualmente o relatório em Markdown (incluindo correções nos dados e edição da análise do BrisinhAI) antes de enviá-lo para a IA. Implementa também injeção de logos dinâmicos múltiplos alinhados à direita caso mais de uma empresa seja selecionada no Dashboard.",
   "v.02.50.11 - Fix: Corrige quebra de exibição de logomarca em todos os Headers, Dashboards, Landing Pages e páginas de Seguro do sistema após renomeação do arquivo original. Atualizado para apontar corretamente para '/Logos/Mar-Brasil-sem-fundo-preto.png'.",
   "v.02.50.10 - Feat/DRE: Implementa suporte a logos dinâmicos na geração de relatórios do Gamma. O sistema agora mapeia a empresa selecionada (Mar Brasil, DZM, Grupo 2, Ybox, Conectius, Solucione) e injeta o logotipo correspondente do diretório /public/logos na primeira página do relatório Markdown enviado para a IA.",
