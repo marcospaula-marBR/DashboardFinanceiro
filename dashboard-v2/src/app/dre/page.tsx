@@ -559,7 +559,7 @@ export default function DrePage() {
     
     // Indicadores extra de fluxo e operação
     const receitas_totais = val_receita_bruta + val_receitas_indiretas;
-    const total_saidas = (results.kpis.totalCustos + results.kpis.totalDespesas + val_impostos_vendas + val_irpj_csll);
+    const total_saidas = results.kpis.totalSaidas || (results.kpis.totalCustos + results.kpis.totalDespesas + val_impostos_vendas + val_irpj_csll);
     const gastos_pessoal = getTot('Pessoal');
     const manut_preventiva = getTot('Preventiva');
     const manut_corretiva = getTot('Corretiva');
@@ -625,8 +625,8 @@ export default function DrePage() {
     markdownReport += `- **5. Margem EBITDA:** ${formatPCT((ebitda / RL) * 100)}\n`;
     markdownReport += `  *A capacidade da empresa de transformar receita em caixa. Acima de 20% é considerado bom.*\n`;
     
-    markdownReport += `- **6. Total Custos Operacionais:** ${formatBRL(results.kpis.totalCustos)}\n`;
-    markdownReport += `  *Soma de todos os custos diretamente ligados à entrega dos serviços e produtos da empresa.*\n`;
+    markdownReport += `- **6. Índice de Custos Operacionais:** ${formatPCT((results.kpis.totalCustos / RL) * 100)}\n`;
+    markdownReport += `  *Mostra quanto da receita é consumido pelos custos diretos e de intermediação. Quanto menor, melhor.*\n`;
     
     markdownReport += `- **7. Margem Antes do IR/CSLL:** ${formatPCT((lair / RL) * 100)}\n`;
     markdownReport += `  *Margem de lucro total antes dos tributos corporativos diretos.*\n`;
@@ -637,17 +637,20 @@ export default function DrePage() {
     markdownReport += `- **9. Índ. Despesas Operacionais:** ${formatPCT((despesas_operacionais / RL) * 100)}\n`;
     markdownReport += `  *Quanto a estrutura corporativa/fixa consome da receita. O ideal é ficar abaixo de 15%.*\n`;
     
-    markdownReport += `- **10. Total Despesas Rateadas:** ${formatBRL(results.kpis.totalDespesas)}\n`;
-    markdownReport += `  *Soma total do custo da estrutura fixa e administrativa da empresa.*\n`;
+    markdownReport += `- **10. Índice de Despesas Rateadas:** ${formatPCT((results.kpis.totalDespesas / RL) * 100)}\n`;
+    markdownReport += `  *Impacto percentual de todos os rateios e custos fixos estruturais sobre a receita líquida do negócio.*\n`;
     markdownReport += `\n`;
 
+    const numMeses = results.validColumns.length || 1;
+    const formatAvg = (val: number) => ` *(Média: ${formatBRL(val / numMeses)})*`;
+
     markdownReport += `## 2. Fluxo de Caixa e Eficiência Operacional\n`;
-    markdownReport += `- **Receitas Totais:** ${formatBRL(receitas_totais)}\n`;
-    markdownReport += `- **Total Saídas (Estimado):** ${formatBRL(total_saidas)}\n`;
-    markdownReport += `- **Fluxo de Caixa Livre (FCL):** ${formatBRL(results.kpis.fcl)} (Margem: ${formatPCT((results.kpis.fcl / RL) * 100)})\n`;
-    markdownReport += `- **Gastos com Pessoal:** ${formatBRL(gastos_pessoal)}\n`;
-    markdownReport += `- **Manutenção Preventiva:** ${formatBRL(manut_preventiva)}\n`;
-    markdownReport += `- **Manutenção Corretiva:** ${formatBRL(manut_corretiva)}\n`;
+    markdownReport += `- **Receitas Totais:** ${formatBRL(receitas_totais)}${formatAvg(receitas_totais)}\n`;
+    markdownReport += `- **Total Saídas:** ${formatBRL(total_saidas)}${formatAvg(total_saidas)}\n`;
+    markdownReport += `- **Fluxo de Caixa Livre (FCL):** ${formatBRL(results.kpis.fcl)} (Margem: ${formatPCT((results.kpis.fcl / RL) * 100)})${formatAvg(results.kpis.fcl)}\n`;
+    markdownReport += `- **Gastos com Pessoal:** ${formatBRL(gastos_pessoal)}${formatAvg(gastos_pessoal)}\n`;
+    markdownReport += `- **Manutenção Preventiva:** ${formatBRL(manut_preventiva)}${formatAvg(manut_preventiva)}\n`;
+    markdownReport += `- **Manutenção Corretiva:** ${formatBRL(manut_corretiva)}${formatAvg(manut_corretiva)}\n`;
     markdownReport += `\n`;
 
     markdownReport += `## 3. DRE Resumida (Acumulado do Período)\n`;

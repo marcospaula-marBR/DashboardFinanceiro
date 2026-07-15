@@ -201,15 +201,15 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       assessmentHelp: 'Bom: acima de 20%. Preocupante: abaixo de 10%. Valores baixos sugerem problemas de eficiência na operação.',
     },
     {
-      title: '6. Total Custos Operacionais',
-      value: kpis.totalCustos,
-      type: 'currency' as const,
-      formula: 'Custos Diretos + Intermediação',
-      desc: 'Soma dos custos de entrega/produção',
+      title: '6. Índice de Custos Operacionais',
+      value: (kpis.totalCustos / RL) * 100,
+      type: 'percent' as const,
+      formula: 'Custos Operacionais ÷ Receita Líquida',
+      desc: 'Custos Operacionais / Receita',
       icon: <Activity className="text-rose-500" size={16} />,
       color: 'border-slate-200 bg-white text-slate-800',
       chartColor: '#f43f5e',
-      explanation: 'Representa todos os custos diretamente ligados à entrega dos serviços e produtos da empresa.',
+      explanation: 'Mostra quanto da receita é consumido pelos custos diretos e de intermediação.',
       assessmentHelp: 'O objetivo é manter o mais baixo possível sem afetar a qualidade.',
     },
     {
@@ -249,15 +249,15 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       assessmentHelp: 'Bom: abaixo de 15%. Se o índice for muito alto, a empresa tem uma estrutura cara e pesada que corrói o lucro operacional.',
     },
     {
-      title: '10. Total Despesas Rateadas',
-      value: kpis.totalDespesas,
-      type: 'currency' as const,
-      formula: 'Despesas Fixas + rateios',
-      desc: 'Soma de todas as despesas da estrutura',
+      title: '10. Índice de Despesas Rateadas',
+      value: (kpis.totalDespesas / RL) * 100,
+      type: 'percent' as const,
+      formula: 'Despesas Rateadas ÷ Receita Líquida',
+      desc: 'Participação das despesas na receita',
       icon: <Zap className="text-rose-500" size={16} />,
       color: 'border-slate-800 bg-slate-900 text-white',
       chartColor: '#f43f5e',
-      explanation: 'Soma total do custo da estrutura fixa e administrativa da empresa.',
+      explanation: 'Impacto percentual de todos os rateios e custos fixos estruturais sobre a receita líquida do negócio.',
       assessmentHelp: 'Reduzir essa linha sem comprometer o crescimento melhora substancialmente a Margem Líquida.',
     },
   ];
@@ -369,8 +369,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         case '5. Margem EBITDA':
           val = (o_ebitda / l_RL) * 100;
           break;
-        case '6. Total Custos Operacionais':
-          val = tCustos;
+        case '6. Índice de Custos Operacionais':
+          val = (tCustos / l_RL) * 100;
           break;
         case '7. Margem Antes do IR/CSLL':
           val = (o_lair / l_RL) * 100;
@@ -381,15 +381,15 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         case '9. Índ. Despesas Operacionais':
           val = (d_operacionais / l_RL) * 100;
           break;
-        case '10. Total Despesas Rateadas':
-          val = tDespesas;
+        case '10. Índice de Despesas Rateadas':
+          val = (tDespesas / l_RL) * 100;
           break;
         default:
           val = 0;
       }
 
       // Handle "Per Equipment" division for currency indicators
-      if (viewMode === 'equipment' && (title === '4. EBITDA' || title === '6. Total Custos Operacionais' || title === '10. Total Despesas Rateadas')) {
+      if (viewMode === 'equipment' && (title === '4. EBITDA')) {
         const equipmentsOfMonth = getDREValMensal('Equipamentos', col) || getDREValMensal('Total Equipamentos', col) || totalEquipamentos || 1;
         val = val / (equipmentsOfMonth > 0 ? equipmentsOfMonth : 1);
       }
@@ -458,13 +458,14 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           ],
           result: { label: 'Margem EBITDA', value: (ebitda / RL) * 100, type: 'percent' as const }
         };
-      case '6. Total Custos Operacionais':
+      case '6. Índice de Custos Operacionais':
         return {
-          formula: 'Custos Diretos + Intermediação de Negócios',
+          formula: 'Custos Diretos + Intermediação de Negócios ÷ Receita Líquida',
           steps: [
             { label: 'Total Custos (Custos de Produção/Serviços)', value: kpis.totalCustos, type: 'currency' as const, highlight: true },
+            { label: 'Receita Líquida', value: receita_liquida, type: 'currency' as const, highlight: true },
           ],
-          result: { label: 'Total Custos Operacionais', value: kpis.totalCustos, type: 'currency' as const }
+          result: { label: 'Índice de Custos Operacionais', value: (kpis.totalCustos / RL) * 100, type: 'percent' as const }
         };
       case '7. Margem Antes do IR/CSLL':
         return {
@@ -503,13 +504,14 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           ],
           result: { label: 'Índice de Despesas Operacionais', value: (despesas_operacionais / RL) * 100, type: 'percent' as const }
         };
-      case '10. Total Despesas Rateadas':
+      case '10. Índice de Despesas Rateadas':
         return {
-          formula: 'Despesas Fixas + Administrativas + Comercial + Indiretas',
+          formula: 'Despesas Rateadas ÷ Receita Líquida',
           steps: [
             { label: 'Total Despesas Rateadas', value: kpis.totalDespesas, type: 'currency' as const, highlight: true },
+            { label: 'Receita Líquida', value: receita_liquida, type: 'currency' as const, highlight: true },
           ],
-          result: { label: 'Total Despesas', value: kpis.totalDespesas, type: 'currency' as const }
+          result: { label: 'Índice de Despesas Rateadas', value: (kpis.totalDespesas / RL) * 100, type: 'percent' as const }
         };
       default:
         return null;
