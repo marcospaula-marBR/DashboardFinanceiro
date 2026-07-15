@@ -114,9 +114,10 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         if (value >= 20) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
         if (value >= 10) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
         return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
-      case '6. Resultado Financeiro':
-        if (value >= 0) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-        return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+      case '6. Índice de Custos Operacionais':
+        if (value <= 65) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value <= 75) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
       case '7. Margem Antes do IR/CSLL':
         if (value >= 12) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
         if (value >= 6) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
@@ -129,10 +130,10 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         if (value <= 20) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
         if (value <= 25) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
         return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
-      case '10. GAO (Alavancagem Op.)':
-        if (value >= 1 && value <= 2.5) return { label: 'Equilibrado', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-        if (value > 2.5 && value <= 3.5) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
-        return { label: 'Alto Risco', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+      case '10. Índice de Despesas Rateadas':
+        if (value <= 15) return { label: 'Bom', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        if (value <= 20) return { label: 'Atenção', color: 'bg-amber-100 text-amber-855 border-amber-200' };
+        return { label: 'Crítico', color: 'bg-rose-100 text-rose-800 border-rose-200' };
       default:
         return null;
     }
@@ -210,7 +211,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       color: 'border-slate-200 bg-white text-slate-800',
       chartColor: '#f43f5e',
       explanation: 'Mostra quanto da receita é consumido pelos custos diretos e de intermediação.',
-      assessmentHelp: 'O objetivo é manter o mais baixo possível sem afetar a qualidade.',
+      assessmentHelp: 'Bom: abaixo de 65%. Preocupante: acima de 75%. O objetivo é manter o custo de operação controlado para não esmagar a margem bruta.',
     },
     {
       title: '7. Margem Antes do IR/CSLL',
@@ -258,7 +259,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       color: 'border-slate-800 bg-slate-900 text-white',
       chartColor: '#f43f5e',
       explanation: 'Impacto percentual de todos os rateios e custos fixos estruturais sobre a receita líquida do negócio.',
-      assessmentHelp: 'Reduzir essa linha sem comprometer o crescimento melhora substancialmente a Margem Líquida.',
+      assessmentHelp: 'Bom: abaixo de 15%. Preocupante: acima de 20%. Reduzir essa linha sem comprometer o crescimento melhora substancialmente a Margem Líquida.',
     },
   ];
 
