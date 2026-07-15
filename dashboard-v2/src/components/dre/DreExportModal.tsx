@@ -4,6 +4,13 @@ import { X, FileText, CheckSquare, Square, BrainCircuit, Download, Loader2, File
 export interface ExportSelections {
   includeGamma: boolean;
   includeRawCsv: boolean;
+  // Legacy PDF options (optional to avoid TS errors in legacy code)
+  includeAiAnalysis?: boolean;
+  includeKpis?: boolean;
+  includeEvolution?: boolean;
+  includeWaterfall?: boolean;
+  includeDonut?: boolean;
+  includeTable?: boolean;
 }
 
 interface DreExportModalProps {

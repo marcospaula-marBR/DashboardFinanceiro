@@ -531,10 +531,10 @@ export default function DrePage() {
         const kpis = results.kpis;
         const indicadores = {
           receita: formatBRL(kpis.receitaOperacional),
-          custos: formatBRL(kpis.custosOperacionais),
-          despesas: formatBRL(kpis.despesasRateadas),
-          lucro: formatBRL(kpis.lucroAntesFcl),
-          fcl: formatBRL(kpis.fluxoCaixaLivre)
+          custos: formatBRL(kpis.totalCustos),
+          despesas: formatBRL(kpis.totalDespesas),
+          lucro: formatBRL(kpis.resultado),
+          fcl: formatBRL(kpis.fcl)
         };
 
         // 1. Iniciar geração na API
@@ -887,21 +887,7 @@ export default function DrePage() {
         filters={filters}
       />
 
-      {/* Off-screen renderer for high-quality PDF charts */}
-      {results && (
-        <DrePrintCharts
-          results={results}
-          selections={{
-            includeEvolution: true,
-            includeWaterfall: true,
-            includeDonut: true,
-            includeAiAnalysis: false,
-            includeKpis: false,
-            includeTable: false,
-            includeRawCsv: false
-          }}
-        />
-      )}
+
     </main>
   );
 }
