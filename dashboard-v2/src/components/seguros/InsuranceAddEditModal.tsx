@@ -113,6 +113,8 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
     } else {
       setForm(EMPTY_FORM);
     }
+    // Sempre abre a seção OCR expandida ao abrir o modal
+    setShowOcrSection(true);
     setOcrResult(null);
     setOcrError(null);
     setOcrFile(null);
@@ -237,7 +239,7 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
             </h2>
             <p className={styles.modalSubtitle}>
               {isEditMode
-                ? `Editando: ${policy?.tipo} · ${policy?.segurado || policy?.contratante}`
+                ? `Editando: ${policy?.tipo} · ${policy?.segurado || policy?.contratante} — Envie o PDF para atualizar os campos automaticamente`
                 : 'Cadastre manualmente ou envie o PDF/imagem para preenchimento automático via IA'}
             </p>
           </div>
@@ -255,7 +257,11 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
               onClick={() => setShowOcrSection(!showOcrSection)}
             >
               <Sparkles size={16} className={styles.sparkleIcon} />
-              <span>Leitura Automática via IA (Gemini OCR)</span>
+              <span>
+                {isEditMode
+                  ? '✨ Atualizar Campos via IA — Envie o PDF da Apólice'
+                  : 'Leitura Automática via IA (Gemini OCR)'}
+              </span>
               {showOcrSection ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
 
