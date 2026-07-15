@@ -550,7 +550,8 @@ export default function DrePage() {
         });
 
         if (!resGenerate.ok) {
-          throw new Error('Falha ao iniciar geração no Gamma');
+          const errData = await resGenerate.json().catch(() => ({}));
+          throw new Error(errData.error || 'Falha ao iniciar geração no Gamma');
         }
 
         const genData = await resGenerate.json();

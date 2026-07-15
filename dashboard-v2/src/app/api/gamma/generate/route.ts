@@ -57,14 +57,14 @@ Seções recomendadas:
         'X-API-KEY': GAMMA_API_KEY,
       },
       body: JSON.stringify({
-        prompt: promptText
+        inputText: promptText
       })
     });
 
     if (!response.ok) {
       const errorData = await response.text();
       console.error('Erro na API do Gamma:', errorData);
-      return NextResponse.json({ error: 'Falha ao comunicar com API do Gamma' }, { status: response.status });
+      return NextResponse.json({ error: `Gamma API Error: ${errorData}` }, { status: response.status });
     }
 
     const data = await response.json();
