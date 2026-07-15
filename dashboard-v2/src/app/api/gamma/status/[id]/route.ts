@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const GAMMA_API_KEY = process.env.GAMMA_API_KEY;
     
     if (!GAMMA_API_KEY) {
@@ -29,8 +29,8 @@ export async function GET(
     const data = await response.json();
     return NextResponse.json(data);
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erro na rota /api/gamma/status:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
