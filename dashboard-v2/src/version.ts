@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.49.01";
+export const APP_VERSION = "v.02.50.00";
 export const VERSION_DATE = "2026-07-15";
 export const VERSION_CHANGELOG = [
+  "v.02.50.00 - Feat/DRE: Integração nativa com a Inteligência Artificial do Gamma.app. Remoção completa da exportação estática em PDF. O sistema agora extrai todos os KPIs, receitas, custos, despesas, margens, DRE completa e constrói um prompt executivo inteligente, enviando para a API REST do Gamma em background. Um modal de carregamento trava a tela garantindo a integridade, e a apresentação de slides final é aberta automaticamente em uma nova aba.",
   "v.02.49.01 - Fix/DRE: Corrige falha de tipagem (DreKpis) que impedia o build no Vercel no arquivo exportPdf.service.ts e renomeia o botão 'Exportar PDF' para 'Gerar Relatório' no painel principal.",
   "v.02.49.00 - Feat/DRE: Reativa e redesenha a opção de geração de relatórios executivos. Implementa suporte dinâmico a orientação paisagem (Landscape) para tabelas com mais de 5 colunas mensais, exibição detalhada de filtros ativos (empresa, período, centro de custos, projeto e categoria DRE), reestilização completa baseada na paleta Slate/Amber (em conformidade com a Purple Ban) e exportação direta de dados brutos consolidados para formato de planilha Excel (CSV com delimitador de ponto e vírgula e BOM). Desativa animações dos gráficos off-screen para captura instantânea e nítida.",
   "v.02.48.99 - Feat/Seguros: Adiciona botões explícitos de Inativar/Reativar nos cards de seguros, facilitando a gestão de apólices não renovadas sem perdê-las do histórico (soft-delete). Re-mapeia o botão Excluir definitivo para remoção física da linha (hard-delete) no banco de dados.",

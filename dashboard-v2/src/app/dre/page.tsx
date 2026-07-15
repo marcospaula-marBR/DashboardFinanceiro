@@ -17,7 +17,6 @@ import { DreLancamentosService } from '@/services/dre-lancamentos.service';
 import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
-import { BrisinhaiService } from '@/services/brisinhai.service';
 import { supabase } from '@/lib/supabase';
 import { DreFilters, DreMetadata, DreCalculatedResult, DreRow, DreSimulationParams, DreStructureItem, DreTemplateDefinition } from '@/types/dre';
 import { Scenario, ScenarioAssumption } from '@/types/dre-simulator.types';
@@ -44,7 +43,6 @@ export default function DrePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalData, setModalData] = useState<Record<string, number>>({});
   const [modalSourceRows, setModalSourceRows] = useState<Record<string, DreRow[]>>({});
@@ -516,36 +514,79 @@ export default function DrePage() {
   };
 
   const handleConfirmExport = async (selections: ExportSelections) => {
-    setIsExportingPdf(true);
-
-    let aiText: string | undefined;
+    setIsExportingPdf(true); // Usado agora para travar a tela tanto no CSV quanto no Gamma
 
     const empresa = filters.empresas.length === 1 ? filters.empresas[0] : (filters.empresas.length > 1 ? "Varias" : "Global");
     const periodo = filters.periodos.length > 0 ? `${filters.periodos[0]}...` : "Completo";
 
-    // Se marcou IA, gerar análise
-    if (selections.includeAiAnalysis && results) {
-      setIsAiAnalyzing(true);
-      try {
-        aiText = await BrisinhaiService.analyzeDre(results, empresa, periodo);
-      } catch (err) {
-        console.error("Erro na IA:", err);
-      } finally {
-        setIsAiAnalyzing(false);
-      }
-    }
-
     try {
-      const hasPdfModules = selections.includeAiAnalysis || selections.includeKpis || selections.includeEvolution || selections.includeWaterfall || selections.includeDonut || selections.includeTable;
-      
-      if (hasPdfModules && results) {
-        // Chamada para o gerador nativo com filtros ativos passados como parâmetro
-        await ExportPdfService.buildNativePdf(results!, selections, empresa, periodo, filters, aiText);
-      }
-      
       if (selections.includeRawCsv && results) {
         // Exporta diretamente para CSV estruturado
         ExportPdfService.exportToCsv(results, filters, empresa, periodo);
+      }
+
+      if (selections.includeGamma && results) {
+        // Extrai indicadores formatados para mandar ao Gamma
+        const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+        const kpis = results.kpis;
+        const indicadores = {
+          receita: formatBRL(kpis.receitaOperacionalBruta),
+          custos: formatBRL(kpis.custosOperacionais),
+          despesas: formatBRL(kpis.despesasRateadas),
+          lucro: formatBRL(kpis.lucroAntesFcl),
+          fcl: formatBRL(kpis.fluxoCaixaLivre)
+        };
+
+        // 1. Iniciar geração na API
+        const resGenerate = await fetch('/api/gamma/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            empresa,
+            periodo,
+            indicadores,
+            rawData: results.totais // Passa o objeto de totais resumidos para a IA
+          })
+        });
+
+        if (!resGenerate.ok) {
+          throw new Error('Falha ao iniciar geração no Gamma');
+        }
+
+        const genData = await resGenerate.json();
+        const generationId = genData.id || genData.generationId;
+
+        if (generationId) {
+          // 2. Polling para aguardar o status
+          let isComplete = false;
+          let attempts = 0;
+          const MAX_ATTEMPTS = 20; // 20 * 3s = 60 segundos
+          
+          while (!isComplete && attempts < MAX_ATTEMPTS) {
+            attempts++;
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Espera 3 segundos
+
+            const resStatus = await fetch(`/api/gamma/status/${generationId}`);
+            if (resStatus.ok) {
+              const statusData = await resStatus.json();
+              if (statusData.status === 'completed' || statusData.state === 'completed') {
+                isComplete = true;
+                const finalUrl = statusData.url || statusData.gammaUrl || statusData.exportUrl;
+                if (finalUrl) {
+                  window.open(finalUrl, '_blank');
+                } else {
+                  alert('Apresentação gerada, mas URL não foi retornada.');
+                }
+              } else if (statusData.status === 'failed' || statusData.state === 'failed') {
+                throw new Error('Geração falhou no Gamma.');
+              }
+            }
+          }
+
+          if (!isComplete) {
+            alert('A geração está demorando mais que o esperado. Verifique o painel do Gamma.');
+          }
+        }
       }
 
       setIsExportModalOpen(false);
@@ -809,7 +850,6 @@ export default function DrePage() {
         onClose={() => setIsExportModalOpen(false)}
         onExport={handleConfirmExport}
         isExporting={isExportingPdf}
-        isAiAnalyzing={isAiAnalyzing}
       />
 
       <DreEquipmentsModal
