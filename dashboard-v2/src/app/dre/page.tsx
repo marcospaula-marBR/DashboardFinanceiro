@@ -560,9 +560,9 @@ export default function DrePage() {
     // Indicadores extra de fluxo e operação
     const receitas_totais = val_receita_bruta + val_receitas_indiretas;
     const total_saidas = (results.kpis.totalCustos + results.kpis.totalDespesas + val_impostos_vendas + val_irpj_csll);
-    const gastos_pessoal = getTot('Gastos com Pessoal');
-    const manut_preventiva = getTot('Manutenção Planejada B2G') || getTot('Manutenção Preventiva');
-    const manut_corretiva = getTot('Manutenção Corretiva B2G') || getTot('Manutenção Corretiva');
+    const gastos_pessoal = getTot('Pessoal');
+    const manut_preventiva = getTot('Preventiva');
+    const manut_corretiva = getTot('Corretiva');
     
     // --- LÓGICA DO LOGO DINÂMICO MULTIPLO ---
     const getLogoUrl = (nomeEmpresa: string) => {
@@ -579,33 +579,66 @@ export default function DrePage() {
 
     let logosHtml = '';
     const empresasParaLogos = (empresa === 'Varias' || empresa === 'Global') ? filters.empresas : [empresa];
-    empresasParaLogos.forEach(emp => {
-      const url = getLogoUrl(emp);
-      logosHtml += `<img align="right" src="${url}" height="80" style="margin-left: 10px;" />\n`;
-    });
+    if (empresasParaLogos.length === 0) {
+        logosHtml += `<img align="right" src="${getLogoUrl('Global')}" height="80" style="margin-left: 10px;" />\n`;
+    } else {
+        empresasParaLogos.forEach(emp => {
+          const url = getLogoUrl(emp);
+          logosHtml += `<img align="right" src="${url}" height="80" style="margin-left: 10px;" />\n`;
+        });
+    }
+
+    // --- CONSTRUÇÃO DO NOME DO RELATÓRIO ---
+    const empresaFormatada = filters.empresas.length > 0 ? filters.empresas.join(', ') : 'Global (Todas as Empresas)';
+    const periodoFormatado = filters.periodos.length > 0 ? filters.periodos.join(', ') : 'Completo (Acumulado)';
+    let tituloRelatorio = `Relatório Financeiro: ${empresaFormatada}`;
+    if (filters.departamentos.length > 0) {
+      tituloRelatorio += ` | Departamentos: ${filters.departamentos.join(', ')}`;
+    }
 
     // --- CONSTRUÇÃO DO RELATÓRIO MARKDOWN ---
     let markdownReport = `${logosHtml}\n`;
-    markdownReport += `# Relatório Financeiro: ${empresa}\n\n`;
+    markdownReport += `# ${tituloRelatorio}\n\n`;
     
     markdownReport += `## Filtros Aplicados\n`;
-    markdownReport += `- **Empresa:** ${empresa}\n`;
-    markdownReport += `- **Períodos:** ${filters.periodos.join(', ')}\n`;
+    markdownReport += `- **Empresas:** ${empresaFormatada}\n`;
+    markdownReport += `- **Períodos:** ${periodoFormatado}\n`;
     if (filters.projetos.length > 0) markdownReport += `- **Projetos:** ${filters.projetos.join(', ')}\n`;
     if (filters.departamentos.length > 0) markdownReport += `- **Centros de Custo:** ${filters.departamentos.join(', ')}\n`;
     markdownReport += `\n`;
 
     markdownReport += `## 1. Indicadores Estratégicos Financeiros (KPIs Avançados)\n`;
+    markdownReport += `*Nota: Abaixo estão os principais indicadores de performance e risco do negócio, acompanhados de uma breve explicação técnica para facilitar a leitura de não-especialistas.*\n\n`;
+    
     markdownReport += `- **1. Margem Bruta:** ${formatPCT((lucro_bruto / RL) * 100)}\n`;
+    markdownReport += `  *O quanto sobra da receita após pagar os custos diretos. Valores acima de 35% são bons.*\n`;
+    
     markdownReport += `- **2. Margem de Contribuição:** ${formatPCT((margem_contribuicao_valor / RL) * 100)}\n`;
+    markdownReport += `  *Lucro antes de pagar as despesas fixas. Indica se a operação principal é saudável. Acima de 25% é bom.*\n`;
+    
     markdownReport += `- **3. Margem Operacional:** ${formatPCT((ebit / RL) * 100)}\n`;
+    markdownReport += `  *O verdadeiro lucro da operação antes de juros e impostos. Mede a eficiência real. Acima de 15% é bom.*\n`;
+    
     markdownReport += `- **4. EBITDA:** ${formatBRL(ebitda)}\n`;
+    markdownReport += `  *A geração de caixa operacional do negócio (Lucro antes de juros, impostos, depreciação e amortização).*\n`;
+    
     markdownReport += `- **5. Margem EBITDA:** ${formatPCT((ebitda / RL) * 100)}\n`;
+    markdownReport += `  *A capacidade da empresa de transformar receita em caixa. Acima de 20% é considerado bom.*\n`;
+    
     markdownReport += `- **6. Resultado Financeiro:** ${formatBRL(resultado_financeiro)}\n`;
+    markdownReport += `  *Receitas financeiras menos as despesas com bancos e juros.*\n`;
+    
     markdownReport += `- **7. Margem Antes do IR/CSLL:** ${formatPCT((lair / RL) * 100)}\n`;
+    markdownReport += `  *Margem de lucro total antes dos tributos corporativos diretos.*\n`;
+    
     markdownReport += `- **8. Margem Líquida:** ${formatPCT((lucro_liquido / RL) * 100)}\n`;
+    markdownReport += `  *O que de fato "sobra no bolso" da empresa após tudo pago. Acima de 10% é bom.*\n`;
+    
     markdownReport += `- **9. Índ. Despesas Operacionais:** ${formatPCT((despesas_operacionais / RL) * 100)}\n`;
+    markdownReport += `  *Quanto a estrutura corporativa/fixa consome da receita. O ideal é ficar abaixo de 15%.*\n`;
+    
     markdownReport += `- **10. GAO (Alavancagem Op.):** ${formatDEC(gao)}\n`;
+    markdownReport += `  *Mede o risco do negócio: se as vendas caírem 1%, quantos % o lucro cai. Acima de 3,0x é alto risco.*\n`;
     markdownReport += `\n`;
 
     markdownReport += `## 2. Fluxo de Caixa e Eficiência Operacional\n`;

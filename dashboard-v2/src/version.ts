@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.12";
+export const APP_VERSION = "v.02.50.13";
 export const VERSION_DATE = "2026-07-15";
 export const VERSION_CHANGELOG = [
+  "v.02.50.13 - Fix/DRE: Corrige chaves de captura dos indicadores customizáveis no preview Markdown para evitar zerar Pessoal, Preventiva e Corretiva. Ajusta título do relatório exportado para referenciar explicitamente múltiplas empresas e departamentos selecionados. Adiciona comentários didáticos automáticos com benchamarks e explicações curtas de cada KPI para leigos interpretarem no relatório final.",
   "v.02.50.12 - Feat/DRE: Cria o novo recurso de 'Pré-visualização e Edição' na geração de relatórios Gamma. Agora os usuários podem visualizar e alterar manualmente o relatório em Markdown (incluindo correções nos dados e edição da análise do BrisinhAI) antes de enviá-lo para a IA. Implementa também injeção de logos dinâmicos múltiplos alinhados à direita caso mais de uma empresa seja selecionada no Dashboard.",
   "v.02.50.11 - Fix: Corrige quebra de exibição de logomarca em todos os Headers, Dashboards, Landing Pages e páginas de Seguro do sistema após renomeação do arquivo original. Atualizado para apontar corretamente para '/Logos/Mar-Brasil-sem-fundo-preto.png'.",
   "v.02.50.10 - Feat/DRE: Implementa suporte a logos dinâmicos na geração de relatórios do Gamma. O sistema agora mapeia a empresa selecionada (Mar Brasil, DZM, Grupo 2, Ybox, Conectius, Solucione) e injeta o logotipo correspondente do diretório /public/logos na primeira página do relatório Markdown enviado para a IA.",
