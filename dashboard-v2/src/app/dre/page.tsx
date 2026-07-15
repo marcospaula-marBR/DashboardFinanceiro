@@ -524,7 +524,7 @@ export default function DrePage() {
         // Exporta diretamente para CSV estruturado
         ExportPdfService.exportToCsv(results, filters, empresa, periodo);
       }
-
+      if (selections.includeGamma && results) {
         // Helper functions
         const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
         const formatPCT = (val: number) => `${(val).toFixed(1).replace('.', ',')}%`;
@@ -571,7 +571,8 @@ export default function DrePage() {
         const manut_corretiva = getTot('Manutenção Corretiva B2G') || getTot('Manutenção Corretiva');
         
         // --- CONSTRUÇÃO DO RELATÓRIO MARKDOWN ---
-        let markdownReport = `# Relatório Financeiro: ${empresa}\n\n`;
+        let markdownReport = `![Logo Mar Brasil](https://dashboard-financeiro-mar-brasil.vercel.app/mar-brasil-logo.png)\n\n`;
+        markdownReport += `# Relatório Financeiro: ${empresa}\n\n`;
         
         markdownReport += `## Filtros Aplicados\n`;
         markdownReport += `- **Empresa:** ${empresa}\n`;
@@ -602,7 +603,7 @@ export default function DrePage() {
         markdownReport += `- **Manutenção Corretiva:** ${formatBRL(manut_corretiva)}\n`;
         markdownReport += `\n`;
 
-        markdownReport += `## DRE Resumida (Acumulado do Período)\n`;
+        markdownReport += `## 3. DRE Resumida (Acumulado do Período)\n`;
         markdownReport += `| Categoria | Valor Acumulado |\n`;
         markdownReport += `| :--- | :--- |\n`;
         results.estrutura.forEach(item => {
@@ -613,8 +614,42 @@ export default function DrePage() {
             }
           }
         });
+        markdownReport += `\n`;
 
-        // 1. Iniciar geração na API
+        // Se o usuário solicitou análise do BrisinhAI
+        if (selections.includeAiAnalysis) {
+          try {
+            const aiRes = await fetch('/api/ai/analyze', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                empresa,
+                periodo,
+                kpis: {
+                  receitaBruta: val_receita_bruta,
+                  custos: results.kpis.totalCustos,
+                  despesas: results.kpis.totalDespesas,
+                  pontoEquilibrio: 0,
+                  lucroLiquido: lucro_liquido,
+                  fcl: results.kpis.fcl,
+                  margemOperacional: (ebit / RL) * 100
+                },
+                maioresDespesas: [] // array vazio já que não há necessidade estrita
+              })
+            });
+            if (aiRes.ok) {
+              const aiData = await aiRes.json();
+              if (aiData.analysis) {
+                markdownReport += `## 4. Análise Executiva (Por BrisinhAI)\n`;
+                markdownReport += `${aiData.analysis}\n\n`;
+              }
+            }
+          } catch (e) {
+            console.error("Erro ao chamar BrisinhAI", e);
+          }
+        }
+
+        // 1. Iniciar geração na API do Gamma
         const resGenerate = await fetch('/api/gamma/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

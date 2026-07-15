@@ -95,10 +95,32 @@ export function DreExportModal({ isOpen, onClose, onExport, isExporting }: DreEx
                   Apresentação Gamma (IA) <BrainCircuit size={16} className="text-amber-500" />
                 </p>
                 <p className="text-[11px] text-slate-500 font-medium mt-0.5 leading-normal">
-                  Gera uma apresentação visual automática usando a Inteligência Artificial do Gamma contendo o resumo executivo, tabelas e indicadores financeiros da DRE.
+                  Gera uma apresentação visual automática contendo o resumo executivo, tabelas e indicadores financeiros da DRE.
                 </p>
               </div>
             </div>
+
+            {/* BrisinhAI Option (Nested under Gamma or standalone) */}
+            {selections.includeGamma && (
+              <div 
+                onClick={() => toggleSelection('includeAiAnalysis')}
+                className={`flex items-center gap-3 p-3 ml-8 border-l-2 cursor-pointer transition-all ${
+                  selections.includeAiAnalysis ? 'border-amber-400 bg-amber-50/30' : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+              >
+                <div className={selections.includeAiAnalysis ? 'text-amber-600' : 'text-slate-350'}>
+                  {selections.includeAiAnalysis ? <CheckSquare size={16} /> : <Square size={16} />}
+                </div>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold text-slate-800 flex items-center gap-2 uppercase">
+                    Incluir Análise do BrisinhAI
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-medium mt-0.5 leading-normal">
+                    Adiciona um slide com a visão executiva e comentários da nossa inteligência artificial sobre os resultados.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* CSV Module */}
             <div 
