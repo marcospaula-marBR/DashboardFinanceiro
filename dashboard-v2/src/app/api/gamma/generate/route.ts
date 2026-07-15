@@ -15,30 +15,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Extrair dados do corpo da requisição (que será enviado pelo DreExportModal)
-    const { 
-      empresa, 
-      periodo, 
-      indicadores, 
-      rawData 
-    } = body;
+    // Extrair dados do corpo da requisição
+    const { markdownReport } = body;
 
-    // Construção do Prompt Inteligente baseado nos dados da DRE e Indicadores
-    let promptText = `Crie uma apresentação executiva financeira para a empresa ${empresa || 'Mar Brasil'}.
-Período de referência: ${periodo || 'Últimos 12 meses'}.
-
-# INDICADORES PRINCIPAIS (KPIs)
-`;
-
-    if (indicadores) {
-      if (indicadores.receita) promptText += `- Receita Operacional Bruta: ${indicadores.receita}\n`;
-      if (indicadores.custos) promptText += `- Custos Operacionais: ${indicadores.custos}\n`;
-      if (indicadores.despesas) promptText += `- Despesas Operacionais (Rateadas): ${indicadores.despesas}\n`;
-      if (indicadores.lucro) promptText += `- Lucro antes do FCL: ${indicadores.lucro}\n`;
-      if (indicadores.fcl) promptText += `- Fluxo de Caixa Livre (FCL): ${indicadores.fcl}\n`;
-    }
-
-    promptText += `
+    const promptText = `
 Aja como um analista financeiro (CFO) e crie slides profissionais, limpos e direto ao ponto. 
 Use a paleta de cores neutra (tons de cinza e laranja/âmbar, evite cores espalhafatosas).
 Seções recomendadas:
@@ -47,6 +27,10 @@ Seções recomendadas:
 3. Análise de Custos e Despesas
 4. Lucratividade e Fluxo de Caixa Livre
 5. Conclusões.
+
+Abaixo estão os dados financeiros do período e os filtros aplicados. Crie a apresentação baseada EXCLUSIVAMENTE nestes dados reais (não invente números):
+
+${markdownReport}
 `;
 
     // Chamada para a API do Gamma

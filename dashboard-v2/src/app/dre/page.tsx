@@ -526,26 +526,45 @@ export default function DrePage() {
       }
 
       if (selections.includeGamma && results) {
-        // Extrai indicadores formatados para mandar ao Gamma
         const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
         const kpis = results.kpis;
-        const indicadores = {
-          receita: formatBRL(kpis.receitaOperacional),
-          custos: formatBRL(kpis.totalCustos),
-          despesas: formatBRL(kpis.totalDespesas),
-          lucro: formatBRL(kpis.resultado),
-          fcl: formatBRL(kpis.fcl)
-        };
+        
+        // --- CONSTRUÇÃO DO RELATÓRIO MARKDOWN ---
+        let markdownReport = `# Relatório Financeiro: ${empresa}\n\n`;
+        
+        markdownReport += `## Filtros Aplicados\n`;
+        markdownReport += `- **Empresa:** ${empresa}\n`;
+        markdownReport += `- **Períodos:** ${filters.periodos.join(', ')}\n`;
+        if (filters.projetos.length > 0) markdownReport += `- **Projetos:** ${filters.projetos.join(', ')}\n`;
+        if (filters.departamentos.length > 0) markdownReport += `- **Centros de Custo:** ${filters.departamentos.join(', ')}\n`;
+        markdownReport += `\n`;
+
+        markdownReport += `## Indicadores Principais (KPIs)\n`;
+        markdownReport += `- **Receita Operacional:** ${formatBRL(kpis.receitaOperacional)}\n`;
+        markdownReport += `- **Custos Totais:** ${formatBRL(kpis.totalCustos)}\n`;
+        markdownReport += `- **Despesas Totais:** ${formatBRL(kpis.totalDespesas)}\n`;
+        markdownReport += `- **Lucro (Resultado Antes FCL):** ${formatBRL(kpis.resultado)}\n`;
+        markdownReport += `- **Fluxo de Caixa Livre (FCL):** ${formatBRL(kpis.fcl)}\n`;
+        markdownReport += `\n`;
+
+        markdownReport += `## DRE Resumida (Acumulado do Período)\n`;
+        markdownReport += `| Categoria | Valor Acumulado |\n`;
+        markdownReport += `| :--- | :--- |\n`;
+        results.estrutura.forEach(item => {
+          if (item.tipo === 'linha' || item.tipo === 'linha_calc') {
+            const valorTotal = results.totais[item.titulo] || 0;
+            if (valorTotal !== 0) {
+              markdownReport += `| ${item.titulo} | ${formatBRL(valorTotal)} |\n`;
+            }
+          }
+        });
 
         // 1. Iniciar geração na API
         const resGenerate = await fetch('/api/gamma/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            empresa,
-            periodo,
-            indicadores,
-            rawData: results.totais // Passa o objeto de totais resumidos para a IA
+            markdownReport
           })
         });
 

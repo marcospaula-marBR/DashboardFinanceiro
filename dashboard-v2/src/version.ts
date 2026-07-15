@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.06";
+export const APP_VERSION = "v.02.50.07";
 export const VERSION_DATE = "2026-07-15";
 export const VERSION_CHANGELOG = [
+  "v.02.50.07 - Feat/DRE: Refatora completamente o envio de contexto para a IA do Gamma. Em vez de enviar variáveis soltas, o frontend agora constrói antecipadamente um mini Relatório em Markdown (contendo Filtros Ativos, Tabela de KPIs e Tabela de Acumulado Resumido da DRE) e envia como input único para o Gamma usar como material de base (textMode: generate). Isso soluciona alucinações da IA sobre períodos ou valores ausentes.",
   "v.02.50.06 - Fix/DRE: Adiciona o parâmetro obrigatório 'textMode: generate' no payload de integração com a API do Gamma para validar a requisição de criação.",
   "v.02.50.05 - Fix/DRE: Corrige o corpo da requisição da API do Gamma, de 'prompt' para 'inputText', conforme a documentação oficial da versão 1.0 para gerar novas apresentações. Aprimora o tratamento de erro no frontend para exibir detalhes exatos do Gamma.",
   "v.02.50.04 - Fix/DRE: Restaura propriedades opcionais na interface ExportSelections para evitar erros de tipagem em componentes legados de PDF (como DrePrintCharts) que ainda eram montados na tela.",
