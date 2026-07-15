@@ -19,16 +19,16 @@ export async function POST(req: Request) {
     const { markdownReport } = body;
 
     const promptText = `
-Crie uma apresentação estritamente baseada em dados, com gráficos, tabelas de valores, percentuais e médias.
-NÃO crie textos de análise, opiniões, subjetividades ou "textões". Apenas exponha os números, os indicadores estratégicos e a DRE de forma limpa e direta.
+Aja como um gerador de relatórios executivos de alto nível (C-level).
+Gere uma apresentação estritamente em PORTUGUÊS DO BRASIL.
+Utilize o modelo padrão fornecido no documento Markdown abaixo, mantendo todos os dados numéricos, os nomes das empresas, os filtros exatos, os valores de cada KPI, bem como suas respectivas explicações breves e parâmetros aceitáveis. 
+NÃO invente, não altere dados e não alucine gráficos que não estejam descritos nos dados reais. Apenas exponha de forma limpa e direta.
 
-Seções obrigatórias:
-1. Resumo do Período (com KPIs consolidados)
-2. Indicadores Estratégicos Financeiros (tabela ou cartões)
-3. Fluxo de Caixa e Eficiência Operacional
-4. DRE Resumida
+Se o documento incluir uma seção "Análise Executiva (Por BrisinhAI)", garanta que ela seja incluída integralmente como um slide ou conjunto de slides na sua apresentação final. Preserve os comentários e o feedback.
 
-Abaixo estão os dados financeiros do período e os filtros aplicados. Crie a apresentação baseada EXCLUSIVAMENTE nestes dados reais (não invente números):
+Se houver logomarcas (tags <img src=...>), tente posicioná-las adequadamente na capa ou rodapé da apresentação.
+
+Abaixo estão os dados financeiros do período e os filtros aplicados:
 
 ${markdownReport}
 `;

@@ -201,64 +201,64 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       assessmentHelp: 'Bom: acima de 20%. Preocupante: abaixo de 10%. Valores baixos sugerem problemas de eficiência na operação.',
     },
     {
-      title: '6. Resultado Financeiro',
-      value: resultado_financeiro,
+      title: '6. Total Custos Operacionais',
+      value: kpis.totalCustos,
       type: 'currency' as const,
-      formula: 'Rec. Fin. - Desp. Fin.',
-      desc: 'Impacto de receitas e desp. fin.',
-      icon: <Landmark className="text-slate-500" size={16} />,
-      color: 'border-slate-200 bg-slate-50 text-slate-950',
-      chartColor: '#64748b',
-      explanation: 'Diferença entre o que a empresa ganha com aplicações financeiras e o que gasta com juros, tarifas bancárias e empréstimos.',
-      assessmentHelp: 'Bom: maior ou igual a zero. Negativo indica que despesas com juros e tarifas estão pesando no caixa.',
+      formula: 'Custos Diretos + Intermediação',
+      desc: 'Soma dos custos de entrega/produção',
+      icon: <Activity className="text-rose-500" size={16} />,
+      color: 'border-slate-200 bg-white text-slate-800',
+      chartColor: '#f43f5e',
+      explanation: 'Representa todos os custos diretamente ligados à entrega dos serviços e produtos da empresa.',
+      assessmentHelp: 'O objetivo é manter o mais baixo possível sem afetar a qualidade.',
     },
     {
       title: '7. Margem Antes do IR/CSLL',
       value: (lair / RL) * 100,
       type: 'percent' as const,
       formula: 'LAIR ÷ Receita Líquida',
-      desc: 'Desempenho antes de impostos s/ lucro',
-      icon: <FileText className="text-indigo-500" size={16} />,
-      color: 'border-indigo-100 bg-indigo-50/10 text-indigo-950',
-      chartColor: '#6366f1',
-      explanation: 'O resultado da empresa considerando toda a operação e o resultado financeiro, logo antes de pagar o imposto de renda.',
-      assessmentHelp: 'Bom: acima de 12%. Preocupante: abaixo de 6%. É a base real do lucro corporativo antes dos impostos finais.',
+      desc: 'Lucro antes dos impostos s/ renda',
+      icon: <PieChart className="text-violet-650" size={16} />,
+      color: 'border-slate-200 bg-white text-slate-800',
+      chartColor: '#7c3aed',
+      explanation: 'O lucro gerado pelas operações somado às movimentações financeiras, medido antes de se descontar impostos como IRPJ e CSLL.',
+      assessmentHelp: 'Bom: acima de 12%. Ajuda a avaliar a rentabilidade livre do peso tributário direto.',
     },
     {
       title: '8. Margem Líquida',
       value: (lucro_liquido / RL) * 100,
       type: 'percent' as const,
-      formula: 'Lucro Líq. ÷ Receita Líq.',
-      desc: 'Quanto efetivamente sobra',
-      icon: <Coins className="text-amber-650" size={16} />,
-      color: 'border-amber-200/60 bg-amber-50/10 text-amber-950',
-      chartColor: '#d97706',
-      explanation: 'O lucro líquido final que sobra de fato para os sócios, comparado ao total faturado pela empresa.',
-      assessmentHelp: 'Bom: acima de 10%. Preocupante: abaixo de 5%. Margem muito baixa deixa a empresa vulnerável a qualquer queda de faturamento.',
+      formula: 'Lucro Líquido ÷ Receita Líquida',
+      desc: 'Lucro final sobre a receita',
+      icon: <FileText className="text-fuchsia-600" size={16} />,
+      color: 'border-slate-200 bg-white text-slate-800',
+      chartColor: '#d946ef',
+      explanation: 'Mostra o quanto "sobra no bolso" da empresa de forma líquida, para cada R$ 100 vendidos, após pagar TUDO.',
+      assessmentHelp: 'Bom: acima de 10%. Excelente: acima de 15%. É o indicador final da sustentabilidade e retorno aos sócios.',
     },
     {
       title: '9. Índ. Despesas Operacionais',
       value: (despesas_operacionais / RL) * 100,
       type: 'percent' as const,
-      formula: 'Desp. Op. ÷ Receita Líquida',
-      desc: 'Peso das despesas sobre a receita',
-      icon: <Percent className="text-rose-500" size={16} />,
-      color: 'border-rose-100 bg-rose-50/10 text-rose-950',
-      chartColor: '#f43f5e',
-      explanation: 'Representa o peso da estrutura administrativa e de vendas sobre a receita líquida.',
-      assessmentHelp: 'Bom: abaixo de 20%. Preocupante: acima de 25%. Valores altos indicam que a estrutura de suporte está cara e pesada.',
+      formula: 'OpEx ÷ Receita Líquida',
+      desc: 'Peso da estrutura sobre a receita',
+      icon: <Activity className="text-rose-600" size={16} />,
+      color: 'border-slate-200 bg-white text-slate-800',
+      chartColor: '#e11d48',
+      explanation: 'Mede o "peso da máquina" (despesas fixas, financeiras e corporativas) em relação à receita.',
+      assessmentHelp: 'Bom: abaixo de 15%. Se o índice for muito alto, a empresa tem uma estrutura cara e pesada que corrói o lucro operacional.',
     },
     {
-      title: '10. GAO (Alavancagem Op.)',
-      value: gao,
-      type: 'decimal' as const,
-      formula: 'Margem Contrib. ÷ EBIT',
-      desc: 'Sensibilidade do lucro à receita',
-      icon: <Zap className="text-yellow-650" size={16} />,
+      title: '10. Total Despesas Rateadas',
+      value: kpis.totalDespesas,
+      type: 'currency' as const,
+      formula: 'Despesas Fixas + rateios',
+      desc: 'Soma de todas as despesas da estrutura',
+      icon: <Zap className="text-rose-500" size={16} />,
       color: 'border-slate-800 bg-slate-900 text-white',
-      chartColor: '#eab308',
-      explanation: 'Mede o risco operacional: se as vendas caírem 1%, quantos % o lucro vai cair. Quanto maior, mais volátil é o lucro.',
-      assessmentHelp: 'Bom: entre 1,0x e 2,5x. Alto Risco: acima de 3,0x. Valores altos indicam que pequenas quedas nas vendas podem gerar grandes prejuízos.',
+      chartColor: '#f43f5e',
+      explanation: 'Soma total do custo da estrutura fixa e administrativa da empresa.',
+      assessmentHelp: 'Reduzir essa linha sem comprometer o crescimento melhora substancialmente a Margem Líquida.',
     },
   ];
 
@@ -369,8 +369,8 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         case '5. Margem EBITDA':
           val = (o_ebitda / l_RL) * 100;
           break;
-        case '6. Resultado Financeiro':
-          val = r_financeiro;
+        case '6. Total Custos Operacionais':
+          val = tCustos;
           break;
         case '7. Margem Antes do IR/CSLL':
           val = (o_lair / l_RL) * 100;
@@ -381,15 +381,15 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         case '9. Índ. Despesas Operacionais':
           val = (d_operacionais / l_RL) * 100;
           break;
-        case '10. GAO (Alavancagem Op.)':
-          val = o_gao;
+        case '10. Total Despesas Rateadas':
+          val = tDespesas;
           break;
         default:
           val = 0;
       }
 
       // Handle "Per Equipment" division for currency indicators
-      if (viewMode === 'equipment' && (title === '4. EBITDA' || title === '6. Resultado Financeiro')) {
+      if (viewMode === 'equipment' && (title === '4. EBITDA' || title === '6. Total Custos Operacionais' || title === '10. Total Despesas Rateadas')) {
         const equipmentsOfMonth = getDREValMensal('Equipamentos', col) || getDREValMensal('Total Equipamentos', col) || totalEquipamentos || 1;
         val = val / (equipmentsOfMonth > 0 ? equipmentsOfMonth : 1);
       }
@@ -458,14 +458,13 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           ],
           result: { label: 'Margem EBITDA', value: (ebitda / RL) * 100, type: 'percent' as const }
         };
-      case '6. Resultado Financeiro':
+      case '6. Total Custos Operacionais':
         return {
-          formula: 'Receitas Financeiras - Despesas Financeiras',
+          formula: 'Custos Diretos + Intermediação de Negócios',
           steps: [
-            { label: 'Receitas Financeiras', value: val_receitas_financeiras, type: 'currency' as const },
-            { label: '(-) Despesas Financeiras', value: val_despesas_financeiras, type: 'currency' as const },
+            { label: 'Total Custos (Custos de Produção/Serviços)', value: kpis.totalCustos, type: 'currency' as const, highlight: true },
           ],
-          result: { label: 'Resultado Financeiro', value: resultado_financeiro, type: 'currency' as const }
+          result: { label: 'Total Custos Operacionais', value: kpis.totalCustos, type: 'currency' as const }
         };
       case '7. Margem Antes do IR/CSLL':
         return {
@@ -504,14 +503,13 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           ],
           result: { label: 'Índice de Despesas Operacionais', value: (despesas_operacionais / RL) * 100, type: 'percent' as const }
         };
-      case '10. GAO (Alavancagem Op.)':
+      case '10. Total Despesas Rateadas':
         return {
-          formula: 'Margem de Contribuição ($) ÷ Resultado Operacional (EBIT)',
+          formula: 'Despesas Fixas + Administrativas + Comercial + Indiretas',
           steps: [
-            { label: 'Margem de Contribuição ($)', value: margem_contribuicao_valor, type: 'currency' as const, highlight: true },
-            { label: 'Resultado Operacional (EBIT)', value: ebit, type: 'currency' as const, highlight: true },
+            { label: 'Total Despesas Rateadas', value: kpis.totalDespesas, type: 'currency' as const, highlight: true },
           ],
-          result: { label: 'GAO', value: gao, type: 'decimal' as const }
+          result: { label: 'Total Despesas', value: kpis.totalDespesas, type: 'currency' as const }
         };
       default:
         return null;
@@ -544,35 +542,6 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           </div>
 
           <div className="flex items-center gap-4">
-            {/* View Mode Toggle Switch */}
-            <div className="bg-slate-200/70 p-1 rounded-xl flex items-center border border-slate-300/30">
-              <button
-                onClick={() => setViewMode('total')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  viewMode === 'total'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-850'
-                }`}
-              >
-                Valores Totais
-              </button>
-              <button
-                onClick={() => setViewMode('equipment')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  viewMode === 'equipment'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-850'
-                }`}
-              >
-                <span>Por Equipamento</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-extrabold ${
-                  viewMode === 'equipment' ? 'bg-amber-100 text-amber-800' : 'bg-slate-300 text-slate-600'
-                }`}>
-                  {totalEquipamentos}
-                </span>
-              </button>
-            </div>
-
             {/* Close Button */}
             <button
               onClick={onClose}
@@ -723,7 +692,6 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
                         tickLine={false}
                         tickFormatter={(v) => {
                           if (selectedKpiData.type === 'percent') return `${v}%`;
-                          if (selectedKpiData.type === 'decimal') return `${v}x`;
                           return v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v;
                         }}
                       />

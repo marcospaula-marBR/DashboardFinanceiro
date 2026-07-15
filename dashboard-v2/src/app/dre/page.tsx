@@ -625,8 +625,8 @@ export default function DrePage() {
     markdownReport += `- **5. Margem EBITDA:** ${formatPCT((ebitda / RL) * 100)}\n`;
     markdownReport += `  *A capacidade da empresa de transformar receita em caixa. Acima de 20% é considerado bom.*\n`;
     
-    markdownReport += `- **6. Resultado Financeiro:** ${formatBRL(resultado_financeiro)}\n`;
-    markdownReport += `  *Receitas financeiras menos as despesas com bancos e juros.*\n`;
+    markdownReport += `- **6. Total Custos Operacionais:** ${formatBRL(results.kpis.totalCustos)}\n`;
+    markdownReport += `  *Soma de todos os custos diretamente ligados à entrega dos serviços e produtos da empresa.*\n`;
     
     markdownReport += `- **7. Margem Antes do IR/CSLL:** ${formatPCT((lair / RL) * 100)}\n`;
     markdownReport += `  *Margem de lucro total antes dos tributos corporativos diretos.*\n`;
@@ -637,8 +637,8 @@ export default function DrePage() {
     markdownReport += `- **9. Índ. Despesas Operacionais:** ${formatPCT((despesas_operacionais / RL) * 100)}\n`;
     markdownReport += `  *Quanto a estrutura corporativa/fixa consome da receita. O ideal é ficar abaixo de 15%.*\n`;
     
-    markdownReport += `- **10. GAO (Alavancagem Op.):** ${formatDEC(gao)}\n`;
-    markdownReport += `  *Mede o risco do negócio: se as vendas caírem 1%, quantos % o lucro cai. Acima de 3,0x é alto risco.*\n`;
+    markdownReport += `- **10. Total Despesas Rateadas:** ${formatBRL(results.kpis.totalDespesas)}\n`;
+    markdownReport += `  *Soma total do custo da estrutura fixa e administrativa da empresa.*\n`;
     markdownReport += `\n`;
 
     markdownReport += `## 2. Fluxo de Caixa e Eficiência Operacional\n`;

@@ -50,6 +50,12 @@ export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporti
 
   const handleExport = () => {
     onExport(selections, previewContent || undefined);
+    // Limpar ao exportar (se desejar, ou apenas ao fechar o modal)
+  };
+
+  const handleClose = () => {
+    setPreviewContent(null);
+    onClose();
   };
 
   const isAnySelected = Object.values(selections).some(Boolean);
@@ -89,7 +95,7 @@ export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporti
             </div>
           </div>
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isExporting || isPreviewing}
             className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-150 transition-colors disabled:opacity-50"
           >
