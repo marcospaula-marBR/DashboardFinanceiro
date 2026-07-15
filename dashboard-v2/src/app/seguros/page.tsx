@@ -9,13 +9,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ChevronLeft, Plus, ShieldCheck, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Plus, ShieldCheck, Loader2, AlertCircle, RefreshCw, FileText } from 'lucide-react';
 
 import { InsuranceExpiryAlert } from '@/components/seguros/InsuranceExpiryAlert';
 import { InsuranceKPICards } from '@/components/seguros/InsuranceKPICards';
 import { InsuranceFilterBar } from '@/components/seguros/InsuranceFilterBar';
 import { InsurancePolicyCard } from '@/components/seguros/InsurancePolicyCard';
 import { InsuranceAddEditModal } from '@/components/seguros/InsuranceAddEditModal';
+import { InsuranceExportModal, InsuranceExportSelections } from '@/components/seguros/InsuranceExportModal';
 
 import {
   fetchInsurancePolicies,
@@ -53,6 +54,10 @@ export default function SegurosPage() {
   // ── DELETE CONFIRM ──
   const [deletingPolicy, setDeletingPolicy] = useState<InsurancePolicy | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // ── EXPORT MODAL ──
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // ──────────────────────────────────────────────────────────
   // FETCH
@@ -154,6 +159,175 @@ export default function SegurosPage() {
   };
 
   // ──────────────────────────────────────────────────────────
+  // GAMMA / BRISINH AI HELPERS
+  // ──────────────────────────────────────────────────────────
+  const formatBRL = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  const formatDate = (iso?: string) => {
+    if (!iso) return '—';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  // Mapa de logos por contratante
+  const LOGO_MAP: Record<string, string> = {
+    'Mar Brasil': '/logos/MarBR.png',
+    'Mar BR': '/logos/MarBR.png',
+    'DZM': '/logos/DZM.png',
+    'Grupo 2': '/logos/G2.png',
+    'G2': '/logos/G2.png',
+    'Ybox': '/logos/Ybox.png',
+    'Conectius': '/logos/Conectius.png',
+  };
+
+  const buildInsuranceMarkdown = async (
+    selections: InsuranceExportSelections
+  ): Promise<string> => {
+    // Determina contratantes visíveis nos dados filtrados
+    const contratantesAtivos = [...new Set(filteredPolicies.map((p) => p.contratante).filter(Boolean))];
+    const logoTags = contratantesAtivos
+      .map((c) => LOGO_MAP[c])
+      .filter(Boolean)
+      .map((src) => `<img src="${src}" width="120" />`)
+      .join(' ');
+
+    const dataHoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    const filtroDesc = [
+      filters.contratante ? `Empresa: ${filters.contratante}` : 'Todas as Empresas',
+      filters.tipo ? `Tipo: ${filters.tipo}` : '',
+      filters.seguradora ? `Seguradora: ${filters.seguradora}` : '',
+    ].filter(Boolean).join(' | ');
+
+    let md = '';
+
+    if (logoTags) md += `${logoTags}\n\n`;
+    md += `# Relatório de Gestão de Seguros\n`;
+    md += `**Grupo Mar Brasil** — Emitido em ${dataHoje}\n\n`;
+    md += `---\n\n`;
+    md += `## Filtros Aplicados\n`;
+    md += `- ${filtroDesc}\n\n`;
+
+    // KPIs gerais
+    md += `## Resumo Executivo do Portfólio\n`;
+    md += `| Indicador | Valor |\n|---|---|\n`;
+    md += `| Total de Apólices (Carteira) | ${kpis.totalApólices} |\n`;
+    md += `| Apólices Ativas | ${kpis.apólicesAtivas} |\n`;
+    md += `| Custo Mensal Total (Prêmio) | ${formatBRL(kpis.premioMensalTotal)} |\n`;
+    md += `| Custo Anual Total (Prêmio) | ${formatBRL(kpis.premioAnualTotal)} |\n`;
+    md += `| Vencendo em até 7 dias | **${kpis.vencendoEm7Dias.length}** |\n`;
+    md += `| Vencendo em até 30 dias | ${kpis.vencendoEm30Dias.length} |\n\n`;
+
+    // Apólices urgentes
+    if (kpis.vencendoEm30Dias.length > 0) {
+      md += `## ⚠️ Apólices com Vencimento Próximo (30 dias)\n`;
+      md += `| Contratante | Segurado | Tipo | Seguradora | Vencimento | Dias Restantes | Prêmio |\n`;
+      md += `|---|---|---|---|---|---|---|\n`;
+      kpis.vencendoEm30Dias.forEach((p) => {
+        md += `| ${p.contratante} | ${p.segurado || '—'} | ${p.tipo} | ${p.seguradora || '—'} | ${formatDate(p.vencimento)} | **${p.diasParaVencer ?? '?'}** | ${formatBRL(p.premio || 0)} |\n`;
+      });
+      md += `\n`;
+    }
+
+    // Distribuição por tipo
+    if (Object.keys(kpis.porTipo).length > 0) {
+      md += `## Distribuição por Tipo de Seguro\n`;
+      md += `| Tipo | Quantidade |\n|---|---|\n`;
+      Object.entries(kpis.porTipo)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .forEach(([tipo, qtd]) => {
+          md += `| ${tipo} | ${qtd} |\n`;
+        });
+      md += `\n`;
+    }
+
+    // Distribuição por contratante
+    if (Object.keys(kpis.porContratante).length > 0) {
+      md += `## Distribuição por Empresa (Contratante)\n`;
+      md += `| Empresa | Apólices Ativas |\n|---|---|\n`;
+      Object.entries(kpis.porContratante)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .forEach(([empresa, qtd]) => {
+          md += `| ${empresa} | ${qtd} |\n`;
+        });
+      md += `\n`;
+    }
+
+    // Listagem completa de apólices filtradas
+    if (filteredPolicies.length > 0) {
+      md += `## Portfólio Detalhado das Apólices Filtradas\n`;
+      md += `| Contratante | Segurado | Tipo | Seguradora | Início | Vencimento | Prêmio Anual | Parcela Mensal | Status |\n`;
+      md += `|---|---|---|---|---|---|---|---|---|\n`;
+      filteredPolicies.forEach((p) => {
+        const status = p.statusVencimento === 'urgente' || p.statusVencimento === 'vencido'
+          ? '🔴 Urgente'
+          : p.statusVencimento === 'atencao'
+          ? '🟡 Atenção'
+          : '🟢 Ok';
+        md += `| ${p.contratante} | ${p.segurado || '—'} | ${p.tipo} | ${p.seguradora || '—'} | ${formatDate(p.inicio)} | ${formatDate(p.vencimento)} | ${formatBRL(p.premio || 0)} | ${formatBRL(p.valor_parcela || 0)} | ${status} |\n`;
+      });
+      md += `\n`;
+    }
+
+    // Análise BrisinhAI
+    if (selections.includeAiAnalysis) {
+      try {
+        const res = await fetch('/api/ai/analyze_seguros', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kpis,
+            policies: filteredPolicies,
+            filtros: filtroDesc,
+          }),
+        });
+        const data = await res.json();
+        if (data?.analysis) {
+          md += `## Análise Executiva (Por BrisinhAI)\n\n`;
+          md += `${data.analysis}\n\n`;
+        }
+      } catch {
+        md += `## Análise Executiva (Por BrisinhAI)\n\n`;
+        md += `*Não foi possível gerar a análise de IA neste momento.*\n\n`;
+      }
+    }
+
+    return md;
+  };
+
+  const handlePreviewInsurance = async (
+    selections: InsuranceExportSelections
+  ): Promise<string> => {
+    return buildInsuranceMarkdown(selections);
+  };
+
+  const handleExportInsurance = async (
+    selections: InsuranceExportSelections,
+    customMarkdown?: string
+  ) => {
+    setIsExporting(true);
+    try {
+      const markdownReport = customMarkdown || (await buildInsuranceMarkdown(selections));
+      const res = await fetch('/api/gamma/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markdownReport }),
+      });
+      const data = await res.json();
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      } else {
+        alert('Não foi possível obter o link da apresentação. Verifique os logs.');
+      }
+    } catch {
+      alert('Erro ao gerar apresentação. Tente novamente.');
+    } finally {
+      setIsExporting(false);
+      setIsExportModalOpen(false);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────
   // RENDER
   // ──────────────────────────────────────────────────────────
   return (
@@ -181,6 +355,16 @@ export default function SegurosPage() {
             <ChevronLeft size={14} />
             <span>Voltar ao Início</span>
           </Link>
+          <button
+            className={styles.backBtn}
+            onClick={() => setIsExportModalOpen(true)}
+            id="btn-relatorio-seguros"
+            title="Gerar Relatório Gamma"
+            style={{ color: '#059669', borderColor: '#059669' }}
+          >
+            <FileText size={14} />
+            <span>Relatório</span>
+          </button>
           <button className={styles.addBtn} onClick={handleOpenNew} id="btn-nova-apolice">
             <Plus size={14} />
             <span>Nova Apólice</span>
@@ -276,6 +460,15 @@ export default function SegurosPage() {
         onClose={() => { setIsModalOpen(false); setEditingPolicy(null); }}
         onSave={handleSave}
         policy={editingPolicy}
+      />
+
+      {/* ── MODAL EXPORT/GAMMA ── */}
+      <InsuranceExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onPreview={handlePreviewInsurance}
+        onExport={handleExportInsurance}
+        isExporting={isExporting}
       />
 
       {/* ── MODAL CONFIRM DELETE ── */}

@@ -1,7 +1,7 @@
-export const APP_VERSION = "v.02.50.16";
+export const APP_VERSION = "v.02.50.17";
 export const VERSION_DATE = "2026-07-15";
 export const VERSION_CHANGELOG = [
-  "v.02.50.16 - Fix/DRE: Ajusta os limites e benchamarks (Selo de Nível) de avaliação para os novos indicadores de Índice de Custos Operacionais (KPI 6) e Índice de Despesas Rateadas (KPI 10) que não estavam exibindo cor.",
+  "v.02.50.17 - Feat/Seguros: Implementa integração completa com Gamma e BrisinhAI na página de Seguros. Novo botão 'Relatório' no header, modal com pré-visualização editável, gerador de Markdown com portfólio detalhado, alertas de vencimento, distribuição por tipo/empresa e logos das contratantes. Nova rota /api/ai/analyze_seguros com prompt focado em risco, vencimentos e custo-benefício de apólices.",
   "v.02.50.12 - Feat/DRE: Cria o novo recurso de 'Pré-visualização e Edição' na geração de relatórios Gamma. Agora os usuários podem visualizar e alterar manualmente o relatório em Markdown (incluindo correções nos dados e edição da análise do BrisinhAI) antes de enviá-lo para a IA. Implementa também injeção de logos dinâmicos múltiplos alinhados à direita caso mais de uma empresa seja selecionada no Dashboard.",
   "v.02.50.11 - Fix: Corrige quebra de exibição de logomarca em todos os Headers, Dashboards, Landing Pages e páginas de Seguro do sistema após renomeação do arquivo original. Atualizado para apontar corretamente para '/Logos/Mar-Brasil-sem-fundo-preto.png'.",
   "v.02.50.10 - Feat/DRE: Implementa suporte a logos dinâmicos na geração de relatórios do Gamma. O sistema agora mapeia a empresa selecionada (Mar Brasil, DZM, Grupo 2, Ybox, Conectius, Solucione) e injeta o logotipo correspondente do diretório /public/logos na primeira página do relatório Markdown enviado para a IA.",

@@ -28,7 +28,7 @@ Se o documento incluir uma seção "Análise Executiva (Por BrisinhAI)", garanta
 
 Se houver logomarcas (tags <img src=...>), tente posicioná-las adequadamente na capa ou rodapé da apresentação.
 
-Abaixo estão os dados financeiros do período e os filtros aplicados:
+Abaixo estão os dados corporativos estruturados do período analisado:
 
 ${markdownReport}
 `;
