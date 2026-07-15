@@ -57,7 +57,8 @@ Seções recomendadas:
         'X-API-KEY': GAMMA_API_KEY,
       },
       body: JSON.stringify({
-        inputText: promptText
+        inputText: promptText,
+        textMode: 'generate'
       })
     });
 
