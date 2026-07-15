@@ -161,7 +161,7 @@ export function DreHeader({
           onClick={onExportPDF}
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-bold transition-all duration-200 shadow-md shadow-orange-500/10 active:scale-95 min-w-[140px]"
         >
-          <FileText size={16} /> <span className="hidden sm:inline">Exportar PDF</span>
+          <FileText size={16} /> <span className="hidden sm:inline">Gerar Relatório</span>
         </button>
       </div>
     </header>

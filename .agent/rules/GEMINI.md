@@ -132,7 +132,7 @@ When auto-applying an agent, inform the user:
 1. Bumpar versão em version.ts   ← Ver regra VERSION BUMP acima
 2. git add -A
 3. git commit -m "tipo: descrição objetiva da mudança"
-4. git push origin main          ← Dispara deploy automático no Vercel
+4. git pushall                   ← Dispara deploy automático no Vercel e atualiza conta pessoal
 ```
 
 **Comandos prontos (PowerShell):**
@@ -142,7 +142,7 @@ When auto-applying an agent, inform the user:
 cd d:\DRE-V33-Dianna
 git add -A
 git commit -m "feat: <descrição da mudança>"
-git push origin main
+git pushall
 ```
 
 **Checklist de commit (obrigatório antes do push):**
@@ -152,7 +152,7 @@ git push origin main
 | 1 | `version.ts` foi atualizado (versão + data + changelog)? | ✅ SIM |
 | 2 | Todos os arquivos modificados estão no stage (`git add -A`)? | ✅ SIM |
 | 3 | Mensagem do commit segue o padrão Conventional Commits? | ✅ SIM |
-| 4 | Push foi executado (`git push origin main`)? | ✅ SIM — deploy só ocorre com push |
+| 4 | Push foi executado (`git pushall`)? | ✅ SIM — deploy só ocorre com push |
 
 **Padrão de mensagem de commit (Conventional Commits):**
 
