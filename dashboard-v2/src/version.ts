@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.21";
+export const APP_VERSION = "v.02.50.22";
 export const VERSION_DATE = "2026-07-16";
 export const VERSION_CHANGELOG = [
+  "v.02.50.22 - Fix/Seguros: Unifica o motor de inteligência artificial OCR de seguros com o BrisinhAI. Migra a chamada direta de fetch REST para o SDK oficial @google/generative-ai e implementa a mesma cascata de modelos (MODEL_CASCADE) e tolerância a chaves alternativas (Gemini_API_Key, gemini_api_key) usada no chat, resolvendo erros de conexões e respostas 404 da API.",
   "v.02.50.21 - Fix/Seguros: Resolve o colapso visual do container OCR (Gemini OCR) no modal de apólices, adicionando flex-shrink: 0 para impedir que o flexbox do modalBody reduza a altura da seção a zero. Substitui também todas as referências a cores roxas/violetas por tons de azul premium, garantindo 100% de conformidade com a Purple Ban do projeto.",
   "v.02.50.20 - Feat/UI: Adiciona o número da versão do sistema de forma visível e legível no cabeçalho das páginas (Seguros e DRE) para permitir o acompanhamento rápido de novos deploys. Garante compatibilidade visual.",
   "v.02.50.12 - Feat/DRE: Cria o novo recurso de 'Pré-visualização e Edição' na geração de relatórios Gamma. Agora os usuários podem visualizar e alterar manualmente o relatório em Markdown (incluindo correções nos dados e edição da análise do BrisinhAI) antes de enviá-lo para a IA. Implementa também injeção de logos dinâmicos múltiplos alinhados à direita caso mais de uma empresa seja selecionada no Dashboard.",

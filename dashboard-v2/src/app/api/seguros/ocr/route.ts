@@ -8,8 +8,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { InsuranceOCRResult } from '@/types/insurance';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// Modelos em ordem de prioridade para a cascata — compatíveis com generateContent
+const MODEL_CASCADE = [
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-pro-latest',
+  'gemini-1.5-flash-002',
+  'gemini-1.5-pro-002',
+  'gemini-1.5-flash-001',
+  'gemini-1.5-pro-001',
+  'gemini-1.0-pro',
+  'gemini-1.0-pro-latest',
+  'gemini-pro'
+];
 
 const OCR_PROMPT = `Você é um especialista em análise de apólices de seguro. Analise o documento enviado (pode ser PDF, imagem ou scan de apólice) e extraia os seguintes dados em formato JSON.
 
@@ -53,9 +71,14 @@ Regras:
 
 export async function POST(request: NextRequest) {
   try {
-    if (!GEMINI_API_KEY) {
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.Gemini_API_Key ||
+      process.env.gemini_api_key;
+
+    if (!apiKey) {
       return NextResponse.json(
-        { error: 'GEMINI_API_KEY não configurada. Adicione ao .env.local' },
+        { error: 'Chave de API do Gemini não configurada no servidor (Vercel).' },
         { status: 500 }
       );
     }
@@ -89,51 +112,54 @@ export async function POST(request: NextRequest) {
     const base64Data = Buffer.from(arrayBuffer).toString('base64');
     const mimeType = file.type;
 
-    // Monta payload para Gemini API
-    const payload = {
-      contents: [
-        {
-          parts: [
-            {
-              text: OCR_PROMPT,
-            },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: base64Data,
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,     // Baixa temperatura para respostas mais determinísticas
-        maxOutputTokens: 2048,
-        responseMimeType: 'application/json',
-      },
-    };
+    const genAI = new GoogleGenerativeAI(apiKey);
+    let rawText = '';
+    let usedModel = '';
+    let allErrors: string[] = [];
 
-    // Chama Gemini API
-    const geminiResponse = await fetch(GEMINI_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    // Executa a cascata de modelos para tolerar indisponibilidades ou deprecations
+    for (const modelName of MODEL_CASCADE) {
+      try {
+        console.log(`[OCR Seguros] Tentando modelo: ${modelName}`);
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            temperature: 0.15,
+            maxOutputTokens: 2048,
+            responseMimeType: 'application/json',
+          }
+        });
 
-    if (!geminiResponse.ok) {
-      const errorBody = await geminiResponse.text();
-      console.error('[OCR] Gemini API error:', errorBody);
+        const result = await model.generateContent([
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType
+            }
+          },
+          OCR_PROMPT
+        ]);
+
+        const text = result.response.text();
+        if (text) {
+          rawText = text;
+          usedModel = modelName;
+          console.log(`[OCR Seguros] Sucesso com o modelo: ${modelName}`);
+          break;
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        allErrors.push(`[${modelName}] ${errorMsg}`);
+        console.warn(`[OCR Seguros] Falha no modelo ${modelName}: ${errorMsg}`);
+      }
+    }
+
+    if (!rawText) {
       return NextResponse.json(
-        { error: `Erro na API Gemini: ${geminiResponse.status}` },
+        { error: `Não foi possível conectar a nenhum modelo do Gemini. Erros encontrados:\n${allErrors.slice(0, 3).join('\n')}` },
         { status: 502 }
       );
     }
-
-    const geminiData = await geminiResponse.json();
-
-    // Extrai texto da resposta
-    const rawText: string =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
 
     let result: InsuranceOCRResult;
     try {
@@ -181,6 +207,7 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 
 // ──────────────────────────────────────────────────────────
 // AUXILIARY PARSING HELPERS
