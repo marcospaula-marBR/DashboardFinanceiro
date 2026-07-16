@@ -69,6 +69,8 @@ Regras:
 - O campo "confianca" avalia a qualidade geral da leitura
 - "camposNaoEncontrados" lista apenas os campos importantes que faltaram`;
 
+import { supabase } from '@/lib/supabase';
+
 export async function POST(request: NextRequest) {
   try {
     const apiKey =
@@ -83,34 +85,83 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
+    let base64Data = '';
+    let mimeType = 'application/pdf';
+    
+    // Tenta ler o body como JSON (upload via Supabase Storage, que previne corrupção de arquivo e bypassa limites)
+    const contentType = request.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const body = await request.json();
+      const { fileUrl } = body;
 
-    if (!file) {
-      return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
+      if (!fileUrl) {
+        return NextResponse.json({ error: 'Nenhum fileUrl informado.' }, { status: 400 });
+      }
+
+      // Download do arquivo do storage do Supabase
+      // Se a URL for completa (ex: signedUrl do contracts), extraímos o path relativo para baixar
+      let storagePath = fileUrl;
+      if (fileUrl.includes('/object/sign/')) {
+        // Extrai o caminho relativo do storage após o nome do bucket 'contracts/'
+        const match = fileUrl.match(/\/contracts\/([^?]+)/);
+        if (match && match[1]) {
+          storagePath = decodeURIComponent(match[1]);
+        }
+      }
+
+      console.log(`[OCR Seguros] Baixando arquivo do Supabase Storage: ${storagePath}`);
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('contracts')
+        .download(storagePath);
+
+      if (downloadError || !fileData) {
+        console.error('[OCR Seguros] Erro ao baixar do Supabase:', downloadError);
+        return NextResponse.json(
+          { error: 'Falha ao processar o arquivo da apólice no armazenamento.' },
+          { status: 500 }
+        );
+      }
+
+      const bytes = await fileData.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      base64Data = buffer.toString('base64');
+      mimeType = fileData.type || 'application/pdf';
+      if (mimeType === 'application/octet-stream') {
+        if (fileUrl.toLowerCase().endsWith('.pdf')) mimeType = 'application/pdf';
+        else if (fileUrl.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+        else mimeType = 'image/jpeg';
+      }
+    } else {
+      // Fallback para FormData (caso legado)
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+
+      if (!file) {
+        return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
+      }
+
+      // Valida tipo de arquivo
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        return NextResponse.json(
+          { error: 'Tipo de arquivo não suportado. Use PDF, JPEG, PNG ou WebP.' },
+          { status: 400 }
+        );
+      }
+
+      // Limite de 10MB
+      if (file.size > 10 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: 'Arquivo muito grande. Máximo: 10MB.' },
+          { status: 400 }
+        );
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      base64Data = buffer.toString('base64');
+      mimeType = file.type;
     }
-
-    // Valida tipo de arquivo
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        { error: 'Tipo de arquivo não suportado. Use PDF, JPEG, PNG ou WebP.' },
-        { status: 400 }
-      );
-    }
-
-    // Limite de 10MB
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: 'Arquivo muito grande. Máximo: 10MB.' },
-        { status: 400 }
-      );
-    }
-
-    // Converte arquivo para base64
-    const arrayBuffer = await file.arrayBuffer();
-    const base64Data = Buffer.from(arrayBuffer).toString('base64');
-    const mimeType = file.type;
 
     const genAI = new GoogleGenerativeAI(apiKey);
     let rawText = '';

@@ -16,6 +16,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { InsurancePolicy, InsurancePolicyInput, InsuranceOCRResult } from '@/types/insurance';
+import { uploadInsurancePolicyFile } from '@/services/insurance.service';
 import styles from './seguros.module.css';
 
 interface InsuranceAddEditModalProps {
@@ -35,9 +36,9 @@ const EMPTY_FORM: InsurancePolicyInput = {
   assistencia_24h: '',
   inicio: '',
   vencimento: '',
-  premio: undefined,
-  parcelas_total: undefined,
-  valor_parcela: undefined,
+  premio: 0,
+  parcelas_total: 1,
+  valor_parcela: 0,
   dia_pgto: '',
   formato_parcelas: '',
   corretor: '',
@@ -45,7 +46,7 @@ const EMPTY_FORM: InsurancePolicyInput = {
   email_corretor: '',
   indicador: '',
   ativo: true,
-  franquia: undefined,
+  franquia: 0,
   franquia_reduzida: false,
   cobertura_vidros: false,
   cobertura_lanternas: false,
@@ -92,9 +93,9 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         assistencia_24h: policy.assistencia_24h || '',
         inicio: policy.inicio || '',
         vencimento: policy.vencimento || '',
-        premio: policy.premio || undefined,
-        parcelas_total: policy.parcelas_total || undefined,
-        valor_parcela: policy.valor_parcela || undefined,
+        premio: policy.premio || 0,
+        parcelas_total: policy.parcelas_total || 1,
+        valor_parcela: policy.valor_parcela || 0,
         dia_pgto: policy.dia_pgto || '',
         formato_parcelas: policy.formato_parcelas || '',
         corretor: policy.corretor || '',
@@ -102,7 +103,7 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         email_corretor: policy.email_corretor || '',
         indicador: policy.indicador || '',
         ativo: policy.ativo ?? true,
-        franquia: policy.franquia || undefined,
+        franquia: policy.franquia || 0,
         franquia_reduzida: policy.franquia_reduzida ?? false,
         cobertura_vidros: policy.cobertura_vidros ?? false,
         cobertura_lanternas: policy.cobertura_lanternas ?? false,
@@ -151,10 +152,21 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
     setOcrResult(null);
 
     try {
-      const fd = new FormData();
-      fd.append('file', file);
+      // 1. Realizar upload do arquivo para o Supabase Storage para evitar problemas de limite/corrupção de multipart no Next.js
+      const targetId = (policy as any)?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'new_' + Date.now());
+      console.log('[OCR Seguros] Iniciando upload para o Supabase Storage...');
+      const fileUrl = await uploadInsurancePolicyFile(targetId, file);
+      console.log('[OCR Seguros] Upload concluído. URL assinada obtida.');
 
-      const resp = await fetch('/api/seguros/ocr', { method: 'POST', body: fd });
+      // 2. Chamar o backend passando a URL do storage em JSON
+      const resp = await fetch('/api/seguros/ocr', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fileUrl }),
+      });
+
       const json = await resp.json();
 
       if (!resp.ok || !json.success) {

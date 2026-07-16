@@ -264,3 +264,26 @@ export function getTipoIcon(tipo: string): string {
   const key = Object.keys(map).find((k) => tipo?.toLowerCase().includes(k.toLowerCase()));
   return key ? map[key] : '🛡️';
 }
+
+/**
+ * Faz o upload do PDF/imagem da apólice de seguro para o Supabase Storage
+ * no bucket 'contracts' (mesmo bucket usado para contratos de RH e Empréstimos)
+ */
+export async function uploadInsurancePolicyFile(
+  policyId: string,
+  file: File,
+  isTestMode?: boolean
+): Promise<string> {
+  const folder = isTestMode ? 'test' : 'production';
+  const ext = file.name.split('.').pop() || 'pdf';
+  const storagePath = `rh-aditivos/${folder}/insurance_${policyId}_${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('contracts')
+    .upload(storagePath, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) throw new Error(`Falha no upload do arquivo de seguro: ${uploadError.message}`);
+
+  const { data } = await supabase.storage.from('contracts').createSignedUrl(storagePath, 31536000); // 1 ano
+  return data?.signedUrl || storagePath;
+}
