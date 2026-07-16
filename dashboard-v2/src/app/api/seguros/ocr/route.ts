@@ -109,23 +109,21 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      console.log(`[OCR Seguros] Baixando arquivo do Supabase Storage: ${storagePath}`);
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from('contracts')
-        .download(storagePath);
+      console.log(`[OCR Seguros] Baixando arquivo via URL assinada...`);
+      const fileRes = await fetch(fileUrl);
 
-      if (downloadError || !fileData) {
-        console.error('[OCR Seguros] Erro ao baixar do Supabase:', downloadError);
+      if (!fileRes.ok) {
+        console.error('[OCR Seguros] Erro ao baixar via fetch:', fileRes.status);
         return NextResponse.json(
           { error: 'Falha ao processar o arquivo da apólice no armazenamento.' },
           { status: 500 }
         );
       }
 
-      const bytes = await fileData.arrayBuffer();
+      const bytes = await fileRes.arrayBuffer();
       const buffer = Buffer.from(bytes);
       base64Data = buffer.toString('base64');
-      mimeType = fileData.type || 'application/pdf';
+      mimeType = fileRes.headers.get('content-type') || 'application/pdf';
       if (mimeType === 'application/octet-stream') {
         if (fileUrl.toLowerCase().endsWith('.pdf')) mimeType = 'application/pdf';
         else if (fileUrl.toLowerCase().endsWith('.png')) mimeType = 'image/png';
