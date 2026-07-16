@@ -873,12 +873,12 @@
 .btnSave:hover { background: linear-gradient(135deg, #16a34a, #15803d); }
 .btnSave:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* ── OCR SECTION ── */
 .ocrSection {
-  background: rgba(139, 92, 246, 0.04);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: rgba(59, 130, 246, 0.04);
+  border: 1px solid rgba(59, 130, 246, 0.25);
   border-radius: 10px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .ocrSectionToggle {
@@ -890,15 +890,15 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #a78bfa;
+  color: #60a5fa;
   font-size: 0.78rem;
   font-weight: 700;
   text-align: left;
   transition: background 0.15s;
 }
-.ocrSectionToggle:hover { background: rgba(139, 92, 246, 0.06); }
+.ocrSectionToggle:hover { background: rgba(59, 130, 246, 0.06); }
 
-.sparkleIcon { color: #a78bfa; }
+.sparkleIcon { color: #60a5fa; }
 
 .ocrBody {
   padding: 0 1rem 0.85rem;
@@ -915,18 +915,18 @@
 }
 
 .dropZone {
-  border: 2px dashed rgba(139, 92, 246, 0.4);
+  border: 2px dashed rgba(59, 130, 246, 0.4);
   border-radius: 10px;
   padding: 2rem 1.5rem;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  background: rgba(139, 92, 246, 0.02);
+  background: rgba(59, 130, 246, 0.02);
 }
 
 .dropZone:hover, .dropZoneDragging {
-  border-color: rgba(139, 92, 246, 0.7);
-  background: rgba(139, 92, 246, 0.07);
+  border-color: rgba(59, 130, 246, 0.7);
+  background: rgba(59, 130, 246, 0.07);
   transform: scale(1.005);
 }
 
@@ -950,7 +950,7 @@
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  color: #a78bfa;
+  color: #60a5fa;
 }
 .ocrLoading span { font-size: 0.78rem; }
 
@@ -1034,7 +1034,7 @@
 
 .formInput:focus, .formSelect:focus {
   outline: none;
-  border-color: rgba(139, 92, 246, 0.4);
+  border-color: rgba(59, 130, 246, 0.4);
   background: rgba(255, 255, 255, 0.06);
 }
 

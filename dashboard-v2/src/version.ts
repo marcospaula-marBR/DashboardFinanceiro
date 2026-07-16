@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.20";
-export const VERSION_DATE = "2026-07-15";
+export const APP_VERSION = "v.02.50.21";
+export const VERSION_DATE = "2026-07-16";
 export const VERSION_CHANGELOG = [
+  "v.02.50.21 - Fix/Seguros: Resolve o colapso visual do container OCR (Gemini OCR) no modal de apólices, adicionando flex-shrink: 0 para impedir que o flexbox do modalBody reduza a altura da seção a zero. Substitui também todas as referências a cores roxas/violetas por tons de azul premium, garantindo 100% de conformidade com a Purple Ban do projeto.",
   "v.02.50.20 - Feat/UI: Adiciona o número da versão do sistema de forma visível e legível no cabeçalho das páginas (Seguros e DRE) para permitir o acompanhamento rápido de novos deploys. Garante compatibilidade visual.",
   "v.02.50.12 - Feat/DRE: Cria o novo recurso de 'Pré-visualização e Edição' na geração de relatórios Gamma. Agora os usuários podem visualizar e alterar manualmente o relatório em Markdown (incluindo correções nos dados e edição da análise do BrisinhAI) antes de enviá-lo para a IA. Implementa também injeção de logos dinâmicos múltiplos alinhados à direita caso mais de uma empresa seja selecionada no Dashboard.",
   "v.02.50.11 - Fix: Corrige quebra de exibição de logomarca em todos os Headers, Dashboards, Landing Pages e páginas de Seguro do sistema após renomeação do arquivo original. Atualizado para apontar corretamente para '/Logos/Mar-Brasil-sem-fundo-preto.png'.",
