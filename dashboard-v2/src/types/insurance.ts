@@ -40,6 +40,7 @@ export interface InsurancePolicy {
   indicador?: string;
   franquia?: number;
   franquia_reduzida?: boolean;
+  franquia_reduzida_percentual?: number;
   cobertura_vidros?: boolean;
   cobertura_lanternas?: boolean;
   cobertura_farois?: boolean;
@@ -78,6 +79,7 @@ export interface InsurancePolicyInput {
   ativo?: boolean;
   franquia?: number;
   franquia_reduzida?: boolean;
+  franquia_reduzida_percentual?: number;
   cobertura_vidros?: boolean;
   cobertura_lanternas?: boolean;
   cobertura_farois?: boolean;

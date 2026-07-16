@@ -233,7 +233,11 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
                     <span className={styles.detailKey}>Franquia</span>
                     <span className={styles.detailValue}>
                       {formatInsuranceCurrency(policy.franquia)}
-                      {policy.franquia_reduzida && <span className={styles.formato}> · Reduzida</span>}
+                      {policy.franquia_reduzida && (
+                        <span className={styles.formato}>
+                          {' '}· Reduzida{policy.franquia_reduzida_percentual ? ` (${policy.franquia_reduzida_percentual}%)` : ''}
+                        </span>
+                      )}
                     </span>
                   </div>
                 )}

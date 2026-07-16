@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.24";
+export const APP_VERSION = "v.02.50.25";
 export const VERSION_DATE = "2026-07-16";
 export const VERSION_CHANGELOG = [
+  "v.02.50.25 - Feat/Seguros: Remove a seção de leitura automática de apólices via IA (Gemini OCR) a pedido do usuário, simplificando o fluxo para um cadastro 100% manual e sem risco de mensagens de erro na tela. Adiciona também suporte à porcentagem de franquia reduzida, incluindo novo campo numérico condicional no modal e exibição do percentual nos cards de apólice (ex: '· Reduzida (30%)').",
   "v.02.50.24 - Fix/Seguros: Altera o download do arquivo de seguros no backend de supabase.storage.download para fetch da URL assinada completa. Isso garante que o token de autenticação contido nos query params seja repassado e previne a rejeição por regras RLS que resultava no erro 'The document has no pages'.",
   "v.02.50.23 - Fix/Seguros: Resolve o erro de processamento de PDF 'The document has no pages' no OCR. Implementa upload prévio do arquivo diretamente para o Supabase Storage bucket contracts (arquitetura idêntica ao BrisinhAI no RH e Empréstimos) e envio da URL do arquivo em formato JSON, eliminando corrupções de multipart e contornando limites de payload na Vercel.",
   "v.02.50.22 - Fix/Seguros: Unifica o motor de inteligência artificial OCR de seguros com o BrisinhAI. Migra a chamada direta de fetch REST para o SDK oficial @google/generative-ai e implementa a mesma cascata de modelos (MODEL_CASCADE) e tolerância a chaves alternativas (Gemini_API_Key, gemini_api_key) usada no chat, resolvendo erros de conexões e respostas 404 da API.",

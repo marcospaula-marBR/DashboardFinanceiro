@@ -1,22 +1,11 @@
 /**
  * InsuranceAddEditModal — Modal para cadastrar ou editar apólice de seguro
- * Inclui leitura OCR de PDF/Imagem via Gemini API
  */
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import {
-  X,
-  Upload,
-  Sparkles,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
-import { InsurancePolicy, InsurancePolicyInput, InsuranceOCRResult } from '@/types/insurance';
-import { uploadInsurancePolicyFile } from '@/services/insurance.service';
+import { useState, useEffect } from 'react';
+import { X, AlertCircle, Loader2 } from 'lucide-react';
+import { InsurancePolicy, InsurancePolicyInput } from '@/types/insurance';
 import styles from './seguros.module.css';
 
 interface InsuranceAddEditModalProps {
@@ -48,6 +37,7 @@ const EMPTY_FORM: InsurancePolicyInput = {
   ativo: true,
   franquia: 0,
   franquia_reduzida: false,
+  franquia_reduzida_percentual: 0,
   cobertura_vidros: false,
   cobertura_lanternas: false,
   cobertura_farois: false,
@@ -69,15 +59,6 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // OCR state
-  const [isDragging, setIsDragging] = useState(false);
-  const [ocrFile, setOcrFile] = useState<File | null>(null);
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrResult, setOcrResult] = useState<InsuranceOCRResult | null>(null);
-  const [ocrError, setOcrError] = useState<string | null>(null);
-  const [showOcrSection, setShowOcrSection] = useState(true);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditMode = !!policy;
 
   // Preenche form ao abrir em modo edição
@@ -105,6 +86,7 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         ativo: policy.ativo ?? true,
         franquia: policy.franquia || 0,
         franquia_reduzida: policy.franquia_reduzida ?? false,
+        franquia_reduzida_percentual: policy.franquia_reduzida_percentual || 0,
         cobertura_vidros: policy.cobertura_vidros ?? false,
         cobertura_lanternas: policy.cobertura_lanternas ?? false,
         cobertura_farois: policy.cobertura_farois ?? false,
@@ -114,102 +96,12 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
     } else {
       setForm(EMPTY_FORM);
     }
-    // Sempre abre a seção OCR expandida ao abrir o modal
-    setShowOcrSection(true);
-    setOcrResult(null);
-    setOcrError(null);
-    setOcrFile(null);
     setSaveError(null);
   }, [policy, isOpen]);
 
   // ── CAMPO INDIVIDUAL ──
   const setField = <K extends keyof InsurancePolicyInput>(key: K, value: InsurancePolicyInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  // ── OCR: DRAG & DROP ──
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  const handleDragLeave = () => setIsDragging(false);
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) processOCRFile(file);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processOCRFile(file);
-  };
-
-  const processOCRFile = async (file: File) => {
-    setOcrFile(file);
-    setOcrError(null);
-    setOcrLoading(true);
-    setOcrResult(null);
-
-    try {
-      // 1. Realizar upload do arquivo para o Supabase Storage para evitar problemas de limite/corrupção de multipart no Next.js
-      const targetId = (policy as any)?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'new_' + Date.now());
-      console.log('[OCR Seguros] Iniciando upload para o Supabase Storage...');
-      const fileUrl = await uploadInsurancePolicyFile(targetId, file);
-      console.log('[OCR Seguros] Upload concluído. URL assinada obtida.');
-
-      // 2. Chamar o backend passando a URL do storage em JSON
-      const resp = await fetch('/api/seguros/ocr', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ fileUrl }),
-      });
-
-      const json = await resp.json();
-
-      if (!resp.ok || !json.success) {
-        throw new Error(json.error || 'Erro desconhecido na leitura OCR.');
-      }
-
-      const result: InsuranceOCRResult = json.data;
-      setOcrResult(result);
-
-      // Auto-preenche os campos com os dados extraídos (prioriza o resultado do OCR)
-      setForm((prev) => ({
-        contratante: result.contratante || prev.contratante || '',
-        tipo: result.tipo || prev.tipo || '',
-        segurado: result.segurado || prev.segurado || '',
-        seguradora: result.seguradora || prev.seguradora || '',
-        apolice: result.apolice || prev.apolice || '',
-        senha: result.senha || prev.senha || '',
-        assistencia_24h: result.assistencia_24h || prev.assistencia_24h || '',
-        inicio: result.inicio || prev.inicio || '',
-        vencimento: result.vencimento || prev.vencimento || '',
-        premio: result.premio !== undefined ? result.premio : prev.premio,
-        parcelas_total: result.parcelas_total !== undefined ? result.parcelas_total : prev.parcelas_total,
-        valor_parcela: result.valor_parcela !== undefined ? result.valor_parcela : prev.valor_parcela,
-        dia_pgto: result.dia_pgto || prev.dia_pgto || '',
-        formato_parcelas: result.formato_parcelas || prev.formato_parcelas || '',
-        corretor: result.corretor || prev.corretor || '',
-        telefone_corretor: result.telefone_corretor || prev.telefone_corretor || '',
-        email_corretor: result.email_corretor || prev.email_corretor || '',
-        indicador: result.indicador || prev.indicador || '',
-        ativo: prev.ativo,
-        franquia: result.franquia !== undefined ? result.franquia : prev.franquia,
-        franquia_reduzida: result.franquia_reduzida !== undefined ? result.franquia_reduzida : prev.franquia_reduzida,
-        cobertura_vidros: result.cobertura_vidros !== undefined ? result.cobertura_vidros : prev.cobertura_vidros,
-        cobertura_lanternas: result.cobertura_lanternas !== undefined ? result.cobertura_lanternas : prev.cobertura_lanternas,
-        cobertura_farois: result.cobertura_farois !== undefined ? result.cobertura_farois : prev.cobertura_farois,
-        coberturas_adicionais: result.coberturas_adicionais || prev.coberturas_adicionais || '',
-        observacoes: result.observacoes || prev.observacoes || '',
-      }));
-    } catch (err: any) {
-      setOcrError(err.message || 'Erro ao processar arquivo.');
-    } finally {
-      setOcrLoading(false);
-    }
   };
 
   // ── SALVAR ──
@@ -251,8 +143,8 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
             </h2>
             <p className={styles.modalSubtitle}>
               {isEditMode
-                ? `Editando: ${policy?.tipo} · ${policy?.segurado || policy?.contratante} — Envie o PDF para atualizar os campos automaticamente`
-                : 'Cadastre manualmente ou envie o PDF/imagem para preenchimento automático via IA'}
+                ? `Editando: ${policy?.tipo} · ${policy?.segurado || policy?.contratante}`
+                : 'Preencha os campos abaixo para cadastrar uma nova apólice de seguro'}
             </p>
           </div>
           <button className={styles.modalCloseBtn} onClick={onClose} aria-label="Fechar">
@@ -261,97 +153,6 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         </div>
 
         <div className={styles.modalBody}>
-
-          {/* ─── SEÇÃO OCR ─── */}
-          <div className={styles.ocrSection}>
-            <button
-              className={styles.ocrSectionToggle}
-              onClick={() => setShowOcrSection(!showOcrSection)}
-            >
-              <Sparkles size={16} className={styles.sparkleIcon} />
-              <span>
-                {isEditMode
-                  ? '✨ Atualizar Campos via IA — Envie o PDF da Apólice'
-                  : 'Leitura Automática via IA (Gemini OCR)'}
-              </span>
-              {showOcrSection ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-
-            {showOcrSection && (
-              <div className={styles.ocrBody}>
-                <p className={styles.ocrHint}>
-                  Envie o PDF ou foto da apólice. A IA extrai os dados automaticamente e preenche o formulário abaixo para você revisar e salvar.
-                </p>
-
-                {/* Drop Zone */}
-                <div
-                  className={`${styles.dropZone} ${isDragging ? styles.dropZoneDragging : ''} ${ocrFile ? styles.dropZoneHasFile : ''}`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Área para upload do arquivo de apólice"
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                    onChange={handleFileSelect}
-                    className={styles.hiddenInput}
-                    aria-hidden="true"
-                  />
-
-                  {ocrLoading ? (
-                    <div className={styles.ocrLoading}>
-                      <Loader2 size={28} className={styles.spinIcon} />
-                      <span>Analisando documento com Gemini IA...</span>
-                    </div>
-                  ) : ocrFile ? (
-                    <div className={styles.ocrFileSelected}>
-                      <CheckCircle2 size={24} className={styles.ocrCheckIcon} />
-                      <div>
-                        <p className={styles.ocrFileName}>{ocrFile.name}</p>
-                        <p className={styles.ocrFileSize}>
-                          {(ocrFile.size / 1024).toFixed(0)} KB · Clique para trocar
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className={styles.ocrDropHint}>
-                      <Upload size={28} />
-                      <p>Arraste o PDF/imagem aqui ou clique para selecionar</p>
-                      <span>Suporta: PDF, JPEG, PNG, WebP · Máx. 10MB</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Erro OCR */}
-                {ocrError && (
-                  <div className={styles.ocrError}>
-                    <AlertCircle size={14} />
-                    <span>{ocrError}</span>
-                  </div>
-                )}
-
-                {/* Resultado OCR */}
-                {ocrResult && (
-                  <div className={styles.ocrSuccess}>
-                    <CheckCircle2 size={14} />
-                    <span>
-                      Dados extraídos com confiança{' '}
-                      <strong>{ocrResult.confianca}</strong>.
-                      {ocrResult.camposNaoEncontrados && ocrResult.camposNaoEncontrados.length > 0 && (
-                        <> Campos não encontrados: {ocrResult.camposNaoEncontrados.join(', ')}.</>
-                      )}
-                      {' '}Revise e corrija os campos abaixo antes de salvar.
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
           {/* ─── FORMULÁRIO MANUAL ─── */}
           <div className={styles.formGrid}>
@@ -592,11 +393,35 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
                 <input
                   type="checkbox"
                   checked={form.franquia_reduzida ?? false}
-                  onChange={(e) => setField('franquia_reduzida', e.target.checked)}
+                  onChange={(e) => {
+                    setField('franquia_reduzida', e.target.checked);
+                    if (!e.target.checked) {
+                      setField('franquia_reduzida_percentual', 0);
+                    }
+                  }}
                 />
                 <span>Franquia Reduzida</span>
               </label>
             </div>
+
+            {form.franquia_reduzida && (
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel} htmlFor="ins-franquia-reduzida-percentual">
+                  Porcentagem da Franquia Reduzida (%)
+                </label>
+                <input
+                  id="ins-franquia-reduzida-percentual"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  className={styles.formInput}
+                  value={form.franquia_reduzida_percentual ?? ''}
+                  onChange={(e) => setField('franquia_reduzida_percentual', e.target.value ? parseFloat(e.target.value) : 0)}
+                  placeholder="Ex: 50"
+                />
+              </div>
+            )}
 
             <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
               <label className={styles.formLabel}>Coberturas Inclusas</label>
