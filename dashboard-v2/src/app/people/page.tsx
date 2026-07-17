@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ProfileDrawer } from "@/components/people/ProfileDrawer";
 import { PeopleKpiCard } from "@/components/people/PeopleKpiCard";
 import { DeleteConfirmDialog } from "@/components/people/DeleteConfirmDialog";
+import { PayrollBatchImportModal } from "@/components/people/PayrollBatchImportModal";
 import { PeopleTable } from "@/components/people/PeopleTable";
 import { KPIStatsDrawer } from "@/components/people/KPIStatsDrawer";
 import { PeopleHRService } from "@/services/people-hr.service";
@@ -18,7 +19,8 @@ import {
   Loader2, AlertCircle, Users, Eye, EyeOff, Search, Filter, X, 
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
-  ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3
+  ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
+  FileText
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -89,6 +91,7 @@ export default function PeoplePage() {
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isPayrollBatchModalOpen, setIsPayrollBatchModalOpen] = useState(false);
   
   // C-Level Executive Drawer States
   const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "headcount_clt" | "headcount_pj" | "payroll_clt" | "payroll_pj" | "loans" | "health" | "audit" | "strategic" | "nopbid" | null>(null);
@@ -1129,6 +1132,15 @@ export default function PeoplePage() {
               <HandCoins size={14} /> Empréstimos
             </Link>
 
+            {/* Import payroll consolidated PDF button */}
+            <button
+              onClick={() => setIsPayrollBatchModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase animate-in fade-in"
+              title="Importar extrato mensal de folha de pagamento CLT em lote"
+            >
+              <FileText size={14} /> Importar Folha
+            </button>
+
             {/* Create new employee button */}
             <button
               onClick={handleCreateEmployeeClick}
@@ -1905,6 +1917,16 @@ export default function PeoplePage() {
         monthlyCosts={monthlyCosts}
         loanStats={loanStats}
         auditIssues={Object.fromEntries(Object.entries(allAuditIssues).filter(([id]) => filteredEmployees.some(e => e.id === id)))}
+      />
+
+      <PayrollBatchImportModal
+        isOpen={isPayrollBatchModalOpen}
+        onClose={() => setIsPayrollBatchModalOpen(false)}
+        onSuccess={() => {
+          fetchData();
+        }}
+        employees={employees}
+        isTestMode={isTestMode}
       />
     </div>
   );
