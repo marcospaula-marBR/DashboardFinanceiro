@@ -161,6 +161,22 @@ export const PeopleHRService = {
     const glosaBonusTotal = costs.reduce((sum, c) => sum + (c.valor_glosa_bonus || 0), 0);
     const deducoesTotal = costs.reduce((sum, c) => sum + (c.valor_deducoes || 0), 0);
 
+    // Campos CLT
+    const horaExtraTotal = costs.reduce((sum, c) => sum + (c.valor_hora_extra || 0), 0);
+    const adicionalNotTotal = costs.reduce((sum, c) => sum + (c.valor_adicional_not || 0), 0);
+    const vrTotal = costs.reduce((sum, c) => sum + (c.valor_vr || 0), 0);
+    const vtTotal = costs.reduce((sum, c) => sum + (c.valor_vt || 0), 0);
+    const cestaTotal = costs.reduce((sum, c) => sum + (c.valor_cesta || 0), 0);
+    const ajudaCustoTotal = costs.reduce((sum, c) => sum + (c.valor_ajuda_custo || 0), 0);
+    const beneficiosTotal = costs.reduce((sum, c) => sum + (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0), 0);
+    const decimoTerceiroTotal = costs.reduce((sum, c) => sum + (c.valor_decimo_terceiro || 0), 0);
+    const feriasTotal = costs.reduce((sum, c) => sum + (c.valor_ferias || 0), 0);
+    const rescisaoTotal = costs.reduce((sum, c) => sum + (c.valor_rescisao || 0), 0);
+    const descontosTotal = costs.reduce((sum, c) => sum + (c.valor_descontos || 0), 0);
+    const faltasTotal = costs.reduce((sum, c) => sum + (c.valor_faltas || 0), 0);
+    const consignadoTotal = costs.reduce((sum, c) => sum + (c.valor_consignado || 0), 0);
+    const bancoHorasTotal = costs.reduce((sum, c) => sum + (c.banco_horas || 0), 0);
+
     const count = costs.length;
 
     return {
@@ -177,12 +193,33 @@ export const PeopleHRService = {
       glosaBaseTotal,
       glosaBonusTotal,
       deducoesTotal,
+      // CLT fields
+      horaExtraTotal,
+      adicionalNotTotal,
+      vrTotal,
+      vtTotal,
+      cestaTotal,
+      ajudaCustoTotal,
+      beneficiosTotal,
+      decimoTerceiroTotal,
+      feriasTotal,
+      rescisaoTotal,
+      descontosTotal,
+      faltasTotal,
+      consignadoTotal,
+      bancoHorasTotal,
       // averages:
       fixedAverage: fixedTotal / count,
       bonusAverage: bonusTotal / count,
       commissionAverage: commissionTotal / count,
       incentivosAverage: incentivosTotal / count,
       conectividadeAverage: conectividadeTotal / count,
+      horaExtraAverage: horaExtraTotal / count,
+      adicionalNotAverage: adicionalNotTotal / count,
+      beneficiosAverage: beneficiosTotal / count,
+      faltasAverage: faltasTotal / count,
+      consignadoAverage: consignadoTotal / count,
+      bancoHorasAverage: bancoHorasTotal / count,
       totalAverage: costs.reduce((sum, c) => sum + c.valor_liquido, 0) / count,
       history: values
     };
