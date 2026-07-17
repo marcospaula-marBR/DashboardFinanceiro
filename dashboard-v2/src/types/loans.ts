@@ -240,6 +240,7 @@ export interface MonthlyCost {
   valor_decimo_terceiro?: number;
   valor_descontos?: number;
   valor_faltas?: number;
+  dias_faltas?: number;
   valor_consignado?: number;
   banco_horas?: number;
   valor_incentivos?: number;

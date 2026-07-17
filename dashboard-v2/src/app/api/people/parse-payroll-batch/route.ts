@@ -61,7 +61,7 @@ Instruções de Extração:
    - Total de Proventos/Vencimentos Brutos no campo "valor_holerite".
    - Total de Descontos no campo "valor_descontos".
    - Empréstimo Consignado: Se houver descontos com termos como "DESC. EMP. CRED. TRAB N..." ou "Consignado", some os respectivos valores e adicione no campo "valor_consignado".
-   - Faltas/Atrasos: Some todos os descontos de faltas ou faltas DSR (ex: "DIAS FALTAS", "DIAS FALTAS DSR") e coloque no campo "valor_faltas".
+   - Faltas/Atrasos: Some todos os descontos de faltas ou faltas DSR (ex: "DIAS FALTAS", "DIAS FALTAS DSR") e coloque no campo "valor_faltas". Extraia também o quantitativo total de dias de falta acumulados (ex: se constar "318 DIAS FALTAS 1,00" ou similar, capture o valor de quantidade, ex: "1.00", e coloque no campo "dias_faltas").
    - Banco de Horas: Se houver desconto de banco de horas (ex: "Desconto Banco de Horas 15:22"), converta as horas/minutos para formato decimal (ex: 15h22m = 15.37) e coloque no campo "banco_horas" como número positivo representando a quantidade de horas descontadas.
    - Demais proventos e descontos mapeados nos respectivos campos (adiantamento, hora extra, adicional noturno, férias, décimo terceiro, VR, VT, cesta básica, bônus, comissão, ajuda de custo).
 
@@ -88,6 +88,7 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
       "valor_decimo_terceiro": 0.00,
       "valor_descontos": 0.00,
       "valor_faltas": 0.00,
+      "dias_faltas": 0.00,
       "valor_consignado": 0.00,
       "banco_horas": 0.00,
       "valor_incentivos": 0.00,

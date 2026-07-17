@@ -164,6 +164,7 @@ export const PeopleHRService = {
     // Campos CLT
     const horaExtraTotal = costs.reduce((sum, c) => sum + (c.valor_hora_extra || 0), 0);
     const adicionalNotTotal = costs.reduce((sum, c) => sum + (c.valor_adicional_not || 0), 0);
+    const adiantamentoTotal = costs.reduce((sum, c) => sum + (c.valor_adiantamento || 0), 0);
     const vrTotal = costs.reduce((sum, c) => sum + (c.valor_vr || 0), 0);
     const vtTotal = costs.reduce((sum, c) => sum + (c.valor_vt || 0), 0);
     const cestaTotal = costs.reduce((sum, c) => sum + (c.valor_cesta || 0), 0);
@@ -174,16 +175,24 @@ export const PeopleHRService = {
     const rescisaoTotal = costs.reduce((sum, c) => sum + (c.valor_rescisao || 0), 0);
     const descontosTotal = costs.reduce((sum, c) => sum + (c.valor_descontos || 0), 0);
     const faltasTotal = costs.reduce((sum, c) => sum + (c.valor_faltas || 0), 0);
+    const diasFaltasTotal = costs.reduce((sum, c) => sum + (c.dias_faltas || 0), 0);
     const consignadoTotal = costs.reduce((sum, c) => sum + (c.valor_consignado || 0), 0);
     const bancoHorasTotal = costs.reduce((sum, c) => sum + (c.banco_horas || 0), 0);
 
     const count = costs.length;
 
+    // Se for CLT, somamos o líquido ao adiantamento para computar o custo real total gasto com o funcionário
+    const totalDesembolsado = costs.reduce((sum, c) => {
+      const isCLT = c.vinculo_tipo === 'CLT';
+      const liquidoReal = c.valor_liquido + (isCLT ? (c.valor_adiantamento || 0) : 0);
+      return sum + liquidoReal;
+    }, 0);
+
     return {
-      total: values.reduce((a, b) => a + b, 0),
-      average: values.reduce((a, b) => a + b, 0) / values.length,
-      min: Math.min(...values),
-      max: Math.max(...values),
+      total: totalDesembolsado,
+      average: totalDesembolsado / count,
+      min: Math.min(...costs.map(c => c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))),
+      max: Math.max(...costs.map(c => c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))),
       count,
       fixedTotal,
       bonusTotal,
@@ -196,6 +205,7 @@ export const PeopleHRService = {
       // CLT fields
       horaExtraTotal,
       adicionalNotTotal,
+      adiantamentoTotal,
       vrTotal,
       vtTotal,
       cestaTotal,
@@ -206,6 +216,7 @@ export const PeopleHRService = {
       rescisaoTotal,
       descontosTotal,
       faltasTotal,
+      diasFaltasTotal,
       consignadoTotal,
       bancoHorasTotal,
       // averages:
@@ -216,12 +227,14 @@ export const PeopleHRService = {
       conectividadeAverage: conectividadeTotal / count,
       horaExtraAverage: horaExtraTotal / count,
       adicionalNotAverage: adicionalNotTotal / count,
+      adiantamentoAverage: adiantamentoTotal / count,
       beneficiosAverage: beneficiosTotal / count,
       faltasAverage: faltasTotal / count,
+      diasFaltasAverage: diasFaltasTotal / count,
       consignadoAverage: consignadoTotal / count,
       bancoHorasAverage: bancoHorasTotal / count,
-      totalAverage: costs.reduce((sum, c) => sum + c.valor_liquido, 0) / count,
-      history: values
+      totalAverage: totalDesembolsado / count,
+      history: costs.map(c => c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))
     };
   },
 

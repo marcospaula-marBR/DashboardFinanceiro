@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3 } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
@@ -104,11 +104,17 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [editingCostDecimoTerceiro, setEditingCostDecimoTerceiro] = useState(0);
   const [editingCostDescontos, setEditingCostDescontos] = useState(0);
   const [editingCostFaltas, setEditingCostFaltas] = useState(0);
+  const [editingCostDiasFaltas, setEditingCostDiasFaltas] = useState(0);
   const [editingCostConsignado, setEditingCostConsignado] = useState(0);
   const [editingCostBancoHoras, setEditingCostBancoHoras] = useState(0);
   const [editingCostObservacao, setEditingCostObservacao] = useState('');
   const [isParsingPayroll, setIsParsingPayroll] = useState(false);
   const [saveCostError, setSaveCostError] = useState<string | null>(null);
+
+  // Estados dos filtros de período e data
+  const [costPeriodFilter, setCostPeriodFilter] = useState<'all' | '3m' | '6m' | '12m' | 'custom'>('all');
+  const [costSelectedYears, setCostSelectedYears] = useState<string[]>([]);
+  const [costSelectedMonths, setCostSelectedMonths] = useState<string[]>([]);
   const [isSearchingCEP, setIsSearchingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
   const [isSearchingCNPJCEP, setIsSearchingCNPJCEP] = useState(false);
@@ -1564,6 +1570,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setEditingCostDecimoTerceiro(data.valor_decimo_terceiro || 0);
       setEditingCostDescontos(data.valor_descontos || 0);
       setEditingCostFaltas(data.valor_faltas || 0);
+      setEditingCostDiasFaltas(data.dias_faltas || 0);
       setEditingCostConsignado(data.valor_consignado || 0);
       setEditingCostBancoHoras(data.banco_horas || 0);
       setEditingCostBonus(data.valor_bonus || 0);
@@ -1634,6 +1641,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         valor_decimo_terceiro: isCLT ? editingCostDecimoTerceiro : undefined,
         valor_descontos: isCLT ? editingCostDescontos : undefined,
         valor_faltas: isCLT ? editingCostFaltas : undefined,
+        dias_faltas: isCLT ? editingCostDiasFaltas : undefined,
         valor_consignado: isCLT ? editingCostConsignado : undefined,
         banco_horas: isCLT ? editingCostBancoHoras : undefined,
         observacao: editingCostObservacao || undefined
@@ -3060,6 +3068,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 setEditingCostDecimoTerceiro(lastCost.valor_decimo_terceiro || 0);
                                 setEditingCostDescontos(lastCost.valor_descontos || 0);
                                 setEditingCostFaltas(lastCost.valor_faltas || 0);
+                                setEditingCostDiasFaltas(lastCost.dias_faltas || 0);
                                 setEditingCostConsignado(lastCost.valor_consignado || 0);
                                 setEditingCostBancoHoras(lastCost.banco_horas || 0);
                                 setEditingCostObservacao(lastCost.observacao || '');
@@ -3099,6 +3108,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               setEditingCostDecimoTerceiro(0);
                               setEditingCostDescontos(0);
                               setEditingCostFaltas(0);
+                              setEditingCostDiasFaltas(0);
                               setEditingCostConsignado(0);
                               setEditingCostBancoHoras(0);
                               setEditingCostObservacao('');
@@ -3112,26 +3122,232 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       </div>
 
                       {(() => {
-                        const stats = PeopleHRService.computeCostStats(costs);
+                        // 1. Extrair anos e meses existentes nos dados para preencher as opções dos filtros múltiplos
+                        const availableYears = Array.from(new Set(costs.map(c => c.competencia.split('-')[0]))).sort().reverse();
+                        const availableMonths = [
+                          { val: '01', name: 'Jan' }, { val: '02', name: 'Fev' }, { val: '03', name: 'Mar' },
+                          { val: '04', name: 'Abr' }, { val: '05', name: 'Mai' }, { val: '06', name: 'Jun' },
+                          { val: '07', name: 'Jul' }, { val: '08', name: 'Ago' }, { val: '09', name: 'Set' },
+                          { val: '10', name: 'Out' }, { val: '11', name: 'Nov' }, { val: '12', name: 'Dez' }
+                        ];
+
+                        // 2. Filtrar reativamente a lista de custos
+                        const filteredCosts = costs.filter(c => {
+                          if (costPeriodFilter !== 'all') {
+                            const costDate = new Date(c.competencia + 'T12:00:00');
+                            const now = new Date();
+                            const monthsDiff = (now.getFullYear() - costDate.getFullYear()) * 12 + now.getMonth() - costDate.getMonth();
+                            if (costPeriodFilter === '3m' && monthsDiff > 3) return false;
+                            if (costPeriodFilter === '6m' && monthsDiff > 6) return false;
+                            if (costPeriodFilter === '12m' && monthsDiff > 12) return false;
+                          }
+                          if (costSelectedYears.length > 0) {
+                            const year = c.competencia.split('-')[0];
+                            if (!costSelectedYears.includes(year)) return false;
+                          }
+                          if (costSelectedMonths.length > 0) {
+                            const month = c.competencia.split('-')[1];
+                            if (!costSelectedMonths.includes(month)) return false;
+                          }
+                          return true;
+                        });
+
+                        const stats = PeopleHRService.computeCostStats(filteredCosts);
                         
                         if (!stats) {
                           return (
-                            <div className="text-center py-10 bg-slate-50 border border-dashed rounded-2xl">
-                              <Coins className="mx-auto mb-2 text-slate-300" size={32} />
-                              <p className="text-sm text-slate-500 font-bold">Sem dados de custos para este colaborador.</p>
-                              <p className="text-xs text-slate-400 mt-1">Os dados serão importados da planilha Dianna na Fase 2.</p>
+                            <div className="space-y-4">
+                              {/* Painel de Filtros (mesmo sem dados para permitir remover filtros se existirem) */}
+                              <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 space-y-3 shadow-sm text-left">
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/60 dark:border-slate-800/60 pb-2">
+                                  <div className="flex items-center gap-1.5 text-xs font-black text-slate-500 uppercase tracking-wider">
+                                    <Filter size={14} className="text-slate-400" />
+                                    Filtros de Histórico
+                                  </div>
+                                  {(costPeriodFilter !== 'all' || costSelectedYears.length > 0 || costSelectedMonths.length > 0) && (
+                                    <button
+                                      onClick={() => {
+                                        setCostPeriodFilter('all');
+                                        setCostSelectedYears([]);
+                                        setCostSelectedMonths([]);
+                                      }}
+                                      className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 uppercase tracking-wider"
+                                    >
+                                      Limpar Filtros
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Período Rápido</label>
+                                    <select
+                                      value={costPeriodFilter}
+                                      onChange={e => setCostPeriodFilter(e.target.value as any)}
+                                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-200"
+                                    >
+                                      <option value="all">Todo o Histórico</option>
+                                      <option value="3m">Últimos 3 Meses</option>
+                                      <option value="6m">Últimos 6 Meses</option>
+                                      <option value="12m">Últimos 12 Meses</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Anos (Múltipla)</label>
+                                    <div className="flex flex-wrap gap-1">
+                                      {availableYears.map(year => {
+                                        const selected = costSelectedYears.includes(year);
+                                        return (
+                                          <button
+                                            key={year}
+                                            onClick={() => {
+                                              setCostSelectedYears(prev =>
+                                                selected ? prev.filter(y => y !== year) : [...prev, year]
+                                              );
+                                            }}
+                                            className={`px-2 py-1 text-[10px] font-bold rounded border transition-all ${
+                                              selected
+                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900/50 dark:text-indigo-400'
+                                                : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-950 dark:border-slate-850 dark:text-slate-400'
+                                            }`}
+                                          >
+                                            {year}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Meses (Múltipla)</label>
+                                    <div className="flex flex-wrap gap-0.5 max-h-[72px] overflow-y-auto pr-1">
+                                      {availableMonths.map(m => {
+                                        const selected = costSelectedMonths.includes(m.val);
+                                        return (
+                                          <button
+                                            key={m.val}
+                                            onClick={() => {
+                                              setCostSelectedMonths(prev =>
+                                                selected ? prev.filter(month => month !== m.val) : [...prev, m.val]
+                                              );
+                                            }}
+                                            className={`px-1.5 py-0.5 text-[9px] font-bold rounded border transition-all ${
+                                              selected
+                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900/50 dark:text-indigo-400'
+                                                : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-950 dark:border-slate-850 dark:text-slate-400'
+                                            }`}
+                                          >
+                                            {m.name}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-center py-10 bg-slate-50 border border-dashed rounded-2xl">
+                                <Coins className="mx-auto mb-2 text-slate-300" size={32} />
+                                <p className="text-sm text-slate-500 font-bold">Sem dados de custos para os filtros aplicados.</p>
+                                <p className="text-xs text-slate-400 mt-1">Os dados serão importados da planilha Dianna na Fase 2.</p>
+                              </div>
                             </div>
                           );
                         }
 
                         return (
-                          <div className="space-y-6">
+                          <div className="space-y-4">
+                            {/* Painel de Filtros Dinâmicos */}
+                            <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 space-y-3 shadow-sm text-left">
+                              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/60 dark:border-slate-800/60 pb-2">
+                                <div className="flex items-center gap-1.5 text-xs font-black text-slate-500 uppercase tracking-wider">
+                                  <Filter size={14} className="text-slate-400" />
+                                  Filtros de Histórico
+                                </div>
+                                {(costPeriodFilter !== 'all' || costSelectedYears.length > 0 || costSelectedMonths.length > 0) && (
+                                  <button
+                                    onClick={() => {
+                                      setCostPeriodFilter('all');
+                                      setCostSelectedYears([]);
+                                      setCostSelectedMonths([]);
+                                    }}
+                                    className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 uppercase tracking-wider"
+                                  >
+                                    Limpar Filtros
+                                  </button>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Período Rápido</label>
+                                  <select
+                                    value={costPeriodFilter}
+                                    onChange={e => setCostPeriodFilter(e.target.value as any)}
+                                    className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-200"
+                                  >
+                                    <option value="all">Todo o Histórico</option>
+                                    <option value="3m">Últimos 3 Meses</option>
+                                    <option value="6m">Últimos 6 Meses</option>
+                                    <option value="12m">Últimos 12 Meses</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Anos (Múltipla)</label>
+                                  <div className="flex flex-wrap gap-1">
+                                    {availableYears.map(year => {
+                                      const selected = costSelectedYears.includes(year);
+                                      return (
+                                        <button
+                                          key={year}
+                                          onClick={() => {
+                                            setCostSelectedYears(prev =>
+                                              selected ? prev.filter(y => y !== year) : [...prev, year]
+                                            );
+                                          }}
+                                          className={`px-2 py-1 text-[10px] font-bold rounded border transition-all ${
+                                            selected
+                                              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900/50 dark:text-indigo-400'
+                                              : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-950 dark:border-slate-850 dark:text-slate-400'
+                                          }`}
+                                        >
+                                          {year}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Meses (Múltipla)</label>
+                                  <div className="flex flex-wrap gap-0.5 max-h-[72px] overflow-y-auto pr-1">
+                                    {availableMonths.map(m => {
+                                      const selected = costSelectedMonths.includes(m.val);
+                                      return (
+                                        <button
+                                          key={m.val}
+                                          onClick={() => {
+                                            setCostSelectedMonths(prev =>
+                                              selected ? prev.filter(month => month !== m.val) : [...prev, m.val]
+                                            );
+                                          }}
+                                          className={`px-1.5 py-0.5 text-[9px] font-bold rounded border transition-all ${
+                                            selected
+                                              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900/50 dark:text-indigo-400'
+                                              : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-950 dark:border-slate-850 dark:text-slate-400'
+                                          }`}
+                                        >
+                                          {m.name}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
                             {/* Dashboard de Totais e Médias */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 text-left">
                               {profile?.linkType === 'CLT' ? (
                                 <div>
                                   <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Ganhos CLT (Média do Período)</h5>
-                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                                     <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
                                       <div>
                                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Salário Base</p>
@@ -3168,6 +3384,18 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       </p>
                                     </div>
 
+                                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                      <div>
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Adiantamento</p>
+                                        <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                                          {formatCurrency(stats.adiantamentoAverage || 0)}
+                                        </p>
+                                      </div>
+                                      <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
+                                        Média Vale
+                                      </p>
+                                    </div>
+
                                     <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 flex flex-col justify-between shadow-sm">
                                       <div>
                                         <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Benefícios</p>
@@ -3175,8 +3403,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           {formatCurrency(stats.beneficiosAverage || 0)}
                                         </p>
                                       </div>
-                                      <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase">
-                                        VR + VT + Outros
+                                      <p 
+                                        className="text-[8px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase truncate"
+                                        title={`VR: ${formatCurrency(stats.vrTotal / stats.count)} · VT: ${formatCurrency(stats.vtTotal / stats.count)} · Cesta: ${formatCurrency(stats.cestaTotal / stats.count)} · Reembolsos: ${formatCurrency(stats.ajudaCustoTotal / stats.count)}`}
+                                      >
+                                        VR:{formatCurrency(stats.vrTotal / stats.count)} · VT:{formatCurrency(stats.vtTotal / stats.count)} · Cesta:{formatCurrency(stats.cestaTotal / stats.count)}
                                       </p>
                                     </div>
 
@@ -3187,8 +3418,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           {formatCurrency((stats.decimoTerceiroTotal + stats.feriasTotal) / stats.count || 0)}
                                         </p>
                                       </div>
-                                      <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase">
-                                        Média Proporcional
+                                      <p 
+                                        className="text-[8px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase truncate"
+                                        title={`13º Salário: ${formatCurrency(stats.decimoTerceiroTotal / stats.count)} · Férias: ${formatCurrency(stats.feriasTotal / stats.count)}`}
+                                      >
+                                        13º:{formatCurrency(stats.decimoTerceiroTotal / stats.count)} · Férias:{formatCurrency(stats.feriasTotal / stats.count)}
                                       </p>
                                     </div>
                                   </div>
@@ -3273,7 +3507,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           </p>
                                         </div>
                                         <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase">
-                                          Média: {formatCurrency(stats.faltasAverage || 0)}
+                                          Média: {formatCurrency(stats.faltasAverage || 0)} {stats.diasFaltasTotal > 0 ? `(${stats.diasFaltasTotal.toFixed(1)}d)` : ''}
                                         </p>
                                       </div>
                                       <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm flex flex-col justify-between">
@@ -3294,8 +3528,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             {formatCurrency(stats.descontosTotal - stats.faltasTotal - stats.consignadoTotal || 0)}
                                           </p>
                                         </div>
-                                        <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase">
-                                          Total Descontos
+                                        <p 
+                                          className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase truncate"
+                                          title={`INSS/IRRF: ${formatCurrency(stats.descontosTotal - stats.faltasTotal - stats.consignadoTotal || 0)}`}
+                                        >
+                                          INSS + IRRF + Outros
                                         </p>
                                       </div>
                                     </div>
@@ -3327,7 +3564,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resultado Final</h5>
                                   <div className="bg-emerald-100 dark:bg-emerald-950 border border-emerald-300 dark:border-emerald-900 rounded-xl p-3 flex flex-col justify-between shadow-sm h-[66px]">
                                     <div className="flex justify-between items-baseline">
-                                      <p className="text-[10px] font-black text-emerald-950 dark:text-emerald-400 uppercase tracking-wider">Total Geral</p>
+                                      <p className="text-[10px] font-black text-emerald-950 dark:text-emerald-400 uppercase tracking-wider">Total Real</p>
                                       <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-500 uppercase">
                                         Média: {formatCurrency(stats.totalAverage || 0)}
                                       </span>
@@ -3343,7 +3580,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             <div className="space-y-2">
                               <h5 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Lançamentos Recentes ({stats.count})</h5>
                               <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-950 max-h-[250px] overflow-y-auto shadow-sm">
-                                {costs.map((c, i) => {
+                                {filteredCosts.map((c, i) => {
                                   const fixedVal = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
                                     ? c.valor_fixo 
                                     : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
@@ -3360,7 +3597,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           <div className="flex items-center gap-2">
                                             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">Total:</span>
                                             <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                                              {formatCurrency(c.valor_liquido)}
+                                              {formatCurrency(c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))}
                                             </span>
                                           </div>
                                           <button
@@ -3390,6 +3627,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                               setEditingCostDecimoTerceiro(c.valor_decimo_terceiro || 0);
                                               setEditingCostDescontos(c.valor_descontos || 0);
                                               setEditingCostFaltas(c.valor_faltas || 0);
+                                              setEditingCostDiasFaltas(c.dias_faltas || 0);
                                               setEditingCostConsignado(c.valor_consignado || 0);
                                               setEditingCostBancoHoras(c.banco_horas || 0);
                                               setEditingCostObservacao(c.observacao || '');
@@ -3409,6 +3647,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Salário Base</span>
                                             <span className="text-slate-700 dark:text-slate-300 font-bold tabular-nums">{formatCurrency(c.valor_fixo || 0)}</span>
                                           </div>
+                                          {!!c.valor_adiantamento && (
+                                            <div>
+                                              <span className="text-blue-500 font-bold block uppercase text-[8px]">Adiantamento</span>
+                                              <span className="text-blue-600 dark:text-blue-400 font-bold tabular-nums">{formatCurrency(c.valor_adiantamento)}</span>
+                                            </div>
+                                          )}
                                           {!!c.valor_hora_extra && (
                                             <div>
                                               <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Horas Extras</span>
@@ -3444,7 +3688,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           {!!c.valor_faltas && (
                                             <div>
                                               <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Faltas</span>
-                                              <span className="text-red-600 dark:text-red-400 font-bold tabular-nums">-{formatCurrency(c.valor_faltas)}</span>
+                                              <span className="text-red-600 dark:text-red-400 font-bold tabular-nums">
+                                                -{formatCurrency(c.valor_faltas)} {c.dias_faltas ? `(${c.dias_faltas.toFixed(1)}d)` : ''}
+                                              </span>
                                             </div>
                                           )}
                                           {!!c.valor_consignado && (
@@ -3607,6 +3853,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             setEditingCostDecimoTerceiro(cost.valor_decimo_terceiro || 0);
                                             setEditingCostDescontos(cost.valor_descontos || 0);
                                             setEditingCostFaltas(cost.valor_faltas || 0);
+                                            setEditingCostDiasFaltas(cost.dias_faltas || 0);
                                             setEditingCostConsignado(cost.valor_consignado || 0);
                                             setEditingCostBancoHoras(cost.banco_horas || 0);
                                             setEditingCostObservacao(cost.observacao || '');
@@ -3904,6 +4151,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           placeholder="0.00"
                         />
                       </div>
+                      {editingCostType === 'CLT' && (
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Dias de Falta (Qtd)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={editingCostDiasFaltas}
+                            onChange={e => setEditingCostDiasFaltas(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 text-right outline-none focus:ring-1 focus:ring-red-500 font-bold tabular-nums"
+                            placeholder="0.0"
+                          />
+                        </div>
+                      )}
                       <div>
                         <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Empréstimo Consignado</label>
                         <input
