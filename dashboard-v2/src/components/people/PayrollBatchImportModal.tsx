@@ -211,7 +211,7 @@ export function PayrollBatchImportModal({
             document_id: record.cpf || undefined,
             linkType: 'CLT',
             status: 'Ativo',
-            company: 'Mar Brasil', // Empresa padrão para novos
+            company: 'MarBR', // Empresa padrão para novos
             start_date: record.admission_date || new Date(parsedData.competencia).toISOString().split('T')[0],
             remuneration_fixed: record.valor_fixo || 0,
             remuneration: record.valor_fixo || 0,
