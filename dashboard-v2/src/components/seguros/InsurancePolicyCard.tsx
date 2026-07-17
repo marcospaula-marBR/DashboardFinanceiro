@@ -23,6 +23,7 @@ import {
   Lock,
   Headphones,
   ShieldCheck,
+  FileText,
 } from 'lucide-react';
 import { InsurancePolicy } from '@/types/insurance';
 import {
@@ -260,13 +261,37 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
               </div>
             )}
 
-            {/* BLOCO: Apólice */}
-            <div className={styles.detailSection}>
-              <h4 className={styles.detailSectionTitle}>
-                <Hash size={14} /> Apólice
-              </h4>
-              {policy.apolice && (
-                <div className={styles.detailRow}>
+             {/* BLOCO: Apólice */}
+             <div className={styles.detailSection}>
+               <h4 className={styles.detailSectionTitle}>
+                 <Hash size={14} /> Apólice
+               </h4>
+               {policy.pdf_url && (
+                 <div className={styles.detailRow}>
+                   <span className={styles.detailKey}>Documento</span>
+                   <span className={styles.detailValue}>
+                     <a
+                       href={policy.pdf_url}
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       style={{
+                         color: '#38bdf8',
+                         textDecoration: 'underline',
+                         fontWeight: '500',
+                         fontSize: '0.8rem',
+                         display: 'inline-flex',
+                         alignItems: 'center',
+                         gap: '0.25rem',
+                         cursor: 'pointer'
+                       }}
+                     >
+                       📄 Visualizar Anexo
+                     </a>
+                   </span>
+                 </div>
+               )}
+               {policy.apolice && (
+                 <div className={styles.detailRow}>
                   <span className={styles.detailKey}>Nº Apólice</span>
                   <span className={styles.detailValueCopy}>
                     <span>{policy.apolice}</span>
@@ -353,6 +378,31 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
 
           {/* Ações */}
           <div className={styles.policyCardActions}>
+            {policy.pdf_url && (
+              <a
+                href={policy.pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.btnEdit}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.4rem 0.8rem',
+                  fontSize: '0.75rem',
+                  fontWeight: '500',
+                  background: '#0369a1',
+                  color: '#e0f2fe',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  textDecoration: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <FileText size={14} />
+                Visualizar Apólice
+              </a>
+            )}
             <button
               className={styles.btnEdit}
               onClick={(e) => { e.stopPropagation(); onEdit(policy); }}

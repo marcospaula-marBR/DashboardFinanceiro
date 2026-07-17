@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.25";
-export const VERSION_DATE = "2026-07-16";
+export const APP_VERSION = "v.02.50.26";
+export const VERSION_DATE = "2026-07-17";
 export const VERSION_CHANGELOG = [
+  "v.02.50.26 - Feat/Seguros: Implementa suporte completo a upload e download de arquivos físicos de apólices (PDF ou imagens). Os arquivos são armazenados no Supabase Storage na pasta insurances/ e seus links associados diretamente à coluna pdf_url no banco de dados. Adiciona botões para visualizar/baixar os arquivos diretamente nos cards e de seleção de arquivos no modal.",
   "v.02.50.25 - Feat/Seguros: Remove a seção de leitura automática de apólices via IA (Gemini OCR) a pedido do usuário, simplificando o fluxo para um cadastro 100% manual e sem risco de mensagens de erro na tela. Adiciona também suporte à porcentagem de franquia reduzida, incluindo novo campo numérico condicional no modal e exibição do percentual nos cards de apólice (ex: '· Reduzida (30%)').",
   "v.02.50.24 - Fix/Seguros: Altera o download do arquivo de seguros no backend de supabase.storage.download para fetch da URL assinada completa. Isso garante que o token de autenticação contido nos query params seja repassado e previne a rejeição por regras RLS que resultava no erro 'The document has no pages'.",
   "v.02.50.23 - Fix/Seguros: Resolve o erro de processamento de PDF 'The document has no pages' no OCR. Implementa upload prévio do arquivo diretamente para o Supabase Storage bucket contracts (arquitetura idêntica ao BrisinhAI no RH e Empréstimos) e envio da URL do arquivo em formato JSON, eliminando corrupções de multipart e contornando limites de payload na Vercel.",

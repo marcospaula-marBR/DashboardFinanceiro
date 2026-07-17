@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertCircle, Loader2 } from 'lucide-react';
 import { InsurancePolicy, InsurancePolicyInput } from '@/types/insurance';
+import { uploadInsurancePolicyFile } from '@/services/insurance.service';
 import styles from './seguros.module.css';
 
 interface InsuranceAddEditModalProps {
@@ -43,6 +44,7 @@ const EMPTY_FORM: InsurancePolicyInput = {
   cobertura_farois: false,
   coberturas_adicionais: '',
   observacoes: '',
+  pdf_url: '',
 };
 
 const TIPOS_SEGURO = [
@@ -58,6 +60,7 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
   const [form, setForm] = useState<InsurancePolicyInput>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const isEditMode = !!policy;
 
@@ -92,11 +95,13 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         cobertura_farois: policy.cobertura_farois ?? false,
         coberturas_adicionais: policy.coberturas_adicionais || '',
         observacoes: policy.observacoes || '',
+        pdf_url: policy.pdf_url || '',
       });
     } else {
       setForm(EMPTY_FORM);
     }
     setSaveError(null);
+    setSelectedFile(null); // Limpa seleção anterior
   }, [policy, isOpen]);
 
   // ── CAMPO INDIVIDUAL ──
@@ -115,7 +120,20 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
     setSaveError(null);
 
     try {
-      await onSave(form);
+      let finalPdfUrl = form.pdf_url;
+
+      // Se houver um novo arquivo selecionado, fazemos o upload dele para o storage primeiro
+      if (selectedFile) {
+        const targetId = policy?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'new_' + Date.now());
+        console.log('[Insurance upload] Carregando arquivo para o Supabase Storage...');
+        finalPdfUrl = await uploadInsurancePolicyFile(targetId, selectedFile);
+        console.log('[Insurance upload] Upload de arquivo realizado. URL:', finalPdfUrl);
+      }
+
+      await onSave({
+        ...form,
+        pdf_url: finalPdfUrl,
+      });
       onClose();
     } catch (err: any) {
       setSaveError(err.message || 'Erro ao salvar apólice.');
@@ -488,6 +506,95 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
                 placeholder="Informações adicionais sobre esta apólice..."
                 rows={3}
               />
+            </div>
+
+            {/* Anexo da Apólice (PDF/Imagem) */}
+            <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
+              <label className={styles.formLabel}>Documento da Apólice (PDF ou Imagem)</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                {form.pdf_url ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      📄 Arquivo da apólice anexado.
+                    </span>
+                    <a
+                      href={form.pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.btnSecondary}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        fontSize: '0.75rem',
+                        background: '#1e293b',
+                        color: '#f8fafc',
+                        border: '1px solid #334155',
+                        borderRadius: '0.375rem',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Visualizar Apólice
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setField('pdf_url', '')}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        fontSize: '0.75rem',
+                        background: '#7f1d1d',
+                        color: '#fecaca',
+                        border: 'none',
+                        borderRadius: '0.375rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Remover Anexo
+                    </button>
+                  </div>
+                ) : selectedFile ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#38bdf8', fontWeight: '500' }}>
+                      📎 Novo arquivo selecionado: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFile(null)}
+                      style={{
+                        padding: '0.3rem 0.6rem',
+                        fontSize: '0.75rem',
+                        background: '#334155',
+                        color: '#cbd5e1',
+                        border: 'none',
+                        borderRadius: '0.25rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Limpar Seleção
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setSelectedFile(file);
+                    }}
+                    style={{
+                      fontSize: '0.85rem',
+                      color: '#94a3b8',
+                      background: '#0f172a',
+                      border: '1px solid #1e293b',
+                      borderRadius: '0.375rem',
+                      padding: '0.5rem',
+                      width: '100%',
+                      cursor: 'pointer'
+                    }}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Status ativo */}

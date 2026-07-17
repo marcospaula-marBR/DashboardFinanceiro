@@ -47,6 +47,7 @@ export interface InsurancePolicy {
   coberturas_adicionais?: string;
   ativo: boolean;
   observacoes?: string;
+  pdf_url?: string;
   created_at?: string;
   updated_at?: string;
 
@@ -85,6 +86,7 @@ export interface InsurancePolicyInput {
   cobertura_farois?: boolean;
   coberturas_adicionais?: string;
   observacoes?: string;
+  pdf_url?: string;
 }
 
 export interface InsuranceKPIs {

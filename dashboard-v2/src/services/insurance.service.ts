@@ -276,7 +276,7 @@ export async function uploadInsurancePolicyFile(
 ): Promise<string> {
   const folder = isTestMode ? 'test' : 'production';
   const ext = file.name.split('.').pop() || 'pdf';
-  const storagePath = `rh-aditivos/${folder}/insurance_${policyId}_${Date.now()}.${ext}`;
+  const storagePath = `insurances/${folder}/${policyId}_${Date.now()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from('contracts')
