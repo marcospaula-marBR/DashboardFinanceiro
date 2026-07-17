@@ -253,6 +253,7 @@ export interface MonthlyCost {
   valor_comissao?: number;
   origem: 'csv' | 'manual' | 'dianna_import';
   observacao?: string;
+  verbas_adicionais?: Record<string, number>;
   created_at?: string;
 }
 

@@ -111,6 +111,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [isParsingPayroll, setIsParsingPayroll] = useState(false);
   const [saveCostError, setSaveCostError] = useState<string | null>(null);
 
+  // Estados para verbas adicionais extra-folha customizadas
+  const [editingCostVerbasAdicionais, setEditingCostVerbasAdicionais] = useState<{ name: string; value: number }[]>([]);
+  const [newVerbaName, setNewVerbaName] = useState('');
+  const [newVerbaValue, setNewVerbaValue] = useState(0);
+
   // Estados dos filtros de período e data
   const [costPeriodFilter, setCostPeriodFilter] = useState<'all' | '3m' | '6m' | '12m' | 'custom'>('all');
   const [costSelectedYears, setCostSelectedYears] = useState<string[]>([]);
@@ -1577,6 +1582,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setEditingCostComissao(data.valor_comissao || 0);
       setEditingCostIncentivos(data.valor_incentivos || 0);
       setEditingCostConectividade(data.valor_ajuda_custo || 0);
+      setEditingCostVerbasAdicionais([]);
       
       if (data.observacao) {
         setEditingCostObservacao(data.observacao);
@@ -1608,11 +1614,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       
       const isCLT = editingCostType === 'CLT';
       
+      // Converte a lista de verbas adicionais temporária para record
+      const verbasObj: Record<string, number> = {};
+      editingCostVerbasAdicionais.forEach(v => {
+        if (v.name.trim() && v.value !== 0) {
+          verbasObj[v.name.trim()] = v.value;
+        }
+      });
+
+      const verbasAdicionaisSoma = Object.values(verbasObj).reduce((sum, val) => sum + val, 0);
+
       const computedLiquido = isCLT
         ? (editingCostFixo + editingCostHoraExtra + editingCostAdicionalNot + editingCostFerias + editingCostDecimoTerceiro + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade)
           - (editingCostDescontos + editingCostFaltas + editingCostConsignado + editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes)
+          + verbasAdicionaisSoma
         : (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade)
-          - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
+          - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes)
+          + verbasAdicionaisSoma;
 
       const payload = {
         competencia: editingCostCompetencia,
@@ -1644,8 +1662,22 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         dias_faltas: isCLT ? editingCostDiasFaltas : undefined,
         valor_consignado: isCLT ? editingCostConsignado : undefined,
         banco_horas: isCLT ? editingCostBancoHoras : undefined,
-        observacao: editingCostObservacao || undefined
+        observacao: editingCostObservacao || undefined,
+        verbas_adicionais: Object.keys(verbasObj).length > 0 ? verbasObj : undefined
       };
+
+      // Inativação reativa automática do colaborador caso haja rescisão CLT
+      if (isCLT && editingCostRescisao > 0) {
+        const updatedProfile = {
+          ...profile,
+          status: 'Inativo' as const,
+          active: false,
+          status_end_date: editingCostCompetencia,
+          resignation_date: editingCostCompetencia
+        };
+        await PeopleService.saveEmployeeProfile(updatedProfile, false, false);
+        setProfile(updatedProfile);
+      }
 
       if (editingCost.id) {
         await PeopleHRService.updateMonthlyCost(editingCost.id, payload);
@@ -3071,6 +3103,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 setEditingCostDiasFaltas(lastCost.dias_faltas || 0);
                                 setEditingCostConsignado(lastCost.valor_consignado || 0);
                                 setEditingCostBancoHoras(lastCost.banco_horas || 0);
+                                setEditingCostVerbasAdicionais(lastCost.verbas_adicionais ? Object.entries(lastCost.verbas_adicionais).map(([name, value]) => ({ name, value })) : []);
                                 setEditingCostObservacao(lastCost.observacao || '');
                                 setSaveCostError(null);
                               }}
@@ -3111,6 +3144,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               setEditingCostDiasFaltas(0);
                               setEditingCostConsignado(0);
                               setEditingCostBancoHoras(0);
+                              setEditingCostVerbasAdicionais([]);
                               setEditingCostObservacao('');
                               setSaveCostError(null);
                             }}
@@ -3630,6 +3664,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                               setEditingCostDiasFaltas(c.dias_faltas || 0);
                                               setEditingCostConsignado(c.valor_consignado || 0);
                                               setEditingCostBancoHoras(c.banco_horas || 0);
+                                              setEditingCostVerbasAdicionais(c.verbas_adicionais ? Object.entries(c.verbas_adicionais).map(([name, value]) => ({ name, value })) : []);
                                               setEditingCostObservacao(c.observacao || '');
                                               setSaveCostError(null);
                                             }}
@@ -3642,69 +3677,125 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       </div>
                                       
                                       {profile?.linkType === 'CLT' ? (
-                                        <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1.5 border-t border-slate-100/50 dark:border-slate-800/50 text-[10px]">
-                                          <div>
-                                            <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Salário Base</span>
-                                            <span className="text-slate-700 dark:text-slate-300 font-bold tabular-nums">{formatCurrency(c.valor_fixo || 0)}</span>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800/60 text-[11px] text-left">
+                                          {/* Coluna de Ganhos */}
+                                          <div className="space-y-1 bg-emerald-50/10 dark:bg-emerald-950/5 p-2 rounded-lg border border-emerald-100/20 text-left">
+                                            <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block border-b border-emerald-100/20 pb-0.5 mb-1.5 font-sans">Ganhos / Proventos</span>
+                                            
+                                            <div className="flex justify-between items-center py-0.5">
+                                              <span className="text-slate-500 font-semibold">Salário Base:</span>
+                                              <span className="text-slate-800 dark:text-slate-200 font-extrabold tabular-nums">{formatCurrency(c.valor_fixo || 0)}</span>
+                                            </div>
+                                            {!!c.valor_adiantamento && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Adiantamento (Vale):</span>
+                                                <span className="text-blue-600 dark:text-blue-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_adiantamento)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_hora_extra && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Horas Extras:</span>
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_hora_extra)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_adicional_not && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Adicional Noturno:</span>
+                                                <span className="text-emerald-650 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_adicional_not)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_vr && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Vale Refeição:</span>
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_vr)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_vt && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Vale Transporte:</span>
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_vt)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_cesta && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Cesta Básica:</span>
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_cesta)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_ajuda_custo && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Ajuda Custo / Conect.:</span>
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_ajuda_custo)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_ferias && (
+                                              <div className="flex justify-between items-center py-0.5 bg-yellow-500/5 px-1 rounded">
+                                                <span className="text-amber-700 dark:text-amber-400 font-semibold">Férias + 1/3:</span>
+                                                <span className="text-amber-600 dark:text-amber-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_ferias)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_decimo_terceiro && (
+                                              <div className="flex justify-between items-center py-0.5 bg-yellow-500/5 px-1 rounded">
+                                                <span className="text-amber-700 dark:text-amber-400 font-semibold">13º Salário:</span>
+                                                <span className="text-amber-600 dark:text-amber-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_decimo_terceiro)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_rescisao && (
+                                              <div className="flex justify-between items-center py-0.5 bg-rose-500/5 px-1 rounded border border-rose-200/20">
+                                                <span className="text-rose-700 dark:text-rose-455 font-black uppercase text-[8px]">Verba Rescisória:</span>
+                                                <span className="text-rose-650 dark:text-rose-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_rescisao)}</span>
+                                              </div>
+                                            )}
+                                            {/* Verbas adicionais customizadas (Ganhos) */}
+                                            {c.verbas_adicionais && Object.entries(c.verbas_adicionais).map(([name, val]) => val >= 0 ? (
+                                              <div key={name} className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50">
+                                                <span className="text-indigo-650 dark:text-indigo-400 font-semibold">{name}:</span>
+                                                <span className="text-indigo-650 dark:text-indigo-400 font-extrabold tabular-nums">+{formatCurrency(val)}</span>
+                                              </div>
+                                            ) : null)}
                                           </div>
-                                          {!!c.valor_adiantamento && (
-                                            <div>
-                                              <span className="text-blue-500 font-bold block uppercase text-[8px]">Adiantamento</span>
-                                              <span className="text-blue-600 dark:text-blue-400 font-bold tabular-nums">{formatCurrency(c.valor_adiantamento)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_hora_extra && (
-                                            <div>
-                                              <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Horas Extras</span>
-                                              <span className="text-slate-700 dark:text-slate-300 font-bold tabular-nums">{formatCurrency(c.valor_hora_extra)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_adicional_not && (
-                                            <div>
-                                              <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Adic. Noturno</span>
-                                              <span className="text-slate-700 dark:text-slate-300 font-bold tabular-nums">{formatCurrency(c.valor_adicional_not)}</span>
-                                            </div>
-                                          )}
-                                          {!!(c.valor_vr || c.valor_vt || c.valor_cesta || c.valor_ajuda_custo) && (
-                                            <div>
-                                              <span className="text-emerald-500 font-bold block uppercase text-[8px]">Benefícios</span>
-                                              <span className="text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">
-                                                {formatCurrency((c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0))}
-                                              </span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_ferias && (
-                                            <div>
-                                              <span className="text-emerald-500 font-bold block uppercase text-[8px]">Férias</span>
-                                              <span className="text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">{formatCurrency(c.valor_ferias)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_decimo_terceiro && (
-                                            <div>
-                                              <span className="text-emerald-500 font-bold block uppercase text-[8px]">13º Salário</span>
-                                              <span className="text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">{formatCurrency(c.valor_decimo_terceiro)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_faltas && (
-                                            <div>
-                                              <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Faltas</span>
-                                              <span className="text-red-600 dark:text-red-400 font-bold tabular-nums">
-                                                -{formatCurrency(c.valor_faltas)} {c.dias_faltas ? `(${c.dias_faltas.toFixed(1)}d)` : ''}
-                                              </span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_consignado && (
-                                            <div>
-                                              <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Consignado</span>
-                                              <span className="text-red-600 dark:text-red-400 font-bold tabular-nums">-{formatCurrency(c.valor_consignado)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.banco_horas && (
-                                            <div>
-                                              <span className="text-sky-500 font-bold block uppercase text-[8px]">B. Horas</span>
-                                              <span className="text-sky-650 dark:text-sky-400 font-bold tabular-nums">{c.banco_horas > 0 ? `+` : ''}{c.banco_horas}h</span>
-                                            </div>
-                                          )}
+
+                                          {/* Coluna de Descontos */}
+                                          <div className="space-y-1 bg-red-50/10 dark:bg-red-950/5 p-2 rounded-lg border border-red-100/20 text-left">
+                                            <span className="text-[9px] font-black text-red-700 dark:text-red-400 uppercase tracking-wider block border-b border-red-100/20 pb-0.5 mb-1.5 font-sans">Descontos / Retenções</span>
+                                            
+                                            {!!c.valor_faltas && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Faltas {c.dias_faltas ? `(${c.dias_faltas.toFixed(1)}d)` : ''}:</span>
+                                                <span className="text-red-650 dark:text-red-405 font-extrabold tabular-nums">-{formatCurrency(c.valor_faltas)}</span>
+                                              </div>
+                                            )}
+                                            {!!c.valor_consignado && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">Consignados / Emprést.:</span>
+                                                <span className="text-red-655 dark:text-red-405 font-extrabold tabular-nums">-{formatCurrency(c.valor_consignado)}</span>
+                                              </div>
+                                            )}
+                                            {/* Impostos / Outros Descontos da folha */}
+                                            {!!((c.valor_descontos || 0) - (c.valor_faltas || 0) - (c.valor_consignado || 0)) && (
+                                              <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-slate-500 font-semibold">INSS, IRRF & Outros:</span>
+                                                <span className="text-red-650 dark:text-red-405 font-extrabold tabular-nums">
+                                                  -{formatCurrency((c.valor_descontos || 0) - (c.valor_faltas || 0) - (c.valor_consignado || 0))}
+                                                </span>
+                                              </div>
+                                            )}
+                                            {/* Verbas adicionais customizadas (Descontos) */}
+                                            {c.verbas_adicionais && Object.entries(c.verbas_adicionais).map(([name, val]) => val < 0 ? (
+                                              <div key={name} className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50">
+                                                <span className="text-red-650 dark:text-red-450 font-semibold">{name}:</span>
+                                                <span className="text-red-650 dark:text-red-450 font-extrabold tabular-nums">-{formatCurrency(Math.abs(val))}</span>
+                                              </div>
+                                            ) : null)}
+                                            
+                                            {/* Banco de horas informativo */}
+                                            {!!c.banco_horas && (
+                                              <div className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50 mt-1.5 pt-1">
+                                                <span className="text-sky-600 dark:text-sky-400 font-semibold">Banco de Horas:</span>
+                                                <span className="text-sky-650 dark:text-sky-400 font-extrabold tabular-nums">{c.banco_horas > 0 ? `+` : ''}{c.banco_horas}h</span>
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
                                       ) : (
                                         <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1.5 border-t border-slate-100/50 dark:border-slate-800/50 text-[10px]">
@@ -3856,6 +3947,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             setEditingCostDiasFaltas(cost.dias_faltas || 0);
                                             setEditingCostConsignado(cost.valor_consignado || 0);
                                             setEditingCostBancoHoras(cost.banco_horas || 0);
+                                            setEditingCostVerbasAdicionais(cost.verbas_adicionais ? Object.entries(cost.verbas_adicionais).map(([name, value]) => ({ name, value })) : []);
                                             setEditingCostObservacao(cost.observacao || '');
                                             setSaveCostError(null);
                                           }
@@ -4204,6 +4296,111 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           placeholder="0.00"
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Verbas Adicionais Extra Folha */}
+                  <div className="border border-slate-100 dark:border-slate-800 rounded-xl p-3 bg-indigo-50/10 dark:bg-indigo-950/10 border-indigo-150/40 dark:border-indigo-900/20 space-y-3">
+                    <div className="flex justify-between items-center border-b border-indigo-100/30 pb-1">
+                      <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-400 uppercase tracking-wider block">Verbas Adicionais Extra Folha</span>
+                      <span className="text-[8px] text-slate-400 font-bold uppercase">(Positivos somam, negativos descontam)</span>
+                    </div>
+
+                    {/* Lista de Verbas Adicionadas */}
+                    {editingCostVerbasAdicionais.length > 0 && (
+                      <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                        {editingCostVerbasAdicionais.map((v, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-lg p-2 shadow-sm text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-700 dark:text-slate-300">{v.name}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase ${
+                                v.value >= 0 
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' 
+                                  : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                              }`}>
+                                {v.value >= 0 ? 'Ganho' : 'Desconto'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`font-black tabular-nums ${v.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-650 dark:text-red-400'}`}>
+                                {v.value >= 0 ? '+' : ''}{formatCurrency(v.value)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCostVerbasAdicionais(prev => prev.filter((_, i) => i !== idx));
+                                }}
+                                className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                                title="Excluir verba"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Controles para Adicionar Nova Verba */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end pt-1 bg-slate-50/50 dark:bg-slate-900/40 p-2.5 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
+                      <div className="relative text-left">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Nome da Verba</label>
+                        <input
+                          type="text"
+                          value={newVerbaName}
+                          onChange={e => setNewVerbaName(e.target.value)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-200"
+                          placeholder="Ex: Prêmio Especial, Reembolso"
+                          list="verbas-sugestoes"
+                        />
+                        <datalist id="verbas-sugestoes">
+                          <option value="Prêmio Extra" />
+                          <option value="Reembolso Viagem" />
+                          <option value="Reembolso KM" />
+                          <option value="Abono Pecuniário" />
+                          <option value="Ajuda de Custo Extra" />
+                          <option value="Multa FGTS Rescisório" />
+                          <option value="Seguro de Vida Coletivo" />
+                          <option value="Plano de Saúde Coparticipação" />
+                          <option value="Desconto Coparticipação" />
+                          <option value="Ajuste de Folha" />
+                        </datalist>
+                      </div>
+
+                      <div className="text-left">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Valor (R$)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newVerbaValue === 0 ? '' : newVerbaValue}
+                          onChange={e => setNewVerbaValue(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-right font-bold tabular-nums text-slate-850 dark:text-slate-250"
+                          placeholder="0.00 (Ex: -150 para desc)"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newVerbaName.trim()) {
+                            alert('Informe o nome da verba.');
+                            return;
+                          }
+                          if (newVerbaValue === 0) {
+                            alert('Informe um valor diferente de zero.');
+                            return;
+                          }
+                          setEditingCostVerbasAdicionais(prev => [
+                            ...prev,
+                            { name: newVerbaName.trim(), value: newVerbaValue }
+                          ]);
+                          setNewVerbaName('');
+                          setNewVerbaValue(0);
+                        }}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded px-2.5 py-1.5 text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-sm active:scale-98"
+                      >
+                        <Plus size={13} /> Adicionar Verba
+                      </button>
                     </div>
                   </div>
 

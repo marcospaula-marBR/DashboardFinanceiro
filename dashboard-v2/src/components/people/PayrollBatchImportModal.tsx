@@ -271,6 +271,33 @@ export function PayrollBatchImportModal({
 
           // Executar insert
           await PeopleHRService.insertMonthlyCost(costPayload);
+
+          // Inativação reativa automática do colaborador se houver rescisão no lote
+          if (record.valor_rescisao && record.valor_rescisao > 0) {
+            try {
+              const currentProfile = await PeopleService.getEmployeeProfile(employeeId, isTestMode);
+              if (currentProfile) {
+                const updatedProfile = {
+                  ...currentProfile,
+                  status: 'Inativo' as const,
+                  active: false,
+                  status_end_date: parsedData.competencia,
+                  resignation_date: parsedData.competencia
+                };
+                await PeopleService.saveEmployeeProfile(updatedProfile, isTestMode, false);
+                
+                // Registra evento de Desligamento na trajetória
+                await PeopleService.insertHistoryItem({
+                  employee_id: employeeId,
+                  event_type: 'Desligamento',
+                  change_date: parsedData.competencia,
+                  observations: `Colaborador inativado automaticamente por detecção de verba rescisória (${formatCurrency(record.valor_rescisao)}) na importação em lote de folha.`
+                }, isTestMode);
+              }
+            } catch (errProfile) {
+              console.error('Erro ao inativar colaborador por rescisao no lote:', errProfile);
+            }
+          }
         }
       });
 
