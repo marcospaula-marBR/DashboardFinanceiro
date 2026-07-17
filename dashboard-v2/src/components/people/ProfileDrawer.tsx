@@ -92,6 +92,22 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [editingCostGlosaBase, setEditingCostGlosaBase] = useState(0);
   const [editingCostGlosaBonus, setEditingCostGlosaBonus] = useState(0);
   const [editingCostDeducoes, setEditingCostDeducoes] = useState(0);
+  const [editingCostHolerite, setEditingCostHolerite] = useState(0);
+  const [editingCostAdiantamento, setEditingCostAdiantamento] = useState(0);
+  const [editingCostHoraExtra, setEditingCostHoraExtra] = useState(0);
+  const [editingCostAdicionalNot, setEditingCostAdicionalNot] = useState(0);
+  const [editingCostVR, setEditingCostVR] = useState(0);
+  const [editingCostVT, setEditingCostVT] = useState(0);
+  const [editingCostCesta, setEditingCostCesta] = useState(0);
+  const [editingCostFerias, setEditingCostFerias] = useState(0);
+  const [editingCostRescisao, setEditingCostRescisao] = useState(0);
+  const [editingCostDecimoTerceiro, setEditingCostDecimoTerceiro] = useState(0);
+  const [editingCostDescontos, setEditingCostDescontos] = useState(0);
+  const [editingCostFaltas, setEditingCostFaltas] = useState(0);
+  const [editingCostConsignado, setEditingCostConsignado] = useState(0);
+  const [editingCostBancoHoras, setEditingCostBancoHoras] = useState(0);
+  const [editingCostObservacao, setEditingCostObservacao] = useState('');
+  const [isParsingPayroll, setIsParsingPayroll] = useState(false);
   const [saveCostError, setSaveCostError] = useState<string | null>(null);
   const [isSearchingCEP, setIsSearchingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
@@ -1475,6 +1491,99 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     }
   };
 
+  const handleParsePayrollPDF = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsParsingPayroll(true);
+    setSaveCostError(null);
+    try {
+      // 1. Upload do PDF do holerite
+      const uploadId = profile.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'temp_' + Date.now());
+      const payrollUrl = await PeopleService.uploadAdditiveFile(uploadId, file, isTestMode);
+
+      // 2. Chamar API de parse do holerite
+      const res = await fetch('/api/people/parse-payroll', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fileUrl: payrollUrl }),
+      });
+
+      const responseText = await res.text();
+      
+      if (!res.ok) {
+        let errMsg = 'Falha ao processar PDF do holerite.';
+        try {
+          const parsed = JSON.parse(responseText);
+          errMsg = parsed.error || errMsg;
+        } catch {
+          if (responseText.trim().startsWith('<')) {
+            errMsg = `Erro no servidor (${res.status}). A API do Gemini falhou ou o tempo limite foi excedido.`;
+          } else {
+            errMsg = responseText.slice(0, 200) || errMsg;
+          }
+        }
+        throw new Error(errMsg);
+      }
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(responseText.slice(0, 200) || 'A resposta do servidor não é um JSON válido.');
+      }
+
+      // Validação de segurança: verificar se o nome bate com o colaborador atual
+      if (data.name && profile.name) {
+        const docName = data.name.toLowerCase();
+        const profName = profile.name.toLowerCase();
+        
+        // Se não houver correspondência parcial de nome
+        const hasCommonName = docName.split(' ').some((word: string) => word.length > 3 && profName.includes(word));
+        if (!hasCommonName) {
+          if (!confirm(`Aviso: O holerite lido pertence a "${data.name}", mas o cadastro atual é de "${profile.name}". Deseja importar mesmo assim?`)) {
+            return;
+          }
+        }
+      }
+
+      // Seta todos os estados com os dados extraídos pelo OCR
+      if (data.competencia) setEditingCostCompetencia(data.competencia);
+      setEditingCostFixo(data.valor_fixo || 0);
+      setEditingCostHolerite(data.valor_holerite || data.valor_fixo || 0);
+      setEditingCostAdiantamento(data.valor_adiantamento || 0);
+      setEditingCostHoraExtra(data.valor_hora_extra || 0);
+      setEditingCostAdicionalNot(data.valor_adicional_not || 0);
+      setEditingCostVR(data.valor_vr || 0);
+      setEditingCostVT(data.valor_vt || 0);
+      setEditingCostCesta(data.valor_cesta || 0);
+      setEditingCostFerias(data.valor_ferias || 0);
+      setEditingCostRescisao(data.valor_rescisao || 0);
+      setEditingCostDecimoTerceiro(data.valor_decimo_terceiro || 0);
+      setEditingCostDescontos(data.valor_descontos || 0);
+      setEditingCostFaltas(data.valor_faltas || 0);
+      setEditingCostConsignado(data.valor_consignado || 0);
+      setEditingCostBancoHoras(data.banco_horas || 0);
+      setEditingCostBonus(data.valor_bonus || 0);
+      setEditingCostComissao(data.valor_comissao || 0);
+      setEditingCostIncentivos(data.valor_incentivos || 0);
+      setEditingCostConectividade(data.valor_ajuda_custo || 0);
+      
+      if (data.observacao) {
+        setEditingCostObservacao(data.observacao);
+      } else {
+        setEditingCostObservacao(`Importado via OCR em ${new Date().toLocaleDateString('pt-BR')}`);
+      }
+
+    } catch (err: any) {
+      setSaveCostError(err.message || 'Erro ao ler holerite.');
+    } finally {
+      setIsParsingPayroll(false);
+    }
+  };
+
   const handleSaveCost = async () => {
     if (!editingCost) return;
     setSaveCostError(null);
@@ -1490,7 +1599,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior à data de admissão (${formatDateBR(profile.start_date)}).`);
       }
       
-      const computedLiquido = (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade) - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
+      const isCLT = editingCostType === 'CLT';
+      
+      const computedLiquido = isCLT
+        ? (editingCostFixo + editingCostHoraExtra + editingCostAdicionalNot + editingCostFerias + editingCostDecimoTerceiro + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade)
+          - (editingCostDescontos + editingCostFaltas + editingCostConsignado + editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes)
+        : (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade)
+          - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
 
       const payload = {
         competencia: editingCostCompetencia,
@@ -1504,7 +1619,24 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         valor_glosa_bonus: editingCostGlosaBonus,
         valor_deducoes: editingCostDeducoes,
         vinculo_tipo: editingCostType,
-        origem: editingCost.id ? editingCost.origem : 'manual'
+        origem: editingCost.id ? editingCost.origem : 'manual',
+        
+        // Novos campos CLT
+        valor_holerite: isCLT ? editingCostHolerite : undefined,
+        valor_adiantamento: isCLT ? editingCostAdiantamento : undefined,
+        valor_hora_extra: isCLT ? editingCostHoraExtra : undefined,
+        valor_adicional_not: isCLT ? editingCostAdicionalNot : undefined,
+        valor_vr: isCLT ? editingCostVR : undefined,
+        valor_vt: isCLT ? editingCostVT : undefined,
+        valor_cesta: isCLT ? editingCostCesta : undefined,
+        valor_ferias: isCLT ? editingCostFerias : undefined,
+        valor_rescisao: isCLT ? editingCostRescisao : undefined,
+        valor_decimo_terceiro: isCLT ? editingCostDecimoTerceiro : undefined,
+        valor_descontos: isCLT ? editingCostDescontos : undefined,
+        valor_faltas: isCLT ? editingCostFaltas : undefined,
+        valor_consignado: isCLT ? editingCostConsignado : undefined,
+        banco_horas: isCLT ? editingCostBancoHoras : undefined,
+        observacao: editingCostObservacao || undefined
       };
 
       if (editingCost.id) {
@@ -2914,6 +3046,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 setEditingCostGlosaBase(lastCost.valor_glosa_base || 0);
                                 setEditingCostGlosaBonus(lastCost.valor_glosa_bonus || 0);
                                 setEditingCostDeducoes(lastCost.valor_deducoes || 0);
+                                
+                                // Inicializa campos CLT anteriores
+                                setEditingCostHolerite(lastCost.valor_holerite || 0);
+                                setEditingCostAdiantamento(lastCost.valor_adiantamento || 0);
+                                setEditingCostHoraExtra(lastCost.valor_hora_extra || 0);
+                                setEditingCostAdicionalNot(lastCost.valor_adicional_not || 0);
+                                setEditingCostVR(lastCost.valor_vr || 0);
+                                setEditingCostVT(lastCost.valor_vt || 0);
+                                setEditingCostCesta(lastCost.valor_cesta || 0);
+                                setEditingCostFerias(lastCost.valor_ferias || 0);
+                                setEditingCostRescisao(lastCost.valor_rescisao || 0);
+                                setEditingCostDecimoTerceiro(lastCost.valor_decimo_terceiro || 0);
+                                setEditingCostDescontos(lastCost.valor_descontos || 0);
+                                setEditingCostFaltas(lastCost.valor_faltas || 0);
+                                setEditingCostConsignado(lastCost.valor_consignado || 0);
+                                setEditingCostBancoHoras(lastCost.banco_horas || 0);
+                                setEditingCostObservacao(lastCost.observacao || '');
                                 setSaveCostError(null);
                               }}
                               className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
@@ -2936,6 +3085,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               setEditingCostGlosaBase(0);
                               setEditingCostGlosaBonus(0);
                               setEditingCostDeducoes(0);
+                              
+                              // Zera campos CLT para novo custo
+                              setEditingCostHolerite(0);
+                              setEditingCostAdiantamento(0);
+                              setEditingCostHoraExtra(0);
+                              setEditingCostAdicionalNot(0);
+                              setEditingCostVR(0);
+                              setEditingCostVT(0);
+                              setEditingCostCesta(0);
+                              setEditingCostFerias(0);
+                              setEditingCostRescisao(0);
+                              setEditingCostDecimoTerceiro(0);
+                              setEditingCostDescontos(0);
+                              setEditingCostFaltas(0);
+                              setEditingCostConsignado(0);
+                              setEditingCostBancoHoras(0);
+                              setEditingCostObservacao('');
                               setSaveCostError(null);
                             }}
                             className="px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
@@ -3105,6 +3271,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                               setEditingCostGlosaBase(c.valor_glosa_base || 0);
                                               setEditingCostGlosaBonus(c.valor_glosa_bonus || 0);
                                               setEditingCostDeducoes(c.valor_deducoes || 0);
+                                              
+                                              // Inicializa campos específicos CLT do registro existente
+                                              setEditingCostHolerite(c.valor_holerite || 0);
+                                              setEditingCostAdiantamento(c.valor_adiantamento || 0);
+                                              setEditingCostHoraExtra(c.valor_hora_extra || 0);
+                                              setEditingCostAdicionalNot(c.valor_adicional_not || 0);
+                                              setEditingCostVR(c.valor_vr || 0);
+                                              setEditingCostVT(c.valor_vt || 0);
+                                              setEditingCostCesta(c.valor_cesta || 0);
+                                              setEditingCostFerias(c.valor_ferias || 0);
+                                              setEditingCostRescisao(c.valor_rescisao || 0);
+                                              setEditingCostDecimoTerceiro(c.valor_decimo_terceiro || 0);
+                                              setEditingCostDescontos(c.valor_descontos || 0);
+                                              setEditingCostFaltas(c.valor_faltas || 0);
+                                              setEditingCostConsignado(c.valor_consignado || 0);
+                                              setEditingCostBancoHoras(c.banco_horas || 0);
+                                              setEditingCostObservacao(c.observacao || '');
                                               setSaveCostError(null);
                                             }}
                                             className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
@@ -3213,7 +3396,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                     </div>
                                     <p className="text-sm font-bold leading-relaxed">{issue.message}</p>
                                   </div>
-
                                   <div className="flex gap-2 shrink-0 flex-wrap">
                                     {(issue.type === 'date_before_admission' || issue.type === 'missing_start_date') && (
                                       <button 
@@ -3247,6 +3429,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             setEditingCostGlosaBase(cost.valor_glosa_base || 0);
                                             setEditingCostGlosaBonus(cost.valor_glosa_bonus || 0);
                                             setEditingCostDeducoes(cost.valor_deducoes || 0);
+                                            
+                                            // Inicializa campos específicos CLT do registro existente
+                                            setEditingCostHolerite(cost.valor_holerite || 0);
+                                            setEditingCostAdiantamento(cost.valor_adiantamento || 0);
+                                            setEditingCostHoraExtra(cost.valor_hora_extra || 0);
+                                            setEditingCostAdicionalNot(cost.valor_adicional_not || 0);
+                                            setEditingCostVR(cost.valor_vr || 0);
+                                            setEditingCostVT(cost.valor_vt || 0);
+                                            setEditingCostCesta(cost.valor_cesta || 0);
+                                            setEditingCostFerias(cost.valor_ferias || 0);
+                                            setEditingCostRescisao(cost.valor_rescisao || 0);
+                                            setEditingCostDecimoTerceiro(cost.valor_decimo_terceiro || 0);
+                                            setEditingCostDescontos(cost.valor_descontos || 0);
+                                            setEditingCostFaltas(cost.valor_faltas || 0);
+                                            setEditingCostConsignado(cost.valor_consignado || 0);
+                                            setEditingCostBancoHoras(cost.banco_horas || 0);
+                                            setEditingCostObservacao(cost.observacao || '');
                                             setSaveCostError(null);
                                           }
                                         }}
@@ -3280,9 +3479,24 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 <h4 className="font-bold text-sm">{editingCost?.id ? 'Ajustar Lançamento de Custo' : 'Novo Lançamento de Custo'}</h4>
                 <p className="text-[10px] text-emerald-100 uppercase mt-0.5">{editingCost?.id ? 'Correção rápida de inconsistência' : 'Adicionar custo histórico ou atual'}</p>
               </div>
-              <button onClick={() => setEditingCost(null)} className="text-white/80 hover:text-white">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-3">
+                {editingCostType === 'CLT' && (
+                  <label className={`flex items-center gap-1 px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer select-none ${isParsingPayroll ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {isParsingPayroll ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+                    <span>Importar Holerite (PDF)</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf"
+                      onChange={handleParsePayrollPDF}
+                      disabled={isParsingPayroll}
+                    />
+                  </label>
+                )}
+                <button onClick={() => setEditingCost(null)} className="text-white/80 hover:text-white transition-opacity">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
             
             <div className="p-5 space-y-4">
@@ -3316,209 +3530,477 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 </div>
               </div>
 
-              {/* Tabela de Comparação de Verbas */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Detalhamento de Verbas</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingCostFixo(profile?.remuneration_fixed || profile?.remuneration || 0);
-                      setEditingCostBonus(profile?.remuneration_bonus || 0);
-                      setEditingCostComissao(profile?.remuneration_commission || 0);
-                      setEditingCostIncentivos(profile?.remuneration_incentives || 0);
-                      setEditingCostConectividade(profile?.remuneration_connectivity || 0);
-                    }}
-                    className="px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-400 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 transform"
-                  >
-                    <Copy size={12} /> Copiar do Contrato (Repetir Tudo)
-                  </button>
-                </div>
-
-                <div className="border border-slate-150 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        <th className="p-2.5">Verba</th>
-                        <th className="p-2.5 text-right">Previsto</th>
-                        <th className="p-2.5 text-center" style={{ width: '130px' }}>Pago (Real)</th>
-                        <th className="p-2.5 text-right">Diferença</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
-                      {/* Fixo */}
-                      <tr>
-                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Fixo</td>
-                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-                          {formatCurrency(profile?.remuneration_fixed || profile?.remuneration || 0)}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          <input 
-                            type="number"
-                            value={editingCostFixo}
-                            onChange={e => setEditingCostFixo(parseFloat(e.target.value) || 0)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
-                            placeholder="0.00"
-                          />
-                        </td>
-                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
-                          (editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
-                          (editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
-                        }`}>
-                          {(() => {
-                            const diff = editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0);
-                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
-                          })()}
-                        </td>
-                      </tr>
-
-                      {/* Bônus */}
-                      <tr>
-                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Bônus</td>
-                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-                          {formatCurrency(profile?.remuneration_bonus || 0)}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          <input 
-                            type="number"
-                            value={editingCostBonus}
-                            onChange={e => setEditingCostBonus(parseFloat(e.target.value) || 0)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
-                            placeholder="0.00"
-                          />
-                        </td>
-                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
-                          (editingCostBonus - (profile?.remuneration_bonus || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
-                          (editingCostBonus - (profile?.remuneration_bonus || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
-                        }`}>
-                          {(() => {
-                            const diff = editingCostBonus - (profile?.remuneration_bonus || 0);
-                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
-                          })()}
-                        </td>
-                      </tr>
-
-                      {/* Comissão */}
-                      <tr>
-                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Comissão</td>
-                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-                          {formatCurrency(profile?.remuneration_commission || 0)}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          <input 
-                            type="number"
-                            value={editingCostComissao}
-                            onChange={e => setEditingCostComissao(parseFloat(e.target.value) || 0)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
-                            placeholder="0.00"
-                          />
-                        </td>
-                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
-                          (editingCostComissao - (profile?.remuneration_commission || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
-                          (editingCostComissao - (profile?.remuneration_commission || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
-                        }`}>
-                          {(() => {
-                            const diff = editingCostComissao - (profile?.remuneration_commission || 0);
-                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
-                          })()}
-                        </td>
-                      </tr>
-
-                      {/* Incentivos */}
-                      <tr>
-                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Incentivos</td>
-                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-                          {formatCurrency(profile?.remuneration_incentives || 0)}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          <input 
-                            type="number"
-                            value={editingCostIncentivos}
-                            onChange={e => setEditingCostIncentivos(parseFloat(e.target.value) || 0)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
-                            placeholder="0.00"
-                          />
-                        </td>
-                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
-                          (editingCostIncentivos - (profile?.remuneration_incentives || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
-                          (editingCostIncentivos - (profile?.remuneration_incentives || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
-                        }`}>
-                          {(() => {
-                            const diff = editingCostIncentivos - (profile?.remuneration_incentives || 0);
-                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
-                          })()}
-                        </td>
-                      </tr>
-
-                      {/* Conectividade */}
-                      <tr>
-                        <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Conectividade</td>
-                        <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-                          {formatCurrency(profile?.remuneration_connectivity || 0)}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          <input 
-                            type="number"
-                            value={editingCostConectividade}
-                            onChange={e => setEditingCostConectividade(parseFloat(e.target.value) || 0)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
-                            placeholder="0.00"
-                          />
-                        </td>
-                        <td className={`p-2.5 text-right font-extrabold tabular-nums ${
-                          (editingCostConectividade - (profile?.remuneration_connectivity || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
-                          (editingCostConectividade - (profile?.remuneration_connectivity || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
-                        }`}>
-                          {(() => {
-                            const diff = editingCostConectividade - (profile?.remuneration_connectivity || 0);
-                            return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
-                          })()}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Seção de Descontos e Ajustes */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Descontos e Ajustes do Mês</span>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Glosa Base</label>
-                    <input 
-                      type="number" 
-                      value={editingCostGlosaBase} 
-                      onChange={e => setEditingCostGlosaBase(parseFloat(e.target.value) || 0)} 
-                      className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
-                      placeholder="0.00"
-                    />
+              {/* Condicional de Layout: CLT vs MEI/PJ */}
+              {editingCostType === 'CLT' ? (
+                /* Formulário Expandido para CLT */
+                <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
+                  {/* Proventos */}
+                  <div className="border border-slate-100 dark:border-slate-800 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block border-b pb-1">Proventos (Vencimentos)</span>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Salário Base (Fixo)</label>
+                        <input
+                          type="number"
+                          value={editingCostFixo}
+                          onChange={e => setEditingCostFixo(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Total Proventos (Bruto)</label>
+                        <input
+                          type="number"
+                          value={editingCostHolerite}
+                          onChange={e => setEditingCostHolerite(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Horas Extras</label>
+                        <input
+                          type="number"
+                          value={editingCostHoraExtra}
+                          onChange={e => setEditingCostHoraExtra(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Adicional Noturno</label>
+                        <input
+                          type="number"
+                          value={editingCostAdicionalNot}
+                          onChange={e => setEditingCostAdicionalNot(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Férias</label>
+                        <input
+                          type="number"
+                          value={editingCostFerias}
+                          onChange={e => setEditingCostFerias(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">13º Salário</label>
+                        <input
+                          type="number"
+                          value={editingCostDecimoTerceiro}
+                          onChange={e => setEditingCostDecimoTerceiro(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Comissão</label>
+                        <input
+                          type="number"
+                          value={editingCostComissao}
+                          onChange={e => setEditingCostComissao(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Bônus / Variável</label>
+                        <input
+                          type="number"
+                          value={editingCostBonus}
+                          onChange={e => setEditingCostBonus(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Incentivos</label>
+                        <input
+                          type="number"
+                          value={editingCostIncentivos}
+                          onChange={e => setEditingCostIncentivos(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Adiantamento</label>
+                        <input
+                          type="number"
+                          value={editingCostAdiantamento}
+                          onChange={e => setEditingCostAdiantamento(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Rescisão</label>
+                        <input
+                          type="number"
+                          value={editingCostRescisao}
+                          onChange={e => setEditingCostRescisao(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Glosa Bônus</label>
-                    <input 
-                      type="number" 
-                      value={editingCostGlosaBonus} 
-                      onChange={e => setEditingCostGlosaBonus(parseFloat(e.target.value) || 0)} 
-                      className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
-                      placeholder="0.00"
-                    />
+                  {/* Benefícios */}
+                  <div className="border border-slate-100 dark:border-slate-800 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block border-b pb-1">Benefícios</span>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Vale Refeição</label>
+                        <input
+                          type="number"
+                          value={editingCostVR}
+                          onChange={e => setEditingCostVR(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Vale Transporte</label>
+                        <input
+                          type="number"
+                          value={editingCostVT}
+                          onChange={e => setEditingCostVT(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Cesta Alimentação</label>
+                        <input
+                          type="number"
+                          value={editingCostCesta}
+                          onChange={e => setEditingCostCesta(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Ajuda Custo / Conect.</label>
+                        <input
+                          type="number"
+                          value={editingCostConectividade}
+                          onChange={e => setEditingCostConectividade(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Deduções</label>
-                    <input 
-                      type="number" 
-                      value={editingCostDeducoes} 
-                      onChange={e => setEditingCostDeducoes(parseFloat(e.target.value) || 0)} 
-                      className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
-                      placeholder="0.00"
+                  {/* Banco de horas */}
+                  <div className="border border-slate-100 dark:border-slate-800 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block border-b pb-1">Banco de Horas</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Saldo Banco Horas (Decimal)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editingCostBancoHoras}
+                          onChange={e => setEditingCostBancoHoras(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 font-bold tabular-nums"
+                          placeholder="Ex: 10.5 ou -3.2"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Descontos e Deduções */}
+                  <div className="border border-slate-100 dark:border-slate-800 rounded-xl p-3 bg-red-50/10 dark:bg-red-950/10 border-red-150/40 dark:border-red-900/20 space-y-3">
+                    <span className="text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-wider block border-b pb-1">Descontos e Glosas</span>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Descontos Holerite</label>
+                        <input
+                          type="number"
+                          value={editingCostDescontos}
+                          onChange={e => setEditingCostDescontos(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 text-right outline-none focus:ring-1 focus:ring-red-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Faltas / Atrasos</label>
+                        <input
+                          type="number"
+                          value={editingCostFaltas}
+                          onChange={e => setEditingCostFaltas(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 text-right outline-none focus:ring-1 focus:ring-red-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Empréstimo Consignado</label>
+                        <input
+                          type="number"
+                          value={editingCostConsignado}
+                          onChange={e => setEditingCostConsignado(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 text-right outline-none focus:ring-1 focus:ring-red-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Glosa Base</label>
+                        <input
+                          type="number"
+                          value={editingCostGlosaBase}
+                          onChange={e => setEditingCostGlosaBase(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 text-right outline-none focus:ring-1 focus:ring-red-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Glosa Bônus</label>
+                        <input
+                          type="number"
+                          value={editingCostGlosaBonus}
+                          onChange={e => setEditingCostGlosaBonus(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 text-right outline-none focus:ring-1 focus:ring-red-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Deduções</label>
+                        <input
+                          type="number"
+                          value={editingCostDeducoes}
+                          onChange={e => setEditingCostDeducoes(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 text-right outline-none focus:ring-1 focus:ring-red-500 font-bold tabular-nums"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Observações */}
+                  <div className="border border-slate-100 dark:border-slate-800 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/30">
+                    <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Observações</label>
+                    <textarea
+                      value={editingCostObservacao}
+                      onChange={e => setEditingCostObservacao(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-750 dark:text-slate-350 outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
+                      rows={2}
+                      placeholder="Alguma nota sobre a folha ou desconto..."
                     />
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* Tabela de verbas clássica MEI/PJ */
+                <>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Detalhamento de Verbas</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCostFixo(profile?.remuneration_fixed || profile?.remuneration || 0);
+                          setEditingCostBonus(profile?.remuneration_bonus || 0);
+                          setEditingCostComissao(profile?.remuneration_commission || 0);
+                          setEditingCostIncentivos(profile?.remuneration_incentives || 0);
+                          setEditingCostConectividade(profile?.remuneration_connectivity || 0);
+                        }}
+                        className="px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-400 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 transform"
+                      >
+                        <Copy size={12} /> Copiar do Contrato (Repetir Tudo)
+                      </button>
+                    </div>
 
+                    <div className="border border-slate-150 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            <th className="p-2.5">Verba</th>
+                            <th className="p-2.5 text-right">Previsto</th>
+                            <th className="p-2.5 text-center" style={{ width: '130px' }}>Pago (Real)</th>
+                            <th className="p-2.5 text-right">Diferença</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
+                          {/* Fixo */}
+                          <tr>
+                            <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Fixo</td>
+                            <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                              {formatCurrency(profile?.remuneration_fixed || profile?.remuneration || 0)}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <input 
+                                type="number"
+                                value={editingCostFixo}
+                                onChange={e => setEditingCostFixo(parseFloat(e.target.value) || 0)}
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                                placeholder="0.00"
+                              />
+                            </td>
+                            <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                              (editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                              (editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                            }`}>
+                              {(() => {
+                                const diff = editingCostFixo - (profile?.remuneration_fixed || profile?.remuneration || 0);
+                                return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                              })()}
+                            </td>
+                          </tr>
+
+                          {/* Bônus */}
+                          <tr>
+                            <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Bônus</td>
+                            <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                              {formatCurrency(profile?.remuneration_bonus || 0)}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <input 
+                                type="number"
+                                value={editingCostBonus}
+                                onChange={e => setEditingCostBonus(parseFloat(e.target.value) || 0)}
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                                placeholder="0.00"
+                              />
+                            </td>
+                            <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                              (editingCostBonus - (profile?.remuneration_bonus || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                              (editingCostBonus - (profile?.remuneration_bonus || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                            }`}>
+                              {(() => {
+                                const diff = editingCostBonus - (profile?.remuneration_bonus || 0);
+                                return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                              })()}
+                            </td>
+                          </tr>
+
+                          {/* Comissão */}
+                          <tr>
+                            <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Comissão</td>
+                            <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                              {formatCurrency(profile?.remuneration_commission || 0)}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <input 
+                                type="number"
+                                value={editingCostComissao}
+                                onChange={e => setEditingCostComissao(parseFloat(e.target.value) || 0)}
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                                placeholder="0.00"
+                              />
+                            </td>
+                            <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                              (editingCostComissao - (profile?.remuneration_commission || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                              (editingCostComissao - (profile?.remuneration_commission || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                            }`}>
+                              {(() => {
+                                const diff = editingCostComissao - (profile?.remuneration_commission || 0);
+                                return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                              })()}
+                            </td>
+                          </tr>
+
+                          {/* Incentivos */}
+                          <tr>
+                            <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Incentivos</td>
+                            <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                              {formatCurrency(profile?.remuneration_incentives || 0)}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <input 
+                                type="number"
+                                value={editingCostIncentivos}
+                                onChange={e => setEditingCostIncentivos(parseFloat(e.target.value) || 0)}
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                                placeholder="0.00"
+                              />
+                            </td>
+                            <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                              (editingCostIncentivos - (profile?.remuneration_incentives || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                              (editingCostIncentivos - (profile?.remuneration_incentives || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                            }`}>
+                              {(() => {
+                                const diff = editingCostIncentivos - (profile?.remuneration_incentives || 0);
+                                return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                              })()}
+                            </td>
+                          </tr>
+
+                          {/* Conectividade */}
+                          <tr>
+                            <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Conectividade</td>
+                            <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                              {formatCurrency(profile?.remuneration_connectivity || 0)}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <input 
+                                type="number"
+                                value={editingCostConectividade}
+                                onChange={e => setEditingCostConectividade(parseFloat(e.target.value) || 0)}
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs text-slate-850 dark:text-slate-200 text-right outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold tabular-nums"
+                                placeholder="0.00"
+                              />
+                            </td>
+                            <td className={`p-2.5 text-right font-extrabold tabular-nums ${
+                              (editingCostConectividade - (profile?.remuneration_connectivity || 0)) > 0.01 ? 'text-emerald-600 dark:text-emerald-400' :
+                              (editingCostConectividade - (profile?.remuneration_connectivity || 0)) < -0.01 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'
+                            }`}>
+                              {(() => {
+                                const diff = editingCostConectividade - (profile?.remuneration_connectivity || 0);
+                                return `${diff > 0.01 ? '+' : ''}${formatCurrency(diff)}`;
+                              })()}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Seção de Descontos e Ajustes */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Descontos e Ajustes do Mês</span>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Glosa Base</label>
+                        <input 
+                          type="number" 
+                          value={editingCostGlosaBase} 
+                          onChange={e => setEditingCostGlosaBase(parseFloat(e.target.value) || 0)} 
+                          className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
+                          placeholder="0.00"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Glosa Bônus</label>
+                        <input 
+                          type="number" 
+                          value={editingCostGlosaBonus} 
+                          onChange={e => setEditingCostGlosaBonus(parseFloat(e.target.value) || 0)} 
+                          className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
+                          placeholder="0.00"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Deduções</label>
+                        <input 
+                          type="number" 
+                          value={editingCostDeducoes} 
+                          onChange={e => setEditingCostDeducoes(parseFloat(e.target.value) || 0)} 
+                          className="w-full bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-lg px-2.5 py-1.5 text-xs text-red-700 dark:text-red-400 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold tabular-nums text-right"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
               {/* Resumo do Total Líquido */}
               {(() => {
                 const previstoTotal = (profile?.remuneration_fixed || profile?.remuneration || 0) + 
@@ -3527,8 +4009,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       (profile?.remuneration_incentives || 0) + 
                                       (profile?.remuneration_connectivity || 0);
                 
-                const pagoTotal = (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade) - 
-                                  (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
+                const pagoTotal = editingCostType === 'CLT'
+                  ? (editingCostFixo + editingCostHoraExtra + editingCostAdicionalNot + editingCostFerias + editingCostDecimoTerceiro + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade) - 
+                    (editingCostDescontos + editingCostFaltas + editingCostConsignado + editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes)
+                  : (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade) - 
+                    (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
                 
                 const diffTotal = pagoTotal - previstoTotal;
                 
