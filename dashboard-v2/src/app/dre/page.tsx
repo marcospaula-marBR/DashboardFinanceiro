@@ -700,8 +700,14 @@ export default function DrePage() {
     }
 
     // ── Seções Segregadas por Empresa ──────────────────────────────────────────
-    if (selections.includeSegregated && filters.empresas.length > 1 && metadata && estrutura) {
-      for (const empresaSeg of filters.empresas) {
+    if (selections.includeSegregated && metadata && estrutura) {
+      // Quando nenhuma empresa está no filtro = todas estão ativas
+      const empresasParaSegregacao = filters.empresas.length > 0
+        ? filters.empresas
+        : (metadata.empresas ?? []);
+
+      if (empresasParaSegregacao.length > 1) {
+        for (const empresaSeg of empresasParaSegregacao) {
         const filtrosSeg = { ...filters, empresas: [empresaSeg] };
         const resultsSeg = DreService.calculate(rawData, metadata, estrutura, filtrosSeg, undefined, equipamentoCounts);
 
@@ -739,6 +745,7 @@ export default function DrePage() {
           }
         });
         markdownReport += `\n`;
+        }
       }
     }
 
@@ -1076,6 +1083,7 @@ export default function DrePage() {
         onPreview={handlePreviewExport}
         isExporting={isExportingPdf}
         empresasSelecionadas={filters.empresas}
+        todasEmpresas={metadata?.empresas ?? []}
       />
 
       <DreEquipmentsModal

@@ -20,10 +20,13 @@ interface DreExportModalProps {
   onPreview: (selections: ExportSelections) => Promise<string>;
   isExporting: boolean;
   empresasSelecionadas?: string[];
+  todasEmpresas?: string[];
 }
 
-export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporting, empresasSelecionadas = [] }: DreExportModalProps) {
-  const isMultiEmpresa = empresasSelecionadas.length > 1;
+export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporting, empresasSelecionadas = [], todasEmpresas = [] }: DreExportModalProps) {
+  // Se nenhuma empresa está filtrada = todas as empresas estão ativas
+  const empresasEfetivas = empresasSelecionadas.length > 0 ? empresasSelecionadas : todasEmpresas;
+  const isMultiEmpresa = empresasEfetivas.length > 1;
   const [selections, setSelections] = useState<ExportSelections>({
     includeGamma: true,
     includeRawCsv: false,
@@ -177,7 +180,7 @@ export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporti
                       </p>
                       {selections.includeSegregated && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          {empresasSelecionadas.map(emp => (
+                          {empresasEfetivas.map(emp => (
                             <span key={emp} className="text-[10px] font-semibold px-2 py-0.5 bg-sky-100 text-sky-700 rounded-full border border-sky-200">
                               {emp}
                             </span>
