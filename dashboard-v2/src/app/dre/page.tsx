@@ -96,6 +96,7 @@ export default function DrePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [gammaResultUrl, setGammaResultUrl] = useState<string | null>(null);
   const [modalTitle, setModalTitle] = useState("");
   const [modalData, setModalData] = useState<Record<string, number>>({});
   const [modalSourceRows, setModalSourceRows] = useState<Record<string, DreRow[]>>({});
@@ -560,6 +561,7 @@ export default function DrePage() {
 
 
   const handleOpenExportModal = () => {
+    setGammaResultUrl(null);
     setIsExportModalOpen(true);
   };
 
@@ -835,13 +837,13 @@ export default function DrePage() {
         }
 
         const genData = await resGenerate.json();
-        const generationId = genData.id || genData.generationId;
+        const generationId = genData.generationId || genData.id;
 
         if (generationId) {
           // 2. Polling para aguardar o status
           let isComplete = false;
           let attempts = 0;
-          const MAX_ATTEMPTS = 20; // 20 * 3s = 60 segundos
+          const MAX_ATTEMPTS = 30; // 30 * 3s = 90 segundos
           
           while (!isComplete && attempts < MAX_ATTEMPTS) {
             attempts++;
@@ -850,27 +852,39 @@ export default function DrePage() {
             const resStatus = await fetch(`/api/gamma/status/${generationId}`);
             if (resStatus.ok) {
               const statusData = await resStatus.json();
-              if (statusData.status === 'completed' || statusData.state === 'completed') {
+              console.log("Gamma status response:", statusData);
+              const statusStr = (statusData.status || statusData.state || '').toLowerCase();
+              const finalUrl = statusData.gammaUrl || statusData.url || statusData.exportUrl || statusData.link;
+
+              if (statusStr === 'completed' || statusStr === 'complete' || statusStr === 'done' || (finalUrl && statusStr !== 'pending' && statusStr !== 'generating')) {
                 isComplete = true;
-                const finalUrl = statusData.url || statusData.gammaUrl || statusData.exportUrl;
                 if (finalUrl) {
-                  window.open(finalUrl, '_blank');
+                  setGammaResultUrl(finalUrl);
+                  try {
+                    window.open(finalUrl, '_blank');
+                  } catch (e) {
+                    console.warn("window.open bloqueado pelo navegador:", e);
+                  }
                 } else {
-                  alert('Apresentação gerada, mas URL não foi retornada.');
+                  alert('Apresentação gerada, mas a URL não foi retornada pela API do Gamma.');
                 }
-              } else if (statusData.status === 'failed' || statusData.state === 'failed') {
-                throw new Error('Geração falhou no Gamma.');
+              } else if (statusStr === 'failed' || statusStr === 'error') {
+                throw new Error('A geração falhou no servidor do Gamma: ' + (statusData.error || 'Erro interno'));
               }
             }
           }
 
           if (!isComplete) {
-            alert('A geração está demorando mais que o esperado. Verifique o painel do Gamma.');
+            alert('A geração está demorando mais que o esperado. Verifique o seu painel no site do Gamma.');
           }
+        } else {
+          throw new Error('API do Gamma não retornou o ID de geração. Resposta: ' + JSON.stringify(genData));
         }
       }
 
-      setIsExportModalOpen(false);
+      if (!selections.includeGamma) {
+        setIsExportModalOpen(false);
+      }
     } catch (error: any) {
       alert("Falha ao exportar os dados. Erro: " + (error?.message || String(error)));
       console.error(error);
@@ -1128,12 +1142,13 @@ export default function DrePage() {
 
       <DreExportModal
         isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
+        onClose={() => { setGammaResultUrl(null); setIsExportModalOpen(false); }}
         onExport={handleConfirmExport}
         onPreview={handlePreviewExport}
         isExporting={isExportingPdf}
         empresasSelecionadas={filters.empresas}
         todasEmpresas={metadata?.empresas ?? []}
+        gammaResultUrl={gammaResultUrl}
       />
 
       <DreEquipmentsModal

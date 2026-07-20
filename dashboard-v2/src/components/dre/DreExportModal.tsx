@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileText, CheckSquare, Square, BrainCircuit, Download, Loader2, FileSpreadsheet, Layers } from 'lucide-react';
+import { X, FileText, CheckSquare, Square, BrainCircuit, Download, Loader2, FileSpreadsheet, Layers, ExternalLink } from 'lucide-react';
 
 export interface ExportSelections {
   includeGamma: boolean;
@@ -21,9 +21,10 @@ interface DreExportModalProps {
   isExporting: boolean;
   empresasSelecionadas?: string[];
   todasEmpresas?: string[];
+  gammaResultUrl?: string | null;
 }
 
-export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporting, empresasSelecionadas = [], todasEmpresas = [] }: DreExportModalProps) {
+export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporting, empresasSelecionadas = [], todasEmpresas = [], gammaResultUrl = null }: DreExportModalProps) {
   // Se nenhuma empresa está filtrada = todas as empresas estão ativas
   const empresasEfetivas = empresasSelecionadas.length > 0 ? empresasSelecionadas : todasEmpresas;
   const isMultiEmpresa = empresasEfetivas.length > 1;
@@ -111,7 +112,29 @@ export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporti
 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1">
-          {!previewContent ? (
+          {gammaResultUrl ? (
+            <div className="py-8 px-4 flex flex-col items-center justify-center text-center animate-in zoom-in-95 my-auto">
+              <div className="w-16 h-16 bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center rounded-2xl mb-4 shadow-sm">
+                <BrainCircuit size={32} />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-1 uppercase tracking-wide">
+                Apresentação Gamma Gerada!
+              </h3>
+              <p className="text-xs text-slate-500 max-w-sm mb-6 font-medium">
+                Sua apresentação executiva da DRE no Gamma foi montada com sucesso. Clique no botão abaixo para visualizá-la:
+              </p>
+
+              <a
+                href={gammaResultUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 transition-all hover:scale-105 active:scale-95"
+              >
+                <span>Abrir Apresentação no Gamma</span>
+                <ExternalLink size={16} />
+              </a>
+            </div>
+          ) : !previewContent ? (
             <>
               <p className="text-xs text-slate-500 font-medium mb-5">
                 Os dados da DRE com os filtros atuais serão enviados para a API. Selecione os formatos desejados:
@@ -239,10 +262,10 @@ export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporti
             disabled={isExporting || isPreviewing}
             className="px-4 py-2 text-xs uppercase tracking-wider font-bold text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-50"
           >
-            {previewContent ? 'Voltar' : 'Cancelar'}
+            {gammaResultUrl ? 'Fechar' : (previewContent ? 'Voltar' : 'Cancelar')}
           </button>
           
-          {selections.includeGamma && !previewContent && (
+          {!gammaResultUrl && selections.includeGamma && !previewContent && (
             <button
               onClick={handlePreview}
               disabled={!isAnySelected || isExporting || isPreviewing}
@@ -252,17 +275,19 @@ export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporti
             </button>
           )}
 
-          <button
-            onClick={handleExport}
-            disabled={!isAnySelected || isExporting || isPreviewing}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs uppercase tracking-wider font-bold transition-colors shadow-md shadow-orange-500/10 disabled:opacity-50 justify-center"
-          >
-            {isExporting ? (
-              <><Loader2 size={16} className="animate-spin" /> Gerando Gamma...</>
-            ) : (
-              <><Download size={16} /> {previewContent ? 'Confirmar e Enviar para Gamma' : 'Exportar Direto'}</>
-            )}
-          </button>
+          {!gammaResultUrl && (
+            <button
+              onClick={handleExport}
+              disabled={!isAnySelected || isExporting || isPreviewing}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs uppercase tracking-wider font-bold transition-colors shadow-md shadow-orange-500/10 disabled:opacity-50 justify-center"
+            >
+              {isExporting ? (
+                <><Loader2 size={16} className="animate-spin" /> Gerando Gamma...</>
+              ) : (
+                <><Download size={16} /> {previewContent ? 'Confirmar e Enviar para Gamma' : 'Exportar Direto'}</>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
