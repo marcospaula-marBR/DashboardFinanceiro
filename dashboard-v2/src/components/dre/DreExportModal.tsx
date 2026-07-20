@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { X, FileText, CheckSquare, Square, BrainCircuit, Download, Loader2, FileSpreadsheet } from 'lucide-react';
+import { X, FileText, CheckSquare, Square, BrainCircuit, Download, Loader2, FileSpreadsheet, Layers } from 'lucide-react';
 
 export interface ExportSelections {
   includeGamma: boolean;
   includeRawCsv: boolean;
   includeAiAnalysis?: boolean;
+  includeSegregated?: boolean;
   includeKpis?: boolean;
   includeEvolution?: boolean;
   includeWaterfall?: boolean;
@@ -18,9 +19,11 @@ interface DreExportModalProps {
   onExport: (selections: ExportSelections, customMarkdown?: string) => void;
   onPreview: (selections: ExportSelections) => Promise<string>;
   isExporting: boolean;
+  empresasSelecionadas?: string[];
 }
 
-export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporting }: DreExportModalProps) {
+export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporting, empresasSelecionadas = [] }: DreExportModalProps) {
+  const isMultiEmpresa = empresasSelecionadas.length > 1;
   const [selections, setSelections] = useState<ExportSelections>({
     includeGamma: true,
     includeRawCsv: false,
@@ -150,6 +153,37 @@ export function DreExportModal({ isOpen, onClose, onExport, onPreview, isExporti
                       <p className="text-[10px] text-slate-500 font-medium mt-0.5 leading-normal">
                         Adiciona um slide com a visão executiva e comentários da nossa inteligência artificial sobre os resultados.
                       </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Segregated per-company option — only visible when 2+ companies selected */}
+                {isMultiEmpresa && (
+                  <div
+                    onClick={() => toggleSelection('includeSegregated')}
+                    className={`flex items-start gap-3 p-4 border cursor-pointer transition-all ${
+                      selections.includeSegregated ? 'border-amber-400 bg-amber-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`mt-0.5 ${selections.includeSegregated ? 'text-amber-600' : 'text-slate-350'}`}>
+                      {selections.includeSegregated ? <CheckSquare size={20} /> : <Square size={20} />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide">
+                        Relatório por Empresa (Segregado) <Layers size={16} className="text-sky-500" />
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5 leading-normal">
+                        Além do consolidado, gera uma seção separada para cada empresa selecionada.
+                      </p>
+                      {selections.includeSegregated && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {empresasSelecionadas.map(emp => (
+                            <span key={emp} className="text-[10px] font-semibold px-2 py-0.5 bg-sky-100 text-sky-700 rounded-full border border-sky-200">
+                              {emp}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

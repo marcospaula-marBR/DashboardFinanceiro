@@ -699,6 +699,49 @@ export default function DrePage() {
       }
     }
 
+    // ── Seções Segregadas por Empresa ──────────────────────────────────────────
+    if (selections.includeSegregated && filters.empresas.length > 1 && metadata && estrutura) {
+      for (const empresaSeg of filters.empresas) {
+        const filtrosSeg = { ...filters, empresas: [empresaSeg] };
+        const resultsSeg = DreService.calculate(rawData, metadata, estrutura, filtrosSeg, undefined, equipamentoCounts);
+
+        const getTotSeg = (key: string) => resultsSeg.totais[key] || 0;
+        const rlSeg_bruta = getTotSeg('Receita Bruta de Vendas') + getTotSeg('Receitas Indiretas');
+        const rlSeg_imp = getTotSeg('Impostos') || getTotSeg('Impostos sobre a Receita');
+        const rlSeg = (rlSeg_bruta - rlSeg_imp) || 1;
+        const ebitSeg = rlSeg_bruta - rlSeg_imp - resultsSeg.kpis.totalCustos -
+          (resultsSeg.kpis.totalDespesas - getTotSeg('Despesas Financeiras') -
+           getTotSeg('Distribuição de Dividendos') - getTotSeg('Dividendos') -
+           getTotSeg('Despesas Variáveis') - getTotSeg('Intermediação de Negócios'));
+
+        markdownReport += `\n---\n\n`;
+        markdownReport += `# 📊 Relatório Segregado: ${empresaSeg}\n\n`;
+        markdownReport += `> *Seção gerada automaticamente com os dados filtrados exclusivamente para esta empresa.*\n\n`;
+
+        markdownReport += `## Indicadores Estratégicos — ${empresaSeg}\n`;
+        markdownReport += `- **Receita Bruta:** ${formatBRL(rlSeg_bruta)}\n`;
+        markdownReport += `- **Total Custos:** ${formatBRL(resultsSeg.kpis.totalCustos)}\n`;
+        markdownReport += `- **Total Despesas:** ${formatBRL(resultsSeg.kpis.totalDespesas)}\n`;
+        markdownReport += `- **EBITDA:** ${formatBRL(ebitSeg)}\n`;
+        markdownReport += `- **Margem Operacional:** ${formatPCT((ebitSeg / rlSeg) * 100)}\n`;
+        markdownReport += `- **Resultado (FCL):** ${formatBRL(resultsSeg.kpis.fcl)}\n`;
+        markdownReport += `\n`;
+
+        markdownReport += `## DRE Resumida — ${empresaSeg}\n`;
+        markdownReport += `| Categoria | Valor Acumulado |\n`;
+        markdownReport += `| :--- | :--- |\n`;
+        resultsSeg.estrutura.forEach(item => {
+          if (item.tipo === 'linha' || item.tipo === 'linha_calc') {
+            const valorTotal = resultsSeg.totais[item.titulo] || 0;
+            if (valorTotal !== 0) {
+              markdownReport += `| ${item.titulo} | ${formatBRL(valorTotal)} |\n`;
+            }
+          }
+        });
+        markdownReport += `\n`;
+      }
+    }
+
     return markdownReport;
   };
 
@@ -1032,6 +1075,7 @@ export default function DrePage() {
         onExport={handleConfirmExport}
         onPreview={handlePreviewExport}
         isExporting={isExportingPdf}
+        empresasSelecionadas={filters.empresas}
       />
 
       <DreEquipmentsModal
