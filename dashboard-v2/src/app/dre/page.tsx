@@ -26,6 +26,59 @@ import { DrePrintCharts } from '@/components/dre/DrePrintCharts';
 import { DreCustomCardModal } from '@/components/dre/DreCustomCardModal';
 import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles, Filter, ChevronLeft, ClipboardEdit } from 'lucide-react';
 
+function parseMonthValue(str: string): { original: string; val: number } {
+  const monthsMap: Record<string, number> = {
+    jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
+    jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12
+  };
+  const parts = str.trim().split(/[\/-]/);
+  if (parts.length !== 2) return { original: str, val: NaN };
+
+  let m = 0;
+  const p0 = parts[0].toLowerCase();
+  if (monthsMap[p0] !== undefined) {
+    m = monthsMap[p0];
+  } else {
+    m = parseInt(p0, 10);
+  }
+
+  let y = parseInt(parts[1], 10);
+  if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return { original: str, val: NaN };
+  if (y < 100) y += 2000;
+
+  return { original: str, val: y * 12 + m };
+}
+
+function formatPeriodoInteligente(selectedPeriodos: string[], validColumns: string[]): string {
+  const list = selectedPeriodos && selectedPeriodos.length > 0 ? selectedPeriodos : validColumns;
+  if (!list || list.length === 0) return 'Período Completo';
+
+  if (list.length === 1) {
+    return list[0];
+  }
+
+  const parsed = list.map(parseMonthValue);
+  if (parsed.some(p => isNaN(p.val))) {
+    return list.join(', ');
+  }
+
+  parsed.sort((a, b) => a.val - b.val);
+
+  let isSequential = true;
+  for (let i = 1; i < parsed.length; i++) {
+    if (parsed[i].val !== parsed[i - 1].val + 1) {
+      isSequential = false;
+      break;
+    }
+  }
+
+  if (isSequential) {
+    return `${parsed[0].original} até ${parsed[parsed.length - 1].original}`;
+  } else {
+    return parsed.map(p => p.original).join(', ');
+  }
+}
+
 export default function DrePage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -417,10 +470,7 @@ export default function DrePage() {
         filters.empresas.length === 0
           ? 'Todas'
           : filters.empresas.join(', ');
-      const periodo =
-        filters.periodos.length === 0
-          ? 'Todos'
-          : filters.periodos.join(', ');
+      const periodo = formatPeriodoInteligente(filters.periodos, results?.validColumns || []);
 
       const indicadores: { indicador: string; valor: string; detalhe: string }[] = [];
 
@@ -517,7 +567,7 @@ export default function DrePage() {
     if (!results) throw new Error("Resultados não carregados.");
 
     const empresa = filters.empresas.length === 1 ? filters.empresas[0] : (filters.empresas.length > 1 ? "Varias" : "Global");
-    const periodo = filters.periodos.length > 0 ? `${filters.periodos[0]}...` : "Completo";
+    const periodo = formatPeriodoInteligente(filters.periodos, results.validColumns);
 
     // Helper functions
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -590,7 +640,7 @@ export default function DrePage() {
 
     // --- CONSTRUÇÃO DO NOME DO RELATÓRIO ---
     const empresaFormatada = filters.empresas.length > 0 ? filters.empresas.join(', ') : 'Global (Todas as Empresas)';
-    const periodoFormatado = filters.periodos.length > 0 ? filters.periodos.join(', ') : 'Completo (Acumulado)';
+    const periodoFormatado = formatPeriodoInteligente(filters.periodos, results.validColumns);
     let tituloRelatorio = `Relatório Financeiro: ${empresaFormatada}`;
     if (filters.departamentos.length > 0) {
       tituloRelatorio += ` | Departamentos: ${filters.departamentos.join(', ')}`;
@@ -760,7 +810,7 @@ export default function DrePage() {
     setIsExportingPdf(true); // Usado agora para travar a tela tanto no CSV quanto no Gamma
 
     const empresa = filters.empresas.length === 1 ? filters.empresas[0] : (filters.empresas.length > 1 ? "Varias" : "Global");
-    const periodo = filters.periodos.length > 0 ? `${filters.periodos[0]}...` : "Completo";
+    const periodo = formatPeriodoInteligente(filters.periodos, results?.validColumns || []);
 
     try {
       if (selections.includeRawCsv && results) {
@@ -1061,7 +1111,7 @@ export default function DrePage() {
           onScenarioChange={setActiveScenario}
           onParamsChange={setSimParams}
           empresaContext={filters.empresas.length === 1 ? filters.empresas[0] : (filters.empresas.length > 1 ? 'Múltiplas' : 'Todas as Empresas')}
-          periodoContext={filters.periodos.length > 0 ? filters.periodos.join(', ') : 'Todos os Períodos'}
+          periodoContext={formatPeriodoInteligente(filters.periodos, results?.validColumns || [])}
         />
       </div>
 

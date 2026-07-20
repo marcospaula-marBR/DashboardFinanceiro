@@ -19,12 +19,13 @@ export async function POST(req: Request) {
     const { markdownReport } = body;
 
     const promptText = `
-Aja como um gerador de relatórios executivos de alto nível (C-level).
+Aja como um conversor estrito de documentos em apresentações visuais executivas (C-level).
 Gere uma apresentação estritamente em PORTUGUÊS DO BRASIL.
-Utilize o modelo padrão fornecido no documento Markdown abaixo, mantendo todos os dados numéricos, os nomes das empresas, os filtros exatos, os valores de cada KPI, bem como suas respectivas explicações breves e parâmetros aceitáveis. 
-NÃO invente, não altere dados e não alucine gráficos que não estejam descritos nos dados reais. Apenas exponha de forma limpa e direta.
+Utilize APENAS o modelo e o conteúdo fornecidos no documento Markdown abaixo.
+NÃO adicione análises próprias, não faça inferências extras, não invente dados e NÃO crie slides de análise executiva própria.
+Preserve todos os dados numéricos, nomes de empresas, filtros, valores de cada KPI e explicações exatamente como constam no documento.
 
-Se o documento incluir uma seção "Análise Executiva (Por BrisinhAI)", garanta que ela seja incluída integralmente como um slide ou conjunto de slides na sua apresentação final. Preserve os comentários e o feedback.
+Se o documento incluir uma seção "Análise Executiva (Por BrisinhAI)", inclua essa seção integralmente. Se NÃO incluir essa seção, NÃO adicione qualquer análise executiva extra.
 
 Se houver logomarcas (tags <img src=...>), tente posicioná-las adequadamente na capa ou rodapé da apresentação.
 
@@ -42,7 +43,7 @@ ${markdownReport}
       },
       body: JSON.stringify({
         inputText: promptText,
-        textMode: 'generate'
+        textMode: 'preserve'
       })
     });
 
