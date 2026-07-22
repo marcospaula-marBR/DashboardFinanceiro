@@ -910,7 +910,8 @@ export function calculateV2SimulationEngine(
   metadata: DreMetadata,
   estrutura: DreStructureItem[],
   filters: DreFilters,
-  params: SimulatorV2Params
+  params: SimulatorV2Params,
+  precomputedBaseResult?: DreCalculatedResult
 ): {
   baseResult: DreCalculatedResult;
   simResult: DreCalculatedResult;
@@ -1009,7 +1010,7 @@ export function calculateV2SimulationEngine(
   }
 
   // 2. Executar Motor Base e Simulado em Memória
-  const baseScenario: Scenario = {
+  const baseResult = precomputedBaseResult || DreSimulatorEngine.runSimulation(rawData, metadata, estrutura, filters, {
     id: 'base_v2',
     name: 'Cenário Real',
     basePeriod: [],
@@ -1020,7 +1021,7 @@ export function calculateV2SimulationEngine(
     assumptions: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
-  };
+  });
 
   const simScenario: Scenario = {
     id: 'sim_v2',
@@ -1035,7 +1036,6 @@ export function calculateV2SimulationEngine(
     updatedAt: new Date().toISOString()
   };
 
-  const baseResult = DreSimulatorEngine.runSimulation(rawData, metadata, estrutura, filters, baseScenario);
   const simResult = DreSimulatorEngine.runSimulation(rawData, metadata, estrutura, filters, simScenario);
 
   // 3. Calcular Indicadores Puramente em Memória

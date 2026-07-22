@@ -105,12 +105,34 @@ export default function DreCustomPage() {
   }, []);
 
   // ──────────────────────────────────────────────────────────
-  // CÁLCULO EM TEMPO REAL VIA FUNÇÃO PURA (SIMULADOR V2)
+  // DESEMPENHO E CÁLCULO ULTRA-RÁPIDO (USEDEFERREDVALUE)
   // ──────────────────────────────────────────────────────────
-  const v2Calculation = useMemo(() => {
+
+  // 1. Cenário Base Memoizado (Calculado apenas quando rawData ou filtros mudam)
+  const baseResult = useMemo(() => {
     if (rawData.length === 0) return null;
-    return calculateV2SimulationEngine(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, v2Params);
-  }, [rawData, metadata, filters, v2Params]);
+    return DreSimulatorEngine.runSimulation(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, {
+      id: 'base_v2',
+      name: 'Cenário Real',
+      basePeriod: [],
+      projectionStartDate: '2025-01',
+      projectionEndDate: '2026-12',
+      mode: 'historical_what_if',
+      includeAllocatedExpenses: !filters.excludeSharedExpenses,
+      assumptions: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }, [rawData, metadata, filters]);
+
+  // 2. Parâmetros Adiados (Garante 60fps nos sliders sem travar a interface)
+  const deferredParams = React.useDeferredValue(v2Params);
+
+  // 3. Simulação Reativa Ultra-Performática
+  const v2Calculation = useMemo(() => {
+    if (rawData.length === 0 || !baseResult) return null;
+    return calculateV2SimulationEngine(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, deferredParams, baseResult);
+  }, [rawData, metadata, filters, deferredParams, baseResult]);
 
   // Presets Rápidos de Cenário
   const handleApplyPreset = (preset: 'conservative' | 'optimistic' | 'crisis' | 'reset') => {
