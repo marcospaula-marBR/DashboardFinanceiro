@@ -227,6 +227,9 @@ export class DreSimulatorEngine {
         let currentVal = simulatedMensal[groupKey][col] || 0;
 
         scenario.assumptions.forEach(asm => {
+          // Ignora premissas desativadas
+          if (asm.enabled === false) return;
+
           // 1. Verificar se o mês da coluna está dentro do range da premissa
           if (colIso < asm.startDate || colIso > asm.endDate) return;
 
@@ -256,8 +259,11 @@ export class DreSimulatorEngine {
           }
 
           // Filtros adicionais baseados no tipo de premissa
-          if (asm.type === 'revenue_replacement' && !['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat)) {
-            matches = false;
+          if ((asm.type === 'revenue_replacement' || asm.type === 'contract_loss' || asm.type === 'future_contract_loss') && 
+              !['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat) && !asm.affectedAccountsRatio?.[cat]) {
+            if (asm.type !== 'contract_loss' || asm.targetType !== 'department') {
+              matches = false;
+            }
           }
 
           if (!matches) return;
@@ -287,9 +293,6 @@ export class DreSimulatorEngine {
                 kMatches = true;
               }
             }
-            if (asm.type === 'revenue_replacement' && !['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(kCat)) {
-              kMatches = false;
-            }
             return kMatches;
           }).length || 1;
 
@@ -316,11 +319,53 @@ export class DreSimulatorEngine {
               }
               break;
 
-            case 'contract_loss':
-              if (['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat)) {
-                currentVal = 0;
+            case 'contract_loss': {
+              const lossVal = asm.monthlyLoss !== undefined ? asm.monthlyLoss : Math.abs(asm.value);
+              const replMonths = asm.replacementMonths || 0;
+              const elapsed = diffMonthsIso(asm.startDate, colIso);
+
+              if (elapsed >= 0) {
+                let currentLoss = lossVal;
+                // Se houver janela de reposição, reduz a perda gradualmente
+                if (replMonths > 0 && elapsed > 0) {
+                  const recoveryFactor = Math.min(1, elapsed / replMonths);
+                  currentLoss = lossVal * (1 - recoveryFactor);
+                }
+
+                if (['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat)) {
+                  currentVal = Math.max(0, currentVal - (currentLoss / matchingKeysCount));
+                } else if (asm.affectedAccountsRatio?.[cat]) {
+                  // Desdobramento proporcional para outras contas DRE (ex: Impostos, Credenciados)
+                  const ratio = asm.affectedAccountsRatio[cat];
+                  currentVal = Math.max(0, currentVal + ((currentLoss * ratio) / matchingKeysCount));
+                }
               }
               break;
+            }
+
+            case 'future_contract_loss': {
+              const lossVal = asm.monthlyLoss !== undefined ? asm.monthlyLoss : Math.abs(asm.value);
+              const futureStart = asm.futureLossStartDate || asm.startDate;
+              const targetGoal = asm.targetSalesGoalPerMonth || 0;
+              const elapsedFromNow = diffMonthsIso(asm.startDate, colIso);
+              const elapsedFromFuture = diffMonthsIso(futureStart, colIso);
+
+              if (['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat)) {
+                // Antes do Ponto X: acumula novos fechamentos conforme meta
+                if (elapsedFromNow >= 0 && elapsedFromFuture < 0) {
+                  const accumulatedGoal = targetGoal * (elapsedFromNow + 1);
+                  currentVal = currentVal + (accumulatedGoal / matchingKeysCount);
+                } else if (elapsedFromFuture >= 0) {
+                  // A partir do Ponto X: aplica o impacto bruto da perda offsetado pela meta acumulada
+                  const totalGoalAcquired = targetGoal * diffMonthsIso(asm.startDate, futureStart);
+                  const netImpact = lossVal - totalGoalAcquired;
+                  if (netImpact > 0) {
+                    currentVal = Math.max(0, currentVal - (netImpact / matchingKeysCount));
+                  }
+                }
+              }
+              break;
+            }
 
             case 'revenue_replacement':
               if (['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat)) {

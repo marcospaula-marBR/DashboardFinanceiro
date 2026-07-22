@@ -3,6 +3,7 @@ export type SimulatorScenarioType =
   | 'revenue_reduction'
   | 'contract_loss'
   | 'revenue_replacement'
+  | 'future_contract_loss'
   | 'expense_increase'
   | 'expense_reduction'
   | 'costs_cut'
@@ -43,6 +44,15 @@ export interface ScenarioAssumption {
   customMonthlyValues?: Record<string, number>; // month -> value mapping if custom
   macroIndex?: MacroIndexType;
   notes?: string;
+
+  // Novos atributos executivos para contratos e simulação prática
+  contractName?: string;
+  monthlyLoss?: number;                // Valor bruto do contrato por mês (R$)
+  replacementMonths?: number;          // Janela de tempo em meses para reposição/rampa
+  futureLossStartDate?: string;        // Ponto X (Mês em que ocorrerá a perda futura)
+  targetSalesGoalPerMonth?: number;    // Meta mensal de fechamento necessária a partir de hoje até Ponto X
+  affectedAccountsRatio?: Record<string, number>; // Desdobramento por conta DRE (ex: Receita: 100%, Impostos: -10%, Pessoal: -40%)
+  enabled?: boolean;                   // Liga/desliga premissa no cenário multi-driver
 }
 
 export interface Scenario {
@@ -63,3 +73,4 @@ export interface MacroIndexProjection {
   index: MacroIndexType;
   monthlyRates: Record<string, number>; // YYYY-MM -> percentage rate (e.g. 0.005 for 0.5% in that month)
 }
+
