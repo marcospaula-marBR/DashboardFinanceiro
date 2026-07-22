@@ -234,6 +234,7 @@ export class DreSimulatorEngine {
           if (colIso < asm.startDate || colIso > asm.endDate) return;
 
           // 2. Verificar o escopo (Target)
+          const catLower = (cat || '').toLowerCase();
           let matches = false;
           if (asm.targetType === 'all') {
             matches = true;
@@ -242,25 +243,18 @@ export class DreSimulatorEngine {
           } else if (asm.targetType === 'account' && asm.targetIds.includes(cat)) {
             matches = true;
           } else if (asm.targetType === 'account_group') {
-            // Se for despesas rateadas, confere com a lista de despesas
-            if (asm.targetIds.includes('despesas_rateadas') && CATEGORIAS_RATEIO.includes(cat)) {
-              matches = true;
-            } else if (asm.targetIds.includes('custos_operacionais') && [
-              'Credenciado Operacional', 'Adiantamento - Credenciado Operacional', 'Terceirização de Mão de Obra',
-              'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva',
-              'Corretiva - B2G', 'Manutenção Corretiva', 'Outros Custos'
-            ].includes(cat)) {
-              matches = true;
-            } else if (asm.targetIds.includes('receita') && [
-              'Receita Bruta de Vendas', 'Receitas Indiretas'
-            ].includes(cat)) {
-              matches = true;
+            if (asm.targetIds.includes('despesas_rateadas')) {
+              matches = catLower.includes('despesa') || catLower.includes('rateio') || CATEGORIAS_RATEIO.includes(cat);
+            } else if (asm.targetIds.includes('custos_operacionais')) {
+              matches = catLower.includes('custo') || catLower.includes('credenciado') || catLower.includes('mão de obra') || catLower.includes('serviço');
+            } else if (asm.targetIds.includes('receita')) {
+              matches = catLower.includes('receita') || catLower.includes('vendas');
             }
           }
 
           // Filtros adicionais baseados no tipo de premissa
           if ((asm.type === 'revenue_replacement' || asm.type === 'contract_loss' || asm.type === 'future_contract_loss') && 
-              !['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(cat) && !asm.affectedAccountsRatio?.[cat]) {
+              !catLower.includes('receita') && !asm.affectedAccountsRatio?.[cat]) {
             if (asm.type !== 'contract_loss' || asm.targetType !== 'department') {
               matches = false;
             }
@@ -271,6 +265,7 @@ export class DreSimulatorEngine {
           // Contar quantas chaves no portfólio batem com este mesmo target para ratear valores absolutos
           const matchingKeysCount = Object.keys(simulatedMensal).filter(k => {
             const [kEmp, kDept, kCat, kProj] = k.split('|');
+            const kCatLower = (kCat || '').toLowerCase();
             let kMatches = false;
             if (asm.targetType === 'all') {
               kMatches = true;
@@ -279,43 +274,72 @@ export class DreSimulatorEngine {
             } else if (asm.targetType === 'account' && asm.targetIds.includes(kCat)) {
               kMatches = true;
             } else if (asm.targetType === 'account_group') {
-              if (asm.targetIds.includes('despesas_rateadas') && CATEGORIAS_RATEIO.includes(kCat)) {
-                kMatches = true;
-              } else if (asm.targetIds.includes('custos_operacionais') && [
-                'Credenciado Operacional', 'Adiantamento - Credenciado Operacional', 'Terceirização de Mão de Obra',
-                'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva',
-                'Corretiva - B2G', 'Manutenção Corretiva', 'Outros Custos'
-              ].includes(kCat)) {
-                kMatches = true;
-              } else if (asm.targetIds.includes('receita') && [
-                'Receita Bruta de Vendas', 'Receitas Indiretas'
-              ].includes(kCat)) {
-                kMatches = true;
+              if (asm.targetIds.includes('despesas_rateadas')) {
+                kMatches = kCatLower.includes('despesa') || kCatLower.includes('rateio') || CATEGORIAS_RATEIO.includes(kCat);
+              } else if (asm.targetIds.includes('custos_operacionais')) {
+                kMatches = kCatLower.includes('custo') || kCatLower.includes('credenciado') || kCatLower.includes('mão de obra') || kCatLower.includes('serviço');
+              } else if (asm.targetIds.includes('receita')) {
+                kMatches = kCatLower.includes('receita') || kCatLower.includes('vendas');
               }
             }
             return kMatches;
           }).length || 1;
 
-          // 3. Aplicar o impacto com base na premissa
+          // 3. Aplicar o impacto com base na premissa (Tratando sinais negativos da DRE)
+          const absVal = Math.abs(asm.value);
+
           switch (asm.type) {
             case 'revenue_reduction':
+            case 'contract_loss':
+              if (asm.amountType === 'percentage') {
+                currentVal = currentVal * (1 - (absVal / 100));
+              } else {
+                currentVal = Math.max(0, currentVal - (absVal / matchingKeysCount));
+              }
+              break;
+
             case 'expense_reduction':
             case 'costs_cut':
-              if (asm.amountType === 'percentage') {
-                const factor = 1 - (Math.abs(asm.value) / 100);
-                currentVal = currentVal * factor;
-              } else if (asm.amountType === 'absolute_value' || asm.amountType === 'monthly_value') {
-                currentVal = Math.max(0, currentVal - (Math.abs(asm.value) / matchingKeysCount));
+              // Se currentVal for negativo (ex: -100.000 de custo/despesa):
+              // Corte de 10% -> -100.000 * 0.90 = -90.000 (reduz o custo absoluto)
+              // Corte absoluto -> -100.000 + 10.000 = -90.000 (aproxima de zero)
+              if (currentVal < 0) {
+                if (asm.amountType === 'percentage') {
+                  currentVal = currentVal * (1 - (absVal / 100));
+                } else {
+                  currentVal = Math.min(0, currentVal + (absVal / matchingKeysCount));
+                }
+              } else {
+                if (asm.amountType === 'percentage') {
+                  currentVal = currentVal * (1 - (absVal / 100));
+                } else {
+                  currentVal = Math.max(0, currentVal - (absVal / matchingKeysCount));
+                }
               }
               break;
 
             case 'revenue_increase':
-            case 'expense_increase':
               if (asm.amountType === 'percentage') {
-                const factor = 1 + (Math.abs(asm.value) / 100);
-                currentVal = currentVal * factor;
-              } else if (asm.amountType === 'absolute_value' || asm.amountType === 'monthly_value') {
-                currentVal = currentVal + (Math.abs(asm.value) / matchingKeysCount);
+                currentVal = currentVal * (1 + (absVal / 100));
+              } else {
+                currentVal = currentVal + (absVal / matchingKeysCount);
+              }
+              break;
+
+            case 'expense_increase':
+              // Aumento de despesa/custo torna número mais negativo se for negativo
+              if (currentVal < 0) {
+                if (asm.amountType === 'percentage') {
+                  currentVal = currentVal * (1 + (absVal / 100));
+                } else {
+                  currentVal = currentVal - (absVal / matchingKeysCount);
+                }
+              } else {
+                if (asm.amountType === 'percentage') {
+                  currentVal = currentVal * (1 + (absVal / 100));
+                } else {
+                  currentVal = currentVal + (absVal / matchingKeysCount);
+                }
               }
               break;
 
