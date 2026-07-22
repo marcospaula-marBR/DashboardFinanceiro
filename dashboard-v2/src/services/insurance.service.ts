@@ -63,13 +63,51 @@ export function enrichPolicy(policy: InsurancePolicy): InsurancePolicy {
   const parcelasPagas = getParcelasPagas(policy.inicio, policy.parcelas_total, policy.dia_pgto);
   const parcelasRestantes = Math.max(0, (policy.parcelas_total || 0) - parcelasPagas);
 
+  // Se observacoes estiver vazio mas coberturas_adicionais contiver "Obs:", extrai para observacoes para exibição
+  let obs = policy.observacoes || '';
+  if (!obs && policy.coberturas_adicionais && policy.coberturas_adicionais.includes('Obs:')) {
+    const parts = policy.coberturas_adicionais.split('| Obs:');
+    if (parts.length > 1) {
+      obs = parts[parts.length - 1].trim();
+    } else if (policy.coberturas_adicionais.startsWith('Obs:')) {
+      obs = policy.coberturas_adicionais.replace('Obs:', '').trim();
+    }
+  }
+
   return {
     ...policy,
+    observacoes: obs,
     diasParaVencer: dias,
     statusVencimento: getStatusVencimento(dias),
     parcelasPagas,
     parcelasRestantes,
   };
+}
+
+/**
+ * Sanitiza o payload para evitar falha no PostgREST se colunas opcionais ('observacoes' ou 'pdf_url')
+ * ainda não existirem fisicamente no schema da tabela do Supabase.
+ */
+function sanitizeInsurancePayload(input: Partial<InsurancePolicyInput>): Record<string, any> {
+  const payload: Record<string, any> = { ...input };
+
+  if (payload.observacoes && payload.observacoes.trim() !== '') {
+    const obsText = payload.observacoes.trim();
+    if (!payload.coberturas_adicionais || payload.coberturas_adicionais.trim() === '') {
+      payload.coberturas_adicionais = `Obs: ${obsText}`;
+    } else if (!payload.coberturas_adicionais.includes(obsText)) {
+      payload.coberturas_adicionais = `${payload.coberturas_adicionais} | Obs: ${obsText}`;
+    }
+  }
+
+  delete payload.observacoes;
+  delete payload.pdf_url;
+  delete payload.diasParaVencer;
+  delete payload.parcelasPagas;
+  delete payload.parcelasRestantes;
+  delete payload.statusVencimento;
+
+  return payload;
 }
 
 // ─────────────────────────────────────────────
@@ -116,18 +154,22 @@ export async function fetchInsurancePolicies(
 export async function createInsurancePolicy(
   input: InsurancePolicyInput
 ): Promise<InsurancePolicy> {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .insert([{ ...input, ativo: input.ativo ?? true }])
-    .select()
-    .single();
+  const rawPayload = { ...input, ativo: input.ativo ?? true };
 
-  if (error) {
-    console.error('[InsuranceService] Erro ao criar apólice:', error.message);
-    throw error;
+  let res = await supabase.from(TABLE).insert([rawPayload]).select().single();
+
+  if (res.error && res.error.code === 'PGRST204') {
+    console.warn('[InsuranceService] Coluna ausente no schema cache, aplicando payload sanitizado...');
+    const sanitized = sanitizeInsurancePayload(rawPayload);
+    res = await supabase.from(TABLE).insert([sanitized]).select().single();
   }
 
-  return enrichPolicy(data);
+  if (res.error) {
+    console.error('[InsuranceService] Erro ao criar apólice:', res.error.message);
+    throw res.error;
+  }
+
+  return enrichPolicy(res.data);
 }
 
 // ─────────────────────────────────────────────
@@ -138,19 +180,22 @@ export async function updateInsurancePolicy(
   id: string,
   input: Partial<InsurancePolicyInput>
 ): Promise<InsurancePolicy> {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .update({ ...input, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
+  const rawPayload = { ...input, updated_at: new Date().toISOString() };
 
-  if (error) {
-    console.error('[InsuranceService] Erro ao atualizar apólice:', error.message);
-    throw error;
+  let res = await supabase.from(TABLE).update(rawPayload).eq('id', id).select().single();
+
+  if (res.error && res.error.code === 'PGRST204') {
+    console.warn('[InsuranceService] Coluna ausente no schema cache, aplicando payload sanitizado...');
+    const sanitized = sanitizeInsurancePayload(rawPayload);
+    res = await supabase.from(TABLE).update(sanitized).eq('id', id).select().single();
   }
 
-  return enrichPolicy(data);
+  if (res.error) {
+    console.error('[InsuranceService] Erro ao atualizar apólice:', res.error.message);
+    throw res.error;
+  }
+
+  return enrichPolicy(res.data);
 }
 
 // ─────────────────────────────────────────────
