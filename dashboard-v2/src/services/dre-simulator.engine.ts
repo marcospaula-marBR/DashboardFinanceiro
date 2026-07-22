@@ -858,11 +858,21 @@ export interface SimulatorV2Metrics {
   severancePaybackMonths: number;
 }
 
-/** 1. Ponto de Equilíbrio (Break-Even Point) em R$/mês */
-export function calculateBreakEvenPoint(fixedCosts: number, variableCostRatio: number): number {
-  const contributionMarginRatio = 1 - Math.min(0.99, Math.max(0, variableCostRatio));
-  if (contributionMarginRatio <= 0) return 0;
-  return Math.round(fixedCosts / contributionMarginRatio);
+/** 1. Ponto de Equilíbrio (Break-Even Point) Operacional Real em R$/mês */
+export function calculateBreakEvenPoint(revenue: number, totalCosts: number, totalExpenses: number): number {
+  if (!revenue || revenue <= 0) return Math.round(totalCosts + totalExpenses);
+  
+  // Custos variáveis operacionais diretos (~65% dos custos totais de serviços/produtos)
+  const variableCosts = totalCosts * 0.65;
+  // Despesas e custos fixos estruturais (~100% das despesas + 35% dos custos)
+  const fixedExpenses = totalExpenses + (totalCosts * 0.35);
+
+  const contributionMarginRatio = (revenue - variableCosts) / revenue;
+  if (contributionMarginRatio <= 0.05) {
+    return Math.round(totalCosts + totalExpenses);
+  }
+
+  return Math.round(fixedExpenses / contributionMarginRatio);
 }
 
 /** 2. Cash Runway (Quantos meses o caixa suporta e data em que zera) */
@@ -1039,13 +1049,17 @@ export function calculateV2SimulationEngine(
   const simResult = DreSimulatorEngine.runSimulation(rawData, metadata, estrutura, filters, simScenario);
 
   // 3. Calcular Indicadores Puramente em Memória
-  const fixedCostsReal = (baseResult.kpis.totalDespesas || 0) + (baseResult.kpis.totalCustos * 0.4);
-  const varRatioReal = baseResult.kpis.receitaOperacional > 0 ? (baseResult.kpis.totalCustos * 0.6) / baseResult.kpis.receitaOperacional : 0.4;
-  const breakEvenPointReal = calculateBreakEvenPoint(fixedCostsReal, varRatioReal);
+  const breakEvenPointReal = calculateBreakEvenPoint(
+    baseResult.kpis.receitaOperacional,
+    baseResult.kpis.totalCustos,
+    baseResult.kpis.totalDespesas
+  );
 
-  const fixedCostsSim = (simResult.kpis.totalDespesas || 0) + (simResult.kpis.totalCustos * 0.4);
-  const varRatioSim = simResult.kpis.receitaOperacional > 0 ? (simResult.kpis.totalCustos * 0.6) / simResult.kpis.receitaOperacional : 0.4;
-  const breakEvenPointSimulated = calculateBreakEvenPoint(fixedCostsSim, varRatioSim);
+  const breakEvenPointSimulated = calculateBreakEvenPoint(
+    simResult.kpis.receitaOperacional,
+    simResult.kpis.totalCustos,
+    simResult.kpis.totalDespesas
+  );
 
   // Runway
   const monthlyFcl: Record<string, number> = {};
@@ -1259,13 +1273,17 @@ export function calculateV3SimulationEngine(
   });
 
   // 4. Calcular Indicadores em Memória
-  const fixedCostsReal = (baseResult.kpis.totalDespesas || 0) + (baseResult.kpis.totalCustos * 0.4);
-  const varRatioReal = baseResult.kpis.receitaOperacional > 0 ? (baseResult.kpis.totalCustos * 0.6) / baseResult.kpis.receitaOperacional : 0.4;
-  const breakEvenPointReal = calculateBreakEvenPoint(fixedCostsReal, varRatioReal);
+  const breakEvenPointReal = calculateBreakEvenPoint(
+    baseResult.kpis.receitaOperacional,
+    baseResult.kpis.totalCustos,
+    baseResult.kpis.totalDespesas
+  );
 
-  const fixedCostsSim = (simResult.kpis.totalDespesas || 0) + (simResult.kpis.totalCustos * 0.4);
-  const varRatioSim = simResult.kpis.receitaOperacional > 0 ? (simResult.kpis.totalCustos * 0.6) / simResult.kpis.receitaOperacional : 0.4;
-  const breakEvenPointSimulated = calculateBreakEvenPoint(fixedCostsSim, varRatioSim);
+  const breakEvenPointSimulated = calculateBreakEvenPoint(
+    simResult.kpis.receitaOperacional,
+    simResult.kpis.totalCustos,
+    simResult.kpis.totalDespesas
+  );
 
   // Runway
   const monthlyFcl: Record<string, number> = {};

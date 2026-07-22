@@ -54,7 +54,7 @@ export default function DreCustomPage() {
   const [periodicity, setPeriodicity] = useState<PeriodicityOption>('mensal');
   const [showDidacticGuide, setShowDidacticGuide] = useState<boolean>(false);
 
-  // REQUISITO 3: SELEÇÃO DE EMPRESA(S)
+  // SELEÇÃO DE EMPRESA(S)
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([]);
 
   // ──────────────────────────────────────────────────────────
@@ -66,17 +66,17 @@ export default function DreCustomPage() {
     // Premissa 1: Receita
     enableRevenueAdj: false,
     revenueType: 'percentage',
-    revenueValue: 10, // +10% ou R$ 10.000
+    revenueValue: 10,
 
     // Premissa 2: Custos Operacionais
     enableCostsAdj: false,
     costsType: 'percentage',
-    costsValue: 5, // -5% ou -R$ 5.000
+    costsValue: 5,
 
     // Premissa 3: Despesas Rateadas
     enableExpensesAdj: false,
     expensesType: 'percentage',
-    expensesValue: 5, // -5% ou -R$ 5.000
+    expensesValue: 5,
 
     // Premissa 4: Perda de Contratos com seleção múltipla
     enableContractLoss: false,
@@ -120,22 +120,55 @@ export default function DreCustomPage() {
     loadData();
   }, []);
 
-  // REQUISITO 4: EXTRAÇÃO DINÂMICA DE CONTRATOS/PROJETOS DAS EMPRESAS SELECIONADAS
+  // REQUISITO 1: EXTRAÇÃO DE CONTRATOS COM VALOR MÉDIO MENSAL REAL
   const availableContractsList = useMemo(() => {
     if (!rawData || rawData.length === 0) return [];
-    const contractsSet = new Set<string>();
+    const mapProj = new Map<string, { total: number; count: number }>();
+
+    // Colunas históricas com valor (ex: "Jan/25", "Jul/26")
+    const periodCols = Object.keys(rawData[0] || {}).filter(k => k.includes('/'));
 
     rawData.forEach(r => {
       const empMatch = selectedEmpresas.length === 0 || selectedEmpresas.includes(r.Empresa);
       if (empMatch && r.Projeto && r.Projeto !== '-' && r.Projeto !== 'Geral' && r.Projeto !== 'Sem Projeto') {
-        contractsSet.add(r.Projeto);
+        if (!mapProj.has(r.Projeto)) {
+          mapProj.set(r.Projeto, { total: 0, count: 0 });
+        }
+        const entry = mapProj.get(r.Projeto)!;
+
+        // Somar apenas lançamentos de receita do projeto
+        if (r.ContaDRE && ['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(r.ContaDRE)) {
+          periodCols.forEach(col => {
+            const val = parseFloat(r[col]?.toString().replace(',', '.') || '0');
+            if (!isNaN(val) && val > 0) {
+              entry.total += val;
+              entry.count += 1;
+            }
+          });
+        }
       }
     });
 
-    return Array.from(contractsSet).sort();
+    const list: { name: string; monthlyAverage: number }[] = [];
+    mapProj.forEach((val, name) => {
+      const periodCount = periodCols.length || 1;
+      const avg = Math.round(val.total / periodCount);
+      list.push({ name, monthlyAverage: avg > 0 ? avg : 25000 });
+    });
+
+    return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [rawData, selectedEmpresas]);
 
-  // REQUISITO 3: HANDLER SELEÇÃO DE EMPRESAS
+  // Handler ao escolher um contrato na lista suspensa (preenche o valor médio automaticamente)
+  const handleSelectContractName = (name: string) => {
+    setNewContractName(name);
+    const found = availableContractsList.find(c => c.name === name);
+    if (found && found.monthlyAverage > 0) {
+      setNewContractValue(found.monthlyAverage);
+    }
+  };
+
+  // Handler para togglar seleção de empresas
   const handleToggleEmpresa = (emp: string) => {
     setSelectedEmpresas(prev => {
       const updated = prev.includes(emp) ? prev.filter(e => e !== emp) : [...prev, emp];
@@ -144,14 +177,14 @@ export default function DreCustomPage() {
     });
   };
 
-  // REQUISITO 4: HANDLER PARA ADICIONAR CONTRATO À LISTA DE PERDAS
+  // Handler para adicionar contrato à lista de perdas
   const handleAddContractToLoss = () => {
     if (!newContractName) return;
     const item: ContractLossItem = {
       contractName: newContractName,
       monthlyValue: newContractValue,
       replacementMonths: newContractReplacement,
-      startDate: '2025-08'
+      startDate: '2026-07'
     };
     setV3Params(p => ({
       ...p,
@@ -209,17 +242,21 @@ export default function DreCustomPage() {
     }, deferredParams, baseResult);
   }, [rawData, metadata, selectedEmpresas, deferredParams, baseResult]);
 
-  // REQUISITO 1: PROJEÇÕES COMEÇAM A PARTIR DO HOJE (FUTURO)
+  // REQUISITO 2: PROJEÇÕES FUTURAS INICIANDO A PARTIR DE HOJE (DETERMINAÇÃO DINÂMICA JUL/26)
   const cashRunwayChartData = useMemo(() => {
     if (!v3Calculation) return [];
     let runningCashBase = v3Params.initialCash;
     let runningCashSim = v3Params.initialCash;
 
-    // Filtra colunas a partir do mês atual ("2025-08" ou "Ago/25" em diante)
-    const currentMonthIndex = v3Calculation.simResult.validColumns.findIndex(c => c.includes('Ago/25') || c.includes('Set/25') || c.includes('2025-08'));
-    const futureColumns = currentMonthIndex >= 0 
-      ? v3Calculation.simResult.validColumns.slice(currentMonthIndex) 
-      : v3Calculation.simResult.validColumns.slice(-12);
+    const validCols = v3Calculation.simResult.validColumns;
+    
+    // Identifica o mês atual/futuro (Jul/26 ou período mais recente)
+    let currentMonthIdx = validCols.findIndex(c => c.includes('Jul/26') || c.includes('jul/26') || c.includes('2026-07'));
+    if (currentMonthIdx < 0) {
+      currentMonthIdx = Math.max(0, validCols.length - 12);
+    }
+
+    const futureColumns = validCols.slice(currentMonthIdx);
 
     return futureColumns.map(col => {
       const baseFcl = v3Calculation.baseResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v3Calculation.baseResult.mensal['Lucro antes do FCL']?.[col] || 0;
@@ -270,6 +307,31 @@ export default function DreCustomPage() {
     return Object.values(grouped);
   }, [cashRunwayChartData, periodicity]);
 
+  // REQUISITO 4: CÁLCULO DA META MENSAL DE NOVOS FECHAMENTOS (REPOSIÇÃO COMERCIAL ATÉ PONTO X)
+  const salesReplacementTarget = useMemo(() => {
+    if (!v3Params.enableContractLoss || v3Params.selectedContracts.length === 0) return null;
+
+    let totalMonthlyLoss = 0;
+    let maxReplacementMonths = 1;
+
+    v3Params.selectedContracts.forEach(c => {
+      totalMonthlyLoss += c.monthlyValue || 0;
+      if ((c.replacementMonths || 0) > maxReplacementMonths) {
+        maxReplacementMonths = c.replacementMonths;
+      }
+    });
+
+    if (totalMonthlyLoss <= 0 || maxReplacementMonths <= 0) return null;
+
+    const monthlySalesTarget = totalMonthlyLoss / maxReplacementMonths;
+
+    return {
+      totalMonthlyLoss,
+      maxReplacementMonths,
+      monthlySalesTarget: Math.round(monthlySalesTarget)
+    };
+  }, [v3Params]);
+
   // Dados para Gráfico 2: Demonstrativo Sintético
   const syntheticChartData = useMemo(() => {
     if (!v3Calculation) return [];
@@ -296,15 +358,16 @@ export default function DreCustomPage() {
       const m = v3Calculation.metrics;
       const prompt = `Analise a seguinte simulação DRE V3 em linguagem executiva simples para diretoria:
 - Empresas Selecionadas: ${selectedEmpresas.length > 0 ? selectedEmpresas.join(', ') : 'Todas'}
-- Variação de Receita Ativa: ${v3Params.enableRevenueAdj ? `${v3Params.revenueValue}${v3Params.revenueType === 'percentage' ? '%' : ' R$'}` : 'Não'}
-- Corte de Custos Ativo: ${v3Params.enableCostsAdj ? `${v3Params.costsValue}${v3Params.costsType === 'percentage' ? '%' : ' R$'}` : 'Não'}
-- Corte de Despesas Ativo: ${v3Params.enableExpensesAdj ? `${v3Params.expensesValue}${v3Params.expensesType === 'percentage' ? '%' : ' R$'}` : 'Não'}
-- Perda de Contratos: ${v3Params.enableContractLoss ? v3Params.selectedContracts.map(c => `${c.contractName} (R$ ${c.monthlyValue}/mês)`).join('; ') : 'Nenhum'}
+- Variação de Receita: ${v3Params.enableRevenueAdj ? `${v3Params.revenueValue}${v3Params.revenueType === 'percentage' ? '%' : ' R$'}` : 'Não'}
+- Corte de Custos: ${v3Params.enableCostsAdj ? `${v3Params.costsValue}${v3Params.costsType === 'percentage' ? '%' : ' R$'}` : 'Não'}
+- Corte de Despesas: ${v3Params.enableExpensesAdj ? `${v3Params.expensesValue}${v3Params.expensesType === 'percentage' ? '%' : ' R$'}` : 'Não'}
+- Perda de Contratos: ${v3Params.enableContractLoss ? v3Params.selectedContracts.map(c => `${c.contractName} (R$ ${c.monthlyValue}/mês, Reposição ${c.replacementMonths}m)`).join('; ') : 'Nenhum'}
+${salesReplacementTarget ? `- Meta Mensal de Vendas/Novos Fechamentos: ${formatCurrency(salesReplacementTarget.monthlySalesTarget)}/mês durante ${salesReplacementTarget.maxReplacementMonths} meses` : ''}
 - Ponto de Equilíbrio Real: ${formatCurrency(m.breakEvenPointReal)} vs Simulado: ${formatCurrency(m.breakEvenPointSimulated)}
 - Margem EBITDA Real: ${m.ebitdaMarginReal.toFixed(1)}% vs Simulada: ${m.ebitdaMarginSimulated.toFixed(1)}%
 - Cash Runway: ${m.isRunwaySustainable ? 'Sustentável (Caixa Positivo)' : `Zera no mês ${m.zeroCashMonth} (${m.cashRunwayMonths} meses)`}
 
-Forneça um parecer executivo claro e didático em 3 tópicos: 1. Diagnóstico da Saúde Financeira, 2. Risco do Caixa Futuro, 3. Recomendações Práticas.`;
+Forneça um parecer executivo claro em 3 tópicos: 1. Diagnóstico da Saúde Financeira, 2. Meta de Vendas Requerida, 3. Recomendações Práticas.`;
 
       const res = await fetch('/api/ai/analyze', {
         method: 'POST',
@@ -323,7 +386,7 @@ Forneça um parecer executivo claro e didático em 3 tópicos: 1. Diagnóstico d
   };
 
   // ──────────────────────────────────────────────────────────
-  // GAMMA EXPORT
+  // REQUISITO 5: RELATÓRIO GAMMA (GERAÇÃO DE APRESENTAÇÃO COMPLETA)
   // ──────────────────────────────────────────────────────────
   const handleExportGamma = async () => {
     if (!v3Calculation) return;
@@ -342,6 +405,7 @@ Forneça um parecer executivo claro e didático em 3 tópicos: 1. Diagnóstico d
 - **Ponto de Equilíbrio (Break-Even)**: Real ${formatCurrency(m.breakEvenPointReal)} | Simulado ${formatCurrency(m.breakEvenPointSimulated)}
 - **Margem EBITDA**: Real ${m.ebitdaMarginReal.toFixed(1)}% | Simulada ${m.ebitdaMarginSimulated.toFixed(1)}%
 - **Cash Runway**: ${m.isRunwaySustainable ? 'Caixa Sustentável' : `Caixa Zera no Mês ${m.zeroCashMonth}`}
+${salesReplacementTarget ? `- **Meta Mensal de Vendas/Reposição**: ${formatCurrency(salesReplacementTarget.monthlySalesTarget)}/mês durante ${salesReplacementTarget.maxReplacementMonths} meses` : ''}
 
 ## 2. Demostrativo Comparativo DRE
 - **Receita Operacional**: Real ${formatCurrency(bK.receitaOperacional)} | Simulado ${formatCurrency(sK.receitaOperacional)}
@@ -356,7 +420,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Gere uma apresentação executiva sobre esta simulação DRE V3: ${reportMarkdown}`,
+          prompt: `Crie uma apresentação de slides executiva completa com gráficos e tabelas baseada nesta simulação DRE V3: ${reportMarkdown}`,
           textMode: 'preserve'
         })
       });
@@ -427,7 +491,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   Cenários Futuros
                 </span>
               </h1>
-              <p className="text-xs text-slate-400">Projeção a partir do Hoje com Seleção por Empresa e Contratos</p>
+              <p className="text-xs text-slate-400">Projeções Futuras a partir do Mês Atual (Jul/26)</p>
             </div>
           </div>
 
@@ -507,21 +571,21 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-400 uppercase text-[10px]">1. Ponto de Equilíbrio (Break-Even)</span>
                 <p className="text-slate-300 leading-relaxed">
-                  É quanto a empresa precisa vender por mês para pagar todas as contas e ficar no zero a zero.
+                  É quanto a empresa precisa vender por mês para pagar todas as contas operacionais e despesas e ficar no zero a zero.
                 </p>
               </div>
 
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="font-bold text-rose-400 uppercase text-[10px]">2. Cash Runway (Vida do Caixa)</span>
                 <p className="text-slate-300 leading-relaxed">
-                  Mostra exatamente em qual mês o dinheiro em caixa vai acabar se as despesas forem maiores que as receitas.
+                  Mostra em qual mês o dinheiro em caixa vai acabar se o resultado simulated persistir.
                 </p>
               </div>
 
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="font-bold text-cyan-400 uppercase text-[10px]">3. Margem EBITDA</span>
                 <p className="text-slate-300 leading-relaxed">
-                  A porcentagem de cada R$ 100 vendidos que se transforma em lucro direto da operação.
+                  A porcentagem do faturamento que realmente sobra de lucro operacional direto.
                 </p>
               </div>
             </div>
@@ -538,7 +602,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
              ────────────────────────────────────────────────────────── */}
           <div className="lg:col-span-5 space-y-5">
             
-            {/* REQUISITO 3: SELEÇÃO DE EMPRESA(S) */}
+            {/* SELEÇÃO DE EMPRESA(S) */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
               <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
                 <Building2 size={18} className="text-amber-400" />
@@ -577,7 +641,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
               </div>
             </div>
 
-            {/* REQUISITO 2: QUADRO DE PREMISSAS COM CHECKBOXES & TOGGLES (SEM BARRAS SLIDER) */}
+            {/* QUADRO DE PREMISSAS COM CHECKBOXES & TOGGLES */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
               
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -719,7 +783,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                 )}
               </div>
 
-              {/* REQUISITO 4: PERDA DE CONTRATO COM DROPDOWN DE MÚLTIPLA SELEÇÃO */}
+              {/* REQUISITO 1: PERDA DE CONTRATO COM PREENCHIMENTO AUTOMÁTICO DO VALOR MÉDIO MENSAL */}
               <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
@@ -737,15 +801,17 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                 {v3Params.enableContractLoss && (
                   <div className="space-y-3 pt-2 animate-in fade-in">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Selecionar Contrato da Lista</label>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Selecionar Contrato (Preenche Média Mensal)</label>
                       <select
                         value={newContractName}
-                        onChange={e => setNewContractName(e.target.value)}
+                        onChange={e => handleSelectContractName(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                       >
                         <option value="">-- Escolha um Contrato da Empresa --</option>
                         {availableContractsList.map(c => (
-                          <option key={c} value={c}>{c}</option>
+                          <option key={c.name} value={c.name}>
+                            {c.name} ({formatCurrency(c.monthlyAverage)}/mês)
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -758,7 +824,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                           step="5000"
                           value={newContractValue}
                           onChange={e => setNewContractValue(Number(e.target.value))}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-cyan-400 font-bold focus:outline-none focus:border-cyan-500"
                         />
                       </div>
 
@@ -767,7 +833,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                         <input 
                           type="number"
                           min="0"
-                          max="18"
+                          max="48"
                           value={newContractReplacement}
                           onChange={e => setNewContractReplacement(Number(e.target.value))}
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
@@ -832,17 +898,17 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                 {/* CARDS DE INDICADORES EXECUTIVOS EM TEMPO REAL */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   
-                  {/* 1. PONTO DE EQUILÍBRIO (BREAK-EVEN) */}
+                  {/* 1. PONTO DE EQUILÍBRIO (BREAK-EVEN OPERACIONAL REAL) */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider">Break-Even</span>
+                      <span className="font-bold uppercase tracking-wider">Break-Even Operacional</span>
                       <Target size={16} className="text-amber-400" />
                     </div>
                     <div className="text-xl font-black text-white mt-1">
                       {formatCurrency(v3Calculation.metrics.breakEvenPointSimulated)}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Faturamento mínimo necessário para cobrir os custos.
+                      Faturamento mensal mínimo para cobrir despesas e custos fixos.
                     </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Real: {formatCurrency(v3Calculation.metrics.breakEvenPointReal)}</span>
@@ -894,12 +960,32 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
 
                 </div>
 
-                {/* REQUISITO 1: GRÁFICO DE PROJEÇÃO FUTURA (STARTING FROM TODAY) */}
+                {/* REQUISITO 4: CARD DEDICADO DE META MENSAL DE REPOSIÇÃO (COMERCIAL) */}
+                {salesReplacementTarget && (
+                  <div className="bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-900 border border-amber-500/40 rounded-2xl p-5 shadow-xl animate-in fade-in">
+                    <div className="flex items-center justify-between border-b border-amber-500/20 pb-3 mb-2">
+                      <div className="flex items-center gap-2">
+                        <Target className="text-amber-400" size={20} />
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider">
+                          🎯 Meta Mensal de Novos Fechamentos (Reposição Comercial)
+                        </h3>
+                      </div>
+                      <span className="text-xs font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                        {formatCurrency(salesReplacementTarget.monthlySalesTarget)} /mês
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                      Para neutralizar a perda total simulada de <strong className="text-white">{formatCurrency(salesReplacementTarget.totalMonthlyLoss)}/mês</strong> até o final do prazo de <strong className="text-white">{salesReplacementTarget.maxReplacementMonths} meses</strong>, a equipe comercial precisa conquistar em média <strong className="text-amber-400">{formatCurrency(salesReplacementTarget.monthlySalesTarget)} por mês</strong> em novos contratos a partir de hoje.
+                    </p>
+                  </div>
+                )}
+
+                {/* PROJEÇÃO DE CAIXA FUTURA (A PARTIR DO MÊS ATUAL JUL/26) */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div>
                       <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-2">
-                        <span>Projeção de Caixa Futura (A partir do Hoje)</span>
+                        <span>Projeção de Caixa Futura (A partir de Jul/26)</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700 uppercase">
                           Visão {periodicity}
                         </span>
@@ -1010,7 +1096,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   <Sparkles size={32} />
                 </div>
                 <h4 className="font-bold text-white text-base">Apresentação Gamma Gerada com Sucesso!</h4>
-                <p className="text-xs text-slate-400">Sua simulação V3 (Break-Even, Cash Runway e EBITDA) foi convertida em apresentação Gamma.</p>
+                <p className="text-xs text-slate-400">Sua simulação V3 foi convertida em apresentação de slides interativa no Gamma.</p>
                 <a
                   href={gammaUrl}
                   target="_blank"
@@ -1024,7 +1110,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
             ) : (
               <div className="space-y-4">
                 <p className="text-xs text-slate-400">
-                  Os indicadores em tempo real (Break-Even, Cash Runway e EBITDA) serão enviados via Markdown para montagem dos slides.
+                  Os indicadores em tempo real (Break-Even, Cash Runway, EBITDA e Meta de Reposição) serão enviados para montagem dos slides.
                 </p>
 
                 <div className="flex items-center gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
