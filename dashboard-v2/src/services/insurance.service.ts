@@ -85,13 +85,59 @@ export function enrichPolicy(policy: InsurancePolicy): InsurancePolicy {
 }
 
 /**
+ * Trata o payload antes de salvar no Supabase:
+ * 1. Converte strings vazias ('') em campos de data (inicio, vencimento) para null (evita o erro Postgres 'invalid input syntax for type date: ""').
+ * 2. Assegura tipos numéricos válidos.
+ * 3. Remove propriedades calculadas client-side.
+ */
+function prepareInsurancePayload(input: Partial<InsurancePolicyInput>): Record<string, any> {
+  const payload: Record<string, any> = { ...input };
+
+  // 1. Datas (DATE no Postgres só aceita YYYY-MM-DD válido ou null)
+  if (typeof payload.inicio === 'string') {
+    const trimmed = payload.inicio.trim();
+    payload.inicio = (trimmed === '' || trimmed === '—') ? null : trimmed;
+  }
+  if (typeof payload.vencimento === 'string') {
+    const trimmed = payload.vencimento.trim();
+    payload.vencimento = (trimmed === '' || trimmed === '—') ? null : trimmed;
+  }
+
+  // 2. Números (NUMERIC / INTEGER no Postgres)
+  if (payload.premio !== undefined && payload.premio !== null) {
+    payload.premio = isNaN(Number(payload.premio)) ? 0 : Number(payload.premio);
+  }
+  if (payload.valor_parcela !== undefined && payload.valor_parcela !== null) {
+    payload.valor_parcela = isNaN(Number(payload.valor_parcela)) ? 0 : Number(payload.valor_parcela);
+  }
+  if (payload.franquia !== undefined && payload.franquia !== null) {
+    payload.franquia = isNaN(Number(payload.franquia)) ? 0 : Number(payload.franquia);
+  }
+  if (payload.franquia_reduzida_percentual !== undefined && payload.franquia_reduzida_percentual !== null) {
+    payload.franquia_reduzida_percentual = isNaN(Number(payload.franquia_reduzida_percentual)) ? 0 : Number(payload.franquia_reduzida_percentual);
+  }
+  if (payload.parcelas_total !== undefined && payload.parcelas_total !== null) {
+    const p = Number(payload.parcelas_total);
+    payload.parcelas_total = isNaN(p) || p < 1 ? 1 : Math.floor(p);
+  }
+
+  // 3. Remove campos calculados
+  delete payload.diasParaVencer;
+  delete payload.parcelasPagas;
+  delete payload.parcelasRestantes;
+  delete payload.statusVencimento;
+
+  return payload;
+}
+
+/**
  * Sanitiza o payload para evitar falha no PostgREST se colunas opcionais ('observacoes' ou 'pdf_url')
  * ainda não existirem fisicamente no schema da tabela do Supabase.
  */
 function sanitizeInsurancePayload(input: Partial<InsurancePolicyInput>): Record<string, any> {
-  const payload: Record<string, any> = { ...input };
+  const payload = prepareInsurancePayload(input);
 
-  if (payload.observacoes && payload.observacoes.trim() !== '') {
+  if (payload.observacoes && typeof payload.observacoes === 'string' && payload.observacoes.trim() !== '') {
     const obsText = payload.observacoes.trim();
     if (!payload.coberturas_adicionais || payload.coberturas_adicionais.trim() === '') {
       payload.coberturas_adicionais = `Obs: ${obsText}`;
@@ -102,10 +148,6 @@ function sanitizeInsurancePayload(input: Partial<InsurancePolicyInput>): Record<
 
   delete payload.observacoes;
   delete payload.pdf_url;
-  delete payload.diasParaVencer;
-  delete payload.parcelasPagas;
-  delete payload.parcelasRestantes;
-  delete payload.statusVencimento;
 
   return payload;
 }
@@ -154,7 +196,7 @@ export async function fetchInsurancePolicies(
 export async function createInsurancePolicy(
   input: InsurancePolicyInput
 ): Promise<InsurancePolicy> {
-  const rawPayload = { ...input, ativo: input.ativo ?? true };
+  const rawPayload = prepareInsurancePayload({ ...input, ativo: input.ativo ?? true });
 
   let res = await supabase.from(TABLE).insert([rawPayload]).select().single();
 
@@ -180,7 +222,7 @@ export async function updateInsurancePolicy(
   id: string,
   input: Partial<InsurancePolicyInput>
 ): Promise<InsurancePolicy> {
-  const rawPayload = { ...input, updated_at: new Date().toISOString() };
+  const rawPayload = prepareInsurancePayload({ ...input, updated_at: new Date().toISOString() });
 
   let res = await supabase.from(TABLE).update(rawPayload).eq('id', id).select().single();
 

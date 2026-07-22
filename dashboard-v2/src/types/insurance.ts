@@ -87,6 +87,7 @@ export interface InsurancePolicyInput {
   coberturas_adicionais?: string;
   observacoes?: string;
   pdf_url?: string;
+  updated_at?: string;
 }
 
 export interface InsuranceKPIs {
