@@ -707,6 +707,21 @@ export class DreService {
     const servicosBaseTotal = getCatTotal('Serviços');
     const consorciosTotal = getCatTotal('Consórcios - a contemplar');
 
+    const getMatchingBucketKeys = (catList?: string[]): string[] => {
+      if (!catList || catList.length === 0) return [];
+      const matched = new Set<string>();
+      catList.forEach(targetCat => {
+        if (!targetCat) return;
+        const normTarget = normalizeForCompare(targetCat);
+        Object.keys(catMonthly).forEach(k => {
+          if (k.trim().toLowerCase() === targetCat.trim().toLowerCase() || normalizeForCompare(k) === normTarget) {
+            matched.add(k);
+          }
+        });
+      });
+      return Array.from(matched);
+    };
+
     estrutura.forEach(item => {
       const isSharedExpense = filters.excludeSharedExpenses && [
         'Credenciado Administrativo',
@@ -722,8 +737,9 @@ export class DreService {
 
       if (item.tipo === 'linha' || item.tipo === 'hidden' || (item.tipo === 'card' && item.categorias)) {
         let total = 0;
+        const matchingKeys = getMatchingBucketKeys(item.categorias);
         if (!isSharedExpense) {
-          item.categorias?.forEach(cat => total += getCatTotal(cat));
+          matchingKeys.forEach(key => total += (catTotals[key] || 0));
         }
         valoresTotal[item.titulo] = total;
 
@@ -733,9 +749,11 @@ export class DreService {
           let mesTotal = 0;
           let rowsForMonth: DreRow[] = [];
           if (!isSharedExpense) {
-            item.categorias?.forEach(cat => {
-              mesTotal += getCatMonthly(cat, col);
-              rowsForMonth.push(...getCatSourceRowsSafe(cat, col));
+            matchingKeys.forEach(key => {
+              mesTotal += (catMonthly[key]?.[col] || 0);
+              if (catSourceRows[key]?.[col]) {
+                rowsForMonth.push(...catSourceRows[key][col]);
+              }
             });
           }
           valoresMensal[item.titulo][col] = mesTotal;

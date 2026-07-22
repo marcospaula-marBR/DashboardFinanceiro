@@ -479,14 +479,30 @@ export class DreSimulatorEngine {
     const servicosBaseTotal = getCatTotal('Serviços');
     const consorciosTotal = getCatTotal('Consórcios - a contemplar');
 
+    const getMatchingBucketKeys = (catList?: string[]): string[] => {
+      if (!catList || catList.length === 0) return [];
+      const matched = new Set<string>();
+      catList.forEach(targetCat => {
+        if (!targetCat) return;
+        const normTarget = targetCat.trim().toLowerCase();
+        Object.keys(catMonthly).forEach(k => {
+          if (k.trim().toLowerCase() === normTarget) {
+            matched.add(k);
+          }
+        });
+      });
+      return Array.from(matched);
+    };
+
     estrutura.forEach(item => {
       // Toggle de Despesas Rateadas Administrativas
       const isExcludedShared = (!scenario.includeAllocatedExpenses || filters.excludeSharedExpenses) && CATEGORIAS_RATEIO.includes(item.titulo);
 
       if (item.tipo === 'linha' || item.tipo === 'hidden' || (item.tipo === 'card' && item.categorias)) {
         let total = 0;
+        const matchingKeys = getMatchingBucketKeys(item.categorias);
         if (!isExcludedShared) {
-          item.categorias?.forEach(cat => total += getCatTotal(cat));
+          matchingKeys.forEach(key => total += (catTotals[key] || 0));
         }
         valoresTotal[item.titulo] = total;
 
@@ -496,9 +512,11 @@ export class DreSimulatorEngine {
           let mesTotal = 0;
           let rowsForMonth: DreRow[] = [];
           if (!isExcludedShared) {
-            item.categorias?.forEach(cat => {
-              mesTotal += getCatMonthly(cat, col);
-              rowsForMonth.push(...getCatSourceRowsSafe(cat, col));
+            matchingKeys.forEach(key => {
+              mesTotal += (catMonthly[key]?.[col] || 0);
+              if (catSourceRows[key]?.[col]) {
+                rowsForMonth.push(...catSourceRows[key][col]);
+              }
             });
           }
           valoresMensal[item.titulo][col] = mesTotal;
