@@ -10,7 +10,7 @@ import {
   ChevronLeft, ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Percent, 
   Sparkles, RefreshCw, Layers, CheckSquare, Square, X, ExternalLink, Loader2,
   FileText, Zap, Target, DollarSign, Calendar, AlertTriangle, ShieldCheck,
-  Users, Activity, Clock, Award, Sliders
+  Users, Activity, Clock, Award, Sliders, HelpCircle, Info, BookOpen
 } from 'lucide-react';
 import { DreRow, DreFilters, DreMetadata } from '@/types/dre';
 import { 
@@ -33,6 +33,8 @@ const formatPercent = (val?: number) => {
   return `${prefix}${val.toFixed(1)}%`;
 };
 
+type PeriodicityOption = 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
+
 export default function DreCustomPage() {
   // Estado de Dados Brutos e Metadata
   const [rawData, setRawData] = useState<DreRow[]>([]);
@@ -46,6 +48,10 @@ export default function DreCustomPage() {
     mapaMeses: {}
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Periodicidade da Visualização
+  const [periodicity, setPeriodicity] = useState<PeriodicityOption>('mensal');
+  const [showDidacticGuide, setShowDidacticGuide] = useState<boolean>(false);
 
   // Filtros Globais
   const [filters, setFilters] = useState<DreFilters>({
@@ -107,8 +113,6 @@ export default function DreCustomPage() {
   // ──────────────────────────────────────────────────────────
   // DESEMPENHO E CÁLCULO ULTRA-RÁPIDO (USEDEFERREDVALUE)
   // ──────────────────────────────────────────────────────────
-
-  // 1. Cenário Base Memoizado (Calculado apenas quando rawData ou filtros mudam)
   const baseResult = useMemo(() => {
     if (rawData.length === 0) return null;
     return DreSimulatorEngine.runSimulation(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, {
@@ -125,10 +129,8 @@ export default function DreCustomPage() {
     });
   }, [rawData, metadata, filters]);
 
-  // 2. Parâmetros Adiados (Garante 60fps nos sliders sem travar a interface)
   const deferredParams = React.useDeferredValue(v2Params);
 
-  // 3. Simulação Reativa Ultra-Performática
   const v2Calculation = useMemo(() => {
     if (rawData.length === 0 || !baseResult) return null;
     return calculateV2SimulationEngine(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, deferredParams, baseResult);
@@ -208,10 +210,43 @@ export default function DreCustomPage() {
         mes: col,
         'Caixa Acumulado Real': Math.round(runningCashBase),
         'Caixa Acumulado Simulado': Math.round(runningCashSim),
-        'Fator Seguro': 0
       };
     });
   }, [v2Calculation, v2Params.initialCash]);
+
+  // Agrupamento por Periodicidade (Mensal, Bimestral, Trimestral, Semestral, Anual)
+  const groupedChartData = useMemo(() => {
+    if (!cashRunwayChartData || cashRunwayChartData.length === 0) return [];
+    if (periodicity === 'mensal') return cashRunwayChartData;
+
+    const grouped: Record<string, { mes: string; 'Caixa Acumulado Real': number; 'Caixa Acumulado Simulado': number; count: number }> = {};
+
+    cashRunwayChartData.forEach((item, index) => {
+      let groupKey = item.mes;
+      if (periodicity === 'bimestral') {
+        const bIdx = Math.floor(index / 2) + 1;
+        groupKey = `Bim. ${bIdx}`;
+      } else if (periodicity === 'trimestral') {
+        const qIdx = Math.floor(index / 3) + 1;
+        groupKey = `${qIdx}º Tri`;
+      } else if (periodicity === 'semestral') {
+        const sIdx = Math.floor(index / 6) + 1;
+        groupKey = `${sIdx}º Sem`;
+      } else if (periodicity === 'anual') {
+        const yearStr = item.mes.includes('/') ? '20' + item.mes.split('/')[1] : item.mes.slice(0, 4);
+        groupKey = `Ano ${yearStr}`;
+      }
+
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = { mes: groupKey, 'Caixa Acumulado Real': 0, 'Caixa Acumulado Simulado': 0, count: 0 };
+      }
+      grouped[groupKey]['Caixa Acumulado Real'] = item['Caixa Acumulado Real'];
+      grouped[groupKey]['Caixa Acumulado Simulado'] = item['Caixa Acumulado Simulado'];
+      grouped[groupKey].count += 1;
+    });
+
+    return Object.values(grouped);
+  }, [cashRunwayChartData, periodicity]);
 
   // Dados para Gráfico 2: Demonstrativo Sintético de Margem & EBITDA
   const syntheticChartData = useMemo(() => {
@@ -237,7 +272,7 @@ export default function DreCustomPage() {
 
     try {
       const m = v2Calculation.metrics;
-      const prompt = `Analise a seguinte simulação V2 do Simulador DRE:
+      const prompt = `Analise a seguinte simulação V2 do Simulador DRE em linguagem executiva e didática para diretoria:
 - Variação de Receita: ${v2Params.revenueChangePct}%
 - Corte de Custos: ${v2Params.costReductionPct}% | Despesas: ${v2Params.expenseReductionPct}%
 - Perda de Contrato: R$ ${v2Params.contractLossValue}/mês (Reposição: ${v2Params.contractReplacementMonths}m)
@@ -247,7 +282,7 @@ export default function DreCustomPage() {
 - Cash Runway: ${m.isRunwaySustainable ? 'Sustentável (Caixa Positivo)' : `Zera no mês ${m.zeroCashMonth} (${m.cashRunwayMonths} meses)`}
 - Payback de Rescisões: ${m.severancePaybackMonths} meses
 
-Forneça um parecer executivo direto com 3 itens: 1. Diagnóstico de Sustentabilidade, 2. Risco de Runway, 3. Ações Recomendadas.`;
+Forneça um parecer executivo claro e didático em 3 tópicos: 1. Diagnóstico da Saúde Financeira, 2. Risco do Caixa, 3. Recomendações Práticas.`;
 
       const res = await fetch('/api/ai/analyze', {
         method: 'POST',
@@ -259,7 +294,7 @@ Forneça um parecer executivo direto com 3 itens: 1. Diagnóstico de Sustentabil
       const data = await res.json();
       setAiAnalysisText(data.analysis || data.response || 'Análise concluída com sucesso.');
     } catch (err: any) {
-      setAiAnalysisText(`Parecer BrisinhAI: O cenário simulado exige atenção ao Cash Runway. O Ponto de Equilíbrio é de ${formatCurrency(v2Calculation?.metrics.breakEvenPointSimulated)}, recomendando a preservação de margem bruta e controle de rescisões.`);
+      setAiAnalysisText(`Parecer BrisinhAI: O cenário simulado indica necessidade de atenção ao Ponto de Equilíbrio de ${formatCurrency(v2Calculation?.metrics.breakEvenPointSimulated)}/mês. Recomenda-se monitorar a janela de reposição de contratos para preservar a liquidez.`);
     } finally {
       setIsAiAnalyzing(false);
     }
@@ -287,6 +322,7 @@ Forneça um parecer executivo direto com 3 itens: 1. Diagnóstico de Sustentabil
 - **Payback de Rescisões (Peopleboard)**: ${m.severancePaybackMonths} meses para amortizar R$ ${v2Params.layoffsSeveranceCost} em rescisões
 
 ## 2. Parâmetros de Simulação
+- Periodicidade de Visualização: ${periodicity.toUpperCase()}
 - Variação de Receita: ${v2Params.revenueChangePct}%
 - Corte de Custos Operacionais: ${v2Params.costReductionPct}%
 - Corte de Despesas Rateadas: ${v2Params.expenseReductionPct}%
@@ -360,12 +396,13 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           
           <div className="flex items-center gap-3">
+            {/* REQUISITO 1: NAVEGAÇÃO VOLTAR AO DRE */}
             <Link 
-              href="/"
+              href="/dre"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-white border border-slate-700 rounded-lg transition-all"
             >
               <ChevronLeft size={16} />
-              <span>Voltar ao Início</span>
+              <span>Voltar ao DRE</span>
             </Link>
 
             <div className="h-5 w-[1px] bg-slate-700 hidden sm:block" />
@@ -381,9 +418,40 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
             </div>
           </div>
 
-          {/* PRESETS & ACOES */}
+          {/* PRESETS, PERIODICIDADE & GUIA DIDÁTICO */}
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
             
+            {/* REQUISITO 2: SELETOR DE PERIODICIDADE */}
+            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1">
+              {(['mensal', 'bimestral', 'trimestral', 'semestral', 'anual'] as PeriodicityOption[]).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPeriodicity(p)}
+                  className={`px-2 py-1 text-[11px] font-bold capitalize rounded-lg transition-all ${
+                    periodicity === p
+                      ? 'bg-emerald-500 text-slate-950 shadow-md'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            {/* REQUISITO 3: BOTÃO DE EXPANSÃO DO GUIA DIDÁTICO */}
+            <button
+              onClick={() => setShowDidacticGuide(!showDidacticGuide)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                showDidacticGuide
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+              }`}
+              title="Explicar conceitos em linguagem simples para leigos"
+            >
+              <BookOpen size={15} />
+              <span className="hidden md:inline">Guia Didático</span>
+            </button>
+
             <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1">
               <button
                 onClick={() => handleApplyPreset('reset')}
@@ -401,13 +469,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                 onClick={() => handleApplyPreset('crisis')}
                 className="px-2.5 py-1 text-[11px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-all"
               >
-                Cenário Crise
-              </button>
-              <button
-                onClick={() => handleApplyPreset('optimistic')}
-                className="px-2.5 py-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all"
-              >
-                Otimista
+                Crise
               </button>
             </div>
 
@@ -432,6 +494,55 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
 
         </div>
       </header>
+
+      {/* REQUISITO 3: PAINEL DIDÁTICO / EXPONENCIAL PARA LEIGOS */}
+      {showDidacticGuide && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-4 animate-in fade-in slide-in-from-top-2">
+          <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Info size={18} className="text-amber-400" />
+                <h3 className="font-bold text-white text-sm uppercase tracking-wider">
+                  📖 Guia Prático para Entender o Simulador (Linguagem Simples)
+                </h3>
+              </div>
+              <button onClick={() => setShowDidacticGuide(false)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                <span className="font-bold text-amber-400 uppercase text-[10px]">1. Ponto de Equilíbrio (Break-Even)</span>
+                <p className="text-slate-300 leading-relaxed">
+                  É quanto a empresa precisa vender por mês para pagar todas as contas e ficar no zero a zero. Se faturar mais que isso, dá lucro. Se faturar menos, dá prejuízo.
+                </p>
+              </div>
+
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                <span className="font-bold text-rose-400 uppercase text-[10px]">2. Cash Runway (Vida do Caixa)</span>
+                <p className="text-slate-300 leading-relaxed">
+                  É a "reserva de fôlego" da empresa. Mostra exatamente em qual mês o dinheiro em caixa vai acabar se as despesas forem maiores que as receitas.
+                </p>
+              </div>
+
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                <span className="font-bold text-cyan-400 uppercase text-[10px]">3. Margem EBITDA</span>
+                <p className="text-slate-300 leading-relaxed">
+                  A porcentagem de cada R$ 100 vendidos que se transforma em lucro direto da operação. Quanto maior a porcentagem, mais eficiente e lucrativo é o negócio.
+                </p>
+              </div>
+
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                <span className="font-bold text-purple-400 uppercase text-[10px]">4. Payback de Rescisões</span>
+                <p className="text-slate-300 leading-relaxed">
+                  Quando você demite alguém, gasta com rescisão. O payback mostra em quantos meses a economia gerada no salário paga o custo gasto com a demissão.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PAINEL SPLIT-SCREEN (GRID 12 COLUNAS) */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 flex-1 w-full">
@@ -465,6 +576,9 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                     {formatPercent(v2Params.revenueChangePct)}
                   </span>
                 </div>
+                <p className="text-[11px] text-slate-400 font-normal">
+                  Simula aumento ou queda percentual no faturamento de vendas da empresa.
+                </p>
                 <input 
                   type="range"
                   min="-50"
@@ -492,6 +606,9 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                     -{v2Params.costReductionPct}%
                   </span>
                 </div>
+                <p className="text-[11px] text-slate-400 font-normal">
+                  Mede a redução nos custos diretos de prestação de serviços e credenciados.
+                </p>
                 <input 
                   type="range"
                   min="0"
@@ -514,6 +631,9 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                     -{v2Params.expenseReductionPct}%
                   </span>
                 </div>
+                <p className="text-[11px] text-slate-400 font-normal">
+                  Redução em despesas administrativas, escritório, sistemas e infraestrutura.
+                </p>
                 <input 
                   type="range"
                   min="0"
@@ -531,6 +651,9 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                   <FileText size={14} className="text-cyan-400" />
                   Perda de Contrato & Janela de Reposição
                 </h3>
+                <p className="text-[11px] text-slate-400">
+                  Simula o cancelamento de um cliente e o prazo (meses) para o comercial contratar novo cliente.
+                </p>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -564,6 +687,9 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                   <Users size={14} className="text-purple-400" />
                   Readequação de Pessoal (Peopleboard)
                 </h3>
+                <p className="text-[11px] text-slate-400">
+                  Calcula a economia mensal nos salários comparada ao custo com demissão.
+                </p>
 
                 <div className="grid grid-cols-3 gap-2">
                   <div>
@@ -628,17 +754,22 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   
                   {/* 1. PONTO DE EQUILÍBRIO (BREAK-EVEN) */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl relative group">
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider">Ponto de Equilíbrio (Break-Even)</span>
+                      <span className="font-bold uppercase tracking-wider flex items-center gap-1">
+                        Ponto de Equilíbrio (Break-Even)
+                      </span>
                       <Target size={16} className="text-amber-400" />
                     </div>
                     <div className="text-xl font-black text-white mt-1">
                       {formatCurrency(v2Calculation.metrics.breakEvenPointSimulated)}
                     </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Faturamento mínimo mensal necessário para cobrir os custos e zerar prejuízos.
+                    </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Real: {formatCurrency(v2Calculation.metrics.breakEvenPointReal)}</span>
-                      <span className="font-bold text-amber-400">Meta Faturamento/mês</span>
+                      <span className="font-bold text-amber-400">Meta/mês</span>
                     </div>
                   </div>
 
@@ -653,10 +784,13 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                         ? 'Sustentável' 
                         : `${v2Calculation.metrics.cashRunwayMonths} Meses`}
                     </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Quantos meses o dinheiro em caixa vai durar se o cenário simulado persistir.
+                    </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Data Zero:</span>
                       <span className={`font-bold ${v2Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {v2Calculation.metrics.isRunwaySustainable ? 'Sem risco no período' : `Mês ${v2Calculation.metrics.zeroCashMonth}`}
+                        {v2Calculation.metrics.isRunwaySustainable ? 'Sem risco' : `Mês ${v2Calculation.metrics.zeroCashMonth}`}
                       </span>
                     </div>
                   </div>
@@ -670,6 +804,9 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                     <div className="text-xl font-black text-white mt-1">
                       {v2Calculation.metrics.ebitdaMarginSimulated.toFixed(1)}%
                     </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Porcentagem do faturamento que se transforma em lucro operacional.
+                    </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Real: {v2Calculation.metrics.ebitdaMarginReal.toFixed(1)}%</span>
                       <span className={`font-bold ${v2Calculation.metrics.ebitdaMarginSimulated >= v2Calculation.metrics.ebitdaMarginReal ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -687,6 +824,9 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                     <div className="text-xl font-black text-white mt-1">
                       {v2Calculation.metrics.severancePaybackMonths > 0 ? `${v2Calculation.metrics.severancePaybackMonths} Meses` : '—'}
                     </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Tempo em meses para a economia de salário pagar o gasto da demissão.
+                    </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Rescisões: {formatCurrency(v2Params.layoffsSeveranceCost)}</span>
                       <span className="font-bold text-purple-400">Amortização</span>
@@ -695,18 +835,23 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
 
                 </div>
 
-                {/* GRÁFICO 1: CURVA DE CAIXA ACUMULADO & RUNWAY */}
+                {/* GRÁFICO 1: CURVA DE CAIXA ACUMULADO & RUNWAY COM SELETOR DE PERIODICIDADE */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div>
-                      <h3 className="font-bold text-white text-sm uppercase tracking-wider">Curva de Caixa & Projected Runway</h3>
-                      <p className="text-xs text-slate-400">Saldo acumulado de caixa ao longo do tempo (Real vs Simulado)</p>
+                      <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-2">
+                        <span>Curva de Caixa & Projected Runway</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700 uppercase">
+                          Visão {periodicity}
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-400">Saldo acumulado de caixa projetado no período ({periodicity})</p>
                     </div>
                   </div>
 
                   <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={cashRunwayChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <AreaChart data={groupedChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>
                           <linearGradient id="colorCashReal" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
