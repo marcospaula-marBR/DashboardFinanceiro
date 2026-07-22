@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.36";
-export const VERSION_DATE = "2026-07-20";
+export const APP_VERSION = "v.02.50.37";
+export const VERSION_DATE = "2026-07-22";
 export const VERSION_CHANGELOG = [
+  "v.02.50.37 - Fix/DRE: Corrige a computação da categoria 'Caução' e da linha 'Serviços' no DRE. Remove a fórmula legada de subtração dupla 'servicos_menos_consorcios' que zerava indevidamente os valores de Caução e de serviços em filtros gerais/múltiplos quando o valor de Consórcios a contemplar era superior. Agora a categoria 'Caução' (e demais subcategorias de serviços) é processada e exibida com fidelidade em todas as seleções de filtro.",
   "v.02.50.36 - Fix/Gamma: Adiciona tela de sucesso com botão destacado 'Abrir Apresentação no Gamma' no modal de exportação. Captura o campo de URL oficial (gammaUrl) e supera bloqueadores de popup de navegadores (Chrome/Edge/Safari), permitindo que o usuário abra a apresentação com 1 clique.",
   "v.02.50.35 - Feat/DRE: Implementa 2 ajustes na geração e exportação de relatórios: 1. Formatação inteligente de períodos (1 mês = ex: 'Jan/24', 2+ meses sequenciais = ex: 'Jan/24 até Jun/24', não sequenciais = lista de meses). Elimina o termo ambíguo 'Completo' derivando o intervalo exato dos dados quando o filtro está vazio (ex: 'Jan/24 até Dez/25'); 2. Integração estrita com API Gamma (textMode: preserve e instrução no prompt) para impedir a inclusão de análises de IA próprias não solicitadas do Gamma quando o usuário não marca a opção do BrisinhAI.",
   "v.02.50.34 - Fix/DRE: Corrige a visibilidade da opção 'Relatório por Empresa (Segregado)' no modal de exportação. Quando nenhuma empresa está explicitamente selecionada nos filtros (estado padrão = todas ativas), o sistema agora usa metadata.empresas para determinar se há múltiplas empresas e exibe a opção corretamente. Os badges e a geração segregada também passam a usar a lista efetiva de empresas.",

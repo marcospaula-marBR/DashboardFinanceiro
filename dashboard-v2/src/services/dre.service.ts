@@ -49,7 +49,7 @@ export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Total Despesas Rateadas', tipo: 'card', var: 'total_despesas' },
   { titulo: '', tipo: 'divisor' },
   { titulo: 'Consórcios a contemplar', tipo: 'linha', categorias: ['Consórcios - a contemplar'] },
-  { titulo: 'Serviços', tipo: 'linha_calc', formula: 'servicos_menos_consorcios', categorias: ['Serviços'] },
+  { titulo: 'Serviços', tipo: 'linha', categorias: ['Serviços'] },
   { titulo: 'Ativos', tipo: 'linha', categorias: ['Ativos'] },
   { titulo: 'Aplicações Financeiras', tipo: 'linha', categorias: ['Renda Fixa'] },
   { titulo: 'Total Investimentos', tipo: 'card', var: 'total_investimentos' },
@@ -739,27 +739,6 @@ export class DreService {
             });
           }
           valoresMensal[item.titulo][col] = mesTotal;
-          sourceRows[item.titulo][col] = rowsForMonth;
-        });
-      } else if (item.tipo === 'linha_calc' && item.formula === 'servicos_menos_consorcios') {
-        let totalServicosAjustado = 0;
-        if (servicosBaseTotal >= consorciosTotal) {
-          totalServicosAjustado = servicosBaseTotal - consorciosTotal;
-        }
-        valoresTotal[item.titulo] = totalServicosAjustado;
-
-        valoresMensal[item.titulo] = {};
-        sourceRows[item.titulo] = {};
-        validColumns.forEach(col => {
-          const s = getCatMonthly('Serviços', col);
-          const c = getCatMonthly('Consórcios - a contemplar', col);
-          valoresMensal[item.titulo][col] = s >= c ? s - c : 0;
-
-          let rowsForMonth: DreRow[] = [];
-          if (s >= c) {
-            if (catSourceRows['Serviços'] && catSourceRows['Serviços'][col]) rowsForMonth.push(...catSourceRows['Serviços'][col]);
-            if (catSourceRows['Consórcios - a contemplar'] && catSourceRows['Consórcios - a contemplar'][col]) rowsForMonth.push(...catSourceRows['Consórcios - a contemplar'][col]);
-          }
           sourceRows[item.titulo][col] = rowsForMonth;
         });
       }
