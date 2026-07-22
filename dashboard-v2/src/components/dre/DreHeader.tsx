@@ -126,8 +126,10 @@ export function DreHeader({
         {/* Compliant with the Purple Ban: changed from indigo to high-end amber-50 border/slate-800 accent */}
         <Link 
           href="/dre-custom"
+          target="_blank"
+          rel="noopener noreferrer"
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200/80 transition-all duration-200 shadow-sm active:scale-95"
-          title="Abrir Simulador Executivo DRE V2"
+          title="Abrir Simulador Executivo DRE V3 em Nova Aba"
         >
           <SlidersHorizontal size={16} />
           <span className="hidden sm:inline">Simular</span>

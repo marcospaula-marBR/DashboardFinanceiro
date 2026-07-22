@@ -1077,3 +1077,219 @@ export function calculateV2SimulationEngine(
     }
   };
 }
+
+/**
+ * ──────────────────────────────────────────────────────────
+ * SIMULADOR V3 — REFORMULAÇÃO ULTRA-PRÁTICA EM TYPESCRIPT
+ * 1. Projeção iniciando a partir do HOJE
+ * 2. Quadro de premissas por botões/checkboxes (R$ ou %)
+ * 3. Seleção de empresa(s)
+ * 4. Seleção múltipla de contratos por dropdown
+ * 5. Remoção do Peopleboard para desempenho máximo
+ * ──────────────────────────────────────────────────────────
+ */
+
+export interface ContractLossItem {
+  contractName: string;
+  monthlyValue: number;
+  replacementMonths: number;
+  startDate?: string;
+}
+
+export interface SimulatorV3Params {
+  selectedEmpresas: string[];            // Filtro por empresa(s)
+  
+  // Premissa 1: Receita
+  enableRevenueAdj: boolean;
+  revenueType: 'percentage' | 'absolute';
+  revenueValue: number;                  // Ex: +10 ou -10 (% ou R$)
+
+  // Premissa 2: Custos Operacionais
+  enableCostsAdj: boolean;
+  costsType: 'percentage' | 'absolute';
+  costsValue: number;                    // Ex: 5 (-5% ou -R$ 5.000)
+
+  // Premissa 3: Despesas Rateadas
+  enableExpensesAdj: boolean;
+  expensesType: 'percentage' | 'absolute';
+  expensesValue: number;                 // Ex: 5 (-5% ou -R$ 5.000)
+
+  // Premissa 4: Perda de Contratos com seleção múltipla
+  enableContractLoss: boolean;
+  selectedContracts: ContractLossItem[];
+
+  initialCash: number;                   // Saldo de caixa inicial para Runway
+}
+
+export interface SimulatorV3Metrics {
+  breakEvenPointReal: number;
+  breakEvenPointSimulated: number;
+  cashRunwayMonths: number;
+  zeroCashMonth: string | null;
+  isRunwaySustainable: boolean;
+  ebitdaMarginReal: number;
+  ebitdaMarginSimulated: number;
+}
+
+export function calculateV3SimulationEngine(
+  rawData: DreRow[],
+  metadata: DreMetadata,
+  estrutura: DreStructureItem[],
+  filters: DreFilters,
+  params: SimulatorV3Params,
+  precomputedBaseResult?: DreCalculatedResult
+): {
+  baseResult: DreCalculatedResult;
+  simResult: DreCalculatedResult;
+  metrics: SimulatorV3Metrics;
+  assumptions: ScenarioAssumption[];
+} {
+  // 1. Filtrar rawData pelas empresas selecionadas no Simulador
+  const effectiveFilters: DreFilters = {
+    ...filters,
+    empresas: params.selectedEmpresas && params.selectedEmpresas.length > 0 ? params.selectedEmpresas : filters.empresas
+  };
+
+  // 2. Gerar Premissas V3 em Memória
+  const assumptions: ScenarioAssumption[] = [];
+
+  // Receita
+  if (params.enableRevenueAdj && params.revenueValue !== 0) {
+    const isPerc = params.revenueType === 'percentage';
+    assumptions.push({
+      id: 'v3_rev',
+      type: params.revenueValue > 0 ? 'revenue_increase' : 'revenue_reduction',
+      targetType: 'account_group',
+      targetIds: ['receita'],
+      amountType: isPerc ? 'percentage' : 'monthly_value',
+      value: Math.abs(params.revenueValue),
+      startDate: '2025-01',
+      endDate: '2026-12',
+      recurrence: 'monthly',
+      enabled: true,
+      notes: `Variação Receita: ${params.revenueValue > 0 ? '+' : ''}${isPerc ? params.revenueValue + '%' : 'R$ ' + params.revenueValue}`
+    });
+  }
+
+  // Custos Operacionais
+  if (params.enableCostsAdj && params.costsValue !== 0) {
+    const isPerc = params.costsType === 'percentage';
+    assumptions.push({
+      id: 'v3_costs',
+      type: params.costsValue > 0 ? 'costs_cut' : 'expense_increase',
+      targetType: 'account_group',
+      targetIds: ['custos_operacionais'],
+      amountType: isPerc ? 'percentage' : 'monthly_value',
+      value: Math.abs(params.costsValue),
+      startDate: '2025-01',
+      endDate: '2026-12',
+      recurrence: 'monthly',
+      enabled: true,
+      notes: `Corte de Custos: ${isPerc ? '-' + params.costsValue + '%' : '-R$ ' + params.costsValue}`
+    });
+  }
+
+  // Despesas Rateadas
+  if (params.enableExpensesAdj && params.expensesValue !== 0) {
+    const isPerc = params.expensesType === 'percentage';
+    assumptions.push({
+      id: 'v3_exp',
+      type: params.expensesValue > 0 ? 'expense_reduction' : 'expense_increase',
+      targetType: 'account_group',
+      targetIds: ['despesas_rateadas'],
+      amountType: isPerc ? 'percentage' : 'monthly_value',
+      value: Math.abs(params.expensesValue),
+      startDate: '2025-01',
+      endDate: '2026-12',
+      recurrence: 'monthly',
+      enabled: true,
+      notes: `Corte de Despesas: ${isPerc ? '-' + params.expensesValue + '%' : '-R$ ' + params.expensesValue}`
+    });
+  }
+
+  // Perda Múltipla de Contratos
+  if (params.enableContractLoss && params.selectedContracts && params.selectedContracts.length > 0) {
+    params.selectedContracts.forEach((contract, idx) => {
+      if (contract.monthlyValue > 0) {
+        assumptions.push({
+          id: `v3_contract_${idx}`,
+          type: 'contract_loss',
+          targetType: 'account_group',
+          targetIds: ['receita'],
+          amountType: 'monthly_value',
+          value: contract.monthlyValue,
+          monthlyLoss: contract.monthlyValue,
+          contractName: contract.contractName,
+          startDate: contract.startDate || '2025-08',
+          endDate: '2026-12',
+          recurrence: 'linear_ramp',
+          replacementMonths: contract.replacementMonths || 0,
+          enabled: true,
+          notes: `Perda: ${contract.contractName} (R$ ${contract.monthlyValue}/mês - Reposição: ${contract.replacementMonths || 0}m)`
+        });
+      }
+    });
+  }
+
+  // 3. Executar Motor Base e Simulado em Memória
+  const baseResult = precomputedBaseResult || DreSimulatorEngine.runSimulation(rawData, metadata, estrutura, effectiveFilters, {
+    id: 'base_v3',
+    name: 'Cenário Real',
+    basePeriod: [],
+    projectionStartDate: '2025-01',
+    projectionEndDate: '2026-12',
+    mode: 'historical_what_if',
+    includeAllocatedExpenses: !effectiveFilters.excludeSharedExpenses,
+    assumptions: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  const simResult = DreSimulatorEngine.runSimulation(rawData, metadata, estrutura, effectiveFilters, {
+    id: 'sim_v3',
+    name: 'Cenário Simulado V3',
+    basePeriod: [],
+    projectionStartDate: '2025-01',
+    projectionEndDate: '2026-12',
+    mode: 'historical_what_if',
+    includeAllocatedExpenses: !effectiveFilters.excludeSharedExpenses,
+    assumptions,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  // 4. Calcular Indicadores em Memória
+  const fixedCostsReal = (baseResult.kpis.totalDespesas || 0) + (baseResult.kpis.totalCustos * 0.4);
+  const varRatioReal = baseResult.kpis.receitaOperacional > 0 ? (baseResult.kpis.totalCustos * 0.6) / baseResult.kpis.receitaOperacional : 0.4;
+  const breakEvenPointReal = calculateBreakEvenPoint(fixedCostsReal, varRatioReal);
+
+  const fixedCostsSim = (simResult.kpis.totalDespesas || 0) + (simResult.kpis.totalCustos * 0.4);
+  const varRatioSim = simResult.kpis.receitaOperacional > 0 ? (simResult.kpis.totalCustos * 0.6) / simResult.kpis.receitaOperacional : 0.4;
+  const breakEvenPointSimulated = calculateBreakEvenPoint(fixedCostsSim, varRatioSim);
+
+  // Runway
+  const monthlyFcl: Record<string, number> = {};
+  simResult.validColumns.forEach(col => {
+    monthlyFcl[col] = simResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || simResult.mensal['Lucro antes do FCL']?.[col] || 0;
+  });
+  const runway = calculateCashRunway(params.initialCash || 500000, monthlyFcl, simResult.validColumns);
+
+  // EBITDA Margins
+  const ebitdaMarginReal = calculateEbitdaMargin(baseResult.kpis.resultado, baseResult.kpis.receitaOperacional);
+  const ebitdaMarginSimulated = calculateEbitdaMargin(simResult.kpis.resultado, simResult.kpis.receitaOperacional);
+
+  return {
+    baseResult,
+    simResult,
+    assumptions,
+    metrics: {
+      breakEvenPointReal,
+      breakEvenPointSimulated,
+      cashRunwayMonths: runway.runwayMonths,
+      zeroCashMonth: runway.zeroCashMonth,
+      isRunwaySustainable: runway.isSustainable,
+      ebitdaMarginReal,
+      ebitdaMarginSimulated
+    }
+  };
+}

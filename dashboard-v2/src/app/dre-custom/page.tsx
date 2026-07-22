@@ -10,13 +10,14 @@ import {
   ChevronLeft, ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Percent, 
   Sparkles, RefreshCw, Layers, CheckSquare, Square, X, ExternalLink, Loader2,
   FileText, Zap, Target, DollarSign, Calendar, AlertTriangle, ShieldCheck,
-  Users, Activity, Clock, Award, Sliders, HelpCircle, Info, BookOpen
+  Users, Activity, Clock, Award, Sliders, HelpCircle, Info, BookOpen, Check, Building2
 } from 'lucide-react';
 import { DreRow, DreFilters, DreMetadata } from '@/types/dre';
 import { 
   DreSimulatorEngine, 
-  SimulatorV2Params, 
-  calculateV2SimulationEngine 
+  SimulatorV3Params, 
+  ContractLossItem,
+  calculateV3SimulationEngine 
 } from '@/services/dre-simulator.engine';
 import { DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreLancamentosService } from '@/services/dre-lancamentos.service';
@@ -53,32 +54,41 @@ export default function DreCustomPage() {
   const [periodicity, setPeriodicity] = useState<PeriodicityOption>('mensal');
   const [showDidacticGuide, setShowDidacticGuide] = useState<boolean>(false);
 
-  // Filtros Globais
-  const [filters, setFilters] = useState<DreFilters>({
-    empresas: [],
-    periodos: [],
-    departamentos: [],
-    contasDre: [],
-    projetos: [],
-    categorias: [],
-    excludeSharedExpenses: false
-  });
+  // REQUISITO 3: SELEÇÃO DE EMPRESA(S)
+  const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([]);
 
   // ──────────────────────────────────────────────────────────
-  // PARÂMETROS DO SIMULADOR V2 (SLIDERS & CONTROLES PURAS)
+  // PARÂMETROS DO SIMULADOR V3 (CHECKBOXES & BOTÕES)
   // ──────────────────────────────────────────────────────────
-  const [v2Params, setV2Params] = useState<SimulatorV2Params>({
-    revenueChangePct: 0,           // -50% a +50%
-    costReductionPct: 0,           // 0% a 50%
-    expenseReductionPct: 0,        // 0% a 50%
-    contractLossValue: 0,          // Perda mensal em R$
-    contractReplacementMonths: 6,  // Janela de reposição em meses
-    contractStartMonth: '2025-08',
-    layoffsCount: 0,               // Pessoas (Peopleboard)
-    layoffsMonthlySavings: 0,      // R$/mês economizado
-    layoffsSeveranceCost: 0,       // R$ custo de rescisão
-    initialCash: 500000            // Caixa Inicial R$ 500.000
+  const [v3Params, setV3Params] = useState<SimulatorV3Params>({
+    selectedEmpresas: [],
+    
+    // Premissa 1: Receita
+    enableRevenueAdj: false,
+    revenueType: 'percentage',
+    revenueValue: 10, // +10% ou R$ 10.000
+
+    // Premissa 2: Custos Operacionais
+    enableCostsAdj: false,
+    costsType: 'percentage',
+    costsValue: 5, // -5% ou -R$ 5.000
+
+    // Premissa 3: Despesas Rateadas
+    enableExpensesAdj: false,
+    expensesType: 'percentage',
+    expensesValue: 5, // -5% ou -R$ 5.000
+
+    // Premissa 4: Perda de Contratos com seleção múltipla
+    enableContractLoss: false,
+    selectedContracts: [],
+
+    initialCash: 500000
   });
+
+  // Estado de Contrato em Edição no Form
+  const [newContractName, setNewContractName] = useState<string>('');
+  const [newContractValue, setNewContractValue] = useState<number>(30000);
+  const [newContractReplacement, setNewContractReplacement] = useState<number>(6);
 
   // Estado de BrisinhAI
   const [isAiAnalyzing, setIsAiAnalyzing] = useState<boolean>(false);
@@ -102,7 +112,7 @@ export default function DreCustomPage() {
           setMetadata(meta);
         }
       } catch (err) {
-        console.error('[Simulador DRE V2] Erro ao carregar dados:', err);
+        console.error('[Simulador DRE V3] Erro ao carregar dados:', err);
       } finally {
         setIsLoading(false);
       }
@@ -110,98 +120,110 @@ export default function DreCustomPage() {
     loadData();
   }, []);
 
+  // REQUISITO 4: EXTRAÇÃO DINÂMICA DE CONTRATOS/PROJETOS DAS EMPRESAS SELECIONADAS
+  const availableContractsList = useMemo(() => {
+    if (!rawData || rawData.length === 0) return [];
+    const contractsSet = new Set<string>();
+
+    rawData.forEach(r => {
+      const empMatch = selectedEmpresas.length === 0 || selectedEmpresas.includes(r.Empresa);
+      if (empMatch && r.Projeto && r.Projeto !== '-' && r.Projeto !== 'Geral' && r.Projeto !== 'Sem Projeto') {
+        contractsSet.add(r.Projeto);
+      }
+    });
+
+    return Array.from(contractsSet).sort();
+  }, [rawData, selectedEmpresas]);
+
+  // REQUISITO 3: HANDLER SELEÇÃO DE EMPRESAS
+  const handleToggleEmpresa = (emp: string) => {
+    setSelectedEmpresas(prev => {
+      const updated = prev.includes(emp) ? prev.filter(e => e !== emp) : [...prev, emp];
+      setV3Params(p => ({ ...p, selectedEmpresas: updated }));
+      return updated;
+    });
+  };
+
+  // REQUISITO 4: HANDLER PARA ADICIONAR CONTRATO À LISTA DE PERDAS
+  const handleAddContractToLoss = () => {
+    if (!newContractName) return;
+    const item: ContractLossItem = {
+      contractName: newContractName,
+      monthlyValue: newContractValue,
+      replacementMonths: newContractReplacement,
+      startDate: '2025-08'
+    };
+    setV3Params(p => ({
+      ...p,
+      selectedContracts: [...p.selectedContracts.filter(c => c.contractName !== newContractName), item]
+    }));
+    setNewContractName('');
+  };
+
+  const handleRemoveContractFromLoss = (name: string) => {
+    setV3Params(p => ({
+      ...p,
+      selectedContracts: p.selectedContracts.filter(c => c.contractName !== name)
+    }));
+  };
+
   // ──────────────────────────────────────────────────────────
-  // DESEMPENHO E CÁLCULO ULTRA-RÁPIDO (USEDEFERREDVALUE)
+  // DESEMPENHO E CÁLCULO ULTRA-RÁPIDO (SIMULADOR V3)
   // ──────────────────────────────────────────────────────────
   const baseResult = useMemo(() => {
     if (rawData.length === 0) return null;
-    return DreSimulatorEngine.runSimulation(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, {
-      id: 'base_v2',
+    return DreSimulatorEngine.runSimulation(rawData, metadata, DEFAULT_DRE_ESTRUTURA, {
+      empresas: selectedEmpresas,
+      periodos: [],
+      departamentos: [],
+      contasDre: [],
+      projetos: [],
+      categorias: [],
+      excludeSharedExpenses: false
+    }, {
+      id: 'base_v3',
       name: 'Cenário Real',
       basePeriod: [],
       projectionStartDate: '2025-01',
       projectionEndDate: '2026-12',
       mode: 'historical_what_if',
-      includeAllocatedExpenses: !filters.excludeSharedExpenses,
+      includeAllocatedExpenses: true,
       assumptions: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
-  }, [rawData, metadata, filters]);
+  }, [rawData, metadata, selectedEmpresas]);
 
-  const deferredParams = React.useDeferredValue(v2Params);
+  const deferredParams = React.useDeferredValue(v3Params);
 
-  const v2Calculation = useMemo(() => {
+  const v3Calculation = useMemo(() => {
     if (rawData.length === 0 || !baseResult) return null;
-    return calculateV2SimulationEngine(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, deferredParams, baseResult);
-  }, [rawData, metadata, filters, deferredParams, baseResult]);
+    return calculateV3SimulationEngine(rawData, metadata, DEFAULT_DRE_ESTRUTURA, {
+      empresas: selectedEmpresas,
+      periodos: [],
+      departamentos: [],
+      contasDre: [],
+      projetos: [],
+      categorias: [],
+      excludeSharedExpenses: false
+    }, deferredParams, baseResult);
+  }, [rawData, metadata, selectedEmpresas, deferredParams, baseResult]);
 
-  // Presets Rápidos de Cenário
-  const handleApplyPreset = (preset: 'conservative' | 'optimistic' | 'crisis' | 'reset') => {
-    if (preset === 'reset') {
-      setV2Params({
-        revenueChangePct: 0,
-        costReductionPct: 0,
-        expenseReductionPct: 0,
-        contractLossValue: 0,
-        contractReplacementMonths: 6,
-        contractStartMonth: '2025-08',
-        layoffsCount: 0,
-        layoffsMonthlySavings: 0,
-        layoffsSeveranceCost: 0,
-        initialCash: 500000
-      });
-    } else if (preset === 'conservative') {
-      setV2Params({
-        revenueChangePct: -5,
-        costReductionPct: 5,
-        expenseReductionPct: 5,
-        contractLossValue: 25000,
-        contractReplacementMonths: 6,
-        contractStartMonth: '2025-08',
-        layoffsCount: 2,
-        layoffsMonthlySavings: 12000,
-        layoffsSeveranceCost: 36000,
-        initialCash: 500000
-      });
-    } else if (preset === 'crisis') {
-      setV2Params({
-        revenueChangePct: -20,
-        costReductionPct: 15,
-        expenseReductionPct: 15,
-        contractLossValue: 60000,
-        contractReplacementMonths: 9,
-        contractStartMonth: '2025-08',
-        layoffsCount: 5,
-        layoffsMonthlySavings: 35000,
-        layoffsSeveranceCost: 105000,
-        initialCash: 500000
-      });
-    } else if (preset === 'optimistic') {
-      setV2Params({
-        revenueChangePct: 15,
-        costReductionPct: 5,
-        expenseReductionPct: 5,
-        contractLossValue: 0,
-        contractReplacementMonths: 0,
-        contractStartMonth: '2025-08',
-        layoffsCount: 0,
-        layoffsMonthlySavings: 0,
-        layoffsSeveranceCost: 0,
-        initialCash: 500000
-      });
-    }
-  };
-
-  // Dados para Gráfico 1: Curva de Caixa Acumulado & Runway
+  // REQUISITO 1: PROJEÇÕES COMEÇAM A PARTIR DO HOJE (FUTURO)
   const cashRunwayChartData = useMemo(() => {
-    if (!v2Calculation) return [];
-    let runningCashBase = v2Params.initialCash;
-    let runningCashSim = v2Params.initialCash;
+    if (!v3Calculation) return [];
+    let runningCashBase = v3Params.initialCash;
+    let runningCashSim = v3Params.initialCash;
 
-    return v2Calculation.simResult.validColumns.map(col => {
-      const baseFcl = v2Calculation.baseResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v2Calculation.baseResult.mensal['Lucro antes do FCL']?.[col] || 0;
-      const simFcl = v2Calculation.simResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v2Calculation.simResult.mensal['Lucro antes do FCL']?.[col] || 0;
+    // Filtra colunas a partir do mês atual ("2025-08" ou "Ago/25" em diante)
+    const currentMonthIndex = v3Calculation.simResult.validColumns.findIndex(c => c.includes('Ago/25') || c.includes('Set/25') || c.includes('2025-08'));
+    const futureColumns = currentMonthIndex >= 0 
+      ? v3Calculation.simResult.validColumns.slice(currentMonthIndex) 
+      : v3Calculation.simResult.validColumns.slice(-12);
+
+    return futureColumns.map(col => {
+      const baseFcl = v3Calculation.baseResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v3Calculation.baseResult.mensal['Lucro antes do FCL']?.[col] || 0;
+      const simFcl = v3Calculation.simResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v3Calculation.simResult.mensal['Lucro antes do FCL']?.[col] || 0;
 
       runningCashBase += baseFcl;
       runningCashSim += simFcl;
@@ -212,9 +234,9 @@ export default function DreCustomPage() {
         'Caixa Acumulado Simulado': Math.round(runningCashSim),
       };
     });
-  }, [v2Calculation, v2Params.initialCash]);
+  }, [v3Calculation, v3Params.initialCash]);
 
-  // Agrupamento por Periodicidade (Mensal, Bimestral, Trimestral, Semestral, Anual)
+  // Agrupamento por Periodicidade
   const groupedChartData = useMemo(() => {
     if (!cashRunwayChartData || cashRunwayChartData.length === 0) return [];
     if (periodicity === 'mensal') return cashRunwayChartData;
@@ -248,11 +270,11 @@ export default function DreCustomPage() {
     return Object.values(grouped);
   }, [cashRunwayChartData, periodicity]);
 
-  // Dados para Gráfico 2: Demonstrativo Sintético de Margem & EBITDA
+  // Dados para Gráfico 2: Demonstrativo Sintético
   const syntheticChartData = useMemo(() => {
-    if (!v2Calculation) return [];
-    const baseK = v2Calculation.baseResult.kpis;
-    const simK = v2Calculation.simResult.kpis;
+    if (!v3Calculation) return [];
+    const baseK = v3Calculation.baseResult.kpis;
+    const simK = v3Calculation.simResult.kpis;
 
     return [
       { name: 'Receita', Real: Math.round(baseK.receitaOperacional), Simulado: Math.round(simK.receitaOperacional) },
@@ -260,29 +282,29 @@ export default function DreCustomPage() {
       { name: 'Despesas', Real: Math.round(baseK.totalDespesas), Simulado: Math.round(simK.totalDespesas) },
       { name: 'EBITDA (Lucro)', Real: Math.round(baseK.resultado), Simulado: Math.round(simK.resultado) },
     ];
-  }, [v2Calculation]);
+  }, [v3Calculation]);
 
   // ──────────────────────────────────────────────────────────
   // BRISINHAI ANALYSIS
   // ──────────────────────────────────────────────────────────
   const handleRunAiAnalysis = async () => {
-    if (!v2Calculation) return;
+    if (!v3Calculation) return;
     setIsAiAnalyzing(true);
     setAiAnalysisText(null);
 
     try {
-      const m = v2Calculation.metrics;
-      const prompt = `Analise a seguinte simulação V2 do Simulador DRE em linguagem executiva e didática para diretoria:
-- Variação de Receita: ${v2Params.revenueChangePct}%
-- Corte de Custos: ${v2Params.costReductionPct}% | Despesas: ${v2Params.expenseReductionPct}%
-- Perda de Contrato: R$ ${v2Params.contractLossValue}/mês (Reposição: ${v2Params.contractReplacementMonths}m)
-- Demissões Peopleboard: ${v2Params.layoffsCount} pessoas | Economia: R$ ${v2Params.layoffsMonthlySavings}/mês | Rescisão: R$ ${v2Params.layoffsSeveranceCost}
+      const m = v3Calculation.metrics;
+      const prompt = `Analise a seguinte simulação DRE V3 em linguagem executiva simples para diretoria:
+- Empresas Selecionadas: ${selectedEmpresas.length > 0 ? selectedEmpresas.join(', ') : 'Todas'}
+- Variação de Receita Ativa: ${v3Params.enableRevenueAdj ? `${v3Params.revenueValue}${v3Params.revenueType === 'percentage' ? '%' : ' R$'}` : 'Não'}
+- Corte de Custos Ativo: ${v3Params.enableCostsAdj ? `${v3Params.costsValue}${v3Params.costsType === 'percentage' ? '%' : ' R$'}` : 'Não'}
+- Corte de Despesas Ativo: ${v3Params.enableExpensesAdj ? `${v3Params.expensesValue}${v3Params.expensesType === 'percentage' ? '%' : ' R$'}` : 'Não'}
+- Perda de Contratos: ${v3Params.enableContractLoss ? v3Params.selectedContracts.map(c => `${c.contractName} (R$ ${c.monthlyValue}/mês)`).join('; ') : 'Nenhum'}
 - Ponto de Equilíbrio Real: ${formatCurrency(m.breakEvenPointReal)} vs Simulado: ${formatCurrency(m.breakEvenPointSimulated)}
 - Margem EBITDA Real: ${m.ebitdaMarginReal.toFixed(1)}% vs Simulada: ${m.ebitdaMarginSimulated.toFixed(1)}%
 - Cash Runway: ${m.isRunwaySustainable ? 'Sustentável (Caixa Positivo)' : `Zera no mês ${m.zeroCashMonth} (${m.cashRunwayMonths} meses)`}
-- Payback de Rescisões: ${m.severancePaybackMonths} meses
 
-Forneça um parecer executivo claro e didático em 3 tópicos: 1. Diagnóstico da Saúde Financeira, 2. Risco do Caixa, 3. Recomendações Práticas.`;
+Forneça um parecer executivo claro e didático em 3 tópicos: 1. Diagnóstico da Saúde Financeira, 2. Risco do Caixa Futuro, 3. Recomendações Práticas.`;
 
       const res = await fetch('/api/ai/analyze', {
         method: 'POST',
@@ -294,7 +316,7 @@ Forneça um parecer executivo claro e didático em 3 tópicos: 1. Diagnóstico d
       const data = await res.json();
       setAiAnalysisText(data.analysis || data.response || 'Análise concluída com sucesso.');
     } catch (err: any) {
-      setAiAnalysisText(`Parecer BrisinhAI: O cenário simulado indica necessidade de atenção ao Ponto de Equilíbrio de ${formatCurrency(v2Calculation?.metrics.breakEvenPointSimulated)}/mês. Recomenda-se monitorar a janela de reposição de contratos para preservar a liquidez.`);
+      setAiAnalysisText(`Parecer BrisinhAI: O cenário simulado exige atenção ao Ponto de Equilíbrio de ${formatCurrency(v3Calculation?.metrics.breakEvenPointSimulated)}/mês.`);
     } finally {
       setIsAiAnalyzing(false);
     }
@@ -304,45 +326,37 @@ Forneça um parecer executivo claro e didático em 3 tópicos: 1. Diagnóstico d
   // GAMMA EXPORT
   // ──────────────────────────────────────────────────────────
   const handleExportGamma = async () => {
-    if (!v2Calculation) return;
+    if (!v3Calculation) return;
     setIsGammaGenerating(true);
     setGammaUrl(null);
 
     try {
-      const m = v2Calculation.metrics;
-      const bK = v2Calculation.baseResult.kpis;
-      const sK = v2Calculation.simResult.kpis;
+      const m = v3Calculation.metrics;
+      const bK = v3Calculation.baseResult.kpis;
+      const sK = v3Calculation.simResult.kpis;
 
-      const reportMarkdown = `# Apresentação Executiva — Simulador DRE V2
+      const reportMarkdown = `# Apresentação Executiva — Simulador DRE V3
 
 ## 1. Indicadores Executivos em Tempo Real
+- **Empresa(s)**: ${selectedEmpresas.length > 0 ? selectedEmpresas.join(', ') : 'Todas as Empresas'}
 - **Ponto de Equilíbrio (Break-Even)**: Real ${formatCurrency(m.breakEvenPointReal)} | Simulado ${formatCurrency(m.breakEvenPointSimulated)}
 - **Margem EBITDA**: Real ${m.ebitdaMarginReal.toFixed(1)}% | Simulada ${m.ebitdaMarginSimulated.toFixed(1)}%
 - **Cash Runway**: ${m.isRunwaySustainable ? 'Caixa Sustentável' : `Caixa Zera no Mês ${m.zeroCashMonth}`}
-- **Payback de Rescisões (Peopleboard)**: ${m.severancePaybackMonths} meses para amortizar R$ ${v2Params.layoffsSeveranceCost} em rescisões
 
-## 2. Parâmetros de Simulação
-- Periodicidade de Visualização: ${periodicity.toUpperCase()}
-- Variação de Receita: ${v2Params.revenueChangePct}%
-- Corte de Custos Operacionais: ${v2Params.costReductionPct}%
-- Corte de Despesas Rateadas: ${v2Params.expenseReductionPct}%
-- Perda de Contrato: R$ ${v2Params.contractLossValue}/mês (Reposição: ${v2Params.contractReplacementMonths} meses)
-- Readequação Headcount: ${v2Params.layoffsCount} pessoas (Economia: R$ ${v2Params.layoffsMonthlySavings}/mês)
-
-## 3. Demostrativo Comparativo DRE
+## 2. Demostrativo Comparativo DRE
 - **Receita Operacional**: Real ${formatCurrency(bK.receitaOperacional)} | Simulado ${formatCurrency(sK.receitaOperacional)}
 - **Custos Operacionais**: Real ${formatCurrency(bK.totalCustos)} | Simulado ${formatCurrency(sK.totalCustos)}
 - **Despesas Rateadas**: Real ${formatCurrency(bK.totalDespesas)} | Simulado ${formatCurrency(sK.totalDespesas)}
 - **Resultado Final (Lucro)**: Real ${formatCurrency(bK.resultado)} | Simulado ${formatCurrency(sK.resultado)}
 
-${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artificial — BrisinhAI\n${aiAnalysisText}` : ''}
+${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artificial — BrisinhAI\n${aiAnalysisText}` : ''}
 `;
 
       const resGenerate = await fetch('/api/gamma/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Gere uma apresentação executiva sobre esta simulação DRE V2: ${reportMarkdown}`,
+          prompt: `Gere uma apresentação executiva sobre esta simulação DRE V3: ${reportMarkdown}`,
           textMode: 'preserve'
         })
       });
@@ -382,7 +396,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
         <Loader2 className="animate-spin text-emerald-500 mb-4" size={44} />
-        <h2 className="text-xl font-bold">Carregando Simulador V2...</h2>
+        <h2 className="text-xl font-bold">Carregando Simulador V3...</h2>
         <p className="text-slate-400 text-sm mt-1">Conectando ao repositório unificado de DRE...</p>
       </div>
     );
@@ -396,7 +410,6 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           
           <div className="flex items-center gap-3">
-            {/* REQUISITO 1: NAVEGAÇÃO VOLTAR AO DRE */}
             <Link 
               href="/dre"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-white border border-slate-700 rounded-lg transition-all"
@@ -409,19 +422,19 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
 
             <div>
               <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
-                <span>⚡ Simulador Executivo DRE V2</span>
+                <span>⚡ Simulador Executivo DRE V3</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
-                  Pure Engine
+                  Cenários Futuros
                 </span>
               </h1>
-              <p className="text-xs text-slate-400">Break-Even, Cash Runway, EBITDA e Payback Peopleboard em Tempo Real</p>
+              <p className="text-xs text-slate-400">Projeção a partir do Hoje com Seleção por Empresa e Contratos</p>
             </div>
           </div>
 
           {/* PRESETS, PERIODICIDADE & GUIA DIDÁTICO */}
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
             
-            {/* REQUISITO 2: SELETOR DE PERIODICIDADE */}
+            {/* SELETOR DE PERIODICIDADE */}
             <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1">
               {(['mensal', 'bimestral', 'trimestral', 'semestral', 'anual'] as PeriodicityOption[]).map(p => (
                 <button
@@ -438,7 +451,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
               ))}
             </div>
 
-            {/* REQUISITO 3: BOTÃO DE EXPANSÃO DO GUIA DIDÁTICO */}
+            {/* GUIA DIDÁTICO */}
             <button
               onClick={() => setShowDidacticGuide(!showDidacticGuide)}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
@@ -451,27 +464,6 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
               <BookOpen size={15} />
               <span className="hidden md:inline">Guia Didático</span>
             </button>
-
-            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1">
-              <button
-                onClick={() => handleApplyPreset('reset')}
-                className="px-2.5 py-1 text-[11px] font-bold text-slate-400 hover:text-white rounded-lg transition-all"
-              >
-                Reset
-              </button>
-              <button
-                onClick={() => handleApplyPreset('conservative')}
-                className="px-2.5 py-1 text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 transition-all"
-              >
-                Conservador
-              </button>
-              <button
-                onClick={() => handleApplyPreset('crisis')}
-                className="px-2.5 py-1 text-[11px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-all"
-              >
-                Crise
-              </button>
-            </div>
 
             <button
               onClick={handleRunAiAnalysis}
@@ -495,7 +487,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
         </div>
       </header>
 
-      {/* REQUISITO 3: PAINEL DIDÁTICO / EXPONENCIAL PARA LEIGOS */}
+      {/* PAINEL DIDÁTICO */}
       {showDidacticGuide && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-4 animate-in fade-in slide-in-from-top-2">
           <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
@@ -511,32 +503,25 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-400 uppercase text-[10px]">1. Ponto de Equilíbrio (Break-Even)</span>
                 <p className="text-slate-300 leading-relaxed">
-                  É quanto a empresa precisa vender por mês para pagar todas as contas e ficar no zero a zero. Se faturar mais que isso, dá lucro. Se faturar menos, dá prejuízo.
+                  É quanto a empresa precisa vender por mês para pagar todas as contas e ficar no zero a zero.
                 </p>
               </div>
 
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="font-bold text-rose-400 uppercase text-[10px]">2. Cash Runway (Vida do Caixa)</span>
                 <p className="text-slate-300 leading-relaxed">
-                  É a "reserva de fôlego" da empresa. Mostra exatamente em qual mês o dinheiro em caixa vai acabar se as despesas forem maiores que as receitas.
+                  Mostra exatamente em qual mês o dinheiro em caixa vai acabar se as despesas forem maiores que as receitas.
                 </p>
               </div>
 
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="font-bold text-cyan-400 uppercase text-[10px]">3. Margem EBITDA</span>
                 <p className="text-slate-300 leading-relaxed">
-                  A porcentagem de cada R$ 100 vendidos que se transforma em lucro direto da operação. Quanto maior a porcentagem, mais eficiente e lucrativo é o negócio.
-                </p>
-              </div>
-
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
-                <span className="font-bold text-purple-400 uppercase text-[10px]">4. Payback de Rescisões</span>
-                <p className="text-slate-300 leading-relaxed">
-                  Quando você demite alguém, gasta com rescisão. O payback mostra em quantos meses a economia gerada no salário paga o custo gasto com a demissão.
+                  A porcentagem de cada R$ 100 vendidos que se transforma em lucro direto da operação.
                 </p>
               </div>
             </div>
@@ -549,182 +534,276 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {/* ──────────────────────────────────────────────────────────
-              PAINEL DA ESQUERDA: CONTROLES & SLIDERS TÁTEIS (5 COLUNAS)
+              PAINEL DA ESQUERDA: CONTROLES POR QUADRO DE CHECKBOXES (5 COLUNAS)
              ────────────────────────────────────────────────────────── */}
           <div className="lg:col-span-5 space-y-5">
             
+            {/* REQUISITO 3: SELEÇÃO DE EMPRESA(S) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                <Building2 size={18} className="text-amber-400" />
+                <h2 className="font-bold text-white text-xs uppercase tracking-wider">Empresa(s) Filtrada(s) para Simulação</h2>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => { setSelectedEmpresas([]); setV3Params(p => ({ ...p, selectedEmpresas: [] })); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    selectedEmpresas.length === 0
+                      ? 'bg-amber-500 text-slate-950 shadow-md'
+                      : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Todas as Empresas
+                </button>
+
+                {metadata.empresas.map(emp => {
+                  const isSelected = selectedEmpresas.includes(emp);
+                  return (
+                    <button
+                      key={emp}
+                      onClick={() => handleToggleEmpresa(emp)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        isSelected
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {isSelected && <Check size={14} />}
+                      <span>{emp}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* REQUISITO 2: QUADRO DE PREMISSAS COM CHECKBOXES & TOGGLES (SEM BARRAS SLIDER) */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
               
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
                   <Sliders className="text-emerald-400" size={18} />
-                  <h2 className="font-bold text-white text-sm uppercase tracking-wider">Painel de Simulação V2</h2>
+                  <h2 className="font-bold text-white text-sm uppercase tracking-wider">Quadro de Premissas</h2>
                 </div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                  Sliders Táteis
+                <span className="text-[10px] font-bold text-emerald-400 uppercase bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  Modo Checkboxes
                 </span>
               </div>
 
-              {/* SLIDER 1: VARIAÇÃO DE RECEITAS */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
-                    <Wallet size={14} className="text-emerald-400" />
-                    Variação de Receitas (%)
-                  </span>
-                  <span className={`font-black px-2 py-0.5 rounded text-xs ${v2Params.revenueChangePct >= 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-                    {formatPercent(v2Params.revenueChangePct)}
-                  </span>
+              {/* PREMISSA 1: VARIAÇÃO DE RECEITA */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
+                    <input 
+                      type="checkbox"
+                      checked={v3Params.enableRevenueAdj}
+                      onChange={e => setV3Params(p => ({ ...p, enableRevenueAdj: e.target.checked }))}
+                      className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 w-4 h-4"
+                    />
+                    <Wallet size={16} className="text-emerald-400" />
+                    <span>Simular Variação de Receitas</span>
+                  </label>
                 </div>
-                <p className="text-[11px] text-slate-400 font-normal">
-                  Simula aumento ou queda percentual no faturamento de vendas da empresa.
-                </p>
-                <input 
-                  type="range"
-                  min="-50"
-                  max="50"
-                  step="1"
-                  value={v2Params.revenueChangePct}
-                  onChange={e => setV2Params(p => ({ ...p, revenueChangePct: Number(e.target.value) }))}
-                  className="w-full accent-emerald-500 bg-slate-950 h-2 rounded-lg cursor-pointer"
-                />
-                <div className="flex justify-between text-[10px] text-slate-500 font-semibold">
-                  <span>-50%</span>
-                  <span>0% (Base)</span>
-                  <span>+50%</span>
-                </div>
+
+                {v3Params.enableRevenueAdj && (
+                  <div className="grid grid-cols-2 gap-3 pt-2 animate-in fade-in">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo de Ajuste</label>
+                      <select
+                        value={v3Params.revenueType}
+                        onChange={e => setV3Params(p => ({ ...p, revenueType: e.target.value as any }))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-semibold"
+                      >
+                        <option value="percentage">Percentual (%)</option>
+                        <option value="absolute">Valor Absoluto (R$)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Valor Variação</label>
+                      <input 
+                        type="number"
+                        value={v3Params.revenueValue}
+                        onChange={e => setV3Params(p => ({ ...p, revenueValue: Number(e.target.value) }))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+                        placeholder="Ex: 10 para +10% ou -10"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* SLIDER 2: CORTE DE CUSTOS OPERACIONAIS */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
-                    <TrendingUp size={14} className="text-rose-400" />
-                    Corte de Custos Operacionais (%)
-                  </span>
-                  <span className="font-black px-2 py-0.5 rounded text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                    -{v2Params.costReductionPct}%
-                  </span>
+              {/* PREMISSA 2: CORTE DE CUSTOS OPERACIONAIS */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
+                    <input 
+                      type="checkbox"
+                      checked={v3Params.enableCostsAdj}
+                      onChange={e => setV3Params(p => ({ ...p, enableCostsAdj: e.target.checked }))}
+                      className="rounded border-slate-700 bg-slate-900 text-rose-500 focus:ring-rose-500 w-4 h-4"
+                    />
+                    <TrendingUp size={16} className="text-rose-400" />
+                    <span>Simular Corte de Custos Operacionais</span>
+                  </label>
                 </div>
-                <p className="text-[11px] text-slate-400 font-normal">
-                  Mede a redução nos custos diretos de prestação de serviços e credenciados.
-                </p>
-                <input 
-                  type="range"
-                  min="0"
-                  max="50"
-                  step="1"
-                  value={v2Params.costReductionPct}
-                  onChange={e => setV2Params(p => ({ ...p, costReductionPct: Number(e.target.value) }))}
-                  className="w-full accent-rose-500 bg-slate-950 h-2 rounded-lg cursor-pointer"
-                />
+
+                {v3Params.enableCostsAdj && (
+                  <div className="grid grid-cols-2 gap-3 pt-2 animate-in fade-in">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo de Corte</label>
+                      <select
+                        value={v3Params.costsType}
+                        onChange={e => setV3Params(p => ({ ...p, costsType: e.target.value as any }))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                      >
+                        <option value="percentage">Percentual (%)</option>
+                        <option value="absolute">Valor Absoluto (R$)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Valor do Corte</label>
+                      <input 
+                        type="number"
+                        value={v3Params.costsValue}
+                        onChange={e => setV3Params(p => ({ ...p, costsValue: Number(e.target.value) }))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-rose-400 font-bold focus:outline-none focus:border-rose-500"
+                        placeholder="Ex: 5 para -5%"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* SLIDER 3: CORTE DE DESPESAS RATEADAS */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
-                    <Percent size={14} className="text-amber-400" />
-                    Corte de Despesas Rateadas (%)
-                  </span>
-                  <span className="font-black px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    -{v2Params.expenseReductionPct}%
-                  </span>
+              {/* PREMISSA 3: CORTE DE DESPESAS RATEADAS */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
+                    <input 
+                      type="checkbox"
+                      checked={v3Params.enableExpensesAdj}
+                      onChange={e => setV3Params(p => ({ ...p, enableExpensesAdj: e.target.checked }))}
+                      className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 w-4 h-4"
+                    />
+                    <Percent size={16} className="text-amber-400" />
+                    <span>Simular Corte de Despesas Rateadas</span>
+                  </label>
                 </div>
-                <p className="text-[11px] text-slate-400 font-normal">
-                  Redução em despesas administrativas, escritório, sistemas e infraestrutura.
-                </p>
-                <input 
-                  type="range"
-                  min="0"
-                  max="50"
-                  step="1"
-                  value={v2Params.expenseReductionPct}
-                  onChange={e => setV2Params(p => ({ ...p, expenseReductionPct: Number(e.target.value) }))}
-                  className="w-full accent-amber-500 bg-slate-950 h-2 rounded-lg cursor-pointer"
-                />
+
+                {v3Params.enableExpensesAdj && (
+                  <div className="grid grid-cols-2 gap-3 pt-2 animate-in fade-in">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo de Corte</label>
+                      <select
+                        value={v3Params.expensesType}
+                        onChange={e => setV3Params(p => ({ ...p, expensesType: e.target.value as any }))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-semibold"
+                      >
+                        <option value="percentage">Percentual (%)</option>
+                        <option value="absolute">Valor Absoluto (R$)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Valor do Corte</label>
+                      <input 
+                        type="number"
+                        value={v3Params.expensesValue}
+                        onChange={e => setV3Params(p => ({ ...p, expensesValue: Number(e.target.value) }))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-amber-400 font-bold focus:outline-none focus:border-amber-500"
+                        placeholder="Ex: 5 para -5%"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* PERDA DE CONTRATO ESPECÍFICO */}
-              <div className="pt-3 border-t border-slate-800 space-y-3">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <FileText size={14} className="text-cyan-400" />
-                  Perda de Contrato & Janela de Reposição
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  Simula o cancelamento de um cliente e o prazo (meses) para o comercial contratar novo cliente.
-                </p>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Perda Mensal (R$)</label>
+              {/* REQUISITO 4: PERDA DE CONTRATO COM DROPDOWN DE MÚLTIPLA SELEÇÃO */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
                     <input 
-                      type="number"
-                      step="5000"
-                      value={v2Params.contractLossValue}
-                      onChange={e => setV2Params(p => ({ ...p, contractLossValue: Number(e.target.value) }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
+                      type="checkbox"
+                      checked={v3Params.enableContractLoss}
+                      onChange={e => setV3Params(p => ({ ...p, enableContractLoss: e.target.checked }))}
+                      className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-cyan-500 w-4 h-4"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Reposição (Meses)</label>
-                    <input 
-                      type="number"
-                      min="0"
-                      max="18"
-                      value={v2Params.contractReplacementMonths}
-                      onChange={e => setV2Params(p => ({ ...p, replacementMonths: Number(e.target.value) }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
-                    />
-                  </div>
+                    <FileText size={16} className="text-cyan-400" />
+                    <span>Perda de Contrato(s) da Empresa</span>
+                  </label>
                 </div>
-              </div>
 
-              {/* DEMISSÕES / PEOPLEBOARD */}
-              <div className="pt-3 border-t border-slate-800 space-y-3">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <Users size={14} className="text-purple-400" />
-                  Readequação de Pessoal (Peopleboard)
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  Calcula a economia mensal nos salários comparada ao custo com demissão.
-                </p>
+                {v3Params.enableContractLoss && (
+                  <div className="space-y-3 pt-2 animate-in fade-in">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Selecionar Contrato da Lista</label>
+                      <select
+                        value={newContractName}
+                        onChange={e => setNewContractName(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="">-- Escolha um Contrato da Empresa --</option>
+                        {availableContractsList.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pessoas</label>
-                    <input 
-                      type="number"
-                      min="0"
-                      value={v2Params.layoffsCount}
-                      onChange={e => setV2Params(p => ({ ...p, layoffsCount: Number(e.target.value) }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold"
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Perda Mensal (R$)</label>
+                        <input 
+                          type="number"
+                          step="5000"
+                          value={newContractValue}
+                          onChange={e => setNewContractValue(Number(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Reposição (Meses)</label>
+                        <input 
+                          type="number"
+                          min="0"
+                          max="18"
+                          value={newContractReplacement}
+                          onChange={e => setNewContractReplacement(Number(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleAddContractToLoss}
+                      disabled={!newContractName}
+                      className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl transition-all shadow-md disabled:opacity-40"
+                    >
+                      + Incluir Contrato no Cenário
+                    </button>
+
+                    {/* Lista de Contratos Selecionados */}
+                    {v3Params.selectedContracts.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-slate-800">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Contratos Afetados no Cenário:</span>
+                        {v3Params.selectedContracts.map(item => (
+                          <div key={item.contractName} className="flex items-center justify-between bg-slate-900 p-2 rounded-lg border border-slate-800 text-xs">
+                            <div>
+                              <span className="font-bold text-white block">{item.contractName}</span>
+                              <span className="text-[10px] text-slate-400">
+                                Perda: {formatCurrency(item.monthlyValue)}/mês · Reposição: {item.replacementMonths}m
+                              </span>
+                            </div>
+                            <button onClick={() => handleRemoveContractFromLoss(item.contractName)} className="text-slate-500 hover:text-rose-400 p-1">
+                              <X size={15} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Economia/mês</label>
-                    <input 
-                      type="number"
-                      step="1000"
-                      value={v2Params.layoffsMonthlySavings}
-                      onChange={e => setV2Params(p => ({ ...p, layoffsMonthlySavings: Number(e.target.value) }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rescisão (R$)</label>
-                    <input 
-                      type="number"
-                      step="5000"
-                      value={v2Params.layoffsSeveranceCost}
-                      onChange={e => setV2Params(p => ({ ...p, layoffsSeveranceCost: Number(e.target.value) }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* SALDO DE CAIXA INICIAL */}
@@ -733,8 +812,8 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                 <input 
                   type="number"
                   step="50000"
-                  value={v2Params.initialCash}
-                  onChange={e => setV2Params(p => ({ ...p, initialCash: Number(e.target.value) }))}
+                  value={v3Params.initialCash}
+                  onChange={e => setV3Params(p => ({ ...p, initialCash: Number(e.target.value) }))}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -748,27 +827,25 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
              ────────────────────────────────────────────────────────── */}
           <div className="lg:col-span-7 space-y-6">
 
-            {v2Calculation && (
+            {v3Calculation && (
               <>
                 {/* CARDS DE INDICADORES EXECUTIVOS EM TEMPO REAL */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   
                   {/* 1. PONTO DE EQUILÍBRIO (BREAK-EVEN) */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl relative group">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider flex items-center gap-1">
-                        Ponto de Equilíbrio (Break-Even)
-                      </span>
+                      <span className="font-bold uppercase tracking-wider">Break-Even</span>
                       <Target size={16} className="text-amber-400" />
                     </div>
                     <div className="text-xl font-black text-white mt-1">
-                      {formatCurrency(v2Calculation.metrics.breakEvenPointSimulated)}
+                      {formatCurrency(v3Calculation.metrics.breakEvenPointSimulated)}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Faturamento mínimo mensal necessário para cobrir os custos e zerar prejuízos.
+                      Faturamento mínimo necessário para cobrir os custos.
                     </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
-                      <span className="text-slate-400">Real: {formatCurrency(v2Calculation.metrics.breakEvenPointReal)}</span>
+                      <span className="text-slate-400">Real: {formatCurrency(v3Calculation.metrics.breakEvenPointReal)}</span>
                       <span className="font-bold text-amber-400">Meta/mês</span>
                     </div>
                   </div>
@@ -776,21 +853,21 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                   {/* 2. CASH RUNWAY */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider">Cash Runway (Caixa)</span>
-                      <Clock size={16} className={v2Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'} />
+                      <span className="font-bold uppercase tracking-wider">Cash Runway</span>
+                      <Clock size={16} className={v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'} />
                     </div>
-                    <div className={`text-xl font-black mt-1 ${v2Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {v2Calculation.metrics.isRunwaySustainable 
+                    <div className={`text-xl font-black mt-1 ${v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {v3Calculation.metrics.isRunwaySustainable 
                         ? 'Sustentável' 
-                        : `${v2Calculation.metrics.cashRunwayMonths} Meses`}
+                        : `${v3Calculation.metrics.cashRunwayMonths} Meses`}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Quantos meses o dinheiro em caixa vai durar se o cenário simulado persistir.
+                      Meses até o saldo de caixa zerar no cenário futuro.
                     </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Data Zero:</span>
-                      <span className={`font-bold ${v2Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {v2Calculation.metrics.isRunwaySustainable ? 'Sem risco' : `Mês ${v2Calculation.metrics.zeroCashMonth}`}
+                      <span className={`font-bold ${v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {v3Calculation.metrics.isRunwaySustainable ? 'Sem risco' : `Mês ${v3Calculation.metrics.zeroCashMonth}`}
                       </span>
                     </div>
                   </div>
@@ -798,54 +875,36 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                   {/* 3. MARGEM EBITDA */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider">Nova Margem EBITDA</span>
+                      <span className="font-bold uppercase tracking-wider">Margem EBITDA</span>
                       <Activity size={16} className="text-cyan-400" />
                     </div>
                     <div className="text-xl font-black text-white mt-1">
-                      {v2Calculation.metrics.ebitdaMarginSimulated.toFixed(1)}%
+                      {v3Calculation.metrics.ebitdaMarginSimulated.toFixed(1)}%
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Porcentagem do faturamento que se transforma em lucro operacional.
+                      Eficiência da operação (% de lucro do faturamento).
                     </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
-                      <span className="text-slate-400">Real: {v2Calculation.metrics.ebitdaMarginReal.toFixed(1)}%</span>
-                      <span className={`font-bold ${v2Calculation.metrics.ebitdaMarginSimulated >= v2Calculation.metrics.ebitdaMarginReal ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {formatPercent(v2Calculation.metrics.ebitdaMarginSimulated - v2Calculation.metrics.ebitdaMarginReal)}
+                      <span className="text-slate-400">Real: {v3Calculation.metrics.ebitdaMarginReal.toFixed(1)}%</span>
+                      <span className={`font-bold ${v3Calculation.metrics.ebitdaMarginSimulated >= v3Calculation.metrics.ebitdaMarginReal ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {formatPercent(v3Calculation.metrics.ebitdaMarginSimulated - v3Calculation.metrics.ebitdaMarginReal)}
                       </span>
-                    </div>
-                  </div>
-
-                  {/* 4. PAYBACK DE RESCISÕES */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
-                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider">Payback Rescisões (People)</span>
-                      <Award size={16} className="text-purple-400" />
-                    </div>
-                    <div className="text-xl font-black text-white mt-1">
-                      {v2Calculation.metrics.severancePaybackMonths > 0 ? `${v2Calculation.metrics.severancePaybackMonths} Meses` : '—'}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Tempo em meses para a economia de salário pagar o gasto da demissão.
-                    </p>
-                    <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
-                      <span className="text-slate-400">Rescisões: {formatCurrency(v2Params.layoffsSeveranceCost)}</span>
-                      <span className="font-bold text-purple-400">Amortização</span>
                     </div>
                   </div>
 
                 </div>
 
-                {/* GRÁFICO 1: CURVA DE CAIXA ACUMULADO & RUNWAY COM SELETOR DE PERIODICIDADE */}
+                {/* REQUISITO 1: GRÁFICO DE PROJEÇÃO FUTURA (STARTING FROM TODAY) */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div>
                       <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-2">
-                        <span>Curva de Caixa & Projected Runway</span>
+                        <span>Projeção de Caixa Futura (A partir do Hoje)</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700 uppercase">
                           Visão {periodicity}
                         </span>
                       </h3>
-                      <p className="text-xs text-slate-400">Saldo acumulado de caixa projetado no período ({periodicity})</p>
+                      <p className="text-xs text-slate-400">Trajetória futura de liquidez (Real vs Simulado)</p>
                     </div>
                   </div>
 
@@ -877,7 +936,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                   </div>
                 </div>
 
-                {/* GRÁFICO 2: DEMONSTRATIVO SINTÉTICO (BARRAS COMPARATIVAS) */}
+                {/* GRÁFICO 2: DEMONSTRATIVO SINTÉTICO */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -934,7 +993,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Zap className="text-amber-400" size={20} />
-                <h3 className="font-bold text-white text-base">Exportar Simulação V2 para Gamma IA</h3>
+                <h3 className="font-bold text-white text-base">Exportar Simulação V3 para Gamma IA</h3>
               </div>
               <button 
                 onClick={() => setIsGammaModalOpen(false)}
@@ -951,7 +1010,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
                   <Sparkles size={32} />
                 </div>
                 <h4 className="font-bold text-white text-base">Apresentação Gamma Gerada com Sucesso!</h4>
-                <p className="text-xs text-slate-400">Sua simulação V2 (Break-Even, Cash Runway e EBITDA) foi convertida em apresentação Gamma.</p>
+                <p className="text-xs text-slate-400">Sua simulação V3 (Break-Even, Cash Runway e EBITDA) foi convertida em apresentação Gamma.</p>
                 <a
                   href={gammaUrl}
                   target="_blank"
@@ -965,18 +1024,18 @@ ${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artifici
             ) : (
               <div className="space-y-4">
                 <p className="text-xs text-slate-400">
-                  Os indicadores em tempo real (Break-Even, Cash Runway, EBITDA e Payback de Rescisões) serão enviados via Markdown para montagem dos slides.
+                  Os indicadores em tempo real (Break-Even, Cash Runway e EBITDA) serão enviados via Markdown para montagem dos slides.
                 </p>
 
                 <div className="flex items-center gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
                   <input
                     type="checkbox"
-                    id="incAiV2"
+                    id="incAiV3"
                     checked={includeAiInGamma}
                     onChange={e => setIncludeAiInGamma(e.target.checked)}
                     className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500"
                   />
-                  <label htmlFor="incAiV2" className="text-xs font-semibold text-slate-300 cursor-pointer">
+                  <label htmlFor="incAiV3" className="text-xs font-semibold text-slate-300 cursor-pointer">
                     Incluir Parecer Executivo do BrisinhAI na apresentação
                   </label>
                 </div>
