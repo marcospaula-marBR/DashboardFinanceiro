@@ -9,11 +9,15 @@ import {
 import { 
   ChevronLeft, ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Percent, 
   Sparkles, RefreshCw, Layers, CheckSquare, Square, X, ExternalLink, Loader2,
-  FileText, Zap, Target, DollarSign, Calendar, AlertTriangle, ShieldCheck
+  FileText, Zap, Target, DollarSign, Calendar, AlertTriangle, ShieldCheck,
+  Users, Activity, Clock, Award, Sliders
 } from 'lucide-react';
 import { DreRow, DreFilters, DreMetadata } from '@/types/dre';
-import { ScenarioAssumption, SimulatorScenarioType } from '@/types/dre-simulator.types';
-import { DreSimulatorEngine } from '@/services/dre-simulator.engine';
+import { 
+  DreSimulatorEngine, 
+  SimulatorV2Params, 
+  calculateV2SimulationEngine 
+} from '@/services/dre-simulator.engine';
 import { DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreLancamentosService } from '@/services/dre-lancamentos.service';
 
@@ -28,9 +32,6 @@ const formatPercent = (val?: number) => {
   const prefix = val > 0 ? '+' : '';
   return `${prefix}${val.toFixed(1)}%`;
 };
-
-// Modos de Simulação Prática
-type SimulationModeTab = 'contract_loss' | 'future_loss' | 'percentage_adj' | 'absolute_adj' | 'multi_driver';
 
 export default function DreCustomPage() {
   // Estado de Dados Brutos e Metadata
@@ -57,56 +58,20 @@ export default function DreCustomPage() {
     excludeSharedExpenses: false
   });
 
-  // Modo de Aba Ativa
-  const [activeTab, setActiveTab] = useState<SimulationModeTab>('contract_loss');
-
-  // Premissas Ativas no Simulador
-  const [assumptions, setAssumptions] = useState<ScenarioAssumption[]>([
-    {
-      id: 'default_contract_loss',
-      type: 'contract_loss',
-      targetType: 'account_group',
-      targetIds: ['receita'],
-      amountType: 'monthly_value',
-      value: 35000,
-      monthlyLoss: 35000,
-      contractName: 'Contrato Cliente Principal',
-      startDate: '2025-08',
-      endDate: '2026-12',
-      recurrence: 'linear_ramp',
-      replacementMonths: 6,
-      enabled: true,
-      affectedAccountsRatio: {
-        'Impostos': -0.06,
-        'Credenciado Operacional': -0.30,
-      },
-      notes: 'Simulação da perda de contrato com reposição gradual em 6 meses'
-    }
-  ]);
-
-  // Form State: Perda de Contrato com Rampa
-  const [contractForm, setContractForm] = useState({
-    name: 'Contrato Exemplo A',
-    monthlyValue: 40000,
-    startMonth: '2025-08',
-    replacementMonths: 6,
-    includeCostsRatio: true,
-  });
-
-  // Form State: Perda Futura com Meta de Fechamento (Ponto X)
-  const [futureLossForm, setFutureLossForm] = useState({
-    name: 'Contrato Futuro B',
-    monthlyValue: 50000,
-    currentStartMonth: '2025-08',
-    futureLossMonth: '2025-11', // Ponto X (3 meses depois)
-  });
-
-  // Form State: Ajuste Percentual ou Absoluto
-  const [adjForm, setAdjForm] = useState({
-    targetAccount: 'CLTs', // ou 'Receita Bruta de Vendas', 'Despesas Administrativas'
-    type: 'percentage' as 'percentage' | 'absolute',
-    value: -10, // -10% ou R$ -15.000
-    startMonth: '2025-08',
+  // ──────────────────────────────────────────────────────────
+  // PARÂMETROS DO SIMULADOR V2 (SLIDERS & CONTROLES PURAS)
+  // ──────────────────────────────────────────────────────────
+  const [v2Params, setV2Params] = useState<SimulatorV2Params>({
+    revenueChangePct: 0,           // -50% a +50%
+    costReductionPct: 0,           // 0% a 50%
+    expenseReductionPct: 0,        // 0% a 50%
+    contractLossValue: 0,          // Perda mensal em R$
+    contractReplacementMonths: 6,  // Janela de reposição em meses
+    contractStartMonth: '2025-08',
+    layoffsCount: 0,               // Pessoas (Peopleboard)
+    layoffsMonthlySavings: 0,      // R$/mês economizado
+    layoffsSeveranceCost: 0,       // R$ custo de rescisão
+    initialCash: 500000            // Caixa Inicial R$ 500.000
   });
 
   // Estado de BrisinhAI
@@ -131,7 +96,7 @@ export default function DreCustomPage() {
           setMetadata(meta);
         }
       } catch (err) {
-        console.error('[Simulador DRE] Erro ao carregar dados:', err);
+        console.error('[Simulador DRE V2] Erro ao carregar dados:', err);
       } finally {
         setIsLoading(false);
       }
@@ -140,229 +105,127 @@ export default function DreCustomPage() {
   }, []);
 
   // ──────────────────────────────────────────────────────────
-  // ENGINE EXECUTION (Cenário Base vs Cenário Simulado)
+  // CÁLCULO EM TEMPO REAL VIA FUNÇÃO PURA (SIMULADOR V2)
   // ──────────────────────────────────────────────────────────
-
-  // Cenário Base (Sem premissas alteradas)
-  const baseResult = useMemo(() => {
+  const v2Calculation = useMemo(() => {
     if (rawData.length === 0) return null;
-    const baseScenario = {
-      id: 'base',
-      name: 'Cenário Real',
-      basePeriod: [],
-      projectionStartDate: '2025-01',
-      projectionEndDate: '2026-12',
-      mode: 'historical_what_if' as const,
-      includeAllocatedExpenses: !filters.excludeSharedExpenses,
-      assumptions: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    return DreSimulatorEngine.runSimulation(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, baseScenario);
-  }, [rawData, metadata, filters]);
+    return calculateV2SimulationEngine(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, v2Params);
+  }, [rawData, metadata, filters, v2Params]);
 
-  // Cenário Simulado (Com premissas ativas)
-  const simResult = useMemo(() => {
-    if (rawData.length === 0) return null;
-    const activeAssumptions = assumptions.filter(a => a.enabled !== false);
-    const activeScenario = {
-      id: 'simulated',
-      name: 'Cenário Simulado',
-      basePeriod: [],
-      projectionStartDate: '2025-01',
-      projectionEndDate: '2026-12',
-      mode: 'historical_what_if' as const,
-      includeAllocatedExpenses: !filters.excludeSharedExpenses,
-      assumptions: activeAssumptions,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    return DreSimulatorEngine.runSimulation(rawData, metadata, DEFAULT_DRE_ESTRUTURA, filters, activeScenario);
-  }, [rawData, metadata, filters, assumptions]);
+  // Presets Rápidos de Cenário
+  const handleApplyPreset = (preset: 'conservative' | 'optimistic' | 'crisis' | 'reset') => {
+    if (preset === 'reset') {
+      setV2Params({
+        revenueChangePct: 0,
+        costReductionPct: 0,
+        expenseReductionPct: 0,
+        contractLossValue: 0,
+        contractReplacementMonths: 6,
+        contractStartMonth: '2025-08',
+        layoffsCount: 0,
+        layoffsMonthlySavings: 0,
+        layoffsSeveranceCost: 0,
+        initialCash: 500000
+      });
+    } else if (preset === 'conservative') {
+      setV2Params({
+        revenueChangePct: -5,
+        costReductionPct: 5,
+        expenseReductionPct: 5,
+        contractLossValue: 25000,
+        contractReplacementMonths: 6,
+        contractStartMonth: '2025-08',
+        layoffsCount: 2,
+        layoffsMonthlySavings: 12000,
+        layoffsSeveranceCost: 36000,
+        initialCash: 500000
+      });
+    } else if (preset === 'crisis') {
+      setV2Params({
+        revenueChangePct: -20,
+        costReductionPct: 15,
+        expenseReductionPct: 15,
+        contractLossValue: 60000,
+        contractReplacementMonths: 9,
+        contractStartMonth: '2025-08',
+        layoffsCount: 5,
+        layoffsMonthlySavings: 35000,
+        layoffsSeveranceCost: 105000,
+        initialCash: 500000
+      });
+    } else if (preset === 'optimistic') {
+      setV2Params({
+        revenueChangePct: 15,
+        costReductionPct: 5,
+        expenseReductionPct: 5,
+        contractLossValue: 0,
+        contractReplacementMonths: 0,
+        contractStartMonth: '2025-08',
+        layoffsCount: 0,
+        layoffsMonthlySavings: 0,
+        layoffsSeveranceCost: 0,
+        initialCash: 500000
+      });
+    }
+  };
 
-  // KPIs Comparativos (Base vs Simulado)
-  const kpiComparisons = useMemo(() => {
-    if (!baseResult || !simResult) return null;
+  // Dados para Gráfico 1: Curva de Caixa Acumulado & Runway
+  const cashRunwayChartData = useMemo(() => {
+    if (!v2Calculation) return [];
+    let runningCashBase = v2Params.initialCash;
+    let runningCashSim = v2Params.initialCash;
 
-    const baseRec = baseResult.kpis.receitaOperacional || 0;
-    const simRec = simResult.kpis.receitaOperacional || 0;
-    const diffRec = simRec - baseRec;
-    const percRec = baseRec > 0 ? (diffRec / baseRec) * 100 : 0;
+    return v2Calculation.simResult.validColumns.map(col => {
+      const baseFcl = v2Calculation.baseResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v2Calculation.baseResult.mensal['Lucro antes do FCL']?.[col] || 0;
+      const simFcl = v2Calculation.simResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v2Calculation.simResult.mensal['Lucro antes do FCL']?.[col] || 0;
 
-    const baseCustos = baseResult.kpis.totalCustos + baseResult.kpis.totalDespesas;
-    const simCustos = simResult.kpis.totalCustos + simResult.kpis.totalDespesas;
-    const diffCustos = simCustos - baseCustos;
-    const percCustos = baseCustos > 0 ? (diffCustos / baseCustos) * 100 : 0;
+      runningCashBase += baseFcl;
+      runningCashSim += simFcl;
 
-    const baseLucro = baseResult.kpis.resultado || 0;
-    const simLucro = simResult.kpis.resultado || 0;
-    const diffLucro = simLucro - baseLucro;
-    const percLucro = baseLucro !== 0 ? (diffLucro / Math.abs(baseLucro)) * 100 : 0;
-
-    const baseFcl = baseResult.kpis.fcl || 0;
-    const simFcl = simResult.kpis.fcl || 0;
-    const diffFcl = simFcl - baseFcl;
-    const percFcl = baseFcl !== 0 ? (diffFcl / Math.abs(baseFcl)) * 100 : 0;
-
-    return {
-      rec: { base: baseRec, sim: simRec, diff: diffRec, perc: percRec },
-      custos: { base: baseCustos, sim: simCustos, diff: diffCustos, perc: percCustos },
-      lucro: { base: baseLucro, sim: simLucro, diff: diffLucro, perc: percLucro },
-      fcl: { base: baseFcl, sim: simFcl, diff: diffFcl, perc: percFcl }
-    };
-  }, [baseResult, simResult]);
-
-  // Dados para Gráfico Temporal (Evolução Mês a Mês com Rampa)
-  const timelineChartData = useMemo(() => {
-    if (!baseResult || !simResult) return [];
-    return baseResult.validColumns.map(col => {
-      const baseVal = baseResult.mensal['Lucro antes do FCL']?.[col] || 0;
-      const simVal = simResult.mensal['Lucro antes do FCL']?.[col] || 0;
-      const baseRec = baseResult.mensal['Receita Bruta de Vendas']?.[col] || 0;
-      const simRec = simResult.mensal['Receita Bruta de Vendas']?.[col] || 0;
       return {
         mes: col,
-        'Lucro Real': Math.round(baseVal),
-        'Lucro Simulado': Math.round(simVal),
-        'Receita Real': Math.round(baseRec),
-        'Receita Simulada': Math.round(simRec),
+        'Caixa Acumulado Real': Math.round(runningCashBase),
+        'Caixa Acumulado Simulado': Math.round(runningCashSim),
+        'Fator Seguro': 0
       };
     });
-  }, [baseResult, simResult]);
+  }, [v2Calculation, v2Params.initialCash]);
 
-  // Dados para Gráfico Waterfall / Impacto por Premissa
-  const waterfallChartData = useMemo(() => {
-    if (!baseResult || !kpiComparisons) return [];
-    const items = [
-      { name: 'Resultado Real', valor: Math.round(baseResult.kpis.resultado), isTotal: true }
+  // Dados para Gráfico 2: Demonstrativo Sintético de Margem & EBITDA
+  const syntheticChartData = useMemo(() => {
+    if (!v2Calculation) return [];
+    const baseK = v2Calculation.baseResult.kpis;
+    const simK = v2Calculation.simResult.kpis;
+
+    return [
+      { name: 'Receita', Real: Math.round(baseK.receitaOperacional), Simulado: Math.round(simK.receitaOperacional) },
+      { name: 'Custos', Real: Math.round(baseK.totalCustos), Simulado: Math.round(simK.totalCustos) },
+      { name: 'Despesas', Real: Math.round(baseK.totalDespesas), Simulado: Math.round(simK.totalDespesas) },
+      { name: 'EBITDA (Lucro)', Real: Math.round(baseK.resultado), Simulado: Math.round(simK.resultado) },
     ];
-
-    assumptions.filter(a => a.enabled !== false).forEach((a) => {
-      let impactEst = 0;
-      if (a.type === 'contract_loss') {
-        impactEst = -(a.monthlyLoss || a.value || 0) * 6; // estimativa de impacto acumulado
-      } else if (a.type === 'future_contract_loss') {
-        impactEst = -(a.monthlyLoss || a.value || 0) * 3;
-      } else if (a.amountType === 'percentage') {
-        impactEst = (baseResult.kpis.resultado * (a.value / 100));
-      } else {
-        impactEst = a.value;
-      }
-      items.push({
-        name: a.contractName || a.notes || 'Ajuste Premissa',
-        valor: Math.round(impactEst),
-        isTotal: false
-      });
-    });
-
-    items.push({
-      name: 'Resultado Simulado',
-      valor: Math.round(simResult?.kpis.resultado || 0),
-      isTotal: true
-    });
-
-    return items;
-  }, [baseResult, simResult, assumptions, kpiComparisons]);
-
-  // ──────────────────────────────────────────────────────────
-  // PREMISSAS HANDLERS
-  // ──────────────────────────────────────────────────────────
-
-  // Adicionar Perda de Contrato com Janela de Reposição
-  const handleAddContractLoss = () => {
-    const newAsm: ScenarioAssumption = {
-      id: 'asm_' + Date.now(),
-      type: 'contract_loss',
-      targetType: 'account_group',
-      targetIds: ['receita'],
-      amountType: 'monthly_value',
-      value: contractForm.monthlyValue,
-      monthlyLoss: contractForm.monthlyValue,
-      contractName: contractForm.name || 'Contrato Perda',
-      startDate: contractForm.startMonth,
-      endDate: '2026-12',
-      recurrence: 'linear_ramp',
-      replacementMonths: Number(contractForm.replacementMonths),
-      enabled: true,
-      affectedAccountsRatio: contractForm.includeCostsRatio ? {
-        'Impostos': -0.06,
-        'Credenciado Operacional': -0.25,
-      } : undefined,
-      notes: `Perda de ${formatCurrency(contractForm.monthlyValue)}/mês com reposição em ${contractForm.replacementMonths} meses`
-    };
-    setAssumptions(prev => [...prev, newAsm]);
-  };
-
-  // Adicionar Perda Futura (Ponto X) e Calcular Meta Mensal de Vendas
-  const handleAddFutureLoss = () => {
-    const monthsUntilFuture = 3; // estimativa de intervalo até Ponto X
-    const targetGoal = Math.round(futureLossForm.monthlyValue / monthsUntilFuture);
-
-    const newAsm: ScenarioAssumption = {
-      id: 'asm_future_' + Date.now(),
-      type: 'future_contract_loss',
-      targetType: 'account_group',
-      targetIds: ['receita'],
-      amountType: 'monthly_value',
-      value: futureLossForm.monthlyValue,
-      monthlyLoss: futureLossForm.monthlyValue,
-      contractName: futureLossForm.name || 'Contrato Futuro',
-      startDate: futureLossForm.currentStartMonth,
-      futureLossStartDate: futureLossForm.futureLossMonth,
-      endDate: '2026-12',
-      recurrence: 'linear_ramp',
-      targetSalesGoalPerMonth: targetGoal,
-      enabled: true,
-      notes: `Perda Futura em ${futureLossForm.futureLossMonth}. Meta de Fechamento: ${formatCurrency(targetGoal)}/mês`
-    };
-    setAssumptions(prev => [...prev, newAsm]);
-  };
-
-  // Adicionar Ajuste Percentual ou em R$
-  const handleAddAdjustment = () => {
-    const isPerc = adjForm.type === 'percentage';
-    const newAsm: ScenarioAssumption = {
-      id: 'asm_adj_' + Date.now(),
-      type: adjForm.value < 0 ? 'expense_reduction' : 'expense_increase',
-      targetType: 'account',
-      targetIds: [adjForm.targetAccount],
-      amountType: isPerc ? 'percentage' : 'monthly_value',
-      value: adjForm.value,
-      startDate: adjForm.startMonth,
-      endDate: '2026-12',
-      recurrence: 'monthly',
-      enabled: true,
-      notes: `Ajuste de ${isPerc ? formatPercent(adjForm.value) : formatCurrency(adjForm.value)} em ${adjForm.targetAccount}`
-    };
-    setAssumptions(prev => [...prev, newAsm]);
-  };
-
-  // Toggle Liga/Desliga Premissa
-  const handleToggleAssumption = (id: string) => {
-    setAssumptions(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
-  };
-
-  // Remover Premissa
-  const handleRemoveAssumption = (id: string) => {
-    setAssumptions(prev => prev.filter(a => a.id !== id));
-  };
+  }, [v2Calculation]);
 
   // ──────────────────────────────────────────────────────────
   // BRISINHAI ANALYSIS
   // ──────────────────────────────────────────────────────────
   const handleRunAiAnalysis = async () => {
-    if (!kpiComparisons || !baseResult || !simResult) return;
+    if (!v2Calculation) return;
     setIsAiAnalyzing(true);
     setAiAnalysisText(null);
 
     try {
-      const activeAsms = assumptions.filter(a => a.enabled !== false);
-      const prompt = `Analise a seguinte simulação financeira da DRE executiva:
-- Receita Real: ${formatCurrency(kpiComparisons.rec.base)} vs Simulada: ${formatCurrency(kpiComparisons.rec.sim)} (${formatPercent(kpiComparisons.rec.perc)})
-- Lucro Operacional Real: ${formatCurrency(kpiComparisons.lucro.base)} vs Simulado: ${formatCurrency(kpiComparisons.lucro.sim)} (${formatPercent(kpiComparisons.lucro.perc)})
-- Premissas Aplicadas: ${activeAsms.map(a => a.notes || a.contractName).join('; ')}
+      const m = v2Calculation.metrics;
+      const prompt = `Analise a seguinte simulação V2 do Simulador DRE:
+- Variação de Receita: ${v2Params.revenueChangePct}%
+- Corte de Custos: ${v2Params.costReductionPct}% | Despesas: ${v2Params.expenseReductionPct}%
+- Perda de Contrato: R$ ${v2Params.contractLossValue}/mês (Reposição: ${v2Params.contractReplacementMonths}m)
+- Demissões Peopleboard: ${v2Params.layoffsCount} pessoas | Economia: R$ ${v2Params.layoffsMonthlySavings}/mês | Rescisão: R$ ${v2Params.layoffsSeveranceCost}
+- Ponto de Equilíbrio Real: ${formatCurrency(m.breakEvenPointReal)} vs Simulado: ${formatCurrency(m.breakEvenPointSimulated)}
+- Margem EBITDA Real: ${m.ebitdaMarginReal.toFixed(1)}% vs Simulada: ${m.ebitdaMarginSimulated.toFixed(1)}%
+- Cash Runway: ${m.isRunwaySustainable ? 'Sustentável (Caixa Positivo)' : `Zera no mês ${m.zeroCashMonth} (${m.cashRunwayMonths} meses)`}
+- Payback de Rescisões: ${m.severancePaybackMonths} meses
 
-Forneça um parecer parecer executivo em 3 tópicos diretos: 1. Impacto Principal, 2. Risco do Caixa, 3. Recomendações Estratégicas.`;
+Forneça um parecer executivo direto com 3 itens: 1. Diagnóstico de Sustentabilidade, 2. Risco de Runway, 3. Ações Recomendadas.`;
 
       const res = await fetch('/api/ai/analyze', {
         method: 'POST',
@@ -374,7 +237,7 @@ Forneça um parecer parecer executivo em 3 tópicos diretos: 1. Impacto Principa
       const data = await res.json();
       setAiAnalysisText(data.analysis || data.response || 'Análise concluída com sucesso.');
     } catch (err: any) {
-      setAiAnalysisText('O BrisinhAI recomenda atenção especial à janela de reposição de novos contratos para evitar déficit no caixa acumulado.');
+      setAiAnalysisText(`Parecer BrisinhAI: O cenário simulado exige atenção ao Cash Runway. O Ponto de Equilíbrio é de ${formatCurrency(v2Calculation?.metrics.breakEvenPointSimulated)}, recomendando a preservação de margem bruta e controle de rescisões.`);
     } finally {
       setIsAiAnalyzing(false);
     }
@@ -384,30 +247,44 @@ Forneça um parecer parecer executivo em 3 tópicos diretos: 1. Impacto Principa
   // GAMMA EXPORT
   // ──────────────────────────────────────────────────────────
   const handleExportGamma = async () => {
-    if (!baseResult || !simResult || !kpiComparisons) return;
+    if (!v2Calculation) return;
     setIsGammaGenerating(true);
     setGammaUrl(null);
 
     try {
-      const activeAsms = assumptions.filter(a => a.enabled !== false);
-      const reportMarkdown = `# Apresentação Executiva — Simulação DRE
+      const m = v2Calculation.metrics;
+      const bK = v2Calculation.baseResult.kpis;
+      const sK = v2Calculation.simResult.kpis;
 
-## 1. Resumo Executivo Comparativo
-- **Receita Operacional**: Real ${formatCurrency(kpiComparisons.rec.base)} | Simulado ${formatCurrency(kpiComparisons.rec.sim)} (${formatPercent(kpiComparisons.rec.perc)})
-- **Resultado (Lucro)**: Real ${formatCurrency(kpiComparisons.lucro.base)} | Simulado ${formatCurrency(kpiComparisons.lucro.sim)} (${formatPercent(kpiComparisons.lucro.perc)})
-- **Fluxo de Caixa Livre**: Real ${formatCurrency(kpiComparisons.fcl.base)} | Simulado ${formatCurrency(kpiComparisons.fcl.sim)} (${formatPercent(kpiComparisons.fcl.perc)})
+      const reportMarkdown = `# Apresentação Executiva — Simulador DRE V2
 
-## 2. Premissas de Simulação Aplicadas
-${activeAsms.map(a => `- **${a.contractName || a.notes}**: Variação de ${formatCurrency(a.monthlyLoss || a.value)} | Reposição: ${a.replacementMonths || 0} meses`).join('\n')}
+## 1. Indicadores Executivos em Tempo Real
+- **Ponto de Equilíbrio (Break-Even)**: Real ${formatCurrency(m.breakEvenPointReal)} | Simulado ${formatCurrency(m.breakEvenPointSimulated)}
+- **Margem EBITDA**: Real ${m.ebitdaMarginReal.toFixed(1)}% | Simulada ${m.ebitdaMarginSimulated.toFixed(1)}%
+- **Cash Runway**: ${m.isRunwaySustainable ? 'Caixa Sustentável' : `Caixa Zera no Mês ${m.zeroCashMonth}`}
+- **Payback de Rescisões (Peopleboard)**: ${m.severancePaybackMonths} meses para amortizar R$ ${v2Params.layoffsSeveranceCost} em rescisões
 
-${includeAiInGamma && aiAnalysisText ? `## 3. Análise Estratégica por BrisinhAI\n${aiAnalysisText}` : ''}
+## 2. Parâmetros de Simulação
+- Variação de Receita: ${v2Params.revenueChangePct}%
+- Corte de Custos Operacionais: ${v2Params.costReductionPct}%
+- Corte de Despesas Rateadas: ${v2Params.expenseReductionPct}%
+- Perda de Contrato: R$ ${v2Params.contractLossValue}/mês (Reposição: ${v2Params.contractReplacementMonths} meses)
+- Readequação Headcount: ${v2Params.layoffsCount} pessoas (Economia: R$ ${v2Params.layoffsMonthlySavings}/mês)
+
+## 3. Demostrativo Comparativo DRE
+- **Receita Operacional**: Real ${formatCurrency(bK.receitaOperacional)} | Simulado ${formatCurrency(sK.receitaOperacional)}
+- **Custos Operacionais**: Real ${formatCurrency(bK.totalCustos)} | Simulado ${formatCurrency(sK.totalCustos)}
+- **Despesas Rateadas**: Real ${formatCurrency(bK.totalDespesas)} | Simulado ${formatCurrency(sK.totalDespesas)}
+- **Resultado Final (Lucro)**: Real ${formatCurrency(bK.resultado)} | Simulado ${formatCurrency(sK.resultado)}
+
+${includeAiInGamma && aiAnalysisText ? `## 4. Análise de Inteligência Artificial — BrisinhAI\n${aiAnalysisText}` : ''}
 `;
 
       const resGenerate = await fetch('/api/gamma/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Gere uma apresentação executiva sobre esta simulação DRE: ${reportMarkdown}`,
+          prompt: `Gere uma apresentação executiva sobre esta simulação DRE V2: ${reportMarkdown}`,
           textMode: 'preserve'
         })
       });
@@ -447,8 +324,8 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise Estratégica por BrisinhA
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
         <Loader2 className="animate-spin text-emerald-500 mb-4" size={44} />
-        <h2 className="text-xl font-bold">Carregando Dados do Simulador DRE...</h2>
-        <p className="text-slate-400 text-sm mt-1">Conectando ao repositório Omie DB...</p>
+        <h2 className="text-xl font-bold">Carregando Simulador V2...</h2>
+        <p className="text-slate-400 text-sm mt-1">Conectando ao repositório unificado de DRE...</p>
       </div>
     );
   }
@@ -456,9 +333,9 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise Estratégica por BrisinhA
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-16">
       
-      {/* HEADER EXECUTIVO DE NAVEGAÇÃO */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* HEADER EXECUTIVO SPLIT-SCREEN */}
+      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           
           <div className="flex items-center gap-3">
             <Link 
@@ -473,534 +350,412 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise Estratégica por BrisinhA
 
             <div>
               <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
-                <span>⚡ Simulador Executivo DRE</span>
+                <span>⚡ Simulador Executivo DRE V2</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
-                  v.02.50.42
+                  Pure Engine
                 </span>
               </h1>
-              <p className="text-xs text-slate-400">Medição de impactos, rampa de contratos, meta de fechamento e inteligência artificial</p>
+              <p className="text-xs text-slate-400">Break-Even, Cash Runway, EBITDA e Payback Peopleboard em Tempo Real</p>
             </div>
           </div>
 
-          {/* AÇÕES DE TOPO */}
+          {/* PRESETS & ACOES */}
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+            
+            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1">
+              <button
+                onClick={() => handleApplyPreset('reset')}
+                className="px-2.5 py-1 text-[11px] font-bold text-slate-400 hover:text-white rounded-lg transition-all"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => handleApplyPreset('conservative')}
+                className="px-2.5 py-1 text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 transition-all"
+              >
+                Conservador
+              </button>
+              <button
+                onClick={() => handleApplyPreset('crisis')}
+                className="px-2.5 py-1 text-[11px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-all"
+              >
+                Cenário Crise
+              </button>
+              <button
+                onClick={() => handleApplyPreset('optimistic')}
+                className="px-2.5 py-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all"
+              >
+                Otimista
+              </button>
+            </div>
+
             <button
               onClick={handleRunAiAnalysis}
               disabled={isAiAnalyzing}
-              className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-900/30 transition-all shrink-0 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all shrink-0"
             >
               {isAiAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              <span>Analisar com BrisinhAI</span>
+              <span>BrisinhAI</span>
             </button>
 
             <button
               onClick={() => setIsGammaModalOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-orange-900/30 transition-all shrink-0"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-orange-900/30 transition-all shrink-0"
             >
               <Zap size={16} />
-              <span>Gerar Relatório Gamma 🚀</span>
+              <span>Gamma 🚀</span>
             </button>
 
-            <button
-              onClick={() => setAssumptions([])}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all shrink-0"
-              title="Restaurar Padrão"
-            >
-              <RefreshCw size={16} />
-            </button>
           </div>
 
         </div>
       </header>
 
-      {/* CONTEÚDO PRINCIPAL */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 space-y-6 flex-1 w-full">
+      {/* PAINEL SPLIT-SCREEN (GRID 12 COLUNAS) */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 flex-1 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        {/* 1. KPI CARDS COMPARATIVOS (REAL VS SIMULADO) */}
-        {kpiComparisons && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* ──────────────────────────────────────────────────────────
+              PAINEL DA ESQUERDA: CONTROLES & SLIDERS TÁTEIS (5 COLUNAS)
+             ────────────────────────────────────────────────────────── */}
+          <div className="lg:col-span-5 space-y-5">
             
-            {/* Receita Operacional */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                <span className="font-semibold uppercase tracking-wider">Receita Operacional</span>
-                <Wallet size={16} className="text-emerald-400" />
-              </div>
-              <div className="text-xl font-black text-white mt-1">
-                {formatCurrency(kpiComparisons.rec.sim)}
-              </div>
-              <div className="flex items-center justify-between text-xs mt-2 pt-2 border-t border-slate-800/80">
-                <span className="text-slate-400">Real: {formatCurrency(kpiComparisons.rec.base)}</span>
-                <span className={`font-bold flex items-center gap-0.5 ${kpiComparisons.rec.diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {kpiComparisons.rec.diff >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {formatPercent(kpiComparisons.rec.perc)}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
+              
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Sliders className="text-emerald-400" size={18} />
+                  <h2 className="font-bold text-white text-sm uppercase tracking-wider">Painel de Simulação V2</h2>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                  Sliders Táteis
                 </span>
               </div>
-            </div>
 
-            {/* Custos & Despesas */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                <span className="font-semibold uppercase tracking-wider">Custos & Despesas</span>
-                <TrendingUp size={16} className="text-rose-400" />
-              </div>
-              <div className="text-xl font-black text-white mt-1">
-                {formatCurrency(kpiComparisons.custos.sim)}
-              </div>
-              <div className="flex items-center justify-between text-xs mt-2 pt-2 border-t border-slate-800/80">
-                <span className="text-slate-400">Real: {formatCurrency(kpiComparisons.custos.base)}</span>
-                <span className={`font-bold flex items-center gap-0.5 ${kpiComparisons.custos.diff <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {kpiComparisons.custos.diff <= 0 ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
-                  {formatPercent(kpiComparisons.custos.perc)}
-                </span>
-              </div>
-            </div>
-
-            {/* Resultado Operacional (Lucro) */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                <span className="font-semibold uppercase tracking-wider">Resultado (Lucro)</span>
-                <Percent size={16} className="text-amber-400" />
-              </div>
-              <div className="text-xl font-black text-white mt-1">
-                {formatCurrency(kpiComparisons.lucro.sim)}
-              </div>
-              <div className="flex items-center justify-between text-xs mt-2 pt-2 border-t border-slate-800/80">
-                <span className="text-slate-400">Real: {formatCurrency(kpiComparisons.lucro.base)}</span>
-                <span className={`font-bold flex items-center gap-0.5 ${kpiComparisons.lucro.diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {kpiComparisons.lucro.diff >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {formatPercent(kpiComparisons.lucro.perc)}
-                </span>
-              </div>
-            </div>
-
-            {/* Fluxo de Caixa Livre (FCL) */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                <span className="font-semibold uppercase tracking-wider">Fluxo Caixa Livre (FCL)</span>
-                <ShieldCheck size={16} className="text-cyan-400" />
-              </div>
-              <div className="text-xl font-black text-white mt-1">
-                {formatCurrency(kpiComparisons.fcl.sim)}
-              </div>
-              <div className="flex items-center justify-between text-xs mt-2 pt-2 border-t border-slate-800/80">
-                <span className="text-slate-400">Real: {formatCurrency(kpiComparisons.fcl.base)}</span>
-                <span className={`font-bold flex items-center gap-0.5 ${kpiComparisons.fcl.diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {kpiComparisons.fcl.diff >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {formatPercent(kpiComparisons.fcl.perc)}
-                </span>
-              </div>
-            </div>
-
-          </div>
-        )}
-
-        {/* PARECER DO BRISINHAI (SE SOLICITADO) */}
-        {aiAnalysisText && (
-          <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-5 shadow-xl animate-in fade-in">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                <Sparkles size={18} />
-              </div>
-              <h3 className="font-bold text-white text-sm uppercase tracking-wider">Parecer Executivo — BrisinhAI</h3>
-            </div>
-            <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-medium bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-              {aiAnalysisText}
-            </div>
-          </div>
-        )}
-
-        {/* 2. PAINEL DE CONTROLE DE PREMISSAS (ABAS PRÁTICAS) */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-          
-          {/* ABAS */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-800">
-            <button
-              onClick={() => setActiveTab('contract_loss')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                activeTab === 'contract_loss'
-                  ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <FileText size={16} />
-              <span>📄 Perda de Contrato + Janela Reposição</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('future_loss')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                activeTab === 'future_loss'
-                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Target size={16} />
-              <span>📅 Perda Futura & Meta de Vendas</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('percentage_adj')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                activeTab === 'percentage_adj'
-                  ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Percent size={16} />
-              <span>📈 Ajuste % ou R$ Absoluto</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('multi_driver')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                activeTab === 'multi_driver'
-                  ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Layers size={16} />
-              <span>🎛️ Cenário Multi-Premissas ({assumptions.length})</span>
-            </button>
-          </div>
-
-          {/* FORMULÁRIO 1: PERDA DE CONTRATO COM JANELA DE REPOSIÇÃO */}
-          {activeTab === 'contract_loss' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Nome do Contrato</label>
+              {/* SLIDER 1: VARIAÇÃO DE RECEITAS */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                    <Wallet size={14} className="text-emerald-400" />
+                    Variação de Receitas (%)
+                  </span>
+                  <span className={`font-black px-2 py-0.5 rounded text-xs ${v2Params.revenueChangePct >= 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                    {formatPercent(v2Params.revenueChangePct)}
+                  </span>
+                </div>
                 <input 
-                  type="text"
-                  value={contractForm.name}
-                  onChange={e => setContractForm(p => ({ ...p, name: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  type="range"
+                  min="-50"
+                  max="50"
+                  step="1"
+                  value={v2Params.revenueChangePct}
+                  onChange={e => setV2Params(p => ({ ...p, revenueChangePct: Number(e.target.value) }))}
+                  className="w-full accent-emerald-500 bg-slate-950 h-2 rounded-lg cursor-pointer"
                 />
+                <div className="flex justify-between text-[10px] text-slate-500 font-semibold">
+                  <span>-50%</span>
+                  <span>0% (Base)</span>
+                  <span>+50%</span>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Valor Mensal (R$)</label>
+              {/* SLIDER 2: CORTE DE CUSTOS OPERACIONAIS */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                    <TrendingUp size={14} className="text-rose-400" />
+                    Corte de Custos Operacionais (%)
+                  </span>
+                  <span className="font-black px-2 py-0.5 rounded text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                    -{v2Params.costReductionPct}%
+                  </span>
+                </div>
                 <input 
-                  type="number"
-                  value={contractForm.monthlyValue}
-                  onChange={e => setContractForm(p => ({ ...p, monthlyValue: Number(e.target.value) }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Mês de Saída</label>
-                <input 
-                  type="month"
-                  value={contractForm.startMonth}
-                  onChange={e => setContractForm(p => ({ ...p, startMonth: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Janela Reposição (Meses)</label>
-                <input 
-                  type="number"
+                  type="range"
                   min="0"
-                  max="24"
-                  value={contractForm.replacementMonths}
-                  onChange={e => setContractForm(p => ({ ...p, replacementMonths: Number(e.target.value) }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  max="50"
+                  step="1"
+                  value={v2Params.costReductionPct}
+                  onChange={e => setV2Params(p => ({ ...p, costReductionPct: Number(e.target.value) }))}
+                  className="w-full accent-rose-500 bg-slate-950 h-2 rounded-lg cursor-pointer"
                 />
               </div>
 
-              <div className="flex items-end">
-                <button
-                  onClick={handleAddContractLoss}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-900/30"
-                >
-                  + Adicionar Premissa
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* FORMULÁRIO 2: PERDA FUTURA (PONTO X) & META MENSAL DE VENDAS */}
-          {activeTab === 'future_loss' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Contrato Futuro</label>
-                <input 
-                  type="text"
-                  value={futureLossForm.name}
-                  onChange={e => setFutureLossForm(p => ({ ...p, name: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Valor do Contrato (R$)</label>
-                <input 
-                  type="number"
-                  value={futureLossForm.monthlyValue}
-                  onChange={e => setFutureLossForm(p => ({ ...p, monthlyValue: Number(e.target.value) }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Ponto X (Mês da Perda)</label>
-                <input 
-                  type="month"
-                  value={futureLossForm.futureLossMonth}
-                  onChange={e => setFutureLossForm(p => ({ ...p, futureLossMonth: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-2.5 flex flex-col justify-center">
-                <span className="text-[10px] font-bold text-amber-400 uppercase">Meta Vendas Requerida</span>
-                <span className="text-sm font-black text-white mt-0.5">
-                  {formatCurrency(Math.round(futureLossForm.monthlyValue / 3))}/mês
-                </span>
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  onClick={handleAddFutureLoss}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg shadow-amber-900/30"
-                >
-                  + Aplicar Meta
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* FORMULÁRIO 3: AJUSTE PERCENTUAL OU ABSOLUTO */}
-          {activeTab === 'percentage_adj' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Conta DRE Alvo</label>
-                <select
-                  value={adjForm.targetAccount}
-                  onChange={e => setAdjForm(p => ({ ...p, targetAccount: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
-                >
-                  <option value="Receita Bruta de Vendas">Receita Bruta de Vendas</option>
-                  <option value="CLTs">Despesas com Pessoal / CLTs</option>
-                  <option value="Credenciado Operacional">Credenciado Operacional</option>
-                  <option value="Despesas Administrativas">Despesas Administrativas</option>
-                  <option value="Custo dos Serviços Prestados">Custo dos Serviços Prestados</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Tipo de Ajuste</label>
-                <select
-                  value={adjForm.type}
-                  onChange={e => setAdjForm(p => ({ ...p, type: e.target.value as any }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
-                >
-                  <option value="percentage">Percentual (%)</option>
-                  <option value="absolute">Valor Absoluto (R$)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Valor Variação</label>
-                <input 
-                  type="number"
-                  value={adjForm.value}
-                  onChange={e => setAdjForm(p => ({ ...p, value: Number(e.target.value) }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Mês Início</label>
-                <input 
-                  type="month"
-                  value={adjForm.startMonth}
-                  onChange={e => setAdjForm(p => ({ ...p, startMonth: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  onClick={handleAddAdjustment}
-                  className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg shadow-cyan-900/30"
-                >
-                  + Adicionar Ajuste
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* LISTA MULTI-DRIVER DE PREMISSAS ATIVAS */}
-          {activeTab === 'multi_driver' && (
-            <div className="space-y-3 pt-2">
-              {assumptions.length === 0 ? (
-                <div className="text-center py-6 text-slate-500 text-xs font-medium border border-dashed border-slate-800 rounded-xl">
-                  Nenhuma premissa adicionada. Alterne para as abas ao lado para criar simulações.
+              {/* SLIDER 3: CORTE DE DESPESAS RATEADAS */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                    <Percent size={14} className="text-amber-400" />
+                    Corte de Despesas Rateadas (%)
+                  </span>
+                  <span className="font-black px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    -{v2Params.expenseReductionPct}%
+                  </span>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {assumptions.map(asm => (
-                    <div 
-                      key={asm.id}
-                      className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 transition-all ${
-                        asm.enabled !== false
-                          ? 'bg-slate-950 border-purple-500/30 shadow-md'
-                          : 'bg-slate-950/40 border-slate-800 opacity-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => handleToggleAssumption(asm.id)}
-                          className="text-purple-400 hover:text-purple-300 transition-colors"
-                        >
-                          {asm.enabled !== false ? <CheckSquare size={18} /> : <Square size={18} />}
-                        </button>
-                        <div>
-                          <h4 className="text-xs font-bold text-white">{asm.contractName || asm.notes}</h4>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            {formatCurrency(asm.monthlyLoss || asm.value)} · Reposição: {asm.replacementMonths || 0}m
-                          </p>
-                        </div>
-                      </div>
+                <input 
+                  type="range"
+                  min="0"
+                  max="50"
+                  step="1"
+                  value={v2Params.expenseReductionPct}
+                  onChange={e => setV2Params(p => ({ ...p, expenseReductionPct: Number(e.target.value) }))}
+                  className="w-full accent-amber-500 bg-slate-950 h-2 rounded-lg cursor-pointer"
+                />
+              </div>
 
-                      <button
-                        onClick={() => handleRemoveAssumption(asm.id)}
-                        className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
+              {/* PERDA DE CONTRATO ESPECÍFICO */}
+              <div className="pt-3 border-t border-slate-800 space-y-3">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText size={14} className="text-cyan-400" />
+                  Perda de Contrato & Janela de Reposição
+                </h3>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Perda Mensal (R$)</label>
+                    <input 
+                      type="number"
+                      step="5000"
+                      value={v2Params.contractLossValue}
+                      onChange={e => setV2Params(p => ({ ...p, contractLossValue: Number(e.target.value) }))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Reposição (Meses)</label>
+                    <input 
+                      type="number"
+                      min="0"
+                      max="18"
+                      value={v2Params.contractReplacementMonths}
+                      onChange={e => setV2Params(p => ({ ...p, replacementMonths: Number(e.target.value) }))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* DEMISSÕES / PEOPLEBOARD */}
+              <div className="pt-3 border-t border-slate-800 space-y-3">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Users size={14} className="text-purple-400" />
+                  Readequação de Pessoal (Peopleboard)
+                </h3>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pessoas</label>
+                    <input 
+                      type="number"
+                      min="0"
+                      value={v2Params.layoffsCount}
+                      onChange={e => setV2Params(p => ({ ...p, layoffsCount: Number(e.target.value) }))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Economia/mês</label>
+                    <input 
+                      type="number"
+                      step="1000"
+                      value={v2Params.layoffsMonthlySavings}
+                      onChange={e => setV2Params(p => ({ ...p, layoffsMonthlySavings: Number(e.target.value) }))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rescisão (R$)</label>
+                    <input 
+                      type="number"
+                      step="5000"
+                      value={v2Params.layoffsSeveranceCost}
+                      onChange={e => setV2Params(p => ({ ...p, layoffsSeveranceCost: Number(e.target.value) }))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SALDO DE CAIXA INICIAL */}
+              <div className="pt-3 border-t border-slate-800">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Saldo de Caixa Inicial (para Cash Runway)</label>
+                <input 
+                  type="number"
+                  step="50000"
+                  value={v2Params.initialCash}
+                  onChange={e => setV2Params(p => ({ ...p, initialCash: Number(e.target.value) }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* ──────────────────────────────────────────────────────────
+              PAINEL DA DIREITA: RESULTADOS EM TEMPO REAL & GRÁFICOS (7 COLUNAS)
+             ────────────────────────────────────────────────────────── */}
+          <div className="lg:col-span-7 space-y-6">
+
+            {v2Calculation && (
+              <>
+                {/* CARDS DE INDICADORES EXECUTIVOS EM TEMPO REAL */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  
+                  {/* 1. PONTO DE EQUILÍBRIO (BREAK-EVEN) */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                      <span className="font-bold uppercase tracking-wider">Ponto de Equilíbrio (Break-Even)</span>
+                      <Target size={16} className="text-amber-400" />
                     </div>
-                  ))}
+                    <div className="text-xl font-black text-white mt-1">
+                      {formatCurrency(v2Calculation.metrics.breakEvenPointSimulated)}
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
+                      <span className="text-slate-400">Real: {formatCurrency(v2Calculation.metrics.breakEvenPointReal)}</span>
+                      <span className="font-bold text-amber-400">Meta Faturamento/mês</span>
+                    </div>
+                  </div>
+
+                  {/* 2. CASH RUNWAY */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                      <span className="font-bold uppercase tracking-wider">Cash Runway (Caixa)</span>
+                      <Clock size={16} className={v2Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'} />
+                    </div>
+                    <div className={`text-xl font-black mt-1 ${v2Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {v2Calculation.metrics.isRunwaySustainable 
+                        ? 'Sustentável' 
+                        : `${v2Calculation.metrics.cashRunwayMonths} Meses`}
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
+                      <span className="text-slate-400">Data Zero:</span>
+                      <span className={`font-bold ${v2Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {v2Calculation.metrics.isRunwaySustainable ? 'Sem risco no período' : `Mês ${v2Calculation.metrics.zeroCashMonth}`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3. MARGEM EBITDA */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                      <span className="font-bold uppercase tracking-wider">Nova Margem EBITDA</span>
+                      <Activity size={16} className="text-cyan-400" />
+                    </div>
+                    <div className="text-xl font-black text-white mt-1">
+                      {v2Calculation.metrics.ebitdaMarginSimulated.toFixed(1)}%
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
+                      <span className="text-slate-400">Real: {v2Calculation.metrics.ebitdaMarginReal.toFixed(1)}%</span>
+                      <span className={`font-bold ${v2Calculation.metrics.ebitdaMarginSimulated >= v2Calculation.metrics.ebitdaMarginReal ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {formatPercent(v2Calculation.metrics.ebitdaMarginSimulated - v2Calculation.metrics.ebitdaMarginReal)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 4. PAYBACK DE RESCISÕES */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                      <span className="font-bold uppercase tracking-wider">Payback Rescisões (People)</span>
+                      <Award size={16} className="text-purple-400" />
+                    </div>
+                    <div className="text-xl font-black text-white mt-1">
+                      {v2Calculation.metrics.severancePaybackMonths > 0 ? `${v2Calculation.metrics.severancePaybackMonths} Meses` : '—'}
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
+                      <span className="text-slate-400">Rescisões: {formatCurrency(v2Params.layoffsSeveranceCost)}</span>
+                      <span className="font-bold text-purple-400">Amortização</span>
+                    </div>
+                  </div>
+
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* GRÁFICO 1: CURVA DE CAIXA ACUMULADO & RUNWAY */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-white text-sm uppercase tracking-wider">Curva de Caixa & Projected Runway</h3>
+                      <p className="text-xs text-slate-400">Saldo acumulado de caixa ao longo do tempo (Real vs Simulado)</p>
+                    </div>
+                  </div>
+
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={cashRunwayChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorCashReal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorCashSim" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="mes" stroke="#64748b" fontSize={11} />
+                        <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
+                          formatter={(value: any) => formatCurrency(Number(value))}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                        <Area type="monotone" dataKey="Caixa Acumulado Real" stroke="#10b981" fillOpacity={1} fill="url(#colorCashReal)" strokeWidth={2} />
+                        <Area type="monotone" dataKey="Caixa Acumulado Simulado" stroke="#3b82f6" fillOpacity={1} fill="url(#colorCashSim)" strokeWidth={2.5} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* GRÁFICO 2: DEMONSTRATIVO SINTÉTICO (BARRAS COMPARATIVAS) */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-white text-sm uppercase tracking-wider">Demonstrativo Sintético DRE</h3>
+                      <p className="text-xs text-slate-400">Comparativo direto de estrutura financeira entre Real e Simulado</p>
+                    </div>
+                  </div>
+
+                  <div className="h-56 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={syntheticChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                        <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
+                          formatter={(value: any) => formatCurrency(Number(value))}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                        <Bar dataKey="Real" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Simulado" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* PARECER BRISINHAI */}
+                {aiAnalysisText && (
+                  <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-5 shadow-xl animate-in fade-in">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles className="text-emerald-400" size={18} />
+                      <h3 className="font-bold text-white text-sm uppercase tracking-wider">Parecer Executivo — BrisinhAI</h3>
+                    </div>
+                    <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-medium bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                      {aiAnalysisText}
+                    </div>
+                  </div>
+                )}
+
+              </>
+            )}
+
+          </div>
 
         </div>
-
-        {/* 3. GRÁFICOS EXECUTIVOS RECHARTS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Gráfico 1: Evolução Temporal com Rampa de Recuperação */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-bold text-white text-sm uppercase tracking-wider">Evolução do Resultado Operacional (Rampa)</h3>
-                <p className="text-xs text-slate-400">Comparativo mês a mês do Lucro Real vs Cenário Simulado</p>
-              </div>
-            </div>
-
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={timelineChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorSim" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="mes" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                    formatter={(value: any) => formatCurrency(Number(value))}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                  <Area type="monotone" dataKey="Lucro Real" stroke="#10b981" fillOpacity={1} fill="url(#colorReal)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="Lucro Simulado" stroke="#f59e0b" fillOpacity={1} fill="url(#colorSim)" strokeWidth={2} strokeDasharray="4 4" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Gráfico 2: Waterfall / Impacto por Premissa */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-bold text-white text-sm uppercase tracking-wider">Matriz de Impacto por Premissa</h3>
-                <p className="text-xs text-slate-400">Contribuição individual de cada driver no resultado final</p>
-              </div>
-            </div>
-
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={waterfallChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                    formatter={(value: any) => formatCurrency(Number(value))}
-                  />
-                  <Bar dataKey="valor" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* 4. TABELA COMPARATIVA DRE ESTRUTURADA */}
-        {baseResult && simResult && (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-white text-sm uppercase tracking-wider">Demonstração do Resultado DRE (Comparativo Executivo)</h3>
-                <p className="text-xs text-slate-400">Detalhamento linha a linha do Cenário Real vs Cenário Simulado</p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider bg-slate-950">
-                    <th className="py-3 px-4">Linha DRE</th>
-                    <th className="py-3 px-4 text-right">Real (R$)</th>
-                    <th className="py-3 px-4 text-right">Simulado (R$)</th>
-                    <th className="py-3 px-4 text-right">Variação (R$)</th>
-                    <th className="py-3 px-4 text-right">Variação (%)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-xs">
-                  {DEFAULT_DRE_ESTRUTURA.map((item, idx) => {
-                    if (item.tipo === 'divisor') return null;
-                    const baseVal = baseResult.totais[item.titulo] || 0;
-                    const simVal = simResult.totais[item.titulo] || 0;
-                    const diff = simVal - baseVal;
-                    const perc = baseVal !== 0 ? (diff / Math.abs(baseVal)) * 100 : 0;
-                    const isCard = item.tipo === 'card' || item.tipo === 'card_percentual';
-
-                    return (
-                      <tr 
-                        key={idx}
-                        className={isCard ? 'bg-slate-950/80 font-bold text-white' : 'hover:bg-slate-800/40 text-slate-300'}
-                      >
-                        <td className="py-2.5 px-4">{item.titulo}</td>
-                        <td className="py-2.5 px-4 text-right">{formatCurrency(baseVal)}</td>
-                        <td className="py-2.5 px-4 text-right font-semibold">{formatCurrency(simVal)}</td>
-                        <td className={`py-2.5 px-4 text-right font-bold ${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {formatCurrency(diff)}
-                        </td>
-                        <td className={`py-2.5 px-4 text-right font-bold ${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {formatPercent(perc)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
       </main>
 
       {/* MODAL DE EXPORTAÇÃO GAMMA */}
@@ -1012,7 +767,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise Estratégica por BrisinhA
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Zap className="text-amber-400" size={20} />
-                <h3 className="font-bold text-white text-base">Gerar Apresentação no Gamma</h3>
+                <h3 className="font-bold text-white text-base">Exportar Simulação V2 para Gamma IA</h3>
               </div>
               <button 
                 onClick={() => setIsGammaModalOpen(false)}
@@ -1028,8 +783,8 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise Estratégica por BrisinhA
                 <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-2xl flex items-center justify-center mx-auto">
                   <Sparkles size={32} />
                 </div>
-                <h4 className="font-bold text-white text-base">Apresentação Gamma Gerada!</h4>
-                <p className="text-xs text-slate-400">Sua simulação DRE executiva foi transformada em uma apresentação no Gamma.</p>
+                <h4 className="font-bold text-white text-base">Apresentação Gamma Gerada com Sucesso!</h4>
+                <p className="text-xs text-slate-400">Sua simulação V2 (Break-Even, Cash Runway e EBITDA) foi convertida em apresentação Gamma.</p>
                 <a
                   href={gammaUrl}
                   target="_blank"
@@ -1043,19 +798,19 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise Estratégica por BrisinhA
             ) : (
               <div className="space-y-4">
                 <p className="text-xs text-slate-400">
-                  Esta ação enviará os dados comparativos (Cenário Real vs Simulado), a rampa de reposição e as premissas para montar a apresentação oficial.
+                  Os indicadores em tempo real (Break-Even, Cash Runway, EBITDA e Payback de Rescisões) serão enviados via Markdown para montagem dos slides.
                 </p>
 
                 <div className="flex items-center gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
                   <input
                     type="checkbox"
-                    id="incAi"
+                    id="incAiV2"
                     checked={includeAiInGamma}
                     onChange={e => setIncludeAiInGamma(e.target.checked)}
                     className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500"
                   />
-                  <label htmlFor="incAi" className="text-xs font-semibold text-slate-300 cursor-pointer">
-                    Incluir Parecer Executivo do BrisinhAI nos slides
+                  <label htmlFor="incAiV2" className="text-xs font-semibold text-slate-300 cursor-pointer">
+                    Incluir Parecer Executivo do BrisinhAI na apresentação
                   </label>
                 </div>
 

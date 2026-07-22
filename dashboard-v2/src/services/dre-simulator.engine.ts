@@ -826,3 +826,254 @@ export class DreSimulatorEngine {
     };
   }
 }
+
+/**
+ * ──────────────────────────────────────────────────────────
+ * SIMULADOR V2 — FUNÇÕES PURAS EM TYPESCRIPT
+ * Totalmente desvinculado de mutações de banco de dados
+ * ──────────────────────────────────────────────────────────
+ */
+
+export interface SimulatorV2Params {
+  revenueChangePct: number;       // -50% a +50%
+  costReductionPct: number;       // 0% a 50%
+  expenseReductionPct: number;    // 0% a 50%
+  contractLossValue: number;      // Perda mensal em R$
+  contractReplacementMonths: number; // Janela de reposição (meses)
+  contractStartMonth?: string;     // '2025-08'
+  layoffsCount: number;           // Headcount reduzido (Peopleboard)
+  layoffsMonthlySavings: number;  // Economia mensal em R$
+  layoffsSeveranceCost: number;   // Custo total de rescisões (R$)
+  initialCash: number;            // Saldo de caixa inicial para Runway
+}
+
+export interface SimulatorV2Metrics {
+  breakEvenPointReal: number;
+  breakEvenPointSimulated: number;
+  cashRunwayMonths: number;
+  zeroCashMonth: string | null;
+  isRunwaySustainable: boolean;
+  ebitdaMarginReal: number;
+  ebitdaMarginSimulated: number;
+  severancePaybackMonths: number;
+}
+
+/** 1. Ponto de Equilíbrio (Break-Even Point) em R$/mês */
+export function calculateBreakEvenPoint(fixedCosts: number, variableCostRatio: number): number {
+  const contributionMarginRatio = 1 - Math.min(0.99, Math.max(0, variableCostRatio));
+  if (contributionMarginRatio <= 0) return 0;
+  return Math.round(fixedCosts / contributionMarginRatio);
+}
+
+/** 2. Cash Runway (Quantos meses o caixa suporta e data em que zera) */
+export function calculateCashRunway(
+  initialCash: number,
+  monthlyResults: Record<string, number>,
+  validColumns: string[]
+): { runwayMonths: number; zeroCashMonth: string | null; isSustainable: boolean } {
+  let runningCash = initialCash;
+  let zeroMonth: string | null = null;
+  let monthsCount = 0;
+
+  for (const col of validColumns) {
+    const netCashFlow = monthlyResults[col] || 0;
+    runningCash += netCashFlow;
+    monthsCount++;
+    if (runningCash <= 0 && !zeroMonth) {
+      zeroMonth = col;
+    }
+  }
+
+  if (!zeroMonth) {
+    return { runwayMonths: validColumns.length, zeroCashMonth: null, isSustainable: true };
+  }
+
+  return { runwayMonths: monthsCount, zeroCashMonth: zeroMonth, isSustainable: false };
+}
+
+/** 3. Margem EBITDA (%) */
+export function calculateEbitdaMargin(ebitda: number, revenue: number): number {
+  if (!revenue || revenue === 0) return 0;
+  return (ebitda / Math.abs(revenue)) * 100;
+}
+
+/** 4. Payback de Rescisões (Meses para recuperar investimento em rescisões) */
+export function calculateSeverancePayback(severanceCost: number, monthlyPayrollSavings: number): number {
+  if (!monthlyPayrollSavings || monthlyPayrollSavings <= 0) return 0;
+  if (!severanceCost || severanceCost <= 0) return 0;
+  return Math.round((severanceCost / monthlyPayrollSavings) * 10) / 10;
+}
+
+/** 5. Execução Completa da Simulação V2 via Funções Puras */
+export function calculateV2SimulationEngine(
+  rawData: DreRow[],
+  metadata: DreMetadata,
+  estrutura: DreStructureItem[],
+  filters: DreFilters,
+  params: SimulatorV2Params
+): {
+  baseResult: DreCalculatedResult;
+  simResult: DreCalculatedResult;
+  metrics: SimulatorV2Metrics;
+  assumptions: ScenarioAssumption[];
+} {
+  // 1. Gerar Premissas em Memória
+  const assumptions: ScenarioAssumption[] = [];
+
+  // Variação de Receitas (%)
+  if (params.revenueChangePct !== 0) {
+    assumptions.push({
+      id: 'v2_rev_pct',
+      type: params.revenueChangePct > 0 ? 'revenue_increase' : 'revenue_reduction',
+      targetType: 'account_group',
+      targetIds: ['receita'],
+      amountType: 'percentage',
+      value: Math.abs(params.revenueChangePct),
+      startDate: '2025-01',
+      endDate: '2026-12',
+      recurrence: 'monthly',
+      enabled: true,
+      notes: `Variação de Receita: ${params.revenueChangePct > 0 ? '+' : ''}${params.revenueChangePct}%`
+    });
+  }
+
+  // Corte de Custos (%)
+  if (params.costReductionPct > 0) {
+    assumptions.push({
+      id: 'v2_costs_pct',
+      type: 'costs_cut',
+      targetType: 'account_group',
+      targetIds: ['custos_operacionais'],
+      amountType: 'percentage',
+      value: params.costReductionPct,
+      startDate: '2025-01',
+      endDate: '2026-12',
+      recurrence: 'monthly',
+      enabled: true,
+      notes: `Corte de Custos: -${params.costReductionPct}%`
+    });
+  }
+
+  // Corte de Despesas Rateadas (%)
+  if (params.expenseReductionPct > 0) {
+    assumptions.push({
+      id: 'v2_exp_pct',
+      type: 'expense_reduction',
+      targetType: 'account_group',
+      targetIds: ['despesas_rateadas'],
+      amountType: 'percentage',
+      value: params.expenseReductionPct,
+      startDate: '2025-01',
+      endDate: '2026-12',
+      recurrence: 'monthly',
+      enabled: true,
+      notes: `Corte de Despesas Rateadas: -${params.expenseReductionPct}%`
+    });
+  }
+
+  // Perda de Contrato
+  if (params.contractLossValue > 0) {
+    assumptions.push({
+      id: 'v2_contract_loss',
+      type: 'contract_loss',
+      targetType: 'account_group',
+      targetIds: ['receita'],
+      amountType: 'monthly_value',
+      value: params.contractLossValue,
+      monthlyLoss: params.contractLossValue,
+      contractName: 'Contrato Simulado',
+      startDate: params.contractStartMonth || '2025-08',
+      endDate: '2026-12',
+      recurrence: 'linear_ramp',
+      replacementMonths: params.contractReplacementMonths || 0,
+      enabled: true,
+      notes: `Perda de Contrato: R$ ${params.contractLossValue}/mês (Reposição: ${params.contractReplacementMonths || 0}m)`
+    });
+  }
+
+  // Layoffs / Readequação de Pessoal (Peopleboard)
+  if (params.layoffsMonthlySavings > 0) {
+    assumptions.push({
+      id: 'v2_layoffs_savings',
+      type: 'expense_reduction',
+      targetType: 'account',
+      targetIds: ['CLTs', 'Despesas com Pessoal', 'Credenciado Operacional'],
+      amountType: 'monthly_value',
+      value: params.layoffsMonthlySavings,
+      startDate: '2025-08',
+      endDate: '2026-12',
+      recurrence: 'monthly',
+      enabled: true,
+      notes: `Readequação de Pessoal (${params.layoffsCount} pessoas): Economia de R$ ${params.layoffsMonthlySavings}/mês`
+    });
+  }
+
+  // 2. Executar Motor Base e Simulado em Memória
+  const baseScenario: Scenario = {
+    id: 'base_v2',
+    name: 'Cenário Real',
+    basePeriod: [],
+    projectionStartDate: '2025-01',
+    projectionEndDate: '2026-12',
+    mode: 'historical_what_if',
+    includeAllocatedExpenses: !filters.excludeSharedExpenses,
+    assumptions: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  const simScenario: Scenario = {
+    id: 'sim_v2',
+    name: 'Cenário Simulado V2',
+    basePeriod: [],
+    projectionStartDate: '2025-01',
+    projectionEndDate: '2026-12',
+    mode: 'historical_what_if',
+    includeAllocatedExpenses: !filters.excludeSharedExpenses,
+    assumptions,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  const baseResult = DreSimulatorEngine.runSimulation(rawData, metadata, estrutura, filters, baseScenario);
+  const simResult = DreSimulatorEngine.runSimulation(rawData, metadata, estrutura, filters, simScenario);
+
+  // 3. Calcular Indicadores Puramente em Memória
+  const fixedCostsReal = (baseResult.kpis.totalDespesas || 0) + (baseResult.kpis.totalCustos * 0.4);
+  const varRatioReal = baseResult.kpis.receitaOperacional > 0 ? (baseResult.kpis.totalCustos * 0.6) / baseResult.kpis.receitaOperacional : 0.4;
+  const breakEvenPointReal = calculateBreakEvenPoint(fixedCostsReal, varRatioReal);
+
+  const fixedCostsSim = (simResult.kpis.totalDespesas || 0) + (simResult.kpis.totalCustos * 0.4);
+  const varRatioSim = simResult.kpis.receitaOperacional > 0 ? (simResult.kpis.totalCustos * 0.6) / simResult.kpis.receitaOperacional : 0.4;
+  const breakEvenPointSimulated = calculateBreakEvenPoint(fixedCostsSim, varRatioSim);
+
+  // Runway
+  const monthlyFcl: Record<string, number> = {};
+  simResult.validColumns.forEach(col => {
+    monthlyFcl[col] = simResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || simResult.mensal['Lucro antes do FCL']?.[col] || 0;
+  });
+  const runway = calculateCashRunway(params.initialCash || 500000, monthlyFcl, simResult.validColumns);
+
+  // EBITDA Margins
+  const ebitdaMarginReal = calculateEbitdaMargin(baseResult.kpis.resultado, baseResult.kpis.receitaOperacional);
+  const ebitdaMarginSimulated = calculateEbitdaMargin(simResult.kpis.resultado, simResult.kpis.receitaOperacional);
+
+  // Payback
+  const severancePaybackMonths = calculateSeverancePayback(params.layoffsSeveranceCost, params.layoffsMonthlySavings);
+
+  return {
+    baseResult,
+    simResult,
+    assumptions,
+    metrics: {
+      breakEvenPointReal,
+      breakEvenPointSimulated,
+      cashRunwayMonths: runway.runwayMonths,
+      zeroCashMonth: runway.zeroCashMonth,
+      isRunwaySustainable: runway.isSustainable,
+      ebitdaMarginReal,
+      ebitdaMarginSimulated,
+      severancePaybackMonths
+    }
+  };
+}
