@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.40";
+export const APP_VERSION = "v.02.50.41";
 export const VERSION_DATE = "2026-07-22";
 export const VERSION_CHANGELOG = [
+  "v.02.50.41 - Fix/Seguros: Garante a persistência e visualização de anexos (pdf_url/imagens de apólices). Adiciona mecanismo de presenvação de URL com tag [PDF: url] em coberturas_adicionais na sanitização resiliente quando a coluna física pdf_url não existe no banco, e extração automática em enrichPolicy, garantindo que o anexo seja salvo e exibido no card sem erros.",
   "v.02.50.40 - Fix/Seguros: Trata a conversão de campos de data vazios ('') para null antes de enviar ao Supabase (prepareInsurancePayload). Elimina o erro do PostgreSQL 'invalid input syntax for type date: \"\"' quando apólices são salvas ou editadas com campos de início ou vencimento despreenchidos.",
   "v.02.50.39 - Fix/Seguros: Elimina o erro 'Could not find the observacoes column of insurance_policies in the schema cache' (PGRST204) na gravação/edição de apólices de seguro. Adiciona tratamento de payload resiliente (sanitizeInsurancePayload) em insurance.service.ts, preservando observações em coberturas_adicionais se a coluna estiver ausente no banco, além de migration SQL dedicada (20260722_add_insurance_observacoes.sql).",
   "v.02.50.38 - Fix/DRE: Elimina a duplicação de valores na linha 'Deduções de Receita' (observada em DZM no mês de Jun/25). Implementa deduplicação por Set na consolidação de chaves de categorias (getMatchingBucketKeys), impedindo que itens com variações de nomenclatura em item.categorias (ex: 'Deduções de Receita' e 'Deduções de Receitas') acessem e somem o mesmo bucket de dados duas vezes.",

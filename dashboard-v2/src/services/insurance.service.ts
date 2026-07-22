@@ -74,9 +74,19 @@ export function enrichPolicy(policy: InsurancePolicy): InsurancePolicy {
     }
   }
 
+  // Se pdf_url estiver vazio mas coberturas_adicionais contiver "[PDF:", extrai a URL para pdf_url
+  let pdfUrl = policy.pdf_url || '';
+  if (!pdfUrl && policy.coberturas_adicionais && policy.coberturas_adicionais.includes('[PDF:')) {
+    const match = policy.coberturas_adicionais.match(/\[PDF:\s*([^\]]+)\]/);
+    if (match && match[1]) {
+      pdfUrl = match[1].trim();
+    }
+  }
+
   return {
     ...policy,
     observacoes: obs,
+    pdf_url: pdfUrl,
     diasParaVencer: dias,
     statusVencimento: getStatusVencimento(dias),
     parcelasPagas,
@@ -143,6 +153,16 @@ function sanitizeInsurancePayload(input: Partial<InsurancePolicyInput>): Record<
       payload.coberturas_adicionais = `Obs: ${obsText}`;
     } else if (!payload.coberturas_adicionais.includes(obsText)) {
       payload.coberturas_adicionais = `${payload.coberturas_adicionais} | Obs: ${obsText}`;
+    }
+  }
+
+  if (payload.pdf_url && typeof payload.pdf_url === 'string' && payload.pdf_url.trim() !== '') {
+    const urlText = payload.pdf_url.trim();
+    const tag = `[PDF: ${urlText}]`;
+    if (!payload.coberturas_adicionais || payload.coberturas_adicionais.trim() === '') {
+      payload.coberturas_adicionais = tag;
+    } else if (!payload.coberturas_adicionais.includes(urlText)) {
+      payload.coberturas_adicionais = `${payload.coberturas_adicionais} ${tag}`;
     }
   }
 
