@@ -10,7 +10,7 @@ import {
   ChevronLeft, ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Percent, 
   Sparkles, RefreshCw, Layers, CheckSquare, Square, X, ExternalLink, Loader2,
   FileText, Zap, Target, DollarSign, Calendar, AlertTriangle, ShieldCheck,
-  Users, Activity, Clock, Award, Sliders, HelpCircle, Info, BookOpen, Check, Building2
+  Users, Activity, Clock, Award, Sliders, HelpCircle, Info, BookOpen, Check, Building2, Calculator
 } from 'lucide-react';
 import { DreRow, DreFilters, DreMetadata } from '@/types/dre';
 import { 
@@ -35,6 +35,7 @@ const formatPercent = (val?: number) => {
 };
 
 type PeriodicityOption = 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
+type AuditModalType = 'breakeven' | 'runway' | 'ebitda' | 'replacement' | null;
 
 export default function DreCustomPage() {
   // Estado de Dados Brutos e Metadata
@@ -53,6 +54,7 @@ export default function DreCustomPage() {
   // Periodicidade da Visualização
   const [periodicity, setPeriodicity] = useState<PeriodicityOption>('mensal');
   const [showDidacticGuide, setShowDidacticGuide] = useState<boolean>(false);
+  const [activeAuditModal, setActiveAuditModal] = useState<AuditModalType>(null);
 
   // SELEÇÃO DE EMPRESA(S)
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([]);
@@ -120,12 +122,11 @@ export default function DreCustomPage() {
     loadData();
   }, []);
 
-  // REQUISITO 1: EXTRAÇÃO DE CONTRATOS COM VALOR MÉDIO MENSAL REAL
+  // EXTRAÇÃO DE CONTRATOS COM VALOR MÉDIO MENSAL REAL
   const availableContractsList = useMemo(() => {
     if (!rawData || rawData.length === 0) return [];
     const mapProj = new Map<string, { total: number; count: number }>();
 
-    // Colunas históricas com valor (ex: "Jan/25", "Jul/26")
     const periodCols = Object.keys(rawData[0] || {}).filter(k => k.includes('/'));
 
     rawData.forEach(r => {
@@ -136,7 +137,6 @@ export default function DreCustomPage() {
         }
         const entry = mapProj.get(r.Projeto)!;
 
-        // Somar apenas lançamentos de receita do projeto
         if (r.ContaDRE && ['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(r.ContaDRE)) {
           periodCols.forEach(col => {
             const val = parseFloat(r[col]?.toString().replace(',', '.') || '0');
@@ -159,7 +159,7 @@ export default function DreCustomPage() {
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [rawData, selectedEmpresas]);
 
-  // Handler ao escolher um contrato na lista suspensa (preenche o valor médio automaticamente)
+  // Handler ao escolher um contrato na lista suspensa
   const handleSelectContractName = (name: string) => {
     setNewContractName(name);
     const found = availableContractsList.find(c => c.name === name);
@@ -242,31 +242,29 @@ export default function DreCustomPage() {
     }, deferredParams, baseResult);
   }, [rawData, metadata, selectedEmpresas, deferredParams, baseResult]);
 
-  // REQUISITO 2: PROJEÇÕES FUTURAS INICIANDO A PARTIR DE HOJE (DETERMINAÇÃO DINÂMICA JUL/26)
+  // REQUISITO 2: PROJEÇÃO FUTURA A PARTIR DE HOJE (DETERMINAÇÃO DINÂMICA JUL/26 EM DIANTE)
   const cashRunwayChartData = useMemo(() => {
     if (!v3Calculation) return [];
+    
+    // Meses Futuros iniciando no Mês Atual (Jul/26 em diante para 12 meses)
+    const futureMonthsLabels = [
+      'Jul/26', 'Ago/26', 'Set/26', 'Out/26', 'Nov/26', 'Dez/26',
+      'Jan/27', 'Fev/27', 'Mar/27', 'Abr/27', 'Mai/27', 'Jun/27'
+    ];
+
+    const audit = v3Calculation.metrics.audit;
+    const monthlyNetCashBase = (audit.monthlyRevenueReal - audit.monthlyCostsReal - audit.monthlyExpensesReal);
+    const monthlyNetCashSim = (audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim);
+
     let runningCashBase = v3Params.initialCash;
     let runningCashSim = v3Params.initialCash;
 
-    const validCols = v3Calculation.simResult.validColumns;
-    
-    // Identifica o mês atual/futuro (Jul/26 ou período mais recente)
-    let currentMonthIdx = validCols.findIndex(c => c.includes('Jul/26') || c.includes('jul/26') || c.includes('2026-07'));
-    if (currentMonthIdx < 0) {
-      currentMonthIdx = Math.max(0, validCols.length - 12);
-    }
-
-    const futureColumns = validCols.slice(currentMonthIdx);
-
-    return futureColumns.map(col => {
-      const baseFcl = v3Calculation.baseResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v3Calculation.baseResult.mensal['Lucro antes do FCL']?.[col] || 0;
-      const simFcl = v3Calculation.simResult.mensal['Fluxo de Caixa Livre FCL']?.[col] || v3Calculation.simResult.mensal['Lucro antes do FCL']?.[col] || 0;
-
-      runningCashBase += baseFcl;
-      runningCashSim += simFcl;
+    return futureMonthsLabels.map(mes => {
+      runningCashBase += monthlyNetCashBase;
+      runningCashSim += monthlyNetCashSim;
 
       return {
-        mes: col,
+        mes,
         'Caixa Acumulado Real': Math.round(runningCashBase),
         'Caixa Acumulado Simulado': Math.round(runningCashSim),
       };
@@ -307,7 +305,7 @@ export default function DreCustomPage() {
     return Object.values(grouped);
   }, [cashRunwayChartData, periodicity]);
 
-  // REQUISITO 4: CÁLCULO DA META MENSAL DE NOVOS FECHAMENTOS (REPOSIÇÃO COMERCIAL ATÉ PONTO X)
+  // CÁLCULO DA META MENSAL DE NOVOS FECHAMENTOS (REPOSIÇÃO COMERCIAL ATÉ PONTO X)
   const salesReplacementTarget = useMemo(() => {
     if (!v3Params.enableContractLoss || v3Params.selectedContracts.length === 0) return null;
 
@@ -332,17 +330,16 @@ export default function DreCustomPage() {
     };
   }, [v3Params]);
 
-  // Dados para Gráfico 2: Demonstrativo Sintético
+  // Dados para Gráfico 2: Demonstrativo Sintético (Valores Médios Mensais)
   const syntheticChartData = useMemo(() => {
     if (!v3Calculation) return [];
-    const baseK = v3Calculation.baseResult.kpis;
-    const simK = v3Calculation.simResult.kpis;
+    const audit = v3Calculation.metrics.audit;
 
     return [
-      { name: 'Receita', Real: Math.round(baseK.receitaOperacional), Simulado: Math.round(simK.receitaOperacional) },
-      { name: 'Custos', Real: Math.round(baseK.totalCustos), Simulado: Math.round(simK.totalCustos) },
-      { name: 'Despesas', Real: Math.round(baseK.totalDespesas), Simulado: Math.round(simK.totalDespesas) },
-      { name: 'EBITDA (Lucro)', Real: Math.round(baseK.resultado), Simulado: Math.round(simK.resultado) },
+      { name: 'Receita', Real: Math.round(audit.monthlyRevenueReal), Simulado: Math.round(audit.monthlyRevenueSim) },
+      { name: 'Custos', Real: Math.round(audit.monthlyCostsReal), Simulado: Math.round(audit.monthlyCostsSim) },
+      { name: 'Despesas', Real: Math.round(audit.monthlyExpensesReal), Simulado: Math.round(audit.monthlyExpensesSim) },
+      { name: 'Lucro/mês', Real: Math.round(audit.monthlyRevenueReal - audit.monthlyCostsReal - audit.monthlyExpensesReal), Simulado: Math.round(audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim) },
     ];
   }, [v3Calculation]);
 
@@ -363,7 +360,7 @@ export default function DreCustomPage() {
 - Corte de Despesas: ${v3Params.enableExpensesAdj ? `${v3Params.expensesValue}${v3Params.expensesType === 'percentage' ? '%' : ' R$'}` : 'Não'}
 - Perda de Contratos: ${v3Params.enableContractLoss ? v3Params.selectedContracts.map(c => `${c.contractName} (R$ ${c.monthlyValue}/mês, Reposição ${c.replacementMonths}m)`).join('; ') : 'Nenhum'}
 ${salesReplacementTarget ? `- Meta Mensal de Vendas/Novos Fechamentos: ${formatCurrency(salesReplacementTarget.monthlySalesTarget)}/mês durante ${salesReplacementTarget.maxReplacementMonths} meses` : ''}
-- Ponto de Equilíbrio Real: ${formatCurrency(m.breakEvenPointReal)} vs Simulado: ${formatCurrency(m.breakEvenPointSimulated)}
+- Ponto de Equilíbrio Real: ${formatCurrency(m.breakEvenPointReal)}/mês vs Simulado: ${formatCurrency(m.breakEvenPointSimulated)}/mês
 - Margem EBITDA Real: ${m.ebitdaMarginReal.toFixed(1)}% vs Simulada: ${m.ebitdaMarginSimulated.toFixed(1)}%
 - Cash Runway: ${m.isRunwaySustainable ? 'Sustentável (Caixa Positivo)' : `Zera no mês ${m.zeroCashMonth} (${m.cashRunwayMonths} meses)`}
 
@@ -385,9 +382,7 @@ Forneça um parecer executivo claro em 3 tópicos: 1. Diagnóstico da Saúde Fin
     }
   };
 
-  // ──────────────────────────────────────────────────────────
-  // REQUISITO 5: RELATÓRIO GAMMA (GERAÇÃO DE APRESENTAÇÃO COMPLETA)
-  // ──────────────────────────────────────────────────────────
+  // EXPORTAÇÃO GAMMA
   const handleExportGamma = async () => {
     if (!v3Calculation) return;
     setIsGammaGenerating(true);
@@ -395,23 +390,22 @@ Forneça um parecer executivo claro em 3 tópicos: 1. Diagnóstico da Saúde Fin
 
     try {
       const m = v3Calculation.metrics;
-      const bK = v3Calculation.baseResult.kpis;
-      const sK = v3Calculation.simResult.kpis;
+      const audit = m.audit;
 
       const reportMarkdown = `# Apresentação Executiva — Simulador DRE V3
 
-## 1. Indicadores Executivos em Tempo Real
+## 1. Indicadores Executivos Mensais
 - **Empresa(s)**: ${selectedEmpresas.length > 0 ? selectedEmpresas.join(', ') : 'Todas as Empresas'}
-- **Ponto de Equilíbrio (Break-Even)**: Real ${formatCurrency(m.breakEvenPointReal)} | Simulado ${formatCurrency(m.breakEvenPointSimulated)}
+- **Faturamento Médio Mensal Real**: ${formatCurrency(audit.monthlyRevenueReal)}
+- **Ponto de Equilíbrio (Break-Even)**: Real ${formatCurrency(m.breakEvenPointReal)}/mês | Simulado ${formatCurrency(m.breakEvenPointSimulated)}/mês
 - **Margem EBITDA**: Real ${m.ebitdaMarginReal.toFixed(1)}% | Simulada ${m.ebitdaMarginSimulated.toFixed(1)}%
 - **Cash Runway**: ${m.isRunwaySustainable ? 'Caixa Sustentável' : `Caixa Zera no Mês ${m.zeroCashMonth}`}
 ${salesReplacementTarget ? `- **Meta Mensal de Vendas/Reposição**: ${formatCurrency(salesReplacementTarget.monthlySalesTarget)}/mês durante ${salesReplacementTarget.maxReplacementMonths} meses` : ''}
 
-## 2. Demostrativo Comparativo DRE
-- **Receita Operacional**: Real ${formatCurrency(bK.receitaOperacional)} | Simulado ${formatCurrency(sK.receitaOperacional)}
-- **Custos Operacionais**: Real ${formatCurrency(bK.totalCustos)} | Simulado ${formatCurrency(sK.totalCustos)}
-- **Despesas Rateadas**: Real ${formatCurrency(bK.totalDespesas)} | Simulado ${formatCurrency(sK.totalDespesas)}
-- **Resultado Final (Lucro)**: Real ${formatCurrency(bK.resultado)} | Simulado ${formatCurrency(sK.resultado)}
+## 2. Demostrativo Sintético Mensal
+- **Receita Mensal**: Real ${formatCurrency(audit.monthlyRevenueReal)} | Simulado ${formatCurrency(audit.monthlyRevenueSim)}
+- **Custos Mensais**: Real ${formatCurrency(audit.monthlyCostsReal)} | Simulado ${formatCurrency(audit.monthlyCostsSim)}
+- **Despesas Mensais**: Real ${formatCurrency(audit.monthlyExpensesReal)} | Simulado ${formatCurrency(audit.monthlyExpensesSim)}
 
 ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artificial — BrisinhAI\n${aiAnalysisText}` : ''}
 `;
@@ -491,7 +485,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   Cenários Futuros
                 </span>
               </h1>
-              <p className="text-xs text-slate-400">Projeções Futuras a partir do Mês Atual (Jul/26)</p>
+              <p className="text-xs text-slate-400">Projeção Futura (HOJE = Jul/26 em diante)</p>
             </div>
           </div>
 
@@ -559,7 +553,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
               <div className="flex items-center gap-2">
                 <Info size={18} className="text-amber-400" />
                 <h3 className="font-bold text-white text-sm uppercase tracking-wider">
-                  📖 Guia Prático para Entender o Simulador (Linguagem Simples)
+                  📖 Guia Prático para Entender o Simulador (Clique nos Cards para Ver a Fórmula)
                 </h3>
               </div>
               <button onClick={() => setShowDidacticGuide(false)} className="text-slate-400 hover:text-white">
@@ -571,14 +565,14 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-400 uppercase text-[10px]">1. Ponto de Equilíbrio (Break-Even)</span>
                 <p className="text-slate-300 leading-relaxed">
-                  É quanto a empresa precisa vender por mês para pagar todas as contas operacionais e despesas e ficar no zero a zero.
+                  Quanto a empresa precisa faturar por mês para cobrir exatamente as despesas fixas e custos operacionais.
                 </p>
               </div>
 
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="font-bold text-rose-400 uppercase text-[10px]">2. Cash Runway (Vida do Caixa)</span>
                 <p className="text-slate-300 leading-relaxed">
-                  Mostra em qual mês o dinheiro em caixa vai acabar se o resultado simulated persistir.
+                  Mês em que o saldo de caixa zera se o resultado mensal for negativo no cenário futuro.
                 </p>
               </div>
 
@@ -783,7 +777,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                 )}
               </div>
 
-              {/* REQUISITO 1: PERDA DE CONTRATO COM PREENCHIMENTO AUTOMÁTICO DO VALOR MÉDIO MENSAL */}
+              {/* PERDA DE CONTRATO COM PREENCHIMENTO AUTOMÁTICO DO VALOR MÉDIO MENSAL */}
               <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
@@ -895,31 +889,40 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
 
             {v3Calculation && (
               <>
-                {/* CARDS DE INDICADORES EXECUTIVOS EM TEMPO REAL */}
+                {/* CARDS DE INDICADORES EXECUTIVOS EM TEMPO REAL (CLICÁVEIS PARA DETALHAR CÁLCULO) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   
-                  {/* 1. PONTO DE EQUILÍBRIO (BREAK-EVEN OPERACIONAL REAL) */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                  {/* 1. PONTO DE EQUILÍBRIO (BREAK-EVEN OPERACIONAL MENSAL) */}
+                  <div 
+                    onClick={() => setActiveAuditModal('breakeven')}
+                    className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-4 shadow-xl cursor-pointer transition-all group"
+                  >
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider">Break-Even Operacional</span>
-                      <Target size={16} className="text-amber-400" />
+                      <span className="font-bold uppercase tracking-wider group-hover:text-amber-400 transition-colors">Break-Even /Mês</span>
+                      <Calculator size={16} className="text-amber-400" />
                     </div>
                     <div className="text-xl font-black text-white mt-1">
                       {formatCurrency(v3Calculation.metrics.breakEvenPointSimulated)}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Faturamento mensal mínimo para cobrir despesas e custos fixos.
+                      Meta de faturamento mensal para cobrir contas.
                     </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Real: {formatCurrency(v3Calculation.metrics.breakEvenPointReal)}</span>
-                      <span className="font-bold text-amber-400">Meta/mês</span>
+                      <span className="font-bold text-amber-400 flex items-center gap-1">
+                        <span>Ver Fórmula</span>
+                        <ChevronLeft size={12} className="rotate-180" />
+                      </span>
                     </div>
                   </div>
 
                   {/* 2. CASH RUNWAY */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                  <div 
+                    onClick={() => setActiveAuditModal('runway')}
+                    className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-4 shadow-xl cursor-pointer transition-all group"
+                  >
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider">Cash Runway</span>
+                      <span className="font-bold uppercase tracking-wider group-hover:text-emerald-400 transition-colors">Cash Runway</span>
                       <Clock size={16} className={v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'} />
                     </div>
                     <div className={`text-xl font-black mt-1 ${v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -928,7 +931,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                         : `${v3Calculation.metrics.cashRunwayMonths} Meses`}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Meses até o saldo de caixa zerar no cenário futuro.
+                      Vida útil do caixa no cenário simulado.
                     </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Data Zero:</span>
@@ -939,16 +942,19 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   </div>
 
                   {/* 3. MARGEM EBITDA */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                  <div 
+                    onClick={() => setActiveAuditModal('ebitda')}
+                    className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 rounded-2xl p-4 shadow-xl cursor-pointer transition-all group"
+                  >
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider">Margem EBITDA</span>
+                      <span className="font-bold uppercase tracking-wider group-hover:text-cyan-400 transition-colors">Margem EBITDA</span>
                       <Activity size={16} className="text-cyan-400" />
                     </div>
                     <div className="text-xl font-black text-white mt-1">
                       {v3Calculation.metrics.ebitdaMarginSimulated.toFixed(1)}%
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Eficiência da operação (% de lucro do faturamento).
+                      % de lucro operacional sobre o faturamento.
                     </p>
                     <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">Real: {v3Calculation.metrics.ebitdaMarginReal.toFixed(1)}%</span>
@@ -960,13 +966,16 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
 
                 </div>
 
-                {/* REQUISITO 4: CARD DEDICADO DE META MENSAL DE REPOSIÇÃO (COMERCIAL) */}
+                {/* CARD DEDICADO DE META MENSAL DE REPOSIÇÃO (COMERCIAL) */}
                 {salesReplacementTarget && (
-                  <div className="bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-900 border border-amber-500/40 rounded-2xl p-5 shadow-xl animate-in fade-in">
+                  <div 
+                    onClick={() => setActiveAuditModal('replacement')}
+                    className="bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-900 border border-amber-500/40 hover:border-amber-400 rounded-2xl p-5 shadow-xl cursor-pointer transition-all group animate-in fade-in"
+                  >
                     <div className="flex items-center justify-between border-b border-amber-500/20 pb-3 mb-2">
                       <div className="flex items-center gap-2">
                         <Target className="text-amber-400" size={20} />
-                        <h3 className="font-bold text-white text-sm uppercase tracking-wider">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider group-hover:text-amber-300">
                           🎯 Meta Mensal de Novos Fechamentos (Reposição Comercial)
                         </h3>
                       </div>
@@ -975,12 +984,12 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                       </span>
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                      Para neutralizar a perda total simulada de <strong className="text-white">{formatCurrency(salesReplacementTarget.totalMonthlyLoss)}/mês</strong> até o final do prazo de <strong className="text-white">{salesReplacementTarget.maxReplacementMonths} meses</strong>, a equipe comercial precisa conquistar em média <strong className="text-amber-400">{formatCurrency(salesReplacementTarget.monthlySalesTarget)} por mês</strong> em novos contratos a partir de hoje.
+                      Para neutralizar a perda mensal de <strong className="text-white">{formatCurrency(salesReplacementTarget.totalMonthlyLoss)}/mês</strong> em <strong className="text-white">{salesReplacementTarget.maxReplacementMonths} meses</strong>, a equipe comercial deve fechar em média <strong className="text-amber-400">{formatCurrency(salesReplacementTarget.monthlySalesTarget)} por mês</strong> em novos contratos a partir de hoje (Clique para ver a fórmula).
                     </p>
                   </div>
                 )}
 
-                {/* PROJEÇÃO DE CAIXA FUTURA (A PARTIR DO MÊS ATUAL JUL/26) */}
+                {/* PROJEÇÃO DE CAIXA FUTURA INICIANDO NO MÊS ATUAL (JUL/26 EM DIANTE) */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div>
@@ -990,7 +999,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                           Visão {periodicity}
                         </span>
                       </h3>
-                      <p className="text-xs text-slate-400">Trajetória futura de liquidez (Real vs Simulado)</p>
+                      <p className="text-xs text-slate-400">Evolução do saldo acumulado de caixa nos próximos 12 meses (HOJE = Jul/26)</p>
                     </div>
                   </div>
 
@@ -1022,12 +1031,12 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   </div>
                 </div>
 
-                {/* GRÁFICO 2: DEMONSTRATIVO SINTÉTICO */}
+                {/* GRÁFICO 2: DEMONSTRATIVO SINTÉTICO (VALORES MÉDIOS MENSAIS) */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-bold text-white text-sm uppercase tracking-wider">Demonstrativo Sintético DRE</h3>
-                      <p className="text-xs text-slate-400">Comparativo direto de estrutura financeira entre Real e Simulado</p>
+                      <h3 className="font-bold text-white text-sm uppercase tracking-wider">Demonstrativo Sintético DRE (Valores Mensais Médios)</h3>
+                      <p className="text-xs text-slate-400">Comparativo mensal entre Real e Simulado</p>
                     </div>
                   </div>
 
@@ -1069,6 +1078,149 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
 
         </div>
       </main>
+
+      {/* MODAL DE DETALHAMENTO DE CÁLCULO (CADASTRADO PARA OS CARDS) */}
+      {activeAuditModal && v3Calculation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl relative">
+            
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Calculator className="text-amber-400" size={20} />
+                <h3 className="font-bold text-white text-base">
+                  {activeAuditModal === 'breakeven' && 'Memória de Cálculo — Break-Even Operacional'}
+                  {activeAuditModal === 'runway' && 'Memória de Cálculo — Cash Runway'}
+                  {activeAuditModal === 'ebitda' && 'Memória de Cálculo — Margem EBITDA'}
+                  {activeAuditModal === 'replacement' && 'Memória de Cálculo — Meta Mensal de Reposição'}
+                </h3>
+              </div>
+              <button onClick={() => setActiveAuditModal(null)} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* CONTEÚDO DO MODAL SEGUNDO O CARD SELECIONADO */}
+            {activeAuditModal === 'breakeven' && (
+              <div className="space-y-4 text-xs">
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="font-bold text-amber-400 block mb-1">Fórmula do Break-Even Mensal:</span>
+                  <code className="text-slate-300 font-mono text-[11px]">
+                    BreakEven = Despesas Fixas / Margem de Contribuição (%)
+                  </code>
+                </div>
+
+                <div className="space-y-2 border-t border-slate-800 pt-3">
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">1. Faturamento Médio Mensal Real:</span>
+                    <span className="font-bold text-white">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueReal)}/mês</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">2. Custos Variáveis Operacionais (65%):</span>
+                    <span className="font-bold text-rose-400">-{formatCurrency(v3Calculation.metrics.audit.variableCostsSim)}/mês</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">3. Margem de Contribuição (%):</span>
+                    <span className="font-bold text-emerald-400">{v3Calculation.metrics.audit.contributionMarginSimPct.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">4. Despesas Fixas + Custos Estruturais:</span>
+                    <span className="font-bold text-amber-400">{formatCurrency(v3Calculation.metrics.audit.fixedExpensesSim)}/mês</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 font-semibold">
+                  Resultado: {formatCurrency(v3Calculation.metrics.audit.fixedExpensesSim)} ÷ {v3Calculation.metrics.audit.contributionMarginSimPct.toFixed(1)}% = <strong className="text-white font-black">{formatCurrency(v3Calculation.metrics.breakEvenPointSimulated)} / mês</strong>.
+                </div>
+              </div>
+            )}
+
+            {activeAuditModal === 'runway' && (
+              <div className="space-y-4 text-xs">
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="font-bold text-emerald-400 block mb-1">Fórmula do Cash Runway:</span>
+                  <code className="text-slate-300 font-mono text-[11px]">
+                    Caixa Mês N = Caixa Inicial + Sombra dos Resultados Mensais
+                  </code>
+                </div>
+
+                <div className="space-y-2 border-t border-slate-800 pt-3">
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">1. Saldo de Caixa Inicial:</span>
+                    <span className="font-bold text-emerald-400">{formatCurrency(v3Params.initialCash)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">2. Resultado Líquido Simulado/Mês:</span>
+                    <span className="font-bold text-white">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim - v3Calculation.metrics.audit.monthlyCostsSim - v3Calculation.metrics.audit.monthlyExpensesSim)}/mês</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">3. Status de Liquidez:</span>
+                    <span className={`font-bold ${v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {v3Calculation.metrics.isRunwaySustainable ? 'Sustentável (Caixa Crescente)' : `Caixa Zera no Mês ${v3Calculation.metrics.zeroCashMonth}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeAuditModal === 'ebitda' && (
+              <div className="space-y-4 text-xs">
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="font-bold text-cyan-400 block mb-1">Fórmula da Margem EBITDA:</span>
+                  <code className="text-slate-300 font-mono text-[11px]">
+                    Margem EBITDA = (Resultado Operacional ÷ Faturamento) × 100
+                  </code>
+                </div>
+
+                <div className="space-y-2 border-t border-slate-800 pt-3">
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">1. Faturamento Médio Simulado:</span>
+                    <span className="font-bold text-white">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim)}/mês</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">2. Resultado Operacional (Lucro/mês):</span>
+                    <span className="font-bold text-cyan-400">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim - v3Calculation.metrics.audit.monthlyCostsSim - v3Calculation.metrics.audit.monthlyExpensesSim)}/mês</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">3. Margem EBITDA Calculada:</span>
+                    <span className="font-bold text-cyan-400">{v3Calculation.metrics.ebitdaMarginSimulated.toFixed(1)}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeAuditModal === 'replacement' && salesReplacementTarget && (
+              <div className="space-y-4 text-xs">
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="font-bold text-amber-400 block mb-1">Fórmula da Meta de Reposição Comercial:</span>
+                  <code className="text-slate-300 font-mono text-[11px]">
+                    Meta Mensal = Perda Total de Contratos ÷ Meses de Janela
+                  </code>
+                </div>
+
+                <div className="space-y-2 border-t border-slate-800 pt-3">
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">1. Perda Mensal Total de Contratos:</span>
+                    <span className="font-bold text-rose-400">{formatCurrency(salesReplacementTarget.totalMonthlyLoss)}/mês</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">2. Prazo até a Data da Perda (Janela):</span>
+                    <span className="font-bold text-white">{salesReplacementTarget.maxReplacementMonths} meses</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">3. Meta Mensal de Novos Contratos:</span>
+                    <span className="font-bold text-amber-400">{formatCurrency(salesReplacementTarget.monthlySalesTarget)} / mês</span>
+                  </div>
+                </div>
+
+                <p className="text-slate-400 leading-relaxed">
+                  Conquistando este valor a cada mês, quando chegar no mês {salesReplacementTarget.maxReplacementMonths}, a perda total terá sido 100% reposta.
+                </p>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE EXPORTAÇÃO GAMMA */}
       {isGammaModalOpen && (

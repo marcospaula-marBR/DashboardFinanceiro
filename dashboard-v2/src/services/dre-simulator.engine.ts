@@ -1135,6 +1135,22 @@ export interface SimulatorV3Params {
   initialCash: number;                   // Saldo de caixa inicial para Runway
 }
 
+export interface BreakEvenAudit {
+  monthlyRevenueReal: number;
+  monthlyRevenueSim: number;
+  monthlyCostsReal: number;
+  monthlyCostsSim: number;
+  monthlyExpensesReal: number;
+  monthlyExpensesSim: number;
+  fixedExpensesReal: number;
+  fixedExpensesSim: number;
+  variableCostsReal: number;
+  variableCostsSim: number;
+  contributionMarginRealPct: number;
+  contributionMarginSimPct: number;
+  monthsCount: number;
+}
+
 export interface SimulatorV3Metrics {
   breakEvenPointReal: number;
   breakEvenPointSimulated: number;
@@ -1143,6 +1159,7 @@ export interface SimulatorV3Metrics {
   isRunwaySustainable: boolean;
   ebitdaMarginReal: number;
   ebitdaMarginSimulated: number;
+  audit: BreakEvenAudit;
 }
 
 export function calculateV3SimulationEngine(
@@ -1234,7 +1251,7 @@ export function calculateV3SimulationEngine(
           value: contract.monthlyValue,
           monthlyLoss: contract.monthlyValue,
           contractName: contract.contractName,
-          startDate: contract.startDate || '2025-08',
+          startDate: contract.startDate || '2026-07',
           endDate: '2026-12',
           recurrence: 'linear_ramp',
           replacementMonths: contract.replacementMonths || 0,
@@ -1272,18 +1289,27 @@ export function calculateV3SimulationEngine(
     updatedAt: new Date().toISOString()
   });
 
-  // 4. Calcular Indicadores em Memória
-  const breakEvenPointReal = calculateBreakEvenPoint(
-    baseResult.kpis.receitaOperacional,
-    baseResult.kpis.totalCustos,
-    baseResult.kpis.totalDespesas
-  );
+  // 4. Calcular Indicadores Mensais Médios em Memória
+  const monthsCount = Math.max(1, baseResult.validColumns.length || 12);
 
-  const breakEvenPointSimulated = calculateBreakEvenPoint(
-    simResult.kpis.receitaOperacional,
-    simResult.kpis.totalCustos,
-    simResult.kpis.totalDespesas
-  );
+  const monthlyRevenueReal = baseResult.kpis.receitaOperacional / monthsCount;
+  const monthlyCostsReal = baseResult.kpis.totalCustos / monthsCount;
+  const monthlyExpensesReal = baseResult.kpis.totalDespesas / monthsCount;
+
+  const monthlyRevenueSim = simResult.kpis.receitaOperacional / monthsCount;
+  const monthlyCostsSim = simResult.kpis.totalCustos / monthsCount;
+  const monthlyExpensesSim = simResult.kpis.totalDespesas / monthsCount;
+
+  const breakEvenPointReal = calculateBreakEvenPoint(monthlyRevenueReal, monthlyCostsReal, monthlyExpensesReal);
+  const breakEvenPointSimulated = calculateBreakEvenPoint(monthlyRevenueSim, monthlyCostsSim, monthlyExpensesSim);
+
+  const variableCostsReal = monthlyCostsReal * 0.65;
+  const fixedExpensesReal = monthlyExpensesReal + (monthlyCostsReal * 0.35);
+  const contributionMarginRealPct = monthlyRevenueReal > 0 ? ((monthlyRevenueReal - variableCostsReal) / monthlyRevenueReal) * 100 : 0;
+
+  const variableCostsSim = monthlyCostsSim * 0.65;
+  const fixedExpensesSim = monthlyExpensesSim + (monthlyCostsSim * 0.35);
+  const contributionMarginSimPct = monthlyRevenueSim > 0 ? ((monthlyRevenueSim - variableCostsSim) / monthlyRevenueSim) * 100 : 0;
 
   // Runway
   const monthlyFcl: Record<string, number> = {};
@@ -1307,7 +1333,22 @@ export function calculateV3SimulationEngine(
       zeroCashMonth: runway.zeroCashMonth,
       isRunwaySustainable: runway.isSustainable,
       ebitdaMarginReal,
-      ebitdaMarginSimulated
+      ebitdaMarginSimulated,
+      audit: {
+        monthlyRevenueReal,
+        monthlyRevenueSim,
+        monthlyCostsReal,
+        monthlyCostsSim,
+        monthlyExpensesReal,
+        monthlyExpensesSim,
+        fixedExpensesReal,
+        fixedExpensesSim,
+        variableCostsReal,
+        variableCostsSim,
+        contributionMarginRealPct,
+        contributionMarginSimPct,
+        monthsCount
+      }
     }
   };
 }
