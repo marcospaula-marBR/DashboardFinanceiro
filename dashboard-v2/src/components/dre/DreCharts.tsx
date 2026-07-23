@@ -42,7 +42,10 @@ const getEbitdaStatus = (margin: number) => {
       label: 'Ótimo',
       colorClass: 'bg-emerald-50/80 text-emerald-900 border-emerald-200 hover:bg-emerald-100/60',
       badgeClass: 'bg-emerald-600 text-white',
-      textColor: 'text-emerald-700',
+      textColor: '#047857',
+      badgeBg: '#ecfdf5',
+      badgeStroke: '#a7f3d0',
+      dotColor: '#10b981',
       icon: Sparkles
     };
   } else if (margin >= 10) {
@@ -50,7 +53,10 @@ const getEbitdaStatus = (margin: number) => {
       label: 'Bom',
       colorClass: 'bg-sky-50/80 text-sky-900 border-sky-200 hover:bg-sky-100/60',
       badgeClass: 'bg-sky-600 text-white',
-      textColor: 'text-sky-700',
+      textColor: '#0369a1',
+      badgeBg: '#f0f9ff',
+      badgeStroke: '#bae6fd',
+      dotColor: '#0284c7',
       icon: ThumbsUp
     };
   } else if (margin >= 0) {
@@ -58,7 +64,10 @@ const getEbitdaStatus = (margin: number) => {
       label: 'Atenção',
       colorClass: 'bg-amber-50/80 text-amber-900 border-amber-200 hover:bg-amber-100/60',
       badgeClass: 'bg-amber-500 text-slate-950',
-      textColor: 'text-amber-700',
+      textColor: '#b45309',
+      badgeBg: '#fffbeb',
+      badgeStroke: '#fde68a',
+      dotColor: '#f59e0b',
       icon: AlertTriangle
     };
   } else {
@@ -66,7 +75,10 @@ const getEbitdaStatus = (margin: number) => {
       label: 'Crítico',
       colorClass: 'bg-rose-50/80 text-rose-900 border-rose-200 hover:bg-rose-100/60',
       badgeClass: 'bg-rose-600 text-white',
-      textColor: 'text-rose-700',
+      textColor: '#be123c',
+      badgeBg: '#fff1f2',
+      badgeStroke: '#fecdd3',
+      dotColor: '#f43f5e',
       icon: TrendingDown
     };
   }
@@ -119,6 +131,51 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
       ebitdaMargin
     };
   }), [mensal, validColumns]);
+
+  // Componente de Tick Customizado do Eixo X (Mês + Pill Margem EBITDA)
+  const CustomXAxisTick = (props: any) => {
+    const { x, y, payload, index } = props;
+    const item = evolucaoData[index];
+    if (!item) {
+      return (
+        <g transform={`translate(${x},${y})`}>
+          <text x={0} y={12} textAnchor="middle" fill="#94a3b8" fontSize={11} fontWeight={600}>
+            {payload.value}
+          </text>
+        </g>
+      );
+    }
+
+    const status = getEbitdaStatus(item.ebitdaMargin);
+    const marginStr = isPrivacyMode ? '**%' : `${item.ebitdaMargin.toFixed(1)}%`;
+
+    return (
+      <g transform={`translate(${x},${y})`}>
+        {/* Identificação do Mês */}
+        <text x={0} y={14} textAnchor="middle" fill="#334155" fontSize={11} fontWeight={700}>
+          {payload.value}
+        </text>
+
+        {/* Pill da Margem EBITDA diretamente abaixo do mês */}
+        <g transform="translate(0, 22)">
+          <rect
+            x={-27}
+            y={0}
+            width={54}
+            height={18}
+            rx={9}
+            fill={status.badgeBg}
+            stroke={status.badgeStroke}
+            strokeWidth={1}
+          />
+          <circle cx={-18} cy={9} r={3.5} fill={status.dotColor} />
+          <text x={4} y={12} textAnchor="middle" fill={status.textColor} fontSize={9.5} fontWeight={800}>
+            {marginStr}
+          </text>
+        </g>
+      </g>
+    );
+  };
 
   // ── 2. Waterfall DRE ─────────────────────────────────────────────────────
   // Each bar is positioned absolutely: start from cumulative sum, extend by value
@@ -218,12 +275,39 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
         {/* ── TAB 1: EVOLUÇÃO MENSAL ── */}
         {activeTab === 'evolucao' && (
           <div>
-            <p className="text-xs text-slate-400 mb-4">Receitas, Saídas, Lucro (Entradas - Saídas) e FCL mês a mês com rótulos de dados</p>
-            <div className="h-80 w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+              <p className="text-xs text-slate-400">
+                Receitas, Saídas, Lucro e FCL com Margem EBITDA mês a mês diretamente no eixo
+              </p>
+
+              {/* Legenda de Status EBITDA */}
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 flex-wrap">
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Ótimo (≥20%)
+                </span>
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
+                  <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" /> Bom (10-19.9%)
+                </span>
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Atenção (0-9.9%)
+                </span>
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> Crítico (&lt;0%)
+                </span>
+              </div>
+            </div>
+
+            <div className="h-96 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={evolucaoData} margin={{ top: 28, right: 20, left: 0, bottom: 0 }}>
+                <ComposedChart data={evolucaoData} margin={{ top: 28, right: 20, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    height={52} 
+                    tick={<CustomXAxisTick />} 
+                  />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => fmtK(v, isPrivacyMode)} />
                   <Tooltip 
                     formatter={(v: any, name: any) => [
@@ -247,70 +331,6 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
                   </Line>
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
-
-            {/* ── Mês a Mês do Período: Margem EBITDA & Status ── */}
-            <div className="mt-8 border-t border-slate-100 pt-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-1">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
-                    <Activity size={16} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                      Margem EBITDA Mês a Mês
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Indicador de eficiência operacional por período de referência</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 flex-wrap mt-2 sm:mt-0">
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    <Sparkles size={10} /> Ótimo (≥20%)
-                  </span>
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-200">
-                    <ThumbsUp size={10} /> Bom (10%-19.9%)
-                  </span>
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
-                    <AlertTriangle size={10} /> Atenção (0%-9.9%)
-                  </span>
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">
-                    <TrendingDown size={10} /> Crítico (&lt;0%)
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {evolucaoData.map((d) => {
-                  const status = getEbitdaStatus(d.ebitdaMargin);
-                  const StatusIcon = status.icon;
-                  return (
-                    <div 
-                      key={d.name} 
-                      className={`p-3.5 rounded-xl border flex flex-col justify-between shadow-xs transition-all ${status.colorClass}`}
-                    >
-                      <div className="flex items-center justify-between gap-1 mb-2">
-                        <span className="text-xs font-black text-slate-800">{d.name}</span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-2xs ${status.badgeClass}`}>
-                          <StatusIcon size={10} />
-                          {status.label}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">Margem EBITDA</span>
-                        <div className={`text-lg font-black tracking-tight ${status.textColor}`}>
-                          {isPrivacyMode ? '**%' : `${d.ebitdaMargin.toFixed(1)}%`}
-                        </div>
-                      </div>
-
-                      <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
-                        <span className="text-slate-500 font-medium">EBITDA</span>
-                        <span className="font-bold text-slate-700">{fmt(d.ebitda, isPrivacyMode)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           </div>
         )}
