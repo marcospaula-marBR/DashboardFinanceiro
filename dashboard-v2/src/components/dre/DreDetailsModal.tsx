@@ -47,6 +47,8 @@ export function DreDetailsModal({
     setExpandedCats(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  if (!isOpen) return null;
+
   const isLucroAntesFcl = title === 'Lucro antes do FCL';
   const isFcl = title === 'Fluxo de Caixa Livre FCL';
 

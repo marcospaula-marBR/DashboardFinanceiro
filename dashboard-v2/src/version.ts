@@ -1,10 +1,12 @@
-export const APP_VERSION = "v.02.50.65";
+export const APP_VERSION = "v.02.50.66";
 export const VERSION_DATE = "2026-07-23";
 export const VERSION_CHANGELOG = [
+  "v.02.50.66 - Fix/UX: Corrigido comportamento do modal de detalhamento da DRE (DreDetailsModal.tsx) que abria automaticamente travado na tela na carga inicial da página por falta da validação condicional 'if (!isOpen) return null;'.",
   "v.02.50.65 - Refactor/UX: Remoção do botão de Imagem PNG e inclusão dinâmica de Filtros Ativos (Empresa, Período, Departamento, Conta DRE, Projeto, Categoria, Rateio) no cabeçalho dos modais de detalhamento e na carga útil enviada à API do Gamma para geração de apresentações IA.",
   "v.02.50.64 - Feat/UX: Adicionadas opções de Exportação Visual em DreDetailsModal.tsx: 1. Botão 'Imagem PNG' via dom-to-image-more para download de imagem do modal com alta qualidade; 2. Botão 'Gamma IA' para geração dinâmica de apresentações executivas a partir dos dados filtrados do modal.",
   "v.02.50.63 - Fix/UX: Eliminação de erros de Hooks em DreDetailsModal.tsx. Substituídos os useMemo por constantes seguras (safeMensalData = mensalData || {}), garantindo 100% de estabilidade e funcionamento impecável em todos os cards e modais da DRE, com ordem de meses invertida (mês recente à esquerda) e cabeçalho sticky top-0 na aba Transações de Origem.",
   "v.02.50.62 - Feat/UX: Atualização individual na aba Transações de Origem (DreDetailsModal.tsx). 1. Ordem das colunas de meses invertida posicionando o mês mais recente à esquerda e o mais antigo à direita; 2. Linha de descrição das colunas fixada no topo (sticky top-0 z-30) durante rolagem vertical.",
+
   "v.02.50.61 - Rollback: Revertido DreDetailsModal.tsx para o estado estável da v.02.50.58 (com botões de ampliação de janela 98vw x 96vh e exportação para CSV/Excel), restaurando o funcionamento integral de todos os cards de detalhamento.",
   "v.02.50.60 - Fix/UX: Correção crítica de runtime no modal de detalhamento DRE (DreDetailsModal.tsx). Adicionada tratativa de segurança e memoização para mensalData nulo ou indefinido ao abrir cards de auditoria (Lucro antes do FCL / FCL), eliminando erro que impedia o carregamento da página Vercel.",
   "v.02.50.59 - Feat/UX: Atualizações na aba Transações de Origem em DreDetailsModal.tsx. 1. Ordem dos meses invertida posicionando o mês mais recente à esquerda; 2. Cabeçalho de títulos e meses fixado no topo (sticky top-0 z-30) durante rolagem vertical; 3. Expansão flexível da área útil da tabela preenchendo a altura total da janela maximizada.",
