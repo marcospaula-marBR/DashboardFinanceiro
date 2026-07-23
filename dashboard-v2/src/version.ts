@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.60";
+export const APP_VERSION = "v.02.50.61";
 export const VERSION_DATE = "2026-07-23";
 export const VERSION_CHANGELOG = [
+  "v.02.50.61 - Rollback: Revertido DreDetailsModal.tsx para o estado estável da v.02.50.58 (com botões de ampliação de janela 98vw x 96vh e exportação para CSV/Excel), restaurando o funcionamento integral de todos os cards de detalhamento.",
   "v.02.50.60 - Fix/UX: Correção crítica de runtime no modal de detalhamento DRE (DreDetailsModal.tsx). Adicionada tratativa de segurança e memoização para mensalData nulo ou indefinido ao abrir cards de auditoria (Lucro antes do FCL / FCL), eliminando erro que impedia o carregamento da página Vercel.",
   "v.02.50.59 - Feat/UX: Atualizações na aba Transações de Origem em DreDetailsModal.tsx. 1. Ordem dos meses invertida posicionando o mês mais recente à esquerda; 2. Cabeçalho de títulos e meses fixado no topo (sticky top-0 z-30) durante rolagem vertical; 3. Expansão flexível da área útil da tabela preenchendo a altura total da janela maximizada.",
   "v.02.50.58 - Feat/UX: Adicionadas funcionalidades de Ampliação da Janela (Maximizar em Tela Cheia 98vw x 96vh) e Exportação Completa de Dados para CSV / Excel no Modal de Detalhamento de Linha DRE / Transações de Origem (DreDetailsModal.tsx).",
@@ -9,6 +10,7 @@ export const VERSION_CHANGELOG = [
   "v.02.50.55 - Feat/UX: Aprimoramento do eixo X do gráfico de evolução da DRE (/dre). 1. Adicionado o valor absoluto em R$ do EBITDA diretamente abaixo da Margem EBITDA % na pílula do mês (ex: 24.5% / R$ 150k); 2. Configurado XAxis interval={0} garantindo que todos os meses do período selecionado sejam exibidos obrigatoriamente no gráfico sem omissão ou saltos.",
   "v.02.50.54 - Feat/UX: Integração da Margem EBITDA diretamente no eixo X do gráfico de evolução da DRE (/dre). 1. Renderização de CustomXAxisTick posicionando a pílula de Margem EBITDA (%) com ponto indicador e cor de status (Ótimo, Bom, Atenção, Crítico) exatamente abaixo da identificação de cada mês dentro do próprio gráfico; 2. Adicionada legenda indicativa dos intervalos de Margem EBITDA no topo do gráfico.",
   "v.02.50.53 - Feat/UX: Atualizações no gráfico de evolução da DRE principal (/dre). 1. Adicionada a barra de 'Lucro (Entradas - Saídas)' no gráfico de evolução mensal; 2. Adicionados rótulos de dados (LabelList) em todas as barras e linhas do gráfico; 3. Adicionado quadro mês a mês da Margem EBITDA abaixo do gráfico, com badges e ícones de status (Ótimo ≥20%, Bom 10-19.9%, Atenção 0-9.9%, Crítico <0%).",
+
 
   "v.02.50.52 - Refactor/UX: Redesign completo do Simulador DRE V3 (/dre-custom). 1. Separação de estado draft/applied eliminando travamentos durante digitação; 2. Botão Aplicar Simulação dispara cálculo sob demanda; 3. Botão Resetar zera premissas e resultados; 4. BrisinhAI movido do header para seção inline de resultados; 5. Seletor de periodicidade movido para junto ao gráfico; 6. Componentes PremissaRow e KpiCard extraídos para reutilização; 7. Estado vazio elegante quando nenhuma simulação foi aplicada.",
 
