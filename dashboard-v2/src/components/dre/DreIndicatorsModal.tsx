@@ -519,8 +519,13 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
     }
   };
 
-  const activeCompanies = filters.empresas.length > 0 ? filters.empresas.join(', ') : 'Todas';
-  const activePeriods = filters.periodos.length > 0 ? filters.periodos.join(', ') : 'Todos';
+  const activeCompanies = filters?.empresas && filters.empresas.length > 0 ? filters.empresas.join(', ') : 'Todas';
+  const activePeriods = filters?.periodos && filters.periodos.length > 0 ? filters.periodos.join(', ') : 'Todos';
+  const activeDeptos = filters?.departamentos && filters.departamentos.length > 0 ? filters.departamentos.join(', ') : null;
+  const activeContas = filters?.contasDre && filters.contasDre.length > 0 ? filters.contasDre.join(', ') : null;
+  const activeProjetos = filters?.projetos && filters.projetos.length > 0 ? filters.projetos.join(', ') : null;
+  const activeCategorias = filters?.categorias && filters.categorias.length > 0 ? filters.categorias.join(', ') : null;
+  const isWithoutRateio = filters?.excludeSharedExpenses;
 
   const selectedKpiData = financialIndicators.find(kpi => kpi.title === selectedIndicator) || financialIndicators[0];
   const chartData = getMonthlyDataForIndicator(selectedKpiData.title);
@@ -532,16 +537,52 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         {/* Header */}
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/65">
           <div>
-            <div className="flex items-center gap-3 mb-1.5">
+            <div className="flex items-center gap-3 mb-1">
               <h2 className="text-xl font-black text-slate-900 tracking-tight">Indicadores Estratégicos Financeiros</h2>
               <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-855 px-2.5 py-1 rounded-full border border-amber-200/50 animate-pulse">
                 CFO Dashboard
               </span>
             </div>
-            <p className="text-xs text-slate-450 font-medium">
-              Empresa: <span className="text-slate-700 font-bold">{activeCompanies}</span> • 
-              Período: <span className="text-slate-700 font-bold">{activePeriods}</span> ({validColumns.length} meses)
-            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 font-medium">
+              <span>Empresa: <strong className="text-slate-800">{activeCompanies}</strong></span>
+              <span>•</span>
+              <span>Período: <strong className="text-slate-800">{activePeriods}</strong> ({validColumns.length} meses)</span>
+
+              {activeDeptos && (
+                <>
+                  <span>•</span>
+                  <span>Departamento: <strong className="text-slate-800">{activeDeptos}</strong></span>
+                </>
+              )}
+
+              {activeContas && (
+                <>
+                  <span>•</span>
+                  <span>Conta DRE: <strong className="text-slate-800">{activeContas}</strong></span>
+                </>
+              )}
+
+              {activeProjetos && (
+                <>
+                  <span>•</span>
+                  <span>Projeto: <strong className="text-slate-800">{activeProjetos}</strong></span>
+                </>
+              )}
+
+              {activeCategorias && (
+                <>
+                  <span>•</span>
+                  <span>Categoria: <strong className="text-slate-800">{activeCategorias}</strong></span>
+                </>
+              )}
+
+              {isWithoutRateio && (
+                <>
+                  <span>•</span>
+                  <span className="text-amber-700 font-bold">⚡ Sem Rateios Compartilhados</span>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
