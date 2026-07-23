@@ -132,14 +132,14 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
     };
   }), [mensal, validColumns]);
 
-  // Componente de Tick Customizado do Eixo X (Mês + Pill Margem EBITDA)
+  // Componente de Tick Customizado do Eixo X (Mês + Pill Margem EBITDA % + Valor R$)
   const CustomXAxisTick = (props: any) => {
     const { x, y, payload, index } = props;
     const item = evolucaoData[index];
     if (!item) {
       return (
         <g transform={`translate(${x},${y})`}>
-          <text x={0} y={12} textAnchor="middle" fill="#94a3b8" fontSize={11} fontWeight={600}>
+          <text x={0} y={12} textAnchor="middle" fill="#94a3b8" fontSize={10.5} fontWeight={600}>
             {payload.value}
           </text>
         </g>
@@ -148,29 +148,42 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
 
     const status = getEbitdaStatus(item.ebitdaMargin);
     const marginStr = isPrivacyMode ? '**%' : `${item.ebitdaMargin.toFixed(1)}%`;
+    const ebitdaValStr = isPrivacyMode ? 'R$ ****' : `R$ ${fmtK(item.ebitda, false)}`;
+
+    const count = evolucaoData.length;
+    const pillWidth = count > 14 ? 46 : 54;
+    const fontPct = count > 14 ? 8.5 : 9.5;
+    const fontVal = count > 14 ? 7.5 : 8.5;
 
     return (
       <g transform={`translate(${x},${y})`}>
         {/* Identificação do Mês */}
-        <text x={0} y={14} textAnchor="middle" fill="#334155" fontSize={11} fontWeight={700}>
+        <text x={0} y={12} textAnchor="middle" fill="#334155" fontSize={10.5} fontWeight={700}>
           {payload.value}
         </text>
 
-        {/* Pill da Margem EBITDA diretamente abaixo do mês */}
-        <g transform="translate(0, 22)">
+        {/* Pill da Margem EBITDA % + Valor R$ diretamente abaixo do mês */}
+        <g transform="translate(0, 17)">
           <rect
-            x={-27}
+            x={-pillWidth / 2}
             y={0}
-            width={54}
-            height={18}
-            rx={9}
+            width={pillWidth}
+            height={28}
+            rx={6}
             fill={status.badgeBg}
             stroke={status.badgeStroke}
             strokeWidth={1}
           />
-          <circle cx={-18} cy={9} r={3.5} fill={status.dotColor} />
-          <text x={4} y={12} textAnchor="middle" fill={status.textColor} fontSize={9.5} fontWeight={800}>
+          <circle cx={-pillWidth / 2 + 6} cy={8} r={2.5} fill={status.dotColor} />
+          
+          {/* Linha 1: Margem % */}
+          <text x={2} y={10} textAnchor="middle" fill={status.textColor} fontSize={fontPct} fontWeight={800}>
             {marginStr}
+          </text>
+
+          {/* Linha 2: Valor R$ EBITDA */}
+          <text x={0} y={22} textAnchor="middle" fill="#475569" fontSize={fontVal} fontWeight={700}>
+            {ebitdaValStr}
           </text>
         </g>
       </g>
@@ -297,15 +310,16 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
               </div>
             </div>
 
-            <div className="h-96 w-full">
+            <div className="h-[420px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={evolucaoData} margin={{ top: 28, right: 20, left: 0, bottom: 10 }}>
+                <ComposedChart data={evolucaoData} margin={{ top: 28, right: 20, left: 0, bottom: 15 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    height={52} 
+                    interval={0}
+                    height={56} 
                     tick={<CustomXAxisTick />} 
                   />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => fmtK(v, isPrivacyMode)} />
