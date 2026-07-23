@@ -54,6 +54,8 @@ export function DreDetailsModal({
     name: col,
     valor: mensalData[col]
   }));
+  const dataReversed = useMemo(() => [...data].reverse(), [data]);
+
   const total = data.reduce((acc, curr) => acc + curr.valor, 0);
   const average = data.length > 0 ? total / data.length : 0;
 
@@ -112,7 +114,7 @@ export function DreDetailsModal({
         csvContent += rowVals.map(sanitize).join(';') + '\n';
       });
     } else if (activeTab === 'transactions' && sourceRows) {
-      const monthNames = data.map(d => d.name);
+      const monthNames = dataReversed.map(d => d.name);
       const headers = ['Categoria', 'Projeto / Empresa', 'Total', 'Média', ...monthNames];
       csvContent += headers.map(sanitize).join(';') + '\n';
 
@@ -176,7 +178,7 @@ export function DreDetailsModal({
     } else {
       const headers = ['Período', 'Valor Consolidado (R$)'];
       csvContent += headers.map(sanitize).join(';') + '\n';
-      data.forEach(item => {
+      dataReversed.forEach(item => {
         csvContent += [item.name, item.valor.toFixed(2).replace('.', ',')].map(sanitize).join(';') + '\n';
       });
     }
@@ -356,7 +358,7 @@ export function DreDetailsModal({
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
         <div className={containerClasses}>
           {/* Header */}
-          <div className="flex flex-col border-b border-slate-100 bg-slate-50/50 p-6 pb-4">
+          <div className="flex flex-col border-b border-slate-100 bg-slate-50/50 p-6 pb-4 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600">
@@ -399,20 +401,20 @@ export function DreDetailsModal({
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto flex-1">
-            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+          <div className="p-6 overflow-hidden flex-1 flex flex-col min-h-0">
+            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
+              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center shrink-0">
                 <span className="font-bold text-slate-700 text-sm">Conciliação de Valores (DRE Simplificada)</span>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-auto flex-1 min-h-0">
                 <table className="w-full text-xs text-left whitespace-nowrap border-separate border-spacing-0">
-                  <thead className="bg-slate-105 text-slate-600 font-semibold uppercase tracking-wider">
+                  <thead className="bg-slate-100 text-slate-700 font-semibold uppercase tracking-wider sticky top-0 z-30">
                     <tr>
-                      <th className="px-4 py-3 border-b border-slate-200 sticky left-0 min-w-[280px] max-w-[280px] bg-slate-50 z-20 border-r">Linha de Composição</th>
-                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[280px] min-w-[120px] max-w-[120px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Total</th>
-                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[400px] min-w-[100px] max-w-[100px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Média</th>
+                      <th className="px-4 py-3 border-b border-slate-200 sticky top-0 left-0 min-w-[280px] max-w-[280px] bg-slate-100 z-40 border-r">Linha de Composição</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-100 border-r sticky top-0 left-[280px] min-w-[120px] max-w-[120px] z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Total</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-100 border-r sticky top-0 left-[400px] min-w-[100px] max-w-[100px] z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Média</th>
                       {cols.map(month => (
-                        <th key={month} className="px-4 py-3 border-b border-slate-200 text-right">{month}</th>
+                        <th key={month} className="px-4 py-3 border-b border-slate-200 text-right sticky top-0 bg-slate-100 z-30">{month}</th>
                       ))}
                     </tr>
                   </thead>
@@ -478,7 +480,7 @@ export function DreDetailsModal({
       <div className={containerClasses}>
         
         {/* Header */}
-        <div className="flex flex-col border-b border-slate-100 bg-slate-50/50">
+        <div className="flex flex-col border-b border-slate-100 bg-slate-50/50 shrink-0">
           <div className="flex items-center justify-between p-6 pb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600">
@@ -543,9 +545,9 @@ export function DreDetailsModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto">
+        <div className="p-6 overflow-hidden flex-1 flex flex-col min-h-0">
           {activeTab === 'chart' && (
-            <>
+            <div className="overflow-y-auto flex-1">
           {/* Gráfico */}
           <div className="h-64 w-full mb-8">
             <ResponsiveContainer width="100%" height="100%">
@@ -583,7 +585,7 @@ export function DreDetailsModal({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.map((item, idx) => (
+                {dataReversed.map((item, idx) => (
                   <tr key={idx} className="hover:bg-amber-50/30 transition-colors">
                     <td className="px-6 py-3 font-medium text-slate-700">{item.name}</td>
                     <td className="px-6 py-3 text-right font-mono text-slate-600">{formatValueStandard(item.valor)}</td>
@@ -592,23 +594,23 @@ export function DreDetailsModal({
               </tbody>
             </table>
           </div>
-            </>
+            </div>
           )}
 
           {activeTab === 'transactions' && (
-            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
+              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center shrink-0">
                 <span className="font-bold text-slate-700 text-sm">Consolidado de Origem</span>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-auto flex-1 min-h-0">
                 <table className="w-full text-xs text-left whitespace-nowrap border-separate border-spacing-0">
-                  <thead className="bg-slate-100/50 text-slate-500 font-semibold uppercase tracking-wider">
+                  <thead className="bg-slate-100 text-slate-700 font-semibold uppercase tracking-wider sticky top-0 z-30">
                     <tr>
-                      <th className="px-4 py-3 border-b border-slate-200 sticky left-0 min-w-[280px] max-w-[280px] bg-slate-50 z-20 border-r">Categoria / Projeto</th>
-                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[280px] min-w-[120px] max-w-[120px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Total</th>
-                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[400px] min-w-[100px] max-w-[100px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Média</th>
-                      {data.map(item => (
-                        <th key={item.name} className="px-4 py-3 border-b border-slate-200 text-right">{item.name}</th>
+                      <th className="px-4 py-3 border-b border-slate-200 sticky top-0 left-0 min-w-[280px] max-w-[280px] bg-slate-100 z-40 border-r">Categoria / Projeto</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-100 border-r sticky top-0 left-[280px] min-w-[120px] max-w-[120px] z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Total</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-100 border-r sticky top-0 left-[400px] min-w-[100px] max-w-[100px] z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Média</th>
+                      {dataReversed.map(item => (
+                        <th key={item.name} className="px-4 py-3 border-b border-slate-200 text-right sticky top-0 bg-slate-100 z-30">{item.name}</th>
                       ))}
                     </tr>
                   </thead>
@@ -659,7 +661,7 @@ export function DreDetailsModal({
                       if (!hasRows) {
                         return (
                           <tr>
-                            <td colSpan={data.length + 3} className="text-center py-10 text-slate-400">
+                            <td colSpan={dataReversed.length + 3} className="text-center py-10 text-slate-400">
                               <ListTree size={32} className="mx-auto mb-3 opacity-50" />
                               <p>Nenhuma transação individual vinculada a esta linha.</p>
                             </td>
@@ -692,7 +694,7 @@ export function DreDetailsModal({
                               <td className="px-4 py-3 text-right font-mono font-bold text-slate-700 bg-slate-50 border-r border-slate-200 sticky left-[400px] min-w-[100px] max-w-[100px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                 {formatValueStandard(catAvg)}
                               </td>
-                              {data.map(item => (
+                              {dataReversed.map(item => (
                                 <td key={item.name} className="px-4 py-3 text-right font-mono text-slate-600">
                                   {formatValueStandard(catData.totaisMensais[item.name] || 0)}
                                 </td>
@@ -720,7 +722,7 @@ export function DreDetailsModal({
                                   <td className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600 bg-amber-50/95 border-r border-amber-200/50 font-semibold sticky left-[400px] min-w-[100px] max-w-[100px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                     {formatValueStandard(projAvg)}
                                   </td>
-                                  {data.map(item => (
+                                  {dataReversed.map(item => (
                                     <td key={item.name} className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600">
                                       {formatValueStandard(p.mensalProj[item.name] || 0)}
                                     </td>
