@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   X, TrendingUp, ListTree, BarChart2, Plus, Minus, 
-  ChevronRight, ChevronDown, Maximize2, Minimize2, Download 
+  ChevronRight, ChevronDown, Maximize2, Minimize2, Download, Image as ImageIcon, Sparkles, Loader2 
 } from 'lucide-react';
+import domtoimage from 'dom-to-image-more';
 import { DreRow, DreCalculatedResult } from '@/types/dre';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip 
@@ -33,10 +34,141 @@ export function DreDetailsModal({
   const [activeTab, setActiveTab] = useState<'chart' | 'transactions'>('chart');
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isExportingImage, setIsExportingImage] = useState(false);
+  const [isGeneratingGamma, setIsGeneratingGamma] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  const formatValueStandard = (value: number) => {
+    if (isPrivacyMode) return 'R$ ****';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
 
   const toggleCat = (month: string, cat: string) => {
     const key = `${month}-${cat}`;
     setExpandedCats(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleExportPNG = async () => {
+    if (!modalRef.current) return;
+    setIsExportingImage(true);
+    try {
+      const dataUrl = await domtoimage.toPng(modalRef.current, {
+        bgcolor: '#ffffff',
+        filter: (node: Node) => !(node instanceof Element && node.classList.contains('no-export'))
+      });
+      const link = document.createElement('a');
+      const sanitizedTitle = (title || 'Detalhamento').replace(/[^a-zA-Z0-9_-]/g, '_');
+      link.download = `DRE_${sanitizedTitle}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error exporting image:', error);
+      alert('Não foi possível gerar a imagem PNG. Tente novamente.');
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  const handleGenerateGamma = async () => {
+    setIsGeneratingGamma(true);
+    try {
+      let md = `# Relatório Financeiro Executivo - ${title}\n\n`;
+      md += `**Data da Emissão:** ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
+      md += `### Resumo dos Indicadores\n`;
+      md += `- **Total Consolidado:** ${formatValueStandard(total)}\n`;
+      md += `- **Média Mensal:** ${formatValueStandard(average)}\n\n`;
+
+      if ((isLucroAntesFcl || isFcl) && allResults) {
+        const cols = [...allResults.validColumns].reverse();
+        md += `### Conciliação de Valores (${title})\n\n`;
+        md += `| Linha de Composição | Total | Média | ${cols.join(' | ')} |\n`;
+        md += `|---|---|---|${cols.map(() => '---').join('|')}|\n`;
+
+        const getValMensal = (key: string, col: string) => allResults.mensal[key]?.[col] || 0;
+        const getValTotal = (key: string) => allResults.totais[key] || 0;
+
+        let auditRows: any[] = isLucroAntesFcl ? [
+          { label: '(+) Receita (Entradas Operacionais)', key: 'Total Entradas Operacionais' },
+          { label: '(-) Impostos', key: 'Total de Impostos' },
+          { label: '(-) Custos Operacionais', key: 'Total Custos Operacionais' },
+          { label: '(-) Despesas Rateadas', key: 'Total Despesas Rateadas' },
+          { label: '(=) Lucro antes do FCL', key: 'Lucro antes do FCL' }
+        ] : [
+          { label: '(+) Total Entradas Operacionais', key: 'Total Entradas Operacionais' },
+          { label: '(+) Outras Entradas', key: 'Outras Entradas' },
+          { label: '(+) Intermediação de Negócios - Receitas', key: 'Intermediação de Negócios - Receitas' },
+          { label: '(+) Mútuo - Entradas', key: 'Mútuo - Entradas' },
+          { label: '(-) Total Saídas', key: 'Total Saídas' },
+          { label: '(=) Fluxo de Caixa Livre (FCL)', key: 'Fluxo de Caixa Livre FCL' },
+          { label: 'Distribuição de Dividendos', key: 'Distribuição de Dividendos' },
+          { label: '(=) FCL após Retiradas dos Sócios', key: 'FCL após Retiradas dos Sócios' }
+        ];
+
+        auditRows.forEach(r => {
+          const tot = getValTotal(r.key);
+          const avg = cols.length > 0 ? tot / cols.length : 0;
+          const mens = cols.map(m => formatValueStandard(getValMensal(r.key, m)));
+          md += `| ${r.label} | ${formatValueStandard(tot)} | ${formatValueStandard(avg)} | ${mens.join(' | ')} |\n`;
+        });
+      } else if (activeTab === 'transactions' && sourceRows) {
+        const monthNames = dataReversed.map(d => d.name);
+        md += `### Transações de Origem Consolidadas\n\n`;
+        md += `| Categoria / Projeto | Total | Média | ${monthNames.join(' | ')} |\n`;
+        md += `|---|---|---|${monthNames.map(() => '---').join('|')}|\n`;
+
+        dataReversed.forEach(item => {
+          md += `| ${item.name} | ${formatValueStandard(item.valor)} | ${formatValueStandard(average)} | ${monthNames.map(m => m === item.name ? formatValueStandard(item.valor) : '-').join(' | ')} |\n`;
+        });
+      } else {
+        md += `### Evolução Mensal (${title})\n\n`;
+        md += `| Período | Valor Consolidado (R$) |\n|---|---|\n`;
+        dataReversed.forEach(item => {
+          md += `| ${item.name} | ${formatValueStandard(item.valor)} |\n`;
+        });
+      }
+
+      const resGenerate = await fetch('/api/gamma/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markdownReport: md })
+      });
+
+      if (!resGenerate.ok) {
+        const errData = await resGenerate.json().catch(() => ({}));
+        throw new Error(errData.error || 'Falha ao conectar à API do Gamma.');
+      }
+
+      const genData = await resGenerate.json();
+      const generationId = genData.generationId || genData.id;
+
+      if (generationId) {
+        let isComplete = false;
+        let attempts = 0;
+        while (!isComplete && attempts < 30) {
+          attempts++;
+          await new Promise(r => setTimeout(r, 3000));
+          const resStatus = await fetch(`/api/gamma/status/${generationId}`);
+          if (resStatus.ok) {
+            const statusData = await resStatus.json();
+            const statusStr = (statusData.status || statusData.state || '').toLowerCase();
+            const finalUrl = statusData.gammaUrl || statusData.url || statusData.exportUrl || statusData.link;
+            if (statusStr === 'completed' || statusStr === 'complete' || statusStr === 'done' || (finalUrl && statusStr !== 'pending' && statusStr !== 'generating')) {
+              isComplete = true;
+              if (finalUrl) {
+                window.open(finalUrl, '_blank');
+              }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('Erro ao gerar Gamma:', err);
+      alert(err.message || 'Erro ao gerar apresentação no Gamma com IA.');
+    } finally {
+      setIsGeneratingGamma(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -357,7 +489,7 @@ export function DreDetailsModal({
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
-        <div className={containerClasses}>
+        <div ref={modalRef} className={containerClasses}>
           {/* Header */}
           <div className="flex flex-col border-b border-slate-100 bg-slate-50/50 p-6 pb-4">
             <div className="flex items-center justify-between">
@@ -372,14 +504,32 @@ export function DreDetailsModal({
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 no-export">
                 <button
                   onClick={handleExportCSV}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 rounded-xl transition-all shadow-2xs"
                   title="Exportar dados para CSV / Excel"
                 >
                   <Download size={14} className="text-emerald-600" />
-                  <span className="hidden sm:inline">Exportar CSV</span>
+                  <span className="hidden sm:inline">CSV</span>
+                </button>
+                <button
+                  onClick={handleExportPNG}
+                  disabled={isExportingImage}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-xl transition-all shadow-2xs disabled:opacity-50"
+                  title="Baixar imagem PNG do detalhamento"
+                >
+                  {isExportingImage ? <Loader2 size={14} className="animate-spin text-blue-600" /> : <ImageIcon size={14} className="text-blue-600" />}
+                  <span className="hidden sm:inline">{isExportingImage ? 'Gerando...' : 'Imagem PNG'}</span>
+                </button>
+                <button
+                  onClick={handleGenerateGamma}
+                  disabled={isGeneratingGamma}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-gradient-to-r from-amber-100 to-amber-200 border border-amber-300 hover:from-amber-200 hover:to-amber-300 rounded-xl transition-all shadow-2xs disabled:opacity-50"
+                  title="Gerar apresentação executiva com IA no Gamma"
+                >
+                  {isGeneratingGamma ? <Loader2 size={14} className="animate-spin text-amber-700" /> : <Sparkles size={14} className="text-amber-700" />}
+                  <span className="hidden sm:inline">{isGeneratingGamma ? 'Gerando Slides...' : 'Gamma IA'}</span>
                 </button>
                 <button
                   onClick={() => setIsMaximized(!isMaximized)}
@@ -466,11 +616,6 @@ export function DreDetailsModal({
     );
   }
 
-  const formatValueStandard = (value: number) => {
-    if (isPrivacyMode) return 'R$ ****';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
-
   const customTooltipFormatter = (value: any) => {
     if (value === undefined) return ['', title];
     return [formatValueStandard(Number(value)), title];
@@ -478,7 +623,7 @@ export function DreDetailsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
-      <div className={containerClasses}>
+      <div ref={modalRef} className={containerClasses}>
         
         {/* Header */}
         <div className="flex flex-col border-b border-slate-100 bg-slate-50/50">
@@ -494,14 +639,32 @@ export function DreDetailsModal({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 no-export">
               <button
                 onClick={handleExportCSV}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 rounded-xl transition-all shadow-2xs"
                 title="Exportar dados para CSV / Excel"
               >
                 <Download size={14} className="text-emerald-600" />
-                <span className="hidden sm:inline">Exportar CSV</span>
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+              <button
+                onClick={handleExportPNG}
+                disabled={isExportingImage}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-xl transition-all shadow-2xs disabled:opacity-50"
+                title="Baixar imagem PNG do detalhamento"
+              >
+                {isExportingImage ? <Loader2 size={14} className="animate-spin text-blue-600" /> : <ImageIcon size={14} className="text-blue-600" />}
+                <span className="hidden sm:inline">{isExportingImage ? 'Gerando...' : 'Imagem PNG'}</span>
+              </button>
+              <button
+                onClick={handleGenerateGamma}
+                disabled={isGeneratingGamma}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-gradient-to-r from-amber-100 to-amber-200 border border-amber-300 hover:from-amber-200 hover:to-amber-300 rounded-xl transition-all shadow-2xs disabled:opacity-50"
+                title="Gerar apresentação executiva com IA no Gamma"
+              >
+                {isGeneratingGamma ? <Loader2 size={14} className="animate-spin text-amber-700" /> : <Sparkles size={14} className="text-amber-700" />}
+                <span className="hidden sm:inline">{isGeneratingGamma ? 'Gerando Slides...' : 'Gamma IA'}</span>
               </button>
               <button
                 onClick={() => setIsMaximized(!isMaximized)}

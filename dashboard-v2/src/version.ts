@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.63";
+export const APP_VERSION = "v.02.50.64";
 export const VERSION_DATE = "2026-07-23";
 export const VERSION_CHANGELOG = [
+  "v.02.50.64 - Feat/UX: Adicionadas opções de Exportação Visual em DreDetailsModal.tsx: 1. Botão 'Imagem PNG' via dom-to-image-more para download de imagem do modal com alta qualidade; 2. Botão 'Gamma IA' para geração dinâmica de apresentações executivas a partir dos dados filtrados do modal.",
   "v.02.50.63 - Fix/UX: Eliminação de erros de Hooks em DreDetailsModal.tsx. Substituídos os useMemo por constantes seguras (safeMensalData = mensalData || {}), garantindo 100% de estabilidade e funcionamento impecável em todos os cards e modais da DRE, com ordem de meses invertida (mês recente à esquerda) e cabeçalho sticky top-0 na aba Transações de Origem.",
   "v.02.50.62 - Feat/UX: Atualização individual na aba Transações de Origem (DreDetailsModal.tsx). 1. Ordem das colunas de meses invertida posicionando o mês mais recente à esquerda e o mais antigo à direita; 2. Linha de descrição das colunas fixada no topo (sticky top-0 z-30) durante rolagem vertical.",
   "v.02.50.61 - Rollback: Revertido DreDetailsModal.tsx para o estado estável da v.02.50.58 (com botões de ampliação de janela 98vw x 96vh e exportação para CSV/Excel), restaurando o funcionamento integral de todos os cards de detalhamento.",
@@ -8,6 +9,7 @@ export const VERSION_CHANGELOG = [
   "v.02.50.59 - Feat/UX: Atualizações na aba Transações de Origem em DreDetailsModal.tsx. 1. Ordem dos meses invertida posicionando o mês mais recente à esquerda; 2. Cabeçalho de títulos e meses fixado no topo (sticky top-0 z-30) durante rolagem vertical; 3. Expansão flexível da área útil da tabela preenchendo a altura total da janela maximizada.",
   "v.02.50.58 - Feat/UX: Adicionadas funcionalidades de Ampliação da Janela (Maximizar em Tela Cheia 98vw x 96vh) e Exportação Completa de Dados para CSV / Excel no Modal de Detalhamento de Linha DRE / Transações de Origem (DreDetailsModal.tsx).",
   "v.02.50.57 - Feat/UX: Exibição completa de todos os filtros ativos (Empresa, Período, Departamento, Conta DRE, Projeto, Categoria e Rateio) no cabeçalho do Modal de Indicadores Estratégicos Financeiros (DreIndicatorsModal.tsx).",
+
   "v.02.50.56 - Feat/UX: Adicionado quadro/chips de identificação de filtros ativos (Empresa, Departamento, Conta DRE, Projeto, Categoria e Rateio, exceto Período) imediatamente antes do bloco de gráficos na DRE principal (/dre).",
   "v.02.50.55 - Feat/UX: Aprimoramento do eixo X do gráfico de evolução da DRE (/dre). 1. Adicionado o valor absoluto em R$ do EBITDA diretamente abaixo da Margem EBITDA % na pílula do mês (ex: 24.5% / R$ 150k); 2. Configurado XAxis interval={0} garantindo que todos os meses do período selecionado sejam exibidos obrigatoriamente no gráfico sem omissão ou saltos.",
   "v.02.50.54 - Feat/UX: Integração da Margem EBITDA diretamente no eixo X do gráfico de evolução da DRE (/dre). 1. Renderização de CustomXAxisTick posicionando a pílula de Margem EBITDA (%) com ponto indicador e cor de status (Ótimo, Bom, Atenção, Crítico) exatamente abaixo da identificação de cada mês dentro do próprio gráfico; 2. Adicionada legenda indicativa dos intervalos de Margem EBITDA no topo do gráfico.",
