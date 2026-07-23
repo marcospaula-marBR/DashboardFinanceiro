@@ -1139,6 +1139,7 @@ export default function DrePage() {
         isPrivacyMode={isPrivacyMode}
         isRevenuePrivacyMode={isRevenuePrivacyMode}
         allResults={results}
+        filters={filters}
       />
 
       <DreExportModal

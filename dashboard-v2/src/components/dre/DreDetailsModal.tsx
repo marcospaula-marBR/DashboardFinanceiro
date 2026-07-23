@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState } from 'react';
 import { 
   X, TrendingUp, ListTree, BarChart2, Plus, Minus, 
-  ChevronRight, ChevronDown, Maximize2, Minimize2, Download, Image as ImageIcon, Sparkles, Loader2 
+  ChevronRight, ChevronDown, Maximize2, Minimize2, Download, Sparkles, Loader2 
 } from 'lucide-react';
-import domtoimage from 'dom-to-image-more';
-import { DreRow, DreCalculatedResult } from '@/types/dre';
+import { DreRow, DreCalculatedResult, DreFilters } from '@/types/dre';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip 
 } from 'recharts';
@@ -18,6 +17,7 @@ interface DreDetailsModalProps {
   isPrivacyMode: boolean;
   isRevenuePrivacyMode?: boolean;
   allResults?: DreCalculatedResult | null;
+  filters?: DreFilters;
 }
 
 export function DreDetailsModal({ 
@@ -28,15 +28,14 @@ export function DreDetailsModal({
   sourceRows,
   isPrivacyMode,
   isRevenuePrivacyMode,
-  allResults 
+  allResults,
+  filters
 }: DreDetailsModalProps) {
   
   const [activeTab, setActiveTab] = useState<'chart' | 'transactions'>('chart');
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [isMaximized, setIsMaximized] = useState(false);
-  const [isExportingImage, setIsExportingImage] = useState(false);
   const [isGeneratingGamma, setIsGeneratingGamma] = useState(false);
-  const modalRef = useRef<HTMLDivElement>(null);
 
   const formatValueStandard = (value: number) => {
     if (isPrivacyMode) return 'R$ ****';
@@ -48,27 +47,29 @@ export function DreDetailsModal({
     setExpandedCats(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleExportPNG = async () => {
-    if (!modalRef.current) return;
-    setIsExportingImage(true);
-    try {
-      const dataUrl = await domtoimage.toPng(modalRef.current, {
-        bgcolor: '#ffffff',
-        filter: (node: Node) => !(node instanceof Element && node.classList.contains('no-export'))
-      });
-      const link = document.createElement('a');
-      const sanitizedTitle = (title || 'Detalhamento').replace(/[^a-zA-Z0-9_-]/g, '_');
-      link.download = `DRE_${sanitizedTitle}.png`;
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Error exporting image:', error);
-      alert('Não foi possível gerar a imagem PNG. Tente novamente.');
-    } finally {
-      setIsExportingImage(false);
-    }
+  const isLucroAntesFcl = title === 'Lucro antes do FCL';
+  const isFcl = title === 'Fluxo de Caixa Livre FCL';
+
+  // Modal Container Class (Normal vs Maximizada)
+  const containerClasses = isMaximized
+    ? "bg-white w-[98vw] h-[96vh] max-w-none max-h-none rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200"
+    : "bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transition-all duration-200";
+
+  // Data processing for standard view
+  const safeMensalData = mensalData || {};
+  const data = Object.keys(safeMensalData).map(col => ({
+    name: col,
+    valor: safeMensalData[col] || 0
+  }));
+
+  const dataReversed = [...data].reverse();
+  const total = data.reduce((acc, curr) => acc + curr.valor, 0);
+  const average = data.length > 0 ? total / data.length : 0;
+
+  const formatFilterList = (list?: string[]) => {
+    if (!list || list.length === 0) return 'Todas';
+    if (list.length > 3) return `${list.slice(0, 3).join(', ')} (+${list.length - 3})`;
+    return list.join(', ');
   };
 
   const handleGenerateGamma = async () => {
@@ -76,6 +77,18 @@ export function DreDetailsModal({
     try {
       let md = `# Relatório Financeiro Executivo - ${title}\n\n`;
       md += `**Data da Emissão:** ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
+
+      if (filters) {
+        md += `### Parâmetros e Filtros Selecionados\n`;
+        md += `- **Empresa(s):** ${formatFilterList(filters.empresas)}\n`;
+        md += `- **Período(s):** ${formatFilterList(filters.periodos)}\n`;
+        md += `- **Departamento(s):** ${formatFilterList(filters.departamentos)}\n`;
+        md += `- **Conta(s) DRE:** ${formatFilterList(filters.contasDre)}\n`;
+        md += `- **Projeto(s):** ${formatFilterList(filters.projetos)}\n`;
+        md += `- **Categoria(s):** ${formatFilterList(filters.categorias)}\n`;
+        md += `- **Rateio de Despesas:** ${filters.excludeSharedExpenses ? 'Excluído (Sem Rateio)' : 'Incluído (Com Rateio)'}\n\n`;
+      }
+
       md += `### Resumo dos Indicadores\n`;
       md += `- **Total Consolidado:** ${formatValueStandard(total)}\n`;
       md += `- **Média Mensal:** ${formatValueStandard(average)}\n\n`;
@@ -170,27 +183,6 @@ export function DreDetailsModal({
       setIsGeneratingGamma(false);
     }
   };
-
-  if (!isOpen) return null;
-
-  const isLucroAntesFcl = title === 'Lucro antes do FCL';
-  const isFcl = title === 'Fluxo de Caixa Livre FCL';
-
-  // Modal Container Class (Normal vs Maximizada)
-  const containerClasses = isMaximized
-    ? "bg-white w-[98vw] h-[96vh] max-w-none max-h-none rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200"
-    : "bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transition-all duration-200";
-
-  // Data processing for standard view (safely handle null/undefined mensalData without Hooks)
-  const safeMensalData = mensalData || {};
-  const data = Object.keys(safeMensalData).map(col => ({
-    name: col,
-    valor: safeMensalData[col] || 0
-  }));
-
-  const dataReversed = [...data].reverse();
-  const total = data.reduce((acc, curr) => acc + curr.valor, 0);
-  const average = data.length > 0 ? total / data.length : 0;
 
   // CSV Export Logic
   const handleExportCSV = () => {
@@ -489,7 +481,7 @@ export function DreDetailsModal({
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
-        <div ref={modalRef} className={containerClasses}>
+        <div className={containerClasses}>
           {/* Header */}
           <div className="flex flex-col border-b border-slate-100 bg-slate-50/50 p-6 pb-4">
             <div className="flex items-center justify-between">
@@ -512,15 +504,6 @@ export function DreDetailsModal({
                 >
                   <Download size={14} className="text-emerald-600" />
                   <span className="hidden sm:inline">CSV</span>
-                </button>
-                <button
-                  onClick={handleExportPNG}
-                  disabled={isExportingImage}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-xl transition-all shadow-2xs disabled:opacity-50"
-                  title="Baixar imagem PNG do detalhamento"
-                >
-                  {isExportingImage ? <Loader2 size={14} className="animate-spin text-blue-600" /> : <ImageIcon size={14} className="text-blue-600" />}
-                  <span className="hidden sm:inline">{isExportingImage ? 'Gerando...' : 'Imagem PNG'}</span>
                 </button>
                 <button
                   onClick={handleGenerateGamma}
@@ -547,6 +530,44 @@ export function DreDetailsModal({
                 </button>
               </div>
             </div>
+
+            {/* Chips de Filtros Ativos */}
+            {filters && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Filtros:</span>
+                <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                  🏢 {formatFilterList(filters.empresas)}
+                </span>
+                <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                  📅 {formatFilterList(filters.periodos)}
+                </span>
+                {filters.departamentos && filters.departamentos.length > 0 && (
+                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                    Depto: {formatFilterList(filters.departamentos)}
+                  </span>
+                )}
+                {filters.contasDre && filters.contasDre.length > 0 && (
+                  <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+                    Conta DRE: {formatFilterList(filters.contasDre)}
+                  </span>
+                )}
+                {filters.projetos && filters.projetos.length > 0 && (
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    Projeto: {formatFilterList(filters.projetos)}
+                  </span>
+                )}
+                {filters.categorias && filters.categorias.length > 0 && (
+                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                    Categoria: {formatFilterList(filters.categorias)}
+                  </span>
+                )}
+                {filters.excludeSharedExpenses && (
+                  <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
+                    Sem Rateio
+                  </span>
+                )}
+              </div>
+            )}
             
             {infoBox}
           </div>
@@ -623,7 +644,7 @@ export function DreDetailsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
-      <div ref={modalRef} className={containerClasses}>
+      <div className={containerClasses}>
         
         {/* Header */}
         <div className="flex flex-col border-b border-slate-100 bg-slate-50/50">
@@ -647,15 +668,6 @@ export function DreDetailsModal({
               >
                 <Download size={14} className="text-emerald-600" />
                 <span className="hidden sm:inline">CSV</span>
-              </button>
-              <button
-                onClick={handleExportPNG}
-                disabled={isExportingImage}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 rounded-xl transition-all shadow-2xs disabled:opacity-50"
-                title="Baixar imagem PNG do detalhamento"
-              >
-                {isExportingImage ? <Loader2 size={14} className="animate-spin text-blue-600" /> : <ImageIcon size={14} className="text-blue-600" />}
-                <span className="hidden sm:inline">{isExportingImage ? 'Gerando...' : 'Imagem PNG'}</span>
               </button>
               <button
                 onClick={handleGenerateGamma}
