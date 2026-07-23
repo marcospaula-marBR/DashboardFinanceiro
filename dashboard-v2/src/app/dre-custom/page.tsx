@@ -1,870 +1,475 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { 
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  AreaChart, Area
+import {
+  AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { 
-  ChevronLeft, ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Percent, 
-  Sparkles, RefreshCw, Layers, CheckSquare, Square, X, ExternalLink, Loader2,
-  FileText, Zap, Target, DollarSign, Calendar, AlertTriangle, ShieldCheck,
-  Users, Activity, Clock, Award, Sliders, HelpCircle, Info, BookOpen, Check, Building2, Calculator
+import {
+  ChevronLeft, X, ExternalLink, Loader2, Zap, Target,
+  Activity, Clock, Calculator, Check, Building2,
+  RotateCcw, PlayCircle, Sparkles, TrendingDown, TrendingUp,
+  Wallet, Percent, FileText, Info
 } from 'lucide-react';
-import { DreRow, DreFilters, DreMetadata } from '@/types/dre';
-import { 
-  DreSimulatorEngine, 
-  SimulatorV3Params, 
+import { DreRow, DreMetadata } from '@/types/dre';
+import {
+  DreSimulatorEngine,
+  SimulatorV3Params,
   ContractLossItem,
-  calculateV3SimulationEngine 
+  calculateV3SimulationEngine
 } from '@/services/dre-simulator.engine';
 import { DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreLancamentosService } from '@/services/dre-lancamentos.service';
 
-// Formatação BRL
-const formatCurrency = (val?: number) => {
-  if (val === undefined || val === null || isNaN(val)) return 'R$ 0,00';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+// ─── Helpers ────────────────────────────────────────────
+const fmt = (v?: number) =>
+  v == null || isNaN(v)
+    ? 'R$ 0,00'
+    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+const fmtPct = (v?: number) => {
+  if (v == null || isNaN(v)) return '0,0%';
+  return `${v > 0 ? '+' : ''}${v.toFixed(1)}%`;
 };
 
-const formatPercent = (val?: number) => {
-  if (val === undefined || val === null || isNaN(val)) return '0,0%';
-  const prefix = val > 0 ? '+' : '';
-  return `${prefix}${val.toFixed(1)}%`;
+// ─── Tipos ──────────────────────────────────────────────
+type AuditModal = 'breakeven' | 'runway' | 'ebitda' | 'replacement' | null;
+type Periodicity = 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
+
+const DEFAULT_PARAMS: SimulatorV3Params = {
+  selectedEmpresas: [],
+  enableRevenueAdj: false,
+  revenueType: 'percentage',
+  revenueValue: 10,
+  enableCostsAdj: false,
+  costsType: 'percentage',
+  costsValue: 10,
+  enableExpensesAdj: false,
+  expensesType: 'percentage',
+  expensesValue: 10,
+  enableContractLoss: false,
+  selectedContracts: [],
+  initialCash: 500000,
 };
 
-type PeriodicityOption = 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
-type AuditModalType = 'breakeven' | 'runway' | 'ebitda' | 'replacement' | null;
-
-export default function DreCustomPage() {
-  // Estado de Dados Brutos e Metadata
+// ─── Componente Principal ────────────────────────────────
+export default function DreSimulatorPage() {
+  // Dados
   const [rawData, setRawData] = useState<DreRow[]>([]);
   const [metadata, setMetadata] = useState<DreMetadata>({
-    empresas: ['Mar Brasil', 'DZM'],
-    periodos: [],
-    departamentos: [],
-    contasDre: [],
-    projetos: [],
-    categorias: [],
-    mapaMeses: {}
+    empresas: [], periodos: [], departamentos: [],
+    contasDre: [], projetos: [], categorias: [], mapaMeses: {}
   });
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Periodicidade da Visualização
-  const [periodicity, setPeriodicity] = useState<PeriodicityOption>('mensal');
-  const [showDidacticGuide, setShowDidacticGuide] = useState<boolean>(false);
-  const [activeAuditModal, setActiveAuditModal] = useState<AuditModalType>(null);
-
-  // SELEÇÃO DE EMPRESA(S)
+  // Empresa
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([]);
 
-  // ──────────────────────────────────────────────────────────
-  // PARÂMETROS DO SIMULADOR V3 (CHECKBOXES & BOTÕES)
-  // ──────────────────────────────────────────────────────────
-  const [v3Params, setV3Params] = useState<SimulatorV3Params>({
-    selectedEmpresas: [],
-    
-    // Premissa 1: Receita
-    enableRevenueAdj: false,
-    revenueType: 'percentage',
-    revenueValue: 10,
+  // Draft (o que o usuário digita) vs Applied (o que o motor usa)
+  const [draft, setDraft] = useState<SimulatorV3Params>({ ...DEFAULT_PARAMS });
+  const [applied, setApplied] = useState<SimulatorV3Params | null>(null);
+  const [hasChanges, setHasChanges] = useState(false);
 
-    // Premissa 2: Custos Operacionais
-    enableCostsAdj: false,
-    costsType: 'percentage',
-    costsValue: 10,
+  // Contrato em edição
+  const [contractName, setContractName] = useState('');
+  const [contractValue, setContractValue] = useState(30000);
+  const [contractMonths, setContractMonths] = useState(12);
 
-    // Premissa 3: Despesas Rateadas
-    enableExpensesAdj: false,
-    expensesType: 'percentage',
-    expensesValue: 10,
-
-    // Premissa 4: Perda de Contratos com seleção múltipla
-    enableContractLoss: false,
-    selectedContracts: [],
-
-    initialCash: 500000
-  });
-
-  // Estado de Contrato em Edição no Form
-  const [newContractName, setNewContractName] = useState<string>('');
-  const [newContractValue, setNewContractValue] = useState<number>(30000);
-  const [newContractReplacement, setNewContractReplacement] = useState<number>(6);
-
-  // Estado de BrisinhAI
-  const [isAiAnalyzing, setIsAiAnalyzing] = useState<boolean>(false);
-  const [aiAnalysisText, setAiAnalysisText] = useState<string | null>(null);
-
-  // Estado de Exportação Gamma
-  const [isGammaModalOpen, setIsGammaModalOpen] = useState<boolean>(false);
-  const [isGammaGenerating, setIsGammaGenerating] = useState<boolean>(false);
-  const [includeAiInGamma, setIncludeAiInGamma] = useState<boolean>(true);
+  // UI state
+  const [auditModal, setAuditModal] = useState<AuditModal>(null);
+  const [periodicity, setPeriodicity] = useState<Periodicity>('mensal');
+  const [isGammaOpen, setIsGammaOpen] = useState(false);
+  const [isGammaLoading, setIsGammaLoading] = useState(false);
   const [gammaUrl, setGammaUrl] = useState<string | null>(null);
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [includeAi, setIncludeAi] = useState(true);
 
-  // Carregar Dados da Omie / Supabase DB ao Iniciar
+  // ─── Carregar Dados ──────────────────────────────────────
   React.useEffect(() => {
-    async function loadData() {
+    (async () => {
       setIsLoading(true);
       try {
-        const { rows, error } = await DreLancamentosService.fetchAllForDashboard();
-        if (rows && rows.length > 0) {
+        const { rows } = await DreLancamentosService.fetchAllForDashboard();
+        if (rows?.length) {
           setRawData(rows);
-          const meta = DreLancamentosService.generateMetadataFromRows(rows);
-          setMetadata(meta);
+          setMetadata(DreLancamentosService.generateMetadataFromRows(rows));
         }
-      } catch (err) {
-        console.error('[Simulador DRE V3] Erro ao carregar dados:', err);
+      } catch (e) {
+        console.error('[Simulador V3]', e);
       } finally {
         setIsLoading(false);
       }
-    }
-    loadData();
+    })();
   }, []);
 
-  // EXTRAÇÃO DE CONTRATOS COM VALOR MÉDIO MENSAL REAL
-  const availableContractsList = useMemo(() => {
-    if (!rawData || rawData.length === 0) return [];
-    const mapProj = new Map<string, { total: number; count: number }>();
-
-    const periodCols = Object.keys(rawData[0] || {}).filter(k => k.includes('/'));
-
+  // ─── Contratos disponíveis ───────────────────────────────
+  const contracts = useMemo(() => {
+    if (!rawData.length) return [];
+    const map = new Map<string, { total: number; months: number }>();
+    const cols = Object.keys(rawData[0] || {}).filter(k => k.includes('/'));
     rawData.forEach(r => {
-      const empMatch = selectedEmpresas.length === 0 || selectedEmpresas.includes(r.Empresa);
-      if (empMatch && r.Projeto && r.Projeto !== '-' && r.Projeto !== 'Geral' && r.Projeto !== 'Sem Projeto') {
-        if (!mapProj.has(r.Projeto)) {
-          mapProj.set(r.Projeto, { total: 0, count: 0 });
-        }
-        const entry = mapProj.get(r.Projeto)!;
-
-        if (r.ContaDRE && ['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(r.ContaDRE)) {
-          periodCols.forEach(col => {
-            const val = parseFloat(r[col]?.toString().replace(',', '.') || '0');
-            if (!isNaN(val) && val > 0) {
-              entry.total += val;
-              entry.count += 1;
-            }
-          });
-        }
-      }
+      const empOk = !selectedEmpresas.length || selectedEmpresas.includes(r.Empresa);
+      if (!empOk || !r.Projeto || ['–', '-', 'Geral', 'Sem Projeto'].includes(r.Projeto)) return;
+      if (!['Receita Bruta de Vendas', 'Receitas Indiretas'].includes(r.ContaDRE)) return;
+      if (!map.has(r.Projeto)) map.set(r.Projeto, { total: 0, months: 0 });
+      const e = map.get(r.Projeto)!;
+      cols.forEach(c => {
+        const v = parseFloat(r[c]?.toString().replace(',', '.') || '0');
+        if (!isNaN(v) && v > 0) { e.total += v; e.months++; }
+      });
     });
-
-    const list: { name: string; monthlyAverage: number }[] = [];
-    mapProj.forEach((val, name) => {
-      const periodCount = periodCols.length || 1;
-      const avg = Math.round(val.total / periodCount);
-      list.push({ name, monthlyAverage: avg > 0 ? avg : 25000 });
-    });
-
-    return list.sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(map.entries())
+      .map(([name, { total, months }]) => ({ name, avg: Math.round(total / Math.max(1, cols.length)) }))
+      .filter(c => c.avg > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [rawData, selectedEmpresas]);
 
-  // Handler ao escolher um contrato na lista suspensa
-  const handleSelectContractName = (name: string) => {
-    setNewContractName(name);
-    const found = availableContractsList.find(c => c.name === name);
-    if (found && found.monthlyAverage > 0) {
-      setNewContractValue(found.monthlyAverage);
-    }
-  };
-
-  // Handler para togglar seleção de empresas
-  const handleToggleEmpresa = (emp: string) => {
-    setSelectedEmpresas(prev => {
-      const updated = prev.includes(emp) ? prev.filter(e => e !== emp) : [...prev, emp];
-      setV3Params(p => ({ ...p, selectedEmpresas: updated }));
-      return updated;
-    });
-  };
-
-  // Handler para adicionar contrato à lista de perdas
-  const handleAddContractToLoss = () => {
-    if (!newContractName) return;
-    const item: ContractLossItem = {
-      contractName: newContractName,
-      monthlyValue: newContractValue,
-      replacementMonths: newContractReplacement,
-      startDate: '2026-07'
-    };
-    setV3Params(p => ({
-      ...p,
-      selectedContracts: [...p.selectedContracts.filter(c => c.contractName !== newContractName), item]
-    }));
-    setNewContractName('');
-  };
-
-  const handleRemoveContractFromLoss = (name: string) => {
-    setV3Params(p => ({
-      ...p,
-      selectedContracts: p.selectedContracts.filter(c => c.contractName !== name)
-    }));
-  };
-
-  // ──────────────────────────────────────────────────────────
-  // CÁLCULO DO SIMULADOR V3 (DRE ENGINE)
-  // ──────────────────────────────────────────────────────────
+  // ─── Motor Base (sem premissas) ──────────────────────────
   const baseResult = useMemo(() => {
-    if (rawData.length === 0) return null;
+    if (!rawData.length) return null;
     return DreSimulatorEngine.runSimulation(rawData, metadata, DEFAULT_DRE_ESTRUTURA, {
-      empresas: selectedEmpresas,
-      periodos: [],
-      departamentos: [],
-      contasDre: [],
-      projetos: [],
-      categorias: [],
-      excludeSharedExpenses: false
+      empresas: selectedEmpresas, periodos: [], departamentos: [],
+      contasDre: [], projetos: [], categorias: [], excludeSharedExpenses: false
     }, {
-      id: 'base_v3',
-      name: 'Cenário Real',
-      basePeriod: [],
-      projectionStartDate: '2025-01',
-      projectionEndDate: '2026-12',
-      mode: 'historical_what_if',
-      includeAllocatedExpenses: true,
-      assumptions: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      id: 'base', name: 'Real', basePeriod: [],
+      projectionStartDate: '2025-01', projectionEndDate: '2026-12',
+      mode: 'historical_what_if', includeAllocatedExpenses: true,
+      assumptions: [], createdAt: '', updatedAt: ''
     });
   }, [rawData, metadata, selectedEmpresas]);
 
-  const v3Calculation = useMemo(() => {
-    if (rawData.length === 0 || !baseResult) return null;
+  // ─── Motor Simulado (só roda com applied) ───────────────
+  const simulation = useMemo(() => {
+    if (!rawData.length || !baseResult || !applied) return null;
     return calculateV3SimulationEngine(rawData, metadata, DEFAULT_DRE_ESTRUTURA, {
-      empresas: selectedEmpresas,
-      periodos: [],
-      departamentos: [],
-      contasDre: [],
-      projetos: [],
-      categorias: [],
-      excludeSharedExpenses: false
-    }, v3Params, baseResult);
-  }, [rawData, metadata, selectedEmpresas, v3Params, baseResult]);
+      empresas: selectedEmpresas, periodos: [], departamentos: [],
+      contasDre: [], projetos: [], categorias: [], excludeSharedExpenses: false
+    }, applied, baseResult);
+  }, [rawData, metadata, selectedEmpresas, applied, baseResult]);
 
-  // PROJEÇÃO FUTURA A PARTIR DE HOJE (DETERMINAÇÃO DINÂMICA JUL/26 EM DIANTE)
-  const cashRunwayChartData = useMemo(() => {
-    if (!v3Calculation) return [];
-    
-    // Meses Futuros iniciando no Mês Atual (Jul/26 em diante para 12 meses)
-    const futureMonthsLabels = [
-      'Jul/26', 'Ago/26', 'Set/26', 'Out/26', 'Nov/26', 'Dez/26',
-      'Jan/27', 'Fev/27', 'Mar/27', 'Abr/27', 'Mai/27', 'Jun/27'
-    ];
+  // ─── Handlers ────────────────────────────────────────────
+  const updateDraft = useCallback(<K extends keyof SimulatorV3Params>(key: K, val: SimulatorV3Params[K]) => {
+    setDraft(p => ({ ...p, [key]: val }));
+    setHasChanges(true);
+  }, []);
 
-    const audit = v3Calculation.metrics.audit;
-    // O resultado líquido é: Receita - Custos - Despesas
-    const monthlyNetCashBase = audit.monthlyRevenueReal - audit.monthlyCostsReal - audit.monthlyExpensesReal;
-    const monthlyNetCashSim = audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim;
+  const handleApply = () => {
+    setApplied({ ...draft, selectedEmpresas });
+    setHasChanges(false);
+    setAiText(null);
+  };
 
-    let runningCashBase = v3Params.initialCash;
-    let runningCashSim = v3Params.initialCash;
+  const handleReset = () => {
+    setDraft({ ...DEFAULT_PARAMS });
+    setApplied(null);
+    setHasChanges(false);
+    setAiText(null);
+    setGammaUrl(null);
+    setContractName('');
+    setContractValue(30000);
+    setContractMonths(12);
+  };
 
-    return futureMonthsLabels.map(mes => {
-      runningCashBase += monthlyNetCashBase;
-      runningCashSim += monthlyNetCashSim;
-
-      return {
-        mes,
-        'Caixa Acumulado Real': Math.round(runningCashBase),
-        'Caixa Acumulado Simulado': Math.round(runningCashSim),
-      };
+  const toggleEmpresa = (emp: string) => {
+    setSelectedEmpresas(p => {
+      const next = p.includes(emp) ? p.filter(e => e !== emp) : [...p, emp];
+      setHasChanges(true);
+      return next;
     });
-  }, [v3Calculation, v3Params.initialCash]);
+  };
 
-  // Agrupamento por Periodicidade
-  const groupedChartData = useMemo(() => {
-    if (!cashRunwayChartData || cashRunwayChartData.length === 0) return [];
-    if (periodicity === 'mensal') return cashRunwayChartData;
-
-    const grouped: Record<string, { mes: string; 'Caixa Acumulado Real': number; 'Caixa Acumulado Simulado': number; count: number }> = {};
-
-    cashRunwayChartData.forEach((item, index) => {
-      let groupKey = item.mes;
-      if (periodicity === 'bimestral') {
-        const bIdx = Math.floor(index / 2) + 1;
-        groupKey = `Bim. ${bIdx}`;
-      } else if (periodicity === 'trimestral') {
-        const qIdx = Math.floor(index / 3) + 1;
-        groupKey = `${qIdx}º Tri`;
-      } else if (periodicity === 'semestral') {
-        const sIdx = Math.floor(index / 6) + 1;
-        groupKey = `${sIdx}º Sem`;
-      } else if (periodicity === 'anual') {
-        const yearStr = item.mes.includes('/') ? '20' + item.mes.split('/')[1] : item.mes.slice(0, 4);
-        groupKey = `Ano ${yearStr}`;
-      }
-
-      if (!grouped[groupKey]) {
-        grouped[groupKey] = { mes: groupKey, 'Caixa Acumulado Real': 0, 'Caixa Acumulado Simulado': 0, count: 0 };
-      }
-      grouped[groupKey]['Caixa Acumulado Real'] = item['Caixa Acumulado Real'];
-      grouped[groupKey]['Caixa Acumulado Simulado'] = item['Caixa Acumulado Simulado'];
-      grouped[groupKey].count += 1;
-    });
-
-    return Object.values(grouped);
-  }, [cashRunwayChartData, periodicity]);
-
-  // CÁLCULO DA META MENSAL DE NOVOS FECHAMENTOS (REPOSIÇÃO COMERCIAL ATÉ PONTO X)
-  const salesReplacementTarget = useMemo(() => {
-    if (!v3Params.enableContractLoss || v3Params.selectedContracts.length === 0) return null;
-
-    let totalMonthlyLoss = 0;
-    let maxReplacementMonths = 1;
-
-    v3Params.selectedContracts.forEach(c => {
-      totalMonthlyLoss += c.monthlyValue || 0;
-      if ((c.replacementMonths || 0) > maxReplacementMonths) {
-        maxReplacementMonths = c.replacementMonths;
-      }
-    });
-
-    if (totalMonthlyLoss <= 0 || maxReplacementMonths <= 0) return null;
-
-    const monthlySalesTarget = totalMonthlyLoss / maxReplacementMonths;
-
-    return {
-      totalMonthlyLoss,
-      maxReplacementMonths,
-      monthlySalesTarget: Math.round(monthlySalesTarget)
+  const addContract = () => {
+    if (!contractName) return;
+    const item: ContractLossItem = {
+      contractName, monthlyValue: contractValue,
+      replacementMonths: contractMonths, startDate: '2026-07'
     };
-  }, [v3Params]);
+    updateDraft('selectedContracts', [
+      ...draft.selectedContracts.filter(c => c.contractName !== contractName),
+      item
+    ]);
+    setContractName('');
+  };
 
-  // Dados para Gráfico 2: Demonstrativo Sintético (Valores Mensais Médios em R$)
-  const syntheticChartData = useMemo(() => {
-    if (!v3Calculation) return [];
-    const audit = v3Calculation.metrics.audit;
+  const removeContract = (name: string) =>
+    updateDraft('selectedContracts', draft.selectedContracts.filter(c => c.contractName !== name));
 
+  // ─── Dados Calculados ────────────────────────────────────
+  const m = simulation?.metrics;
+  const audit = m?.audit;
+
+  const salesTarget = useMemo(() => {
+    if (!m || !applied?.enableContractLoss || !applied?.selectedContracts.length) return null;
+    let loss = 0, maxMonths = 1;
+    applied.selectedContracts.forEach(c => {
+      loss += c.monthlyValue;
+      if (c.replacementMonths > maxMonths) maxMonths = c.replacementMonths;
+    });
+    if (loss <= 0) return null;
+    return { loss, months: maxMonths, monthly: Math.round(loss / maxMonths) };
+  }, [m, applied]);
+
+  // Labels do mês atual em diante (Jul/26)
+  const futureLabels = ['Jul/26','Ago/26','Set/26','Out/26','Nov/26','Dez/26','Jan/27','Fev/27','Mar/27','Abr/27','Mai/27','Jun/27'];
+
+  const cashData = useMemo(() => {
+    if (!audit) return futureLabels.map(mes => ({ mes, 'Real': 0, 'Simulado': 0 }));
+    const netBase = audit.monthlyRevenueReal - audit.monthlyCostsReal - audit.monthlyExpensesReal;
+    const netSim  = audit.monthlyRevenueSim  - audit.monthlyCostsSim  - audit.monthlyExpensesSim;
+    const cash0 = (applied?.initialCash ?? 500000);
+    let rb = cash0, rs = cash0;
+    return futureLabels.map(mes => {
+      rb += netBase; rs += netSim;
+      return { mes, 'Real': Math.round(rb), 'Simulado': Math.round(rs) };
+    });
+  }, [audit, applied]);
+
+  const groupedCash = useMemo(() => {
+    if (periodicity === 'mensal') return cashData;
+    const g: Record<string, any> = {};
+    cashData.forEach((d, i) => {
+      let k = d.mes;
+      if (periodicity === 'bimestral')  k = `Bim${Math.floor(i/2)+1}`;
+      if (periodicity === 'trimestral') k = `${Math.floor(i/3)+1}ºTri`;
+      if (periodicity === 'semestral')  k = `${Math.floor(i/6)+1}ºSem`;
+      if (periodicity === 'anual')      k = '12 meses';
+      if (!g[k]) g[k] = { mes: k, Real: 0, Simulado: 0 };
+      g[k].Real = d['Real']; g[k].Simulado = d['Simulado'];
+    });
+    return Object.values(g);
+  }, [cashData, periodicity]);
+
+  const barData = useMemo(() => {
+    if (!audit) return [];
     return [
       { name: 'Receita', Real: Math.round(audit.monthlyRevenueReal), Simulado: Math.round(audit.monthlyRevenueSim) },
-      { name: 'Custos', Real: Math.round(audit.monthlyCostsReal), Simulado: Math.round(audit.monthlyCostsSim) },
-      { name: 'Despesas', Real: Math.round(audit.monthlyExpensesReal), Simulado: Math.round(audit.monthlyExpensesSim) },
-      { name: 'Lucro/mês', Real: Math.round(audit.monthlyRevenueReal - audit.monthlyCostsReal - audit.monthlyExpensesReal), Simulado: Math.round(audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim) },
+      { name: 'Custos',  Real: Math.round(audit.monthlyCostsReal),   Simulado: Math.round(audit.monthlyCostsSim) },
+      { name: 'Despesas',Real: Math.round(audit.monthlyExpensesReal),Simulado: Math.round(audit.monthlyExpensesSim) },
+      { name: 'Lucro',   Real: Math.round(audit.monthlyRevenueReal - audit.monthlyCostsReal - audit.monthlyExpensesReal),
+                         Simulado: Math.round(audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim) },
     ];
-  }, [v3Calculation]);
+  }, [audit]);
 
-  // ──────────────────────────────────────────────────────────
-  // BRISINHAI ANALYSIS
-  // ──────────────────────────────────────────────────────────
-  const handleRunAiAnalysis = async () => {
-    if (!v3Calculation) return;
-    setIsAiAnalyzing(true);
-    setAiAnalysisText(null);
-
+  // ─── BrisinhAI ───────────────────────────────────────────
+  const runAi = async () => {
+    if (!m) return;
+    setIsAiLoading(true);
+    setAiText(null);
     try {
-      const m = v3Calculation.metrics;
-      const prompt = `Analise a seguinte simulação DRE V3 em linguagem executiva simples para diretoria:
-- Empresas Selecionadas: ${selectedEmpresas.length > 0 ? selectedEmpresas.join(', ') : 'Todas'}
-- Variação de Receita: ${v3Params.enableRevenueAdj ? `${v3Params.revenueValue}${v3Params.revenueType === 'percentage' ? '%' : ' R$'}` : 'Não'}
-- Corte de Custos: ${v3Params.enableCostsAdj ? `${v3Params.costsValue}${v3Params.costsType === 'percentage' ? '%' : ' R$'}` : 'Não'}
-- Corte de Despesas: ${v3Params.enableExpensesAdj ? `${v3Params.expensesValue}${v3Params.expensesType === 'percentage' ? '%' : ' R$'}` : 'Não'}
-- Perda de Contratos: ${v3Params.enableContractLoss ? v3Params.selectedContracts.map(c => `${c.contractName} (R$ ${c.monthlyValue}/mês, Reposição ${c.replacementMonths}m)`).join('; ') : 'Nenhum'}
-${salesReplacementTarget ? `- Meta Mensal de Vendas/Novos Fechamentos: ${formatCurrency(salesReplacementTarget.monthlySalesTarget)}/mês durante ${salesReplacementTarget.maxReplacementMonths} meses` : ''}
-- Ponto de Equilíbrio Real: ${formatCurrency(m.breakEvenPointReal)}/mês vs Simulado: ${formatCurrency(m.breakEvenPointSimulated)}/mês
-- Margem EBITDA Real: ${m.ebitdaMarginReal.toFixed(1)}% vs Simulada: ${m.ebitdaMarginSimulated.toFixed(1)}%
-- Cash Runway: ${m.isRunwaySustainable ? 'Sustentável (Caixa Positivo)' : `Zera no mês ${m.zeroCashMonth} (${m.cashRunwayMonths} meses)`}
-
-Forneça um parecer executivo claro em 3 tópicos: 1. Diagnóstico da Saúde Financeira, 2. Meta de Vendas Requerida, 3. Recomendações Práticas.`;
-
-      const res = await fetch('/api/ai/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, text: prompt })
-      });
-
-      if (!res.ok) throw new Error('Falha ao consultar BrisinhAI');
+      const prompt = `Análise executiva do Simulador DRE V3:
+- Break-Even Real: ${fmt(m.breakEvenPointReal)}/mês | Simulado: ${fmt(m.breakEvenPointSimulated)}/mês
+- EBITDA Real: ${m.ebitdaMarginReal.toFixed(1)}% | Simulado: ${m.ebitdaMarginSimulated.toFixed(1)}%
+- Cash Runway: ${m.isRunwaySustainable ? 'Sustentável' : `Zera no mês ${m.zeroCashMonth}`}
+${salesTarget ? `- Meta de Vendas: ${fmt(salesTarget.monthly)}/mês em ${salesTarget.months} meses` : ''}
+Forneça 3 tópicos: 1. Diagnóstico; 2. Riscos; 3. Recomendações.`;
+      const res = await fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, text: prompt }) });
       const data = await res.json();
-      setAiAnalysisText(data.analysis || data.response || 'Análise concluída com sucesso.');
-    } catch (err: any) {
-      setAiAnalysisText(`Parecer BrisinhAI: O cenário simulado exige atenção ao Ponto de Equilíbrio de ${formatCurrency(v3Calculation?.metrics.breakEvenPointSimulated)}/mês.`);
+      setAiText(data.analysis || data.response || '');
+    } catch {
+      setAiText('BrisinhAI indisponível no momento.');
     } finally {
-      setIsAiAnalyzing(false);
+      setIsAiLoading(false);
     }
   };
 
-  // EXPORTAÇÃO GAMMA CORRIGIDA (ENVIA markdownReport)
-  const handleExportGamma = async () => {
-    if (!v3Calculation) return;
-    setIsGammaGenerating(true);
-    setGammaUrl(null);
-
+  // ─── Gamma ───────────────────────────────────────────────
+  const handleGamma = async () => {
+    if (!m || !audit) return;
+    setIsGammaLoading(true); setGammaUrl(null);
     try {
-      const m = v3Calculation.metrics;
-      const audit = m.audit;
-
-      const reportMarkdown = `# Apresentação Executiva — Simulador DRE V3
-
-## 1. Indicadores Executivos Mensais
-- **Empresa(s)**: ${selectedEmpresas.length > 0 ? selectedEmpresas.join(', ') : 'Todas as Empresas'}
-- **Faturamento Médio Mensal Real**: ${formatCurrency(audit.monthlyRevenueReal)}
-- **Ponto de Equilíbrio (Break-Even)**: Real ${formatCurrency(m.breakEvenPointReal)}/mês | Simulado ${formatCurrency(m.breakEvenPointSimulated)}/mês
-- **Margem EBITDA**: Real ${m.ebitdaMarginReal.toFixed(1)}% | Simulada ${m.ebitdaMarginSimulated.toFixed(1)}%
-- **Cash Runway**: ${m.isRunwaySustainable ? 'Caixa Sustentável' : `Caixa Zera no Mês ${m.zeroCashMonth}`}
-${salesReplacementTarget ? `- **Meta Mensal de Vendas/Reposição**: ${formatCurrency(salesReplacementTarget.monthlySalesTarget)}/mês durante ${salesReplacementTarget.maxReplacementMonths} meses` : ''}
-
-## 2. Demostrativo Sintético Mensal
-- **Receita Mensal**: Real ${formatCurrency(audit.monthlyRevenueReal)} | Simulado ${formatCurrency(audit.monthlyRevenueSim)}
-- **Custos Mensais**: Real ${formatCurrency(audit.monthlyCostsReal)} | Simulado ${formatCurrency(audit.monthlyCostsSim)}
-- **Despesas Mensais**: Real ${formatCurrency(audit.monthlyExpensesReal)} | Simulado ${formatCurrency(audit.monthlyExpensesSim)}
-
-${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artificial — BrisinhAI\n${aiAnalysisText}` : ''}
-`;
-
-      const resGenerate = await fetch('/api/gamma/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          markdownReport: reportMarkdown
-        })
-      });
-
-      if (!resGenerate.ok) throw new Error('Erro na API Gamma');
-      const genData = await resGenerate.json();
-      const generationId = genData.id || genData.generationId;
-
-      if (generationId) {
-        let attempts = 0;
-        while (attempts < 25) {
+      const md = `# Simulador Executivo DRE V3\n\n## Indicadores\n- **Faturamento Médio Real**: ${fmt(audit.monthlyRevenueReal)}\n- **Break-Even Real**: ${fmt(m.breakEvenPointReal)}/mês | **Simulado**: ${fmt(m.breakEvenPointSimulated)}/mês\n- **EBITDA**: ${m.ebitdaMarginReal.toFixed(1)}% → ${m.ebitdaMarginSimulated.toFixed(1)}%\n- **Cash Runway**: ${m.isRunwaySustainable ? 'Sustentável' : `Zera em ${m.zeroCashMonth}`}\n${salesTarget ? `- **Meta Comercial**: ${fmt(salesTarget.monthly)}/mês por ${salesTarget.months} meses` : ''}\n\n## Demonstrativo Mensal\n- Receita: ${fmt(audit.monthlyRevenueReal)} → ${fmt(audit.monthlyRevenueSim)}\n- Custos: ${fmt(audit.monthlyCostsReal)} → ${fmt(audit.monthlyCostsSim)}\n- Despesas: ${fmt(audit.monthlyExpensesReal)} → ${fmt(audit.monthlyExpensesSim)}\n\n${includeAi && aiText ? `## Parecer BrisinhAI\n${aiText}` : ''}`;
+      const r = await fetch('/api/gamma/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ markdownReport: md }) });
+      const d = await r.json();
+      const gid = d.id || d.generationId;
+      if (gid) {
+        for (let i = 0; i < 25; i++) {
           await new Promise(r => setTimeout(r, 2000));
-          attempts++;
-          const resStatus = await fetch(`/api/gamma/status/${generationId}`);
-          if (resStatus.ok) {
-            const statusData = await resStatus.json();
-            const finalUrl = statusData.gammaUrl || statusData.url || statusData.exportUrl;
-            if (finalUrl) {
-              setGammaUrl(finalUrl);
-              break;
-            }
-          }
+          const s = await fetch(`/api/gamma/status/${gid}`);
+          if (s.ok) { const sd = await s.json(); const u = sd.gammaUrl || sd.url; if (u) { setGammaUrl(u); break; } }
         }
-      } else {
-        const directUrl = genData.gammaUrl || genData.url;
-        if (directUrl) setGammaUrl(directUrl);
-      }
-    } catch (err: any) {
-      console.error('[Gamma Export] Erro:', err);
-      alert('Erro ao gerar apresentação no Gamma. Verifique a API Key.');
-    } finally {
-      setIsGammaGenerating(false);
-    }
+      } else { const u = d.gammaUrl || d.url; if (u) setGammaUrl(u); }
+    } catch (e) { console.error(e); alert('Erro ao gerar apresentação Gamma.'); }
+    finally { setIsGammaLoading(false); }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
-        <Loader2 className="animate-spin text-emerald-500 mb-4" size={44} />
-        <h2 className="text-xl font-bold">Carregando Simulador V3...</h2>
-        <p className="text-slate-400 text-sm mt-1">Conectando ao repositório unificado de DRE...</p>
+  // ─── Loading ─────────────────────────────────────────────
+  if (isLoading) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center gap-4 text-white">
+      <Loader2 className="animate-spin text-emerald-400" size={36} />
+      <div>
+        <p className="font-bold">Carregando dados DRE...</p>
+        <p className="text-slate-400 text-sm">Conectando ao banco de dados</p>
       </div>
-    );
-  }
+    </div>
+  );
 
+  // ─── Render ──────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-16">
-      
-      {/* HEADER EXECUTIVO SPLIT-SCREEN */}
-      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col pb-12">
+
+      {/* ── HEADER ─────────────────────────────────────────── */}
+      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Link 
-              href="/dre"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-white border border-slate-700 rounded-lg transition-all"
-            >
-              <ChevronLeft size={16} />
-              <span>Voltar ao DRE</span>
+            <Link href="/dre" className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all">
+              <ChevronLeft size={15} /> Voltar ao DRE
             </Link>
-
-            <div className="h-5 w-[1px] bg-slate-700 hidden sm:block" />
-
+            <div className="hidden sm:block h-4 w-px bg-slate-700" />
             <div>
-              <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
-                <span>⚡ Simulador Executivo DRE V3</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
-                  Cenários Futuros
-                </span>
+              <h1 className="text-base font-black text-white flex items-center gap-2">
+                ⚡ Simulador DRE V3
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">Cenários Futuros</span>
               </h1>
-              <p className="text-xs text-slate-400">Projeção Futura (HOJE = Jul/26 em diante)</p>
+              <p className="text-[11px] text-slate-400">Configure as premissas e clique em Aplicar</p>
             </div>
           </div>
 
-          {/* PRESETS, PERIODICIDADE & GUIA DIDÁTICO */}
-          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            
-            {/* SELETOR DE PERIODICIDADE */}
-            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1">
-              {(['mensal', 'bimestral', 'trimestral', 'semestral', 'anual'] as PeriodicityOption[]).map(p => (
-                <button
-                  key={p}
-                  onClick={() => setPeriodicity(p)}
-                  className={`px-2 py-1 text-[11px] font-bold capitalize rounded-lg transition-all ${
-                    periodicity === p
-                      ? 'bg-emerald-500 text-slate-950 shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-
-            {/* GUIA DIDÁTICO */}
-            <button
-              onClick={() => setShowDidacticGuide(!showDidacticGuide)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-                showDidacticGuide
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
-              }`}
-              title="Explicar conceitos em linguagem simples para leigos"
-            >
-              <BookOpen size={15} />
-              <span className="hidden md:inline">Guia Didático</span>
+          <div className="flex items-center gap-2">
+            <button onClick={handleReset} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all">
+              <RotateCcw size={14} /> Resetar
             </button>
-
-            <button
-              onClick={handleRunAiAnalysis}
-              disabled={isAiAnalyzing}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all shrink-0"
-            >
-              {isAiAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              <span>BrisinhAI</span>
-            </button>
-
-            <button
-              onClick={() => setIsGammaModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-orange-900/30 transition-all shrink-0"
-            >
-              <Zap size={16} />
-              <span>Gamma 🚀</span>
-            </button>
-
+            {simulation && (
+              <button onClick={() => { setIsGammaOpen(true); setGammaUrl(null); }} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-xs rounded-lg shadow-lg transition-all">
+                <Zap size={14} /> Gamma 🚀
+              </button>
+            )}
           </div>
-
         </div>
       </header>
 
-      {/* PAINEL DIDÁTICO */}
-      {showDidacticGuide && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-4 animate-in fade-in slide-in-from-top-2">
-          <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Info size={18} className="text-amber-400" />
-                <h3 className="font-bold text-white text-sm uppercase tracking-wider">
-                  📖 Guia Prático para Entender o Simulador (Clique nos Cards para Ver a Fórmula)
-                </h3>
+      {/* ── MAIN LAYOUT ─────────────────────────────────────── */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-5 flex-1 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+          {/* ════════════════════════════════════════════════════
+              PAINEL ESQUERDO — CONFIGURAÇÃO (5 COLUNAS)
+             ════════════════════════════════════════════════════ */}
+          <div className="lg:col-span-5 space-y-4">
+
+            {/* Empresa */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <Building2 size={15} className="text-amber-400" /> Empresa
               </div>
-              <button onClick={() => setShowDidacticGuide(false)} className="text-slate-400 hover:text-white">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
-                <span className="font-bold text-amber-400 uppercase text-[10px]">1. Ponto de Equilíbrio (Break-Even)</span>
-                <p className="text-slate-300 leading-relaxed">
-                  Quanto a empresa precisa faturar por mês para cobrir exatamente as despesas fixas e custos operacionais.
-                </p>
-              </div>
-
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
-                <span className="font-bold text-rose-400 uppercase text-[10px]">2. Cash Runway (Vida do Caixa)</span>
-                <p className="text-slate-300 leading-relaxed">
-                  Mês em que o saldo de caixa zera se o resultado mensal for negativo no cenário futuro.
-                </p>
-              </div>
-
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1">
-                <span className="font-bold text-cyan-400 uppercase text-[10px]">3. Margem EBITDA</span>
-                <p className="text-slate-300 leading-relaxed">
-                  A porcentagem do faturamento que realmente sobra de lucro operacional direto.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PAINEL SPLIT-SCREEN (GRID 12 COLUNAS) */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 flex-1 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-          {/* ──────────────────────────────────────────────────────────
-              PAINEL DA ESQUERDA: CONTROLES POR QUADRO DE CHECKBOXES (5 COLUNAS)
-             ────────────────────────────────────────────────────────── */}
-          <div className="lg:col-span-5 space-y-5">
-            
-            {/* SELEÇÃO DE EMPRESA(S) */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                <Building2 size={18} className="text-amber-400" />
-                <h2 className="font-bold text-white text-xs uppercase tracking-wider">Empresa(s) Filtrada(s) para Simulação</h2>
-              </div>
-
-              <div className="flex flex-wrap gap-2 pt-1">
+              <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => { setSelectedEmpresas([]); setV3Params(p => ({ ...p, selectedEmpresas: [] })); }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    selectedEmpresas.length === 0
-                      ? 'bg-amber-500 text-slate-950 shadow-md'
-                      : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Todas as Empresas
-                </button>
-
-                {metadata.empresas.map(emp => {
-                  const isSelected = selectedEmpresas.includes(emp);
-                  return (
-                    <button
-                      key={emp}
-                      onClick={() => handleToggleEmpresa(emp)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                        isSelected
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {isSelected && <Check size={14} />}
-                      <span>{emp}</span>
-                    </button>
-                  );
-                })}
+                  onClick={() => { setSelectedEmpresas([]); setHasChanges(true); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedEmpresas.length === 0 ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}`}
+                >Todas</button>
+                {metadata.empresas.map(e => (
+                  <button key={e} onClick={() => toggleEmpresa(e)}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${selectedEmpresas.includes(e) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}
+                  >
+                    {selectedEmpresas.includes(e) && <Check size={12} />} {e}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* QUADRO DE PREMISSAS COM CHECKBOXES & TOGGLES */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
-              
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <Sliders className="text-emerald-400" size={18} />
-                  <h2 className="font-bold text-white text-sm uppercase tracking-wider">Quadro de Premissas</h2>
-                </div>
-                <span className="text-[10px] font-bold text-emerald-400 uppercase bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  Modo Checkboxes
-                </span>
+            {/* Premissas */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Premissas do Cenário</span>
+                {hasChanges && <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full border border-amber-500/30 font-bold">Não aplicado</span>}
               </div>
 
-              {/* PREMISSA 1: VARIAÇÃO DE RECEITA */}
-              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
-                    <input 
-                      type="checkbox"
-                      checked={v3Params.enableRevenueAdj}
-                      onChange={e => setV3Params(p => ({ ...p, enableRevenueAdj: e.target.checked }))}
-                      className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 w-4 h-4"
-                    />
-                    <Wallet size={16} className="text-emerald-400" />
-                    <span>Simular Variação de Receitas</span>
-                  </label>
-                </div>
+              {/* P1: Receita */}
+              <PremissaRow
+                icon={<Wallet size={15} className="text-emerald-400" />}
+                label="Variação de Receita"
+                hint="Simule aumento (+) ou queda (–) na receita mensal"
+                enabled={draft.enableRevenueAdj}
+                onToggle={v => updateDraft('enableRevenueAdj', v)}
+                type={draft.revenueType}
+                onTypeChange={v => updateDraft('revenueType', v as any)}
+                value={draft.revenueValue}
+                onValueChange={v => updateDraft('revenueValue', v)}
+                color="emerald"
+              />
 
-                {v3Params.enableRevenueAdj && (
-                  <div className="grid grid-cols-2 gap-3 pt-2 animate-in fade-in">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo de Ajuste</label>
-                      <select
-                        value={v3Params.revenueType}
-                        onChange={e => setV3Params(p => ({ ...p, revenueType: e.target.value as any }))}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-semibold"
-                      >
-                        <option value="percentage">Percentual (%)</option>
-                        <option value="absolute">Valor Absoluto (R$)</option>
-                      </select>
-                    </div>
+              {/* P2: Custos */}
+              <PremissaRow
+                icon={<TrendingDown size={15} className="text-rose-400" />}
+                label="Corte de Custos Operacionais"
+                hint="Reduz custos diretos (terceirizados, CLTs, serviços)"
+                enabled={draft.enableCostsAdj}
+                onToggle={v => updateDraft('enableCostsAdj', v)}
+                type={draft.costsType}
+                onTypeChange={v => updateDraft('costsType', v as any)}
+                value={draft.costsValue}
+                onValueChange={v => updateDraft('costsValue', v)}
+                color="rose"
+              />
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Valor Variação</label>
-                      <input 
-                        type="number"
-                        value={v3Params.revenueValue || ''}
-                        onChange={e => {
-                          const val = e.target.value === '' ? 0 : Number(e.target.value);
-                          setV3Params(p => ({ ...p, revenueValue: val }));
-                        }}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
-                        placeholder="Ex: 10 para +10% ou -10"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+              {/* P3: Despesas */}
+              <PremissaRow
+                icon={<Percent size={15} className="text-amber-400" />}
+                label="Corte de Despesas Rateadas"
+                hint="Reduz despesas administrativas e overhead"
+                enabled={draft.enableExpensesAdj}
+                onToggle={v => updateDraft('enableExpensesAdj', v)}
+                type={draft.expensesType}
+                onTypeChange={v => updateDraft('expensesType', v as any)}
+                value={draft.expensesValue}
+                onValueChange={v => updateDraft('expensesValue', v)}
+                color="amber"
+              />
 
-              {/* PREMISSA 2: CORTE DE CUSTOS OPERACIONAIS */}
-              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
-                    <input 
-                      type="checkbox"
-                      checked={v3Params.enableCostsAdj}
-                      onChange={e => setV3Params(p => ({ ...p, enableCostsAdj: e.target.checked }))}
-                      className="rounded border-slate-700 bg-slate-900 text-rose-500 focus:ring-rose-500 w-4 h-4"
-                    />
-                    <TrendingUp size={16} className="text-rose-400" />
-                    <span>Simular Corte de Custos Operacionais</span>
-                  </label>
-                </div>
+              {/* P4: Perda de Contrato */}
+              <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
+                <label className="flex items-center gap-2 p-3 cursor-pointer">
+                  <input type="checkbox" checked={draft.enableContractLoss}
+                    onChange={e => updateDraft('enableContractLoss', e.target.checked)}
+                    className="rounded border-slate-700 text-cyan-500 bg-slate-900 focus:ring-cyan-500 w-4 h-4" />
+                  <FileText size={15} className="text-cyan-400" />
+                  <span className="text-xs font-bold text-white">Perda de Contrato</span>
+                  <span className="ml-auto text-[10px] text-slate-500">Simula encerramento</span>
+                </label>
 
-                {v3Params.enableCostsAdj && (
-                  <div className="grid grid-cols-2 gap-3 pt-2 animate-in fade-in">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo de Corte</label>
-                      <select
-                        value={v3Params.costsType}
-                        onChange={e => setV3Params(p => ({ ...p, costsType: e.target.value as any }))}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
-                      >
-                        <option value="percentage">Percentual (%)</option>
-                        <option value="absolute">Valor Absoluto (R$)</option>
-                      </select>
-                    </div>
+                {draft.enableContractLoss && (
+                  <div className="px-3 pb-3 space-y-2 border-t border-slate-800">
+                    <select value={contractName} onChange={e => {
+                      setContractName(e.target.value);
+                      const c = contracts.find(x => x.name === e.target.value);
+                      if (c) setContractValue(c.avg);
+                    }} className="w-full mt-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+                      <option value="">– Selecione um contrato –</option>
+                      {contracts.map(c => (
+                        <option key={c.name} value={c.name}>{c.name} ({fmt(c.avg)}/mês)</option>
+                      ))}
+                    </select>
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Valor do Corte</label>
-                      <input 
-                        type="number"
-                        value={v3Params.costsValue || ''}
-                        onChange={e => {
-                          const val = e.target.value === '' ? 0 : Number(e.target.value);
-                          setV3Params(p => ({ ...p, costsValue: val }));
-                        }}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-rose-400 font-bold focus:outline-none focus:border-rose-500"
-                        placeholder="Ex: 10 para corte de 10%"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* PREMISSA 3: CORTE DE DESPESAS RATEADAS */}
-              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
-                    <input 
-                      type="checkbox"
-                      checked={v3Params.enableExpensesAdj}
-                      onChange={e => setV3Params(p => ({ ...p, enableExpensesAdj: e.target.checked }))}
-                      className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 w-4 h-4"
-                    />
-                    <Percent size={16} className="text-amber-400" />
-                    <span>Simular Corte de Despesas Rateadas</span>
-                  </label>
-                </div>
-
-                {v3Params.enableExpensesAdj && (
-                  <div className="grid grid-cols-2 gap-3 pt-2 animate-in fade-in">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo de Corte</label>
-                      <select
-                        value={v3Params.expensesType}
-                        onChange={e => setV3Params(p => ({ ...p, expensesType: e.target.value as any }))}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-semibold"
-                      >
-                        <option value="percentage">Percentual (%)</option>
-                        <option value="absolute">Valor Absoluto (R$)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Valor do Corte</label>
-                      <input 
-                        type="number"
-                        value={v3Params.expensesValue || ''}
-                        onChange={e => {
-                          const val = e.target.value === '' ? 0 : Number(e.target.value);
-                          setV3Params(p => ({ ...p, expensesValue: val }));
-                        }}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-amber-400 font-bold focus:outline-none focus:border-amber-500"
-                        placeholder="Ex: 10 para corte de 10%"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* PERDA DE CONTRATO COM PREENCHIMENTO AUTOMÁTICO DO VALOR MÉDIO MENSAL */}
-              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-white">
-                    <input 
-                      type="checkbox"
-                      checked={v3Params.enableContractLoss}
-                      onChange={e => setV3Params(p => ({ ...p, enableContractLoss: e.target.checked }))}
-                      className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-cyan-500 w-4 h-4"
-                    />
-                    <FileText size={16} className="text-cyan-400" />
-                    <span>Perda de Contrato(s) da Empresa</span>
-                  </label>
-                </div>
-
-                {v3Params.enableContractLoss && (
-                  <div className="space-y-3 pt-2 animate-in fade-in">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Selecionar Contrato (Preenche Média Mensal)</label>
-                      <select
-                        value={newContractName}
-                        onChange={e => handleSelectContractName(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
-                      >
-                        <option value="">-- Escolha um Contrato da Empresa --</option>
-                        {availableContractsList.map(c => (
-                          <option key={c.name} value={c.name}>
-                            {c.name} ({formatCurrency(c.monthlyAverage)}/mês)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Perda Mensal (R$)</label>
-                        <input 
-                          type="number"
-                          step="5000"
-                          value={newContractValue || ''}
-                          onChange={e => setNewContractValue(Number(e.target.value))}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-cyan-400 font-bold focus:outline-none focus:border-cyan-500"
-                        />
+                        <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Perda Mensal (R$)</label>
+                        <input type="number" value={contractValue || ''}
+                          onChange={e => setContractValue(Number(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-cyan-400 font-bold focus:outline-none focus:border-cyan-500" />
                       </div>
-
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Reposição (Meses)</label>
-                        <input 
-                          type="number"
-                          min="0"
-                          max="48"
-                          value={newContractReplacement || ''}
-                          onChange={e => setNewContractReplacement(Number(e.target.value))}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold"
-                        />
+                        <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Meses de Reposição</label>
+                        <input type="number" min="1" max="60" value={contractMonths || ''}
+                          onChange={e => setContractMonths(Number(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" />
                       </div>
                     </div>
 
-                    <button
-                      onClick={handleAddContractToLoss}
-                      disabled={!newContractName}
-                      className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl transition-all shadow-md disabled:opacity-40"
-                    >
-                      + Incluir Contrato no Cenário
+                    <button onClick={addContract} disabled={!contractName}
+                      className="w-full py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg transition-all disabled:opacity-40">
+                      + Adicionar ao Cenário
                     </button>
 
-                    {/* Lista de Contratos Selecionados */}
-                    {v3Params.selectedContracts.length > 0 && (
-                      <div className="space-y-2 pt-2 border-t border-slate-800">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Contratos Afetados no Cenário:</span>
-                        {v3Params.selectedContracts.map(item => (
-                          <div key={item.contractName} className="flex items-center justify-between bg-slate-900 p-2 rounded-lg border border-slate-800 text-xs">
+                    {draft.selectedContracts.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        {draft.selectedContracts.map(c => (
+                          <div key={c.contractName} className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px]">
                             <div>
-                              <span className="font-bold text-white block">{item.contractName}</span>
-                              <span className="text-[10px] text-slate-400">
-                                Perda: {formatCurrency(item.monthlyValue)}/mês · Reposição: {item.replacementMonths}m
-                              </span>
+                              <span className="font-bold text-white">{c.contractName}</span>
+                              <span className="text-slate-400 ml-2">{fmt(c.monthlyValue)}/mês · {c.replacementMonths}m</span>
                             </div>
-                            <button onClick={() => handleRemoveContractFromLoss(item.contractName)} className="text-slate-500 hover:text-rose-400 p-1">
-                              <X size={15} />
-                            </button>
+                            <button onClick={() => removeContract(c.contractName)} className="text-slate-500 hover:text-rose-400 ml-2"><X size={13} /></button>
                           </div>
                         ))}
                       </div>
@@ -873,439 +478,390 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                 )}
               </div>
 
-              {/* SALDO DE CAIXA INICIAL */}
-              <div className="pt-3 border-t border-slate-800">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Saldo de Caixa Inicial (para Cash Runway)</label>
-                <input 
-                  type="number"
-                  step="50000"
-                  value={v3Params.initialCash || ''}
-                  onChange={e => setV3Params(p => ({ ...p, initialCash: Number(e.target.value) }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
-                />
+              {/* Caixa inicial */}
+              <div className="flex items-center gap-3 pt-1">
+                <label className="text-[11px] text-slate-400 font-bold whitespace-nowrap">Caixa Inicial</label>
+                <input type="number" step="50000" value={draft.initialCash || ''}
+                  onChange={e => updateDraft('initialCash', Number(e.target.value))}
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-500" />
               </div>
-
             </div>
+
+            {/* Botão APLICAR */}
+            <button
+              onClick={handleApply}
+              disabled={!hasChanges && !!applied}
+              className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all shadow-lg ${
+                hasChanges
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-emerald-900/30 animate-pulse'
+                  : applied
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+              }`}
+            >
+              <PlayCircle size={18} />
+              {hasChanges ? 'Aplicar Simulação' : applied ? '✓ Simulação Aplicada' : 'Configure as premissas acima'}
+            </button>
 
           </div>
 
-          {/* ──────────────────────────────────────────────────────────
-              PAINEL DA DIREITA: RESULTADOS EM TEMPO REAL & GRÁFICOS (7 COLUNAS)
-             ────────────────────────────────────────────────────────── */}
-          <div className="lg:col-span-7 space-y-6">
+          {/* ════════════════════════════════════════════════════
+              PAINEL DIREITO — RESULTADOS (7 COLUNAS)
+             ════════════════════════════════════════════════════ */}
+          <div className="lg:col-span-7 space-y-5">
 
-            {v3Calculation && (
+            {!simulation ? (
+              /* Estado vazio */
+              <div className="h-80 flex flex-col items-center justify-center text-center p-8 bg-slate-900 border border-slate-800 border-dashed rounded-2xl space-y-3">
+                <PlayCircle size={48} className="text-slate-700" />
+                <h3 className="font-bold text-slate-400">Nenhuma simulação ativa</h3>
+                <p className="text-sm text-slate-500 max-w-xs">Configure as premissas no painel ao lado e clique em <strong className="text-emerald-400">Aplicar Simulação</strong> para ver os resultados.</p>
+              </div>
+            ) : (
               <>
-                {/* CARDS DE INDICADORES EXECUTIVOS EM TEMPO REAL (CLICÁVEIS PARA DETALHAR CÁLCULO) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  
-                  {/* 1. PONTO DE EQUILÍBRIO (BREAK-EVEN OPERACIONAL MENSAL) */}
-                  <div 
-                    onClick={() => setActiveAuditModal('breakeven')}
-                    className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-4 shadow-xl cursor-pointer transition-all group"
-                  >
-                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider group-hover:text-amber-400 transition-colors">Break-Even /Mês</span>
-                      <Calculator size={16} className="text-amber-400" />
-                    </div>
-                    <div className="text-xl font-black text-white mt-1">
-                      {formatCurrency(v3Calculation.metrics.breakEvenPointSimulated)}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Meta de faturamento mensal para cobrir contas.
-                    </p>
-                    <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
-                      <span className="text-slate-400">Real: {formatCurrency(v3Calculation.metrics.breakEvenPointReal)}</span>
-                      <span className="font-bold text-amber-400 flex items-center gap-1">
-                        <span>Ver Fórmula</span>
-                        <ChevronLeft size={12} className="rotate-180" />
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 2. CASH RUNWAY */}
-                  <div 
-                    onClick={() => setActiveAuditModal('runway')}
-                    className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-4 shadow-xl cursor-pointer transition-all group"
-                  >
-                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider group-hover:text-emerald-400 transition-colors">Cash Runway</span>
-                      <Clock size={16} className={v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'} />
-                    </div>
-                    <div className={`text-xl font-black mt-1 ${v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {v3Calculation.metrics.isRunwaySustainable 
-                        ? 'Sustentável' 
-                        : `${v3Calculation.metrics.cashRunwayMonths} Meses`}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Vida útil do caixa no cenário simulado.
-                    </p>
-                    <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
-                      <span className="text-slate-400">Data Zero:</span>
-                      <span className={`font-bold ${v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {v3Calculation.metrics.isRunwaySustainable ? 'Sem risco' : `Mês ${v3Calculation.metrics.zeroCashMonth}`}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 3. MARGEM EBITDA */}
-                  <div 
-                    onClick={() => setActiveAuditModal('ebitda')}
-                    className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 rounded-2xl p-4 shadow-xl cursor-pointer transition-all group"
-                  >
-                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                      <span className="font-bold uppercase tracking-wider group-hover:text-cyan-400 transition-colors">Margem EBITDA</span>
-                      <Activity size={16} className="text-cyan-400" />
-                    </div>
-                    <div className="text-xl font-black text-white mt-1">
-                      {v3Calculation.metrics.ebitdaMarginSimulated.toFixed(1)}%
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      % de lucro operacional sobre o faturamento.
-                    </p>
-                    <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-800/80">
-                      <span className="text-slate-400">Real: {v3Calculation.metrics.ebitdaMarginReal.toFixed(1)}%</span>
-                      <span className={`font-bold ${v3Calculation.metrics.ebitdaMarginSimulated >= v3Calculation.metrics.ebitdaMarginReal ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {formatPercent(v3Calculation.metrics.ebitdaMarginSimulated - v3Calculation.metrics.ebitdaMarginReal)}
-                      </span>
-                    </div>
-                  </div>
-
+                {/* ── KPIs ──────────────────────────────────────── */}
+                <div className="grid grid-cols-3 gap-3">
+                  <KpiCard
+                    label="Break-Even /mês"
+                    icon={<Calculator size={15} className="text-amber-400" />}
+                    value={fmt(m!.breakEvenPointSimulated)}
+                    sub={`Real: ${fmt(m!.breakEvenPointReal)}`}
+                    onClick={() => setAuditModal('breakeven')}
+                    color="amber"
+                  />
+                  <KpiCard
+                    label="Cash Runway"
+                    icon={<Clock size={15} className={m!.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'} />}
+                    value={m!.isRunwaySustainable ? 'Sustentável' : `${m!.cashRunwayMonths} meses`}
+                    sub={m!.isRunwaySustainable ? 'Caixa positivo' : `Zera: mês ${m!.zeroCashMonth}`}
+                    onClick={() => setAuditModal('runway')}
+                    color={m!.isRunwaySustainable ? 'emerald' : 'rose'}
+                  />
+                  <KpiCard
+                    label="EBITDA Simulado"
+                    icon={<Activity size={15} className="text-cyan-400" />}
+                    value={`${m!.ebitdaMarginSimulated.toFixed(1)}%`}
+                    sub={`Real: ${m!.ebitdaMarginReal.toFixed(1)}% (${fmtPct(m!.ebitdaMarginSimulated - m!.ebitdaMarginReal)})`}
+                    onClick={() => setAuditModal('ebitda')}
+                    color="cyan"
+                  />
                 </div>
 
-                {/* CARD DEDICADO DE META MENSAL DE REPOSIÇÃO (COMERCIAL) */}
-                {salesReplacementTarget && (
-                  <div 
-                    onClick={() => setActiveAuditModal('replacement')}
-                    className="bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-900 border border-amber-500/40 hover:border-amber-400 rounded-2xl p-5 shadow-xl cursor-pointer transition-all group animate-in fade-in"
-                  >
-                    <div className="flex items-center justify-between border-b border-amber-500/20 pb-3 mb-2">
-                      <div className="flex items-center gap-2">
-                        <Target className="text-amber-400" size={20} />
-                        <h3 className="font-bold text-white text-sm uppercase tracking-wider group-hover:text-amber-300">
-                          🎯 Meta Mensal de Novos Fechamentos (Reposição Comercial)
-                        </h3>
+                {/* Meta comercial */}
+                {salesTarget && (
+                  <div onClick={() => setAuditModal('replacement')} className="flex items-center justify-between bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-900 border border-amber-500/30 hover:border-amber-400/60 rounded-xl p-4 cursor-pointer transition-all group">
+                    <div className="flex items-center gap-3">
+                      <Target className="text-amber-400" size={20} />
+                      <div>
+                        <p className="text-xs font-bold text-white group-hover:text-amber-300">🎯 Meta Mensal de Reposição Comercial</p>
+                        <p className="text-[11px] text-slate-400">Perda de {fmt(salesTarget.loss)}/mês · {salesTarget.months} meses de janela</p>
                       </div>
-                      <span className="text-xs font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-                        {formatCurrency(salesReplacementTarget.monthlySalesTarget)} /mês
-                      </span>
                     </div>
-                    <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                      Para neutralizar a perda mensal de <strong className="text-white">{formatCurrency(salesReplacementTarget.totalMonthlyLoss)}/mês</strong> em <strong className="text-white">{salesReplacementTarget.maxReplacementMonths} meses</strong>, a equipe comercial deve fechar em média <strong className="text-amber-400">{formatCurrency(salesReplacementTarget.monthlySalesTarget)} por mês</strong> em novos contratos a partir de hoje (Clique para ver a fórmula).
-                    </p>
+                    <span className="text-sm font-black text-amber-400">{fmt(salesTarget.monthly)}<span className="text-[10px] text-slate-400">/mês</span></span>
                   </div>
                 )}
 
-                {/* PROJEÇÃO DE CAIXA FUTURA INICIANDO NO MÊS ATUAL (JUL/26 EM DIANTE) */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                {/* ── Gráfico 1: Caixa Futuro ──────────────────── */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-2">
-                        <span>Projeção de Caixa Futura (A partir de Jul/26)</span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700 uppercase">
-                          Visão {periodicity}
-                        </span>
-                      </h3>
-                      <p className="text-xs text-slate-400">Evolução do saldo acumulado de caixa nos próximos 12 meses (HOJE = Jul/26)</p>
+                      <h3 className="text-xs font-bold text-white uppercase tracking-wider">Projeção de Caixa (Jul/26 → Jun/27)</h3>
+                      <p className="text-[11px] text-slate-400">Saldo acumulado: cenário real vs simulado</p>
+                    </div>
+                    {/* Periodicidade junto ao gráfico */}
+                    <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5 gap-0.5">
+                      {(['mensal','trimestral','semestral','anual'] as Periodicity[]).map(p => (
+                        <button key={p} onClick={() => setPeriodicity(p)}
+                          className={`px-2 py-1 text-[10px] font-bold rounded-md capitalize transition-all ${periodicity === p ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}>
+                          {p.slice(0,3)}
+                        </button>
+                      ))}
                     </div>
                   </div>
-
-                  <div className="h-64 w-full">
+                  <div className="h-52">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={groupedChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <AreaChart data={groupedCash} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                         <defs>
-                          <linearGradient id="colorCashReal" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                          <linearGradient id="gReal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
                             <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                           </linearGradient>
-                          <linearGradient id="colorCashSim" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                          <linearGradient id="gSim" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
                             <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                        <XAxis dataKey="mes" stroke="#64748b" fontSize={11} />
-                        <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                          formatter={(value: any) => formatCurrency(Number(value))}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                        <Area type="monotone" dataKey="Caixa Acumulado Real" stroke="#10b981" fillOpacity={1} fill="url(#colorCashReal)" strokeWidth={2} />
-                        <Area type="monotone" dataKey="Caixa Acumulado Simulado" stroke="#3b82f6" fillOpacity={1} fill="url(#colorCashSim)" strokeWidth={2.5} />
+                        <XAxis dataKey="mes" stroke="#475569" fontSize={10} />
+                        <YAxis stroke="#475569" fontSize={10} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '10px', fontSize: '11px' }} formatter={(v: any) => fmt(Number(v))} />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <Area type="monotone" dataKey="Real" stroke="#10b981" fill="url(#gReal)" strokeWidth={2} />
+                        <Area type="monotone" dataKey="Simulado" stroke="#3b82f6" fill="url(#gSim)" strokeWidth={2.5} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                {/* GRÁFICO 2: DEMONSTRATIVO SINTÉTICO (VALORES MÉDIOS MENSAIS) */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-white text-sm uppercase tracking-wider">Demonstrativo Sintético DRE (Valores Mensais Médios)</h3>
-                      <p className="text-xs text-slate-400">Comparativo mensal entre Real e Simulado</p>
-                    </div>
+                {/* ── Gráfico 2: DRE Sintético ─────────────────── */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Demonstrativo Sintético (Médias Mensais)</h3>
+                    <p className="text-[11px] text-slate-400">Comparativo Real × Simulado</p>
                   </div>
-
-                  <div className="h-56 w-full">
+                  <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={syntheticChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <BarChart data={barData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                        <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                          formatter={(value: any) => formatCurrency(Number(value))}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                        <Bar dataKey="Real" fill="#10b981" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="Simulado" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                        <XAxis dataKey="name" stroke="#475569" fontSize={10} />
+                        <YAxis stroke="#475569" fontSize={10} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '10px', fontSize: '11px' }} formatter={(v: any) => fmt(Number(v))} />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <Bar dataKey="Real" fill="#10b981" radius={[3,3,0,0]} />
+                        <Bar dataKey="Simulado" fill="#f59e0b" radius={[3,3,0,0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                {/* PARECER BRISINHAI */}
-                {aiAnalysisText && (
-                  <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-5 shadow-xl animate-in fade-in">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Sparkles className="text-emerald-400" size={18} />
-                      <h3 className="font-bold text-white text-sm uppercase tracking-wider">Parecer Executivo — BrisinhAI</h3>
+                {/* ── BrisinhAI (inline, discreto) ─────────────── */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-emerald-400" />
+                      <span className="text-xs font-bold text-white">Análise BrisinhAI</span>
                     </div>
-                    <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-medium bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-                      {aiAnalysisText}
-                    </div>
+                    <button onClick={runAi} disabled={isAiLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold transition-all disabled:opacity-50">
+                      {isAiLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                      {isAiLoading ? 'Analisando...' : aiText ? 'Reanalisar' : 'Gerar Análise'}
+                    </button>
                   </div>
-                )}
+                  {aiText ? (
+                    <div className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-line bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                      {aiText}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">Clique em "Gerar Análise" para obter um parecer executivo do BrisinhAI sobre este cenário simulado.</p>
+                  )}
+                </div>
 
               </>
             )}
-
           </div>
-
         </div>
       </main>
 
-      {/* MODAL DE DETALHAMENTO DE CÁLCULO (CADASTRADO PARA OS CARDS) */}
-      {activeAuditModal && v3Calculation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl relative">
-            
+      {/* ═══════════════════════════════════════════════════
+          MODAIS DE AUDITORIA DE CÁLCULO
+         ═══════════════════════════════════════════════════ */}
+      {auditModal && simulation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <Calculator className="text-amber-400" size={20} />
-                <h3 className="font-bold text-white text-base">
-                  {activeAuditModal === 'breakeven' && 'Memória de Cálculo — Break-Even Operacional'}
-                  {activeAuditModal === 'runway' && 'Memória de Cálculo — Cash Runway'}
-                  {activeAuditModal === 'ebitda' && 'Memória de Cálculo — Margem EBITDA'}
-                  {activeAuditModal === 'replacement' && 'Memória de Cálculo — Meta Mensal de Reposição'}
+                <Calculator size={18} className="text-amber-400" />
+                <h3 className="font-bold text-white text-sm">
+                  {auditModal === 'breakeven' && 'Break-Even Operacional'}
+                  {auditModal === 'runway'    && 'Cash Runway'}
+                  {auditModal === 'ebitda'   && 'Margem EBITDA'}
+                  {auditModal === 'replacement' && 'Meta de Reposição Comercial'}
                 </h3>
               </div>
-              <button onClick={() => setActiveAuditModal(null)} className="text-slate-400 hover:text-white">
-                <X size={20} />
-              </button>
+              <button onClick={() => setAuditModal(null)} className="text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
 
-            {/* CONTEÚDO DO MODAL SEGUNDO O CARD SELECIONADO */}
-            {activeAuditModal === 'breakeven' && (
-              <div className="space-y-4 text-xs">
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="font-bold text-amber-400 block mb-1">Fórmula do Break-Even Mensal:</span>
-                  <code className="text-slate-300 font-mono text-[11px]">
-                    BreakEven = Despesas Fixas / Margem de Contribuição (%)
-                  </code>
+            {auditModal === 'breakeven' && audit && (
+              <div className="space-y-3 text-xs">
+                <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                  <code className="text-slate-400">BreakEven = Despesas Fixas ÷ Margem de Contribuição (%)</code>
                 </div>
-
-                <div className="space-y-2 border-t border-slate-800 pt-3">
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">1. Faturamento Médio Mensal Real:</span>
-                    <span className="font-bold text-white">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueReal)}/mês</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">2. Custos Variáveis Operacionais (65%):</span>
-                    <span className="font-bold text-rose-400">-{formatCurrency(v3Calculation.metrics.audit.variableCostsSim)}/mês</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">3. Margem de Contribuição (%):</span>
-                    <span className="font-bold text-emerald-400">{v3Calculation.metrics.audit.contributionMarginSimPct.toFixed(1)}%</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">4. Despesas Fixas + Custos Estruturais:</span>
-                    <span className="font-bold text-amber-400">{formatCurrency(v3Calculation.metrics.audit.fixedExpensesSim)}/mês</span>
-                  </div>
+                <div className="space-y-2">
+                  {[
+                    ['Faturamento Médio Real', fmt(audit.monthlyRevenueReal), 'text-white'],
+                    ['Custos Variáveis (65%)', `–${fmt(audit.variableCostsSim)}`, 'text-rose-400'],
+                    ['Margem de Contribuição', `${audit.contributionMarginSimPct.toFixed(1)}%`, 'text-emerald-400'],
+                    ['Despesas Fixas Estruturais', fmt(audit.fixedExpensesSim), 'text-amber-400'],
+                  ].map(([k, v, c]) => (
+                    <div key={k} className="flex justify-between py-1 border-b border-slate-800">
+                      <span className="text-slate-400">{k}</span>
+                      <span className={`font-bold ${c}`}>{v}</span>
+                    </div>
+                  ))}
                 </div>
-
-                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 font-semibold">
-                  Resultado: {formatCurrency(v3Calculation.metrics.audit.fixedExpensesSim)} ÷ {v3Calculation.metrics.audit.contributionMarginSimPct.toFixed(1)}% = <strong className="text-white font-black">{formatCurrency(v3Calculation.metrics.breakEvenPointSimulated)} / mês</strong>.
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs font-semibold">
+                  {fmt(audit.fixedExpensesSim)} ÷ {audit.contributionMarginSimPct.toFixed(1)}% = <strong className="text-white">{fmt(m!.breakEvenPointSimulated)}/mês</strong>
                 </div>
               </div>
             )}
 
-            {activeAuditModal === 'runway' && (
-              <div className="space-y-4 text-xs">
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="font-bold text-emerald-400 block mb-1">Fórmula do Cash Runway:</span>
-                  <code className="text-slate-300 font-mono text-[11px]">
-                    Caixa Mês N = Caixa Inicial + Sombra dos Resultados Mensais
-                  </code>
+            {auditModal === 'runway' && audit && (
+              <div className="space-y-3 text-xs">
+                <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                  <code className="text-slate-400">Runway: Caixa Mês N = Caixa₀ + Σ(Resultado Mensal)</code>
                 </div>
-
-                <div className="space-y-2 border-t border-slate-800 pt-3">
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">1. Saldo de Caixa Inicial:</span>
-                    <span className="font-bold text-emerald-400">{formatCurrency(v3Params.initialCash)}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">2. Resultado Líquido Simulado/Mês:</span>
-                    <span className="font-bold text-white">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim - v3Calculation.metrics.audit.monthlyCostsSim - v3Calculation.metrics.audit.monthlyExpensesSim)}/mês</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">3. Status de Liquidez:</span>
-                    <span className={`font-bold ${v3Calculation.metrics.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {v3Calculation.metrics.isRunwaySustainable ? 'Sustentável (Caixa Crescente)' : `Caixa Zera no Mês ${v3Calculation.metrics.zeroCashMonth}`}
-                    </span>
-                  </div>
+                <div className="space-y-2">
+                  {[
+                    ['Caixa Inicial', fmt(applied?.initialCash ?? 500000), 'text-emerald-400'],
+                    ['Resultado Líquido/Mês', fmt(audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim), 'text-white'],
+                    ['Status', m!.isRunwaySustainable ? 'Sustentável ✓' : `Zera no mês ${m!.zeroCashMonth}`, m!.isRunwaySustainable ? 'text-emerald-400' : 'text-rose-400'],
+                  ].map(([k, v, c]) => (
+                    <div key={k} className="flex justify-between py-1 border-b border-slate-800">
+                      <span className="text-slate-400">{k}</span>
+                      <span className={`font-bold ${c}`}>{v}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {activeAuditModal === 'ebitda' && (
-              <div className="space-y-4 text-xs">
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="font-bold text-cyan-400 block mb-1">Fórmula da Margem EBITDA:</span>
-                  <code className="text-slate-300 font-mono text-[11px]">
-                    Margem EBITDA = (Resultado Operacional ÷ Faturamento) × 100
-                  </code>
+            {auditModal === 'ebitda' && audit && (
+              <div className="space-y-3 text-xs">
+                <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                  <code className="text-slate-400">EBITDA = (Resultado Operacional ÷ Faturamento) × 100</code>
                 </div>
-
-                <div className="space-y-2 border-t border-slate-800 pt-3">
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">1. Faturamento Médio Simulado:</span>
-                    <span className="font-bold text-white">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim)}/mês</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">2. Resultado Operacional (Lucro/mês):</span>
-                    <span className="font-bold text-cyan-400">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim - v3Calculation.metrics.audit.monthlyCostsSim - v3Calculation.metrics.audit.monthlyExpensesSim)}/mês</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">3. Margem EBITDA Calculada:</span>
-                    <span className="font-bold text-cyan-400">{v3Calculation.metrics.ebitdaMarginSimulated.toFixed(1)}%</span>
-                  </div>
+                <div className="space-y-2">
+                  {[
+                    ['Faturamento Simulado', fmt(audit.monthlyRevenueSim), 'text-white'],
+                    ['Resultado Operacional', fmt(audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim), 'text-cyan-400'],
+                    ['Margem EBITDA', `${m!.ebitdaMarginSimulated.toFixed(1)}%`, 'text-cyan-400'],
+                  ].map(([k, v, c]) => (
+                    <div key={k} className="flex justify-between py-1 border-b border-slate-800">
+                      <span className="text-slate-400">{k}</span>
+                      <span className={`font-bold ${c}`}>{v}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {activeAuditModal === 'replacement' && salesReplacementTarget && (
-              <div className="space-y-4 text-xs">
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="font-bold text-amber-400 block mb-1">Fórmula da Meta de Reposição Comercial:</span>
-                  <code className="text-slate-300 font-mono text-[11px]">
-                    Meta Mensal = Perda Total de Contratos ÷ Meses de Janela
-                  </code>
+            {auditModal === 'replacement' && salesTarget && (
+              <div className="space-y-3 text-xs">
+                <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                  <code className="text-slate-400">Meta Mensal = Perda Total ÷ Meses de Janela</code>
                 </div>
-
-                <div className="space-y-2 border-t border-slate-800 pt-3">
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">1. Perda Mensal Total de Contratos:</span>
-                    <span className="font-bold text-rose-400">{formatCurrency(salesReplacementTarget.totalMonthlyLoss)}/mês</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">2. Prazo até a Data da Perda (Janela):</span>
-                    <span className="font-bold text-white">{salesReplacementTarget.maxReplacementMonths} meses</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">3. Meta Mensal de Novos Contratos:</span>
-                    <span className="font-bold text-amber-400">{formatCurrency(salesReplacementTarget.monthlySalesTarget)} / mês</span>
-                  </div>
+                <div className="space-y-2">
+                  {[
+                    ['Perda Mensal de Contratos', fmt(salesTarget.loss), 'text-rose-400'],
+                    ['Janela de Reposição', `${salesTarget.months} meses`, 'text-white'],
+                    ['Meta Comercial Mensal', fmt(salesTarget.monthly), 'text-amber-400'],
+                  ].map(([k, v, c]) => (
+                    <div key={k} className="flex justify-between py-1 border-b border-slate-800">
+                      <span className="text-slate-400">{k}</span>
+                      <span className={`font-bold ${c}`}>{v}</span>
+                    </div>
+                  ))}
                 </div>
-
-                <p className="text-slate-400 leading-relaxed">
-                  Conquistando este valor a cada mês, quando chegar no mês {salesReplacementTarget.maxReplacementMonths}, a perda total terá sido 100% reposta.
-                </p>
+                <p className="text-slate-400 leading-relaxed">Atingindo essa meta todo mês, a perda estará 100% compensada ao final do prazo.</p>
               </div>
             )}
-
           </div>
         </div>
       )}
 
-      {/* MODAL DE EXPORTAÇÃO GAMMA */}
-      {isGammaModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl relative">
-            
-            {/* Header */}
+      {/* ═══════════════════════════════════════════════════
+          MODAL GAMMA
+         ═══════════════════════════════════════════════════ */}
+      {isGammaOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <Zap className="text-amber-400" size={20} />
-                <h3 className="font-bold text-white text-base">Exportar Simulação V3 para Gamma IA</h3>
+                <Zap size={18} className="text-amber-400" />
+                <h3 className="font-bold text-white text-sm">Exportar para Gamma IA</h3>
               </div>
-              <button 
-                onClick={() => setIsGammaModalOpen(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X size={20} />
-              </button>
+              <button onClick={() => setIsGammaOpen(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
 
-            {/* Content */}
             {gammaUrl ? (
-              <div className="py-6 text-center space-y-4">
-                <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-2xl flex items-center justify-center mx-auto">
-                  <Sparkles size={32} />
-                </div>
-                <h4 className="font-bold text-white text-base">Apresentação Gamma Gerada com Sucesso!</h4>
-                <p className="text-xs text-slate-400">Sua simulação V3 foi convertida em apresentação de slides interativa no Gamma.</p>
-                <a
-                  href={gammaUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg hover:scale-105 transition-all"
-                >
-                  <span>Abrir Apresentação no Gamma 🚀</span>
-                  <ExternalLink size={16} />
+              <div className="text-center py-4 space-y-3">
+                <p className="text-sm font-bold text-white">🎉 Apresentação gerada com sucesso!</p>
+                <a href={gammaUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs rounded-xl hover:scale-105 transition-all">
+                  Abrir no Gamma <ExternalLink size={14} />
                 </a>
               </div>
             ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-slate-400">
-                  Os indicadores em tempo real (Break-Even, Cash Runway, EBITDA e Meta de Reposição) serão enviados para montagem dos slides.
-                </p>
-
-                <div className="flex items-center gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <input
-                    type="checkbox"
-                    id="incAiV3"
-                    checked={includeAiInGamma}
-                    onChange={e => setIncludeAiInGamma(e.target.checked)}
-                    className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500"
-                  />
-                  <label htmlFor="incAiV3" className="text-xs font-semibold text-slate-300 cursor-pointer">
-                    Incluir Parecer Executivo do BrisinhAI na apresentação
-                  </label>
-                </div>
-
-                <button
-                  onClick={handleExportGamma}
-                  disabled={isGammaGenerating}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all disabled:opacity-50"
-                >
-                  {isGammaGenerating ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Gerando Slides no Gamma...</span>
-                    </>
-                  ) : (
-                    <span>Iniciar Geração Gamma 🚀</span>
-                  )}
+              <div className="space-y-3">
+                <p className="text-xs text-slate-400">Os indicadores simulados (Break-Even, Cash Runway, EBITDA e Meta Comercial) serão convertidos em uma apresentação de slides.</p>
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                  <input type="checkbox" checked={includeAi} onChange={e => setIncludeAi(e.target.checked)} className="rounded border-slate-700 text-amber-500" />
+                  Incluir parecer do BrisinhAI (se disponível)
+                </label>
+                <button onClick={handleGamma} disabled={isGammaLoading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-xs rounded-xl transition-all disabled:opacity-50">
+                  {isGammaLoading ? <><Loader2 size={14} className="animate-spin" /> Gerando slides...</> : '🚀 Gerar Apresentação Gamma'}
                 </button>
               </div>
             )}
-
           </div>
         </div>
       )}
 
+    </div>
+  );
+}
+
+// ─── Sub-Componentes ─────────────────────────────────────
+
+function PremissaRow({ icon, label, hint, enabled, onToggle, type, onTypeChange, value, onValueChange, color }: {
+  icon: React.ReactNode; label: string; hint: string;
+  enabled: boolean; onToggle: (v: boolean) => void;
+  type: string; onTypeChange: (v: string) => void;
+  value: number; onValueChange: (v: number) => void;
+  color: 'emerald' | 'rose' | 'amber';
+}) {
+  const borderColor = { emerald: 'border-emerald-500/30', rose: 'border-rose-500/30', amber: 'border-amber-500/30' }[color];
+  const ringColor   = { emerald: 'text-emerald-500', rose: 'text-rose-500', amber: 'text-amber-500' }[color];
+
+  return (
+    <div className={`rounded-xl border bg-slate-950 overflow-hidden ${enabled ? borderColor : 'border-slate-800'} transition-all`}>
+      <label className="flex items-center gap-2 p-3 cursor-pointer">
+        <input type="checkbox" checked={enabled} onChange={e => onToggle(e.target.checked)}
+          className={`rounded border-slate-700 bg-slate-900 ${ringColor} focus:ring-0 w-4 h-4`} />
+        {icon}
+        <span className="text-xs font-bold text-white flex-1">{label}</span>
+        {!enabled && <span className="text-[10px] text-slate-500 hidden sm:block">{hint}</span>}
+      </label>
+
+      {enabled && (
+        <div className="flex items-center gap-2 px-3 pb-3 border-t border-slate-800 pt-2.5">
+          <select value={type} onChange={e => onTypeChange(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-[11px] text-white focus:outline-none w-28 shrink-0">
+            <option value="percentage">% Percentual</option>
+            <option value="absolute">R$ Absoluto</option>
+          </select>
+          <input type="number" value={value || ''}
+            onChange={e => onValueChange(e.target.value === '' ? 0 : Number(e.target.value))}
+            className={`flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold focus:outline-none min-w-0 ${
+              color === 'emerald' ? 'text-emerald-400 focus:border-emerald-500' :
+              color === 'rose'    ? 'text-rose-400 focus:border-rose-500' :
+                                    'text-amber-400 focus:border-amber-500'
+            }`}
+            placeholder={type === 'percentage' ? 'Ex: 10 (= 10%)' : 'Ex: 50000'}
+          />
+          <span className="text-xs text-slate-500 shrink-0">{type === 'percentage' ? '%' : 'R$'}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KpiCard({ label, icon, value, sub, onClick, color }: {
+  label: string; icon: React.ReactNode; value: string;
+  sub: string; onClick: () => void;
+  color: 'amber' | 'emerald' | 'rose' | 'cyan';
+}) {
+  const hover = { amber: 'hover:border-amber-500/40', emerald: 'hover:border-emerald-500/40', rose: 'hover:border-rose-500/40', cyan: 'hover:border-cyan-500/40' }[color];
+  return (
+    <div onClick={onClick} className={`bg-slate-900 border border-slate-800 ${hover} rounded-xl p-3 cursor-pointer transition-all group`}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
+        {icon}
+      </div>
+      <div className="text-base font-black text-white leading-tight">{value}</div>
+      <div className="text-[10px] text-slate-400 mt-1">{sub}</div>
+      <div className="text-[10px] text-slate-600 mt-1.5 group-hover:text-slate-400 transition-colors">▸ Ver fórmula</div>
     </div>
   );
 }
