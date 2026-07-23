@@ -201,7 +201,7 @@ export default function DreCustomPage() {
   };
 
   // ──────────────────────────────────────────────────────────
-  // DESEMPENHO E CÁLCULO ULTRA-RÁPIDO (SIMULADOR V3)
+  // CÁLCULO DO SIMULADOR V3 (DRE ENGINE)
   // ──────────────────────────────────────────────────────────
   const baseResult = useMemo(() => {
     if (rawData.length === 0) return null;
@@ -227,8 +227,6 @@ export default function DreCustomPage() {
     });
   }, [rawData, metadata, selectedEmpresas]);
 
-  const deferredParams = React.useDeferredValue(v3Params);
-
   const v3Calculation = useMemo(() => {
     if (rawData.length === 0 || !baseResult) return null;
     return calculateV3SimulationEngine(rawData, metadata, DEFAULT_DRE_ESTRUTURA, {
@@ -239,8 +237,8 @@ export default function DreCustomPage() {
       projetos: [],
       categorias: [],
       excludeSharedExpenses: false
-    }, deferredParams, baseResult);
-  }, [rawData, metadata, selectedEmpresas, deferredParams, baseResult]);
+    }, v3Params, baseResult);
+  }, [rawData, metadata, selectedEmpresas, v3Params, baseResult]);
 
   // PROJEÇÃO FUTURA A PARTIR DE HOJE (DETERMINAÇÃO DINÂMICA JUL/26 EM DIANTE)
   const cashRunwayChartData = useMemo(() => {
@@ -253,9 +251,9 @@ export default function DreCustomPage() {
     ];
 
     const audit = v3Calculation.metrics.audit;
-    // O resultado líquido considera que custos e despesas são negativos na DRE
-    const monthlyNetCashBase = (audit.monthlyRevenueReal + audit.monthlyCostsReal + audit.monthlyExpensesReal);
-    const monthlyNetCashSim = (audit.monthlyRevenueSim + audit.monthlyCostsSim + audit.monthlyExpensesSim);
+    // O resultado líquido é: Receita - Custos - Despesas
+    const monthlyNetCashBase = audit.monthlyRevenueReal - audit.monthlyCostsReal - audit.monthlyExpensesReal;
+    const monthlyNetCashSim = audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim;
 
     let runningCashBase = v3Params.initialCash;
     let runningCashSim = v3Params.initialCash;
@@ -338,9 +336,9 @@ export default function DreCustomPage() {
 
     return [
       { name: 'Receita', Real: Math.round(audit.monthlyRevenueReal), Simulado: Math.round(audit.monthlyRevenueSim) },
-      { name: 'Custos', Real: Math.round(Math.abs(audit.monthlyCostsReal)), Simulado: Math.round(Math.abs(audit.monthlyCostsSim)) },
-      { name: 'Despesas', Real: Math.round(Math.abs(audit.monthlyExpensesReal)), Simulado: Math.round(Math.abs(audit.monthlyExpensesSim)) },
-      { name: 'Lucro/mês', Real: Math.round(audit.monthlyRevenueReal + audit.monthlyCostsReal + audit.monthlyExpensesReal), Simulado: Math.round(audit.monthlyRevenueSim + audit.monthlyCostsSim + audit.monthlyExpensesSim) },
+      { name: 'Custos', Real: Math.round(audit.monthlyCostsReal), Simulado: Math.round(audit.monthlyCostsSim) },
+      { name: 'Despesas', Real: Math.round(audit.monthlyExpensesReal), Simulado: Math.round(audit.monthlyExpensesSim) },
+      { name: 'Lucro/mês', Real: Math.round(audit.monthlyRevenueReal - audit.monthlyCostsReal - audit.monthlyExpensesReal), Simulado: Math.round(audit.monthlyRevenueSim - audit.monthlyCostsSim - audit.monthlyExpensesSim) },
     ];
   }, [v3Calculation]);
 
@@ -405,8 +403,8 @@ ${salesReplacementTarget ? `- **Meta Mensal de Vendas/Reposição**: ${formatCur
 
 ## 2. Demostrativo Sintético Mensal
 - **Receita Mensal**: Real ${formatCurrency(audit.monthlyRevenueReal)} | Simulado ${formatCurrency(audit.monthlyRevenueSim)}
-- **Custos Mensais**: Real ${formatCurrency(Math.abs(audit.monthlyCostsReal))} | Simulado ${formatCurrency(Math.abs(audit.monthlyCostsSim))}
-- **Despesas Mensais**: Real ${formatCurrency(Math.abs(audit.monthlyExpensesReal))} | Simulado ${formatCurrency(Math.abs(audit.monthlyExpensesSim))}
+- **Custos Mensais**: Real ${formatCurrency(audit.monthlyCostsReal)} | Simulado ${formatCurrency(audit.monthlyCostsSim)}
+- **Despesas Mensais**: Real ${formatCurrency(audit.monthlyExpensesReal)} | Simulado ${formatCurrency(audit.monthlyExpensesSim)}
 
 ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artificial — BrisinhAI\n${aiAnalysisText}` : ''}
 `;
@@ -682,7 +680,10 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                       <input 
                         type="number"
                         value={v3Params.revenueValue || ''}
-                        onChange={e => setV3Params(p => ({ ...p, revenueValue: Number(e.target.value) }))}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setV3Params(p => ({ ...p, revenueValue: val }));
+                        }}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
                         placeholder="Ex: 10 para +10% ou -10"
                       />
@@ -725,7 +726,10 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                       <input 
                         type="number"
                         value={v3Params.costsValue || ''}
-                        onChange={e => setV3Params(p => ({ ...p, costsValue: Number(e.target.value) }))}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setV3Params(p => ({ ...p, costsValue: val }));
+                        }}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-rose-400 font-bold focus:outline-none focus:border-rose-500"
                         placeholder="Ex: 10 para corte de 10%"
                       />
@@ -768,7 +772,10 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                       <input 
                         type="number"
                         value={v3Params.expensesValue || ''}
-                        onChange={e => setV3Params(p => ({ ...p, expensesValue: Number(e.target.value) }))}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setV3Params(p => ({ ...p, expensesValue: val }));
+                        }}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-amber-400 font-bold focus:outline-none focus:border-amber-500"
                         placeholder="Ex: 10 para corte de 10%"
                       />
@@ -1116,7 +1123,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-850">
                     <span className="text-slate-400">2. Custos Variáveis Operacionais (65%):</span>
-                    <span className="font-bold text-rose-400">-{formatCurrency(Math.abs(v3Calculation.metrics.audit.variableCostsSim))}/mês</span>
+                    <span className="font-bold text-rose-400">-{formatCurrency(v3Calculation.metrics.audit.variableCostsSim)}/mês</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-850">
                     <span className="text-slate-400">3. Margem de Contribuição (%):</span>
@@ -1124,12 +1131,12 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-850">
                     <span className="text-slate-400">4. Despesas Fixas + Custos Estruturais:</span>
-                    <span className="font-bold text-amber-400">{formatCurrency(Math.abs(v3Calculation.metrics.audit.fixedExpensesSim))}/mês</span>
+                    <span className="font-bold text-amber-400">{formatCurrency(v3Calculation.metrics.audit.fixedExpensesSim)}/mês</span>
                   </div>
                 </div>
 
                 <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 font-semibold">
-                  Resultado: {formatCurrency(Math.abs(v3Calculation.metrics.audit.fixedExpensesSim))} ÷ {v3Calculation.metrics.audit.contributionMarginSimPct.toFixed(1)}% = <strong className="text-white font-black">{formatCurrency(v3Calculation.metrics.breakEvenPointSimulated)} / mês</strong>.
+                  Resultado: {formatCurrency(v3Calculation.metrics.audit.fixedExpensesSim)} ÷ {v3Calculation.metrics.audit.contributionMarginSimPct.toFixed(1)}% = <strong className="text-white font-black">{formatCurrency(v3Calculation.metrics.breakEvenPointSimulated)} / mês</strong>.
                 </div>
               </div>
             )}
@@ -1150,7 +1157,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-850">
                     <span className="text-slate-400">2. Resultado Líquido Simulado/Mês:</span>
-                    <span className="font-bold text-white">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim + v3Calculation.metrics.audit.monthlyCostsSim + v3Calculation.metrics.audit.monthlyExpensesSim)}/mês</span>
+                    <span className="font-bold text-white">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim - v3Calculation.metrics.audit.monthlyCostsSim - v3Calculation.metrics.audit.monthlyExpensesSim)}/mês</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-850">
                     <span className="text-slate-400">3. Status de Liquidez:</span>
@@ -1178,7 +1185,7 @@ ${includeAiInGamma && aiAnalysisText ? `## 3. Análise de Inteligência Artifici
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-850">
                     <span className="text-slate-400">2. Resultado Operacional (Lucro/mês):</span>
-                    <span className="font-bold text-cyan-400">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim + v3Calculation.metrics.audit.monthlyCostsSim + v3Calculation.metrics.audit.monthlyExpensesSim)}/mês</span>
+                    <span className="font-bold text-cyan-400">{formatCurrency(v3Calculation.metrics.audit.monthlyRevenueSim - v3Calculation.metrics.audit.monthlyCostsSim - v3Calculation.metrics.audit.monthlyExpensesSim)}/mês</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-850">
                     <span className="text-slate-400">3. Margem EBITDA Calculada:</span>

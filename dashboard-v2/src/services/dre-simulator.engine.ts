@@ -884,16 +884,20 @@ export interface SimulatorV2Metrics {
 
 /** 1. Ponto de Equilíbrio (Break-Even Point) Operacional Real em R$/mês */
 export function calculateBreakEvenPoint(revenue: number, totalCosts: number, totalExpenses: number): number {
-  if (!revenue || revenue <= 0) return Math.round(totalCosts + totalExpenses);
+  const absCosts = Math.abs(totalCosts || 0);
+  const absExpenses = Math.abs(totalExpenses || 0);
+  const absRevenue = Math.abs(revenue || 0);
+
+  if (!absRevenue || absRevenue <= 0) return Math.round(absCosts + absExpenses);
   
   // Custos variáveis operacionais diretos (~65% dos custos totais de serviços/produtos)
-  const variableCosts = totalCosts * 0.65;
+  const variableCosts = absCosts * 0.65;
   // Despesas e custos fixos estruturais (~100% das despesas + 35% dos custos)
-  const fixedExpenses = totalExpenses + (totalCosts * 0.35);
+  const fixedExpenses = absExpenses + (absCosts * 0.35);
 
-  const contributionMarginRatio = (revenue - variableCosts) / revenue;
+  const contributionMarginRatio = (absRevenue - variableCosts) / absRevenue;
   if (contributionMarginRatio <= 0.05) {
-    return Math.round(totalCosts + totalExpenses);
+    return Math.round(absCosts + absExpenses);
   }
 
   return Math.round(fixedExpenses / contributionMarginRatio);
@@ -1316,13 +1320,13 @@ export function calculateV3SimulationEngine(
   // 4. Calcular Indicadores Mensais Médios em Memória
   const monthsCount = Math.max(1, baseResult.validColumns.length || 12);
 
-  const monthlyRevenueReal = baseResult.kpis.receitaOperacional / monthsCount;
-  const monthlyCostsReal = baseResult.kpis.totalCustos / monthsCount;
-  const monthlyExpensesReal = baseResult.kpis.totalDespesas / monthsCount;
+  const monthlyRevenueReal = Math.abs(baseResult.kpis.receitaOperacional) / monthsCount;
+  const monthlyCostsReal = Math.abs(baseResult.kpis.totalCustos) / monthsCount;
+  const monthlyExpensesReal = Math.abs(baseResult.kpis.totalDespesas) / monthsCount;
 
-  const monthlyRevenueSim = simResult.kpis.receitaOperacional / monthsCount;
-  const monthlyCostsSim = simResult.kpis.totalCustos / monthsCount;
-  const monthlyExpensesSim = simResult.kpis.totalDespesas / monthsCount;
+  const monthlyRevenueSim = Math.abs(simResult.kpis.receitaOperacional) / monthsCount;
+  const monthlyCostsSim = Math.abs(simResult.kpis.totalCustos) / monthsCount;
+  const monthlyExpensesSim = Math.abs(simResult.kpis.totalDespesas) / monthsCount;
 
   const breakEvenPointReal = calculateBreakEvenPoint(monthlyRevenueReal, monthlyCostsReal, monthlyExpensesReal);
   const breakEvenPointSimulated = calculateBreakEvenPoint(monthlyRevenueSim, monthlyCostsSim, monthlyExpensesSim);
