@@ -5,16 +5,18 @@ import {
   PieChart, Pie, Cell, ComposedChart, Line, RadarChart, Radar, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis, Cell as RadarCell, LabelList
 } from 'recharts';
-import { DreCalculatedResult } from '@/types/dre';
+import { DreCalculatedResult, DreFilters } from '@/types/dre';
 import { 
   BarChart2, PieChart as PieIcon, GitFork, Layers,
-  Activity, Sparkles, ThumbsUp, AlertTriangle, TrendingDown
+  Activity, Sparkles, ThumbsUp, AlertTriangle, TrendingDown,
+  Filter, Building2, Briefcase, Folder, Tag
 } from 'lucide-react';
 
 interface DreChartsProps {
   results: DreCalculatedResult | null;
   isPrivacyMode: boolean;
   isRevenuePrivacyMode?: boolean;
+  filters?: DreFilters;
 }
 
 const PALETTE = {
@@ -93,12 +95,20 @@ const TABS: { id: ChartTab; label: string; icon: React.ReactNode }[] = [
   { id: 'radar',      label: 'Radar',      icon: <Layers size={14} /> },
 ];
 
-export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreChartsProps) {
+export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode, filters }: DreChartsProps) {
   const [activeTab, setActiveTab] = useState<ChartTab>('evolucao');
 
   if (!results) return null;
 
   const { mensal, validColumns, totais, kpis } = results;
+
+  // Filtros ativos (exceto período)
+  const hasEmpresas = filters?.empresas && filters.empresas.length > 0;
+  const hasDepto = filters?.departamentos && filters.departamentos.length > 0;
+  const hasContas = filters?.contasDre && filters.contasDre.length > 0;
+  const hasProjetos = filters?.projetos && filters.projetos.length > 0;
+  const hasCategorias = filters?.categorias && filters.categorias.length > 0;
+  const hasRateio = filters?.excludeSharedExpenses;
 
   // ── 1. Evolução Mensal ────────────────────────────────────────────────────
   const evolucaoData = useMemo(() => validColumns.map(col => {
@@ -264,23 +274,85 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-8">
-      {/* Tab Bar */}
-      <div className="flex border-b border-slate-100 bg-slate-50/70 px-2 pt-2">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl mr-1 transition-all ${
-              activeTab === tab.id
-                ? 'bg-white border border-b-white border-slate-200 text-slate-800 shadow-sm -mb-px'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
+    <div className="mb-8 space-y-3">
+      {/* ── Identificação dos Filtros Selecionados (Exceto Período) ── */}
+      <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 flex flex-wrap items-center gap-2 text-xs shadow-2xs">
+        <div className="flex items-center gap-1.5 font-black text-slate-700 mr-1 uppercase text-[11px] tracking-wider">
+          <Filter size={14} className="text-emerald-600" />
+          <span>Filtros Ativos:</span>
+        </div>
+
+        {/* Empresa(s) */}
+        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1 shadow-2xs">
+          <Building2 size={13} className="text-amber-500" />
+          <span className="text-slate-500 font-semibold">Empresa:</span>
+          <span className="font-bold text-slate-800">
+            {hasEmpresas ? filters.empresas.join(', ') : 'Todas (Consolidado)'}
+          </span>
+        </div>
+
+        {/* Departamentos */}
+        {hasDepto && (
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1 shadow-2xs">
+            <Briefcase size={13} className="text-sky-500" />
+            <span className="text-slate-500 font-semibold">Departamento:</span>
+            <span className="font-bold text-slate-800">{filters.departamentos.join(', ')}</span>
+          </div>
+        )}
+
+        {/* Contas DRE */}
+        {hasContas && (
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1 shadow-2xs">
+            <Layers size={13} className="text-violet-500" />
+            <span className="text-slate-500 font-semibold">Conta DRE:</span>
+            <span className="font-bold text-slate-800">{filters.contasDre.join(', ')}</span>
+          </div>
+        )}
+
+        {/* Projetos */}
+        {hasProjetos && (
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1 shadow-2xs">
+            <Folder size={13} className="text-emerald-500" />
+            <span className="text-slate-500 font-semibold">Projeto:</span>
+            <span className="font-bold text-slate-800">{filters.projetos.join(', ')}</span>
+          </div>
+        )}
+
+        {/* Categorias */}
+        {hasCategorias && (
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1 shadow-2xs">
+            <Tag size={13} className="text-rose-500" />
+            <span className="text-slate-500 font-semibold">Categoria:</span>
+            <span className="font-bold text-slate-800">{filters.categorias.join(', ')}</span>
+          </div>
+        )}
+
+        {/* Rateio */}
+        {hasRateio && (
+          <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-900 font-bold rounded-xl px-3 py-1 shadow-2xs">
+            <span>⚡ Sem Rateios Compartilhados</span>
+          </div>
+        )}
       </div>
+
+      {/* Card dos Gráficos */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        {/* Tab Bar */}
+        <div className="flex border-b border-slate-100 bg-slate-50/70 px-2 pt-2">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl mr-1 transition-all ${
+                activeTab === tab.id
+                  ? 'bg-white border border-b-white border-slate-200 text-slate-800 shadow-sm -mb-px'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
 
       {/* Chart Area */}
       <div className="p-6">
@@ -457,5 +529,6 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
 
       </div>
     </div>
-  );
+  </div>
+);
 }

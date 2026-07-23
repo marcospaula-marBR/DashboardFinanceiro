@@ -1073,6 +1073,7 @@ export default function DrePage() {
                   results={results}
                   isPrivacyMode={isPrivacyMode}
                   isRevenuePrivacyMode={isRevenuePrivacyMode}
+                  filters={filters}
                 />
               )}
 
