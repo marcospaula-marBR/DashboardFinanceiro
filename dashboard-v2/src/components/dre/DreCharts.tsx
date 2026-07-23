@@ -3,10 +3,13 @@ import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, ComposedChart, Line, RadarChart, Radar, PolarGrid,
-  PolarAngleAxis, PolarRadiusAxis, Cell as RadarCell
+  PolarAngleAxis, PolarRadiusAxis, Cell as RadarCell, LabelList
 } from 'recharts';
 import { DreCalculatedResult } from '@/types/dre';
-import { BarChart2, PieChart as PieIcon, GitFork, Layers } from 'lucide-react';
+import { 
+  BarChart2, PieChart as PieIcon, GitFork, Layers,
+  Activity, Sparkles, ThumbsUp, AlertTriangle, TrendingDown
+} from 'lucide-react';
 
 interface DreChartsProps {
   results: DreCalculatedResult | null;
@@ -17,6 +20,7 @@ interface DreChartsProps {
 const PALETTE = {
   receita:  '#10b981', // emerald
   saidas:   '#f43f5e', // rose
+  lucro:    '#0ea5e9', // sky blue / cyan - Lucro após Entradas e Saídas
   fcl:      '#3b82f6', // blue
   custos:   '#f59e0b', // amber
   despesas: '#8b5cf6', // violet
@@ -31,6 +35,42 @@ const fmt = (v: number, privacy: boolean) =>
 
 const fmtK = (v: number, privacy: boolean) =>
   privacy ? '****' : `${(v / 1000).toFixed(0)}k`;
+
+const getEbitdaStatus = (margin: number) => {
+  if (margin >= 20) {
+    return {
+      label: 'Ótimo',
+      colorClass: 'bg-emerald-50/80 text-emerald-900 border-emerald-200 hover:bg-emerald-100/60',
+      badgeClass: 'bg-emerald-600 text-white',
+      textColor: 'text-emerald-700',
+      icon: Sparkles
+    };
+  } else if (margin >= 10) {
+    return {
+      label: 'Bom',
+      colorClass: 'bg-sky-50/80 text-sky-900 border-sky-200 hover:bg-sky-100/60',
+      badgeClass: 'bg-sky-600 text-white',
+      textColor: 'text-sky-700',
+      icon: ThumbsUp
+    };
+  } else if (margin >= 0) {
+    return {
+      label: 'Atenção',
+      colorClass: 'bg-amber-50/80 text-amber-900 border-amber-200 hover:bg-amber-100/60',
+      badgeClass: 'bg-amber-500 text-slate-950',
+      textColor: 'text-amber-700',
+      icon: AlertTriangle
+    };
+  } else {
+    return {
+      label: 'Crítico',
+      colorClass: 'bg-rose-50/80 text-rose-900 border-rose-200 hover:bg-rose-100/60',
+      badgeClass: 'bg-rose-600 text-white',
+      textColor: 'text-rose-700',
+      icon: TrendingDown
+    };
+  }
+};
 
 type ChartTab = 'evolucao' | 'waterfall' | 'composicao' | 'radar';
 
@@ -53,7 +93,31 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
     const receitas = (mensal['Total Entradas Operacionais']?.[col] || 0);
     const saidas   = (mensal['Total Saídas']?.[col] || 0);
     const fcl      = (mensal['Fluxo de Caixa Livre FCL']?.[col] || 0);
-    return { name: col, Receitas: receitas, Saídas: saidas, FCL: fcl };
+    const lucro    = receitas - saidas;
+
+    // Cálculo da Margem EBITDA por mês
+    const impostos = (mensal['Total de Impostos']?.[col] || mensal['Impostos']?.[col] || 0);
+    const rl = receitas - impostos;
+    const custos = (mensal['Total Custos Operacionais']?.[col] || 0);
+    const despesasRateadas = (mensal['Total Despesas Rateadas']?.[col] || 0);
+    const despFin = (mensal['Despesas Financeiras']?.[col] || 0);
+    const div = (mensal['Distribuição de Dividendos']?.[col] || 0) + (mensal['Dividendos']?.[col] || 0);
+    const despVar = (mensal['Despesas Variáveis']?.[col] || 0);
+    const interm = (mensal['Intermediação de Negócios']?.[col] || 0);
+    const despOp = despesasRateadas - despFin - div - despVar - interm;
+    const ebitda = (rl - custos) - despOp;
+    const denominator = rl !== 0 ? Math.abs(rl) : (receitas !== 0 ? Math.abs(receitas) : 1);
+    const ebitdaMargin = (ebitda / denominator) * 100;
+
+    return { 
+      name: col, 
+      Receitas: receitas, 
+      Saídas: saidas, 
+      Lucro: lucro, 
+      FCL: fcl,
+      ebitda,
+      ebitdaMargin
+    };
   }), [mensal, validColumns]);
 
   // ── 2. Waterfall DRE ─────────────────────────────────────────────────────
@@ -154,20 +218,99 @@ export function DreCharts({ results, isPrivacyMode, isRevenuePrivacyMode }: DreC
         {/* ── TAB 1: EVOLUÇÃO MENSAL ── */}
         {activeTab === 'evolucao' && (
           <div>
-            <p className="text-xs text-slate-400 mb-4">Receitas, Saídas e FCL mês a mês</p>
-            <div className="h-72 w-full">
+            <p className="text-xs text-slate-400 mb-4">Receitas, Saídas, Lucro (Entradas - Saídas) e FCL mês a mês com rótulos de dados</p>
+            <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={evolucaoData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <ComposedChart data={evolucaoData} margin={{ top: 28, right: 20, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => fmtK(v, isPrivacyMode)} />
-                  <Tooltip formatter={(v: any, name: any) => [fmt(Number(v), isPrivacyMode || (isRevenuePrivacyMode === true && name === 'Receitas')), name]} contentStyle={tooltipStyle} />
+                  <Tooltip 
+                    formatter={(v: any, name: any) => [
+                      fmt(Number(v), isPrivacyMode || (isRevenuePrivacyMode === true && (name === 'Receitas' || name === 'Lucro'))),
+                      name === 'Lucro' ? 'Lucro após Entradas e Saídas' : name
+                    ]} 
+                    contentStyle={tooltipStyle} 
+                  />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
-                  <Bar dataKey="Receitas" fill={PALETTE.receita} radius={[5, 5, 0, 0]} maxBarSize={36} />
-                  <Bar dataKey="Saídas"   fill={PALETTE.saidas}  radius={[5, 5, 0, 0]} maxBarSize={36} />
-                  <Line type="monotone" dataKey="FCL" stroke={PALETTE.fcl} strokeWidth={2.5} dot={{ r: 4, fill: PALETTE.fcl }} activeDot={{ r: 6 }} />
+                  <Bar dataKey="Receitas" fill={PALETTE.receita} radius={[5, 5, 0, 0]} maxBarSize={32}>
+                    <LabelList dataKey="Receitas" position="top" formatter={(v: any) => fmtK(Number(v || 0), isPrivacyMode)} style={{ fontSize: '9px', fontWeight: 700, fill: '#059669' }} />
+                  </Bar>
+                  <Bar dataKey="Saídas" fill={PALETTE.saidas} radius={[5, 5, 0, 0]} maxBarSize={32}>
+                    <LabelList dataKey="Saídas" position="top" formatter={(v: any) => fmtK(Number(v || 0), isPrivacyMode)} style={{ fontSize: '9px', fontWeight: 700, fill: '#e11d48' }} />
+                  </Bar>
+                  <Bar dataKey="Lucro" name="Lucro (Entradas - Saídas)" fill={PALETTE.lucro} radius={[5, 5, 0, 0]} maxBarSize={32}>
+                    <LabelList dataKey="Lucro" position="top" formatter={(v: any) => fmtK(Number(v || 0), isPrivacyMode)} style={{ fontSize: '9px', fontWeight: 700, fill: '#0284c7' }} />
+                  </Bar>
+                  <Line type="monotone" dataKey="FCL" stroke={PALETTE.fcl} strokeWidth={2.5} dot={{ r: 4, fill: PALETTE.fcl }} activeDot={{ r: 6 }}>
+                    <LabelList dataKey="FCL" position="top" formatter={(v: any) => fmtK(Number(v || 0), isPrivacyMode)} style={{ fontSize: '9px', fontWeight: 800, fill: '#1d4ed8' }} />
+                  </Line>
                 </ComposedChart>
               </ResponsiveContainer>
+            </div>
+
+            {/* ── Mês a Mês do Período: Margem EBITDA & Status ── */}
+            <div className="mt-8 border-t border-slate-100 pt-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-1">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
+                    <Activity size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                      Margem EBITDA Mês a Mês
+                    </h4>
+                    <p className="text-[11px] text-slate-500">Indicador de eficiência operacional por período de referência</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 flex-wrap mt-2 sm:mt-0">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    <Sparkles size={10} /> Ótimo (≥20%)
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-200">
+                    <ThumbsUp size={10} /> Bom (10%-19.9%)
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
+                    <AlertTriangle size={10} /> Atenção (0%-9.9%)
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">
+                    <TrendingDown size={10} /> Crítico (&lt;0%)
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {evolucaoData.map((d) => {
+                  const status = getEbitdaStatus(d.ebitdaMargin);
+                  const StatusIcon = status.icon;
+                  return (
+                    <div 
+                      key={d.name} 
+                      className={`p-3.5 rounded-xl border flex flex-col justify-between shadow-xs transition-all ${status.colorClass}`}
+                    >
+                      <div className="flex items-center justify-between gap-1 mb-2">
+                        <span className="text-xs font-black text-slate-800">{d.name}</span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-2xs ${status.badgeClass}`}>
+                          <StatusIcon size={10} />
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">Margem EBITDA</span>
+                        <div className={`text-lg font-black tracking-tight ${status.textColor}`}>
+                          {isPrivacyMode ? '**%' : `${d.ebitdaMargin.toFixed(1)}%`}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
+                        <span className="text-slate-500 font-medium">EBITDA</span>
+                        <span className="font-bold text-slate-700">{fmt(d.ebitda, isPrivacyMode)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
