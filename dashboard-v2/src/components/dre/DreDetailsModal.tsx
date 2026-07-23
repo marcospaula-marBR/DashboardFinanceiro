@@ -49,13 +49,17 @@ export function DreDetailsModal({
     ? "bg-white w-[98vw] h-[96vh] max-w-none max-h-none rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200"
     : "bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transition-all duration-200";
 
-  // Data processing for standard view
-  const data = Object.keys(mensalData).map(col => ({
-    name: col,
-    valor: mensalData[col]
-  }));
-  const total = data.reduce((acc, curr) => acc + curr.valor, 0);
-  const average = data.length > 0 ? total / data.length : 0;
+  const data = useMemo(() => {
+    if (!mensalData) return [];
+    return Object.keys(mensalData).map(col => ({
+      name: col,
+      valor: mensalData[col] || 0
+    }));
+  }, [mensalData]);
+
+  const dataReversed = useMemo(() => [...data].reverse(), [data]);
+  const total = useMemo(() => data.reduce((acc, curr) => acc + curr.valor, 0), [data]);
+  const average = useMemo(() => (data.length > 0 ? total / data.length : 0), [data, total]);
 
   // CSV Export Logic
   const handleExportCSV = () => {
@@ -112,7 +116,7 @@ export function DreDetailsModal({
         csvContent += rowVals.map(sanitize).join(';') + '\n';
       });
     } else if (activeTab === 'transactions' && sourceRows) {
-      const monthNames = data.map(d => d.name);
+      const monthNames = dataReversed.map(d => d.name);
       const headers = ['Categoria', 'Projeto / Empresa', 'Total', 'Média', ...monthNames];
       csvContent += headers.map(sanitize).join(';') + '\n';
 
@@ -176,7 +180,7 @@ export function DreDetailsModal({
     } else {
       const headers = ['Período', 'Valor Consolidado (R$)'];
       csvContent += headers.map(sanitize).join(';') + '\n';
-      data.forEach(item => {
+      dataReversed.forEach(item => {
         csvContent += [item.name, item.valor.toFixed(2).replace('.', ',')].map(sanitize).join(';') + '\n';
       });
     }
@@ -600,15 +604,15 @@ export function DreDetailsModal({
               <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
                 <span className="font-bold text-slate-700 text-sm">Consolidado de Origem</span>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[60vh]">
                 <table className="w-full text-xs text-left whitespace-nowrap border-separate border-spacing-0">
-                  <thead className="bg-slate-100/50 text-slate-500 font-semibold uppercase tracking-wider">
+                  <thead className="bg-slate-100 text-slate-700 font-semibold uppercase tracking-wider sticky top-0 z-30">
                     <tr>
-                      <th className="px-4 py-3 border-b border-slate-200 sticky left-0 min-w-[280px] max-w-[280px] bg-slate-50 z-20 border-r">Categoria / Projeto</th>
-                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[280px] min-w-[120px] max-w-[120px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Total</th>
-                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-50 border-r sticky left-[400px] min-w-[100px] max-w-[100px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Média</th>
-                      {data.map(item => (
-                        <th key={item.name} className="px-4 py-3 border-b border-slate-200 text-right">{item.name}</th>
+                      <th className="px-4 py-3 border-b border-slate-200 sticky top-0 left-0 min-w-[280px] max-w-[280px] bg-slate-100 z-40 border-r">Categoria / Projeto</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-100 border-r sticky top-0 left-[280px] min-w-[120px] max-w-[120px] z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Total</th>
+                      <th className="px-4 py-3 border-b border-slate-200 text-right bg-slate-100 border-r sticky top-0 left-[400px] min-w-[100px] max-w-[100px] z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Média</th>
+                      {dataReversed.map(item => (
+                        <th key={item.name} className="px-4 py-3 border-b border-slate-200 text-right sticky top-0 bg-slate-100 z-30 font-bold text-slate-700">{item.name}</th>
                       ))}
                     </tr>
                   </thead>
@@ -659,7 +663,7 @@ export function DreDetailsModal({
                       if (!hasRows) {
                         return (
                           <tr>
-                            <td colSpan={data.length + 3} className="text-center py-10 text-slate-400">
+                            <td colSpan={dataReversed.length + 3} className="text-center py-10 text-slate-400">
                               <ListTree size={32} className="mx-auto mb-3 opacity-50" />
                               <p>Nenhuma transação individual vinculada a esta linha.</p>
                             </td>
@@ -692,7 +696,7 @@ export function DreDetailsModal({
                               <td className="px-4 py-3 text-right font-mono font-bold text-slate-700 bg-slate-50 border-r border-slate-200 sticky left-[400px] min-w-[100px] max-w-[100px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                 {formatValueStandard(catAvg)}
                               </td>
-                              {data.map(item => (
+                              {dataReversed.map(item => (
                                 <td key={item.name} className="px-4 py-3 text-right font-mono text-slate-600">
                                   {formatValueStandard(catData.totaisMensais[item.name] || 0)}
                                 </td>
@@ -720,7 +724,7 @@ export function DreDetailsModal({
                                   <td className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600 bg-amber-50/95 border-r border-amber-200/50 font-semibold sticky left-[400px] min-w-[100px] max-w-[100px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                     {formatValueStandard(projAvg)}
                                   </td>
-                                  {data.map(item => (
+                                  {dataReversed.map(item => (
                                     <td key={item.name} className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600">
                                       {formatValueStandard(p.mensalProj[item.name] || 0)}
                                     </td>
