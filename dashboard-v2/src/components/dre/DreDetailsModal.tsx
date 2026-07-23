@@ -49,15 +49,19 @@ export function DreDetailsModal({
     ? "bg-white w-[98vw] h-[96vh] max-w-none max-h-none rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200"
     : "bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transition-all duration-200";
 
-  // Data processing for standard view
-  const data = Object.keys(mensalData).map(col => ({
-    name: col,
-    valor: mensalData[col]
-  }));
+  // Data processing for standard view (safely handle null/undefined mensalData)
+  const data = useMemo(() => {
+    if (!mensalData) return [];
+    return Object.keys(mensalData).map(col => ({
+      name: col,
+      valor: mensalData[col] || 0
+    }));
+  }, [mensalData]);
+
   const dataReversed = useMemo(() => [...data].reverse(), [data]);
 
-  const total = data.reduce((acc, curr) => acc + curr.valor, 0);
-  const average = data.length > 0 ? total / data.length : 0;
+  const total = useMemo(() => data.reduce((acc, curr) => acc + curr.valor, 0), [data]);
+  const average = useMemo(() => (data.length > 0 ? total / data.length : 0), [data, total]);
 
   // CSV Export Logic
   const handleExportCSV = () => {
