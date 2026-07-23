@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { X, TrendingUp, ListTree, BarChart2, Plus, Minus, ChevronRight, ChevronDown } from 'lucide-react';
+import { 
+  X, TrendingUp, ListTree, BarChart2, Plus, Minus, 
+  ChevronRight, ChevronDown, Maximize2, Minimize2, Download 
+} from 'lucide-react';
 import { DreRow, DreCalculatedResult } from '@/types/dre';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip 
@@ -29,6 +32,7 @@ export function DreDetailsModal({
   
   const [activeTab, setActiveTab] = useState<'chart' | 'transactions'>('chart');
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const toggleCat = (month: string, cat: string) => {
     const key = `${month}-${cat}`;
@@ -39,6 +43,154 @@ export function DreDetailsModal({
 
   const isLucroAntesFcl = title === 'Lucro antes do FCL';
   const isFcl = title === 'Fluxo de Caixa Livre FCL';
+
+  // Modal Container Class (Normal vs Maximizada)
+  const containerClasses = isMaximized
+    ? "bg-white w-[98vw] h-[96vh] max-w-none max-h-none rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200"
+    : "bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transition-all duration-200";
+
+  // Data processing for standard view
+  const data = Object.keys(mensalData).map(col => ({
+    name: col,
+    valor: mensalData[col]
+  }));
+  const total = data.reduce((acc, curr) => acc + curr.valor, 0);
+  const average = data.length > 0 ? total / data.length : 0;
+
+  // CSV Export Logic
+  const handleExportCSV = () => {
+    let csvContent = '';
+    const sanitize = (val: string | number) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+    if ((isLucroAntesFcl || isFcl) && allResults) {
+      const cols = [...allResults.validColumns].reverse();
+      const headers = ['Linha de Composição', 'Total', 'Média', ...cols];
+      csvContent += headers.map(sanitize).join(';') + '\n';
+
+      const getValMensal = (key: string, col: string) => allResults.mensal[key]?.[col] || 0;
+      const getValTotal = (key: string) => allResults.totais[key] || 0;
+
+      let auditRows: any[] = [];
+      if (isLucroAntesFcl) {
+        auditRows = [
+          { label: '(+) Receita (Entradas Operacionais)', key: 'Total Entradas Operacionais', isSubtracted: false },
+          { label: '(-) Impostos', key: 'Total de Impostos', isSubtracted: true },
+          { label: '(-) Custos Operacionais', key: 'Total Custos Operacionais', isSubtracted: true },
+          { label: '(-) Despesas Rateadas', key: 'Total Despesas Rateadas', isSubtracted: true },
+          { label: '(=) Lucro antes do FCL', key: 'Lucro antes do FCL', isResult: true }
+        ];
+      } else {
+        auditRows = [
+          { label: '(+) Total Entradas Operacionais', key: 'Total Entradas Operacionais', isSubtracted: false },
+          { label: '(+) Outras Entradas', key: 'Outras Entradas', isSubtracted: false },
+          { label: '(+) Intermediação de Negócios - Receitas', key: 'Intermediação de Negócios - Receitas', isSubtracted: false },
+          { label: '(+) Mútuo - Entradas', key: 'Mútuo - Entradas', isSubtracted: false },
+          { label: '(-) Total Saídas', key: 'Total Saídas', isSubtracted: true },
+          { label: '(=) Fluxo de Caixa Livre (FCL)', key: 'Fluxo de Caixa Livre FCL', isResult: true },
+          { label: 'HEADER_USO_FCL', key: 'HEADER_USO_FCL', isHeader: true, labelHeader: '--- USO DO FCL ---' },
+          { label: 'Distribuição de Dividendos', key: 'Distribuição de Dividendos', isSubtracted: false },
+          { label: 'Intermediação de Negócios (Saídas)', key: 'Intermediação de Negócios', isSubtracted: false },
+          { label: 'Mútuo - Saídas', key: 'Mútuo - Saídas', isSubtracted: false },
+          { label: '(=) Total Retiradas dos Sócios', key: 'Total Retiradas dos Sócios', isResult: true },
+          { label: '(=) FCL após Retiradas dos Sócios', key: 'FCL após Retiradas dos Sócios', isResult: true }
+        ];
+      }
+
+      auditRows.forEach(row => {
+        if (row.isHeader) {
+          csvContent += sanitize(row.labelHeader || row.label) + ';' + cols.map(() => '').join(';') + ';\n';
+          return;
+        }
+        const totalVal = getValTotal(row.key);
+        const avgVal = cols.length > 0 ? totalVal / cols.length : 0;
+        const rowVals = [
+          row.label,
+          totalVal.toFixed(2).replace('.', ','),
+          avgVal.toFixed(2).replace('.', ','),
+          ...cols.map(m => (getValMensal(row.key, m)).toFixed(2).replace('.', ','))
+        ];
+        csvContent += rowVals.map(sanitize).join(';') + '\n';
+      });
+    } else if (activeTab === 'transactions' && sourceRows) {
+      const monthNames = data.map(d => d.name);
+      const headers = ['Categoria', 'Projeto / Empresa', 'Total', 'Média', ...monthNames];
+      csvContent += headers.map(sanitize).join(';') + '\n';
+
+      const grouped: Record<string, {
+        totalGlobal: number;
+        totaisMensais: Record<string, number>;
+        projetos: Record<string, {
+          projeto: string;
+          empresa: string;
+          totalProjGlobal: number;
+          mensalProj: Record<string, number>;
+        }>
+      }> = {};
+
+      data.forEach(item => {
+        const monthName = item.name;
+        const monthRows = sourceRows ? sourceRows[monthName] || [] : [];
+        monthRows.forEach(r => {
+          const val = parseFloat(r[monthName]?.toString().replace(',', '.') || '0');
+          if (val === 0) return;
+          const cat = r.Categoria || 'Sem Categoria';
+          const proj = r.Projeto || '-';
+          const emp = r.Empresa || '-';
+
+          if (!grouped[cat]) {
+            grouped[cat] = { totalGlobal: 0, totaisMensais: {}, projetos: {} };
+          }
+          grouped[cat].totalGlobal += val;
+          grouped[cat].totaisMensais[monthName] = (grouped[cat].totaisMensais[monthName] || 0) + val;
+
+          const projKey = `${proj}|${emp}`;
+          if (!grouped[cat].projetos[projKey]) {
+            grouped[cat].projetos[projKey] = { projeto: proj, empresa: emp, totalProjGlobal: 0, mensalProj: {} };
+          }
+          grouped[cat].projetos[projKey].totalProjGlobal += val;
+          grouped[cat].projetos[projKey].mensalProj[monthName] = (grouped[cat].projetos[projKey].mensalProj[monthName] || 0) + val;
+        });
+      });
+
+      Object.entries(grouped).forEach(([cat, catData]) => {
+        const catAvg = data.length > 0 ? catData.totalGlobal / data.length : 0;
+        csvContent += [
+          `[CATEGORIA] ${cat}`,
+          '-',
+          catData.totalGlobal.toFixed(2).replace('.', ','),
+          catAvg.toFixed(2).replace('.', ','),
+          ...monthNames.map(m => (catData.totaisMensais[m] || 0).toFixed(2).replace('.', ','))
+        ].map(sanitize).join(';') + '\n';
+
+        Object.values(catData.projetos).forEach(p => {
+          const projAvg = data.length > 0 ? p.totalProjGlobal / data.length : 0;
+          csvContent += [
+            `  ${cat}`,
+            `${p.projeto} (${p.empresa})`,
+            p.totalProjGlobal.toFixed(2).replace('.', ','),
+            projAvg.toFixed(2).replace('.', ','),
+            ...monthNames.map(m => (p.mensalProj[m] || 0).toFixed(2).replace('.', ','))
+          ].map(sanitize).join(';') + '\n';
+        });
+      });
+    } else {
+      const headers = ['Período', 'Valor Consolidado (R$)'];
+      csvContent += headers.map(sanitize).join(';') + '\n';
+      data.forEach(item => {
+        csvContent += [item.name, item.valor.toFixed(2).replace('.', ',')].map(sanitize).join(';') + '\n';
+      });
+    }
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const sanitizedTitle = (title || 'Detalhamento').replace(/[^a-zA-Z0-9_-]/g, '_');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `DRE_${sanitizedTitle}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if ((isLucroAntesFcl || isFcl) && allResults) {
     const cols = [...allResults.validColumns].reverse();
@@ -187,7 +339,6 @@ export function DreDetailsModal({
       );
     }
 
-
     const isRevenue = title.toLowerCase().includes('receita') || title.toLowerCase().includes('entrada');
 
     const formatValue = (value: number, isSubtracted = false) => {
@@ -203,7 +354,7 @@ export function DreDetailsModal({
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
-        <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className={containerClasses}>
           {/* Header */}
           <div className="flex flex-col border-b border-slate-100 bg-slate-50/50 p-6 pb-4">
             <div className="flex items-center justify-between">
@@ -218,19 +369,37 @@ export function DreDetailsModal({
                   </p>
                 </div>
               </div>
-              <button 
-                onClick={onClose}
-                className="p-2 text-slate-404 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
-              >
-                <X size={24} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 rounded-xl transition-all shadow-2xs"
+                  title="Exportar dados para CSV / Excel"
+                >
+                  <Download size={14} className="text-emerald-600" />
+                  <span className="hidden sm:inline">Exportar CSV</span>
+                </button>
+                <button
+                  onClick={() => setIsMaximized(!isMaximized)}
+                  className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
+                  title={isMaximized ? "Restaurar tamanho padrão" : "Ampliar janela (Tela Cheia)"}
+                >
+                  {isMaximized ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                </button>
+                <button 
+                  onClick={onClose}
+                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                  title="Fechar"
+                >
+                  <X size={22} />
+                </button>
+              </div>
             </div>
             
             {infoBox}
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto">
+          <div className="p-6 overflow-y-auto flex-1">
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
               <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
                 <span className="font-bold text-slate-700 text-sm">Conciliação de Valores (DRE Simplificada)</span>
@@ -294,27 +463,19 @@ export function DreDetailsModal({
     );
   }
 
-  const data = Object.keys(mensalData).map(col => ({
-    name: col,
-    valor: mensalData[col]
-  }));
-
-  const total = data.reduce((acc, curr) => acc + curr.valor, 0);
-  const average = data.length > 0 ? total / data.length : 0;
-
-  const formatValue = (value: number) => {
+  const formatValueStandard = (value: number) => {
     if (isPrivacyMode) return 'R$ ****';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
   const customTooltipFormatter = (value: any) => {
     if (value === undefined) return ['', title];
-    return [formatValue(Number(value)), title];
+    return [formatValueStandard(Number(value)), title];
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className={containerClasses}>
         
         {/* Header */}
         <div className="flex flex-col border-b border-slate-100 bg-slate-50/50">
@@ -326,16 +487,34 @@ export function DreDetailsModal({
               <div>
                 <h2 className="text-xl font-black text-slate-800">{title}</h2>
                 <p className="text-sm font-medium text-slate-500">
-                  Evolução Detalhada • Total: <span className="font-bold text-slate-700">{formatValue(total)}</span> • Média: <span className="font-bold text-slate-700">{formatValue(average)}</span>
+                  Evolução Detalhada • Total: <span className="font-bold text-slate-700">{formatValueStandard(total)}</span> • Média: <span className="font-bold text-slate-700">{formatValueStandard(average)}</span>
                 </p>
               </div>
             </div>
-            <button 
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
-            >
-              <X size={24} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 rounded-xl transition-all shadow-2xs"
+                title="Exportar dados para CSV / Excel"
+              >
+                <Download size={14} className="text-emerald-600" />
+                <span className="hidden sm:inline">Exportar CSV</span>
+              </button>
+              <button
+                onClick={() => setIsMaximized(!isMaximized)}
+                className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
+                title={isMaximized ? "Restaurar tamanho padrão" : "Ampliar janela (Tela Cheia)"}
+              >
+                {isMaximized ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+              </button>
+              <button 
+                onClick={onClose}
+                className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                title="Fechar"
+              >
+                <X size={22} />
+              </button>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -407,7 +586,7 @@ export function DreDetailsModal({
                 {data.map((item, idx) => (
                   <tr key={idx} className="hover:bg-amber-50/30 transition-colors">
                     <td className="px-6 py-3 font-medium text-slate-700">{item.name}</td>
-                    <td className="px-6 py-3 text-right font-mono text-slate-600">{formatValue(item.valor)}</td>
+                    <td className="px-6 py-3 text-right font-mono text-slate-600">{formatValueStandard(item.valor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -508,14 +687,14 @@ export function DreDetailsModal({
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right font-mono font-bold text-slate-700 bg-slate-50 border-r border-slate-200 sticky left-[280px] min-w-[120px] max-w-[120px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                {formatValue(catData.totalGlobal)}
+                                {formatValueStandard(catData.totalGlobal)}
                               </td>
                               <td className="px-4 py-3 text-right font-mono font-bold text-slate-700 bg-slate-50 border-r border-slate-200 sticky left-[400px] min-w-[100px] max-w-[100px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                {formatValue(catAvg)}
+                                {formatValueStandard(catAvg)}
                               </td>
                               {data.map(item => (
                                 <td key={item.name} className="px-4 py-3 text-right font-mono text-slate-600">
-                                  {formatValue(catData.totaisMensais[item.name] || 0)}
+                                  {formatValueStandard(catData.totaisMensais[item.name] || 0)}
                                 </td>
                               ))}
                             </tr>
@@ -536,14 +715,14 @@ export function DreDetailsModal({
                                     {p.empresa !== '-' && <span className="text-slate-400 text-[10px] truncate">{p.empresa}</span>}
                                   </td>
                                   <td className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600 bg-amber-50/95 border-r border-amber-200/50 font-semibold sticky left-[280px] min-w-[120px] max-w-[120px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                    {formatValue(p.totalProjGlobal)}
+                                    {formatValueStandard(p.totalProjGlobal)}
                                   </td>
                                   <td className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600 bg-amber-50/95 border-r border-amber-200/50 font-semibold sticky left-[400px] min-w-[100px] max-w-[100px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                    {formatValue(projAvg)}
+                                    {formatValueStandard(projAvg)}
                                   </td>
                                   {data.map(item => (
                                     <td key={item.name} className="px-4 py-2.5 text-right font-mono text-[12px] text-slate-600">
-                                      {formatValue(p.mensalProj[item.name] || 0)}
+                                      {formatValueStandard(p.mensalProj[item.name] || 0)}
                                     </td>
                                   ))}
                                 </tr>
