@@ -1,9 +1,10 @@
-export const APP_VERSION = "v.02.50.69";
+export const APP_VERSION = "v.02.50.70";
 export const VERSION_DATE = "2026-07-27";
 export const VERSION_CHANGELOG = [
+  "v.02.50.70 - Feat/UX: Adicionada opção de privacidade (botão Olho / Eye Toggle) no cabeçalho do modal de Indicadores Estratégicos Financeiros (DreIndicatorsModal.tsx) para alternar e ocultar exclusivamente os valores monetários em R$ (exibindo 'R$ ****'), mantendo os percentuais (%) e índices (x) totalmente visíveis.",
   "v.02.50.69 - Feat/UX: Adicionada opção para ampliar a janela (maximizar em tela cheia 98vw x 96vh) no modal de Indicadores Estratégicos Financeiros (DreIndicatorsModal.tsx), alinhando a experiência de navegação com os demais modais da DRE.",
   "v.02.50.68 - Fix/Calculo: Corrigido o motor de classificação e extração de categorias da DRE (dre.service.ts e dre-simulator.engine.ts) para direcionar as linhas de 'Provisão - IRPJ e CSSL/CSLL Trimestral' para o seu próprio bucket em vez de mantê-las sob a conta genérica de 'Impostos', resolvendo definitivamente o valor zerado nos cards de detalhamento e indicadores.",
-  "v.02.50.67 - Fix/Calculo: Corrigido o cálculo da Margem Líquida e do Lucro Líquido nos Indicadores da DRE e na exportação executiva (Gamma). Adicionada normalização flexível e tolerante a falhas na busca de totais e mensais da provisão IRPJ/CSLL para unificar chaves, tratando acentos, hífens, espaços e variações como CSLL/CSSL.",
+
 
 
   "v.02.50.64 - Feat/UX: Adicionadas opções de Exportação Visual em DreDetailsModal.tsx: 1. Botão 'Imagem PNG' via dom-to-image-more para download de imagem do modal com alta qualidade; 2. Botão 'Gamma IA' para geração dinâmica de apresentações executivas a partir dos dados filtrados do modal.",

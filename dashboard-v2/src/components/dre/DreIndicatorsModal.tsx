@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, DollarSign, Users, Wrench, ShieldCheck, Percent, Coins, Landmark, Info, ArrowUpRight, ArrowDownRight, BarChart3, PieChart, Activity, Zap, FileText, Calculator, Calendar, Maximize2, Minimize2 } from 'lucide-react';
+import { X, DollarSign, Users, Wrench, ShieldCheck, Percent, Coins, Landmark, Info, ArrowUpRight, ArrowDownRight, BarChart3, PieChart, Activity, Zap, FileText, Calculator, Calendar, Maximize2, Minimize2, Eye, EyeOff } from 'lucide-react';
 import { DreCalculatedResult, DreFilters } from '@/types/dre';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -16,6 +16,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
   const [activeComposition, setActiveComposition] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -43,6 +44,10 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       return `${value.toFixed(2).replace('.', ',')}x`;
     }
     
+    if (isPrivacyMode) {
+      return 'R$ ****';
+    }
+
     const adjustedValue = value / customDivisor;
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -604,6 +609,18 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Privacy Mode (Eye) Button */}
+            <button
+              onClick={() => setIsPrivacyMode(!isPrivacyMode)}
+              className={`p-2 rounded-xl border transition-all active:scale-95 shadow-sm ${
+                isPrivacyMode 
+                  ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' 
+                  : 'bg-white border-slate-200 text-slate-550 hover:bg-slate-100 hover:border-slate-300'
+              }`}
+              title={isPrivacyMode ? "Exibir valores em R$" : "Ocultar valores em R$ (Modo Privacidade)"}
+            >
+              {isPrivacyMode ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
             {/* Maximize Button */}
             <button
               onClick={() => setIsMaximized(!isMaximized)}
@@ -762,6 +779,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
                         tickLine={false}
                         tickFormatter={(v) => {
                           if (selectedKpiData.type === 'percent') return `${v}%`;
+                          if (isPrivacyMode && selectedKpiData.type === 'currency') return '****';
                           return v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v;
                         }}
                       />
