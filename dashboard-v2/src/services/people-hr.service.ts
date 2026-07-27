@@ -129,7 +129,10 @@ export const PeopleHRService = {
       .order('competencia', { ascending: false })
       .limit(limit);
     if (error) throw error;
-    return data || [];
+    return (data || []).map(row => ({
+      ...row,
+      ...(row.verbas_adicionais || {})
+    }));
   },
 
   async getAllMonthlyCosts(limit = 2000): Promise<MonthlyCost[]> {
@@ -139,7 +142,10 @@ export const PeopleHRService = {
       .order('competencia', { ascending: true })
       .limit(limit);
     if (error) throw error;
-    return data || [];
+    return (data || []).map(row => ({
+      ...row,
+      ...(row.verbas_adicionais || {})
+    }));
   },
 
   computeCostStats(costs: MonthlyCost[]) {
@@ -518,10 +524,43 @@ export const PeopleHRService = {
     return result;
   },
 
+  sanitizeMonthlyCostPayload(payload: Partial<MonthlyCost>): Record<string, any> {
+    const knownColumns = new Set([
+      'id', 'employee_id', 'competencia', 'vinculo_tipo',
+      'valor_holerite', 'valor_adiantamento', 'valor_hora_extra', 'valor_adicional_not',
+      'valor_vr', 'valor_vt', 'valor_ajuda_custo', 'valor_cesta',
+      'valor_ferias', 'valor_rescisao', 'valor_decimo_terceiro', 'valor_descontos',
+      'valor_liquido', 'origem', 'observacao', 'created_at',
+      'valor_fixo', 'valor_bonus', 'valor_comissao', 'valor_incentivos',
+      'valor_glosa_base', 'valor_glosa_bonus', 'valor_deducoes', 'valor_faltas',
+      'valor_consignado', 'banco_horas', 'dias_faltas', 'verbas_adicionais'
+    ]);
+
+    const sanitized: Record<string, any> = {};
+    const verbasAdicionaisObj: Record<string, any> = { ...(payload.verbas_adicionais || {}) };
+
+    Object.entries(payload).forEach(([key, val]) => {
+      if (val === undefined) return;
+      if (knownColumns.has(key)) {
+        sanitized[key] = val;
+      } else {
+        // Campos estendidos (valor_fgts, base_fgts, base_inss, base_irrf, inss_empregado, irrf_empregado, salario_familia)
+        verbasAdicionaisObj[key] = val;
+      }
+    });
+
+    if (Object.keys(verbasAdicionaisObj).length > 0) {
+      sanitized.verbas_adicionais = verbasAdicionaisObj;
+    }
+
+    return sanitized;
+  },
+
   async insertMonthlyCost(payload: Partial<MonthlyCost>): Promise<MonthlyCost> {
+    const cleanPayload = this.sanitizeMonthlyCostPayload(payload);
     const { data, error } = await supabase
       .from('people_monthly_costs')
-      .insert([payload])
+      .insert([cleanPayload])
       .select()
       .single();
     if (error) throw error;
@@ -529,18 +568,20 @@ export const PeopleHRService = {
   },
 
   async upsertMonthlyCost(payload: Partial<MonthlyCost>): Promise<MonthlyCost> {
-    if (payload.employee_id && payload.competencia) {
+    const cleanPayload = this.sanitizeMonthlyCostPayload(payload);
+
+    if (cleanPayload.employee_id && cleanPayload.competencia) {
       const { data: existing } = await supabase
         .from('people_monthly_costs')
         .select('id')
-        .eq('employee_id', payload.employee_id)
-        .eq('competencia', payload.competencia)
+        .eq('employee_id', cleanPayload.employee_id)
+        .eq('competencia', cleanPayload.competencia)
         .maybeSingle();
 
       if (existing?.id) {
         const { data, error } = await supabase
           .from('people_monthly_costs')
-          .update(payload)
+          .update(cleanPayload)
           .eq('id', existing.id)
           .select()
           .single();

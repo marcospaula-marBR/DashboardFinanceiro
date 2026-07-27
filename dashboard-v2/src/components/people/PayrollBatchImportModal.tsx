@@ -65,7 +65,7 @@ export function PayrollBatchImportModal({
   employees,
   isTestMode = false
 }: PayrollBatchImportModalProps) {
-  // 1. TODOS OS HOOKS (ESTADOS, REFS E MEMOS) DECLARADOS INCONDICIONALMENTE NO TOPO
+  // 1. TODOS OS HOOKS DECLARADOS INCONDICIONALMENTE NO TOPO
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<'upload' | 'review' | 'saving' | 'success'>('upload');
@@ -73,6 +73,12 @@ export function PayrollBatchImportModal({
   const [error, setError] = useState<string | null>(null);
   const [progressText, setProgressText] = useState('');
   
+  // Estados para Barra de Progresso Real-time de Salvamento
+  const [saveProgressPercent, setSaveProgressPercent] = useState(0);
+  const [saveCurrentEmployeeName, setSaveCurrentEmployeeName] = useState('');
+  const [saveSuccessCount, setSaveSuccessCount] = useState(0);
+  const [saveTotalCount, setSaveTotalCount] = useState(0);
+
   // Accordion de detalhamento por colaborador
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
@@ -267,14 +273,25 @@ export function PayrollBatchImportModal({
 
     setIsProcessing(true);
     setStep('saving');
-    setProgressText('Gravando e conciliando custos mensais no banco de dados...');
     setError(null);
+
+    const totalRecords = parsedData.records.length;
+    setSaveTotalCount(totalRecords);
+    setSaveSuccessCount(0);
+    setSaveProgressPercent(0);
 
     try {
       let createdCount = 0;
       let updatedCostsCount = 0;
 
-      for (const record of parsedData.records) {
+      for (let i = 0; i < totalRecords; i++) {
+        const record = parsedData.records[i];
+        const currentPercent = Math.round(((i + 1) / totalRecords) * 100);
+        
+        setSaveProgressPercent(currentPercent);
+        setSaveCurrentEmployeeName(record.name);
+        setSaveSuccessCount(i + 1);
+
         const cleanedCpf = cleanCPF(record.cpf);
         const recordNameNorm = (record.name || '').toLowerCase().trim();
 
@@ -360,7 +377,7 @@ export function PayrollBatchImportModal({
             observacao: record.observacao || `Auditado e homologado via Folha de Pagamento em ${new Date(parsedData.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`
           };
 
-          // Executar upsert (atualiza ou insere para a competência)
+          // Executar upsert (atualiza ou insere para a competência com sanitização)
           await PeopleHRService.upsertMonthlyCost(costPayload);
           updatedCostsCount++;
 
@@ -842,15 +859,45 @@ export function PayrollBatchImportModal({
           </div>
         )}
 
-        {/* PASSO 3: GRAVANDO */}
+        {/* PASSO 3: GRAVANDO COM BARRA DE PROGRESSO REAL-TIME */}
         {step === 'saving' && (
-          <div className="p-12 flex flex-col items-center justify-center text-center space-y-4">
-            <Loader2 size={36} className="text-amber-600 animate-spin" />
-            <h3 className="text-base font-bold text-slate-800">
-              {progressText || 'Conciliando e atualizando custos históricos...'}
-            </h3>
-            <p className="text-xs text-slate-500">
-              Aguarde a finalização dos upserts e criação de novos perfis CLT.
+          <div className="p-10 flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in duration-200">
+            <div className="w-16 h-16 bg-amber-100 border border-amber-200 text-amber-600 rounded-3xl flex items-center justify-center shadow-inner relative">
+              <Loader2 size={32} className="animate-spin text-amber-600" />
+            </div>
+
+            <div className="space-y-2 max-w-lg w-full">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 px-1">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck size={16} className="text-amber-600" />
+                  Alimentando Custo Histórico...
+                </span>
+                <span className="font-black text-amber-600 font-mono text-sm">{saveProgressPercent}%</span>
+              </div>
+
+              {/* BARRA DE PROGRESSO DE ALIMENTAÇÃO */}
+              <div className="w-full h-4 bg-slate-100 border border-slate-200 rounded-full overflow-hidden p-0.5 shadow-inner">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 rounded-full transition-all duration-300 shadow-sm"
+                  style={{ width: `${saveProgressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 max-w-lg w-full text-left space-y-1 shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gravando Colaborador</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-800 truncate pr-2">
+                  {saveCurrentEmployeeName || 'Inicializando...'}
+                </span>
+                <span className="text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-2.5 py-0.5 rounded-md shrink-0 font-mono">
+                  {saveSuccessCount} de {saveTotalCount}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 max-w-md">
+              Atualizando custos mensais, verbas, encargos FGTS e conciliação cadastral no banco de dados.
             </p>
           </div>
         )}
