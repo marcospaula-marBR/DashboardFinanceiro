@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.51.02";
+export const APP_VERSION = "v.02.51.03";
 export const VERSION_DATE = "2026-07-27";
 export const VERSION_CHANGELOG = [
+  "v.02.51.03 - RELEASE MARCO (Diamante Lapidado): Versão consagrada e homologada com o Construtor de Apresentações Executivas no Gamma (DreReportBuilderModal.tsx), Modo Privacidade de Valores R$ com Olho em Indicadores, Ampliação Maximizar em Tela Cheia e Unificação do Botão Gerar Relatório Gamma no Header DRE com 100% de estabilidade.",
   "v.02.51.02 - Fix/React: Corrigido o erro fatal de renderização no Vercel (React Rules of Hooks) no DreReportBuilderModal.tsx. Reorganizados todos os estados (useState), memoizações (useMemo) e efeitos (useEffect) para a parte superior incondicional do componente antes de qualquer instrução de retorno antecipado (return null).",
   "v.02.51.01 - Fix/UX: Unificado o botão de emissão no cabeçalho da DRE (DreHeader.tsx) para um único botão destacado 'Gerar Relatório Gamma' que aciona diretamente o novo Construtor de Apresentações Executivas (DreReportBuilderModal.tsx). Adicionadas verificações defensivas de nulos e bloco de segurança try-catch na compilação do Markdown para prevenir falhas de renderização.",
   "v.02.51.00 - Feat/Executive: Implementado o Construtor de Apresentações Executivas no Gamma (DreReportBuilderModal.tsx) com acionamento pelo novo botão 'Gerador Gamma' no cabeçalho da DRE (DreHeader.tsx). Permite a seleção interativa de blocos da tela (Capa e Filtros, DRE Sintética Consolidada, Indicadores CFO, Conciliação FCL/Caixa, Cenários Simulados e Parecer Executivo BrisinhAI) para montar relatórios C-Level customizados em Markdown com 100% de fidelidade aos dados da tela.",
