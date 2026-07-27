@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Eye, FileText, SlidersHorizontal, CloudLightning, Loader2, MonitorSmartphone, Filter, Gauge } from 'lucide-react';
+import { ChevronLeft, Eye, FileText, SlidersHorizontal, CloudLightning, Loader2, MonitorSmartphone, Filter, Gauge, Sparkles } from 'lucide-react';
 import { APP_VERSION } from '@/version';
 
 interface DreHeaderProps {
@@ -20,6 +20,7 @@ interface DreHeaderProps {
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onOpenIndicators: () => void;
+  onOpenReportBuilder?: () => void;
 }
 
 export function DreHeader({ 
@@ -36,7 +37,8 @@ export function DreHeader({
   onPublish,
   isSidebarCollapsed,
   onToggleSidebar,
-  onOpenIndicators
+  onOpenIndicators,
+  onOpenReportBuilder
 }: DreHeaderProps) {
   return (
     <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4 select-none">
@@ -111,6 +113,17 @@ export function DreHeader({
           <Gauge size={16} className="text-amber-500" />
           <span>Indicadores</span>
         </button>
+
+        {onOpenReportBuilder && (
+          <button 
+            onClick={onOpenReportBuilder}
+            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-100 via-amber-200 to-amber-300 hover:from-amber-200 hover:to-amber-400 text-sm font-bold text-amber-950 transition-all duration-200 shadow-xs active:scale-95 cursor-pointer"
+            title="Gerar apresentação executiva customizada com IA no Gamma"
+          >
+            <Sparkles size={16} className="text-amber-900" />
+            <span className="hidden sm:inline">Gerador Gamma</span>
+          </button>
+        )}
         
         {/* Botão Máquinas Ocultado 
         <button

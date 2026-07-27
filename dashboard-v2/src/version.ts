@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.50.70";
+export const APP_VERSION = "v.02.51.00";
 export const VERSION_DATE = "2026-07-27";
 export const VERSION_CHANGELOG = [
+  "v.02.51.00 - Feat/Executive: Implementado o Construtor de Apresentações Executivas no Gamma (DreReportBuilderModal.tsx) com acionamento pelo novo botão 'Gerador Gamma' no cabeçalho da DRE (DreHeader.tsx). Permite a seleção interativa de blocos da tela (Capa e Filtros, DRE Sintética Consolidada, Indicadores CFO, Conciliação FCL/Caixa, Cenários Simulados e Parecer Executivo BrisinhAI) para montar relatórios C-Level customizados em Markdown com 100% de fidelidade aos dados da tela.",
   "v.02.50.70 - Feat/UX: Adicionada opção de privacidade (botão Olho / Eye Toggle) no cabeçalho do modal de Indicadores Estratégicos Financeiros (DreIndicatorsModal.tsx) para alternar e ocultar exclusivamente os valores monetários em R$ (exibindo 'R$ ****'), mantendo os percentuais (%) e índices (x) totalmente visíveis.",
   "v.02.50.69 - Feat/UX: Adicionada opção para ampliar a janela (maximizar em tela cheia 98vw x 96vh) no modal de Indicadores Estratégicos Financeiros (DreIndicatorsModal.tsx), alinhando a experiência de navegação com os demais modais da DRE.",
   "v.02.50.68 - Fix/Calculo: Corrigido o motor de classificação e extração de categorias da DRE (dre.service.ts e dre-simulator.engine.ts) para direcionar as linhas de 'Provisão - IRPJ e CSSL/CSLL Trimestral' para o seu próprio bucket em vez de mantê-las sob a conta genérica de 'Impostos', resolvendo definitivamente o valor zerado nos cards de detalhamento e indicadores.",

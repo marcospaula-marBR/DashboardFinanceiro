@@ -13,6 +13,7 @@ import { DreSimulatorV2 } from '@/components/dre/DreSimulatorV2';
 import { DreEquipmentsModal } from '@/components/dre/DreEquipmentsModal';
 import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
 import { DreIndicatorsModal } from '@/components/dre/DreIndicatorsModal';
+import { DreReportBuilderModal } from '@/components/dre/DreReportBuilderModal';
 import { DreLancamentosService } from '@/services/dre-lancamentos.service';
 import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
@@ -108,6 +109,7 @@ export default function DrePage() {
   const [isEquipmentsModalOpen, setIsEquipmentsModalOpen] = useState(false);
   const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
   const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false);
+  const [isReportBuilderOpen, setIsReportBuilderOpen] = useState(false);
   const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
   const [simParams, setSimParams] = useState<DreSimulationParams>({
     revenueMultiplier: 1.0,
@@ -1048,6 +1050,7 @@ export default function DrePage() {
               isSidebarCollapsed={isSidebarCollapsed}
               onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
               onOpenIndicators={() => setIsIndicatorsOpen(true)}
+              onOpenReportBuilder={() => setIsReportBuilderOpen(true)}
             />
 
             {/* Botão de entrada manual — Conectius / Ybox / Histórico */}
@@ -1198,6 +1201,15 @@ export default function DrePage() {
         onClose={() => setIsIndicatorsOpen(false)}
         results={results}
         filters={filters}
+      />
+
+      <DreReportBuilderModal
+        isOpen={isReportBuilderOpen}
+        onClose={() => setIsReportBuilderOpen(false)}
+        results={results}
+        filters={filters}
+        simulationParams={simParams}
+        simulatedResult={results}
       />
 
 
