@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Sparkles, CheckSquare, Square, Eye, FileText, Loader2, Play, Download, Check, AlertCircle, Layers, PieChart, BarChart3, TrendingUp, Cpu, Calendar, Building, HelpCircle } from 'lucide-react';
 import { DreCalculatedResult, DreFilters, DreSimulationParams } from '@/types/dre';
 
@@ -19,6 +19,7 @@ export function DreReportBuilderModal({
   simulationParams,
   simulatedResult
 }: DreReportBuilderModalProps) {
+  // 1. TODOS OS ESTADOS (HOOKS) NO TOPO INCONDICIONALMENTE
   const [activeTab, setActiveTab] = useState<'builder' | 'preview'>('builder');
 
   // Módulos Selecionáveis
@@ -29,32 +30,37 @@ export function DreReportBuilderModal({
   const [includeSimulation, setIncludeSimulation] = useState(false);
   const [includeAiAnalysis, setIncludeAiAnalysis] = useState(true);
 
-  // Customização
+  const [customTitle, setCustomTitle] = useState('');
+  const [isGeneratingGamma, setIsGeneratingGamma] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+
+  // Helper de formatação de listas de filtro
   const formatFilterList = (list?: string[]) => {
     if (!list || list.length === 0) return 'Todas';
     if (list.length > 3) return `${list.slice(0, 3).join(', ')} (+${list.length - 3})`;
     return list.join(', ');
   };
 
+  // 2. TODAS AS MEMOIZAÇÕES E EFEITOS (HOOKS) NO TOPO INCONDICIONALMENTE
   const defaultTitle = useMemo(() => {
     const emp = filters?.empresas && filters.empresas.length > 0 ? filters.empresas.join(', ') : 'Consolidado';
     return `Apresentação Executiva DRE — ${emp}`;
   }, [filters]);
 
-  const [customTitle, setCustomTitle] = useState(defaultTitle);
-  const [isGeneratingGamma, setIsGeneratingGamma] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('');
-
-  if (!isOpen || !results) return null;
+  useEffect(() => {
+    if (defaultTitle && !customTitle) {
+      setCustomTitle(defaultTitle);
+    }
+  }, [defaultTitle, customTitle]);
 
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
   const formatPCT = (val: number) => `${(val || 0).toFixed(1).replace('.', ',')}%`;
-  const getTot = (key: string) => results?.totais?.[key] || 0;
 
   // Compilador dinâmico do Markdown para o Gamma
   const compiledMarkdown = useMemo(() => {
+    if (!isOpen || !results) return '';
     try {
-      if (!results) return '';
+      const getTot = (key: string) => results?.totais?.[key] || 0;
       let md = '';
 
       const validCols = results.validColumns || [];
@@ -184,7 +190,7 @@ export function DreReportBuilderModal({
       return `# Relatório Financeiro Executivo DRE\n\nErro ao compilar os dados do relatório.`;
     }
   }, [
-    customTitle, defaultTitle, filters, results, includeCover, includeDreSummary, 
+    isOpen, results, customTitle, defaultTitle, filters, includeCover, includeDreSummary, 
     includeCfoKpis, includeCashReconciliation, includeSimulation, includeAiAnalysis,
     simulationParams, simulatedResult
   ]);
@@ -246,6 +252,9 @@ export function DreReportBuilderModal({
       setStatusMessage('');
     }
   };
+
+  // 3. APÓS TODOS OS HOOKS DECLARADOS, RETORNO CONDICIONAL É 100% SEGURO
+  if (!isOpen || !results) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md select-none animate-in fade-in duration-200">

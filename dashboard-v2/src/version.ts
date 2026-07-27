@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.51.01";
+export const APP_VERSION = "v.02.51.02";
 export const VERSION_DATE = "2026-07-27";
 export const VERSION_CHANGELOG = [
+  "v.02.51.02 - Fix/React: Corrigido o erro fatal de renderização no Vercel (React Rules of Hooks) no DreReportBuilderModal.tsx. Reorganizados todos os estados (useState), memoizações (useMemo) e efeitos (useEffect) para a parte superior incondicional do componente antes de qualquer instrução de retorno antecipado (return null).",
   "v.02.51.01 - Fix/UX: Unificado o botão de emissão no cabeçalho da DRE (DreHeader.tsx) para um único botão destacado 'Gerar Relatório Gamma' que aciona diretamente o novo Construtor de Apresentações Executivas (DreReportBuilderModal.tsx). Adicionadas verificações defensivas de nulos e bloco de segurança try-catch na compilação do Markdown para prevenir falhas de renderização.",
   "v.02.51.00 - Feat/Executive: Implementado o Construtor de Apresentações Executivas no Gamma (DreReportBuilderModal.tsx) com acionamento pelo novo botão 'Gerador Gamma' no cabeçalho da DRE (DreHeader.tsx). Permite a seleção interativa de blocos da tela (Capa e Filtros, DRE Sintética Consolidada, Indicadores CFO, Conciliação FCL/Caixa, Cenários Simulados e Parecer Executivo BrisinhAI) para montar relatórios C-Level customizados em Markdown com 100% de fidelidade aos dados da tela.",
   "v.02.50.70 - Feat/UX: Adicionada opção de privacidade (botão Olho / Eye Toggle) no cabeçalho do modal de Indicadores Estratégicos Financeiros (DreIndicatorsModal.tsx) para alternar e ocultar exclusivamente os valores monetários em R$ (exibindo 'R$ ****'), mantendo os percentuais (%) e índices (x) totalmente visíveis.",
