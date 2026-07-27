@@ -45,8 +45,20 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
     }).format(adjustedValue);
   };
 
-  // Helper safely retrieving values from DRE totals
-  const getDRETotal = (key: string) => totais[key] || 0;
+  // Helper safely retrieving values from DRE totals with normalization (handles spacing, accents, hyphen, and CSLL/CSSL spellings)
+  const getDRETotal = (key: string) => {
+    if (totais[key] !== undefined) {
+      return totais[key];
+    }
+    const cleanKey = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '').replace('ss', 's').replace('ll', 'l');
+    const normalizedKey = cleanKey(key);
+    for (const tKey of Object.keys(totais)) {
+      if (cleanKey(tKey) === normalizedKey) {
+        return totais[tKey] || 0;
+      }
+    }
+    return 0;
+  };
 
   // --- CALCULATION OF THE 10 FINANCIAL INDICATORS (FROM SCRIPT_V2.JS) ---
   const val_receita_bruta = getDRETotal('Receita Bruta de Vendas');
@@ -308,10 +320,10 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
     if (results.mensal[key] && results.mensal[key][col] !== undefined) {
       return results.mensal[key][col];
     }
-    const normalizedKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const cleanKey = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '').replace('ss', 's').replace('ll', 'l');
+    const normalizedKey = cleanKey(key);
     for (const mKey of Object.keys(results.mensal)) {
-      const mNorm = mKey.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      if (mNorm === normalizedKey) {
+      if (cleanKey(mKey) === normalizedKey) {
         return results.mensal[mKey][col] || 0;
       }
     }

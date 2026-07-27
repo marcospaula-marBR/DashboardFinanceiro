@@ -575,7 +575,19 @@ export default function DrePage() {
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     const formatPCT = (val: number) => `${(val).toFixed(1).replace('.', ',')}%`;
     const formatDEC = (val: number) => `${val.toFixed(2).replace('.', ',')}x`;
-    const getTot = (key: string) => results.totais[key] || 0;
+    const getTot = (key: string) => {
+      if (results.totais[key] !== undefined) {
+        return results.totais[key];
+      }
+      const cleanKey = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '').replace('ss', 's').replace('ll', 'l');
+      const normalizedKey = cleanKey(key);
+      for (const tKey of Object.keys(results.totais)) {
+        if (cleanKey(tKey) === normalizedKey) {
+          return results.totais[tKey] || 0;
+        }
+      }
+      return 0;
+    };
 
     // Cálculos dos Indicadores
     const val_receita_bruta = getTot('Receita Bruta de Vendas');
