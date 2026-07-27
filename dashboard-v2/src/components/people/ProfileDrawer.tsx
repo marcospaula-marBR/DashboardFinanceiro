@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
@@ -10,6 +10,7 @@ import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
 import { formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { isExternalEntity, formatCompanyTime, RELATIONSHIP_NATURE_LABELS } from "./PeopleBadges";
+import { ProfileExportModal } from "./ProfileExportModal";
 
 interface HistoryItem {
   id: string;
@@ -128,6 +129,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [serviceLocations, setServiceLocations] = useState<string[]>([]);
 
   // Estados para busca de colaboradores cadastrados
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isSearchExistingOpen, setIsSearchExistingOpen] = useState(false);
   const [isDiannaImportOpen, setIsDiannaImportOpen] = useState(false);
   const [diannaResults, setDiannaResults] = useState<any[]>([]);
@@ -1817,6 +1819,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
             <div className="flex gap-2">
               {employeeId && !isEditMode && (
                 <>
+                  <button
+                    onClick={() => setIsExportModalOpen(true)}
+                    className="flex items-center gap-1.5 p-2 px-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 rounded-lg transition-all text-amber-950 font-bold text-xs shadow-xs active:scale-95 cursor-pointer"
+                    title="Exportar Ficha do Colaborador (Selecionar Abas)"
+                  >
+                    <Download size={14} />
+                    <span>Exportar Ficha</span>
+                  </button>
                   <a 
                     href={`/emprestimos?employeeId=${employeeId}`}
                     className="flex items-center gap-1.5 p-2 px-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg transition-all text-amber-700 dark:text-amber-500 font-semibold text-xs border border-amber-200 dark:border-amber-900/50"
@@ -5336,6 +5346,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           </div>
         </div>
       )}
+
+      {/* Modal de Exportação Customizada da Ficha */}
+      <ProfileExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        profile={profile}
+        history={history}
+        bonds={bonds}
+        costs={costs}
+      />
 
     </AnimatePresence>
   );
