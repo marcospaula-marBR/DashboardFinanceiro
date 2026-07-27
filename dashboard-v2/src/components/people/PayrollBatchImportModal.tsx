@@ -65,6 +65,7 @@ export function PayrollBatchImportModal({
   employees,
   isTestMode = false
 }: PayrollBatchImportModalProps) {
+  // 1. TODOS OS HOOKS (ESTADOS, REFS E MEMOS) DECLARADOS INCONDICIONALMENTE NO TOPO
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<'upload' | 'review' | 'saving' | 'success'>('upload');
@@ -80,6 +81,20 @@ export function PayrollBatchImportModal({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Totais da tela de auditoria memoizados no topo incondicionalmente
+  const auditTotals = useMemo(() => {
+    if (!parsedData?.records) return { count: 0, proventos: 0, descontos: 0, fgts: 0, liquido: 0 };
+    return parsedData.records.reduce((acc, r) => {
+      acc.count++;
+      acc.proventos += r.valor_holerite || r.valor_fixo || 0;
+      acc.descontos += r.valor_descontos || 0;
+      acc.fgts += r.valor_fgts || 0;
+      acc.liquido += r.valor_liquido || 0;
+      return acc;
+    }, { count: 0, proventos: 0, descontos: 0, fgts: 0, liquido: 0 });
+  }, [parsedData]);
+
+  // 2. RETORNO CONDICIONAL SEGURO APÓS TODOS OS HOOKS
   if (!isOpen) return null;
 
   const cleanCPF = (cpf: string) => (cpf || '').replace(/\D/g, '');
@@ -188,12 +203,6 @@ export function PayrollBatchImportModal({
       [field]: typeof value === 'number' ? (isNaN(value) ? 0 : value) : value
     };
 
-    // Recalcular total de proventos / descontos / líquido se for verba monetária
-    const rec = updatedRecords[index];
-    if (['valor_fixo', 'valor_holerite', 'valor_hora_extra', 'valor_adicional_not', 'valor_ferias', 'valor_decimo_terceiro', 'valor_rescisao', 'salario_familia', 'valor_bonus', 'valor_comissao'].includes(field)) {
-      // Ajuste automático opcional
-    }
-
     setParsedData({
       ...parsedData,
       records: updatedRecords
@@ -251,17 +260,6 @@ export function PayrollBatchImportModal({
       records: [...parsedData.records, newRec]
     });
     setExpandedIndex(parsedData.records.length);
-  };
-
-  const toggleCreateNew = (key: string) => {
-    setMatchedEmployees(prev => {
-      const current = prev[key];
-      if (!current) return prev;
-      return {
-        ...prev,
-        [key]: { ...current, shouldCreate: !current.shouldCreate }
-      };
-    });
   };
 
   const handleSaveBatch = async () => {
@@ -398,19 +396,6 @@ export function PayrollBatchImportModal({
       setIsProcessing(false);
     }
   };
-
-  // TOTAIS DA TELA DE AUDITORIA
-  const auditTotals = useMemo(() => {
-    if (!parsedData?.records) return { count: 0, proventos: 0, descontos: 0, fgts: 0, liquido: 0 };
-    return parsedData.records.reduce((acc, r) => {
-      acc.count++;
-      acc.proventos += r.valor_holerite || r.valor_fixo || 0;
-      acc.descontos += r.valor_descontos || 0;
-      acc.fgts += r.valor_fgts || 0;
-      acc.liquido += r.valor_liquido || 0;
-      return acc;
-    }, { count: 0, proventos: 0, descontos: 0, fgts: 0, liquido: 0 });
-  }, [parsedData]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md select-none animate-in fade-in duration-200">
