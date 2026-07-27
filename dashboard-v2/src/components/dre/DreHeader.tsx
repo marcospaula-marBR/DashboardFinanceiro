@@ -114,29 +114,7 @@ export function DreHeader({
           <span>Indicadores</span>
         </button>
 
-        {onOpenReportBuilder && (
-          <button 
-            onClick={onOpenReportBuilder}
-            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-100 via-amber-200 to-amber-300 hover:from-amber-200 hover:to-amber-400 text-sm font-bold text-amber-950 transition-all duration-200 shadow-xs active:scale-95 cursor-pointer"
-            title="Gerar apresentação executiva customizada com IA no Gamma"
-          >
-            <Sparkles size={16} className="text-amber-900" />
-            <span className="hidden sm:inline">Gerador Gamma</span>
-          </button>
-        )}
-        
-        {/* Botão Máquinas Ocultado 
-        <button
-          onClick={onOpenEquipmentsManager}
-          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all duration-200 shadow-sm active:scale-95"
-          title="Gerenciar Parque de Máquinas"
-        >
-          <MonitorSmartphone size={16} className="text-amber-500" />
-          <span>Máquinas</span>
-        </button>
-        */}
-
-        {/* Compliant with the Purple Ban: changed from indigo to high-end amber-50 border/slate-800 accent */}
+        {/* Link para o Simulador DRE */}
         <Link 
           href="/dre-custom"
           target="_blank"
@@ -173,11 +151,13 @@ export function DreHeader({
           </button>
         )}
 
+        {/* Botão Único de Gerar Relatório Executivo Gamma (Construtor de Módulos) */}
         <button 
-          onClick={onExportPDF}
-          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-bold transition-all duration-200 shadow-md shadow-orange-500/10 active:scale-95 min-w-[140px]"
+          onClick={onOpenReportBuilder || onExportPDF}
+          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-bold transition-all duration-200 shadow-md shadow-orange-500/10 active:scale-95 min-w-[170px] cursor-pointer"
+          title="Gerar Apresentação Executiva Customizada com IA no Gamma"
         >
-          <FileText size={16} /> <span className="hidden sm:inline">Gerar Relatório</span>
+          <Sparkles size={16} /> <span className="hidden sm:inline">Gerar Relatório Gamma</span>
         </button>
       </div>
     </header>

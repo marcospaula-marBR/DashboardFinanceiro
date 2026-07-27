@@ -47,130 +47,142 @@ export function DreReportBuilderModal({
 
   if (!isOpen || !results) return null;
 
-  const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-  const formatPCT = (val: number) => `${(val).toFixed(1).replace('.', ',')}%`;
-  const getTot = (key: string) => results.totais[key] || 0;
+  const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+  const formatPCT = (val: number) => `${(val || 0).toFixed(1).replace('.', ',')}%`;
+  const getTot = (key: string) => results?.totais?.[key] || 0;
 
   // Compilador dinâmico do Markdown para o Gamma
   const compiledMarkdown = useMemo(() => {
-    let md = '';
+    try {
+      if (!results) return '';
+      let md = '';
 
-    // 1. CAPA & CONTEXTO EXECUTIVO
-    if (includeCover) {
-      md += `# ${customTitle || defaultTitle}\n\n`;
-      md += `**Relatório Gerencial Executivo C-Level**\n\n`;
-      md += `**Data da Emissão:** ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
-      md += `### Contexto e Filtros Aplicados\n`;
-      md += `- **Empresa(s):** ${formatFilterList(filters.empresas)}\n`;
-      md += `- **Período(s) de Análise:** ${formatFilterList(filters.periodos)} (${results.validColumns.length} meses)\n`;
-      if (filters.departamentos && filters.departamentos.length > 0) {
-        md += `- **Departamento(s):** ${formatFilterList(filters.departamentos)}\n`;
+      const validCols = results.validColumns || [];
+      const kpis = results.kpis || ({} as any);
+
+      // 1. CAPA & CONTEXTO EXECUTIVO
+      if (includeCover) {
+        md += `# ${customTitle || defaultTitle}\n\n`;
+        md += `**Relatório Gerencial Executivo C-Level**\n\n`;
+        md += `**Data da Emissão:** ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
+        md += `### Contexto e Filtros Aplicados\n`;
+        md += `- **Empresa(s):** ${formatFilterList(filters?.empresas)}\n`;
+        md += `- **Período(s) de Análise:** ${formatFilterList(filters?.periodos)} (${validCols.length} meses)\n`;
+        if (filters?.departamentos && filters.departamentos.length > 0) {
+          md += `- **Departamento(s):** ${formatFilterList(filters.departamentos)}\n`;
+        }
+        if (filters?.contasDre && filters.contasDre.length > 0) {
+          md += `- **Conta(s) DRE:** ${formatFilterList(filters.contasDre)}\n`;
+        }
+        if (filters?.projetos && filters.projetos.length > 0) {
+          md += `- **Projeto(s):** ${formatFilterList(filters.projetos)}\n`;
+        }
+        if (filters?.categorias && filters.categorias.length > 0) {
+          md += `- **Categoria(s):** ${formatFilterList(filters.categorias)}\n`;
+        }
+        md += `- **Rateio de Despesas:** ${filters?.excludeSharedExpenses ? 'Excluído (Sem Rateio)' : 'Incluído (Com Rateio)'}\n\n`;
       }
-      if (filters.contasDre && filters.contasDre.length > 0) {
-        md += `- **Conta(s) DRE:** ${formatFilterList(filters.contasDre)}\n`;
+
+      // 2. RESUMO DRE SINTÉTICA
+      if (includeDreSummary) {
+        md += `## Demonstrativo do Resultado do Exercício (DRE Sintética)\n\n`;
+        md += `| Estrutura DRE | Total Acumulado (R$) | Média Mensal (R$) |\n`;
+        md += `|---|---|---|\n`;
+
+        const colsCount = validCols.length || 1;
+        const recOperacional = getTot('Receita Bruta de Vendas') + getTot('Receitas Indiretas');
+        const impostosTotais = getTot('Total de Impostos');
+        const custosTotais = getTot('Total Custos Operacionais');
+        const despesasTotais = getTot('Total Despesas Rateadas');
+        const resultadoGlobal = getTot('Lucro antes do FCL');
+
+        md += `| (+) Receita Operacional Bruta | ${formatBRL(recOperacional)} | ${formatBRL(recOperacional / colsCount)} |\n`;
+        md += `| (-) Total de Impostos | ${formatBRL(impostosTotais)} | ${formatBRL(impostosTotais / colsCount)} |\n`;
+        md += `| (-) Custos Operacionais | ${formatBRL(custosTotais)} | ${formatBRL(custosTotais / colsCount)} |\n`;
+        md += `| (-) Despesas Rateadas / Gerais | ${formatBRL(despesasTotais)} | ${formatBRL(despesasTotais / colsCount)} |\n`;
+        md += `| **(=) Resultado (Lucro/Prejuízo)** | **${formatBRL(resultadoGlobal)}** | **${formatBRL(resultadoGlobal / colsCount)}** |\n\n`;
       }
-      if (filters.projetos && filters.projetos.length > 0) {
-        md += `- **Projeto(s):** ${formatFilterList(filters.projetos)}\n`;
+
+      // 3. INDICADORES CFO E MARGENS
+      if (includeCfoKpis) {
+        const val_rec_bruta = getTot('Receita Bruta de Vendas');
+        const val_rec_ind = getTot('Receitas Indiretas');
+        const val_imp_vendas = getTot('Impostos');
+        const val_irpj_csll = getTot('Provisão - IRPJ e CSSL Trimestral') || getTot('Provisão IRPJ e CSSL Trimestral');
+        
+        const rec_liquida = (val_rec_bruta + val_rec_ind) - val_imp_vendas;
+        const RL = rec_liquida !== 0 ? rec_liquida : 1;
+
+        const totalCustos = kpis.totalCustos || 0;
+        const totalDespesas = kpis.totalDespesas || 0;
+
+        const lucro_bruto = rec_liquida - totalCustos;
+        const despesas_operacionais = totalDespesas - getTot('Despesas Financeiras') - getTot('Distribuição de Dividendos') - getTot('Despesas Variáveis') - getTot('Intermediação de Negócios');
+        const ebit = lucro_bruto - despesas_operacionais;
+        const res_financeiro = getTot('Receitas Financeiras') - getTot('Despesas Financeiras');
+        const outras_rec = getTot('Outras Receitas') + getTot('Honorários') + getTot('Juros e devoluções') + getTot('Recuperação de Despesas Variáveis');
+        const lair = ebit + res_financeiro + outras_rec;
+        const lucro_liquido = lair - val_irpj_csll;
+
+        md += `## Indicadores Estratégicos Financeiros (CFO)\n\n`;
+        md += `- **1. Margem Bruta:** ${formatPCT((lucro_bruto / RL) * 100)} (Lucro Bruto: ${formatBRL(lucro_bruto)})\n`;
+        md += `- **2. Margem Operacional (EBIT):** ${formatPCT((ebit / RL) * 100)} (EBIT: ${formatBRL(ebit)})\n`;
+        md += `- **3. EBITDA:** ${formatBRL(ebit)} (Margem EBITDA: ${formatPCT((ebit / RL) * 100)})\n`;
+        md += `- **4. Resultado Financeiro:** ${formatBRL(res_financeiro)}\n`;
+        md += `- **5. LAIR (Antes de IR/CSLL):** ${formatBRL(lair)} (Margem LAIR: ${formatPCT((lair / RL) * 100)})\n`;
+        md += `- **6. Provisão de IRPJ/CSLL:** ${formatBRL(val_irpj_csll)}\n`;
+        md += `- **7. Margem Líquida (Lucro Líquido):** ${formatPCT((lucro_liquido / RL) * 100)} (Lucro Líquido: ${formatBRL(lucro_liquido)})\n\n`;
       }
-      if (filters.categorias && filters.categorias.length > 0) {
-        md += `- **Categoria(s):** ${formatFilterList(filters.categorias)}\n`;
+
+      // 4. CONCILIAÇÃO DE CAIXA & FLUXO LIVRE (FCL)
+      if (includeCashReconciliation) {
+        const fcl = getTot('Fluxo de Caixa Livre FCL');
+        const dividendos = getTot('Distribuição de Dividendos');
+        const fclAposRetiradas = getTot('FCL após Retiradas dos Sócios');
+
+        md += `## Conciliação de Caixa e Fluxo de Caixa Livre (FCL)\n\n`;
+        md += `| Linha de Caixa | Valor Consolidado (R$) |\n`;
+        md += `|---|---|\n`;
+        md += `| Lucro antes do FCL | ${formatBRL(getTot('Lucro antes do FCL'))} |\n`;
+        md += `| **Fluxo de Caixa Livre (FCL)** | **${formatBRL(fcl)}** |\n`;
+        md += `| (-) Distribuição de Dividendos / Retiradas | ${formatBRL(dividendos)} |\n`;
+        md += `| **(=) FCL Líquido Após Retiradas** | **${formatBRL(fclAposRetiradas)}** |\n\n`;
       }
-      md += `- **Rateio de Despesas:** ${filters.excludeSharedExpenses ? 'Excluído (Sem Rateio)' : 'Incluído (Com Rateio)'}\n\n`;
+
+      // 5. SIMULAÇÃO & PREMISSAS DE CENÁRIOS
+      if (includeSimulation && simulationParams && simulatedResult) {
+        const simEntradas = simulatedResult?.kpis?.totalEntradas || 0;
+        const simResultado = simulatedResult?.kpis?.resultado || 0;
+        const baseEntradas = kpis.totalEntradas || 0;
+        const baseResultado = kpis.resultado || 0;
+
+        md += `## Análise de Cenário Simulado\n\n`;
+        md += `### Premissas da Simulação\n`;
+        md += `- Multiplicador de Receitas: ${(((simulationParams.revenueMultiplier || 1) - 1) * 100).toFixed(1)}%\n`;
+        md += `- Ajuste de Custos Operacionais: ${(((simulationParams.costsMultiplier || 1) - 1) * 100).toFixed(1)}%\n`;
+        md += `- Ajuste de Despesas Rateadas: ${(((simulationParams.expensesMultiplier || 1) - 1) * 100).toFixed(1)}%\n\n`;
+
+        md += `### Comparativo: Base vs. Cenário Simulado\n`;
+        md += `| Métrica | Cenário Base | Cenário Simulado | Variação Absolute |\n`;
+        md += `|---|---|---|---|\n`;
+        md += `| Entradas Operacionais | ${formatBRL(baseEntradas)} | ${formatBRL(simEntradas)} | ${formatBRL(simEntradas - baseEntradas)} |\n`;
+        md += `| Resultado Final | ${formatBRL(baseResultado)} | ${formatBRL(simResultado)} | ${formatBRL(simResultado - baseResultado)} |\n\n`;
+      }
+
+      // 6. PARECER EXECUTIVO / BRISINHAI
+      if (includeAiAnalysis) {
+        md += `## Análise Executiva & Parecer Gerencial (BrisinhAI)\n\n`;
+        md += `### Destaques da Performance Financeira\n`;
+        md += `- A operação apresentou um volume total de entradas de **${formatBRL(getTot('Receita Bruta de Vendas'))}** com margem de retorno operacional sólida no período analisado.\n`;
+        md += `- O custo operacional total responde por **${formatPCT((getTot('Total Custos Operacionais') / (getTot('Receita Bruta de Vendas') || 1)) * 100)}** da receita bruta, exigindo monitoramento rigoroso de eficiência.\n`;
+        md += `- Recomenda-se manter controle estrito sobre as despesas rateadas e acompanhar de perto a margem de contribuição por departamento.\n\n`;
+      }
+
+      return md;
+    } catch (err) {
+      console.error("Erro na compilação do relatório Markdown:", err);
+      return `# Relatório Financeiro Executivo DRE\n\nErro ao compilar os dados do relatório.`;
     }
-
-    // 2. RESUMO DRE SINTÉTICA
-    if (includeDreSummary) {
-      md += `## Demonstrativo do Resultado do Exercício (DRE Sintética)\n\n`;
-      md += `| Estrutura DRE | Total Acumulado (R$) | Média Mensal (R$) |\n`;
-      md += `|---|---|---|\n`;
-
-      const colsCount = results.validColumns.length || 1;
-      const recOperacional = getTot('Receita Bruta de Vendas') + getTot('Receitas Indiretas');
-      const impostosTotais = getTot('Total de Impostos');
-      const custosTotais = getTot('Total Custos Operacionais');
-      const despesasTotais = getTot('Total Despesas Rateadas');
-      const resultadoGlobal = getTot('Lucro antes do FCL');
-
-      md += `| (+) Receita Operacional Bruta | ${formatBRL(recOperacional)} | ${formatBRL(recOperacional / colsCount)} |\n`;
-      md += `| (-) Total de Impostos | ${formatBRL(impostosTotais)} | ${formatBRL(impostosTotais / colsCount)} |\n`;
-      md += `| (-) Custos Operacionais | ${formatBRL(custosTotais)} | ${formatBRL(custosTotais / colsCount)} |\n`;
-      md += `| (-) Despesas Rateadas / Gerais | ${formatBRL(despesasTotais)} | ${formatBRL(despesasTotais / colsCount)} |\n`;
-      md += `| **(=) Resultado (Lucro/Prejuízo)** | **${formatBRL(resultadoGlobal)}** | **${formatBRL(resultadoGlobal / colsCount)}** |\n\n`;
-    }
-
-    // 3. INDICADORES CFO E MARGENS
-    if (includeCfoKpis) {
-      const val_rec_bruta = getTot('Receita Bruta de Vendas');
-      const val_rec_ind = getTot('Receitas Indiretas');
-      const val_imp_vendas = getTot('Impostos');
-      const val_irpj_csll = getTot('Provisão - IRPJ e CSSL Trimestral') || getTot('Provisão IRPJ e CSSL Trimestral');
-      
-      const rec_liquida = (val_rec_bruta + val_rec_ind) - val_imp_vendas;
-      const RL = rec_liquida !== 0 ? rec_liquida : 1;
-
-      const lucro_bruto = rec_liquida - results.kpis.totalCustos;
-      const despesas_operacionais = results.kpis.totalDespesas - getTot('Despesas Financeiras') - getTot('Distribuição de Dividendos') - getTot('Despesas Variáveis') - getTot('Intermediação de Negócios');
-      const ebit = lucro_bruto - despesas_operacionais;
-      const res_financeiro = getTot('Receitas Financeiras') - getTot('Despesas Financeiras');
-      const outras_rec = getTot('Outras Receitas') + getTot('Honorários') + getTot('Juros e devoluções') + getTot('Recuperação de Despesas Variáveis');
-      const lair = ebit + res_financeiro + outras_rec;
-      const lucro_liquido = lair - val_irpj_csll;
-
-      md += `## Indicadores Estratégicos Financeiros (CFO)\n\n`;
-      md += `- **1. Margem Bruta:** ${formatPCT((lucro_bruto / RL) * 100)} (Lucro Bruto: ${formatBRL(lucro_bruto)})\n`;
-      md += `- **2. Margem Operacional (EBIT):** ${formatPCT((ebit / RL) * 100)} (EBIT: ${formatBRL(ebit)})\n`;
-      md += `- **3. EBITDA:** ${formatBRL(ebit)} (Margem EBITDA: ${formatPCT((ebit / RL) * 100)})\n`;
-      md += `- **4. Resultado Financeiro:** ${formatBRL(res_financeiro)}\n`;
-      md += `- **5. LAIR (Antes de IR/CSLL):** ${formatBRL(lair)} (Margem LAIR: ${formatPCT((lair / RL) * 100)})\n`;
-      md += `- **6. Provisão de IRPJ/CSLL:** ${formatBRL(val_irpj_csll)}\n`;
-      md += `- **7. Margem Líquida (Lucro Líquido):** ${formatPCT((lucro_liquido / RL) * 100)} (Lucro Líquido: ${formatBRL(lucro_liquido)})\n\n`;
-    }
-
-    // 4. CONCILIAÇÃO DE CAIXA & FLUXO LIVRE (FCL)
-    if (includeCashReconciliation) {
-      const fcl = getTot('Fluxo de Caixa Livre FCL');
-      const dividendos = getTot('Distribuição de Dividendos');
-      const fclAposRetiradas = getTot('FCL após Retiradas dos Sócios');
-
-      md += `## Conciliação de Caixa e Fluxo de Caixa Livre (FCL)\n\n`;
-      md += `| Linha de Caixa | Valor Consolidado (R$) |\n`;
-      md += `|---|---|\n`;
-      md += `| Lucro antes do FCL | ${formatBRL(getTot('Lucro antes do FCL'))} |\n`;
-      md += `| **Fluxo de Caixa Livre (FCL)** | **${formatBRL(fcl)}** |\n`;
-      md += `| (-) Distribuição de Dividendos / Retiradas | ${formatBRL(dividendos)} |\n`;
-      md += `| **(=) FCL Líquido Após Retiradas** | **${formatBRL(fclAposRetiradas)}** |\n\n`;
-    }
-
-    // 5. SIMULAÇÃO & PREMISSAS DE CENÁRIOS
-    if (includeSimulation && simulationParams && simulatedResult) {
-      const simEntradas = simulatedResult.kpis.totalEntradas;
-      const simResultado = simulatedResult.kpis.resultado;
-      const baseEntradas = results.kpis.totalEntradas;
-      const baseResultado = results.kpis.resultado;
-
-      md += `## Análise de Cenário Simulado\n\n`;
-      md += `### Premissas da Simulação\n`;
-      md += `- Multiplicador de Receitas: ${((simulationParams.revenueMultiplier - 1) * 100).toFixed(1)}%\n`;
-      md += `- Ajuste de Custos Operacionais: ${((simulationParams.costsMultiplier - 1) * 100).toFixed(1)}%\n`;
-      md += `- Ajuste de Despesas Rateadas: ${((simulationParams.expensesMultiplier - 1) * 100).toFixed(1)}%\n\n`;
-
-      md += `### Comparativo: Base vs. Cenário Simulado\n`;
-      md += `| Métrica | Cenário Base | Cenário Simulado | Variação Absolute |\n`;
-      md += `|---|---|---|---|\n`;
-      md += `| Entradas Operacionais | ${formatBRL(baseEntradas)} | ${formatBRL(simEntradas)} | ${formatBRL(simEntradas - baseEntradas)} |\n`;
-      md += `| Resultado Final | ${formatBRL(baseResultado)} | ${formatBRL(simResultado)} | ${formatBRL(simResultado - baseResultado)} |\n\n`;
-    }
-
-    // 6. PARECER EXECUTIVO / BRISINHAI
-    if (includeAiAnalysis) {
-      md += `## Análise Executiva & Parecer Gerencial (BrisinhAI)\n\n`;
-      md += `### Destaques da Performance Financeira\n`;
-      md += `- A operação apresentou um volume total de entradas de **${formatBRL(getTot('Receita Bruta de Vendas'))}** com margem de retorno operacional sólida no período analisado.\n`;
-      md += `- O custo operacional total responde por **${formatPCT((getTot('Total Custos Operacionais') / (getTot('Receita Bruta de Vendas') || 1)) * 100)}** da receita bruta, exigindo monitoramento rigoroso de eficiência.\n`;
-      md += `- Recomenda-se manter controle estrito sobre as despesas rateadas e acompanhar de perto a margem de contribuição por departamento.\n\n`;
-    }
-
-    return md;
   }, [
     customTitle, defaultTitle, filters, results, includeCover, includeDreSummary, 
     includeCfoKpis, includeCashReconciliation, includeSimulation, includeAiAnalysis,
