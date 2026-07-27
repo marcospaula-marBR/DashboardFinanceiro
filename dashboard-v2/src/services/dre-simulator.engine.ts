@@ -118,7 +118,12 @@ export class DreSimulatorEngine {
       'intermediacao de negocio': 'Intermediação de Negócios',
       
       'mutuo - saida': 'Mútuo - Saídas',
-      'mutuo - saidas': 'Mútuo - Saídas'
+      'mutuo - saidas': 'Mútuo - Saídas',
+      
+      'provisao - irpj e cssl trimestral': 'Provisão - IRPJ e CSSL Trimestral',
+      'provisao - irpj e csll trimestral': 'Provisão - IRPJ e CSSL Trimestral',
+      'provisao irpj e cssl trimestral': 'Provisão - IRPJ e CSSL Trimestral',
+      'provisao irpj e csll trimestral': 'Provisão - IRPJ e CSSL Trimestral'
     };
 
     const subCategoriasEspecificas = [
@@ -130,7 +135,8 @@ export class DreSimulatorEngine {
       'Jurídico', 'Intermediação de Negócios', 'Renda Fixa',
       'Intermediação de Negócios - Receita', 'Intermediação de Negócio - Receita', 'Intermediação de Negócio - Receitas',
       'Mútuo - Entrada', 'Mútuo - Saída', 'Distribuição de Dividendo', 'Dividendo',
-      'Distribuição Lucro', 'Distribuição de Lucro', 'Distribuição de Lucros', 'Intermediação de Negócio'
+      'Distribuição Lucro', 'Distribuição de Lucro', 'Distribuição de Lucros', 'Intermediação de Negócio',
+      'Provisão - IRPJ e CSSL Trimestral', 'Provisão - IRPJ e CSLL Trimestral', 'Provisão IRPJ e CSSL Trimestral', 'Provisão IRPJ e CSLL Trimestral'
     ];
 
     // Mapeamos a estrutura de DRE por linha
