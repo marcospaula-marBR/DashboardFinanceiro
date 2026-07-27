@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, DollarSign, Users, Wrench, ShieldCheck, Percent, Coins, Landmark, Info, ArrowUpRight, ArrowDownRight, BarChart3, PieChart, Activity, Zap, FileText, Calculator, Calendar } from 'lucide-react';
+import { X, DollarSign, Users, Wrench, ShieldCheck, Percent, Coins, Landmark, Info, ArrowUpRight, ArrowDownRight, BarChart3, PieChart, Activity, Zap, FileText, Calculator, Calendar, Maximize2, Minimize2 } from 'lucide-react';
 import { DreCalculatedResult, DreFilters } from '@/types/dre';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -15,6 +15,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
   const [selectedIndicator, setSelectedIndicator] = useState<string>('1. Margem Bruta');
   const [activeComposition, setActiveComposition] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -22,6 +23,11 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
     }
     return () => setMounted(false);
   }, [isOpen]);
+
+  // Modal Container Class (Normal vs Maximizada)
+  const containerClasses = isMaximized
+    ? "bg-white border border-slate-100 rounded-2xl shadow-2xl w-[98vw] h-[96vh] max-w-none max-h-none flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+    : "bg-white border border-slate-100 rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200";
 
   if (!isOpen || !results) return null;
 
@@ -544,7 +550,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm select-none animate-in fade-in duration-200">
-      <div className="bg-white border border-slate-100 rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className={containerClasses}>
         
         {/* Header */}
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/65">
@@ -597,7 +603,15 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            {/* Maximize Button */}
+            <button
+              onClick={() => setIsMaximized(!isMaximized)}
+              className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 hover:border-slate-300 text-slate-550 transition-all active:scale-95 shadow-sm"
+              title={isMaximized ? "Restaurar tamanho padrão" : "Ampliar janela (Tela Cheia)"}
+            >
+              {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
             {/* Close Button */}
             <button
               onClick={onClose}
