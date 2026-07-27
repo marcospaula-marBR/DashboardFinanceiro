@@ -56,13 +56,16 @@ Analise este documento PDF contendo o Extrato Mensal da folha de pagamento de m�
 Instruções de Extração:
 1. **Competência**: Identifique a competência (mês/ano) da folha no cabeçalho do documento (ex: '06/2026' ou 'Junho de 2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-06-01').
 2. **Colaboradores**: Extraia os dados individuais de cada colaborador CLT celetista identificado no documento.
-3. **Verbas Financeiras**:
+3. **Verbas Financeiras & Informativos Patronais**:
    - Salário base contratual no campo "valor_fixo".
    - Total de Proventos/Vencimentos Brutos no campo "valor_holerite".
    - Total de Descontos no campo "valor_descontos".
+   - **Informativo FGTS da Empresa (CRUCIAL!)**: Extraia o valor do FGTS mensal pago pela empresa no campo "valor_fgts" (localizado nas linhas informativas, ex: 'Valor FGTS: 147,98'). Extraia também a "base_fgts".
+   - **Bases e Encargos**: Extraia "base_inss", "base_irrf", o INSS descontado ("inss_empregado") e o IRRF descontado ("irrf_empregado").
    - Empréstimo Consignado: Se houver descontos com termos como "DESC. EMP. CRED. TRAB N..." ou "Consignado", some os respectivos valores e adicione no campo "valor_consignado".
-   - Faltas/Atrasos: Some todos os descontos de faltas ou faltas DSR (ex: "DIAS FALTAS", "DIAS FALTAS DSR") e coloque no campo "valor_faltas". Extraia também o quantitativo total de dias de falta acumulados (ex: se constar "318 DIAS FALTAS 1,00" ou similar, capture o valor de quantidade, ex: "1.00", e coloque no campo "dias_faltas").
-   - Banco de Horas: Se houver desconto de banco de horas (ex: "Desconto Banco de Horas 15:22"), converta as horas/minutos para formato decimal (ex: 15h22m = 15.37) e coloque no campo "banco_horas" como número positivo representando a quantidade de horas descontadas.
+   - Faltas/Atrasos: Some todos os descontos de faltas ou faltas DSR (ex: "DIAS FALTAS", "DIAS FALTAS DSR") e coloque no campo "valor_faltas". Extraia também o quantitativo total de dias de falta acumulados no campo "dias_faltas".
+   - Salário Família: Se houver rubrica 995 SALARIO FAMILIA, adicione o valor no campo "salario_familia".
+   - Banco de Horas: Se houver desconto de banco de horas (ex: "Desconto Banco de Horas 15:22"), converta as horas/minutos para formato decimal e coloque no campo "banco_horas".
    - Demais proventos e descontos mapeados nos respectivos campos (adiantamento, hora extra, adicional noturno, férias, décimo terceiro, VR, VT, cesta básica, bônus, comissão, ajuda de custo).
 
 Retorne obrigatoriamente um objeto JSON com o seguinte formato:
@@ -95,6 +98,13 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
       "valor_bonus": 0.00,
       "valor_comissao": 0.00,
       "valor_ajuda_custo": 0.00,
+      "valor_fgts": 0.00,
+      "base_fgts": 0.00,
+      "base_inss": 0.00,
+      "base_irrf": 0.00,
+      "inss_empregado": 0.00,
+      "irrf_empregado": 0.00,
+      "salario_familia": 0.00,
       "valor_liquido": 0.00,
       "observacao": "Breve observacao se for demitido ou tiver faltas"
     }

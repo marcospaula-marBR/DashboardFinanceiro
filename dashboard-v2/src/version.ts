@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.52.00";
+export const APP_VERSION = "v.02.53.00";
 export const VERSION_DATE = "2026-07-27";
 export const VERSION_CHANGELOG = [
+  "v.02.53.00 - Feat/People: Implementada a Tela de Auditoria e Conferência da Folha de Pagamento (PayrollBatchImportModal.tsx) e extensão do motor IA (/api/people/parse-payroll-batch). O sistema agora extrai verba por verba mais os informativos patronais (como Valor FGTS da empresa, Base FGTS, Base INSS, Base IRRF), abre uma janela 100% editável para conferência do usuário antes de atualizar/substituir o custo histórico e cria fichas de colaboradores CLT ausentes automaticamente com cadastro padrão.",
   "v.02.52.00 - Feat/People: Criado o recurso de Exportação Customizada da Ficha do Colaborador (ProfileExportModal.tsx) no módulo People. Adicionado botão 'Exportar Ficha' no topo de ProfileDrawer.tsx permitindo ao usuário selecionar quais seções/abas cadastrais deseja exportar (Identificação, Dados Contratuais, Endereço/Contatos, Dados Bancários, Remuneração/Ficha Executiva, Trajetória e Custos Mensais) nos formatos PDF Executivo Formatado ou Planilha Excel/CSV.",
   "v.02.51.04 - Feat/Branding: Adicionada injeção dinâmica dos logotipos oficiais das empresas selecionadas (Mar Brasil, DZM, Grupo 2, Ybox, Conectius, Solucione) no topo da capa da apresentação gerada no Gamma (DreReportBuilderModal.tsx).",
   "v.02.51.03 - RELEASE MARCO (Diamante Lapidado): Versão consagrada e homologada com o Construtor de Apresentações Executivas no Gamma (DreReportBuilderModal.tsx), Modo Privacidade de Valores R$ com Olho em Indicadores, Ampliação Maximizar em Tela Cheia e Unificação do Botão Gerar Relatório Gamma no Header DRE com 100% de estabilidade.",

@@ -247,6 +247,13 @@ export interface MonthlyCost {
   valor_glosa_base?: number;
   valor_glosa_bonus?: number;
   valor_deducoes?: number;
+  valor_fgts?: number;
+  base_fgts?: number;
+  base_inss?: number;
+  base_irrf?: number;
+  inss_empregado?: number;
+  irrf_empregado?: number;
+  salario_familia?: number;
   valor_liquido: number;
   valor_fixo?: number;
   valor_bonus?: number;

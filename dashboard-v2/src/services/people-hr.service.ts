@@ -528,6 +528,30 @@ export const PeopleHRService = {
     return data;
   },
 
+  async upsertMonthlyCost(payload: Partial<MonthlyCost>): Promise<MonthlyCost> {
+    if (payload.employee_id && payload.competencia) {
+      const { data: existing } = await supabase
+        .from('people_monthly_costs')
+        .select('id')
+        .eq('employee_id', payload.employee_id)
+        .eq('competencia', payload.competencia)
+        .maybeSingle();
+
+      if (existing?.id) {
+        const { data, error } = await supabase
+          .from('people_monthly_costs')
+          .update(payload)
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
+    }
+
+    return this.insertMonthlyCost(payload);
+  },
+
   async updateMonthlyCost(costId: string, payload: Partial<MonthlyCost>): Promise<void> {
     const { error } = await supabase
       .from('people_monthly_costs')
