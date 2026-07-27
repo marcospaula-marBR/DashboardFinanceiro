@@ -68,6 +68,29 @@ export function DreReportBuilderModal({
 
       // 1. CAPA & CONTEXTO EXECUTIVO
       if (includeCover) {
+        const getLogoUrl = (nomeEmpresa: string) => {
+          const baseUrl = 'https://dashboard-financeiro-mar-brasil.vercel.app/Logos';
+          if (nomeEmpresa.includes('Mar Brasil')) return `${baseUrl}/Mar%20BR%20-%20Chap%C3%A9u.png`;
+          if (nomeEmpresa.includes('DZM')) return `${baseUrl}/DZM.png`;
+          if (nomeEmpresa.includes('Grupo 2') || nomeEmpresa.includes('G2')) return `${baseUrl}/Grupo%202.jpeg`;
+          if (nomeEmpresa.includes('Ybox')) return `${baseUrl}/Ybox.png`;
+          if (nomeEmpresa.includes('Conectius')) return `${baseUrl}/Conectius.png`;
+          if (nomeEmpresa.includes('Solucione')) return `${baseUrl}/Solucione.png`;
+          return `${baseUrl}/Mar-Brasil-sem-fundo-preto.png`;
+        };
+
+        let logosHtml = '';
+        const empresasAtivas = filters?.empresas || [];
+        if (empresasAtivas.length === 0) {
+          logosHtml += `<img align="right" src="${getLogoUrl('Global')}" height="80" style="margin-left: 10px;" />\n\n`;
+        } else {
+          empresasAtivas.forEach(emp => {
+            logosHtml += `<img align="right" src="${getLogoUrl(emp)}" height="80" style="margin-left: 10px;" />\n`;
+          });
+          logosHtml += '\n';
+        }
+
+        md += `${logosHtml}`;
         md += `# ${customTitle || defaultTitle}\n\n`;
         md += `**Relatório Gerencial Executivo C-Level**\n\n`;
         md += `**Data da Emissão:** ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
