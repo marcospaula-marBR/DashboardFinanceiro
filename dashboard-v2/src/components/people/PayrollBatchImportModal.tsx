@@ -275,13 +275,22 @@ export function PayrollBatchImportModal({
       let updatedCostsCount = 0;
 
       for (const record of parsedData.records) {
-        const key = record.cpf ? cleanCPF(record.cpf) : record.name.toLowerCase().trim();
-        const matchInfo = matchedEmployees[key];
-        
-        let employeeId = '';
+        const cleanedCpf = cleanCPF(record.cpf);
+        const recordNameNorm = (record.name || '').toLowerCase().trim();
 
-        if (matchInfo?.id === 'new' && matchInfo.shouldCreate) {
-          // Criar perfil CLT padrão automaticamente
+        // 1. Resolver o ID do colaborador com busca resiliente (CPF ou Nome)
+        let foundEmp = cleanedCpf 
+          ? employees.find(e => cleanCPF(e.document_id || '') === cleanedCpf)
+          : null;
+
+        if (!foundEmp && recordNameNorm) {
+          foundEmp = employees.find(e => (e.name || '').toLowerCase().trim() === recordNameNorm);
+        }
+
+        let employeeId = foundEmp?.id || '';
+
+        // 2. Se não foi localizado, criar ficha cadastral CLT padrão automaticamente
+        if (!employeeId) {
           const basicProfile: Partial<Employee> = {
             name: record.name,
             document_id: record.cpf || undefined,
@@ -308,12 +317,9 @@ export function PayrollBatchImportModal({
             change_date: record.admission_date || new Date(parsedData.competencia).toISOString().split('T')[0],
             observations: `Ficha cadastral CLT criada automaticamente na importação auditada da folha (${parsedData.competencia}).`
           }, isTestMode);
-
-        } else if (matchInfo?.id && matchInfo.id !== 'new') {
-          employeeId = matchInfo.id;
         }
 
-        // Se temos um ID de colaborador associado, upsert no custo histórico
+        // 3. AGORA COM EMPLOYEE_ID 100% GARANTIDO, EXECUTAR UPSERT NO CUSTO HISTÓRICO!
         if (employeeId) {
           const costPayload: Partial<MonthlyCost> = {
             employee_id: employeeId,
@@ -693,6 +699,27 @@ export function PayrollBatchImportModal({
                               value={record.valor_decimo_terceiro}
                               onChange={(e) => handleUpdateRecordField(index, 'valor_decimo_terceiro', parseFloat(e.target.value))}
                               className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-lg p-1.5 outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-emerald-700 uppercase block">Salário Família (R$)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={record.salario_familia}
+                              onChange={(e) => handleUpdateRecordField(index, 'salario_familia', parseFloat(e.target.value))}
+                              className="w-full text-xs font-bold text-emerald-800 bg-emerald-50/50 border border-emerald-200 rounded-lg p-1.5 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-rose-700 uppercase block">Desc. Adiantamento (R$)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={record.valor_adiantamento}
+                              onChange={(e) => handleUpdateRecordField(index, 'valor_adiantamento', parseFloat(e.target.value))}
+                              className="w-full text-xs font-bold text-rose-800 bg-rose-50/50 border border-rose-200 rounded-lg p-1.5 outline-none"
                             />
                           </div>
 
