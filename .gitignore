@@ -34,6 +34,7 @@ backup/
 !vercel.json
 !tsconfig.json
 !package-lock.json
+!dashboard-v2/public/dianna_source.json
 
 # Temporary drive upload folders
 .tmp.driveupload/
