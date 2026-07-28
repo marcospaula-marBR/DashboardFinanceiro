@@ -114,6 +114,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [saveCostError, setSaveCostError] = useState<string | null>(null);
 
   // Estados para verbas adicionais extra-folha customizadas
+  const [verbaDetailModal, setVerbaDetailModal] = useState<{
+    title: string;
+    items: { label: string; total: number; average: number }[];
+    total: number;
+    average: number;
+  } | null>(null);
   const [editingCostVerbasAdicionais, setEditingCostVerbasAdicionais] = useState<{ name: string; value: number }[]>([]);
   const [newVerbaName, setNewVerbaName] = useState('');
   const [newVerbaValue, setNewVerbaValue] = useState(0);
@@ -3402,11 +3408,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       <div>
                                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Salário Base</p>
                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.fixedAverage || 0)}
+                                          {formatCurrency(stats.fixedTotal || 0)}
                                         </p>
                                       </div>
                                       <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Fixo contratual
+                                        Média: {formatCurrency(stats.fixedAverage || 0)}
                                       </p>
                                     </div>
 
@@ -3414,11 +3420,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       <div>
                                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Horas Extras</p>
                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.horaExtraAverage || 0)}
+                                          {formatCurrency(stats.horaExtraTotal || 0)}
                                         </p>
                                       </div>
                                       <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média H. Extra
+                                        Média: {formatCurrency(stats.horaExtraAverage || 0)}
                                       </p>
                                     </div>
 
@@ -3426,11 +3432,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       <div>
                                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Adic. Noturno</p>
                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.adicionalNotAverage || 0)}
+                                          {formatCurrency(stats.adicionalNotTotal || 0)}
                                         </p>
                                       </div>
                                       <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média Adic. Not
+                                        Média: {formatCurrency(stats.adicionalNotAverage || 0)}
                                       </p>
                                     </div>
 
@@ -3438,46 +3444,73 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       <div>
                                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Adiantamento</p>
                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.adiantamentoAverage || 0)}
+                                          {formatCurrency(stats.adiantamentoTotal || 0)}
                                         </p>
                                       </div>
                                       <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média Vale
+                                        Média: {formatCurrency(stats.adiantamentoAverage || 0)}
                                       </p>
                                     </div>
 
-                                    <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                    <div 
+                                      onClick={() => setVerbaDetailModal({
+                                        title: 'Detalhamento de Benefícios',
+                                        items: [
+                                          { label: 'Vale Refeição (VR)', total: stats.vrTotal, average: stats.vrTotal / stats.count },
+                                          { label: 'Vale Transporte (VT)', total: stats.vtTotal, average: stats.vtTotal / stats.count },
+                                          { label: 'Cesta Básica / Aux. Alimentação', total: stats.cestaTotal, average: stats.cestaTotal / stats.count },
+                                          { label: 'Ajuda de Custo / Reembolso', total: stats.ajudaCustoTotal, average: stats.ajudaCustoTotal / stats.count },
+                                        ],
+                                        total: stats.beneficiosTotal,
+                                        average: stats.beneficiosAverage
+                                      })}
+                                      className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 rounded-xl p-3 flex flex-col justify-between shadow-sm cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-all group"
+                                      title="Clique para ver o detalhamento por verbas de benefícios"
+                                    >
                                       <div>
-                                        <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Benefícios</p>
+                                        <div className="flex justify-between items-center">
+                                          <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Benefícios</p>
+                                          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver verbas</span>
+                                        </div>
                                         <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.beneficiosAverage || 0)}
+                                          {formatCurrency(stats.beneficiosTotal || 0)}
                                         </p>
                                       </div>
-                                      <p 
-                                        className="text-[8px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase truncate"
-                                        title={`VR: ${formatCurrency(stats.vrTotal / stats.count)} · VT: ${formatCurrency(stats.vtTotal / stats.count)} · Cesta: ${formatCurrency(stats.cestaTotal / stats.count)} · Reembolsos: ${formatCurrency(stats.ajudaCustoTotal / stats.count)}`}
-                                      >
-                                        VR:{formatCurrency(stats.vrTotal / stats.count)} · VT:{formatCurrency(stats.vtTotal / stats.count)} · Cesta:{formatCurrency(stats.cestaTotal / stats.count)}
+                                      <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-200/50 uppercase truncate">
+                                        Média: {formatCurrency(stats.beneficiosAverage || 0)}
                                       </p>
                                     </div>
 
-                                    <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                    <div 
+                                      onClick={() => setVerbaDetailModal({
+                                        title: 'Detalhamento de 13º Salário e Férias',
+                                        items: [
+                                          { label: '13º Salário (Gratificação Natalina)', total: stats.decimoTerceiroTotal, average: stats.decimoTerceiroTotal / stats.count },
+                                          { label: 'Férias + 1/3 Constitucional', total: stats.feriasTotal, average: stats.feriasTotal / stats.count },
+                                          { label: 'Rescisão Contratual', total: stats.rescisaoTotal, average: stats.rescisaoTotal / stats.count },
+                                        ],
+                                        total: stats.decimoTerceiroTotal + stats.feriasTotal + stats.rescisaoTotal,
+                                        average: (stats.decimoTerceiroTotal + stats.feriasTotal + stats.rescisaoTotal) / stats.count
+                                      })}
+                                      className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 rounded-xl p-3 flex flex-col justify-between shadow-sm cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-all group"
+                                      title="Clique para ver o detalhamento de 13º e Férias"
+                                    >
                                       <div>
-                                        <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">13º & Férias</p>
+                                        <div className="flex justify-between items-center">
+                                          <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">13º & Férias</p>
+                                          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver verbas</span>
+                                        </div>
                                         <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
-                                          {formatCurrency((stats.decimoTerceiroTotal + stats.feriasTotal) / stats.count || 0)}
+                                          {formatCurrency((stats.decimoTerceiroTotal || 0) + (stats.feriasTotal || 0))}
                                         </p>
                                       </div>
-                                      <p 
-                                        className="text-[8px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase truncate"
-                                        title={`13º Salário: ${formatCurrency(stats.decimoTerceiroTotal / stats.count)} · Férias: ${formatCurrency(stats.feriasTotal / stats.count)}`}
-                                      >
-                                        13º:{formatCurrency(stats.decimoTerceiroTotal / stats.count)} · Férias:{formatCurrency(stats.feriasTotal / stats.count)}
+                                      <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-200/50 uppercase truncate">
+                                        Média: {formatCurrency(((stats.decimoTerceiroTotal || 0) + (stats.feriasTotal || 0)) / stats.count || 0)}
                                       </p>
                                     </div>
                                   </div>
                                 </div>
-                              ) : (
+                               ) : (
                                 <div>
                                   <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Ganhos Recebidos</h5>
                                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -3571,18 +3604,32 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           Média: {formatCurrency(stats.consignadoAverage || 0)}
                                         </p>
                                       </div>
-                                      <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                      <div 
+                                        onClick={() => setVerbaDetailModal({
+                                          title: 'Detalhamento de Descontos e Deduções',
+                                          items: [
+                                            { label: 'INSS (Previdência Social)', total: stats.inssEmpregadoTotal || 0, average: stats.inssEmpregadoAverage || 0 },
+                                            { label: 'IRRF (Imposto de Renda)', total: stats.irrfEmpregadoTotal || 0, average: stats.irrfEmpregadoAverage || 0 },
+                                            { label: 'Pensão Alimentícia', total: stats.pensaoAlimenticiaTotal || 0, average: stats.pensaoAlimenticiaAverage || 0 },
+                                            { label: 'Outros Descontos Diversos', total: Math.max(0, (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0) - (stats.pensaoAlimenticiaTotal || 0) - (stats.inssEmpregadoTotal || 0) - (stats.irrfEmpregadoTotal || 0)), average: Math.max(0, (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0) - (stats.pensaoAlimenticiaTotal || 0) - (stats.inssEmpregadoTotal || 0) - (stats.irrfEmpregadoTotal || 0)) / stats.count },
+                                          ],
+                                          total: (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0),
+                                          average: ((stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0)) / stats.count
+                                        })}
+                                        className="bg-red-50/40 dark:bg-red-950/20 border border-red-200/80 dark:border-red-900/40 rounded-xl p-3 shadow-sm flex flex-col justify-between cursor-pointer hover:border-red-400 hover:bg-red-50/80 dark:hover:bg-red-950/40 transition-all group"
+                                        title="Clique para ver o detalhamento dos descontos de INSS, IRRF, Pensão e outros"
+                                      >
                                         <div>
-                                          <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Outros Descontos</p>
+                                          <div className="flex justify-between items-center">
+                                            <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Outros Descontos</p>
+                                            <span className="text-[8px] font-black text-red-600 bg-red-100 dark:bg-red-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver verbas</span>
+                                          </div>
                                           <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
                                             {formatCurrency(stats.descontosTotal - stats.faltasTotal - stats.consignadoTotal || 0)}
                                           </p>
                                         </div>
-                                        <p 
-                                          className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase truncate"
-                                          title={`INSS/IRRF: ${formatCurrency(stats.descontosTotal - stats.faltasTotal - stats.consignadoTotal || 0)}`}
-                                        >
-                                          INSS + IRRF + Outros
+                                        <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase truncate">
+                                          Média: {formatCurrency(((stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0)) / stats.count || 0)}
                                         </p>
                                       </div>
                                     </div>
@@ -5407,6 +5454,67 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
               >
                 {isSavingHistoryItem && <Loader2 size={12} className="animate-spin" />}
                 Salvar Evento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalhamento por Verbas */}
+      {verbaDetailModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
+              <h3 className="text-sm font-black uppercase tracking-wide flex items-center gap-2">
+                <Coins size={18} className="text-emerald-400" />
+                {verbaDetailModal.title}
+              </h3>
+              <button 
+                onClick={() => setVerbaDetailModal(null)} 
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Composição das Verbas Mês a Mês</p>
+              
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
+                {verbaDetailModal.items.map((item, idx) => (
+                  <div key={idx} className="p-3.5 flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{item.label}</span>
+                    <div className="text-right">
+                      <span className="font-black text-slate-900 dark:text-white block tabular-nums">
+                        {formatCurrency(item.total)}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium block">
+                        Média: {formatCurrency(item.average)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-2xl p-4 flex justify-between items-center mt-4 shadow-sm">
+                <div>
+                  <span className="text-xs font-black uppercase text-emerald-800 dark:text-emerald-400 block">Total da Categoria</span>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 block">
+                    Média Mensal: {formatCurrency(verbaDetailModal.average)}
+                  </span>
+                </div>
+                <span className="text-base font-black text-emerald-900 dark:text-emerald-200 tabular-nums">
+                  {formatCurrency(verbaDetailModal.total)}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 text-right">
+              <button 
+                onClick={() => setVerbaDetailModal(null)} 
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold uppercase transition-colors"
+              >
+                Fechar
               </button>
             </div>
           </div>

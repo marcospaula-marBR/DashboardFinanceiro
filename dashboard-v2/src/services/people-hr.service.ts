@@ -182,6 +182,9 @@ export const PeopleHRService = {
     const descontosTotal = costs.reduce((sum, c) => sum + (c.valor_descontos || 0), 0);
     const faltasTotal = costs.reduce((sum, c) => sum + (c.valor_faltas || 0), 0);
     const diasFaltasTotal = costs.reduce((sum, c) => sum + (c.dias_faltas || 0), 0);
+    const pensaoAlimenticiaTotal = costs.reduce((sum, c) => sum + (c.valor_pensao_alimenticia || 0), 0);
+    const inssEmpregadoTotal = costs.reduce((sum, c) => sum + (c.inss_empregado || 0), 0);
+    const irrfEmpregadoTotal = costs.reduce((sum, c) => sum + (c.irrf_empregado || 0), 0);
     const consignadoTotal = costs.reduce((sum, c) => sum + (c.valor_consignado || 0), 0);
     const bancoHorasTotal = costs.reduce((sum, c) => sum + (c.banco_horas || 0), 0);
 
@@ -224,6 +227,9 @@ export const PeopleHRService = {
       faltasTotal,
       diasFaltasTotal,
       consignadoTotal,
+      pensaoAlimenticiaTotal,
+      inssEmpregadoTotal,
+      irrfEmpregadoTotal,
       bancoHorasTotal,
       // averages:
       fixedAverage: fixedTotal / count,
@@ -238,6 +244,9 @@ export const PeopleHRService = {
       faltasAverage: faltasTotal / count,
       diasFaltasAverage: diasFaltasTotal / count,
       consignadoAverage: consignadoTotal / count,
+      pensaoAlimenticiaAverage: pensaoAlimenticiaTotal / count,
+      inssEmpregadoAverage: inssEmpregadoTotal / count,
+      irrfEmpregadoAverage: irrfEmpregadoTotal / count,
       bancoHorasAverage: bancoHorasTotal / count,
       totalAverage: totalDesembolsado / count,
       history: costs.map(c => c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))

@@ -242,6 +242,8 @@ export interface MonthlyCost {
   valor_faltas?: number;
   dias_faltas?: number;
   valor_consignado?: number;
+  valor_pensao_alimenticia?: number;
+  is_decimo_terceiro?: boolean;
   banco_horas?: number;
   valor_incentivos?: number;
   valor_glosa_base?: number;

@@ -65,7 +65,9 @@ Instruções de Extração:
    - **Informativo FGTS da Empresa (CRUCIAL!)**: Extraia o valor do FGTS mensal pago pela empresa no campo "valor_fgts" (localizado nas linhas informativas, ex: 'Valor FGTS: 147,98').
    - **Encargos Descontados**: Extraia o INSS descontado ("inss_empregado", rubrica 998 I.N.S.S.) e o IRRF descontado ("irrf_empregado").
    - **REGRA DE EXCLUSÃO DE BASES (CRUCIAL!)**: IGNORE E NÃO EXTRAIA valores de bases informativas (como 'Base FGTS', 'Base INSS', 'Base IRRF', 'Base Salário Família' ou rubricas de base). Elas NÃO são proventos nem descontos e NUNCA devem ser computadas no total de proventos, descontos ou custo real.
-   - Empréstimo Consignado: Se houver descontos com termos como "DESC. EMP. CRED. TRAB N..." ou "Consignado", some os respectivos valores e adicione no campo "valor_consignado".
+   - **Empréstimo Consignado**: Se houver descontos com termos como "DESC. EMP. CRED. TRAB N..." ou "Consignado", some os respectivos valores e adicione no campo "valor_consignado".
+   - **Pensão Alimentícia (CRUCIAL!)**: Se houver descontos com termos como "PENSÃO ALIMENTÍCIA", "PENSAO ALIMENTICIA", "DESC. PENSAO" ou similares, capture o valor e adicione no campo "valor_pensao_alimenticia".
+   - **Folha de 13º Salário**: Se o documento for referente a 13º Salário (1ª Parcela, 2ª Parcela ou Integral), capture os proventos do 13º no campo "valor_decimo_terceiro" e marque "is_decimo_terceiro": true.
    - Faltas/Atrasos: Some todos os descontos de faltas ou faltas DSR (ex: "DIAS FALTAS", "DIAS FALTAS DSR") e coloque no campo "valor_faltas". Extraia também o quantitativo total de dias de falta acumulados no campo "dias_faltas".
    - Banco de Horas: Se houver desconto de banco de horas (ex: "Desconto Banco de Horas 15:22"), converta as horas/minutos para formato decimal e coloque no campo "banco_horas".
    - Demais proventos e descontos mapeados nos respectivos campos (hora extra, adicional noturno, férias, décimo terceiro, VR, VT, cesta básica, bônus, comissão, ajuda de custo).
@@ -91,10 +93,12 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
       "valor_ferias": 0.00,
       "valor_rescisao": 0.00,
       "valor_decimo_terceiro": 0.00,
+      "is_decimo_terceiro": false,
       "valor_descontos": 0.00,
       "valor_faltas": 0.00,
       "dias_faltas": 0.00,
       "valor_consignado": 0.00,
+      "valor_pensao_alimenticia": 0.00,
       "banco_horas": 0.00,
       "valor_incentivos": 0.00,
       "valor_bonus": 0.00,

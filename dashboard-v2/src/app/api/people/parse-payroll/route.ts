@@ -74,6 +74,8 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo se não encontr
   "valor_faltas": Valor descontado especificamente por faltas ou atrasos no mês se houver (apenas número decimal),
   "dias_faltas": Quantidade de dias ou fração de dia das faltas/atrasos do mês (apenas número decimal. Ex: se no recibo constar 'Dias Faltas 1.50' ou similar, retorne 1.50; se não houver faltas retorne 0),
   "valor_consignado": Valor descontado em folha referente a Empréstimo Consignado de bancos ou FGTS (ex: 'Empréstimo Consignado', 'Desc. Consignado', etc. - apenas número decimal),
+  "valor_pensao_alimenticia": Valor descontado em folha referente a Pensão Alimentícia se houver (ex: 'Pensão Alimentícia', 'Desc. Pensão' - apenas número decimal),
+  "is_decimo_terceiro": true se este recibo/folha for referente a 13º Salário (1ª Parcela, 2ª Parcela ou Integral), caso contrário false,
   "banco_horas": Saldo de horas extras acumuladas no banco de horas se mencionado no rodapé/detalhe do holerite (ex: se mencionar '+15:30' retorne 15.5; se for '-5:00' retorne -5; retorne apenas o número decimal correspondente às horas totais),
   "valor_incentivos": Premiações, PLR, quebra de caixa ou gratificações fixas e garantidas se houver (apenas número decimal),
   "valor_bonus": Bônus variável ou prêmio por desempenho se houver (apenas número decimal),

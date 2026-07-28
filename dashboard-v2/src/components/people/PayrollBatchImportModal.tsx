@@ -36,6 +36,8 @@ export interface ExtractedRecord {
   valor_faltas: number;
   dias_faltas: number;
   valor_consignado: number;
+  valor_pensao_alimenticia?: number;
+  is_decimo_terceiro?: boolean;
   banco_horas: number;
   valor_incentivos: number;
   valor_bonus: number;
@@ -265,6 +267,14 @@ export function PayrollBatchImportModal({
   const handleSaveBatch = async () => {
     if (!parsedData) return;
 
+    const compLabel = new Date(parsedData.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
+    const confirmProceed = window.confirm(`AUDITORIA DE FOLHA: Você está prestes a homologar o lançamento em lote da competência ${compLabel} para ${parsedData.records.length} colaboradores.\n\nCaso já existam lançamentos cadastrados para esta competência, os dados existentes serão atualizados e substituídos. Deseja prosseguir com a gravação?`);
+    if (!confirmProceed) {
+      setIsProcessing(false);
+      setStep('review');
+      return;
+    }
+
     setIsProcessing(true);
     setStep('saving');
     setError(null);
@@ -363,7 +373,8 @@ export function PayrollBatchImportModal({
             valor_descontos: record.valor_descontos || 0,
             valor_faltas: record.valor_faltas || 0,
             dias_faltas: record.dias_faltas || 0,
-            valor_consignado: record.valor_consignado || 0,
+            valor_pensao_alimenticia: record.valor_pensao_alimenticia || 0,
+            is_decimo_terceiro: record.is_decimo_terceiro || false,
             banco_horas: record.banco_horas || 0,
             observacao: record.observacao || `Auditado e homologado via Folha de Pagamento em ${new Date(parsedData.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`
           };
