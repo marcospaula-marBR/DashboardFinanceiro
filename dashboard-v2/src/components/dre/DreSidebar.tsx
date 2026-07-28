@@ -23,6 +23,7 @@ interface MultiSelectProps {
   selected: string[];
   onToggle: (val: string) => void;
   onClear: () => void;
+  onSelectAll?: () => void;
   searchable?: boolean;
   placeholder?: string;
   compact?: boolean;
@@ -30,7 +31,7 @@ interface MultiSelectProps {
 }
 
 function MultiSelectDropdown({
-  label, icon, options, selected, onToggle, onClear,
+  label, icon, options, selected, onToggle, onClear, onSelectAll,
   searchable = false, placeholder = 'Buscar...', compact = false, fullWidth = false
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
@@ -49,7 +50,7 @@ function MultiSelectDropdown({
     ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
     : options;
 
-  const displayLabel = selected.length === 0
+  const displayLabel = selected.length === 0 || (options.length > 0 && selected.length === options.length)
     ? 'Todos'
     : selected.length === 1
     ? selected[0]
@@ -75,13 +76,28 @@ function MultiSelectDropdown({
       {open && (
         <div className="absolute top-full left-0 mt-1 z-50 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl w-full min-w-[240px] max-h-[320px] overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-700 flex-shrink-0">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-700 flex-shrink-0 bg-slate-900/50">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
-            {selected.length > 0 && (
-              <button type="button" onClick={onClear} className="text-[10px] text-amber-500 hover:text-amber-400 font-semibold cursor-pointer">
-                Limpar ({selected.length})
+            <div className="flex items-center gap-2.5">
+              {onSelectAll && (
+                <button
+                  type="button"
+                  onClick={onSelectAll}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer transition-colors"
+                >
+                  Todos
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClear}
+                className={`text-[10px] font-semibold cursor-pointer transition-colors ${
+                  selected.length > 0 ? 'text-amber-500 hover:text-amber-400' : 'text-slate-500 hover:text-slate-400'
+                }`}
+              >
+                Limpar{selected.length > 0 ? ` (${selected.length})` : ''}
               </button>
-            )}
+            </div>
           </div>
           {/* Search */}
           {searchable && (
@@ -219,6 +235,13 @@ export function DreSidebar({
     });
   };
 
+  const handleSelectAllYears = () => {
+    onFilterChange({
+      ...filters,
+      periodos: [...availablePeriodos]
+    });
+  };
+
   // 3. Filter raw data based on selected Empresa
   const rowsFilteredByEmpresa = useMemo(() => {
     if (!filters.empresas || filters.empresas.length === 0) return rawData;
@@ -319,12 +342,13 @@ export function DreSidebar({
     });
   };
 
-  const toggleAll = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, availableItems: string[]) => {
+  const selectAllGroup = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, availableItems: string[]) => {
     if (availableItems.length === 0) return;
-    const isAllSelected = (filters[key] || []).length === availableItems.length;
+    const current = filters[key] || [];
+    const merged = Array.from(new Set([...current, ...availableItems]));
     onFilterChange({
       ...filters,
-      [key]: isAllSelected ? [] : [...availableItems]
+      [key]: merged
     });
   };
 
@@ -475,6 +499,7 @@ export function DreSidebar({
                 selected={filters.empresas}
                 onToggle={(v) => toggleFilter('empresas', v)}
                 onClear={() => clearGroup('empresas')}
+                onSelectAll={() => selectAllGroup('empresas', availableEmpresas)}
                 searchable={availableEmpresas.length > 5}
                 placeholder="Buscar empresa..."
                 fullWidth
@@ -496,6 +521,7 @@ export function DreSidebar({
                   selected={selectedYears}
                   onToggle={handleToggleYear}
                   onClear={handleClearYears}
+                  onSelectAll={handleSelectAllYears}
                   fullWidth
                 />
               </div>
@@ -509,6 +535,7 @@ export function DreSidebar({
                   selected={filters.periodos}
                   onToggle={(v) => toggleFilter('periodos', v)}
                   onClear={() => clearGroup('periodos')}
+                  onSelectAll={() => selectAllGroup('periodos', visiblePeriodos)}
                   fullWidth
                 />
               </div>
@@ -523,6 +550,7 @@ export function DreSidebar({
                 selected={filters.departamentos}
                 onToggle={(v) => toggleFilter('departamentos', v)}
                 onClear={() => clearGroup('departamentos')}
+                onSelectAll={() => selectAllGroup('departamentos', availableDepartamentos)}
                 searchable={availableDepartamentos.length > 5}
                 placeholder="Buscar departamento..."
                 fullWidth
@@ -538,6 +566,7 @@ export function DreSidebar({
                 selected={filters.contasDre}
                 onToggle={(v) => toggleFilter('contasDre', v)}
                 onClear={() => clearGroup('contasDre')}
+                onSelectAll={() => selectAllGroup('contasDre', availableContasDre)}
                 searchable={availableContasDre.length > 5}
                 placeholder="Buscar conta..."
                 fullWidth
@@ -553,6 +582,7 @@ export function DreSidebar({
                 selected={filters.projetos}
                 onToggle={(v) => toggleFilter('projetos', v)}
                 onClear={() => clearGroup('projetos')}
+                onSelectAll={() => selectAllGroup('projetos', availableProjetos)}
                 searchable={availableProjetos.length > 5}
                 placeholder="Buscar projeto..."
                 fullWidth
@@ -568,6 +598,7 @@ export function DreSidebar({
                 selected={filters.categorias}
                 onToggle={(v) => toggleFilter('categorias', v)}
                 onClear={() => clearGroup('categorias')}
+                onSelectAll={() => selectAllGroup('categorias', availableCategorias)}
                 searchable={availableCategorias.length > 5}
                 placeholder="Buscar categoria..."
                 fullWidth

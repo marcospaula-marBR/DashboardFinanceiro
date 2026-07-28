@@ -74,13 +74,14 @@ interface MultiSelectProps {
   selected: string[];
   onToggle: (val: string) => void;
   onClear: () => void;
+  onSelectAll?: () => void;
   searchable?: boolean;
   placeholder?: string;
   compact?: boolean;
 }
 
 function MultiSelectDropdown({
-  label, icon, options, selected, onToggle, onClear,
+  label, icon, options, selected, onToggle, onClear, onSelectAll,
   searchable = false, placeholder = 'Buscar...', compact = false
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
@@ -99,7 +100,7 @@ function MultiSelectDropdown({
     ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
     : options;
 
-  const displayLabel = selected.length === 0
+  const displayLabel = selected.length === 0 || (options.length > 0 && selected.length === options.length)
     ? 'Todos'
     : selected.length === 1
     ? selected[0]
@@ -122,13 +123,28 @@ function MultiSelectDropdown({
       {open && (
         <div className="absolute top-full left-0 mt-1 z-50 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl min-w-[200px] max-w-[280px] overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700 bg-slate-900/40">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
-            {selected.length > 0 && (
-              <button type="button" onClick={onClear} className="text-[10px] text-amber-500 hover:text-amber-400 font-semibold">
-                Limpar
+            <div className="flex items-center gap-2">
+              {onSelectAll && (
+                <button
+                  type="button"
+                  onClick={onSelectAll}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer transition-colors"
+                >
+                  Todos
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClear}
+                className={`text-[10px] font-semibold cursor-pointer transition-colors ${
+                  selected.length > 0 ? 'text-amber-500 hover:text-amber-400' : 'text-slate-500 hover:text-slate-400'
+                }`}
+              >
+                Limpar{selected.length > 0 ? ` (${selected.length})` : ''}
               </button>
-            )}
+            </div>
           </div>
           {/* Search */}
           {searchable && (
@@ -730,6 +746,7 @@ export function DreManualEntryModal({
                   onToggle={v => setFilterEmpresas(prev =>
                     prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]
                   )}
+                  onSelectAll={() => setFilterEmpresas([...empresasNaTabela])}
                   onClear={() => setFilterEmpresas([])}
                   compact
                 />
@@ -758,6 +775,7 @@ export function DreManualEntryModal({
                     onToggle={v => setFilterMeses(prev =>
                       prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]
                     )}
+                    onSelectAll={() => setFilterMeses([...mesesDoAno])}
                     onClear={() => setFilterMeses([])}
                     compact
                   />
@@ -772,6 +790,7 @@ export function DreManualEntryModal({
                   onToggle={v => setFilterCategorias(prev =>
                     prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]
                   )}
+                  onSelectAll={() => setFilterCategorias([...categoriasNaTabela])}
                   onClear={() => setFilterCategorias([])}
                   searchable
                   placeholder="Buscar categoria..."

@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.03";
-export const VERSION_DATE = "2026-07-27";
+export const APP_VERSION = "v.02.53.04";
+export const VERSION_DATE = "2026-07-28";
 export const VERSION_CHANGELOG = [
+  "v.02.53.04 - Feat/DRE: Adicionada a opção 'Todos' ao lado do botão 'Limpar' em todas as opções de filtros dinâmicos da DRE (DreSidebar.tsx e DreManualEntryModal.tsx), permitindo a seleção massiva ou individual de opções (Empresas, Anos, Meses, Departamentos, Contas DRE, Projetos e Categorias) com um clique e atualizando automaticamente o rótulo da seleção.",
   "v.02.53.03 - Fix/Feat: Adicionada Barra de Progresso Real-time com porcentagem (0-100%) e identificador do colaborador em processamento durante a gravação da folha de pagamento em PayrollBatchImportModal.tsx. Implementada a função sanitizadora sanitizeMonthlyCostPayload em people-hr.service.ts, que empacota dinamicamente verbas estendidas (como FGTS e encargos) dentro de verbas_adicionais em JSONB, eliminando qualquer erro de esquema PostgREST no Supabase e garantindo a gravação de 100% dos registros.",
   "v.02.53.02 - Fix/Feat: Refinada a extração por IA (/api/people/parse-payroll-batch) para capturar com máxima precisão o Desconto de Adiantamento Salarial (rubrica 981) e Salário Família (rubrica 995). Corrigido o fluxo do botão 'Aprovar & Alimentar Custo Histórico' em PayrollBatchImportModal.tsx com resolução resiliente de colaboradores por CPF/Nome e criação de cadastro CLT garantia para salvar 100% dos custos na tabela sem falhar.",
   "v.02.53.01 - Fix/React: Corrigido o erro fatal de renderização no Vercel (React Rules of Hooks) no PayrollBatchImportModal.tsx ao clicar no botão 'Importar Folha'. Reorganizada a memoização auditTotals para o topo incondicional do componente antes da instrução de retorno antecipado (if (!isOpen) return null).",
