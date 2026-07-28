@@ -154,23 +154,22 @@ export function PeopleMobileCard({
           </span>
         </div>
 
-        {/* Linha inferior (Embaixo do Status): Logotipo da Empresa do Vínculo */}
+        {/* Linha inferior (Embaixo do Status): Apenas o Logotipo da Empresa do Vínculo */}
         {employee.company && (
-          <span 
+          <div 
             onClick={(e) => {
               e.stopPropagation();
               onFilterSelect?.('company', employee.company);
             }}
-            className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100/90 hover:bg-slate-200/90 border border-slate-200/80 rounded-lg cursor-pointer transition-all shrink-0 shadow-2xs hover:scale-105"
+            className="inline-flex items-center justify-center px-1.5 py-0.5 bg-white/90 hover:bg-slate-50 border border-slate-200/80 rounded-lg cursor-pointer transition-all shrink-0 shadow-2xs hover:scale-105"
             title={`Empresa do Vínculo: ${employee.company} (Clique para filtrar)`}
           >
             <img 
               src={getCompanyLogoUrl(employee.company)} 
               alt={employee.company} 
-              className="h-3.5 max-w-[45px] object-contain shrink-0" 
+              className="h-4 max-w-[55px] object-contain shrink-0" 
             />
-            <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">{employee.company}</span>
-          </span>
+          </div>
         )}
       </div>
 
@@ -199,7 +198,7 @@ export function PeopleMobileCard({
           <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
         </div>
 
-        <div className="flex-1 min-w-0 pr-16">
+        <div className="flex-1 min-w-0 pr-24">
           <div className="flex items-center gap-1">
             <p 
               onClick={(e) => {
