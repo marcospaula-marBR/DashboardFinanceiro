@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, Download, FileText, CheckSquare, Square, Printer, FileSpreadsheet, User, Building2, MapPin, CreditCard, DollarSign, History, Calculator, HelpCircle } from 'lucide-react';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel } from '@/types/loans';
 import { formatCurrency } from '@/services/loans.service';
@@ -42,6 +42,62 @@ export function ProfileExportModal({
   const [includeTrajectory, setIncludeTrajectory] = useState(true);
   const [includeCostsHistory, setIncludeCostsHistory] = useState(true);
 
+  // Totalizadores acumulados do histórico de custos por verbas
+  const costTotals = useMemo(() => {
+    if (!costs || costs.length === 0) return null;
+    return costs.reduce((acc, c) => {
+      const fixed = c.valor_fixo || 0;
+      const bonus = c.valor_bonus || 0;
+      const comissao = c.valor_comissao || 0;
+      const horaExtra = c.valor_hora_extra || 0;
+      const adicionalNot = c.valor_adicional_not || 0;
+      const vr = c.valor_vr || 0;
+      const vt = c.valor_vt || 0;
+      const cesta = c.valor_cesta || 0;
+      const ajudaCusto = c.valor_ajuda_custo || 0;
+      const incentivos = c.valor_incentivos || 0;
+      const adiantamento = c.valor_adiantamento || 0;
+      const decimo = c.valor_decimo_terceiro || 0;
+      const ferias = c.valor_ferias || 0;
+      const rescisao = c.valor_rescisao || 0;
+      const descontos = c.valor_descontos || 0;
+      const fgts = c.valor_fgts || 0;
+      const inss = c.inss_empregado || 0;
+      const irrf = c.irrf_empregado || 0;
+      const liquido = c.valor_liquido || 0;
+      const isCLT = c.vinculo_tipo === 'CLT';
+      const realCost = liquido + (isCLT ? adiantamento : 0);
+
+      acc.fixed += fixed;
+      acc.bonus += bonus;
+      acc.comissao += comissao;
+      acc.horaExtra += horaExtra;
+      acc.adicionalNot += adicionalNot;
+      acc.vr += vr;
+      acc.vt += vt;
+      acc.cesta += cesta;
+      acc.ajudaCusto += ajudaCusto;
+      acc.beneficios += (vr + vt + cesta + ajudaCusto);
+      acc.incentivos += incentivos;
+      acc.adiantamento += adiantamento;
+      acc.decimo += decimo;
+      acc.ferias += ferias;
+      acc.rescisao += rescisao;
+      acc.descontos += descontos;
+      acc.fgts += fgts;
+      acc.inss += inss;
+      acc.irrf += irrf;
+      acc.liquido += liquido;
+      acc.realCost += realCost;
+      return acc;
+    }, {
+      fixed: 0, bonus: 0, comissao: 0, horaExtra: 0, adicionalNot: 0,
+      vr: 0, vt: 0, cesta: 0, ajudaCusto: 0, beneficios: 0, incentivos: 0,
+      adiantamento: 0, decimo: 0, ferias: 0, rescisao: 0, descontos: 0,
+      fgts: 0, inss: 0, irrf: 0, liquido: 0, realCost: 0
+    });
+  }, [costs]);
+
   if (!isOpen) return null;
 
   const employeeName = profile.name || 'Colaborador';
@@ -61,6 +117,22 @@ export function ProfileExportModal({
 
   // Helper para rótulo de remuneração
   const remLabel = getRemunerationLabel(profile.linkType || 'CLT');
+
+  // Mapeador de logotipo da empresa do vínculo (disponíveis na pasta /Logos em public)
+  const getCompanyLogoUrl = (company?: string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const c = (company || '').toLowerCase();
+    if (c.includes('dzm')) return origin + '/Logos/DZM.png';
+    if (c.includes('grupo') || c.includes('g2')) return origin + '/Logos/Grupo%202.jpeg';
+    if (c.includes('ybox')) return origin + '/Logos/Ybox.png';
+    if (c.includes('conectius')) return origin + '/Logos/Conectius.png';
+    if (c.includes('solucione')) return origin + '/Logos/Solucione.png';
+    if (c.includes('brisinha')) return origin + '/Logos/BrisinhAI.jpeg';
+    return origin + '/Logos/Mar-Brasil-sem-fundo-preto.png';
+  };
+
+  const photoUrl = profile.avatar || (profile as any).photo_url || (profile.metadata as any)?.photo_url || null;
+  const companyLogoUrl = getCompanyLogoUrl(profile.company);
 
   // GERADOR CSV ESTRUTURADO
   const handleExportCSV = () => {
@@ -147,10 +219,26 @@ export function ProfileExportModal({
     }
 
     if (includeCostsHistory && costs.length > 0) {
-      csv += `"7. HISTÓRICO DE CUSTOS MENSAIS"\n`;
-      csv += `Período Competência;Tipo Vínculo;Valor Fixo;Bônus;Comissão;Liquido\n`;
+      csv += `"7. HISTÓRICO DE CUSTOS MENSAIS E TOTALIZADORES POR VERBA"\n`;
+      if (costTotals) {
+        csv += `"TOTALIZADORES ACUMULADOS POR VERBA"\n`;
+        csv += `Verba;Total Acumulado (R$)\n`;
+        csv += `Salário Fixo;${costTotals.fixed.toFixed(2).replace('.', ',')}\n`;
+        csv += `Bônus;${costTotals.bonus.toFixed(2).replace('.', ',')}\n`;
+        csv += `Comissão;${costTotals.comissao.toFixed(2).replace('.', ',')}\n`;
+        csv += `Horas Extras;${costTotals.horaExtra.toFixed(2).replace('.', ',')}\n`;
+        csv += `Benefícios (VR/VT/Cesta/Ajuda);${costTotals.beneficios.toFixed(2).replace('.', ',')}\n`;
+        csv += `FGTS Empresa;${costTotals.fgts.toFixed(2).replace('.', ',')}\n`;
+        csv += `13º Salário e Férias;${(costTotals.decimo + costTotals.ferias).toFixed(2).replace('.', ',')}\n`;
+        csv += `Descontos Folha;${costTotals.descontos.toFixed(2).replace('.', ',')}\n`;
+        csv += `TOTAL MENSAL DESEMBOLSADO;${costTotals.realCost.toFixed(2).replace('.', ',')}\n\n`;
+      }
+      csv += `DETALHAMENTO MENSAL DE CUSTOS\n`;
+      csv += `Período Competência;Tipo Vínculo;Valor Fixo;Bônus;Comissão;FGTS;Custo Real Desembolsado\n`;
       costs.forEach(c => {
-        csv += `${sanitize(c.competencia)};${sanitize(c.vinculo_tipo)};${(c.valor_fixo || 0).toFixed(2).replace('.', ',')};${(c.valor_bonus || 0).toFixed(2).replace('.', ',')};${(c.valor_comissao || 0).toFixed(2).replace('.', ',')};${(c.valor_liquido || 0).toFixed(2).replace('.', ',')}\n`;
+        const isCLT = c.vinculo_tipo === 'CLT';
+        const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+        csv += `${sanitize(c.competencia)};${sanitize(c.vinculo_tipo)};${(c.valor_fixo || 0).toFixed(2).replace('.', ',')};${(c.valor_bonus || 0).toFixed(2).replace('.', ',')};${(c.valor_comissao || 0).toFixed(2).replace('.', ',')};${(c.valor_fgts || 0).toFixed(2).replace('.', ',')};${cReal.toFixed(2).replace('.', ',')}\n`;
       });
       csv += `\n`;
     }
@@ -200,12 +288,21 @@ export function ProfileExportModal({
       </head>
       <body>
         <div class="header">
-          <div>
-            <h1>${employeeName}</h1>
-            <p>Ficha Cadastral Executiva do Colaborador • ${profile.job_role || 'Função não informada'}</p>
+          <div style="display: flex; align-items: center; gap: 15px;">
+            ${photoUrl ? `<img src="${photoUrl}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2.5px solid #f59e0b; box-shadow: 0 2px 6px rgba(0,0,0,0.15);" />` : ''}
+            <div>
+              <h1 style="font-size: 22px; margin: 0; color: #0f172a; font-weight: 800;">${employeeName}</h1>
+              <p style="margin: 3px 0 0 0; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                Ficha Cadastral Executiva • ${profile.job_role || 'Função não informada'}
+              </p>
+              <p style="margin: 2px 0 0 0; color: #334155; font-size: 11px; font-weight: 600;">
+                Empresa: <strong style="color: #b45309;">${profile.company || 'MarBR'}</strong> &nbsp;|&nbsp; Vínculo: <strong>${profile.linkType || 'CLT'}</strong>
+              </p>
+            </div>
           </div>
-          <div style="text-align: right;">
-            <p style="font-size: 10px; color: #94a3b8;">Emitido em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+          <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 6px;">
+            ${companyLogoUrl ? `<img src="${companyLogoUrl}" style="max-height: 48px; max-width: 170px; object-fit: contain;" />` : ''}
+            <p style="font-size: 10px; color: #94a3b8; margin: 0;">Emitido em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
           </div>
         </div>
     `;
@@ -333,27 +430,101 @@ export function ProfileExportModal({
       `;
     }
 
-    // 7. HISTÓRICO DE CUSTOS MENSAIS
+    // 7. HISTÓRICO DE CUSTOS MENSAIS E TOTALIZADORES
     if (includeCostsHistory && costs.length > 0) {
       html += `
         <div class="section">
-          <div class="section-title">7. Histórico de Custos Mensais</div>
+          <div class="section-title">7. Histórico de Custos Mensais e Totalizadores por Verba</div>
+          
+          ${costTotals ? `
+            <!-- Quadro de Totalizadores por Verbas Recebidas -->
+            <div style="margin-bottom: 18px; background: #fffdf5; border: 1.5px solid #fef3c7; padding: 14px; border-radius: 8px;">
+              <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #92400e; margin-bottom: 10px; border-bottom: 1px solid #fde68a; padding-bottom: 4px;">
+                Totalizadores Acumulados de Verbas Recebidas do Custo Histórico
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label">Total Salário Fixo</span>
+                  <span class="field-value">${formatCurrency(costTotals.fixed)}</span>
+                </div>
+                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label">Total Bônus</span>
+                  <span class="field-value">${formatCurrency(costTotals.bonus)}</span>
+                </div>
+                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label">Total Comissões</span>
+                  <span class="field-value">${formatCurrency(costTotals.comissao)}</span>
+                </div>
+                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label">Total Horas Extras</span>
+                  <span class="field-value">${formatCurrency(costTotals.horaExtra)}</span>
+                </div>
+                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label">Total Benefícios (VR/VT/Cesta)</span>
+                  <span class="field-value">${formatCurrency(costTotals.beneficios)}</span>
+                </div>
+                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label">Total FGTS Empresa</span>
+                  <span class="field-value">${formatCurrency(costTotals.fgts)}</span>
+                </div>
+                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label">Total 13º & Férias</span>
+                  <span class="field-value">${formatCurrency(costTotals.decimo + costTotals.ferias)}</span>
+                </div>
+                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #ef4444; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label">Total Descontos Folha</span>
+                  <span class="field-value" style="color: #dc2626;">${formatCurrency(costTotals.descontos)}</span>
+                </div>
+                <div style="background: #fef3c7; padding: 8px 12px; border-radius: 6px; border-left: 4px solid #b45309; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                  <span class="field-label" style="color: #92400e; font-weight: 800;">TOTAL MENSAL DESEMBOLSADO</span>
+                  <span class="field-value" style="color: #b45309; font-size: 14px; font-weight: 800;">${formatCurrency(costTotals.realCost)}</span>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Tabela Detalhada por Mês -->
           <table>
             <thead>
-              <tr><th>Competência</th><th>Vínculo</th><th>Valor Fixo</th><th>Bônus</th><th>Comissão</th><th style="text-align: right;">Custo Líquido</th></tr>
+              <tr>
+                <th>Competência</th>
+                <th>Vínculo</th>
+                <th>Valor Fixo</th>
+                <th>Bônus</th>
+                <th>Comissão</th>
+                <th>FGTS</th>
+                <th style="text-align: right;">Custo Real Desembolsado</th>
+              </tr>
             </thead>
             <tbody>
-              ${costs.map(c => `
+              ${costs.map(c => {
+                const isCLT = c.vinculo_tipo === 'CLT';
+                const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                return `
                 <tr>
                   <td><strong>${c.competencia}</strong></td>
                   <td>${c.vinculo_tipo}</td>
                   <td>${formatCurrency(c.valor_fixo || 0)}</td>
                   <td>${formatCurrency(c.valor_bonus || 0)}</td>
                   <td>${formatCurrency(c.valor_comissao || 0)}</td>
-                  <td style="text-align: right; font-weight: 700; color: #b45309;">${formatCurrency(c.valor_liquido || 0)}</td>
+                  <td>${formatCurrency(c.valor_fgts || 0)}</td>
+                  <td style="text-align: right; font-weight: 700; color: #b45309;">${formatCurrency(cReal)}</td>
                 </tr>
-              `).join('')}
+                `;
+              }).join('')}
             </tbody>
+            ${costTotals ? `
+              <tfoot>
+                <tr style="background: #fffbeb; font-weight: 800; color: #92400e; border-top: 2px solid #fde68a;">
+                  <td colspan="2">TOTAL ACUMULADO (${costs.length} MÊSES)</td>
+                  <td>${formatCurrency(costTotals.fixed)}</td>
+                  <td>${formatCurrency(costTotals.bonus)}</td>
+                  <td>${formatCurrency(costTotals.comissao)}</td>
+                  <td>${formatCurrency(costTotals.fgts)}</td>
+                  <td style="text-align: right; font-size: 13px; color: #b45309;">${formatCurrency(costTotals.realCost)}</td>
+                </tr>
+              </tfoot>
+            ` : ''}
           </table>
         </div>
       `;
