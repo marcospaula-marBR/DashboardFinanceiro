@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
 import { PeopleHRService } from "@/services/people-hr.service";
@@ -2348,7 +2349,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               </datalist>
                             </div>
                             <div>
-                              <label className={labelClass}>Função / Cargo</label>
+                              <label className={labelClass}>Escopo do Contrato</label>
                               <input type="text" value={profile.job_role || ''} onChange={e => handleChange('job_role', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="Ex: Analista Financeiro"/>
                             </div>
                             <div>
@@ -2746,7 +2747,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                         <div className="grid grid-cols-2 gap-4">
                           <div className="col-span-2 md:col-span-1">
-                            <label className={labelClass}>Função / Cargo (Sincronizado)</label>
+                            <label className={labelClass}>Escopo do Contrato (Sincronizado)</label>
                             <input 
                               type="text" 
                               value={profile.job_role || ''} 
@@ -3861,6 +3862,66 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   );
                                 })}
                               </div>
+
+                              {/* Gráfico de Barras de Custo Histórico Mês a Mês com Rótulos de Valor nas Barras */}
+                              {filteredCosts && filteredCosts.length > 0 && (
+                                <div className="mt-6 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                                  <div className="flex items-center justify-between border-b dark:border-slate-800 pb-2.5">
+                                    <h5 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                      <BarChart3 size={16} className="text-emerald-600" />
+                                      Evolução do Custo Histórico Mês a Mês (Rótulos de Valor R$)
+                                    </h5>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                      {filteredCosts.length} Competência(s) Filtrada(s)
+                                    </span>
+                                  </div>
+
+                                  <div className="h-[280px] w-full pt-4">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      <BarChart 
+                                        data={[...filteredCosts].sort((a, b) => a.competencia.localeCompare(b.competencia)).map(c => {
+                                          const isCLT = c.vinculo_tipo === 'CLT';
+                                          const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                                          const compParts = c.competencia.split('-');
+                                          const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                                          const mName = monthsShort[parseInt(compParts[1] || '1', 10) - 1];
+                                          const label = `${mName}/${(compParts[0] || '').slice(2)}`;
+                                          const labelFormatted = realCost >= 1000 ? `R$ ${(realCost / 1000).toFixed(1)}k` : `R$ ${realCost.toFixed(0)}`;
+                                          return {
+                                            competencia: c.competencia,
+                                            monthLabel: label,
+                                            realCost: Math.round(realCost),
+                                            formattedLabel: labelFormatted,
+                                          };
+                                        })}
+                                        margin={{ top: 25, right: 15, left: 0, bottom: 5 }}
+                                      >
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
+                                        <XAxis 
+                                          dataKey="monthLabel" 
+                                          axisLine={false} 
+                                          tickLine={false} 
+                                          tick={{ fontSize: 10, fontWeight: 700, fill: '#64748B' }}
+                                        />
+                                        <YAxis 
+                                          axisLine={false} 
+                                          tickLine={false} 
+                                          tick={{ fontSize: 10, fontWeight: 700, fill: '#64748B' }}
+                                          tickFormatter={(v) => `R$ ${(v/1000).toFixed(0)}k`}
+                                          width={50}
+                                        />
+                                        <Tooltip 
+                                          formatter={(val: any) => [formatCurrency(Number(val)), 'Custo Real Desembolsado']}
+                                          labelFormatter={(label) => `Competência: ${label}`}
+                                        />
+                                        <Bar dataKey="realCost" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32}>
+                                          <LabelList dataKey="formattedLabel" position="top" style={{ fontSize: '10px', fontWeight: '800', fill: '#059669' }} />
+                                        </Bar>
+                                      </BarChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         );

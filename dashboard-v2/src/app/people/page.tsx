@@ -9,6 +9,7 @@ import { DeleteConfirmDialog } from "@/components/people/DeleteConfirmDialog";
 import { PayrollBatchImportModal } from "@/components/people/PayrollBatchImportModal";
 import { PeopleTable } from "@/components/people/PeopleTable";
 import { KPIStatsDrawer } from "@/components/people/KPIStatsDrawer";
+import { BatchPdfExportModal } from "@/components/people/BatchPdfExportModal";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
@@ -20,7 +21,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText
+  FileText, Printer
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -92,6 +93,7 @@ export default function PeoplePage() {
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isPayrollBatchModalOpen, setIsPayrollBatchModalOpen] = useState(false);
+  const [isBatchPdfModalOpen, setIsBatchPdfModalOpen] = useState(false);
   
   // C-Level Executive Drawer States
   const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "headcount_clt" | "headcount_pj" | "payroll_clt" | "payroll_pj" | "loans" | "health" | "audit" | "strategic" | "nopbid" | null>(null);
@@ -1162,6 +1164,15 @@ export default function PeoplePage() {
               <HandCoins size={14} /> Empréstimos
             </Link>
 
+            {/* Botão Exportar Lote PDF ao lado do botão Empréstimos */}
+            <button
+              onClick={() => setIsBatchPdfModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
+              title="Gerar fichas dos colaboradores em PDF em lote"
+            >
+              <Printer size={14} /> Exportar Lote PDF
+            </button>
+
             {/* Import payroll consolidated PDF button */}
             <button
               onClick={() => setIsPayrollBatchModalOpen(true)}
@@ -1971,6 +1982,13 @@ export default function PeoplePage() {
         }}
         employees={employees}
         isTestMode={isTestMode}
+      />
+
+      <BatchPdfExportModal
+        isOpen={isBatchPdfModalOpen}
+        onClose={() => setIsBatchPdfModalOpen(false)}
+        employees={employees}
+        allMonthlyCosts={monthlyCosts}
       />
     </div>
   );

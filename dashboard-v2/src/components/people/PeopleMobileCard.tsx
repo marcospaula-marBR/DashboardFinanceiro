@@ -167,7 +167,7 @@ export function PeopleMobileCard({
             <img 
               src={getCompanyLogoUrl(employee.company)} 
               alt={employee.company} 
-              className="h-4 max-w-[55px] object-contain shrink-0" 
+              className="h-6 max-w-[82px] object-contain shrink-0" 
             />
           </div>
         )}
@@ -198,7 +198,7 @@ export function PeopleMobileCard({
           <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
         </div>
 
-        <div className="flex-1 min-w-0 pr-24">
+        <div className="flex-1 min-w-0 pr-28">
           <div className="flex items-center gap-1">
             <p 
               onClick={(e) => {

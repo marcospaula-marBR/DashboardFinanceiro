@@ -41,6 +41,7 @@ export function ProfileExportModal({
   const [includeRemuneration, setIncludeRemuneration] = useState(true);
   const [includeTrajectory, setIncludeTrajectory] = useState(true);
   const [includeCostsHistory, setIncludeCostsHistory] = useState(true);
+  const [includeCostsChart, setIncludeCostsChart] = useState(true);
 
   // Totalizadores acumulados do histórico de custos por verbas
   const costTotals = useMemo(() => {
@@ -158,7 +159,7 @@ export function ProfileExportModal({
       csv += `Campo;Valor\n`;
       csv += `Empresa;${sanitize(profile.company)}\n`;
       csv += `Vínculo Contratual;${sanitize(profile.linkType)}\n`;
-      csv += `Cargo / Função;${sanitize(profile.job_role)}\n`;
+      csv += `Escopo do Contrato;${sanitize(profile.job_role)}\n`;
       csv += `Setor / Departamento;${sanitize(profile.department)}\n`;
       csv += `Data de Admissão;${sanitize(formatDate(profile.start_date))}\n`;
       csv += `Vencimento do Contrato;${sanitize(formatDate(profile.contract_expiry_date))}\n`;
@@ -332,7 +333,7 @@ export function ProfileExportModal({
           <div class="grid">
             <div class="field"><span class="field-label">Empresa</span><span class="field-value">${profile.company || '-'}</span></div>
             <div class="field"><span class="field-label">Vínculo Contratual</span><span class="field-value">${profile.linkType || '-'}</span></div>
-            <div class="field"><span class="field-label">Cargo / Função</span><span class="field-value">${profile.job_role || '-'}</span></div>
+            <div class="field"><span class="field-label">Escopo do Contrato</span><span class="field-value">${profile.job_role || '-'}</span></div>
             <div class="field"><span class="field-label">Setor / Departamento</span><span class="field-value">${profile.department || '-'}</span></div>
             <div class="field"><span class="field-label">Data de Admissão</span><span class="field-value">${formatDate(profile.start_date)}</span></div>
             <div class="field"><span class="field-label">Vencimento do Contrato</span><span class="field-value">${formatDate(profile.contract_expiry_date)}</span></div>
@@ -432,9 +433,13 @@ export function ProfileExportModal({
 
     // 7. HISTÓRICO DE CUSTOS MENSAIS E TOTALIZADORES
     if (includeCostsHistory && costs.length > 0) {
+      const avgMonthlyCost = costTotals && costs.length > 0 ? costTotals.realCost / costs.length : 0;
+      const sortedCosts = [...costs].sort((a, b) => a.competencia.localeCompare(b.competencia));
+      const maxCost = Math.max(...sortedCosts.map(c => (c.valor_liquido || 0) + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0)), 1);
+
       html += `
         <div class="section">
-          <div class="section-title">7. Histórico de Custos Mensais e Totalizadores por Verba</div>
+          <div class="section-title">7. Histórico de Custos Mensais, Gráfico e Totalizadores por Verba</div>
           
           ${costTotals ? `
             <!-- Quadro de Totalizadores por Verbas Recebidas -->
@@ -471,14 +476,41 @@ export function ProfileExportModal({
                   <span class="field-label">Total 13º & Férias</span>
                   <span class="field-value">${formatCurrency(costTotals.decimo + costTotals.ferias)}</span>
                 </div>
-                <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #ef4444; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
-                  <span class="field-label">Total Descontos Folha</span>
-                  <span class="field-value" style="color: #dc2626;">${formatCurrency(costTotals.descontos)}</span>
+                <div style="background: #ecfdf5; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #10b981; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                  <span class="field-label" style="color: #047857;">Média Mensal Desembolsada</span>
+                  <span class="field-value" style="color: #047857; font-weight: 800;">${formatCurrency(avgMonthlyCost)}</span>
                 </div>
                 <div style="background: #fef3c7; padding: 8px 12px; border-radius: 6px; border-left: 4px solid #b45309; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                  <span class="field-label" style="color: #92400e; font-weight: 800;">TOTAL MENSAL DESEMBOLSADO</span>
+                  <span class="field-label" style="color: #92400e; font-weight: 800;">TOTAL ACUMULADO DESEMBOLSADO</span>
                   <span class="field-value" style="color: #b45309; font-size: 14px; font-weight: 800;">${formatCurrency(costTotals.realCost)}</span>
                 </div>
+              </div>
+            </div>
+          ` : ''}
+
+          ${includeCostsChart ? `
+            <!-- Gráfico de Custo Mês a Mês em Barras com Rótulo de Valor nas Barras -->
+            <div style="margin-top: 15px; margin-bottom: 16px; background: #ffffff; border: 1px solid #e2e8f0; padding: 14px; border-radius: 8px;">
+              <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 12px;">
+                Gráfico de Evolução do Custo Histórico Mês a Mês (Rótulos em R$)
+              </div>
+              <div style="display: flex; align-items: flex-end; justify-content: space-between; height: 160px; padding-top: 22px; padding-bottom: 18px; border-bottom: 2px solid #cbd5e1; gap: 8px;">
+                ${sortedCosts.map(c => {
+                  const isCLT = c.vinculo_tipo === 'CLT';
+                  const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                  const pct = Math.max(10, Math.min(100, Math.round((realCost / maxCost) * 100)));
+                  const compParts = c.competencia.split('-');
+                  const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                  const mLabel = `${monthsShort[parseInt(compParts[1] || '1', 10) - 1]}/${(compParts[0] || '').slice(2)}`;
+                  const valLabel = realCost >= 1000 ? `${(realCost / 1000).toFixed(1)}k` : `${realCost.toFixed(0)}`;
+                  return `
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; position: relative;">
+                      <span style="font-size: 9px; font-weight: 800; color: #047857; margin-bottom: 3px; font-family: sans-serif;">R$${valLabel}</span>
+                      <div style="width: 80%; max-width: 32px; height: ${pct}%; background: #10b981; border-radius: 4px 4px 0 0;"></div>
+                      <span style="font-size: 9px; font-weight: 700; color: #475569; margin-top: 6px; font-family: sans-serif;">${mLabel}</span>
+                    </div>
+                  `;
+                }).join('')}
               </div>
             </div>
           ` : ''}
@@ -731,6 +763,23 @@ export function ProfileExportModal({
                 <span className="text-xs font-bold text-slate-800">7. Histórico de Custos Mensais</span>
               </div>
               <span className="text-[10px] text-slate-400 ml-auto font-medium">{costs.length} mês(es)</span>
+            </div>
+
+            {/* 8. Gráfico de Custos Mês a Mês */}
+            <div
+              onClick={() => setIncludeCostsChart(!includeCostsChart)}
+              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                includeCostsChart ? 'bg-emerald-50/50 border-emerald-300' : 'bg-white border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className={includeCostsChart ? 'text-emerald-600' : 'text-slate-400'}>
+                {includeCostsChart ? <CheckSquare size={18} /> : <Square size={18} />}
+              </div>
+              <div className="flex items-center gap-2">
+                <Calculator size={15} className="text-emerald-600" />
+                <span className="text-xs font-bold text-slate-800">8. Gráfico de Custos Mês a Mês (com Rótulos R$)</span>
+              </div>
+              <span className="text-[10px] text-slate-400 ml-auto font-medium">Gráfico de barras em PDF</span>
             </div>
 
           </div>
