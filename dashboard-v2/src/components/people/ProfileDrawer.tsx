@@ -143,6 +143,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [diannaResults, setDiannaResults] = useState<any[]>([]);
   const [selectedDiannaRows, setSelectedDiannaRows] = useState<number[]>([]);
   const [isImportingDianna, setIsImportingDianna] = useState(false);
+  const [diannaSearchFilter, setDiannaSearchFilter] = useState('');
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchingExisting, setIsSearchingExisting] = useState(false);
@@ -1756,20 +1757,27 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     setIsSearchingExisting(true);
     setDiannaResults([]);
     setSelectedDiannaRows([]);
+    setDiannaSearchFilter('');
     try {
       const res = await fetch('/dianna_source.json');
       if (!res.ok) throw new Error('Não foi possível carregar a fonte Dianna (dianna_source.json). O Data Lake precisa ser gerado primeiro.');
       const data = await res.json();
       
-      // Filter by name (simple includes, case insensitive)
-      const queryWords = (profile.name || '').toLowerCase().split(' ').filter((w: string) => w.length > 2);
+      const queryWords = (profile.name || '').toLowerCase().trim().split(' ').filter((w: string) => w.length > 2);
       
-      const matched = data.filter((row: any) => {
+      let matched = data.filter((row: any) => {
         if (!row.nome_bruto) return false;
         const n = row.nome_bruto.toLowerCase();
-        // Return true if at least one meaningful word matches
-        return queryWords.some((w: string) => n.includes(w));
+        return queryWords.every((w: string) => n.includes(w));
       });
+
+      if (matched.length === 0 && queryWords.length > 0) {
+        matched = data.filter((row: any) => {
+          if (!row.nome_bruto) return false;
+          const n = row.nome_bruto.toLowerCase();
+          return queryWords.some((w: string) => n.includes(w));
+        });
+      }
       
       setDiannaResults(matched);
       setIsDiannaImportOpen(true);
@@ -4910,32 +4918,70 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
               </button>
             </div>
             
+            </div>
+            
+            {/* Campo de Consulta em Tempo Real */}
+            <div className="p-3 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 focus-within:border-emerald-500 transition-colors">
+                <Search size={16} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Refinar consulta por nome completo ou mês (ex: Guilherme Oliveira)..."
+                  value={diannaSearchFilter}
+                  onChange={e => setDiannaSearchFilter(e.target.value)}
+                  className="bg-transparent text-xs text-slate-800 dark:text-slate-200 outline-none w-full font-medium"
+                />
+                {diannaSearchFilter && (
+                  <button 
+                    onClick={() => setDiannaSearchFilter('')}
+                    className="text-[10px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 uppercase px-1"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto p-5 bg-slate-50/30 dark:bg-slate-900">
-              {diannaResults.length === 0 ? (
-                <div className="text-center py-10">
-                  <p className="text-sm text-slate-500 font-bold">Nenhum registro encontrado.</p>
-                  <p className="text-xs text-slate-400 mt-1">O nome deste colaborador não foi localizado na fonte de dados atual.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {diannaResults.map((item, idx) => {
-                    const isSelected = selectedDiannaRows.includes(idx);
-                    return (
-                      <div 
-                        key={idx}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedDiannaRows(prev => prev.filter(i => i !== idx));
-                          } else {
-                            setSelectedDiannaRows(prev => [...prev, idx]);
-                          }
-                        }}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-4 ${
-                          isSelected 
-                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' 
-                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-slate-300'
-                        }`}
-                      >
+              {(() => {
+                const filteredDiannaList = diannaResults.filter((row: any) => {
+                  if (!diannaSearchFilter.trim()) return true;
+                  const fWords = diannaSearchFilter.toLowerCase().trim().split(' ').filter((w: string) => w.length > 0);
+                  const nNorm = (row.nome_bruto || '').toLowerCase();
+                  const cNorm = (row.competencia || '').toLowerCase();
+                  return fWords.every((w: string) => nNorm.includes(w) || cNorm.includes(w));
+                });
+
+                if (filteredDiannaList.length === 0) {
+                  return (
+                    <div className="text-center py-10">
+                      <p className="text-sm text-slate-500 font-bold">Nenhum registro localizado.</p>
+                      <p className="text-xs text-slate-400 mt-1">Tente ajustar o termo no campo de consulta acima.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {filteredDiannaList.map((item) => {
+                      const originalIdx = diannaResults.indexOf(item);
+                      const isSelected = selectedDiannaRows.includes(originalIdx);
+                      return (
+                        <div 
+                          key={originalIdx}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedDiannaRows(prev => prev.filter(i => i !== originalIdx));
+                            } else {
+                              setSelectedDiannaRows(prev => [...prev, originalIdx]);
+                            }
+                          }}
+                          className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-4 ${
+                            isSelected 
+                              ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' 
+                              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-slate-300'
+                          }`}
+                        >
                         <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
                           isSelected ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 bg-white'
                         }`}>
@@ -4961,7 +5007,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                     );
                   })}
                 </div>
-              )}
+              );
+            })()}
             </div>
             
             <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 flex justify-between items-center">

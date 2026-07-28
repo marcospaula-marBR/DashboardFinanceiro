@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.16";
+export const APP_VERSION = "v.02.53.17";
 export const VERSION_DATE = "2026-07-28";
 export const VERSION_CHANGELOG = [
+  "v.02.53.17 - Feat/People: Incluído o quadro de Resumo de Empréstimos Corporativos (Total Tomado, Total Pago e Saldo Devedor) no PDF individual do colaborador, aprimorado o algoritmo de busca no Data Lake Dianna para correspondência estrita por palavras e adicionado o campo de consulta interativa em tempo real dentro do modal de importação Dianna.",
   "v.02.53.16 - Fix/People: Bloqueada a duplicação de competências no banco de dados Supabase e no estado da aplicação (insertMonthlyCost/upsertMonthlyCost) e adicionado o card executivo de Empréstimo Corporativo na aba Custo Histórico com os valores de Total Tomado, Total Pago e Saldo Devedor.",
   "v.02.53.15 - Fix/People: Forçado o rastreamento do arquivo dianna_source.json no Git designorando-o no .gitignore raiz, garantindo a sua publicação e disponibilidade física nos servidores de produção do Vercel.",
   "v.02.53.14 - Feat/People: Incluído arquivo dianna_source.json no build estático do Vercel eliminando o erro de Data Lake no ambiente de produção; adicionada trava de auditoria prevenindo sobrescrita inadvertida em competências já preenchidas com confirmação do usuário; incluída detecção inteligente de folha de 13º salário e extração de Pensão Alimentícia na IA do Gemini (parse-payroll/parse-payroll-batch); aprimorados os cards Resumo exibindo o Valor Total como número principal e Média no rodapé; criados modals interativos ao clicar nos cards 'Benefícios', '13º & Férias' e 'Outros Descontos' mostrando o detalhamento completo por verba com seus totais e médias.",

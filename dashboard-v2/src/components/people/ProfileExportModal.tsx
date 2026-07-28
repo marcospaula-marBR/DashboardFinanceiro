@@ -486,6 +486,29 @@ export function ProfileExportModal({
                 </div>
               </div>
             </div>
+
+            <!-- Resumo do Empréstimo Corporativo (Posição Financeira) -->
+            ${(profile.totalTaken || profile.loan_amount || (costTotals && costTotals.consignado > 0)) ? `
+              <div style="margin-top: 14px; margin-bottom: 16px; background: #0f172a; border: 1px solid #1e293b; padding: 14px; border-radius: 8px; color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #fbbf24; margin-bottom: 10px; font-family: sans-serif; letter-spacing: 0.5px;">
+                  Resumo do Empréstimo Corporativo (Posição Financeira)
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                  <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; border-left: 4px solid #f59e0b;">
+                    <span style="font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; font-family: sans-serif;">Total Tomado</span>
+                    <span style="font-size: 13px; font-weight: 800; color: #fef08a; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(profile.totalTaken || profile.loan_amount || 0)}</span>
+                  </div>
+                  <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; border-left: 4px solid #10b981;">
+                    <span style="font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; font-family: sans-serif;">Total Pago</span>
+                    <span style="font-size: 13px; font-weight: 800; color: #6ee7b7; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(profile.totalReceived || (costTotals ? costTotals.consignado : 0))}</span>
+                  </div>
+                  <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; border-left: 4px solid #f43f5e;">
+                    <span style="font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; font-family: sans-serif;">Saldo Devedor</span>
+                    <span style="font-size: 13px; font-weight: 800; color: #fda4af; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(profile.balance || Math.max(0, (profile.totalTaken || profile.loan_amount || 0) - (costTotals ? costTotals.consignado : 0)))}</span>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
           ` : ''}
 
           ${includeCostsChart ? `
