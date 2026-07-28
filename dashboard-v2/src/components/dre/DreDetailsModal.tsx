@@ -49,7 +49,7 @@ export function DreDetailsModal({
 
   if (!isOpen) return null;
 
-  const isLucroAntesFcl = title === 'Lucro antes do FCL';
+  const isLucroAntesFcl = title === 'Resultado Operacional' || title === 'Lucro antes do FCL';
   const isFcl = title === 'Fluxo de Caixa Livre FCL';
 
   // Modal Container Class (Normal vs Maximizada)
@@ -359,7 +359,7 @@ export function DreDetailsModal({
         className: 'text-rose-500'
       },
       { 
-        label: '(=) Lucro antes do FCL', 
+        label: '(=) Resultado Operacional', 
         key: 'Lucro antes do FCL', 
         isResult: true,
         className: 'font-bold text-slate-900'
@@ -367,12 +367,12 @@ export function DreDetailsModal({
       ];
       infoBox = (
         <div className="mt-4 bg-amber-50/60 border border-amber-200/50 rounded-2xl p-4 text-slate-700 text-[12px] leading-relaxed">
-          <p className="font-bold text-amber-800 mb-1">Entendendo o Lucro antes do FCL:</p>
+          <p className="font-bold text-amber-800 mb-1">Entendendo o Resultado Operacional:</p>
           <p>
             Este card representa o resultado líquido gerado pelas operações no período antes de deduzir investimentos de capital em <strong>Ativos, Consórcios</strong> e <strong>Serviços</strong>. Retiradas dos sócios não afetam este cálculo.
           </p>
           <p className="mt-2 font-semibold">
-            Fórmula de Cálculo: Receitas - Impostos - Custos Operacionais - Despesas Rateadas = Lucro antes do FCL
+            Fórmula de Cálculo: Receitas - Impostos - Custos Operacionais - Despesas Rateadas = Resultado Operacional
           </p>
         </div>
       );

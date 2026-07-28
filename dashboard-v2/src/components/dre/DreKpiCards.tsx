@@ -225,7 +225,7 @@ export function DreKpiCards({
           className={`relative bg-white border rounded-2xl p-5 shadow-sm transition-all flex flex-col justify-between ${
             isCardSelected('resultado') ? 'border-amber-500 ring-2 ring-amber-500/25 bg-amber-50/5' : 'border-slate-200'
           } ${onCardClick ? 'cursor-pointer hover:scale-105 hover:shadow-md' : ''}`}
-          onClick={() => onCardClick && onCardClick("Lucro antes do FCL")}
+          onClick={() => onCardClick && onCardClick("Resultado Operacional")}
         >
           <button
             onClick={(e) => { e.stopPropagation(); toggleCardSelection('resultado'); }}
@@ -239,7 +239,7 @@ export function DreKpiCards({
             <Calculator size={12} />
           </button>
           <div>
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pr-6">Lucro antes do FCL</h3>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pr-6">Resultado Operacional</h3>
             <p className={`text-2xl font-black tracking-tight ${kpis.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {displayValue(kpis.resultado)}
             </p>
