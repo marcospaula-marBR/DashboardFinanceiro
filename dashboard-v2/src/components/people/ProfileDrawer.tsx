@@ -3177,15 +3177,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                         ];
 
                         // 2. Filtrar reativamente a lista de custos
-                        const filteredCosts = costs.filter(c => {
-                          if (costPeriodFilter !== 'all') {
-                            const costDate = new Date(c.competencia + 'T12:00:00');
-                            const now = new Date();
-                            const monthsDiff = (now.getFullYear() - costDate.getFullYear()) * 12 + now.getMonth() - costDate.getMonth();
-                            if (costPeriodFilter === '3m' && monthsDiff > 3) return false;
-                            if (costPeriodFilter === '6m' && monthsDiff > 6) return false;
-                            if (costPeriodFilter === '12m' && monthsDiff > 12) return false;
-                          }
+                        let baseList = costs.filter(c => {
                           if (costSelectedYears.length > 0) {
                             const year = c.competencia.split('-')[0];
                             if (!costSelectedYears.includes(year)) return false;
@@ -3196,6 +3188,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           }
                           return true;
                         });
+
+                        // Ordena cronologicamente do mais antigo para o mais recente
+                        baseList.sort((a, b) => a.competencia.localeCompare(b.competencia));
+
+                        // Aplica o filtro de período rápido trazendo os últimos N lançamentos existentes
+                        let filteredCosts = baseList;
+                        if (costPeriodFilter === '3m') {
+                          filteredCosts = baseList.slice(-3);
+                        } else if (costPeriodFilter === '6m') {
+                          filteredCosts = baseList.slice(-6);
+                        } else if (costPeriodFilter === '12m') {
+                          filteredCosts = baseList.slice(-12);
+                        }
 
                         const stats = PeopleHRService.computeCostStats(filteredCosts);
                         

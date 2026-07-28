@@ -241,28 +241,43 @@ export function BatchPdfExportModal({
             </div>
 
             ${includeCostsChart ? `
-              <div style="margin-top: 10px; margin-bottom: 12px; background: #ffffff; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px;">
-                <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 8px;">
+              <!-- Gráfico SVG Vetorial de Custo Mês a Mês (Garantido em Impressões PDF) -->
+              <div style="margin-top: 10px; margin-bottom: 12px; background: #ffffff; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 8px; font-family: sans-serif;">
                   Gráfico de Custo Mês a Mês (Rótulos em R$)
                 </div>
-                <div style="display: flex; align-items: flex-end; justify-content: space-between; height: 140px; padding-top: 20px; padding-bottom: 15px; border-bottom: 2px solid #cbd5e1; gap: 6px;">
-                  ${sortedCosts.map(c => {
+                
+                <svg width="100%" height="150" viewBox="0 0 500 150" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                  <line x1="0" y1="20" x2="500" y2="20" stroke="#f1f5f9" stroke-width="1" />
+                  <line x1="0" y1="60" x2="500" y2="60" stroke="#f1f5f9" stroke-width="1" />
+                  <line x1="0" y1="105" x2="500" y2="105" stroke="#cbd5e1" stroke-width="1.5" />
+
+                  ${sortedCosts.map((c, idx) => {
+                    const count = sortedCosts.length;
+                    const slotWidth = 500 / count;
+                    const barWidth = Math.min(slotWidth * 0.55, 34);
+                    const xCenter = idx * slotWidth + slotWidth / 2;
+                    const xBar = xCenter - barWidth / 2;
+
                     const isCLT = c.vinculo_tipo === 'CLT';
                     const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
-                    const pct = Math.max(10, Math.min(100, Math.round((realCost / maxCost) * 100)));
+                    const maxH = 80;
+                    const barH = Math.max(8, Math.round((realCost / maxCost) * maxH));
+                    const yBar = 105 - barH;
+                    const yValLabel = yBar - 4;
+
                     const compParts = c.competencia.split('-');
                     const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
                     const mLabel = `${monthsShort[parseInt(compParts[1] || '1', 10) - 1]}/${(compParts[0] || '').slice(2)}`;
-                    const valLabel = realCost >= 1000 ? `${(realCost / 1000).toFixed(1)}k` : `${realCost.toFixed(0)}`;
+                    const valLabel = realCost >= 1000 ? `R$${(realCost / 1000).toFixed(1)}k` : `R$${realCost.toFixed(0)}`;
+
                     return `
-                      <div style="flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end;">
-                        <span style="font-size: 8px; font-weight: 800; color: #047857; margin-bottom: 2px;">R$${valLabel}</span>
-                        <div style="width: 85%; max-width: 28px; height: ${pct}%; background: #10b981; border-radius: 3px 3px 0 0;"></div>
-                        <span style="font-size: 8px; font-weight: 700; color: #475569; margin-top: 4px;">${mLabel}</span>
-                      </div>
+                      <text x="${xCenter}" y="${yValLabel}" text-anchor="middle" font-size="9" font-weight="800" fill="#047857" font-family="sans-serif">${valLabel}</text>
+                      <rect x="${xBar}" y="${yBar}" width="${barWidth}" height="${barH}" rx="3" ry="3" fill="#10b981" stroke="#059669" stroke-width="1" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />
+                      <text x="${xCenter}" y="122" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569" font-family="sans-serif">${mLabel}</text>
                     `;
                   }).join('')}
-                </div>
+                </svg>
               </div>
             ` : ''}
 
