@@ -567,6 +567,21 @@ export const PeopleHRService = {
 
   async insertMonthlyCost(payload: Partial<MonthlyCost>): Promise<MonthlyCost> {
     const cleanPayload = this.sanitizeMonthlyCostPayload(payload);
+
+    if (cleanPayload.employee_id && cleanPayload.competencia) {
+      const { data: existing } = await supabase
+        .from('people_monthly_costs')
+        .select('id')
+        .eq('employee_id', cleanPayload.employee_id)
+        .eq('competencia', cleanPayload.competencia)
+        .maybeSingle();
+
+      if (existing?.id) {
+        await this.updateMonthlyCost(existing.id, cleanPayload);
+        return { ...cleanPayload, id: existing.id } as MonthlyCost;
+      }
+    }
+
     const { data, error } = await supabase
       .from('people_monthly_costs')
       .insert([cleanPayload])

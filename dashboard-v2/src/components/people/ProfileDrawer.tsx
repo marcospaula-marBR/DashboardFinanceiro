@@ -8,7 +8,7 @@ import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditI
 import { PeopleService } from "@/services/people.service";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
-import { formatCurrency } from "@/services/loans.service";
+import { LoansService, formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { isExternalEntity, formatCompanyTime, RELATIONSHIP_NATURE_LABELS } from "./PeopleBadges";
 import { ProfileExportModal } from "./ProfileExportModal";
@@ -81,6 +81,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [bonds, setBonds] = useState<EmploymentContract[]>([]);
   const [costs, setCosts] = useState<MonthlyCost[]>([]);
   const [auditIssues, setAuditIssues] = useState<AuditIssue[]>([]);
+  const [loanSummary, setLoanSummary] = useState<{ totalTaken: number; totalReceived: number; balance: number } | null>(null);
 
   // Auditoria quick cost editor state
   const [editingCost, setEditingCost] = useState<MonthlyCost | null>(null);
@@ -321,6 +322,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setHistory(hist || []);
       setBonds(bondsData || []);
       setCosts(costsData || []);
+
+      try {
+        const loansEmps = await LoansService.getEmployees({ showAll: true }, isTestMode);
+        const empLoan = loansEmps.find(e => e.id === id);
+        if (empLoan) {
+          setLoanSummary({
+            totalTaken: empLoan.totalTaken || 0,
+            totalReceived: empLoan.totalReceived || 0,
+            balance: empLoan.balance || 0
+          });
+        } else {
+          setLoanSummary(null);
+        }
+      } catch {
+        setLoanSummary(null);
+      }
+
       setIsEditMode(true);
       setIsSearchExistingOpen(false);
     } catch (err: any) {
@@ -353,6 +371,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setHistory(hist || []);
       setBonds(bondsData || []);
       setCosts(costsData || []);
+
+      // Buscar posição de empréstimos corporativos
+      try {
+        const loansEmps = await LoansService.getEmployees({ showAll: true }, isTestMode);
+        const empLoan = loansEmps.find(e => e.id === id);
+        if (empLoan) {
+          setLoanSummary({
+            totalTaken: empLoan.totalTaken || 0,
+            totalReceived: empLoan.totalReceived || 0,
+            balance: empLoan.balance || 0
+          });
+        } else {
+          setLoanSummary(null);
+        }
+      } catch {
+        setLoanSummary(null);
+      }
     } catch (err: unknown) {
       const error = err as Error;
       setError(error.message || 'Erro ao carregar Ficha RH');
@@ -3397,6 +3432,46 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 </div>
                               </div>
                             </div>
+
+                            {/* Card de Posição de Empréstimos Corporativos (Total Tomado, Total Pago e Saldo Devedor) */}
+                            {loanSummary && (loanSummary.totalTaken > 0 || loanSummary.balance > 0) && (
+                              <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-md border border-slate-800 space-y-3 mb-4">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-2.5">
+                                  <div className="flex items-center gap-2">
+                                    <Coins className="text-amber-400" size={18} />
+                                    <h5 className="text-xs font-black uppercase tracking-wider text-slate-200">
+                                      Resumo do Empréstimo Corporativo
+                                    </h5>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 border border-amber-800/40 px-2.5 py-0.5 rounded-full uppercase">
+                                    Posição Financeira
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-3">
+                                  <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 shadow-inner">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Tomado</span>
+                                    <span className="text-sm font-black text-amber-300 tabular-nums mt-0.5 block">
+                                      {formatCurrency(loanSummary.totalTaken)}
+                                    </span>
+                                  </div>
+
+                                  <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 shadow-inner">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Pago</span>
+                                    <span className="text-sm font-black text-emerald-400 tabular-nums mt-0.5 block">
+                                      {formatCurrency(loanSummary.totalReceived)}
+                                    </span>
+                                  </div>
+
+                                  <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 shadow-inner">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Saldo Devedor</span>
+                                    <span className="text-sm font-black text-rose-400 tabular-nums mt-0.5 block">
+                                      {formatCurrency(loanSummary.balance)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {/* Dashboard de Totais e Médias */}
                             <div className="space-y-4 text-left">
