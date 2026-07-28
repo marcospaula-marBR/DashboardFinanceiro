@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.22";
+export const APP_VERSION = "v.02.53.23";
 export const VERSION_DATE = "2026-07-28";
 export const VERSION_CHANGELOG = [
+  "v.02.53.23 - Fix/DRE: Revisadas e alinhadas as fórmulas de Margem Operacional (Resultado Operacional ÷ Rec. Líquida) e Margem EBITDA (EBITDA ÷ Rec. Líquida), adicionando o tratamento de Depreciação/Amortização e nota explicativa no modal de conciliação quando o período não possui lançamentos não caixa.",
   "v.02.53.22 - Feat/DRE: Incluídas as categorias 'Intermediação de Negócios - Receitas' e 'Mútuo - Entradas' na composição total e mensal do card e indicador 'Outras Entradas'.",
   "v.02.53.21 - Feat/DRE: Atualizada a fórmula de cálculo do FCL para FCL = Resultado Operacional + Outras Entradas - Investimentos e ajustado o modal de auditoria de FCL para exibir o bloco de retiradas de sócios/mútuos apenas de forma informativa sem dedução.",
   "v.02.53.20 - Style/DRE: Alterada a nomenclatura do card KPI e do modal de auditoria financeira no DRE de 'Lucro antes do FCL' para 'Resultado Operacional'.",

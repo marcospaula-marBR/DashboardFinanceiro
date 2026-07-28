@@ -95,8 +95,9 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
   const despesas_operacionais = kpis.totalDespesas - val_despesas_financeiras - val_dividendos - val_despesas_variaveis - val_intermediacao;
 
   // 5. EBIT & EBITDA
-  const ebit = lucro_bruto - despesas_operacionais;
-  const ebitda = ebit; // As defined in legacy script: EBITDA = EBIT (depreciation not explicitly separated)
+  const ebit = kpis.resultado !== undefined ? kpis.resultado : (lucro_bruto - despesas_operacionais);
+  const val_depreciacao_amortizacao = getDRETotal('Depreciação') + getDRETotal('Amortização') + getDRETotal('Depreciação e Amortização');
+  const ebitda = ebit + val_depreciacao_amortizacao;
 
   // 6. Resultado Financeiro
   const val_receitas_financeiras = getDRETotal('Receitas Financeiras');
@@ -192,12 +193,12 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       title: '3. Margem Operacional',
       value: (ebit / RL) * 100,
       type: 'percent' as const,
-      formula: 'EBIT ÷ Receita Líquida',
+      formula: 'Resultado Operacional ÷ Rec. Líquida',
       desc: 'Resultado da operação principal',
       icon: <Activity className="text-emerald-500" size={16} />,
       color: 'border-emerald-100 bg-emerald-50/10 text-emerald-950',
       chartColor: '#10b981',
-      explanation: 'Rentabilidade operacional pura (EBIT), ou seja, a saúde financeira da operação antes dos custos financeiros e impostos.',
+      explanation: 'Rentabilidade operacional (Resultado Operacional ÷ Receita Líquida), medindo a eficiência da operação antes de receitas/despesas não operacionais.',
       assessmentHelp: 'Bom: acima de 15%. Preocupante: abaixo de 8%. Mostra se o negócio é sustentável no seu dia a dia.',
     },
     {
@@ -217,11 +218,11 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
       value: (ebitda / RL) * 100,
       type: 'percent' as const,
       formula: 'EBITDA ÷ Receita Líquida',
-      desc: 'Eficiência operacional (Caixa)',
+      desc: 'Eficiência operacional (Caixa Bruto)',
       icon: <ArrowUpRight className="text-emerald-500" size={16} />,
       color: 'border-emerald-100 bg-emerald-50/10 text-emerald-950',
       chartColor: '#34d399',
-      explanation: 'Mede a eficiência operacional convertida em caixa. Indica a porcentagem da receita que vira caixa operacional bruto.',
+      explanation: 'Margem de Geração de Caixa Operacional (EBITDA ÷ Receita Líquida). Caso não haja depreciação/amortização no período, o EBITDA equivale ao Resultado Operacional.',
       assessmentHelp: 'Bom: acima de 20%. Preocupante: abaixo de 10%. Valores baixos sugerem problemas de eficiência na operação.',
     },
     {
@@ -455,11 +456,9 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         };
       case '3. Margem Operacional':
         return {
-          formula: 'Resultado Operacional (EBIT) ÷ Receita Líquida',
+          formula: 'Resultado Operacional ÷ Receita Líquida',
           steps: [
-            { label: 'Lucro Bruto', value: lucro_bruto, type: 'currency' as const, highlight: true },
-            { label: '(-) Despesas Operacionais (OpEx)', value: despesas_operacionais, type: 'currency' as const },
-            { label: '(=) Resultado Operacional (EBIT)', value: ebit, type: 'currency' as const, highlight: true },
+            { label: 'Resultado Operacional (EBIT)', value: ebit, type: 'currency' as const, highlight: true },
             { label: 'Receita Líquida', value: receita_liquida, type: 'currency' as const },
           ],
           result: { label: 'Margem Operacional', value: (ebit / RL) * 100, type: 'percent' as const }
@@ -469,7 +468,7 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
           formula: 'EBIT + Depreciação + Amortização',
           steps: [
             { label: 'Resultado Operacional (EBIT)', value: ebit, type: 'currency' as const, highlight: true },
-            { label: '(+) Depreciação e Amortização', value: 0, type: 'currency' as const, desc: 'Não detalhado separadamente no DRE' },
+            { label: '(+) Depreciação e Amortização', value: val_depreciacao_amortizacao, type: 'currency' as const, desc: val_depreciacao_amortizacao === 0 ? 'Sem lançamentos discriminados no período' : undefined },
           ],
           result: { label: 'EBITDA', value: ebitda, type: 'currency' as const }
         };
@@ -477,8 +476,10 @@ export function DreIndicatorsModal({ isOpen, onClose, results, filters }: DreInd
         return {
           formula: 'EBITDA ÷ Receita Líquida',
           steps: [
-            { label: 'EBITDA', value: ebitda, type: 'currency' as const, highlight: true },
-            { label: 'Receita Líquida', value: receita_liquida, type: 'currency' as const, highlight: true },
+            { label: 'Resultado Operacional (EBIT)', value: ebit, type: 'currency' as const },
+            { label: '(+) Depreciação e Amortização', value: val_depreciacao_amortizacao, type: 'currency' as const, desc: val_depreciacao_amortizacao === 0 ? 'Sem lançamentos no período (EBITDA = Resultado Operacional)' : undefined },
+            { label: '(=) EBITDA (Geração de Caixa)', value: ebitda, type: 'currency' as const, highlight: true },
+            { label: 'Receita Líquida', value: receita_liquida, type: 'currency' as const },
           ],
           result: { label: 'Margem EBITDA', value: (ebitda / RL) * 100, type: 'percent' as const }
         };
