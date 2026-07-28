@@ -43,9 +43,6 @@ export interface ExtractedRecord {
   valor_ajuda_custo: number;
   // Informativos Patronais da Empresa
   valor_fgts: number;
-  base_fgts: number;
-  base_inss: number;
-  base_irrf: number;
   inss_empregado: number;
   irrf_empregado: number;
   salario_familia: number;
@@ -253,9 +250,6 @@ export function PayrollBatchImportModal({
       valor_comissao: 0,
       valor_ajuda_custo: 0,
       valor_fgts: 0,
-      base_fgts: 0,
-      base_inss: 0,
-      base_irrf: 0,
       inss_empregado: 0,
       irrf_empregado: 0,
       salario_familia: 0,
@@ -348,9 +342,6 @@ export function PayrollBatchImportModal({
             valor_incentivos: record.valor_incentivos || 0,
             valor_ajuda_custo: record.valor_ajuda_custo || 0,
             valor_fgts: record.valor_fgts || 0,
-            base_fgts: record.base_fgts || 0,
-            base_inss: record.base_inss || 0,
-            base_irrf: record.base_irrf || 0,
             inss_empregado: record.inss_empregado || 0,
             irrf_empregado: record.irrf_empregado || 0,
             salario_familia: record.salario_familia || 0,
@@ -798,16 +789,6 @@ export function PayrollBatchImportModal({
                               step="0.5"
                               value={record.dias_faltas}
                               onChange={(e) => handleUpdateRecordField(index, 'dias_faltas', parseFloat(e.target.value))}
-                              className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-lg p-1.5 outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-amber-800 uppercase block">Base FGTS (R$)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={record.base_fgts}
-                              onChange={(e) => handleUpdateRecordField(index, 'base_fgts', parseFloat(e.target.value))}
                               className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-lg p-1.5 outline-none"
                             />
                           </div>

@@ -544,7 +544,7 @@ export const PeopleHRService = {
       if (knownColumns.has(key)) {
         sanitized[key] = val;
       } else {
-        // Campos estendidos (valor_fgts, base_fgts, base_inss, base_irrf, inss_empregado, irrf_empregado, salario_familia)
+        // Campos estendidos (valor_fgts, inss_empregado, irrf_empregado, salario_familia)
         verbasAdicionaisObj[key] = val;
       }
     });

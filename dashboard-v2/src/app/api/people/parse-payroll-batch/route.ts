@@ -62,8 +62,9 @@ Instruções de Extração:
    - Total de Descontos no campo "valor_descontos" (consta no campo 'Descontos:', ex: '993,07').
    - **Desconto de Adiantamento Salarial (CRUCIAL!)**: Procure por rubricas como '981 DESC.ADIANT.SALARIAL', 'DESC.ADIANT.SALARIAL', 'ADIANTAMENTO' ou similares nos descontos. Capture o valor monetário descontado (ex: '739,92') e COLOQUE NO CAMPO "valor_adiantamento".
    - **Salário Família (CRUCIAL!)**: Procure por rubricas como '995 SALARIO FAMILIA' ou 'SALARIO FAMILIA' nos proventos. Capture o valor em R$ (ex: '67,54' ou '58,53') e COLOQUE NO CAMPO "salario_familia".
-   - **Informativo FGTS da Empresa (CRUCIAL!)**: Extraia o valor do FGTS mensal pago pela empresa no campo "valor_fgts" (localizado nas linhas informativas, ex: 'Valor FGTS: 147,98'). Extraia também a "base_fgts".
-   - **Bases e Encargos**: Extraia "base_inss", "base_irrf", o INSS descontado ("inss_empregado", rubrica 998 I.N.S.S.) e o IRRF descontado ("irrf_empregado").
+   - **Informativo FGTS da Empresa (CRUCIAL!)**: Extraia o valor do FGTS mensal pago pela empresa no campo "valor_fgts" (localizado nas linhas informativas, ex: 'Valor FGTS: 147,98').
+   - **Encargos Descontados**: Extraia o INSS descontado ("inss_empregado", rubrica 998 I.N.S.S.) e o IRRF descontado ("irrf_empregado").
+   - **REGRA DE EXCLUSÃO DE BASES (CRUCIAL!)**: IGNORE E NÃO EXTRAIA valores de bases informativas (como 'Base FGTS', 'Base INSS', 'Base IRRF', 'Base Salário Família' ou rubricas de base). Elas NÃO são proventos nem descontos e NUNCA devem ser computadas no total de proventos, descontos ou custo real.
    - Empréstimo Consignado: Se houver descontos com termos como "DESC. EMP. CRED. TRAB N..." ou "Consignado", some os respectivos valores e adicione no campo "valor_consignado".
    - Faltas/Atrasos: Some todos os descontos de faltas ou faltas DSR (ex: "DIAS FALTAS", "DIAS FALTAS DSR") e coloque no campo "valor_faltas". Extraia também o quantitativo total de dias de falta acumulados no campo "dias_faltas".
    - Banco de Horas: Se houver desconto de banco de horas (ex: "Desconto Banco de Horas 15:22"), converta as horas/minutos para formato decimal e coloque no campo "banco_horas".
@@ -100,9 +101,6 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
       "valor_comissao": 0.00,
       "valor_ajuda_custo": 0.00,
       "valor_fgts": 0.00,
-      "base_fgts": 0.00,
-      "base_inss": 0.00,
-      "base_irrf": 0.00,
       "inss_empregado": 0.00,
       "irrf_empregado": 0.00,
       "salario_familia": 0.00,
