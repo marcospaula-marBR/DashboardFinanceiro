@@ -140,16 +140,38 @@ export function PeopleMobileCard({
       onKeyDown={(e) => e.key === "Enter" && setIsHovered(!isHovered)}
       aria-label={`Alternar detalhes de ${displayName}`}
     >
-      {/* Indicadores de Status & Alertas no topo */}
-      <div className="absolute top-4 right-4 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-        {hasAuditIssues && (
-          <span className="text-amber-500 shrink-0 cursor-help" title="Possui pendências de auditoria">
-            <AlertCircle size={14} className="fill-amber-50" />
+      {/* Indicadores de Status & Logotipo da Empresa no topo direito */}
+      <div className="absolute top-3.5 right-4 flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
+        {/* Linha superior: Alertas de Auditoria + Badge de Status */}
+        <div className="flex items-center gap-1.5">
+          {hasAuditIssues && (
+            <span className="text-amber-500 shrink-0 cursor-help" title="Possui pendências de auditoria">
+              <AlertCircle size={14} className="fill-amber-50" />
+            </span>
+          )}
+          <span className={`text-[9px] font-black border uppercase px-2 py-0.5 rounded-full shrink-0 ${statusStyle}`}>
+            {employee.status}
+          </span>
+        </div>
+
+        {/* Linha inferior (Embaixo do Status): Logotipo da Empresa do Vínculo */}
+        {employee.company && (
+          <span 
+            onClick={(e) => {
+              e.stopPropagation();
+              onFilterSelect?.('company', employee.company);
+            }}
+            className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100/90 hover:bg-slate-200/90 border border-slate-200/80 rounded-lg cursor-pointer transition-all shrink-0 shadow-2xs hover:scale-105"
+            title={`Empresa do Vínculo: ${employee.company} (Clique para filtrar)`}
+          >
+            <img 
+              src={getCompanyLogoUrl(employee.company)} 
+              alt={employee.company} 
+              className="h-3.5 max-w-[45px] object-contain shrink-0" 
+            />
+            <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">{employee.company}</span>
           </span>
         )}
-        <span className={`text-[9px] font-black border uppercase px-2 py-0.5 rounded-full shrink-0 ${statusStyle}`}>
-          {employee.status}
-        </span>
       </div>
 
       <div className="flex items-start gap-3">
@@ -256,7 +278,7 @@ export function PeopleMobileCard({
             </div>
           )}
 
-          {/* Badges do Cockpit (Vínculo + Empresa com Logotipo) */}
+          {/* Badges do Cockpit (Vínculo) */}
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
             <span 
               onClick={(e) => {
@@ -268,25 +290,6 @@ export function PeopleMobileCard({
             >
               <RelationshipNatureBadge nature={employee.relationshipNature} />
             </span>
-
-            {/* Logotipo & Empresa do Vínculo */}
-            {employee.company && (
-              <span 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFilterSelect?.('company', employee.company);
-                }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100/90 hover:bg-slate-200/90 border border-slate-200 rounded-full cursor-pointer transition-all shrink-0 shadow-2xs"
-                title={`Empresa do Vínculo: ${employee.company}`}
-              >
-                <img 
-                  src={getCompanyLogoUrl(employee.company)} 
-                  alt={employee.company} 
-                  className="h-3 max-w-[40px] object-contain shrink-0" 
-                />
-                <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">{employee.company}</span>
-              </span>
-            )}
           </div>
         </div>
       </div>

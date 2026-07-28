@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.07";
+export const APP_VERSION = "v.02.53.08";
 export const VERSION_DATE = "2026-07-28";
 export const VERSION_CHANGELOG = [
+  "v.02.53.08 - Style/People: Reorganizado o logotipo da empresa do vínculo nos cards dos colaboradores (PeopleMobileCard.tsx), posicionado diretamente abaixo da badge de status no canto superior direito.",
   "v.02.53.07 - Feat/People: Exibidos o Local de Prestação de Serviço (service_location com ícone MapPin) e o Logotipo da Empresa do Vínculo em todos os cards de colaboradores (PeopleMobileCard.tsx, PeopleTable.tsx e PeopleEcosystemMap.tsx), com suporte a clique para filtragem rápida.",
   "v.02.53.06 - Feat/People: Incluídos foto do colaborador, logotipo dinâmico da empresa do vínculo no cabeçalho e quadro de totalizadores acumulados por verbas recebidas do custo histórico no relatório PDF/CSV da Ficha do Colaborador (ProfileExportModal.tsx).",
   "v.02.53.05 - Fix/People: Excluída a extração e o processamento dos valores bases informativas (Base FGTS, Base INSS, Base IRRF) das importações de folha de pagamento em parse-payroll-batch/route.ts e PayrollBatchImportModal.tsx, evitando distorções no cálculo do custo real total do colaborador.",
