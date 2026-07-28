@@ -379,8 +379,8 @@ export function DreDetailsModal({
     } else if (isFcl) {
       auditRows = [
         { 
-          label: '(+) Total Entradas Operacionais', 
-          key: 'Total Entradas Operacionais', 
+          label: '(+) Resultado Operacional', 
+          key: 'Lucro antes do FCL', 
           isSubtracted: false,
           className: 'font-semibold text-slate-700'
         },
@@ -388,23 +388,11 @@ export function DreDetailsModal({
           label: '(+) Outras Entradas', 
           key: 'Outras Entradas', 
           isSubtracted: false,
-          className: 'font-semibold text-slate-700'
-        },
-        { 
-          label: '(+) Intermediação de Negócios - Receitas', 
-          key: 'Intermediação de Negócios - Receitas', 
-          isSubtracted: false,
           className: 'font-semibold text-emerald-600'
         },
         { 
-          label: '(+) Mútuo - Entradas', 
-          key: 'Mútuo - Entradas', 
-          isSubtracted: false,
-          className: 'font-semibold text-emerald-600'
-        },
-        { 
-          label: '(-) Total Saídas (Impostos + Custos + Despesas + Investimentos)', 
-          key: 'Total Saídas', 
+          label: '(-) Investimentos (Ativos, Consórcios, Serviços, Aplic.)', 
+          key: 'Total Investimentos', 
           isSubtracted: true,
           className: 'text-rose-600 font-medium'
         },
@@ -415,7 +403,7 @@ export function DreDetailsModal({
           className: 'font-bold text-slate-900 bg-amber-100/50'
         },
         {
-          label: 'USO DO FCL — RETIRADAS DOS SÓCIOS',
+          label: 'INFORMATIVO: RETIRADAS DE SÓCIOS E MÚTUOS',
           key: 'HEADER_USO_FCL',
           isHeader: true,
           className: 'font-black text-amber-700 bg-amber-50'
@@ -427,13 +415,13 @@ export function DreDetailsModal({
           className: 'text-slate-600'
         },
         { 
-          label: 'Intermediação de Negócios (Saídas)', 
+          label: '(+) Intermediação de Negócios (Saídas)', 
           key: 'Intermediação de Negócios', 
           isSubtracted: false,
           className: 'text-slate-600'
         },
         { 
-          label: 'Mútuo - Saídas', 
+          label: '(+) Mútuo - Saídas', 
           key: 'Mútuo - Saídas', 
           isSubtracted: false,
           className: 'text-slate-600'
@@ -443,26 +431,19 @@ export function DreDetailsModal({
           key: 'Total Retiradas dos Sócios', 
           isResult: true,
           className: 'font-bold text-amber-900 bg-amber-50'
-        },
-        {
-          label: 'FCL LÍQUIDO APÓS RETIRADAS',
-          key: 'HEADER_FCL_LIQ',
-          isHeader: true,
-          className: 'font-black text-emerald-700 bg-emerald-50'
-        },
-        { 
-          label: '(=) FCL após Retiradas dos Sócios', 
-          key: 'FCL após Retiradas dos Sócios', 
-          isResult: true,
-          className: 'font-bold text-emerald-900 bg-emerald-100/70'
         }
       ];
       infoBox = (
         <div className="mt-4 bg-emerald-50/60 border border-emerald-200/50 rounded-2xl p-4 text-slate-700 text-[12px] leading-relaxed">
           <p className="font-bold text-emerald-800 mb-1">Entendendo o Fluxo de Caixa Livre (FCL):</p>
           <p>
-            O FCL representa o caixa gerado pela operação (Entradas + Outras Entradas + Intermediação de Negócios - Receitas + Mútuo - Entradas) menos todas as saídas (Impostos, Custos, Despesas Rateadas e Investimentos). 
-            Na tabela de <strong>USO DO FCL</strong> é possível visualizar onde este caixa livre foi utilizado pelas retiradas dos sócios.
+            O FCL representa a geração de caixa líquido da operação após deduções de impostos, custos, despesas rateadas e investimentos de capital.
+          </p>
+          <p className="mt-2 font-semibold">
+            Fórmula de Cálculo: FCL = Resultado Operacional + Outras Entradas - Investimentos
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500 italic">
+            As retiradas dos sócios (Dividendos, Intermediação de Negócios e Mútuo - Saídas) são exibidas apenas como informativo abaixo e não sofrem dedução sobre o valor do FCL.
           </p>
         </div>
       );

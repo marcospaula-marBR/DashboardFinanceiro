@@ -801,7 +801,7 @@ export class DreService {
     const totalRetiradas = totalDividendos + totalIntermedioSaidas + totalMutuoSaidas;
 
     const resultado = totalEntradas - totalImpostos - totalCustos - totalDespesas;
-    const fcl = totalEntradas + outrasEntradas - totalSaidas + totalIntermediReceitas + totalMutuoEntradas;
+    const fcl = resultado + outrasEntradas - totalInvestimentos;
 
     // Novo: Equipamentos
     const totalEquipamentos = getCatTotal("Equipamentos");
@@ -958,7 +958,7 @@ export class DreService {
         ...sourceRows["Mútuo - Saídas"][col]
       ];
       
-      const fclCol = totEnt + outrasEnt - totSai + intermReceitasCol + mutuoEntradasCol;
+      const fclCol = resCol + outrasEnt - totInv;
 
       valoresMensal["Lucro antes do FCL"][col] = resCol;
       sourceRows["Lucro antes do FCL"][col] = [

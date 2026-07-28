@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.20";
+export const APP_VERSION = "v.02.53.21";
 export const VERSION_DATE = "2026-07-28";
 export const VERSION_CHANGELOG = [
+  "v.02.53.21 - Feat/DRE: Atualizada a fórmula de cálculo do FCL para FCL = Resultado Operacional + Outras Entradas - Investimentos e ajustado o modal de auditoria de FCL para exibir o bloco de retiradas de sócios/mútuos apenas de forma informativa sem dedução.",
   "v.02.53.20 - Style/DRE: Alterada a nomenclatura do card KPI e do modal de auditoria financeira no DRE de 'Lucro antes do FCL' para 'Resultado Operacional'.",
   "v.02.53.19 - Fix/PDF: Corrigida a passagem de loanSummary para a exportação individual de PDF (ProfileExportModal) garantindo a renderização do bloco de Resumo do Empréstimo Corporativo (Total Tomado, Total Pago e Saldo Devedor) na Seção 7.",
   "v.02.53.18 - Feat/DataLake: Processada a extração completa multi-aba de Dianna.xlsx unificando Celetistas (CLT NOVA) e Prestadores (MEI NOVA) no Data Lake com 3.227 registros disponíveis para busca e importação.",
