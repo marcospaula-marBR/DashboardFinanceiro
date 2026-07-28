@@ -21,6 +21,7 @@ interface ProfileExportModalProps {
   history?: HistoryItem[];
   bonds?: EmploymentContract[];
   costs?: MonthlyCost[];
+  loanSummary?: { totalTaken: number; totalReceived: number; balance: number } | null;
 }
 
 export function ProfileExportModal({
@@ -29,7 +30,8 @@ export function ProfileExportModal({
   profile,
   history = [],
   bonds = [],
-  costs = []
+  costs = [],
+  loanSummary = null
 }: ProfileExportModalProps) {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'csv'>('pdf');
 
@@ -436,6 +438,11 @@ export function ProfileExportModal({
       const avgMonthlyCost = costTotals && costs.length > 0 ? costTotals.realCost / costs.length : 0;
       const sortedCosts = [...costs].sort((a, b) => a.competencia.localeCompare(b.competencia));
       const maxCost = Math.max(...sortedCosts.map(c => (c.valor_liquido || 0) + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0)), 1);
+      const effectiveLoan = loanSummary || (profile.totalTaken || (profile as any).loan_amount ? {
+        totalTaken: profile.totalTaken || (profile as any).loan_amount || 0,
+        totalReceived: profile.totalReceived || 0,
+        balance: profile.balance || 0
+      } : null);
 
       html += `
         <div class="section">
@@ -488,7 +495,7 @@ export function ProfileExportModal({
             </div>
 
             <!-- Resumo do Empréstimo Corporativo (Posição Financeira) -->
-            ${(profile.totalTaken || (profile as any).loan_amount || (costTotals && (costTotals as any).consignado > 0)) ? `
+            ${effectiveLoan && (effectiveLoan.totalTaken > 0 || effectiveLoan.balance > 0 || effectiveLoan.totalReceived > 0) ? `
               <div style="margin-top: 14px; margin-bottom: 16px; background: #0f172a; border: 1px solid #1e293b; padding: 14px; border-radius: 8px; color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #fbbf24; margin-bottom: 10px; font-family: sans-serif; letter-spacing: 0.5px;">
                   Resumo do Empréstimo Corporativo (Posição Financeira)
@@ -496,15 +503,15 @@ export function ProfileExportModal({
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
                   <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; border-left: 4px solid #f59e0b;">
                     <span style="font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; font-family: sans-serif;">Total Tomado</span>
-                    <span style="font-size: 13px; font-weight: 800; color: #fef08a; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(profile.totalTaken || (profile as any).loan_amount || 0)}</span>
+                    <span style="font-size: 13px; font-weight: 800; color: #fef08a; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(effectiveLoan.totalTaken)}</span>
                   </div>
                   <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; border-left: 4px solid #10b981;">
                     <span style="font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; font-family: sans-serif;">Total Pago</span>
-                    <span style="font-size: 13px; font-weight: 800; color: #6ee7b7; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(profile.totalReceived || (costTotals ? ((costTotals as any).consignado || 0) : 0))}</span>
+                    <span style="font-size: 13px; font-weight: 800; color: #6ee7b7; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(effectiveLoan.totalReceived)}</span>
                   </div>
                   <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; border-left: 4px solid #f43f5e;">
                     <span style="font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; font-family: sans-serif;">Saldo Devedor</span>
-                    <span style="font-size: 13px; font-weight: 800; color: #fda4af; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(profile.balance || Math.max(0, (profile.totalTaken || (profile as any).loan_amount || 0) - (costTotals ? ((costTotals as any).consignado || 0) : 0)))}</span>
+                    <span style="font-size: 13px; font-weight: 800; color: #fda4af; display: block; margin-top: 3px; font-family: sans-serif;">${formatCurrency(effectiveLoan.balance)}</span>
                   </div>
                 </div>
               </div>

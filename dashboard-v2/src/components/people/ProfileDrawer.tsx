@@ -5649,6 +5649,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         history={history}
         bonds={bonds}
         costs={costs}
+        loanSummary={loanSummary}
       />
 
     </AnimatePresence>
