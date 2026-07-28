@@ -583,9 +583,13 @@ export default function PeoplePage() {
     setIsProfileDrawerOpen(true);
   };
 
-  const handleFilterSelect = (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level', value: string) => {
+  const handleFilterSelect = (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level' | 'location', value: string) => {
     if (type === 'name' || type === 'responsible_name' || type === 'job_role') {
       setFilterSearch(value);
+    } else if (type === 'company') {
+      setFilterEmpresa([value]);
+    } else if (type === 'location') {
+      setFilterLocalPrestacao([value]);
     } else if (type === 'department') {
       setFilterSetor([value]);
     } else if (type === 'nature') {

@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo } from "react";
 import { Employee, getRemunerationLabel, getPBClassification, inferEntityType } from "@/types/loans";
-import { Building2, UserRound, ArrowUpRight, ArrowDownRight, ArrowLeftRight, HelpCircle, Network, Users } from "lucide-react";
-import { isExternalEntity, PeopleClassificationBadge, RelationshipNatureBadge, PeopleHealthBadge, formatCompanyTime } from "./PeopleBadges";
+import { Building2, UserRound, ArrowUpRight, ArrowDownRight, ArrowLeftRight, HelpCircle, Network, Users, MapPin } from "lucide-react";
+import { isExternalEntity, PeopleClassificationBadge, RelationshipNatureBadge, PeopleHealthBadge, formatCompanyTime, getCompanyLogoUrl } from "./PeopleBadges";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface PeopleEcosystemMapProps {
@@ -226,6 +226,13 @@ export function PeopleEcosystemMap({
                 : (emp.job_role || 'Sem Cadeira')}
             </p>
 
+            {emp.service_location && (
+              <p className="text-[9px] font-bold text-amber-700 flex items-center gap-1 mt-0.5 truncate" title="Local de Prestação do Serviço">
+                <MapPin size={9} className="text-amber-500 shrink-0" />
+                <span>{emp.service_location}</span>
+              </p>
+            )}
+
             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
               <PeopleClassificationBadge level={emp.nivel} degree={emp.grau} />
               <RelationshipNatureBadge nature={emp.relationshipNature} />
@@ -246,9 +253,12 @@ export function PeopleEcosystemMap({
               </span>
             </div>
           )}
-          {/* Empresa + Rem */}
+          {/* Empresa com Logotipo + Rem */}
           <div className="flex items-center justify-between gap-1 text-[9px] text-slate-400 font-bold">
-            <span>{emp.company}</span>
+            <div className="flex items-center gap-1">
+              <img src={getCompanyLogoUrl(emp.company)} alt={emp.company} className="h-3 max-w-[35px] object-contain shrink-0" />
+              <span>{emp.company}</span>
+            </div>
             {showValues && (emp.remuneration_fixed || emp.remuneration) > 0 ? (
               <span className="text-slate-600 font-black tabular-nums">
                 {BRL.format(emp.remuneration_fixed || emp.remuneration)}

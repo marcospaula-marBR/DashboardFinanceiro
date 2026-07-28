@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Trash2, UserCog, AlertCircle, Phone, Copy, Check, Building2, UserRound } from "lucide-react";
+import { Trash2, UserCog, AlertCircle, Phone, Copy, Check, Building2, UserRound, MapPin } from "lucide-react";
 import { Employee, AuditIssue, inferEntityType } from "@/types/loans";
 import { getRemunerationLabel } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
@@ -12,7 +12,8 @@ import {
   PeopleClassificationBadge, 
   RelationshipNatureBadge, 
   PeopleHealthBadge,
-  formatCompanyTime
+  formatCompanyTime,
+  getCompanyLogoUrl
 } from "./PeopleBadges";
 
 interface PeopleTableProps {
@@ -289,6 +290,11 @@ export function PeopleTable({
                                 </span>
                               )
                             )}
+                            {emp.service_location && (
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0" title="Local de Prestação do Serviço">
+                                <MapPin size={10} className="text-amber-500 shrink-0" /> {emp.service_location}
+                              </span>
+                            )}
                             {emp.pix_key && (
                               <span 
                                 onClick={(e) => handleCopyPix(e, emp)}
@@ -324,9 +330,10 @@ export function PeopleTable({
                       <PeopleHealthBadge employee={emp} />
                     </td>
                     <td className="py-4 px-4 text-center">
-                      <span className="text-[10px] font-black text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-sm">
-                        {emp.company}
-                      </span>
+                      <div className="inline-flex items-center justify-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg shadow-2xs">
+                        <img src={getCompanyLogoUrl(emp.company)} alt={emp.company} className="h-3.5 max-w-[40px] object-contain shrink-0" />
+                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">{emp.company}</span>
+                      </div>
                     </td>
                     <td className="py-4 px-4 text-right tabular-nums">
                       {showValues ? (

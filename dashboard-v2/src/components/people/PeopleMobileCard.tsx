@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { Employee, getRemunerationLabel, inferEntityType } from "@/types/loans";
-import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar } from "lucide-react";
+import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar, MapPin } from "lucide-react";
 import { 
   isExternalEntity, 
   formatWhatsAppLink, 
   PeopleClassificationBadge, 
   RelationshipNatureBadge, 
   PeopleHealthBadge,
-  formatCompanyTime
+  formatCompanyTime,
+  getCompanyLogoUrl
 } from "./PeopleBadges";
 
 interface PeopleMobileCardProps {
@@ -229,6 +230,21 @@ export function PeopleMobileCard({
             </div>
           )}
 
+          {/* Local de Prestação do Serviço (se preenchido) */}
+          {employee.service_location && (
+            <p 
+              onClick={(e) => {
+                e.stopPropagation();
+                onFilterSelect?.('location' as any, employee.service_location || '');
+              }}
+              className="text-[10px] font-bold text-amber-800 flex items-center gap-1 mt-1 hover:underline cursor-pointer truncate"
+              title="Local de Prestação do Serviço"
+            >
+              <MapPin size={10} className="text-amber-500 shrink-0" />
+              <span>Local: {employee.service_location}</span>
+            </p>
+          )}
+
           {/* Emojis dos indicadores (alertas) acima do vínculo */}
           {hasAnyAlert && (
             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
@@ -240,7 +256,7 @@ export function PeopleMobileCard({
             </div>
           )}
 
-          {/* Badges do Cockpit (apenas Vínculo) */}
+          {/* Badges do Cockpit (Vínculo + Empresa com Logotipo) */}
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
             <span 
               onClick={(e) => {
@@ -252,6 +268,25 @@ export function PeopleMobileCard({
             >
               <RelationshipNatureBadge nature={employee.relationshipNature} />
             </span>
+
+            {/* Logotipo & Empresa do Vínculo */}
+            {employee.company && (
+              <span 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFilterSelect?.('company', employee.company);
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100/90 hover:bg-slate-200/90 border border-slate-200 rounded-full cursor-pointer transition-all shrink-0 shadow-2xs"
+                title={`Empresa do Vínculo: ${employee.company}`}
+              >
+                <img 
+                  src={getCompanyLogoUrl(employee.company)} 
+                  alt={employee.company} 
+                  className="h-3 max-w-[40px] object-contain shrink-0" 
+                />
+                <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">{employee.company}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -279,6 +314,22 @@ export function PeopleMobileCard({
                 {employee.department || "Sem Setor"}
               </span>
             </div>
+
+            {employee.service_location && (
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFilterSelect?.('location' as any, employee.service_location || '');
+                }}
+                className="flex items-center gap-1.5 text-slate-500 hover:text-amber-600 cursor-pointer group/loc"
+                title="Local de Prestação do Serviço"
+              >
+                <MapPin size={12} className="text-amber-500 group-hover/loc:text-amber-600 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-700 group-hover/loc:underline truncate">
+                  Local: {employee.service_location}
+                </span>
+              </div>
+            )}
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1.5 text-slate-400">
                 <Clock size={12} />

@@ -13,6 +13,18 @@ export function isExternalEntity(entityType?: EntityType): boolean {
   ].includes(entityType as EntityType);
 }
 
+export function getCompanyLogoUrl(company?: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const c = (company || '').toLowerCase();
+  if (c.includes('dzm')) return origin + '/Logos/DZM.png';
+  if (c.includes('grupo') || c.includes('g2')) return origin + '/Logos/Grupo%202.jpeg';
+  if (c.includes('ybox')) return origin + '/Logos/Ybox.png';
+  if (c.includes('conectius')) return origin + '/Logos/Conectius.png';
+  if (c.includes('solucione')) return origin + '/Logos/Solucione.png';
+  if (c.includes('brisinha')) return origin + '/Logos/BrisinhAI.jpeg';
+  return origin + '/Logos/Mar-Brasil-sem-fundo-preto.png';
+}
+
 export function formatWhatsAppLink(phone?: string): string | null {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, "");
