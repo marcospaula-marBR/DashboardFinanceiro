@@ -482,32 +482,6 @@ export default function PeoplePage() {
     setFilteredEmployees(result);
   }, [baseFilteredEmployees, filterInsight, noRaiseMonths, noPromoMonths, noGradeMonths]);
 
-  // Booleano para saber se há qualquer filtro ativo no cockpit
-  const hasActiveFilters = useMemo(() => {
-    return !!(
-      filterSearch ||
-      filterEmpresa.length > 0 ||
-      filterStatus.length > 0 ||
-      filterVinculo.length > 0 ||
-      filterSetor.length > 0 ||
-      filterGrau.length > 0 ||
-      filterTerceirizado.length > 0 ||
-      filterLocalPrestacao.length > 0 ||
-      filterRegimeTributario.length > 0 ||
-      filterEntityType.length > 0 ||
-      filterRelationshipNature.length > 0 ||
-      filterLevel.length > 0 ||
-      filterQuality.length > 0 ||
-      filterHasPbId.length > 0 ||
-      filterInsight ||
-      showInativos
-    );
-  }, [
-    filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau,
-    filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, filterEntityType,
-    filterRelationshipNature, filterLevel, filterQuality, filterHasPbId, filterInsight, showInativos
-  ]);
-
   // Pagination slice for grid view
   const paginatedGridEmployees = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;

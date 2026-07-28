@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.11";
+export const APP_VERSION = "v.02.53.12";
 export const VERSION_DATE = "2026-07-28";
 export const VERSION_CHANGELOG = [
+  "v.02.53.12 - Fix/Build: Removida a declaração duplicada da constante 'hasActiveFilters' em src/app/people/page.tsx, corrigindo a falha no processo de compilação Next.js / Vercel Build.",
   "v.02.53.11 - Feat/People: Aumentado o logo nos cards em 1,5x (h-6 max-w-82px), adicionado gráfico de barras de custo histórico mês a mês com rótulos de valor R$ no prontuário (ProfileDrawer) e no relatório PDF (ProfileExportModal), incluída a média mensal desembolsada, criado modal de exportação em lote de fichas PDF com seleção por empresa/setor/vínculo (botões Todos e Limpar) e alterada nomenclatura de 'Função/Cargo' para 'Escopo do Contrato'.",
   "v.02.53.10 - Feat/People: Adicionado o botão 'Limpar Filtros' na barra superior da visualização em Cards (page.tsx) e da visualização em Lista/Tabela (PeopleTable.tsx), permitindo resetar instantaneamente a busca e todos os filtros aplicados com 1 clique.",
   "v.02.53.09 - Style/People: Removida a exibição do texto com nome da empresa do topo do card em PeopleMobileCard.tsx, exibindo estritamente apenas a imagem do logotipo abaixo da badge de status e expandindo o pr-24 para eliminar qualquer sobreposição com o nome do responsável.",
