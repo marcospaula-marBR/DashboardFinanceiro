@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.17";
+export const APP_VERSION = "v.02.53.18";
 export const VERSION_DATE = "2026-07-28";
 export const VERSION_CHANGELOG = [
+  "v.02.53.18 - Feat/DataLake: Processada a extração completa multi-aba de Dianna.xlsx unificando Celetistas (CLT NOVA) e Prestadores (MEI NOVA) no Data Lake com 3.227 registros disponíveis para busca e importação.",
   "v.02.53.17 - Feat/People: Incluído o quadro de Resumo de Empréstimos Corporativos (Total Tomado, Total Pago e Saldo Devedor) no PDF individual do colaborador, aprimorado o algoritmo de busca no Data Lake Dianna para correspondência estrita por palavras e adicionado o campo de consulta interativa em tempo real dentro do modal de importação Dianna.",
   "v.02.53.16 - Fix/People: Bloqueada a duplicação de competências no banco de dados Supabase e no estado da aplicação (insertMonthlyCost/upsertMonthlyCost) e adicionado o card executivo de Empréstimo Corporativo na aba Custo Histórico com os valores de Total Tomado, Total Pago e Saldo Devedor.",
   "v.02.53.15 - Fix/People: Forçado o rastreamento do arquivo dianna_source.json no Git designorando-o no .gitignore raiz, garantindo a sua publicação e disponibilidade física nos servidores de produção do Vercel.",

@@ -4918,8 +4918,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
               </button>
             </div>
             
-            </div>
-            
             {/* Campo de Consulta em Tempo Real */}
             <div className="p-3 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 focus-within:border-emerald-500 transition-colors">
