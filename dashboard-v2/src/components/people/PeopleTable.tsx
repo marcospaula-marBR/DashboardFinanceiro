@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Trash2, UserCog, AlertCircle, Phone, Copy, Check, Building2, UserRound, MapPin } from "lucide-react";
+import { Trash2, UserCog, AlertCircle, Phone, Copy, Check, Building2, UserRound, MapPin, X } from "lucide-react";
 import { Employee, AuditIssue, inferEntityType } from "@/types/loans";
 import { getRemunerationLabel } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
@@ -27,7 +27,9 @@ interface PeopleTableProps {
   noPromoMonths?: number;
   noGradeMonths?: number;
   itemsPerPage?: number;
-  onFilterSelect?: (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level', value: string) => void;
+  onFilterSelect?: (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level' | 'location', value: string) => void;
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -49,7 +51,9 @@ export function PeopleTable({
   noPromoMonths, 
   noGradeMonths,
   itemsPerPage = 10,
-  onFilterSelect
+  onFilterSelect,
+  hasActiveFilters = false,
+  onClearFilters
 }: PeopleTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -120,12 +124,25 @@ export function PeopleTable({
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-6">
       <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center flex-wrap gap-2">
-        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-tight">
-          Listagem de Colaboradores
-          <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500 font-bold">
-            {employees.length} REGISTROS
-          </span>
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-tight">
+            Listagem de Colaboradores
+            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500 font-bold">
+              {employees.length} REGISTROS
+            </span>
+          </h3>
+
+          {hasActiveFilters && onClearFilters && (
+            <button
+              onClick={onClearFilters}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 uppercase shadow-sm"
+              title="Limpar todos os filtros ativos"
+            >
+              <X size={13} />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
+        </div>
         
         {totalPages > 1 && (
           <div className="flex items-center gap-2">

@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.09";
+export const APP_VERSION = "v.02.53.10";
 export const VERSION_DATE = "2026-07-28";
 export const VERSION_CHANGELOG = [
+  "v.02.53.10 - Feat/People: Adicionado o botão 'Limpar Filtros' na barra superior da visualização em Cards (page.tsx) e da visualização em Lista/Tabela (PeopleTable.tsx), permitindo resetar instantaneamente a busca e todos os filtros aplicados com 1 clique.",
   "v.02.53.09 - Style/People: Removida a exibição do texto com nome da empresa do topo do card em PeopleMobileCard.tsx, exibindo estritamente apenas a imagem do logotipo abaixo da badge de status e expandindo o pr-24 para eliminar qualquer sobreposição com o nome do responsável.",
   "v.02.53.08 - Style/People: Reorganizado o logotipo da empresa do vínculo nos cards dos colaboradores (PeopleMobileCard.tsx), posicionado diretamente abaixo da badge de status no canto superior direito.",
   "v.02.53.07 - Feat/People: Exibidos o Local de Prestação de Serviço (service_location com ícone MapPin) e o Logotipo da Empresa do Vínculo em todos os cards de colaboradores (PeopleMobileCard.tsx, PeopleTable.tsx e PeopleEcosystemMap.tsx), com suporte a clique para filtragem rápida.",

@@ -480,6 +480,32 @@ export default function PeoplePage() {
     setFilteredEmployees(result);
   }, [baseFilteredEmployees, filterInsight, noRaiseMonths, noPromoMonths, noGradeMonths]);
 
+  // Booleano para saber se há qualquer filtro ativo no cockpit
+  const hasActiveFilters = useMemo(() => {
+    return !!(
+      filterSearch ||
+      filterEmpresa.length > 0 ||
+      filterStatus.length > 0 ||
+      filterVinculo.length > 0 ||
+      filterSetor.length > 0 ||
+      filterGrau.length > 0 ||
+      filterTerceirizado.length > 0 ||
+      filterLocalPrestacao.length > 0 ||
+      filterRegimeTributario.length > 0 ||
+      filterEntityType.length > 0 ||
+      filterRelationshipNature.length > 0 ||
+      filterLevel.length > 0 ||
+      filterQuality.length > 0 ||
+      filterHasPbId.length > 0 ||
+      filterInsight ||
+      showInativos
+    );
+  }, [
+    filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau,
+    filterTerceirizado, filterLocalPrestacao, filterRegimeTributario, filterEntityType,
+    filterRelationshipNature, filterLevel, filterQuality, filterHasPbId, filterInsight, showInativos
+  ]);
+
   // Pagination slice for grid view
   const paginatedGridEmployees = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -1721,6 +1747,8 @@ export default function PeoplePage() {
               noGradeMonths={noGradeMonths}
               itemsPerPage={itemsPerPage}
               onFilterSelect={handleFilterSelect}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={handleClearFilters}
             />
           ) : (
             <div>
@@ -1746,6 +1774,18 @@ export default function PeoplePage() {
                   >
                     <span>{expandAllCards ? 'Recolher Cards' : 'Expandir Cards'}</span>
                   </button>
+
+                  {/* Botão Limpar Filtros na barra superior de Cards */}
+                  {hasActiveFilters && (
+                    <button
+                      onClick={handleClearFilters}
+                      className="flex items-center gap-1.5 px-3 py-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 uppercase shadow-sm"
+                      title="Limpar todos os filtros ativos"
+                    >
+                      <X size={13} />
+                      <span>Limpar Filtros</span>
+                    </button>
+                  )}
                 </div>
                 
                 {totalPages > 1 && (
