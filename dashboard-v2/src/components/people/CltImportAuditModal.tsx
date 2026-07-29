@@ -236,10 +236,11 @@ export function CltImportAuditModal({
           const existing = existingEmployees.find((e) => e.id === targetEmployeeId);
           if (existing) {
             const updatePayload: Partial<Employee> = {};
-            if (pEmp.status === "Inativo" && existing.status !== "Inativo") {
+            // Preserva status Ativo se o colaborador atualmente for PJ ou estiver ativo no app
+            if (pEmp.status === "Inativo" && existing.status !== "Inativo" && existing.linkType === "CLT") {
               updatePayload.status = "Inativo";
             }
-            if (pEmp.desligamento && !existing.resignation_date) {
+            if (pEmp.desligamento && !existing.resignation_date && existing.linkType === "CLT") {
               updatePayload.resignation_date = pEmp.desligamento;
             }
             if (pEmp.setor && (!existing.department || existing.department === "Geral")) {

@@ -97,19 +97,28 @@ function formatDateISO(val: any): string | undefined {
     const y = val.getUTCFullYear();
     const m = String(val.getUTCMonth() + 1).padStart(2, "0");
     const d = String(val.getUTCDate()).padStart(2, "0");
+    if (y <= 1900 || d === "00" || m === "00") return undefined;
     return `${y}-${m}-${d}`;
   }
   const str = String(val).trim();
-  if (!str || str.toLowerCase() === "none" || str.toLowerCase() === "null") return undefined;
+  if (!str || str.toLowerCase() === "none" || str.toLowerCase() === "null" || str.includes("1900-01-00")) return undefined;
 
   const ymd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (ymd) {
-    return `${ymd[1]}-${String(ymd[2]).padStart(2, "0")}-${String(ymd[3]).padStart(2, "0")}`;
+    const y = parseInt(ymd[1], 10);
+    const m = parseInt(ymd[2], 10);
+    const d = parseInt(ymd[3], 10);
+    if (y <= 1900 || m === 0 || d === 0) return undefined;
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   }
 
   const dmy = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
   if (dmy) {
-    return `${dmy[3]}-${String(dmy[2]).padStart(2, "0")}-${String(dmy[1]).padStart(2, "0")}`;
+    const d = parseInt(dmy[1], 10);
+    const m = parseInt(dmy[2], 10);
+    const y = parseInt(dmy[3], 10);
+    if (y <= 1900 || m === 0 || d === 0) return undefined;
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   }
 
   return undefined;
