@@ -12,6 +12,7 @@ import { PeopleTable } from "@/components/people/PeopleTable";
 import { KPIStatsDrawer } from "@/components/people/KPIStatsDrawer";
 import { BatchPdfExportModal } from "@/components/people/BatchPdfExportModal";
 import { ClearCostHistoryModal } from "@/components/people/ClearCostHistoryModal";
+import { CltImportAuditModal } from "@/components/people/CltImportAuditModal";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
@@ -23,7 +24,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText, Printer, Database, Trash2
+  FileText, Printer, Database, Trash2, FileSpreadsheet
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -98,6 +99,7 @@ export default function PeoplePage() {
   const [isBatchPdfModalOpen, setIsBatchPdfModalOpen] = useState(false);
   const [isDiannaBatchModalOpen, setIsDiannaBatchModalOpen] = useState(false);
   const [isClearCostHistoryModalOpen, setIsClearCostHistoryModalOpen] = useState(false);
+  const [isCltImportModalOpen, setIsCltImportModalOpen] = useState(false);
   
   // C-Level Executive Drawer States
   const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "headcount_clt" | "headcount_pj" | "payroll_clt" | "payroll_pj" | "loans" | "health" | "audit" | "strategic" | "nopbid" | null>(null);
@@ -1152,6 +1154,15 @@ export default function PeoplePage() {
               <FileText size={14} /> Importar Folha
             </button>
 
+            {/* Import Planilha CLT (.csv / .xlsx) button */}
+            <button
+              onClick={() => setIsCltImportModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-emerald-300 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
+              title="Auditar e importar colaboradores e verbas históricas da planilha CLT (.csv / .xlsx)"
+            >
+              <FileSpreadsheet size={14} /> Importar Planilha CLT
+            </button>
+
             {/* Import Dianna Batch (CLT NOVA) button */}
             <button
               onClick={() => setIsDiannaBatchModalOpen(true)}
@@ -1995,6 +2006,15 @@ export default function PeoplePage() {
         onSuccess={() => {
           fetchData();
         }}
+      />
+
+      <CltImportAuditModal
+        isOpen={isCltImportModalOpen}
+        onClose={() => setIsCltImportModalOpen(false)}
+        onSuccess={() => {
+          fetchData();
+        }}
+        existingEmployees={employees}
       />
     </div>
   );

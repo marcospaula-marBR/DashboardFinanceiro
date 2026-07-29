@@ -375,6 +375,62 @@ export const PeopleHRService = {
     }) as Employee[];
   },
 
+  async insertEmployee(employeePayload: Partial<Employee>): Promise<Employee> {
+    const payload: any = {
+      full_name: employeePayload.name || employeePayload.corporate_name || "Colaborador",
+      company: employeePayload.company || "MarBR",
+      employment_type: employeePayload.linkType || "CLT",
+      status: employeePayload.status || "Ativo",
+      department: employeePayload.department || "Geral",
+      job_role: employeePayload.job_role || "Colaborador",
+      start_date: employeePayload.start_date || undefined,
+      resignation_date: employeePayload.resignation_date || undefined,
+      remuneration: employeePayload.remuneration_fixed || 0,
+      remuneration_fixed: employeePayload.remuneration_fixed || 0,
+      active: employeePayload.status !== "Inativo",
+      created_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("employees")
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return {
+      ...data,
+      name: data.full_name,
+      linkType: data.employment_type
+    } as Employee;
+  },
+
+  async updateEmployee(employeeId: string, employeePayload: Partial<Employee>): Promise<void> {
+    const payload: any = {};
+    if (employeePayload.name) payload.full_name = employeePayload.name;
+    if (employeePayload.company) payload.company = employeePayload.company;
+    if (employeePayload.linkType) payload.employment_type = employeePayload.linkType;
+    if (employeePayload.status) {
+      payload.status = employeePayload.status;
+      payload.active = employeePayload.status !== "Inativo";
+    }
+    if (employeePayload.department) payload.department = employeePayload.department;
+    if (employeePayload.job_role) payload.job_role = employeePayload.job_role;
+    if (employeePayload.start_date) payload.start_date = employeePayload.start_date;
+    if (employeePayload.resignation_date) payload.resignation_date = employeePayload.resignation_date;
+    if (employeePayload.remuneration_fixed !== undefined) {
+      payload.remuneration_fixed = employeePayload.remuneration_fixed;
+      payload.remuneration = employeePayload.remuneration_fixed;
+    }
+
+    const { error } = await supabase
+      .from("employees")
+      .update(payload)
+      .eq("id", employeeId);
+
+    if (error) throw error;
+  },
+
   async deleteEmployee(employeeId: string): Promise<void> {
     const { error } = await supabase
       .from('employees')

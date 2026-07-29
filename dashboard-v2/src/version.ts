@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.29";
+export const APP_VERSION = "v.02.53.30";
 export const VERSION_DATE = "2026-07-29";
 export const VERSION_CHANGELOG = [
+  "v.02.53.30 - Feat/People: Criado o utilitário cltFileParser.ts e o modal CltImportAuditModal.tsx para leitura, auditoria executiva e sincronização em lote de planilhas CLT (.csv / .xlsx) com conferência de batimento 100% das verbas, resolução de similaridade de nomes e detecção de status/desligamento automáticos.",
   "v.02.53.29 - Fix/People: Corrigido o cálculo dinâmico da data final do mês (getLastDayOfMonth) em ClearCostHistoryModal.tsx para meses de 30/28/31 dias (ex: 2025-06-30), eliminando a rejeição 22008 do PostgreSQL (date/time out of range) e garantindo a exclusão real dos lançamentos do Custo Histórico.",
   "v.02.53.28 - Feat/People: Criado o modal ClearCostHistoryModal.tsx para limpeza e exclusão de lançamentos do Custo Histórico por período (De/Até) ou global com aviso de segurança. Adicionado o método deleteMonthlyCostsByPeriod no PeopleHRService e integrados os botões de atalho na aba Custo Histórico da ficha individual e no header executivo da página People.",
   "v.02.53.27 - Fix/People: Incluído o valor da Hora Extra no Custo Total Real do mês (valor_liquido), separado o Adicional Noturno em valor_adicional_not, adicionado o selo de auditoria de batimento financeiro 100% por colaborador no DiannaBatchSyncModal.tsx e mantidos exclusivamente os valores 'CLT', 'PJ-MEI' e 'PJ-Simples' no campo Natureza da Relação.",
