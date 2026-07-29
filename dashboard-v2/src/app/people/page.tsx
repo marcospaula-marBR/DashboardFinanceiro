@@ -7,6 +7,7 @@ import { ProfileDrawer } from "@/components/people/ProfileDrawer";
 import { PeopleKpiCard } from "@/components/people/PeopleKpiCard";
 import { DeleteConfirmDialog } from "@/components/people/DeleteConfirmDialog";
 import { PayrollBatchImportModal } from "@/components/people/PayrollBatchImportModal";
+import { DiannaBatchSyncModal } from "@/components/people/DiannaBatchSyncModal";
 import { PeopleTable } from "@/components/people/PeopleTable";
 import { KPIStatsDrawer } from "@/components/people/KPIStatsDrawer";
 import { BatchPdfExportModal } from "@/components/people/BatchPdfExportModal";
@@ -21,7 +22,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText, Printer
+  FileText, Printer, Database
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -94,6 +95,7 @@ export default function PeoplePage() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isPayrollBatchModalOpen, setIsPayrollBatchModalOpen] = useState(false);
   const [isBatchPdfModalOpen, setIsBatchPdfModalOpen] = useState(false);
+  const [isDiannaBatchModalOpen, setIsDiannaBatchModalOpen] = useState(false);
   
   // C-Level Executive Drawer States
   const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "headcount_clt" | "headcount_pj" | "payroll_clt" | "payroll_pj" | "loans" | "health" | "audit" | "strategic" | "nopbid" | null>(null);
@@ -1156,6 +1158,15 @@ export default function PeoplePage() {
               <FileText size={14} /> Importar Folha
             </button>
 
+            {/* Import Dianna Batch (CLT NOVA) button */}
+            <button
+              onClick={() => setIsDiannaBatchModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-amber-300 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
+              title="Sincronizar e importar colaboradores e verbas históricas da planilha Dianna (CLT NOVA)"
+            >
+              <Database size={14} /> Importar Dianna (CLT)
+            </button>
+
             {/* Create new employee button */}
             <button
               onClick={handleCreateEmployeeClick}
@@ -1963,6 +1974,15 @@ export default function PeoplePage() {
         onClose={() => setIsBatchPdfModalOpen(false)}
         employees={employees}
         allMonthlyCosts={monthlyCosts}
+      />
+
+      <DiannaBatchSyncModal
+        isOpen={isDiannaBatchModalOpen}
+        onClose={() => setIsDiannaBatchModalOpen(false)}
+        onSuccess={() => {
+          fetchData();
+        }}
+        employees={employees}
       />
     </div>
   );
