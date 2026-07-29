@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.27";
+export const APP_VERSION = "v.02.53.28";
 export const VERSION_DATE = "2026-07-29";
 export const VERSION_CHANGELOG = [
+  "v.02.53.28 - Feat/People: Criado o modal ClearCostHistoryModal.tsx para limpeza e exclusão de lançamentos do Custo Histórico por período (De/Até) ou global com aviso de segurança. Adicionado o método deleteMonthlyCostsByPeriod no PeopleHRService e integrados os botões de atalho na aba Custo Histórico da ficha individual e no header executivo da página People.",
   "v.02.53.27 - Fix/People: Incluído o valor da Hora Extra no Custo Total Real do mês (valor_liquido), separado o Adicional Noturno em valor_adicional_not, adicionado o selo de auditoria de batimento financeiro 100% por colaborador no DiannaBatchSyncModal.tsx e mantidos exclusivamente os valores 'CLT', 'PJ-MEI' e 'PJ-Simples' no campo Natureza da Relação.",
   "v.02.53.26 - Feat/People: Mapeada a verba 'Holerite' da planilha Dianna diretamente para 'valor_fixo' (Salário Base no dashboard) e configurada a detecção e atualização automática da data de desligamento (resignation_date) e alteração de status para 'Inativo' na Ficha de Info Pessoal tanto em novos cadastros quanto em vínculos de colaboradores existentes em DiannaBatchSyncModal.tsx.",
   "v.02.53.25 - Fix/People: Adicionado o campo obrigatório 'vinculo_tipo' ('CLT') e o desdobramento correto dos benefícios (valor_vr, valor_vt, valor_cesta, valor_ajuda_custo) e valor_rescisao no costPayload em DiannaBatchSyncModal.tsx, eliminando a restrição NOT NULL no Supabase ao importar ex-colaboradores e colaboradores ativos da aba CLT NOVA.",

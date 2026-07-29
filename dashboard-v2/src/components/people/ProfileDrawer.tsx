@@ -12,6 +12,7 @@ import { LoansService, formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { isExternalEntity, formatCompanyTime, RELATIONSHIP_NATURE_LABELS } from "./PeopleBadges";
 import { ProfileExportModal } from "./ProfileExportModal";
+import { ClearCostHistoryModal } from "./ClearCostHistoryModal";
 
 interface HistoryItem {
   id: string;
@@ -129,6 +130,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [costPeriodFilter, setCostPeriodFilter] = useState<'all' | '3m' | '6m' | '12m' | 'custom'>('all');
   const [costSelectedYears, setCostSelectedYears] = useState<string[]>([]);
   const [costSelectedMonths, setCostSelectedMonths] = useState<string[]>([]);
+  const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
   const [isSearchingCEP, setIsSearchingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
   const [isSearchingCNPJCEP, setIsSearchingCNPJCEP] = useState(false);
@@ -3121,6 +3123,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             {isSearchingExisting ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
                             Buscar na Dianna
                           </button>
+                          <button
+                            onClick={() => setIsClearHistoryModalOpen(true)}
+                            className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm border border-rose-200"
+                            title="Limpar lançamentos de custos históricos por período"
+                          >
+                            <Trash2 size={14} />
+                            Limpar Histórico
+                          </button>
                           {costs && costs.length > 0 && (
                             <button
                               onClick={() => {
@@ -5644,6 +5654,22 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         bonds={bonds}
         costs={costs}
         loanSummary={loanSummary}
+      />
+
+      {/* Modal de Limpeza de Custo Histórico */}
+      <ClearCostHistoryModal
+        isOpen={isClearHistoryModalOpen}
+        onClose={() => setIsClearHistoryModalOpen(false)}
+        employeeId={profile?.id}
+        employeeName={profile?.name}
+        availableCompetencias={costs?.map(c => c.competencia)}
+        onSuccess={async () => {
+          if (profile?.id) {
+            const freshCosts = await PeopleHRService.getMonthlyCosts(profile.id);
+            setCosts(freshCosts || []);
+            onDataChanged?.(profile.id);
+          }
+        }}
       />
 
     </AnimatePresence>

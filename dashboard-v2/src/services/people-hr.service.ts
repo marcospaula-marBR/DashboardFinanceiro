@@ -632,4 +632,22 @@ export const PeopleHRService = {
       .eq('id', costId);
     if (error) throw error;
   },
+
+  async deleteMonthlyCostsByPeriod(employeeId?: string, startComp?: string, endComp?: string): Promise<number> {
+    let query = supabase.from('people_monthly_costs').delete({ count: 'exact' });
+
+    if (employeeId) {
+      query = query.eq('employee_id', employeeId);
+    }
+    if (startComp) {
+      query = query.gte('competencia', startComp);
+    }
+    if (endComp) {
+      query = query.lte('competencia', endComp);
+    }
+
+    const { count, error } = await query;
+    if (error) throw error;
+    return count || 0;
+  },
 };
