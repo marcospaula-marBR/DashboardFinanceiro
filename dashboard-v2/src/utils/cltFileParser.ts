@@ -55,40 +55,6 @@ function parseNumber(val: any): number {
 }
 
 /**
- * Normaliza a competência para formato YYYY-MM-01
- */
-function formatCompetencia(val: any): string | null {
-  if (!val) return null;
-  const strVal = String(val).trim();
-  if (strVal.toLowerCase() === "total" || strVal.toLowerCase() === "ciclo do mês") return null;
-
-  // Se for um objeto Date
-  if (val instanceof Date) {
-    const y = val.getUTCFullYear();
-    const m = String(val.getUTCMonth() + 1).padStart(2, "0");
-    return `${y}-${m}-01`;
-  }
-
-  // Tenta parsear formato YYYY-MM-DD ou YYYY-MM-01
-  const ymdMatch = strVal.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (ymdMatch) {
-    const y = ymdMatch[1];
-    const m = String(ymdMatch[2]).padStart(2, "0");
-    return `${y}-${m}-01`;
-  }
-
-  // Tenta parsear formato DD/MM/YYYY
-  const dmyMatch = strVal.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-  if (dmyMatch) {
-    const y = dmyMatch[3];
-    const m = String(dmyMatch[2]).padStart(2, "0");
-    return `${y}-${m}-01`;
-  }
-
-  return null;
-}
-
-/**
  * Normaliza data para YYYY-MM-DD
  */
 function formatDateISO(val: any): string | undefined {
@@ -144,23 +110,17 @@ export async function parseCltFile(fileOrBuffer: File | ArrayBuffer, fileName = 
     throw new Error("Arquivo vazio ou com estrutura inválida.");
   }
 
-  const headerRow = rows[0];
-  const competenciaCols: { colIndex: number; compStr: string }[] = [];
-
-  // Mapear colunas de competência
-  for (let c = 8; c < headerRow.length; c++) {
-    const compFormatted = formatCompetencia(headerRow[c]);
-    if (compFormatted) {
-      competenciaCols.push({ colIndex: c, compStr: compFormatted });
-    }
-  }
-
-  const competenciasSet = new Set<string>();
-  competenciaCols.forEach((cc) => competenciasSet.add(cc.compStr));
-  const competencias = Array.from(competenciasSet).sort();
-
   const parsedEmployees: CltParsedEmployee[] = [];
-  let currentEmp: CltParsedEmployee | null = null;
+  let currentEmpHeader: {
+    rawName: string;
+    statusRaw: string;
+    setor?: string;
+    cargoInicial?: string;
+    ultimoCargo?: string;
+    dataInicial?: string;
+    desligamento?: string;
+  } | null = null;
+  let currentBlockRows: any[][] = [];
   let empCounter = 0;
 
   for (let r = 1; r < rows.length; r++) {
@@ -168,112 +128,42 @@ export async function parseCltFile(fileOrBuffer: File | ArrayBuffer, fileName = 
     if (!row || row.length === 0) continue;
 
     const rawNameCell = row[1];
-    const verbaCell = row[8] ? String(row[8]).trim() : "";
-
-    // Se encontramos um novo colaborador (tem nome na coluna B)
     if (rawNameCell && String(rawNameCell).trim() !== "" && String(rawNameCell).trim().toLowerCase() !== "funcionários") {
-      if (currentEmp) {
-        // Finaliza cálculos do colaborador anterior
-        finalizeEmployee(currentEmp);
-        parsedEmployees.push(currentEmp);
+      if (currentEmpHeader) {
+        empCounter++;
+        parsedEmployees.push(processEmployeeBlock(currentEmpHeader, currentBlockRows, rows, empCounter));
       }
 
-      empCounter++;
       const rawName = String(rawNameCell).trim();
-      const statusRaw = row[2] ? String(row[2]).trim() : "Ativo";
-
-      currentEmp = {
-        id: `clt-emp-${empCounter}-${Date.now()}`,
+      currentEmpHeader = {
         rawName,
-        cleanName: rawName.replace(/\s+/g, " "),
-        status: statusRaw.toLowerCase().includes("inativ") || statusRaw.toLowerCase().includes("deslig") ? "Inativo" : "Ativo",
+        statusRaw: row[2] ? String(row[2]).trim() : "Ativo",
         setor: row[3] ? String(row[3]).trim() : undefined,
         cargoInicial: row[4] ? String(row[4]).trim() : undefined,
         ultimoCargo: row[5] ? String(row[5]).trim() : undefined,
         dataInicial: formatDateISO(row[6]),
         desligamento: formatDateISO(row[7]),
-        costsByCompetencia: {},
-        totalPlanilha: 0,
-        totalCalculado: 0,
-        difBatimento: 0,
-        isAuditOk: true,
       };
-    }
-
-    if (!currentEmp) continue;
-
-    // Processa a verba desta linha para as competências
-    if (verbaCell) {
-      const verbaNorm = verbaCell.toLowerCase();
-
-      for (const cc of competenciaCols) {
-        const comp = cc.compStr;
-        const val = parseNumber(row[cc.colIndex]);
-
-        if (!currentEmp.costsByCompetencia[comp]) {
-          currentEmp.costsByCompetencia[comp] = {
-            valor_fixo: 0,
-            valor_adiantamento: 0,
-            valor_hora_extra: 0,
-            valor_adicional_not: 0,
-            valor_vr: 0,
-            valor_vt: 0,
-            valor_ajuda_custo: 0,
-            valor_cesta: 0,
-            valor_bonus: 0,
-            valor_ferias: 0,
-            valor_rescisao: 0,
-            valor_decimo_terceiro: 0,
-            valor_descontos: 0,
-            outros_ajustes: 0,
-            total_liquido: 0,
-          };
-        }
-
-        const cost = currentEmp.costsByCompetencia[comp];
-
-        if (verbaNorm.includes("holerite") && !verbaNorm.includes("sem holerite")) {
-          cost.valor_fixo = val;
-        } else if (verbaNorm.includes("adiantamento")) {
-          cost.valor_adiantamento = val;
-        } else if (verbaNorm.includes("hora extra")) {
-          cost.valor_hora_extra = val;
-        } else if (verbaNorm.includes("adicional noturno")) {
-          cost.valor_adicional_not = val;
-        } else if (verbaNorm === "vr" || verbaNorm.includes("refeição")) {
-          cost.valor_vr = val;
-        } else if (verbaNorm === "vt" || verbaNorm.includes("transporte")) {
-          cost.valor_vt = val;
-        } else if (verbaNorm.includes("ajuda de custo")) {
-          cost.valor_ajuda_custo = val;
-        } else if (verbaNorm.includes("cesta")) {
-          cost.valor_cesta = val;
-        } else if (verbaNorm.includes("bonifica") || verbaNorm.includes("comiss")) {
-          cost.valor_bonus += val;
-        } else if (verbaNorm.includes("férias") || verbaNorm.includes("ferias")) {
-          cost.valor_ferias = val;
-        } else if (verbaNorm.includes("rescisão") || verbaNorm.includes("rescisao")) {
-          cost.valor_rescisao = val;
-        } else if (verbaNorm.includes("13º") || verbaNorm.includes("13")) {
-          cost.valor_decimo_terceiro = val;
-        } else if (verbaNorm.includes("desconto")) {
-          cost.valor_descontos = val;
-        } else if (verbaNorm.includes("sem holerite") || verbaNorm.includes("pagamento sem")) {
-          cost.outros_ajustes = val;
-        }
-      }
+      currentBlockRows = [row];
+    } else if (currentEmpHeader) {
+      currentBlockRows.push(row);
     }
   }
 
-  if (currentEmp) {
-    finalizeEmployee(currentEmp);
-    parsedEmployees.push(currentEmp);
+  if (currentEmpHeader) {
+    empCounter++;
+    parsedEmployees.push(processEmployeeBlock(currentEmpHeader, currentBlockRows, rows, empCounter));
   }
 
+  const allCompetenciasSet = new Set<string>();
   let totalFolhaAmount = 0;
+
   parsedEmployees.forEach((emp) => {
+    Object.keys(emp.costsByCompetencia).forEach((c) => allCompetenciasSet.add(c));
     totalFolhaAmount += emp.totalCalculado;
   });
+
+  const competencias = Array.from(allCompetenciasSet).sort();
 
   return {
     employees: parsedEmployees,
@@ -284,36 +174,142 @@ export async function parseCltFile(fileOrBuffer: File | ArrayBuffer, fileName = 
   };
 }
 
-/**
- * Recalcula totais por competência e total acumulado do colaborador
- */
-function finalizeEmployee(emp: CltParsedEmployee) {
-  let accTotal = 0;
-
-  for (const comp in emp.costsByCompetencia) {
-    const c = emp.costsByCompetencia[comp];
-    // Proventos + Adicionais + Benefícios
-    const proventos =
-      c.valor_fixo +
-      c.valor_adiantamento +
-      c.valor_hora_extra +
-      c.valor_adicional_not +
-      c.valor_vr +
-      c.valor_vt +
-      c.valor_ajuda_custo +
-      c.valor_cesta +
-      c.valor_bonus +
-      c.valor_ferias +
-      c.valor_rescisao +
-      c.valor_decimo_terceiro +
-      c.outros_ajustes;
-
-    c.total_liquido = proventos - c.valor_descontos;
-    accTotal += c.total_liquido;
+function processEmployeeBlock(
+  header: {
+    rawName: string;
+    statusRaw: string;
+    setor?: string;
+    cargoInicial?: string;
+    ultimoCargo?: string;
+    dataInicial?: string;
+    desligamento?: string;
+  },
+  blockRows: any[][],
+  globalRows: any[][],
+  empCounter: number
+): CltParsedEmployee {
+  // Procura a linha 'Ciclo do mês' que contém as datas das colunas neste bloco
+  let cicloRow = blockRows.find((r) => r && r[8] && String(r[8]).trim().toLowerCase() === "ciclo do mês");
+  if (!cicloRow) {
+    cicloRow = globalRows[0];
   }
 
+  const compCols: { colIndex: number; compStr: string }[] = [];
+  for (let c = 8; c < cicloRow.length; c++) {
+    const val = cicloRow[c];
+    if (val) {
+      let compStr: string | null = null;
+      if (val instanceof Date) {
+        const y = val.getUTCFullYear();
+        const m = String(val.getUTCMonth() + 1).padStart(2, "0");
+        compStr = `${y}-${m}-01`;
+      } else {
+        const str = String(val).trim();
+        const ymd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (ymd) compStr = `${ymd[1]}-${String(ymd[2]).padStart(2, "0")}-01`;
+      }
+      if (compStr) {
+        compCols.push({ colIndex: c, compStr });
+      }
+    }
+  }
+
+  const costsByCompetencia: Record<string, CltCostItem> = {};
+
+  for (const cc of compCols) {
+    let fixo = 0,
+      adiantamento = 0,
+      horaExtra = 0,
+      adnot = 0,
+      vr = 0,
+      vt = 0,
+      ajuda = 0,
+      cesta = 0,
+      bonus = 0,
+      ferias = 0,
+      rescisao = 0,
+      decimo3 = 0,
+      descontos = 0,
+      outros = 0,
+      totalRowVal = 0;
+
+    for (const r of blockRows) {
+      const verba = r[8] ? String(r[8]).trim().toLowerCase() : "";
+      const val = parseNumber(r[cc.colIndex]);
+      if (val === 0) continue;
+
+      if (verba.includes("holerite") && !verba.includes("sem holerite")) fixo = val;
+      else if (verba.includes("adiantamento")) adiantamento = val;
+      else if (verba.includes("hora extra")) horaExtra = val;
+      else if (verba.includes("adicional noturno")) adnot = val;
+      else if (verba === "vr" || verba.includes("refeição")) vr = val;
+      else if (verba === "vt" || verba.includes("transporte")) vt = val;
+      else if (verba.includes("ajuda de custo")) ajuda = val;
+      else if (verba.includes("cesta")) cesta = val;
+      else if (verba.includes("bonifica") || verba.includes("comiss")) bonus += val;
+      else if (verba.includes("férias") || verba.includes("ferias")) ferias = val;
+      else if (verba.includes("rescisão") || verba.includes("rescisao")) rescisao = val;
+      else if (verba.includes("13º") || verba.includes("13")) decimo3 = val;
+      else if (verba.includes("desconto")) descontos = val;
+      else if (verba.includes("sem holerite") || verba.includes("pagamento sem")) outros = val;
+      else if (verba === "" || !r[8]) totalRowVal = val;
+    }
+
+    const proventos =
+      fixo + adiantamento + horaExtra + adnot + vr + vt + ajuda + cesta + bonus + ferias + rescisao + decimo3 + outros;
+    const valorLiquido = proventos > 0 ? proventos - descontos : totalRowVal;
+
+    if (proventos > 0 || descontos > 0 || totalRowVal > 0) {
+      costsByCompetencia[cc.compStr] = {
+        valor_fixo: fixo > 0 ? fixo : proventos === 0 && totalRowVal > 0 ? totalRowVal : 0,
+        valor_adiantamento: adiantamento,
+        valor_hora_extra: horaExtra,
+        valor_adicional_not: adnot,
+        valor_vr: vr,
+        valor_vt: vt,
+        valor_ajuda_custo: ajuda,
+        valor_cesta: cesta,
+        valor_bonus: bonus,
+        valor_ferias: ferias,
+        valor_rescisao: rescisao,
+        valor_decimo_terceiro: decimo3,
+        valor_descontos: descontos,
+        outros_ajustes: outros,
+        total_liquido: valorLiquido,
+      };
+    }
+  }
+
+  const cleanName = header.rawName.replace(/\s+/g, " ");
+  const status =
+    header.statusRaw.toLowerCase().includes("inativ") || header.statusRaw.toLowerCase().includes("deslig")
+      ? "Inativo"
+      : "Ativo";
+
+  const emp: CltParsedEmployee = {
+    id: `clt-emp-${empCounter}-${Date.now()}`,
+    rawName: header.rawName,
+    cleanName,
+    status,
+    setor: header.setor,
+    cargoInicial: header.cargoInicial,
+    ultimoCargo: header.ultimoCargo,
+    dataInicial: header.dataInicial,
+    desligamento: header.desligamento,
+    costsByCompetencia,
+    totalPlanilha: 0,
+    totalCalculado: 0,
+    difBatimento: 0,
+    isAuditOk: true,
+  };
+
+  let accTotal = 0;
+  for (const c in costsByCompetencia) {
+    accTotal += costsByCompetencia[c].total_liquido;
+  }
   emp.totalCalculado = accTotal;
-  emp.totalPlanilha = accTotal; // Batimento 100% calculável
-  emp.difBatimento = Math.abs(emp.totalCalculado - emp.totalPlanilha);
-  emp.isAuditOk = emp.difBatimento < 0.05;
+  emp.totalPlanilha = accTotal;
+  emp.difBatimento = 0;
+
+  return emp;
 }

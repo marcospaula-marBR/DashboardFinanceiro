@@ -159,20 +159,47 @@ async function runImport() {
         valor_rescisao: c.valor_rescisao,
         valor_decimo_terceiro: c.valor_decimo_terceiro,
         valor_descontos: c.valor_descontos,
-        outros_ajustes: c.outros_ajustes,
+        verbas_adicionais: { outros_ajustes: c.outros_ajustes },
         valor_liquido: c.valor_liquido,
         origem: "dianna_batch_clt",
         observacao: "Carga direta automatizada da planilha CLT (.xlsx)"
       };
 
-      const { data: existingCost } = await supabase.from("people_monthly_costs").select("id").eq("employee_id", targetId).eq("competencia", comp).maybeSingle();
+      try {
+        const { data: existingCost, error: selectErr } = await supabase
+          .from("people_monthly_costs")
+          .select("id")
+          .eq("employee_id", targetId)
+          .eq("competencia", comp)
+          .maybeSingle();
 
-      if (existingCost?.id) {
-        await supabase.from("people_monthly_costs").update(costPayload).eq("id", existingCost.id);
-      } else {
-        await supabase.from("people_monthly_costs").insert([costPayload]);
+        if (selectErr) {
+          console.error("Erro ao buscar custo existente:", comp, targetId, selectErr.message);
+        }
+
+        if (existingCost?.id) {
+          const { error: updateErr } = await supabase
+            .from("people_monthly_costs")
+            .update(costPayload)
+            .eq("id", existingCost.id);
+          if (updateErr) {
+            console.error("Erro ao atualizar custo:", comp, pEmp.cleanName, updateErr.message);
+          } else {
+            insertedCostCount++;
+          }
+        } else {
+          const { error: insertErr } = await supabase
+            .from("people_monthly_costs")
+            .insert([costPayload]);
+          if (insertErr) {
+            console.error("Erro ao inserir custo:", comp, pEmp.cleanName, insertErr.message);
+          } else {
+            insertedCostCount++;
+          }
+        }
+      } catch (err) {
+        console.error("Exceção ao gravar custo:", comp, pEmp.cleanName, err);
       }
-      insertedCostCount++;
     }
   }
 

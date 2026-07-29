@@ -121,7 +121,7 @@ export const PeopleHRService = {
     return data || [];
   },
 
-  async getMonthlyCosts(employeeId: string, limit = 24): Promise<MonthlyCost[]> {
+  async getMonthlyCosts(employeeId: string, limit = 120): Promise<MonthlyCost[]> {
     const { data, error } = await supabase
       .from('people_monthly_costs')
       .select('*')
