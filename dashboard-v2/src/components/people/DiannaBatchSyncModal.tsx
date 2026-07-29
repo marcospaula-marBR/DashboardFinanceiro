@@ -140,26 +140,43 @@ export function DiannaBatchSyncModal({
         setCurrentEmpName(item.emp.nome);
         let employeeId = item.userRes.targetId;
 
-        // 1. Criar novo cadastro se necessário ou se a opção 'new' estiver selecionada
-        if (item.userRes.mode === 'new' || !employeeId) {
-          const rawStatus = item.emp.status ? item.emp.status.toLowerCase() : '';
-          const statusVal: "Ativo" | "Inativo" | "Férias" = 
-            rawStatus.includes('férias') || rawStatus.includes('ferias') ? 'Férias' :
-            rawStatus.includes('inativo') || rawStatus.includes('desligado') ? 'Inativo' : 'Ativo';
+        const rawStatus = item.emp.status ? item.emp.status.toLowerCase() : '';
+        const hasDesligamento = !!item.emp.data_desligamento;
+        const isExEmp = hasDesligamento || rawStatus.includes('inativo') || rawStatus.includes('desligado');
 
+        const statusVal: "Ativo" | "Inativo" | "Férias" = isExEmp
+          ? 'Inativo'
+          : rawStatus.includes('férias') || rawStatus.includes('ferias')
+          ? 'Férias'
+          : 'Ativo';
+
+        const resignationDate = item.emp.data_desligamento || undefined;
+        const startDate = item.emp.data_admissao || undefined;
+
+        // 1. Criar novo cadastro ou Atualizar cadastro existente com data de desligamento e status inativo
+        if (item.userRes.mode === 'new' || !employeeId) {
           const newEmpPayload: Partial<Employee> = {
             name: item.emp.nome,
             status: statusVal,
             department: item.emp.setor || 'Operacional',
             job_role: item.emp.ultimo_cargo || item.emp.cargo_inicial || 'Auxiliar',
             linkType: 'CLT',
-            start_date: item.emp.data_admissao || undefined,
-            resignation_date: item.emp.data_desligamento || undefined,
+            start_date: startDate,
+            resignation_date: resignationDate,
             company: 'DZM',
           };
 
           const savedEmp = await PeopleService.saveEmployeeProfile(newEmpPayload);
           employeeId = savedEmp.id;
+        } else if (employeeId) {
+          // Se já existir, sincroniza a data de desligamento e status para Inativo se houver desligamento
+          const updateEmpPayload: Partial<Employee> = {
+            id: employeeId,
+            status: statusVal,
+            ...(resignationDate ? { resignation_date: resignationDate } : {}),
+            ...(startDate ? { start_date: startDate } : {})
+          };
+          await PeopleService.saveEmployeeProfile(updateEmpPayload);
         }
 
         // 2. Salvar matriz de verbas por competência
@@ -184,6 +201,7 @@ export function DiannaBatchSyncModal({
               employee_id: employeeId,
               competencia: comp,
               vinculo_tipo: (item.emp.tipo_vinculo as 'CLT' | 'MEI') || 'CLT',
+              valor_fixo: holerite, // Holerite na planilha Dianna = Salário Base no dashboard
               valor_holerite: holerite,
               valor_adiantamento: adiantamento,
               valor_hora_extra: horaExtra,
