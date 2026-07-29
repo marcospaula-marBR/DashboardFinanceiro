@@ -646,8 +646,8 @@ export const PeopleHRService = {
       query = query.lte('competencia', endComp);
     }
 
-    const { count, error } = await query;
+    const { data, count, error } = await query.select();
     if (error) throw error;
-    return count || 0;
+    return count !== null && count !== undefined ? count : (data ? data.length : 0);
   },
 };

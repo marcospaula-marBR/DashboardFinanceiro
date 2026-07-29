@@ -33,6 +33,17 @@ export function ClearCostHistoryModal({
 
   if (!isOpen) return null;
 
+  const getLastDayOfMonth = (compStr: string): string => {
+    const clean = compStr.trim();
+    const parts = clean.split('-');
+    if (parts.length < 2) return clean;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    if (isNaN(year) || isNaN(month)) return clean;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${parts[0]}-${parts[1].padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  };
+
   const handleClearHistory = async () => {
     try {
       setIsDeleting(true);
@@ -43,12 +54,11 @@ export function ClearCostHistoryModal({
 
       if (rangeMode === 'custom') {
         if (startComp) {
-          // Garante formato YYYY-MM-01
-          fromComp = startComp.length === 7 ? `${startComp}-01` : startComp;
+          const parts = startComp.split('-');
+          fromComp = `${parts[0]}-${parts[1].padStart(2, '0')}-01`;
         }
         if (endComp) {
-          // Garante formato YYYY-MM-31 ou fim de mês para lte
-          toComp = endComp.length === 7 ? `${endComp}-31` : endComp;
+          toComp = getLastDayOfMonth(endComp);
         }
       }
 
