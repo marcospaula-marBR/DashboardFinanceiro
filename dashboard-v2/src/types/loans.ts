@@ -310,15 +310,12 @@ export type EntityType =
   | "accredited_provider";
 
 export type RelationshipNature =
+  | "CLT"
+  | "PJ-MEI"
+  | "PJ-Simples"
   | "clt_internal"
   | "pj_specialized"
-  | "accredited_company"
-  | "strategic_partner"
-  | "approved_supplier"
-  | "external_consultancy"
-  | "council_member"
-  | "shareholder"
-  | "founder";
+  | "accredited_company";
 
 export type PBLevel = "E" | "T" | "O";
 export type PBDegree = 1 | 2 | 3;

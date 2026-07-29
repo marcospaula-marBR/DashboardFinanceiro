@@ -391,7 +391,11 @@ export default function PeoplePage() {
 
     // Filtro por Natureza da Relação
     if (filterRelationshipNature.length > 0) {
-      result = result.filter(e => filterRelationshipNature.includes(e.relationshipNature || ''));
+      result = result.filter(e => {
+        const nat = e.relationshipNature || '';
+        const mappedNat = nat === 'clt_internal' ? 'CLT' : nat === 'pj_specialized' ? 'PJ-MEI' : nat === 'accredited_company' ? 'PJ-Simples' : nat;
+        return filterRelationshipNature.includes(nat) || filterRelationshipNature.includes(mappedNat);
+      });
     }
 
     // Filtro por Nível PB (E, T, O)
@@ -675,15 +679,9 @@ export default function PeoplePage() {
               onChange={setFilterRelationshipNature}
               placeholder="Todas as Naturezas"
               options={[
-                { label: 'Integrador CLT', value: 'clt_internal' },
-                { label: 'Prestador PJ', value: 'pj_specialized' },
-                { label: 'Empresa Credenciada', value: 'accredited_company' },
-                { label: 'Parceiro Estratégico', value: 'strategic_partner' },
-                { label: 'Fornecedor Homologado', value: 'approved_supplier' },
-                { label: 'Consultoria Externa', value: 'external_consultancy' },
-                { label: 'Membro do Conselho', value: 'council_member' },
-                { label: 'Acionista', value: 'shareholder' },
-                { label: 'Sócio Fundador', value: 'founder' }
+                { label: 'CLT', value: 'CLT' },
+                { label: 'PJ-MEI', value: 'PJ-MEI' },
+                { label: 'PJ-Simples', value: 'PJ-Simples' }
               ]}
             />
           </div>
@@ -920,15 +918,9 @@ export default function PeoplePage() {
                     onChange={setFilterRelationshipNature}
                     placeholder="Todas as Naturezas"
                     options={[
-                      { label: 'Integrador CLT', value: 'clt_internal' },
-                      { label: 'Prestador PJ', value: 'pj_specialized' },
-                      { label: 'Empresa Credenciada', value: 'accredited_company' },
-                      { label: 'Parceiro Estratégico', value: 'strategic_partner' },
-                      { label: 'Fornecedor Homologado', value: 'approved_supplier' },
-                      { label: 'Consultoria Externa', value: 'external_consultancy' },
-                      { label: 'Membro do Conselho', value: 'council_member' },
-                      { label: 'Acionista', value: 'shareholder' },
-                      { label: 'Sócio Fundador', value: 'founder' }
+                      { label: 'CLT', value: 'CLT' },
+                      { label: 'PJ-MEI', value: 'PJ-MEI' },
+                      { label: 'PJ-Simples', value: 'PJ-Simples' }
                     ]}
                   />
                 </div>

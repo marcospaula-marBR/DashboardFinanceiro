@@ -120,27 +120,21 @@ export function PeopleClassificationBadge({
 // ─── Relationship Nature Badge ───────────────────────────────────────────────
 
 export const RELATIONSHIP_NATURE_LABELS: Record<RelationshipNature, string> = {
-  clt_internal: "Integrante Interno (CLT)",
-  pj_specialized: "Prestador Especializado (PJ)",
-  accredited_company: "Empresa Credenciada",
-  strategic_partner: "Parceiro Estratégico",
-  approved_supplier: "Fornecedor Homologado",
-  external_consultancy: "Consultoria Externa",
-  council_member: "Membro do Conselho",
-  shareholder: "Acionista",
-  founder: "Fundador / Sócio",
+  CLT: "CLT",
+  "PJ-MEI": "PJ-MEI",
+  "PJ-Simples": "PJ-Simples",
+  clt_internal: "CLT",
+  pj_specialized: "PJ-MEI",
+  accredited_company: "PJ-Simples",
 };
 
 const RELATIONSHIP_NATURE_STYLES: Record<RelationshipNature, string> = {
+  CLT: "bg-blue-50 text-blue-700 border-blue-150",
+  "PJ-MEI": "bg-amber-50 text-amber-700 border-amber-150",
+  "PJ-Simples": "bg-purple-50 text-purple-700 border-purple-150",
   clt_internal: "bg-blue-50 text-blue-700 border-blue-150",
-  pj_specialized: "bg-orange-50 text-orange-700 border-orange-150",
-  accredited_company: "bg-orange-50 text-orange-700 border-orange-100",
-  strategic_partner: "bg-emerald-50 text-emerald-700 border-emerald-150",
-  approved_supplier: "bg-slate-100 text-slate-700 border-slate-200",
-  external_consultancy: "bg-purple-50 text-purple-700 border-purple-150",
-  council_member: "bg-indigo-50 text-indigo-700 border-indigo-150",
-  shareholder: "bg-teal-50 text-teal-700 border-teal-150",
-  founder: "bg-amber-50 text-amber-700 border-amber-200",
+  pj_specialized: "bg-amber-50 text-amber-700 border-amber-150",
+  accredited_company: "bg-purple-50 text-purple-700 border-purple-150",
 };
 
 export function RelationshipNatureBadge({ 

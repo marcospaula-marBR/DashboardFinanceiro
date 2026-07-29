@@ -537,11 +537,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       // Se mudar o Vínculo (linkType), atualizar reativamente a Natureza da Relação (relationshipNature)
       if (field === 'linkType') {
         if (value === 'CLT') {
-          next.relationshipNature = 'clt_internal';
+          next.relationshipNature = 'CLT';
         } else if (value === 'PJ') {
-          next.relationshipNature = 'pj_specialized';
+          next.relationshipNature = 'PJ-MEI';
         } else if (value === 'Estagiário') {
-          next.relationshipNature = 'clt_internal';
+          next.relationshipNature = 'CLT';
         }
       }
 
@@ -2117,15 +2117,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2 outline-none focus:border-emerald-500"
                               >
                                 <option value="">Selecione...</option>
-                                <option value="clt_internal">Integrante Interno (CLT)</option>
-                                <option value="pj_specialized">Prestador Especializado (PJ)</option>
-                                <option value="accredited_company">Empresa Credenciada</option>
-                                <option value="strategic_partner">Parceiro Estratégico</option>
-                                <option value="approved_supplier">Fornecedor Homologado</option>
-                                <option value="external_consultancy">Consultoria Externa</option>
-                                <option value="council_member">Membro do Conselho</option>
-                                <option value="shareholder">Acionista</option>
-                                <option value="founder">Fundador / Sócio</option>
+                                <option value="CLT">CLT</option>
+                                <option value="PJ-MEI">PJ-MEI</option>
+                                <option value="PJ-Simples">PJ-Simples</option>
                               </select>
                             ) : (
                               <div className="text-xs font-semibold bg-slate-100 px-2 py-1 rounded text-slate-700 mt-1 self-start inline-block uppercase">

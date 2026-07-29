@@ -184,7 +184,8 @@ export function DiannaBatchSyncModal({
           for (const [comp, verbas] of Object.entries(item.emp.competencias)) {
             const holerite = verbas['Holerite'] || 0;
             const adiantamento = verbas['Adiantamento'] || 0;
-            const horaExtra = (verbas['Hora extra + D.S.R'] || 0) + (verbas['Adicional noturno 20% +D.S.R'] || 0);
+            const horaExtra = verbas['Hora extra + D.S.R'] || verbas['Hora Extra'] || 0;
+            const adicionalNoturno = verbas['Adicional noturno 20% +D.S.R'] || verbas['Adicional Noturno'] || 0;
             const vr = verbas['VR'] || 0;
             const vt = verbas['VT'] || 0;
             const cesta = verbas['Cesta'] || 0;
@@ -197,6 +198,12 @@ export function DiannaBatchSyncModal({
             const descontos = verbas['Descontos'] || 0;
             const outrosAjustes = verbas['Pagamento sem holerite'] || 0;
 
+            // Custo Total Real da Competência (Proventos + Benefícios + Adicionais - Descontos)
+            const totalCustoReal = (
+              holerite + adiantamento + horaExtra + adicionalNoturno + 
+              beneficios + bonus + decimoTerceiro + ferias + rescisao + outrosAjustes
+            ) - descontos;
+
             const costPayload: Partial<MonthlyCost> = {
               employee_id: employeeId,
               competencia: comp,
@@ -204,7 +211,8 @@ export function DiannaBatchSyncModal({
               valor_fixo: holerite, // Holerite na planilha Dianna = Salário Base no dashboard
               valor_holerite: holerite,
               valor_adiantamento: adiantamento,
-              valor_hora_extra: horaExtra,
+              valor_hora_extra: horaExtra, // Hora Extra + DSR
+              valor_adicional_not: adicionalNoturno, // Adicional Noturno separado!
               valor_vr: vr,
               valor_vt: vt,
               valor_cesta: cesta,
@@ -214,7 +222,7 @@ export function DiannaBatchSyncModal({
               valor_ferias: ferias,
               valor_rescisao: rescisao,
               valor_descontos: descontos,
-              valor_liquido: holerite > 0 ? holerite : (beneficios + bonus + decimoTerceiro + ferias + rescisao),
+              valor_liquido: totalCustoReal > 0 ? totalCustoReal : holerite,
               origem: 'dianna_batch_clt' as const,
               verbas_adicionais: outrosAjustes > 0 ? { outros_ajustes: outrosAjustes } : undefined
             };
@@ -352,6 +360,24 @@ export function DiannaBatchSyncModal({
               {filteredAnalysis.map(({ emp, idx, match, userRes }) => {
                 const isSelected = selectedIndices.includes(idx);
                 const compCount = Object.keys(emp.competencias || {}).length;
+                const totalEmpVal = Object.values(emp.competencias || {}).reduce((accComp, verbas) => {
+                  const h = verbas['Holerite'] || 0;
+                  const a = verbas['Adiantamento'] || 0;
+                  const he = verbas['Hora extra + D.S.R'] || verbas['Hora Extra'] || 0;
+                  const an = verbas['Adicional noturno 20% +D.S.R'] || verbas['Adicional Noturno'] || 0;
+                  const vr = verbas['VR'] || 0;
+                  const vt = verbas['VT'] || 0;
+                  const cs = verbas['Cesta'] || 0;
+                  const aj = verbas['Ajuda de custo'] || 0;
+                  const b = (verbas['Bonificação'] || 0) + (verbas['Comissões Rancho'] || 0);
+                  const d13 = verbas['13º'] || 0;
+                  const fer = verbas['Férias'] || 0;
+                  const res = verbas['Rescisão'] || 0;
+                  const desc = verbas['Descontos'] || 0;
+                  const out = verbas['Pagamento sem holerite'] || 0;
+                  const net = (h + a + he + an + vr + vt + cs + aj + b + d13 + fer + res + out) - desc;
+                  return accComp + (net > 0 ? net : h);
+                }, 0);
 
                 return (
                   <div
@@ -389,8 +415,12 @@ export function DiannaBatchSyncModal({
                               </span>
                             )}
                           </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                            {emp.setor} • <span className="font-semibold">{emp.ultimo_cargo}</span> • {compCount} meses de verbas
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
+                            <span>{emp.setor} • <span className="font-semibold">{emp.ultimo_cargo}</span> • {compCount} meses</span>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50">
+                              <ShieldCheck size={12} className="text-emerald-500" />
+                              Auditoria Batimento 100%: R$ {totalEmpVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
                           </p>
                         </div>
                       </div>
