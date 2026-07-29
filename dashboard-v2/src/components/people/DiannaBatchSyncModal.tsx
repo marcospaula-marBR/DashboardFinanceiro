@@ -3,7 +3,7 @@ import {
   X, Database, Search, CheckCircle2, AlertTriangle, UserPlus, 
   Loader2, Check, RefreshCw, Layers, ShieldCheck, ArrowRight, UserCheck
 } from 'lucide-react';
-import { Employee } from '@/types/loans';
+import { Employee, MonthlyCost } from '@/types/loans';
 import { PeopleService } from '@/services/people.service';
 import { PeopleHRService } from '@/services/people-hr.service';
 import { findBestNameMatch, NameMatchResult } from '@/utils/nameSimilarity';
@@ -180,20 +180,25 @@ export function DiannaBatchSyncModal({
             const descontos = verbas['Descontos'] || 0;
             const outrosAjustes = verbas['Pagamento sem holerite'] || 0;
 
-            const costPayload = {
+            const costPayload: Partial<MonthlyCost> = {
               employee_id: employeeId,
               competencia: comp,
-              valor_liquido: holerite,
+              vinculo_tipo: (item.emp.tipo_vinculo as 'CLT' | 'MEI') || 'CLT',
+              valor_holerite: holerite,
               valor_adiantamento: adiantamento,
               valor_hora_extra: horaExtra,
-              valor_beneficios: beneficios,
+              valor_vr: vr,
+              valor_vt: vt,
+              valor_cesta: cesta,
+              valor_ajuda_custo: ajudaCusto,
               valor_bonus: bonus,
               valor_decimo_terceiro: decimoTerceiro,
               valor_ferias: ferias,
-              rescisao: rescisao,
-              descontos: descontos,
-              outros_ajustes: outrosAjustes,
-              origem: 'dianna_batch_clt' as const
+              valor_rescisao: rescisao,
+              valor_descontos: descontos,
+              valor_liquido: holerite > 0 ? holerite : (beneficios + bonus + decimoTerceiro + ferias + rescisao),
+              origem: 'dianna_batch_clt' as const,
+              verbas_adicionais: outrosAjustes > 0 ? { outros_ajustes: outrosAjustes } : undefined
             };
 
             await PeopleHRService.upsertMonthlyCost(costPayload);

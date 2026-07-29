@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.24";
+export const APP_VERSION = "v.02.53.25";
 export const VERSION_DATE = "2026-07-29";
 export const VERSION_CHANGELOG = [
+  "v.02.53.25 - Fix/People: Adicionado o campo obrigatório 'vinculo_tipo' ('CLT') e o desdobramento correto dos benefícios (valor_vr, valor_vt, valor_cesta, valor_ajuda_custo) e valor_rescisao no costPayload em DiannaBatchSyncModal.tsx, eliminando a restrição NOT NULL no Supabase ao importar ex-colaboradores e colaboradores ativos da aba CLT NOVA.",
   "v.02.53.24 - Feat/People: Sincronização automática e importação em lote da aba 'CLT NOVA' (planilha Dianna) com algoritmo inteligente de similaridade de nomes (nameSimilarity.ts) para identificação e prevenção de duplicidades por grafia. Adicionado novo modal DiannaBatchSyncModal.tsx e gerador de Data Lake v2.",
   "v.02.53.23 - Fix/DRE: Revisadas e alinhadas as fórmulas de Margem Operacional (Resultado Operacional ÷ Rec. Líquida) e Margem EBITDA (EBITDA ÷ Rec. Líquida), adicionando o tratamento de Depreciação/Amortização e nota explicativa no modal de conciliação quando o período não possui lançamentos não caixa.",
   "v.02.53.22 - Feat/DRE: Incluídas as categorias 'Intermediação de Negócios - Receitas' e 'Mútuo - Entradas' na composição total e mensal do card e indicador 'Outras Entradas'.",
