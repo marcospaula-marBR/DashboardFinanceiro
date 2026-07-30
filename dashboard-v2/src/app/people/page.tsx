@@ -137,7 +137,7 @@ export default function PeoplePage() {
   // Insights & Alerts states
   const [noRaiseMonths, setNoRaiseMonths] = useState(6);
   const [isCostSectionOpen, setIsCostSectionOpen] = useState(false);
-  const [costDetailMode, setCostDetailMode] = useState<'fixo'|'bonus'|'comissao'|'incentivos'|'conectividade'|'total'|null>(null);
+  const [costDetailMode, setCostDetailMode] = useState<'fixo'|'extras'|'bonus'|'comissao'|'incentivos'|'beneficios'|'decimo_ferias'|'conectividade'|'total'|null>(null);
   const [noPromoMonths, setNoPromoMonths] = useState(6);
   const [noGradeMonths, setNoGradeMonths] = useState(6);
   const [filterInsight, setFilterInsight] = useState<string | null>(null);
@@ -315,27 +315,39 @@ export default function PeoplePage() {
     };
   }, [filteredEmployees, allAuditIssues]);
 
-  // 💰 Custos Históricos — agrega monthlyCosts dos colaboradores filtrados
+  // 💰 Custos Históricos — agrega monthlyCosts dos colaboradores filtrados via PeopleHRService.computeCostStats
   const historicalCostsSummary = useMemo(() => {
-    const filteredIds = new Set(filteredEmployees.map(e => e.id));
-    const relevantCosts = monthlyCosts.filter(c => filteredIds.has(c.employee_id));
     const count = filteredEmployees.length || 1;
 
-    const totalFixo = relevantCosts.reduce((s, c) => s + (c.valor_fixo || 0), 0);
-    const totalBonus = relevantCosts.reduce((s, c) => s + (c.valor_bonus || 0), 0);
-    const totalComissao = relevantCosts.reduce((s, c) => s + (c.valor_comissao || 0), 0);
-    const totalIncentivos = relevantCosts.reduce((s, c) => s + (c.valor_incentivos || 0), 0);
-    // Conectividade: calculada a partir do campo remuneration_connectivity dos colaboradores filtrados
-    const totalConectividade = filteredEmployees.reduce((s, e) => s + (e.remuneration_connectivity || 0), 0);
-    const totalGeral = totalFixo + totalBonus + totalComissao + totalIncentivos + totalConectividade;
+    let totalFixo = 0;
+    let totalExtras = 0;
+    let totalBonus = 0;
+    let totalBeneficios = 0;
+    let totalDecimoFerias = 0;
+    let totalGeral = 0;
+
+    filteredEmployees.forEach(emp => {
+      const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
+      const stats = PeopleHRService.computeCostStats(empCosts);
+      if (stats) {
+        totalFixo += (stats.fixedTotal || 0);
+        totalExtras += (stats.horaExtraTotal || 0) + (stats.adicionalNotTotal || 0);
+        totalBonus += (stats.bonusTotal || 0) + (stats.commissionTotal || 0) + (stats.incentivosTotal || 0);
+        totalBeneficios += (stats.beneficiosTotal || 0) + (emp.remuneration_connectivity || 0);
+        totalDecimoFerias += (stats.decimoTerceiroTotal || 0) + (stats.feriasTotal || 0) + (stats.rescisaoTotal || 0);
+        totalGeral += (stats.total || 0);
+      } else {
+        totalBeneficios += (emp.remuneration_connectivity || 0);
+      }
+    });
 
     return {
-      totalFixo,    avgFixo: totalFixo / count,
-      totalBonus,   avgBonus: totalBonus / count,
-      totalComissao, avgComissao: totalComissao / count,
-      totalIncentivos, avgIncentivos: totalIncentivos / count,
-      totalConectividade, avgConectividade: totalConectividade / count,
-      totalGeral,   avgGeral: totalGeral / count,
+      totalFixo,          avgFixo: totalFixo / count,
+      totalExtras,        avgExtras: totalExtras / count,
+      totalBonus,         avgBonus: totalBonus / count,
+      totalBeneficios,    avgBeneficios: totalBeneficios / count,
+      totalDecimoFerias,  avgDecimoFerias: totalDecimoFerias / count,
+      totalGeral,         avgGeral: totalGeral / count,
       count,
     };
   }, [filteredEmployees, monthlyCosts]);
@@ -1356,7 +1368,7 @@ export default function PeoplePage() {
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-100 text-blue-600 shrink-0">
                       <DollarSign size={20} />
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fixo</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Salário Base</p>
                   </div>
                   <p className="text-2xl font-black leading-tight text-blue-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalFixo) : '••••••'}
@@ -1364,7 +1376,24 @@ export default function PeoplePage() {
                   <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgFixo) : '•••'}</p>
                 </div>
 
-                {/* Card: Bônus */}
+                {/* Card: HE & Noturno */}
+                <div
+                  onClick={() => setCostDetailMode('extras')}
+                  className="flex flex-col gap-3 p-5 rounded-2xl border border-amber-100 bg-amber-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-100 text-amber-600 shrink-0">
+                      <Zap size={20} />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">HE & Noturno</p>
+                  </div>
+                  <p className="text-2xl font-black leading-tight text-amber-700">
+                    {showValues ? formatCurrency(historicalCostsSummary.totalExtras) : '••••••'}
+                  </p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgExtras) : '•••'}</p>
+                </div>
+
+                {/* Card: Bônus & Comissões */}
                 <div
                   onClick={() => setCostDetailMode('bonus')}
                   className="flex flex-col gap-3 p-5 rounded-2xl border border-emerald-100 bg-emerald-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
@@ -1373,7 +1402,7 @@ export default function PeoplePage() {
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-100 text-emerald-600 shrink-0">
                       <TrendingUp size={20} />
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bônus</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bônus & Comissões</p>
                   </div>
                   <p className="text-2xl font-black leading-tight text-emerald-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalBonus) : '••••••'}
@@ -1381,55 +1410,38 @@ export default function PeoplePage() {
                   <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgBonus) : '•••'}</p>
                 </div>
 
-                {/* Card: Comissões */}
+                {/* Card: Benefícios */}
                 <div
-                  onClick={() => setCostDetailMode('comissao')}
-                  className="flex flex-col gap-3 p-5 rounded-2xl border border-amber-100 bg-amber-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-100 text-amber-600 shrink-0">
-                      <Coins size={20} />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Comissões</p>
-                  </div>
-                  <p className="text-2xl font-black leading-tight text-amber-700">
-                    {showValues ? formatCurrency(historicalCostsSummary.totalComissao) : '••••••'}
-                  </p>
-                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgComissao) : '•••'}</p>
-                </div>
-
-                {/* Card: Incentivos */}
-                <div
-                  onClick={() => setCostDetailMode('incentivos')}
-                  className="flex flex-col gap-3 p-5 rounded-2xl border border-indigo-100 bg-indigo-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-indigo-100 text-indigo-600 shrink-0">
-                      <Zap size={20} />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Incentivos</p>
-                  </div>
-                  <p className="text-2xl font-black leading-tight text-indigo-700">
-                    {showValues ? formatCurrency(historicalCostsSummary.totalIncentivos) : '••••••'}
-                  </p>
-                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgIncentivos) : '•••'}</p>
-                </div>
-
-                {/* Card: Conectividade */}
-                <div
-                  onClick={() => setCostDetailMode('conectividade')}
+                  onClick={() => setCostDetailMode('beneficios')}
                   className="flex flex-col gap-3 p-5 rounded-2xl border border-cyan-100 bg-cyan-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-cyan-100 text-cyan-600 shrink-0">
                       <Wifi size={20} />
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Conectividade</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Benefícios</p>
                   </div>
                   <p className="text-2xl font-black leading-tight text-cyan-700">
-                    {showValues ? formatCurrency(historicalCostsSummary.totalConectividade) : '••••••'}
+                    {showValues ? formatCurrency(historicalCostsSummary.totalBeneficios) : '••••••'}
                   </p>
-                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgConectividade) : '•••'}</p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgBeneficios) : '•••'}</p>
+                </div>
+
+                {/* Card: 13º & Férias */}
+                <div
+                  onClick={() => setCostDetailMode('decimo_ferias')}
+                  className="flex flex-col gap-3 p-5 rounded-2xl border border-indigo-100 bg-indigo-50 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-indigo-100 text-indigo-600 shrink-0">
+                      <Coins size={20} />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">13º & Férias</p>
+                  </div>
+                  <p className="text-2xl font-black leading-tight text-indigo-700">
+                    {showValues ? formatCurrency(historicalCostsSummary.totalDecimoFerias) : '••••••'}
+                  </p>
+                  <p className="text-[11px] text-slate-500">Média: {showValues ? formatCurrency(historicalCostsSummary.avgDecimoFerias) : '•••'}</p>
                 </div>
 
                 {/* Card: Total Geral */}
@@ -1469,34 +1481,33 @@ export default function PeoplePage() {
                 {/* Modal Header */}
                 {(() => {
                   const modeLabels: Record<string, { title: string; icon: ReactNode; color: string }> = {
-                    fixo:          { title: 'Custo Fixo por Colaborador',       icon: <DollarSign size={20} />, color: 'text-blue-400' },
-                    bonus:         { title: 'Bônus por Colaborador',            icon: <TrendingUp size={20} />, color: 'text-emerald-400' },
-                    comissao:      { title: 'Comissões por Colaborador',        icon: <Coins size={20} />,     color: 'text-amber-400' },
-                    incentivos:    { title: 'Incentivos por Colaborador',       icon: <Zap size={20} />,       color: 'text-indigo-400' },
-                    conectividade: { title: 'Conectividade por Colaborador',   icon: <Wifi size={20} />,      color: 'text-cyan-400' },
-                    total:         { title: 'Total de Custos por Colaborador', icon: <Wallet size={20} />,    color: 'text-emerald-400' },
+                    fixo:          { title: 'Salário Base (Fixo) por Colaborador',         icon: <DollarSign size={20} />, color: 'text-blue-400' },
+                    extras:        { title: 'Horas Extras & Adic. Noturno por Colaborador', icon: <Zap size={20} />,        color: 'text-amber-400' },
+                    bonus:         { title: 'Bônus & Comissões por Colaborador',            icon: <TrendingUp size={20} />, color: 'text-emerald-400' },
+                    beneficios:    { title: 'Benefícios & Conectividade por Colaborador',   icon: <Wifi size={20} />,       color: 'text-cyan-400' },
+                    decimo_ferias: { title: '13º, Férias & Rescisão por Colaborador',         icon: <Coins size={20} />,      color: 'text-indigo-400' },
+                    total:         { title: 'Total Geral Desembolsado por Colaborador',     icon: <Wallet size={20} />,     color: 'text-emerald-400' },
                   };
-                  const { title: modalTitle, icon: modalIcon, color: modalColor } = modeLabels[costDetailMode];
+                  const { title: modalTitle, icon: modalIcon, color: modalColor } = modeLabels[costDetailMode] || modeLabels['total'];
 
-                  // Build per-employee data
-                  const filteredIds = new Set(filteredEmployees.map(e => e.id));
-                  const costsForFiltered = monthlyCosts.filter(c => filteredIds.has(c.employee_id));
-
-                  // Group by employee_id
+                  // Group by employee_id via PeopleHRService.computeCostStats
                   const costByEmployee = filteredEmployees.map(emp => {
-                    const empCosts = costsForFiltered.filter(c => c.employee_id === emp.id);
-                    const totalFixoEmp   = empCosts.reduce((s, c) => s + (c.valor_fixo || 0), 0);
-                    const totalBonusEmp  = empCosts.reduce((s, c) => s + (c.valor_bonus || 0), 0);
-                    const totalComEmp    = empCosts.reduce((s, c) => s + (c.valor_comissao || 0), 0);
-                    const totalIncEmp    = empCosts.reduce((s, c) => s + (c.valor_incentivos || 0), 0);
-                    const totalConEmp    = emp.remuneration_connectivity || 0;
-                    const totalGeralEmp  = totalFixoEmp + totalBonusEmp + totalComEmp + totalIncEmp + totalConEmp;
+                    const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
+                    const stats = PeopleHRService.computeCostStats(empCosts);
+                    const totalFixoEmp       = stats?.fixedTotal || 0;
+                    const totalExtrasEmp     = (stats?.horaExtraTotal || 0) + (stats?.adicionalNotTotal || 0);
+                    const totalBonusEmp      = (stats?.bonusTotal || 0) + (stats?.commissionTotal || 0) + (stats?.incentivosTotal || 0);
+                    const totalBeneficiosEmp = (stats?.beneficiosTotal || 0) + (emp.remuneration_connectivity || 0);
+                    const totalDecimoEmp     = (stats?.decimoTerceiroTotal || 0) + (stats?.feriasTotal || 0) + (stats?.rescisaoTotal || 0);
+                    const totalGeralEmp      = stats?.total || 0;
+
                     const value = costDetailMode === 'fixo'          ? totalFixoEmp
+                                : costDetailMode === 'extras'        ? totalExtrasEmp
                                 : costDetailMode === 'bonus'         ? totalBonusEmp
-                                : costDetailMode === 'comissao'      ? totalComEmp
-                                : costDetailMode === 'incentivos'    ? totalIncEmp
-                                : costDetailMode === 'conectividade' ? totalConEmp
+                                : costDetailMode === 'beneficios'    ? totalBeneficiosEmp
+                                : costDetailMode === 'decimo_ferias' ? totalDecimoEmp
                                 : totalGeralEmp;
+
                     return { emp, value, totalGeralEmp, months: empCosts.length };
                   }).filter(r => r.value > 0).sort((a, b) => b.value - a.value);
 
