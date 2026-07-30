@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.40";
+export const APP_VERSION = "v.02.53.41";
 export const VERSION_DATE = "2026-07-30";
 export const VERSION_CHANGELOG = [
+  "v.02.53.41 - Feat/People: Implementada inteligência de associação de nomes por similaridade (nameSimilarity.ts) e adicionado o seletor interativo de vínculo (<select>) no modal Dianna PJ (PjImportAuditModal.tsx), permitindo ao usuário decidir se cria um novo colaborador PJ ou vincula a um cadastro semelhante existente com 1 clique.",
   "v.02.53.40 - Fix/People: Corrigida a restrição de banco (CHECK constraint people_monthly_costs_vinculo_tipo_check) ajustando vinculo_tipo para 'MEI' ao salvar lançamentos no modal Dianna PJ (PjImportAuditModal.tsx), garantindo 100% de sucesso na gravação de ex-colaboradores e prestadores ativos.",
   "v.02.53.39 - Feat/People: Criado o Menu Dropdown 'Central de Importações' unificando todas as rotinas de carga no topo da tela, e implementado o utilitário diannaPjFileParser.ts e o modal PjImportAuditModal.tsx para auditoria executiva e carga Dianna (PJ) com o layout exato dos cards de Fixo, Bônus, Comissões, Incentivos, Conectividade, Glosa Base, Glosa Bônus, Deduções e Resultado Final.",
   "v.02.53.38 - Fix/People: Restrita a atualização automática de remuneração base exclusivamente a colaboradores CLT. Para vínculos PJ, o valor contratual base (remuneration_fixed) é preservado e protegido contra alterações provocadas por comissões ou bônus variáveis recebidos na competência.",

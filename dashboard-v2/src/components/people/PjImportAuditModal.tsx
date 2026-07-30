@@ -11,9 +11,12 @@ import {
   Users,
   Search,
   Check,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  Link as LinkIcon
 } from "lucide-react";
 import { parsePjFile, PjParseResult, PjParsedEmployee } from "@/utils/diannaPjFileParser";
+import { findBestNameMatch } from "@/utils/nameSimilarity";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee } from "@/types/loans";
 
@@ -22,6 +25,14 @@ interface PjImportAuditModalProps {
   onClose: () => void;
   existingEmployees: Employee[];
   onImportSuccess: () => void;
+}
+
+export interface PjEmployeeAuditMatch {
+  parsedEmp: PjParsedEmployee;
+  selectedMatchId: string; // 'NEW' ou id do colaborador no Supabase
+  matchScore: number;
+  matchedName?: string;
+  isSelected: boolean;
 }
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -33,12 +44,11 @@ export function PjImportAuditModal({
   onImportSuccess
 }: PjImportAuditModalProps) {
   const [parseResult, setParseResult] = useState<PjParseResult | null>(null);
+  const [auditMatches, setAuditMatches] = useState<PjEmployeeAuditMatch[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [selectedEmpIds, setSelectedEmpIds] = useState<Set<string>>(new Set());
   const [searchFilter, setSearchFilter] = useState("");
-  const [matchingMap, setMatchingMap] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -65,21 +75,31 @@ export function PjImportAuditModal({
 
   const processResult = (result: PjParseResult) => {
     setParseResult(result);
-    const newSelected = new Set<string>();
-    const newMatching: Record<string, string | null> = {};
 
-    result.employees.forEach((emp) => {
-      newSelected.add(emp.id);
-      const matched = existingEmployees.find((e) => {
-        const n1 = e.name.toLowerCase().trim().replace(/\s+/g, " ");
-        const n2 = emp.cleanName.toLowerCase().trim().replace(/\s+/g, " ");
-        return n1 === n2 || n1.includes(n2) || n2.includes(n1);
-      });
-      newMatching[emp.id] = matched ? matched.id : null;
+    const matches: PjEmployeeAuditMatch[] = result.employees.map((emp) => {
+      const best = findBestNameMatch(emp.cleanName, existingEmployees);
+      let selectedMatchId = "NEW";
+      let matchScore = 0;
+      let matchedName: string | undefined = undefined;
+
+      if (best) {
+        matchScore = best.similarity;
+        matchedName = best.matchedEmployeeName;
+        if (best.matchedEmployeeId && (best.status === "EXACT" || best.status === "SIMILAR")) {
+          selectedMatchId = best.matchedEmployeeId;
+        }
+      }
+
+      return {
+        parsedEmp: emp,
+        selectedMatchId,
+        matchScore,
+        matchedName,
+        isSelected: true,
+      };
     });
 
-    setSelectedEmpIds(newSelected);
-    setMatchingMap(newMatching);
+    setAuditMatches(matches);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,34 +117,38 @@ export function PjImportAuditModal({
     }
   };
 
-  const handleToggleSelectAll = () => {
-    if (!parseResult) return;
-    if (selectedEmpIds.size === parseResult.employees.length) {
-      setSelectedEmpIds(new Set());
-    } else {
-      setSelectedEmpIds(new Set(parseResult.employees.map((e) => e.id)));
-    }
+  const handleUpdateMatchSelection = (empId: string, matchId: string) => {
+    setAuditMatches((prev) =>
+      prev.map((item) => (item.parsedEmp.id === empId ? { ...item, selectedMatchId: matchId } : item))
+    );
   };
 
-  const handleToggleSelect = (id: string) => {
-    const next = new Set(selectedEmpIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedEmpIds(next);
+  const handleToggleSelectAll = () => {
+    const allSelected = auditMatches.every((m) => m.isSelected);
+    setAuditMatches((prev) => prev.map((item) => ({ ...item, isSelected: !allSelected })));
+  };
+
+  const handleToggleSelect = (empId: string) => {
+    setAuditMatches((prev) =>
+      prev.map((item) => (item.parsedEmp.id === empId ? { ...item, isSelected: !item.isSelected } : item))
+    );
   };
 
   const handleSaveToDatabase = async () => {
-    if (!parseResult || selectedEmpIds.size === 0) return;
+    if (!parseResult || auditMatches.length === 0) return;
+    const selectedMatches = auditMatches.filter((m) => m.isSelected);
+    if (selectedMatches.length === 0) return;
+
     try {
       setIsSaving(true);
-      const selectedEmps = parseResult.employees.filter((e) => selectedEmpIds.has(e.id));
       const monthlyCostsToInsert: any[] = [];
 
-      for (const pEmp of selectedEmps) {
-        const targetEmployeeId = matchingMap[pEmp.id];
-        let employeeIdToUse = targetEmployeeId;
+      for (const item of selectedMatches) {
+        const pEmp = item.parsedEmp;
+        let targetEmployeeId = item.selectedMatchId;
 
-        if (!employeeIdToUse) {
+        // Se for "NEW" ou não possuir ID cadastrado, cria um novo colaborador PJ no Supabase
+        if (targetEmployeeId === "NEW") {
           const newEmpObj: Partial<Employee> = {
             name: pEmp.cleanName,
             linkType: "PJ",
@@ -137,27 +161,29 @@ export function PjImportAuditModal({
           };
           const created = await PeopleHRService.insertEmployee(newEmpObj);
           if (created && created.id) {
-            employeeIdToUse = created.id;
+            targetEmployeeId = created.id;
           }
         }
 
-        Object.keys(pEmp.costsByCompetencia).forEach((comp) => {
-          const cost = pEmp.costsByCompetencia[comp];
-          monthlyCostsToInsert.push({
-            employee_id: employeeIdToUse,
-            competencia: comp,
-            vinculo_tipo: "MEI",
-            valor_fixo: cost.valor_fixo,
-            valor_bonus: cost.valor_bonus,
-            valor_comissao: cost.valor_comissao,
-            valor_incentivos: cost.valor_incentivos,
-            valor_ajuda_custo: cost.valor_conectividade,
-            valor_glosa_base: cost.valor_glosa_base,
-            valor_glosa_bonus: cost.valor_glosa_bonus,
-            valor_deducoes: cost.valor_deducoes,
-            valor_liquido: cost.total_liquido,
+        if (targetEmployeeId && targetEmployeeId !== "NEW") {
+          Object.keys(pEmp.costsByCompetencia).forEach((comp) => {
+            const cost = pEmp.costsByCompetencia[comp];
+            monthlyCostsToInsert.push({
+              employee_id: targetEmployeeId,
+              competencia: comp,
+              vinculo_tipo: "MEI",
+              valor_fixo: cost.valor_fixo,
+              valor_bonus: cost.valor_bonus,
+              valor_comissao: cost.valor_comissao,
+              valor_incentivos: cost.valor_incentivos,
+              valor_ajuda_custo: cost.valor_conectividade,
+              valor_glosa_base: cost.valor_glosa_base,
+              valor_glosa_bonus: cost.valor_glosa_bonus,
+              valor_deducoes: cost.valor_deducoes,
+              valor_liquido: cost.total_liquido,
+            });
           });
-        });
+        }
       }
 
       if (monthlyCostsToInsert.length > 0) {
@@ -195,13 +221,13 @@ export function PjImportAuditModal({
   const mediaConectividade = totalCompsCount > 0 ? sumConectividade / totalCompsCount : 0;
   const mediaTotalReal = totalCompsCount > 0 ? sumTotalReal / totalCompsCount : 0;
 
-  const filteredEmployees = parseResult
-    ? parseResult.employees.filter(
-        (e) =>
-          e.cleanName.toLowerCase().includes(searchFilter.toLowerCase()) ||
-          (e.setor && e.setor.toLowerCase().includes(searchFilter.toLowerCase()))
-      )
-    : [];
+  const filteredMatches = auditMatches.filter(
+    (m) =>
+      m.parsedEmp.cleanName.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      (m.parsedEmp.setor && m.parsedEmp.setor.toLowerCase().includes(searchFilter.toLowerCase()))
+  );
+
+  const selectedCount = auditMatches.filter((m) => m.isSelected).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto">
@@ -220,7 +246,7 @@ export function PjImportAuditModal({
                 </span>
               </h2>
               <p className="text-xs text-slate-500">
-                Auditoria executiva de ganhos, comissões, bônus e glosas da base Dianna PJ
+                Auditoria executiva com inteligência de associação de nomes por similaridade
               </p>
             </div>
           </div>
@@ -245,7 +271,7 @@ export function PjImportAuditModal({
             <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200/80">
               <RefreshCw className="w-10 h-10 text-teal-600 animate-spin mb-3" />
               <p className="text-sm font-semibold text-slate-800">Analisando dados Dianna (PJ)...</p>
-              <p className="text-xs text-slate-500">Computando fixo, comissões, bônus e deduções de prestadores</p>
+              <p className="text-xs text-slate-500">Calculando similaridade de nomes e cruzando com colaboradores do sistema</p>
             </div>
           )}
 
@@ -373,7 +399,7 @@ export function PjImportAuditModal({
                 </div>
               </div>
 
-              {/* LISTA DE PRESTADORES PJ ENCONTRADOS */}
+              {/* LISTA DE PRESTADORES PJ COM SELETOR DE ASSOCIAÇÃO INTELIGENTE */}
               <div className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-sm">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2">
@@ -383,11 +409,11 @@ export function PjImportAuditModal({
                     >
                       <Check className="w-3.5 h-3.5" />
                       <span>
-                        {selectedEmpIds.size === parseResult.employees.length ? "Desmarcar Todos" : "Marcar Todos"}
+                        {selectedCount === auditMatches.length ? "Desmarcar Todos" : "Marcar Todos"}
                       </span>
                     </button>
                     <span className="text-xs text-slate-500 font-medium">
-                      {selectedEmpIds.size} de {parseResult.employees.length} selecionados
+                      {selectedCount} de {auditMatches.length} prestadores selecionados
                     </span>
                   </div>
 
@@ -403,25 +429,26 @@ export function PjImportAuditModal({
                   </div>
                 </div>
 
-                <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto pr-1">
-                  {filteredEmployees.map((emp) => {
-                    const isSelected = selectedEmpIds.has(emp.id);
-                    const matchedId = matchingMap[emp.id];
-                    const matchedEmp = existingEmployees.find((e) => e.id === matchedId);
+                <div className="divide-y divide-slate-100 max-h-[360px] overflow-y-auto pr-1">
+                  {filteredMatches.map((item) => {
+                    const emp = item.parsedEmp;
 
                     return (
                       <div
                         key={emp.id}
-                        className={`py-3 flex items-center justify-between gap-4 transition-colors ${
-                          isSelected ? "bg-teal-50/20 px-2 rounded-xl" : "opacity-60"
+                        className={`py-3.5 px-3 rounded-2xl border transition-all my-1.5 flex flex-wrap items-center justify-between gap-4 ${
+                          item.isSelected
+                            ? "bg-white border-slate-200 shadow-sm"
+                            : "bg-slate-50 border-slate-100 opacity-50"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
+                        {/* Checkbox + Dados da Planilha */}
+                        <div className="flex items-center gap-3 min-w-[280px]">
                           <input
                             type="checkbox"
-                            checked={isSelected}
+                            checked={item.isSelected}
                             onChange={() => handleToggleSelect(emp.id)}
-                            className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
+                            className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500 shrink-0"
                           />
                           <div>
                             <div className="flex items-center gap-2">
@@ -444,6 +471,29 @@ export function PjImportAuditModal({
                           </div>
                         </div>
 
+                        {/* SELETOR DE ASSOCIAÇÃO INTELIGENTE POR SIMILARIDADE */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 font-medium hidden sm:inline">Vínculo:</span>
+                          <select
+                            value={item.selectedMatchId}
+                            onChange={(e) => handleUpdateMatchSelection(emp.id, e.target.value)}
+                            aria-label={`Vínculo do Sistema para ${emp.cleanName}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-xl border focus:outline-none transition-colors ${
+                              item.selectedMatchId === "NEW"
+                                ? "bg-blue-50 border-blue-200 text-blue-800"
+                                : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                            }`}
+                          >
+                            <option value="NEW">✨ Criar como Novo Prestador PJ</option>
+                            {existingEmployees.map((ex) => (
+                              <option key={ex.id} value={ex.id}>
+                                🔗 Vincular a: {ex.name} ({ex.linkType || "PJ"})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* BADGE DE SIMILARIDADE E TOTAL */}
                         <div className="flex items-center gap-4 text-right">
                           <div>
                             <div className="text-xs font-black text-slate-900 tabular-nums">
@@ -452,14 +502,17 @@ export function PjImportAuditModal({
                             <div className="text-[10px] text-slate-400">Total Desembolsado PJ</div>
                           </div>
 
-                          <div className="min-w-[140px]">
-                            {matchedEmp ? (
+                          <div className="min-w-[130px]">
+                            {item.selectedMatchId !== "NEW" ? (
                               <span className="text-[11px] font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg flex items-center justify-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" /> Vinculado
+                                <CheckCircle2 className="w-3 h-3" />
+                                {item.matchScore >= 0.95
+                                  ? "100% Exato"
+                                  : `${Math.round(item.matchScore * 100)}% Semelhante`}
                               </span>
                             ) : (
-                              <span className="text-[11px] font-semibold px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg flex items-center justify-center gap-1">
-                                Novo Cadastro
+                              <span className="text-[11px] font-semibold px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg flex items-center justify-center gap-1">
+                                <Sparkles className="w-3 h-3 text-blue-500" /> Novo Cadastro
                               </span>
                             )}
                           </div>
@@ -476,7 +529,7 @@ export function PjImportAuditModal({
         {/* Modal Footer */}
         <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <div className="text-xs text-slate-500">
-            {parseResult ? `${selectedEmpIds.size} prestadores selecionados para carga PJ` : "Aguardando arquivo Dianna PJ"}
+            {parseResult ? `${selectedCount} prestadores selecionados para carga PJ` : "Aguardando arquivo Dianna PJ"}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -486,7 +539,7 @@ export function PjImportAuditModal({
               Cancelar
             </button>
             <button
-              disabled={!parseResult || selectedEmpIds.size === 0 || isSaving}
+              disabled={!parseResult || selectedCount === 0 || isSaving}
               onClick={handleSaveToDatabase}
               className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 flex items-center gap-2 transition-colors"
             >
