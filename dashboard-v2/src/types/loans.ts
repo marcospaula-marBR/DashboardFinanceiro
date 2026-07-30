@@ -92,7 +92,9 @@ export interface Employee {
   photo_url?: string;
   
   // RH & Contratos
-  contract_expiry_date?: string; // YYYY-MM-DD
+  contract_expiry_date?: string; // YYYY-MM-DD (Vencimento para renovação)
+  linked_previous_employee_id?: string; // ID do cadastro CLT/anterior para unificação de histórico (CLT -> PJ)
+  is_unified_history?: boolean; // Flag se une histórico e tempo de empresa dos dois regimes
   links_contratos?: string;
   links_aditivos?: string; // string JSON[]
   links_emprestimos?: string; // string JSON[]

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3 } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature } from "@/types/loans";
@@ -360,6 +360,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     return nameMatch || roleMatch || cpfMatch || cnpjMatch;
   });
 
+  const [previousEmployeeProfile, setPreviousEmployeeProfile] = useState<Partial<Employee> | null>(null);
+
   const fetchProfile = async (id: string) => {
     setIsLoading(true);
     setError(null);
@@ -373,7 +375,28 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setProfile(data || {});
       setHistory(hist || []);
       setBonds(bondsData || []);
-      setCosts(costsData || []);
+
+      let mergedCosts = costsData || [];
+      setPreviousEmployeeProfile(null);
+
+      if (data?.linked_previous_employee_id) {
+        try {
+          const [prevProfile, prevCosts] = await Promise.all([
+            PeopleService.getEmployeeProfile(data.linked_previous_employee_id, isTestMode),
+            PeopleHRService.getMonthlyCosts(data.linked_previous_employee_id)
+          ]);
+          if (prevProfile) setPreviousEmployeeProfile(prevProfile);
+          if (prevCosts && prevCosts.length > 0 && data.is_unified_history !== false) {
+            const currentComps = new Set((costsData || []).map(c => c.competencia));
+            const filteredPrev = prevCosts.filter(c => !currentComps.has(c.competencia));
+            mergedCosts = [...filteredPrev, ...(costsData || [])];
+          }
+        } catch (linkErr) {
+          console.warn("Erro ao buscar dados do vinculo CLT/anterior:", linkErr);
+        }
+      }
+
+      setCosts(mergedCosts);
 
       // Buscar posição de empréstimos corporativos
       try {
@@ -2294,57 +2317,127 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             {formatCurrency((profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0))}
                           </div>
                         </div>
-<div>
+                        <div>
                            <label className={labelClass}>Chave PIX</label>
                            <input type="text" value={profile.pix_key || ''} onChange={e => handleChange('pix_key', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                          </div>
-                         <div>
-                            <div className="flex items-center justify-between">
-                              <label className={labelClass}>Data de Admissão</label>
-                              {!isEditMode && profile.start_date && (
-                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                                  {formatCompanyTime(
-                                    profile.start_date, 
-                                    profile.contract_expiry_date || profile.resignation_date || (profile.status === 'Inativo' ? profile.status_end_date : undefined)
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                            <input type="date" name="start_date" value={profile.start_date || ''} onChange={e => handleChange('start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                          </div>
-                          <div>
-                            <div className="flex items-center justify-between">
-                              <label className={labelClass}>Final de Contrato</label>
-                              {!isEditMode && (profile.contract_expiry_date || profile.resignation_date) && (
-                                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
-                                  Data Fim
-                                </span>
-                              )}
-                            </div>
-                            <input 
-                              type="date" 
-                              name="contract_expiry_date" 
-                              value={profile.contract_expiry_date || profile.resignation_date || ''} 
-                              onChange={e => { 
-                                handleChange('contract_expiry_date', e.target.value); 
-                                handleChange('resignation_date', e.target.value); 
-                                handleChange('status_end_date', e.target.value); 
-                              }} 
-                              readOnly={!isEditMode} 
-                              className={inputClass}
-                            />
-                            <span className="text-[9px] text-slate-400 mt-0.5 block">Data fim para cálculo do tempo de empresa e distratos</span>
-                          </div>
-                          <div>
-                            <label className={labelClass}>Data Revisão Valor Base</label>
-                            <input type="date" name="last_raise_date" value={profile.last_raise_date || ''} onChange={e => handleChange('last_raise_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                            <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
-                          </div>
-                          <div>
-                             <label className={labelClass}>Data Alteração Grau</label>
-                             <input type="date" name="last_grade_date" value={profile.last_grade_date || ''} onChange={e => handleChange('last_grade_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           <div>
+                             <div className="flex items-center justify-between">
+                               <label className={labelClass}>Data de Admissão / Início</label>
+                               {!isEditMode && profile.start_date && (
+                                 <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                                   {formatCompanyTime(
+                                     profile.linked_previous_employee_id && previousEmployeeProfile?.start_date && profile.is_unified_history !== false
+                                       ? previousEmployeeProfile.start_date
+                                       : profile.start_date,
+                                     profile.status === 'Inativo' ? (profile.resignation_date || profile.status_end_date) : undefined
+                                   )}
+                                   {profile.linked_previous_employee_id && previousEmployeeProfile?.start_date && profile.is_unified_history !== false && " (CLT + PJ)"}
+                                 </span>
+                               )}
+                             </div>
+                             <input type="date" name="start_date" value={profile.start_date || ''} onChange={e => handleChange('start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Vencimento Contrato/Aditivo</label>
+                             <input 
+                               type="date" 
+                               name="contract_expiry_date" 
+                               value={profile.contract_expiry_date || ''} 
+                               onChange={e => handleChange('contract_expiry_date', e.target.value)} 
+                               readOnly={!isEditMode} 
+                               className={inputClass}
+                             />
+                             <span className="text-[9px] text-slate-400 mt-0.5 block">Para alertas e monitoramento de renovação</span>
+                           </div>
+                           <div>
+                             <div className="flex items-center justify-between">
+                               <label className={labelClass}>Final de Contrato</label>
+                               {!isEditMode && (profile.resignation_date || profile.status_end_date) && (
+                                 <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
+                                   Encerrado
+                                 </span>
+                               )}
+                             </div>
+                             <input 
+                               type="date" 
+                               name="resignation_date" 
+                               value={profile.resignation_date || profile.status_end_date || ''} 
+                               onChange={e => { 
+                                 handleChange('resignation_date', e.target.value); 
+                                 handleChange('status_end_date', e.target.value); 
+                               }} 
+                               readOnly={!isEditMode} 
+                               className={inputClass}
+                             />
+                             <span className="text-[9px] text-slate-400 mt-0.5 block">Data fim em caso de distrato / não renovação</span>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Data Revisão Valor Base</label>
+                             <input type="date" name="last_raise_date" value={profile.last_raise_date || ''} onChange={e => handleChange('last_raise_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                              <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
+                           </div>
+                           <div>
+                              <label className={labelClass}>Data Alteração Grau</label>
+                              <input type="date" name="last_grade_date" value={profile.last_grade_date || ''} onChange={e => handleChange('last_grade_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                              <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
+                           </div>
+
+                        {/* BLOCO DE UNIFICAÇÃO DE VÍNCULO (TRANSIÇÃO CLT -> PJ) */}
+                        <div className="col-span-2 p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 mt-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <LinkIcon className="w-4 h-4 text-indigo-600" />
+                              <span className="text-xs font-bold text-slate-900">Unificação de Cadastro (Transição CLT ➔ PJ)</span>
+                            </div>
+                            {profile.linked_previous_employee_id && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                ✦ Histórico Unificado (CLT + PJ)
+                              </span>
+                            )}
                           </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className={labelClass}>Vincular ao Cadastro CLT Anterior</label>
+                              {isEditMode ? (
+                                <select
+                                  value={profile.linked_previous_employee_id || ''}
+                                  onChange={e => handleChange('linked_previous_employee_id', e.target.value)}
+                                  className="w-full bg-white border border-slate-200 rounded-lg text-xs py-1.5 px-2 outline-none focus:border-indigo-500 font-medium"
+                                >
+                                  <option value="">Nenhum (Cadastro Independente)</option>
+                                  {allEmployees
+                                    .filter(e => e.id !== profile.id && (e.linkType === 'CLT' || e.status === 'Inativo'))
+                                    .map(e => (
+                                      <option key={e.id} value={e.id}>
+                                        🔗 {e.name} ({e.linkType || 'CLT'} - {e.status})
+                                      </option>
+                                    ))}
+                                </select>
+                              ) : (
+                                <span className="text-xs font-semibold text-slate-700 block mt-1">
+                                  {profile.linked_previous_employee_id
+                                    ? `Vincular a: ${allEmployees.find(e => e.id === profile.linked_previous_employee_id)?.name || previousEmployeeProfile?.name || profile.linked_previous_employee_id}`
+                                    : 'Nenhum vínculo anterior acumulado'}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-5">
+                              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={profile.is_unified_history !== false}
+                                  onChange={e => handleChange('is_unified_history', e.target.checked)}
+                                  disabled={!isEditMode || !profile.linked_previous_employee_id}
+                                  className="w-4 h-4 text-indigo-600 rounded border-slate-300"
+                                />
+                                <span>Somar tempo de casa e valores acumulados nos dois regimes</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
                         
                         <div className="col-span-2 mt-4">
                            <div className="flex justify-between items-center mb-2">

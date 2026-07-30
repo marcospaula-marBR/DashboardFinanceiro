@@ -381,6 +381,8 @@ export const PeopleHRService = {
         aiAgents: Array.isArray(emp.metadata?.aiAgents || emp.metadata?.ai_agents) ? (emp.metadata.aiAgents || emp.metadata.ai_agents) : [],
         permissions: Array.isArray(emp.metadata?.permissions) ? emp.metadata.permissions : [],
         temporaryDelegations: Array.isArray(emp.metadata?.temporaryDelegations || emp.metadata?.temporary_delegations) ? (emp.metadata.temporaryDelegations || emp.metadata.temporary_delegations) : [],
+        linked_previous_employee_id: emp.metadata?.linked_previous_employee_id || emp.metadata?.linkedPreviousEmployeeId || undefined,
+        is_unified_history: emp.metadata?.is_unified_history ?? emp.metadata?.isUnifiedHistory ?? true,
         metadata: emp.metadata || {}
       };
       
@@ -453,6 +455,19 @@ export const PeopleHRService = {
     }
     if (employeePayload.camada) payload.nivel = employeePayload.camada;
     if (employeePayload.nivel) payload.nivel_enquadramento = employeePayload.nivel;
+
+    // Buscar metadata atual se for atualizar campos do metadata
+    if (employeePayload.linked_previous_employee_id !== undefined || employeePayload.is_unified_history !== undefined || employeePayload.grau !== undefined) {
+      const { data: currentEmp } = await supabase.from("employees").select("metadata").eq("id", employeeId).single();
+      const currentMeta = currentEmp?.metadata || {};
+      payload.metadata = {
+        ...currentMeta,
+        ...(employeePayload.linked_previous_employee_id !== undefined ? { linked_previous_employee_id: employeePayload.linked_previous_employee_id } : {}),
+        ...(employeePayload.is_unified_history !== undefined ? { is_unified_history: employeePayload.is_unified_history } : {}),
+        ...(employeePayload.grau !== undefined ? { grau: employeePayload.grau } : {}),
+        ...(employeePayload.camada !== undefined ? { camada: employeePayload.camada } : {})
+      };
+    }
 
     const { error } = await supabase
       .from("employees")
