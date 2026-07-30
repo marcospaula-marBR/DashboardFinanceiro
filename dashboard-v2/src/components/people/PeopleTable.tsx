@@ -16,8 +16,11 @@ import {
   getCompanyLogoUrl
 } from "./PeopleBadges";
 
+import { MonthlyCost } from "@/types/loans";
+
 interface PeopleTableProps {
   employees: Employee[];
+  monthlyCosts?: MonthlyCost[];
   onEdit: (id: string) => void;
   onDelete: (employee: Employee) => void;
   onEmployeeClick: (id: string) => void;
@@ -42,6 +45,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function PeopleTable({ 
   employees, 
+  monthlyCosts = [],
   onEdit, 
   onDelete, 
   onEmployeeClick, 
@@ -353,12 +357,20 @@ export function PeopleTable({
                       </div>
                     </td>
                     <td className="py-4 px-4 text-right tabular-nums">
-                      {showValues ? (
-                        emp.remuneration > 0 ? (
+                      {showValues ? (() => {
+                        const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
+                        const historicoCustoTotal = empCosts.reduce((sum, c) => sum + (c.valor_liquido || c.valor_fixo || 0), 0);
+                        const historicoCustoMedio = empCosts.length > 0 ? historicoCustoTotal / empCosts.length : 0;
+
+                        return (
                           <div className="flex flex-col items-end">
-                            <span className="text-sm font-bold text-slate-700">
-                              {formatCurrency(emp.remuneration)}
-                            </span>
+                            {emp.remuneration > 0 ? (
+                              <span className="text-sm font-bold text-slate-700">
+                                {formatCurrency(emp.remuneration)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs">—</span>
+                            )}
                             <div className="text-[10px] text-slate-400 font-medium leading-tight">
                               {emp.remuneration_fixed !== undefined && emp.remuneration_fixed > 0 && (
                                 <div>Base: {formatCurrency(emp.remuneration_fixed)}</div>
@@ -370,11 +382,15 @@ export function PeopleTable({
                                 <div className="text-purple-500 font-semibold">Comissão: {formatCurrency(emp.remuneration_commission)}</div>
                               )}
                             </div>
+                            {historicoCustoTotal > 0 && (
+                              <div className="mt-1 pt-1 border-t border-slate-100 text-[10px] text-slate-500 font-medium leading-tight text-right">
+                                <div>Total Hist.: <span className="font-extrabold text-emerald-700">{formatCurrency(historicoCustoTotal)}</span></div>
+                                <div>Média/mês: <span className="font-extrabold text-blue-700">{formatCurrency(historicoCustoMedio)}</span></div>
+                              </div>
+                            )}
                           </div>
-                        ) : (
-                          <span className="text-slate-400 text-xs">—</span>
-                        )
-                      ) : (
+                        );
+                      })() : (
                         <span className="text-slate-300 font-normal">••••••</span>
                       )}
                     </td>
@@ -467,6 +483,10 @@ export function PeopleTable({
               }
             }
 
+            const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
+            const historicoCustoTotal = empCosts.reduce((sum, c) => sum + (c.valor_liquido || c.valor_fixo || 0), 0);
+            const historicoCustoMedio = empCosts.length > 0 ? historicoCustoTotal / empCosts.length : 0;
+
             return (
               <div key={emp.id} className="relative group" onClick={() => onEmployeeClick(emp.id)}>
                 <PeopleMobileCard 
@@ -484,6 +504,8 @@ export function PeopleTable({
                   noRaiseMonths={noRaiseMonths}
                   noPromoMonths={noPromoMonths}
                   noGradeMonths={noGradeMonths}
+                  historicoCustoTotal={historicoCustoTotal}
+                  historicoCustoMedio={historicoCustoMedio}
                   onFilterSelect={onFilterSelect}
                 />
                 <div className="absolute top-4 right-20 flex gap-1" onClick={e => e.stopPropagation()}>

@@ -246,9 +246,21 @@ export function CltImportAuditModal({
             if (pEmp.setor && (!existing.department || existing.department === "Geral")) {
               updatePayload.department = pEmp.setor;
             }
-            if (pEmp.ultimoCargo && !existing.job_role) {
+            if (pEmp.ultimoCargo && pEmp.ultimoCargo !== existing.job_role) {
               updatePayload.job_role = pEmp.ultimoCargo;
             }
+
+            // Atualiza remuneração base e total se houver reajuste na competência mais recente
+            const sortedComps = Object.keys(pEmp.costsByCompetencia).sort().reverse();
+            const latestCompWithSalary = sortedComps.find(c => pEmp.costsByCompetencia[c].valor_fixo > 0);
+            if (latestCompWithSalary) {
+              const latestSalary = pEmp.costsByCompetencia[latestCompWithSalary].valor_fixo;
+              if (latestSalary > 0 && existing.linkType === "CLT" && Math.abs(latestSalary - (existing.remuneration_fixed || 0)) > 0.01) {
+                updatePayload.remuneration_fixed = latestSalary;
+                updatePayload.remuneration = latestSalary;
+              }
+            }
+
             if (Object.keys(updatePayload).length > 0) {
               await PeopleHRService.updateEmployee(targetEmployeeId, updatePayload);
             }

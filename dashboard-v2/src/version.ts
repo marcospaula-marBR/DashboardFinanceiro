@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.33";
-export const VERSION_DATE = "2026-07-29";
+export const APP_VERSION = "v.02.53.34";
+export const VERSION_DATE = "2026-07-30";
 export const VERSION_CHANGELOG = [
+  "v.02.53.34 - Feat/People: Exibidos o Total Histórico Desembolsado e a Média Mensal nos cards (PeopleMobileCard.tsx) e na tabela desktop (PeopleTable.tsx) para colaboradores CLT/PJ, e ativada a atualização automática de remuneração base e cargo/função no perfil cadastral ao identificar reajustes salariais ou novas atribuições na competência mais recente.",
   "v.02.53.33 - Fix/People: Corrigido o limite de busca de custos mensais em getMonthlyCosts (ampliado de 24 para 120 competências) e atualizado o cltFileParser.ts para ler a linha 'Ciclo do mês' por bloco de colaborador, liberando a exibição de todo o histórico retroativo completo (de 2020 até 2026).",
   "v.02.53.32 - Feat/People: Executada a carga direta automatizada da planilha CLT.xlsx com backup integral preventivo das tabelas no Supabase (151 colaboradores e 516 custos), salvando 778 lançamentos mensais com valores discriminados por verba e agrupando os custos históricos ao perfil do colaborador.",
   "v.02.53.31 - Fix/People: Corrigida a conversão de datas nulas/inválidas de arquivos Excel (ex: 1900-01-00) em cltFileParser.ts e mantido o status 'Ativo' e o vínculo principal PJ do colaborador (ex: Gabriel Wagner Silva Bellini PJ) ao vincular o histórico retroativo de verbas CLT em CltImportAuditModal.tsx.",
