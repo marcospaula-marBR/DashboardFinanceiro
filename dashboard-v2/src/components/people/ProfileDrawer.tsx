@@ -1181,13 +1181,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
         }
 
-        // Se for distrato
-        if (data.document_type === 'Distrato' && data.termination_date) {
-          next.status_end_date = data.termination_date;
-          // Se a data já passou ou é hoje, inativar
-          const termDate = new Date(data.termination_date);
+        // Se for distrato ou houver data de encerramento/rescisao
+        if ((data.document_type === 'Distrato' || data.termination_date) && (data.termination_date || data.contract_expiry_date)) {
+          const endDate = data.termination_date || data.contract_expiry_date;
+          next.contract_expiry_date = endDate;
+          next.resignation_date = endDate;
+          next.status_end_date = endDate;
+          
+          // Se a data já passou ou é hoje, inativar automaticamente
+          const termDate = new Date(endDate + "T12:00:00");
           const now = new Date();
-          // zera a hora para comparar só as datas
           termDate.setHours(0,0,0,0);
           now.setHours(0,0,0,0);
           if (termDate <= now) {
@@ -2084,31 +2087,44 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               )}
                              </div>
                              <div className="flex-1">
-                              <label className={labelClass}>Nível</label>
-                              {isEditMode ? (
-                                <select value={profile.nivel || ''} onChange={e => handleChange('nivel', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
-                                  <option value="">Selecione...</option>
-                                  <option value="Estratégico">Estratégico</option>
-                                  <option value="Tático">Tático</option>
-                                  <option value="Operacional">Operacional</option>
-                                </select>
-                              ) : (
-                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.nivel || '-'}</span>
-                              )}
-                             </div>
-                             <div className="flex-1">
-                              <label className={labelClass}>Grau</label>
-                              {isEditMode ? (
-                                <select value={profile.grau || ''} onChange={e => handleChange('grau', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
-                                  <option value="">Selecione...</option>
-                                  <option value="I">I</option>
-                                  <option value="II">II</option>
-                                  <option value="III">III</option>
-                                </select>
-                              ) : (
-                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.grau || '-'}</span>
-                              )}
-                             </div>
+                               <label className={labelClass}>Camada</label>
+                               {isEditMode ? (
+                                 <select value={profile.camada || profile.nivel || ''} onChange={e => { handleChange('camada', e.target.value); handleChange('nivel', e.target.value); }} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                   <option value="">Selecione...</option>
+                                   <option value="Estratégico">Estratégico</option>
+                                   <option value="Tático">Tático</option>
+                                   <option value="Operacional">Operacional</option>
+                                 </select>
+                               ) : (
+                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.camada || profile.nivel || '-'}</span>
+                               )}
+                              </div>
+                              <div className="flex-1">
+                               <label className={labelClass}>Grau</label>
+                               {isEditMode ? (
+                                 <select value={profile.grau || ''} onChange={e => handleChange('grau', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                   <option value="">Selecione...</option>
+                                   <option value="Iniciante">Iniciante</option>
+                                   <option value="Intermediário">Intermediário</option>
+                                   <option value="Avançado">Avançado</option>
+                                 </select>
+                               ) : (
+                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.grau || '-'}</span>
+                               )}
+                              </div>
+                              <div className="flex-1">
+                               <label className={labelClass}>Nível</label>
+                               {isEditMode ? (
+                                 <select value={profile.nivel_enquadramento || (['I', 'II', 'III'].includes(profile.grau || '') ? profile.grau : '') || ''} onChange={e => handleChange('nivel_enquadramento' as any, e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                   <option value="">Selecione...</option>
+                                   <option value="I">I</option>
+                                   <option value="II">II</option>
+                                   <option value="III">III</option>
+                                 </select>
+                               ) : (
+                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.nivel_enquadramento || (['I', 'II', 'III'].includes(profile.grau || '') ? profile.grau : '-') || '-'}</span>
+                               )}
+                              </div>
                           </div>
                           <div>
                             <label className={labelClass}>Natureza da Relação (Diana PB)</label>
@@ -2278,38 +2294,57 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             {formatCurrency((profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0))}
                           </div>
                         </div>
-
-
-
-                        <div>
+<div>
                            <label className={labelClass}>Chave PIX</label>
                            <input type="text" value={profile.pix_key || ''} onChange={e => handleChange('pix_key', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                          </div>
                          <div>
-                           <div className="flex items-center justify-between">
-                             <label className={labelClass}>Data de Admissão</label>
-                             {!isEditMode && profile.start_date && (
-                               <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                                 {formatCompanyTime(profile.start_date)}
-                               </span>
-                             )}
-                           </div>
-                           <input type="date" name="start_date" value={profile.start_date || ''} onChange={e => handleChange('start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                         </div>
-                         <div>
-                           <label className={labelClass}>Data Revisão Valor Base</label>
-                           <input type="date" name="last_raise_date" value={profile.last_raise_date || ''} onChange={e => handleChange('last_raise_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                           <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
-                         </div>
-                         <div>
-                           <label className={labelClass}>Vencimento Contrato/Aditivo</label>
-                           <input type="date" value={profile.contract_expiry_date || ''} onChange={e => handleChange('contract_expiry_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                         </div>
-                         <div>
-                            <label className={labelClass}>Data Alteração Grau</label>
-                            <input type="date" name="last_grade_date" value={profile.last_grade_date || ''} onChange={e => handleChange('last_grade_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                            <div className="flex items-center justify-between">
+                              <label className={labelClass}>Data de Admissão</label>
+                              {!isEditMode && profile.start_date && (
+                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                                  {formatCompanyTime(
+                                    profile.start_date, 
+                                    profile.contract_expiry_date || profile.resignation_date || (profile.status === 'Inativo' ? profile.status_end_date : undefined)
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            <input type="date" name="start_date" value={profile.start_date || ''} onChange={e => handleChange('start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <label className={labelClass}>Final de Contrato</label>
+                              {!isEditMode && (profile.contract_expiry_date || profile.resignation_date) && (
+                                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
+                                  Data Fim
+                                </span>
+                              )}
+                            </div>
+                            <input 
+                              type="date" 
+                              name="contract_expiry_date" 
+                              value={profile.contract_expiry_date || profile.resignation_date || ''} 
+                              onChange={e => { 
+                                handleChange('contract_expiry_date', e.target.value); 
+                                handleChange('resignation_date', e.target.value); 
+                                handleChange('status_end_date', e.target.value); 
+                              }} 
+                              readOnly={!isEditMode} 
+                              className={inputClass}
+                            />
+                            <span className="text-[9px] text-slate-400 mt-0.5 block">Data fim para cálculo do tempo de empresa e distratos</span>
+                          </div>
+                          <div>
+                            <label className={labelClass}>Data Revisão Valor Base</label>
+                            <input type="date" name="last_raise_date" value={profile.last_raise_date || ''} onChange={e => handleChange('last_raise_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
                             <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
-                         </div>
+                          </div>
+                          <div>
+                             <label className={labelClass}>Data Alteração Grau</label>
+                             <input type="date" name="last_grade_date" value={profile.last_grade_date || ''} onChange={e => handleChange('last_grade_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                             <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
+                          </div>
                         
                         <div className="col-span-2 mt-4">
                            <div className="flex justify-between items-center mb-2">

@@ -370,8 +370,9 @@ export const PeopleHRService = {
         commission_plan: emp.commission_plan,
         has_invoice_glosa: emp.metadata?.has_invoice_glosa || false,
         last_raise_date: emp.metadata?.last_raise_date || null,
+        camada: emp.metadata?.camada || (emp as any).camada || emp.nivel || '',
         grau: emp.metadata?.grau || '',
-        nivel: emp.nivel,
+        nivel: emp.metadata?.nivel_enquadramento || (emp as any).nivel_enquadramento || (['I', 'II', 'III'].includes(emp.metadata?.grau) ? emp.metadata?.grau : '') || emp.nivel || '',
         pbId: emp.metadata?.pbId || emp.metadata?.pb_id || '',
         entityType: emp.metadata?.entityType || emp.metadata?.entity_type || undefined,
         relationshipNature: emp.metadata?.relationshipNature || emp.metadata?.relationship_nature || 
@@ -437,6 +438,7 @@ export const PeopleHRService = {
     if (employeePayload.job_role) payload.job_role = employeePayload.job_role;
     if (employeePayload.start_date) payload.start_date = employeePayload.start_date;
     if (employeePayload.resignation_date) payload.resignation_date = employeePayload.resignation_date;
+    if (employeePayload.contract_expiry_date) payload.contract_expiry_date = employeePayload.contract_expiry_date;
     if (employeePayload.remuneration_fixed !== undefined) {
       payload.remuneration_fixed = employeePayload.remuneration_fixed;
     }
@@ -449,6 +451,8 @@ export const PeopleHRService = {
     if (employeePayload.remuneration !== undefined) {
       payload.remuneration = employeePayload.remuneration;
     }
+    if (employeePayload.camada) payload.nivel = employeePayload.camada;
+    if (employeePayload.nivel) payload.nivel_enquadramento = employeePayload.nivel;
 
     const { error } = await supabase
       .from("employees")

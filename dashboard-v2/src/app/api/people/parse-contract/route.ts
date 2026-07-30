@@ -93,15 +93,15 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "responsible_name": "Nome do responsável legal (geralmente igual ao Name em contratos MEI/PJ)",
   "responsible_cpf": "CPF do responsável legal (formato 000.000.000-00, geralmente igual ao CPF do prestador)",
   "start_date": "Data de início do contrato/admissão/início da prestação (formato YYYY-MM-DD)",
-  "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato se houver (formato YYYY-MM-DD)",
-  "termination_date": "Se for Distrato, busque a DATA EFETIVA DO ÚLTIMO DIA TRABALHADO ou data real do encerramento da prestação de serviços. Atenção: pode não ser a data de assinatura! Procure por frases como 'tendo seu término no dia X' ou 'o último dia de serviço será Y' (formato YYYY-MM-DD)",
+  "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato se houver ou DATA DO DISTRATO/RESCISÃO (formato YYYY-MM-DD)",
+  "termination_date": "Se for Distrato (Termo de Rescisão/Encerramento), busque a DATA EFETIVA DO ÚLTIMO DIA TRABALHADO ou data real do encerramento da prestação de serviços. Atenção: pode não ser a data de assinatura! Procure por frases como 'tendo seu término no dia X' ou 'o último dia de serviço será Y' ou 'distratam nesta data X' (formato YYYY-MM-DD)",
   "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)",
   "executive_summary": "Resumo profissional executivo baseado no OBJETO DO CONTRATO. Descreva em 3 a 5 frases as principais atividades, responsabilidades e entregas esperadas do contratado conforme definidas no contrato. Use linguagem formal e objetiva, na terceira pessoa. Exemplo: 'Responsável pela prestação de serviços de consultoria em tecnologia da informação. Deverá desenvolver e manter sistemas conforme especificações técnicas acordadas. Participará de reuniões de acompanhamento e entregará relatórios mensais de progresso.' Se o contrato não descrever o objeto ou atividades, retorne nulo."
 }
 
 Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser EXCLUSIVAMENTE 'PJ'. O termo MEI diz respeito apenas a regime tributário e nunca deve ser listado como linkType.
 IMPORTANTE sobre remuneração: distinga claramente BÔNUS VARIÁVEL (condicional a metas/resultados → remuneration_bonus) de INCENTIVOS FIXOS (periódicos, garantidos → remuneration_incentives). Nunca some ambos no mesmo campo. Se uma verba puder ser de ambas as categorias, prefira incentivos se for garantida, ou bônus se for condicional.
-Se document_type for 'Distrato', a termination_date deve refletir o último dia real de vínculo/serviço, e não necessariamente o dia em que o distrato foi assinado. Se o documento mencionar que os serviços encerram no dia X, X será a termination_date.
+ATENÇÃO MÁXIMA A DISTRATOS: Se o documento contiver palavras-chave como 'Distrato', 'Rescisão', 'Encerramento de Contrato', 'Termo de Quitação', defina document_type = 'Distrato'. Preencha Obrigatoriamente 'termination_date' E 'contract_expiry_date' com a data final da prestação de serviços encontrada no documento.
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
 `;
 

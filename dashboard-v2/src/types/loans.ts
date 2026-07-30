@@ -51,11 +51,13 @@ export interface Employee {
   state?: string;
   endereco_completo?: string; // NOVO: DB V2
   
-  // HR Role
+  // HR Role & Hierarchy
   department?: string;
   job_role?: string;
-  nivel?: string; // Estratégico | Tático | Operacional
-  grau?: string; // I | II | III
+  camada?: string; // Estratégico | Tático | Operacional (anteriormente chamado de Nível)
+  grau?: string;   // Iniciante | Intermediário | Avançado (novo grau de maturidade)
+  nivel?: string;  // I | II | III (anteriormente chamado de Grau)
+  nivel_enquadramento?: string; // I | II | III
   department_start_date?: string; // YYYY-MM-DD - data de início no setor/função atual
   start_date?: string;
   resignation_date?: string;

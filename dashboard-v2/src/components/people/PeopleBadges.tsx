@@ -34,16 +34,16 @@ export function formatWhatsAppLink(phone?: string): string | null {
   return `https://wa.me/${normalized}`;
 }
 
-export function formatCompanyTime(startDateStr?: string): string | null {
+export function formatCompanyTime(startDateStr?: string, endDateStr?: string): string | null {
   if (!startDateStr) return null;
   const start = new Date(startDateStr + "T12:00:00");
-  const now = new Date();
+  const end = endDateStr ? new Date(endDateStr + "T12:00:00") : new Date();
   
-  let months = (now.getFullYear() - start.getFullYear()) * 12;
+  let months = (end.getFullYear() - start.getFullYear()) * 12;
   months -= start.getMonth();
-  months += now.getMonth();
+  months += end.getMonth();
   
-  if (now.getDate() < start.getDate()) {
+  if (end.getDate() < start.getDate()) {
     months--;
   }
 
@@ -56,8 +56,8 @@ export function formatCompanyTime(startDateStr?: string): string | null {
   const yStr = y > 0 ? `${y} ${y === 1 ? 'ano' : 'anos'}` : '';
   const mStr = m > 0 ? `${m} ${m === 1 ? 'mês' : 'meses'}` : '';
   
-  if (yStr && mStr) return `${yStr} e ${mStr}`;
-  return yStr || mStr;
+  const timeStr = yStr && mStr ? `${yStr} e ${mStr}` : (yStr || mStr);
+  return endDateStr ? `${timeStr} (Distrato)` : timeStr;
 }
 
 // ─── Classification Badge (E1 to O3 with Stars) ──────────────────────────────
