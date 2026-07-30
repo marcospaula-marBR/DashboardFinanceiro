@@ -431,6 +431,8 @@ export class PeopleService {
       aiAgents: Array.isArray(raw.metadata?.aiAgents || raw.metadata?.ai_agents) ? (raw.metadata.aiAgents || raw.metadata.ai_agents) : [],
       permissions: Array.isArray(raw.metadata?.permissions) ? raw.metadata.permissions : [],
       temporaryDelegations: Array.isArray(raw.metadata?.temporaryDelegations || raw.metadata?.temporary_delegations) ? (raw.metadata.temporaryDelegations || raw.metadata.temporary_delegations) : [],
+      linked_previous_employee_id: raw.metadata?.linked_previous_employee_id || raw.metadata?.linkedPreviousEmployeeId || undefined,
+      is_unified_history: raw.metadata?.is_unified_history ?? raw.metadata?.isUnifiedHistory ?? true,
       metadata: raw.metadata || {}
     };
   }
@@ -516,7 +518,9 @@ export class PeopleService {
         last_grade_date: profile.last_grade_date || null,
         grau: profile.grau || '',
         remuneration_connectivity: profile.remuneration_connectivity || 0,
-        remuneration_incentives: profile.remuneration_incentives || 0
+        remuneration_incentives: profile.remuneration_incentives || 0,
+        linked_previous_employee_id: profile.linked_previous_employee_id || undefined,
+        is_unified_history: profile.is_unified_history !== false
       })
     };
   }

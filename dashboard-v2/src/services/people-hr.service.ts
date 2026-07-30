@@ -411,6 +411,10 @@ export const PeopleHRService = {
       remuneration_fixed: employeePayload.remuneration_fixed || 0,
       active: employeePayload.status !== "Inativo",
       created_at: new Date().toISOString(),
+      metadata: {
+        ...(employeePayload.linked_previous_employee_id ? { linked_previous_employee_id: employeePayload.linked_previous_employee_id } : {}),
+        is_unified_history: employeePayload.is_unified_history !== false,
+      }
     };
 
     const { data, error } = await supabase

@@ -381,6 +381,8 @@ export interface PeopleMetadata {
   grau?: string;
   remuneration_connectivity?: number;
   remuneration_incentives?: number;
+  linked_previous_employee_id?: string;
+  is_unified_history?: boolean;
 }
 
 // --- Future Payroll PDF Import Types ---
