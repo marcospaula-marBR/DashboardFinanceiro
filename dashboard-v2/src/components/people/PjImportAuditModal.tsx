@@ -146,7 +146,7 @@ export function PjImportAuditModal({
           monthlyCostsToInsert.push({
             employee_id: employeeIdToUse,
             competencia: comp,
-            vinculo_tipo: "PJ",
+            vinculo_tipo: "MEI",
             valor_fixo: cost.valor_fixo,
             valor_bonus: cost.valor_bonus,
             valor_comissao: cost.valor_comissao,

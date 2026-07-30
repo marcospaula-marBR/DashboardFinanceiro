@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.39";
+export const APP_VERSION = "v.02.53.40";
 export const VERSION_DATE = "2026-07-30";
 export const VERSION_CHANGELOG = [
+  "v.02.53.40 - Fix/People: Corrigida a restrição de banco (CHECK constraint people_monthly_costs_vinculo_tipo_check) ajustando vinculo_tipo para 'MEI' ao salvar lançamentos no modal Dianna PJ (PjImportAuditModal.tsx), garantindo 100% de sucesso na gravação de ex-colaboradores e prestadores ativos.",
   "v.02.53.39 - Feat/People: Criado o Menu Dropdown 'Central de Importações' unificando todas as rotinas de carga no topo da tela, e implementado o utilitário diannaPjFileParser.ts e o modal PjImportAuditModal.tsx para auditoria executiva e carga Dianna (PJ) com o layout exato dos cards de Fixo, Bônus, Comissões, Incentivos, Conectividade, Glosa Base, Glosa Bônus, Deduções e Resultado Final.",
   "v.02.53.38 - Fix/People: Restrita a atualização automática de remuneração base exclusivamente a colaboradores CLT. Para vínculos PJ, o valor contratual base (remuneration_fixed) é preservado e protegido contra alterações provocadas por comissões ou bônus variáveis recebidos na competência.",
   "v.02.53.37 - Fix/People: Atualizados os cards de resumo do Custo Histórico (PeopleBoard) e o modal de auditoria/drilldown para utilizar PeopleHRService.computeCostStats. Agora todas as verbas CLT (Horas Extras, Adicional Noturno, Benefícios, 13º/Férias) são computadas nos totais e no card Total Geral, garantindo 100% de batimento com os R$ 79.530,27 da Andrea e de todos os colaboradores.",
