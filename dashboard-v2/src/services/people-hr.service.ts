@@ -758,4 +758,33 @@ export const PeopleHRService = {
     if (error) throw error;
     return count !== null && count !== undefined ? count : (data ? data.length : 0);
   },
+
+  async getMonthlyCostsByCompetencia(competencia: string, vinculoFilter?: 'ALL' | 'CLT' | 'MEI'): Promise<MonthlyCost[]> {
+    let query = supabase.from('people_monthly_costs').select('*').eq('competencia', competencia);
+    if (vinculoFilter && vinculoFilter !== 'ALL') {
+      query = query.eq('vinculo_tipo', vinculoFilter);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async replicateCompetenciaBatch(originCompetencia: string, targetCompetencia: string, vinculoFilter?: 'ALL' | 'CLT' | 'MEI'): Promise<{ count: number }> {
+    const originCosts = await this.getMonthlyCostsByCompetencia(originCompetencia, vinculoFilter);
+    if (!originCosts || originCosts.length === 0) {
+      return { count: 0 };
+    }
+
+    const newCosts = originCosts.map(item => {
+      const { id, created_at, ...rest } = item;
+      return {
+        ...rest,
+        competencia: targetCompetencia,
+        created_at: new Date().toISOString()
+      };
+    });
+
+    await this.saveMonthlyCostsBatch(newCosts);
+    return { count: newCosts.length };
+  }
 };

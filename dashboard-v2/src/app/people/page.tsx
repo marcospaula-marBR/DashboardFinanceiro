@@ -14,6 +14,7 @@ import { BatchPdfExportModal } from "@/components/people/BatchPdfExportModal";
 import { ClearCostHistoryModal } from "@/components/people/ClearCostHistoryModal";
 import { CltImportAuditModal } from "@/components/people/CltImportAuditModal";
 import { PjImportAuditModal } from "@/components/people/PjImportAuditModal";
+import { BatchReplicateCostsModal } from "@/components/people/BatchReplicateCostsModal";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
@@ -25,7 +26,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2
+  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -102,6 +103,7 @@ export default function PeoplePage() {
   const [isClearCostHistoryModalOpen, setIsClearCostHistoryModalOpen] = useState(false);
   const [isCltImportModalOpen, setIsCltImportModalOpen] = useState(false);
   const [isPjImportModalOpen, setIsPjImportModalOpen] = useState(false);
+  const [isBatchReplicateModalOpen, setIsBatchReplicateModalOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   
   // C-Level Executive Drawer States
@@ -1227,6 +1229,21 @@ export default function PeoplePage() {
                       </div>
                     </button>
 
+                    {/* Option: Replicar Competência em Lote */}
+                    <button
+                      onClick={() => {
+                        setIsImportMenuOpen(false);
+                        setIsBatchReplicateModalOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors border-t border-slate-100"
+                    >
+                      <Copy className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <div>
+                        <div className="font-extrabold">Replicar Competência em Lote</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Inserir novo mês com base no anterior</div>
+                      </div>
+                    </button>
+
                     <div className="px-4 py-2 border-t border-slate-100 font-extrabold text-[11px] uppercase tracking-wider text-slate-400 mt-1">
                       Arquivos PDF & Extratos
                     </div>
@@ -2113,6 +2130,14 @@ export default function PeoplePage() {
           fetchData();
         }}
         existingEmployees={employees}
+      />
+
+      <BatchReplicateCostsModal
+        isOpen={isBatchReplicateModalOpen}
+        onClose={() => setIsBatchReplicateModalOpen(false)}
+        onSuccess={() => {
+          fetchData();
+        }}
       />
     </div>
   );
