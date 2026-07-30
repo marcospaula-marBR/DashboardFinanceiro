@@ -39,9 +39,11 @@ async function syncLatestSalariesAndRoles() {
       const latestSalary = latestCostWithSalary.valor_fixo;
       const currentRem = emp.remuneration_fixed || emp.remuneration || 0;
 
-      // Se o salário da competência mais recente for diferente ou superior ao cadastrado
-      if (latestSalary > 0 && Math.abs(latestSalary - currentRem) > 0.01) {
-        console.log(`[REAJUSTE SALARIAL] ${emp.full_name}: ${currentRem} -> R$ ${latestSalary} (Competência: ${latestCostWithSalary.competencia})`);
+      // Atualização de remuneração base é restrita exclusivamente a colaboradores CLT
+      const isCLT = emp.employment_type === "CLT";
+
+      if (isCLT && latestSalary > 0 && Math.abs(latestSalary - currentRem) > 0.01) {
+        console.log(`[REAJUSTE SALARIAL CLT] ${emp.full_name}: ${currentRem} -> R$ ${latestSalary} (Competência: ${latestCostWithSalary.competencia})`);
 
         await supabase
           .from("employees")

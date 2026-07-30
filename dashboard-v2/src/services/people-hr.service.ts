@@ -439,7 +439,15 @@ export const PeopleHRService = {
     if (employeePayload.resignation_date) payload.resignation_date = employeePayload.resignation_date;
     if (employeePayload.remuneration_fixed !== undefined) {
       payload.remuneration_fixed = employeePayload.remuneration_fixed;
-      payload.remuneration = employeePayload.remuneration_fixed;
+    }
+    if (employeePayload.remuneration_bonus !== undefined) {
+      payload.remuneration_bonus = employeePayload.remuneration_bonus;
+    }
+    if (employeePayload.remuneration_commission !== undefined) {
+      payload.remuneration_commission = employeePayload.remuneration_commission;
+    }
+    if (employeePayload.remuneration !== undefined) {
+      payload.remuneration = employeePayload.remuneration;
     }
 
     const { error } = await supabase
