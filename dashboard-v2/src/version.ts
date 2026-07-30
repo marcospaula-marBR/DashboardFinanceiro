@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.35";
+export const APP_VERSION = "v.02.53.36";
 export const VERSION_DATE = "2026-07-30";
 export const VERSION_CHANGELOG = [
+  "v.02.53.36 - Fix/People: Implementada busca paginada com .range() em PeopleHRService.getAllMonthlyCosts para superar o limite padrão de 1.000 registros do Supabase REST API. Agora os 1.174 lançamentos históricos de toda a empresa são carregados integralmente na inicialização da página People, exibindo o Total Histórico de R$ 79.530,27 e Média de R$ 1.152,61 nos cards com 100% de exatidão.",
   "v.02.53.35 - Fix/People: Unificada a fórmula do Total Histórico Desembolsado e Média Mensal nos cards e na tabela (PeopleMobileCard.tsx e PeopleTable.tsx) utilizando PeopleHRService.computeCostStats. Agora os valores exibidos nos cards (ex: Andrea - Total R$ 79.530,27 / Média R$ 1.152,61) batem 100% com os centavos do Resultado Final da ficha do colaborador.",
   "v.02.53.34 - Feat/People: Exibidos o Total Histórico Desembolsado e a Média Mensal nos cards (PeopleMobileCard.tsx) e na tabela desktop (PeopleTable.tsx) para colaboradores CLT/PJ, e ativada a atualização automática de remuneração base e cargo/função no perfil cadastral ao identificar reajustes salariais ou novas atribuições na competência mais recente.",
   "v.02.53.33 - Fix/People: Corrigido o limite de busca de custos mensais em getMonthlyCosts (ampliado de 24 para 120 competências) e atualizado o cltFileParser.ts para ler a linha 'Ciclo do mês' por bloco de colaborador, liberando a exibição de todo o histórico retroativo completo (de 2020 até 2026).",

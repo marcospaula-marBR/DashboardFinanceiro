@@ -135,14 +135,33 @@ export const PeopleHRService = {
     }));
   },
 
-  async getAllMonthlyCosts(limit = 2000): Promise<MonthlyCost[]> {
-    const { data, error } = await supabase
-      .from('people_monthly_costs')
-      .select('*')
-      .order('competencia', { ascending: true })
-      .limit(limit);
-    if (error) throw error;
-    return (data || []).map(row => ({
+  async getAllMonthlyCosts(): Promise<MonthlyCost[]> {
+    let allRows: any[] = [];
+    let from = 0;
+    const step = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('people_monthly_costs')
+        .select('*')
+        .order('competencia', { ascending: true })
+        .range(from, from + step - 1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allRows = allRows.concat(data);
+        from += step;
+        if (data.length < step) {
+          hasMore = false;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allRows.map(row => ({
       ...row,
       ...(row.verbas_adicionais || {})
     }));
