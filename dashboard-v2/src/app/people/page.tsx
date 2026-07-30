@@ -13,6 +13,7 @@ import { KPIStatsDrawer } from "@/components/people/KPIStatsDrawer";
 import { BatchPdfExportModal } from "@/components/people/BatchPdfExportModal";
 import { ClearCostHistoryModal } from "@/components/people/ClearCostHistoryModal";
 import { CltImportAuditModal } from "@/components/people/CltImportAuditModal";
+import { PjImportAuditModal } from "@/components/people/PjImportAuditModal";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
@@ -24,7 +25,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText, Printer, Database, Trash2, FileSpreadsheet
+  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -100,6 +101,8 @@ export default function PeoplePage() {
   const [isDiannaBatchModalOpen, setIsDiannaBatchModalOpen] = useState(false);
   const [isClearCostHistoryModalOpen, setIsClearCostHistoryModalOpen] = useState(false);
   const [isCltImportModalOpen, setIsCltImportModalOpen] = useState(false);
+  const [isPjImportModalOpen, setIsPjImportModalOpen] = useState(false);
+  const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   
   // C-Level Executive Drawer States
   const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "headcount_clt" | "headcount_pj" | "payroll_clt" | "payroll_pj" | "loans" | "health" | "audit" | "strategic" | "nopbid" | null>(null);
@@ -1157,41 +1160,114 @@ export default function PeoplePage() {
               <Printer size={14} /> Exportar Lote PDF
             </button>
 
-            {/* Import payroll consolidated PDF button */}
-            <button
-              onClick={() => setIsPayrollBatchModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase animate-in fade-in"
-              title="Importar extrato mensal de folha de pagamento CLT em lote"
-            >
-              <FileText size={14} /> Importar Folha
-            </button>
+            {/* PASTA DE IMPORTAÇÕES (Central Executiva de Cargas) */}
+            <div className="relative">
+              <button
+                onClick={() => setIsImportMenuOpen(!isImportMenuOpen)}
+                className="flex items-center gap-2 px-4 py-2 border border-teal-300 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-md"
+                title="Central de Importações de Planilhas e Extratos"
+              >
+                <FolderDown size={15} />
+                <span>Central de Importações</span>
+                <ChevronDown size={14} className={`transition-transform duration-200 ${isImportMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-            {/* Import Planilha CLT (.csv / .xlsx) button */}
-            <button
-              onClick={() => setIsCltImportModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 border border-emerald-300 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
-              title="Auditar e importar colaboradores e verbas históricas da planilha CLT (.csv / .xlsx)"
-            >
-              <FileSpreadsheet size={14} /> Importar Planilha CLT
-            </button>
+              {isImportMenuOpen && (
+                <>
+                  {/* Backdrop para fechar menu ao clicar fora */}
+                  <div className="fixed inset-0 z-40" onClick={() => setIsImportMenuOpen(false)} />
+                  
+                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-4 py-2 border-b border-slate-100 font-extrabold text-[11px] uppercase tracking-wider text-slate-400">
+                      Importações de Planilhas
+                    </div>
+                    
+                    {/* Option: Importar Planilha CLT */}
+                    <button
+                      onClick={() => {
+                        setIsImportMenuOpen(false);
+                        setIsCltImportModalOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <div className="font-extrabold">Importar Planilha CLT</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Holerites, Verbas e Rescisões (.xlsx / .csv)</div>
+                      </div>
+                    </button>
 
-            {/* Import Dianna Batch (CLT NOVA) button */}
-            <button
-              onClick={() => setIsDiannaBatchModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 border border-amber-300 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
-              title="Sincronizar e importar colaboradores e verbas históricas da planilha Dianna (CLT NOVA)"
-            >
-              <Database size={14} /> Importar Dianna (CLT)
-            </button>
+                    {/* Option: Importar Dianna (PJ) */}
+                    <button
+                      onClick={() => {
+                        setIsImportMenuOpen(false);
+                        setIsPjImportModalOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-teal-700 flex items-center gap-2.5 transition-colors"
+                    >
+                      <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
+                      <div>
+                        <div className="font-extrabold">Importar Dianna (PJ)</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Fixo, Bônus, Comissões e Glosas (.xlsx)</div>
+                      </div>
+                    </button>
 
-            {/* Limpar Custo Histórico por Período */}
-            <button
-              onClick={() => setIsClearCostHistoryModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
-              title="Limpar histórico de custos com seleção de período"
-            >
-              <Trash2 size={14} /> Limpar Histórico
-            </button>
+                    {/* Option: Importar Dianna (CLT) */}
+                    <button
+                      onClick={() => {
+                        setIsImportMenuOpen(false);
+                        setIsDiannaBatchModalOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors"
+                    >
+                      <Database className="w-4 h-4 text-amber-600 shrink-0" />
+                      <div>
+                        <div className="font-extrabold">Importar Dianna (CLT)</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Base Legada e Histórico CLT Nova</div>
+                      </div>
+                    </button>
+
+                    <div className="px-4 py-2 border-t border-slate-100 font-extrabold text-[11px] uppercase tracking-wider text-slate-400 mt-1">
+                      Arquivos PDF & Extratos
+                    </div>
+
+                    {/* Option: Importar Folha PDF */}
+                    <button
+                      onClick={() => {
+                        setIsImportMenuOpen(false);
+                        setIsPayrollBatchModalOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors"
+                    >
+                      <FileText className="w-4 h-4 text-slate-600 shrink-0" />
+                      <div>
+                        <div className="font-extrabold">Importar Folha (PDF)</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Extrato Mensal Consolidado em Lote</div>
+                      </div>
+                    </button>
+
+                    <div className="px-4 py-2 border-t border-slate-100 font-extrabold text-[11px] uppercase tracking-wider text-slate-400 mt-1">
+                      Manutenção de Dados
+                    </div>
+
+                    {/* Option: Limpar Histórico */}
+                    <button
+                      onClick={() => {
+                        setIsImportMenuOpen(false);
+                        setIsClearCostHistoryModalOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 flex items-center gap-2.5 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-600 shrink-0" />
+                      <div>
+                        <div className="font-extrabold">Limpar Histórico</div>
+                        <div className="text-[10px] text-rose-400 font-normal">Excluir lançamentos por período</div>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Create new employee button */}
             <button
@@ -2025,6 +2101,15 @@ export default function PeoplePage() {
         isOpen={isCltImportModalOpen}
         onClose={() => setIsCltImportModalOpen(false)}
         onSuccess={() => {
+          fetchData();
+        }}
+        existingEmployees={employees}
+      />
+
+      <PjImportAuditModal
+        isOpen={isPjImportModalOpen}
+        onClose={() => setIsPjImportModalOpen(false)}
+        onImportSuccess={() => {
           fetchData();
         }}
         existingEmployees={employees}

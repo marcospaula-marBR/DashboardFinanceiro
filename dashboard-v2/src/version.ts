@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.38";
+export const APP_VERSION = "v.02.53.39";
 export const VERSION_DATE = "2026-07-30";
 export const VERSION_CHANGELOG = [
+  "v.02.53.39 - Feat/People: Criado o Menu Dropdown 'Central de Importações' unificando todas as rotinas de carga no topo da tela, e implementado o utilitário diannaPjFileParser.ts e o modal PjImportAuditModal.tsx para auditoria executiva e carga Dianna (PJ) com o layout exato dos cards de Fixo, Bônus, Comissões, Incentivos, Conectividade, Glosa Base, Glosa Bônus, Deduções e Resultado Final.",
   "v.02.53.38 - Fix/People: Restrita a atualização automática de remuneração base exclusivamente a colaboradores CLT. Para vínculos PJ, o valor contratual base (remuneration_fixed) é preservado e protegido contra alterações provocadas por comissões ou bônus variáveis recebidos na competência.",
   "v.02.53.37 - Fix/People: Atualizados os cards de resumo do Custo Histórico (PeopleBoard) e o modal de auditoria/drilldown para utilizar PeopleHRService.computeCostStats. Agora todas as verbas CLT (Horas Extras, Adicional Noturno, Benefícios, 13º/Férias) são computadas nos totais e no card Total Geral, garantindo 100% de batimento com os R$ 79.530,27 da Andrea e de todos os colaboradores.",
   "v.02.53.36 - Fix/People: Implementada busca paginada com .range() em PeopleHRService.getAllMonthlyCosts para superar o limite padrão de 1.000 registros do Supabase REST API. Agora os 1.174 lançamentos históricos de toda a empresa são carregados integralmente na inicialização da página People, exibindo o Total Histórico de R$ 79.530,27 e Média de R$ 1.152,61 nos cards com 100% de exatidão.",

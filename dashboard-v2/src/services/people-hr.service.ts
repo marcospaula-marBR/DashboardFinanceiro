@@ -700,6 +700,12 @@ export const PeopleHRService = {
     return this.insertMonthlyCost(payload);
   },
 
+  async saveMonthlyCostsBatch(batch: Partial<MonthlyCost>[]): Promise<void> {
+    for (const item of batch) {
+      await this.upsertMonthlyCost(item);
+    }
+  },
+
   async updateMonthlyCost(costId: string, payload: Partial<MonthlyCost>): Promise<void> {
     const { error } = await supabase
       .from('people_monthly_costs')
