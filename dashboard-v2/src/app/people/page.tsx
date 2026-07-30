@@ -1863,8 +1863,9 @@ export default function PeoplePage() {
                     }
 
                     const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
-                    const historicoCustoTotal = empCosts.reduce((sum, c) => sum + (c.valor_liquido || c.valor_fixo || 0), 0);
-                    const historicoCustoMedio = empCosts.length > 0 ? historicoCustoTotal / empCosts.length : 0;
+                    const stats = PeopleHRService.computeCostStats(empCosts);
+                    const historicoCustoTotal = stats?.total;
+                    const historicoCustoMedio = stats?.average;
 
                     return (
                       <PeopleMobileCard
