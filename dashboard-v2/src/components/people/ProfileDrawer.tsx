@@ -2399,16 +2399,43 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                              <label className={labelClass}>Vincular ao Cadastro CLT Anterior</label>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className={labelClass}>Vincular ao Cadastro CLT / Anterior</label>
+                                {isEditMode && !profile.linked_previous_employee_id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const match = allEmployees.find(e => 
+                                        e.id !== profile.id && 
+                                        (e.name.toLowerCase().trim() === (profile.name || '').toLowerCase().trim() ||
+                                         (e.document_id && profile.document_id && e.document_id.replace(/\D/g, '') === profile.document_id.replace(/\D/g, '')))
+                                      );
+                                      if (match) {
+                                        handleChange('linked_previous_employee_id', match.id);
+                                        handleChange('is_unified_history', true);
+                                      } else {
+                                        alert("Nenhum outro cadastro com nome ou CPF idêntico foi encontrado para vincular automaticamente.");
+                                      }
+                                    }}
+                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                                  >
+                                    ⚡ Auto-Detectar Cadastro CLT
+                                  </button>
+                                )}
+                              </div>
                               {isEditMode ? (
                                 <select
                                   value={profile.linked_previous_employee_id || ''}
-                                  onChange={e => handleChange('linked_previous_employee_id', e.target.value)}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    handleChange('linked_previous_employee_id', val);
+                                    if (val) handleChange('is_unified_history', true);
+                                  }}
                                   className="w-full bg-white border border-slate-200 rounded-lg text-xs py-1.5 px-2 outline-none focus:border-indigo-500 font-medium"
                                 >
                                   <option value="">Nenhum (Cadastro Independente)</option>
                                   {allEmployees
-                                    .filter(e => e.id !== profile.id && (e.linkType === 'CLT' || e.status === 'Inativo'))
+                                    .filter(e => e.id !== profile.id)
                                     .map(e => (
                                       <option key={e.id} value={e.id}>
                                         🔗 {e.name} ({e.linkType || 'CLT'} - {e.status})
@@ -2431,7 +2458,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   checked={profile.is_unified_history !== false}
                                   onChange={e => handleChange('is_unified_history', e.target.checked)}
                                   disabled={!isEditMode || !profile.linked_previous_employee_id}
-                                  className="w-4 h-4 text-indigo-600 rounded border-slate-300"
+                                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 disabled:opacity-50"
                                 />
                                 <span>Somar tempo de casa e valores acumulados nos dois regimes</span>
                               </label>

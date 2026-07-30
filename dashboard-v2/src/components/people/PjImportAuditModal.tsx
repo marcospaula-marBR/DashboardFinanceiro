@@ -85,6 +85,7 @@ export function PjImportAuditModal({
       if (best) {
         matchScore = best.similarity;
         matchedName = best.matchedEmployeeName;
+        // Se houver correspondência exata/similar, sugerir mas manter opção clara de criar novo PJ
         if (best.matchedEmployeeId && (best.status === "EXACT" || best.status === "SIMILAR")) {
           selectedMatchId = best.matchedEmployeeId;
         }
@@ -147,15 +148,20 @@ export function PjImportAuditModal({
         const pEmp = item.parsedEmp;
         let targetEmployeeId = item.selectedMatchId;
 
-        // Se for "NEW" ou não possuir ID cadastrado, cria um novo colaborador PJ no Supabase
-        if (targetEmployeeId === "NEW") {
+        const matchedExisting = existingEmployees.find((e) => e.id === targetEmployeeId);
+
+        // Se for "NEW" OU se o usuário escolheu vincular a um cadastro CLT/anterior existente:
+        // Criamos SEMPRE a nova ficha PJ dedicada (para manter 2 cadastros distintos) e auto-vinculamos o ID anterior!
+        if (targetEmployeeId === "NEW" || (matchedExisting && (matchedExisting.linkType === "CLT" || matchedExisting.status === "Inativo"))) {
           const newEmpObj: Partial<Employee> = {
             name: pEmp.cleanName,
             linkType: "PJ",
             status: pEmp.status === "Inativo" ? "Inativo" : "Ativo",
-            department: pEmp.setor || "Operacional",
-            job_role: pEmp.ultimoCargo || pEmp.cargoInicial || "Prestador PJ",
-            start_date: pEmp.dataInicial,
+            department: pEmp.setor || matchedExisting?.department || "Operacional",
+            job_role: pEmp.ultimoCargo || pEmp.cargoInicial || matchedExisting?.job_role || "Prestador PJ",
+            start_date: pEmp.dataInicial || matchedExisting?.start_date,
+            linked_previous_employee_id: matchedExisting ? matchedExisting.id : undefined,
+            is_unified_history: matchedExisting ? true : undefined,
             remuneration_fixed: pEmp.costsByCompetencia[Object.keys(pEmp.costsByCompetencia).pop() || ""]?.valor_fixo || 0,
             remuneration: pEmp.costsByCompetencia[Object.keys(pEmp.costsByCompetencia).pop() || ""]?.valor_fixo || 0,
           };
