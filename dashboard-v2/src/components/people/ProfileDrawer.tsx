@@ -2110,45 +2110,46 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               )}
                              </div>
                              <div className="flex-1">
-                               <label className={labelClass}>Camada</label>
-                               {isEditMode ? (
-                                 <select value={profile.camada || profile.nivel || ''} onChange={e => { handleChange('camada', e.target.value); handleChange('nivel', e.target.value); }} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
-                                   <option value="">Selecione...</option>
-                                   <option value="Estratégico">Estratégico</option>
-                                   <option value="Tático">Tático</option>
-                                   <option value="Operacional">Operacional</option>
-                                 </select>
-                               ) : (
-                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.camada || profile.nivel || '-'}</span>
-                               )}
-                              </div>
-                              <div className="flex-1">
-                               <label className={labelClass}>Grau</label>
-                               {isEditMode ? (
-                                 <select value={profile.grau || ''} onChange={e => handleChange('grau', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
-                                   <option value="">Selecione...</option>
-                                   <option value="Iniciante">Iniciante</option>
-                                   <option value="Intermediário">Intermediário</option>
-                                   <option value="Avançado">Avançado</option>
-                                 </select>
-                               ) : (
-                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.grau || '-'}</span>
-                               )}
-                              </div>
-                              <div className="flex-1">
-                               <label className={labelClass}>Nível</label>
-                               {isEditMode ? (
-                                 <select value={profile.nivel_enquadramento || profile.nivel || (['I', 'II', 'III'].includes(profile.grau || '') ? profile.grau : '') || ''} onChange={e => { handleChange('nivel_enquadramento', e.target.value); handleChange('nivel', e.target.value); }} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
-                                   <option value="">Selecione...</option>
-                                   <option value="I">I</option>
-                                   <option value="II">II</option>
-                                   <option value="III">III</option>
-                                 </select>
-                               ) : (
-                                 <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.nivel_enquadramento || (['I', 'II', 'III'].includes(profile.grau || '') ? profile.grau : '-') || '-'}</span>
-                               )}
-                              </div>
-                          </div>
+                              <label className={labelClass}>Camada</label>
+                              {isEditMode ? (
+                                <select value={profile.camada || ''} onChange={e => handleChange('camada', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                  <option value="">Selecione...</option>
+                                  <option value="Estratégico">Estratégico</option>
+                                  <option value="Tático">Tático</option>
+                                  <option value="Operacional">Operacional</option>
+                                </select>
+                              ) : (
+                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.camada || '-'}</span>
+                              )}
+                             </div>
+                             <div className="flex-1">
+                              <label className={labelClass}>Grau</label>
+                              {isEditMode ? (
+                                <select value={profile.grau || ''} onChange={e => handleChange('grau', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                  <option value="">Selecione...</option>
+                                  <option value="Iniciante">Iniciante</option>
+                                  <option value="Intermediário">Intermediário</option>
+                                  <option value="Avançado">Avançado</option>
+                                </select>
+                              ) : (
+                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.grau || '-'}</span>
+                              )}
+                             </div>
+                             <div className="flex-1">
+                              <label className={labelClass}>Nível</label>
+                              {isEditMode ? (
+                                <select value={profile.nivel_enquadramento || profile.nivel || ''} onChange={e => { handleChange('nivel_enquadramento', e.target.value); handleChange('nivel', e.target.value); }} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                  <option value="">Selecione...</option>
+                                  <option value="I">I</option>
+                                  <option value="II">II</option>
+                                  <option value="III">III</option>
+                                </select>
+                              ) : (
+                                <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{profile.nivel_enquadramento || (['I', 'II', 'III'].includes(profile.grau || '') ? profile.grau : '-') || '-'}</span>
+                              )}
+                             </div>
+                           </div>
+                          
                           <div>
                             <label className={labelClass}>Natureza da Relação (Diana PB)</label>
                             {isEditMode ? (

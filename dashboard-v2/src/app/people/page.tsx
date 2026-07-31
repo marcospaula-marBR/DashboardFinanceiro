@@ -1838,7 +1838,7 @@ export default function PeoplePage() {
 
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex flex-col">
-                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Base</label>
+                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela R$ Base</label>
                      <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 shadow-sm">
                        <input
                          type="number"
@@ -1851,7 +1851,7 @@ export default function PeoplePage() {
                      </div>
                   </div>
                   <div className="flex flex-col">
-                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Nível</label>
+                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Camada</label>
                      <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 shadow-sm">
                        <input
                          type="number"
@@ -1864,7 +1864,7 @@ export default function PeoplePage() {
                      </div>
                   </div>
                   <div className="flex flex-col">
-                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Grau</label>
+                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Nível</label>
                      <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 shadow-sm">
                        <input
                          type="number"
@@ -1899,7 +1899,7 @@ export default function PeoplePage() {
                  sub="Saldo devedor ativo"
                />
                <PeopleKpiCard
-                 title="Mesmo Valor Base"
+                 title="Mesmo R$ Base"
                  value={insightCounts.aumento}
                  icon={<UserCog size={20} />}
                  color="rose"
@@ -1908,7 +1908,7 @@ export default function PeoplePage() {
                  sub={`Há mais de ${noRaiseMonths} meses`}
                />
                <PeopleKpiCard
-                 title="Mesmo Nível"
+                 title="Mesma Camada"
                  value={insightCounts.promocao}
                  icon={<Target size={20} />}
                  color="indigo"
@@ -1917,7 +1917,7 @@ export default function PeoplePage() {
                  sub={`Há mais de ${noPromoMonths} meses`}
                />
                <PeopleKpiCard
-                 title="Mesmo Grau"
+                 title="Mesmo Nível"
                  value={insightCounts.grau}
                  icon={<Award size={20} />}
                  color="emerald"

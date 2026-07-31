@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.50";
+export const APP_VERSION = "v.02.53.51";
 export const VERSION_DATE = "2026-07-31";
 export const VERSION_CHANGELOG = [
+  "v.02.53.51 - Fix/People: Isolamento completo dos seletores de Camada, Grau e Nível em ProfileDrawer.tsx eliminando o descarte de Camada ao alterar Nível. Ajuste dos filtros de busca por Camada (E, T, O) e Nível (I, II, III) em page.tsx. Readequação dos rótulos e janelas no Monitoramento de Pessoas (Janela R$ Base, Janela Camada e Janela Nível).",
   "v.02.53.50 - Fix/People: Corrigida a falha de salvamento de Nível e Grau ('Could not find the nivel_enquadramento column of employees in the schema cache'). Removido nivel_enquadramento da raiz das queries SQL/payloads do Supabase e migrada a persistência de Camada, Grau e Nível para a estrutura segura metadata JSONB.",
   "v.02.53.49 - Feat/People: Alterado o card do Cockpit de 'Níveis' para 'Camada', exibindo a distribuição detalhada de Estratégico (E), Tático (T) e Operacional (O). Adicionados os filtros dinâmicos de 'Camada' e 'Nível' na barra lateral. Corrigida a persistência do campo 'Nível' (I, II, III) nos serviços de dados (people.service.ts e people-hr.service.ts) e prontuário (ProfileDrawer.tsx).",
   "v.02.53.48 - Fix/People: Alinhada a inferência de tipo de entidade (inferEntityType) no cálculo do card de Custo PJ (cockpitKpis em page.tsx). Antes o card verificava e.entityType estático omitindo colaboradores PJ sem metadados preenchidos. Com a salvaguarda inferEntityType(e), a lista de prestadores e os valores do card passam a ser rigorosamente idênticos aos do detalhamento (KPIStatsDrawer), cravando o Fixo em R$ 154.897,47 e o Total PJ em R$ 169.397,47.",
