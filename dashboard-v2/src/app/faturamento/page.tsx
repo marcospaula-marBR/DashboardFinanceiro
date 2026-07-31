@@ -11,7 +11,8 @@ import { BillingSegmentCharts } from '@/components/faturamento/BillingSegmentCha
 import { BillingTable } from '@/components/faturamento/BillingTable';
 import { BillingQuarterlyTaxModal } from '@/components/faturamento/BillingQuarterlyTaxModal';
 import { BillingCommissionModal } from '@/components/faturamento/BillingCommissionModal';
-import { ChevronLeft, Landmark, Download, RefreshCw } from 'lucide-react';
+import { OmieSyncModal } from '@/components/faturamento/OmieSyncModal';
+import { ChevronLeft, Landmark, Download, RefreshCw, Sparkles } from 'lucide-react';
 import { APP_VERSION } from '@/version';
 
 export default function FaturamentoPage() {
@@ -21,6 +22,7 @@ export default function FaturamentoPage() {
   // Modais
   const [isTaxModalOpen, setIsTaxModalOpen] = useState<boolean>(false);
   const [isCommissionModalOpen, setIsCommissionModalOpen] = useState<boolean>(false);
+  const [isOmieSyncModalOpen, setIsOmieSyncModalOpen] = useState<boolean>(false);
   const [selectedCommissionItem, setSelectedCommissionItem] = useState<BillingItem | null>(null);
 
   // Filtros
@@ -116,8 +118,13 @@ export default function FaturamentoPage() {
         </div>
 
         <div className={styles.actionsArea}>
-          <button className={styles.btnPrimary} onClick={() => setIsTaxModalOpen(true)}>
-            <Landmark size={16} />
+          <button className={styles.btnPrimary} onClick={() => setIsOmieSyncModalOpen(true)}>
+            <Sparkles size={16} />
+            <span>⚡ Sincronizar Omie</span>
+          </button>
+
+          <button className={styles.btnSecondary} onClick={() => setIsTaxModalOpen(true)}>
+            <Landmark size={14} />
             <span>Apuração Trimestral (IRPJ/CSLL)</span>
           </button>
 
@@ -153,6 +160,14 @@ export default function FaturamentoPage() {
       />
 
       {/* ── MODAIS ──────────────────────────────────────────────────── */}
+      <OmieSyncModal
+        isOpen={isOmieSyncModalOpen}
+        onClose={() => setIsOmieSyncModalOpen(false)}
+        onSyncSuccess={(newSyncedItems) => {
+          setAllItems(prev => [...newSyncedItems, ...prev]);
+        }}
+      />
+
       <BillingQuarterlyTaxModal
         isOpen={isTaxModalOpen}
         onClose={() => setIsTaxModalOpen(false)}

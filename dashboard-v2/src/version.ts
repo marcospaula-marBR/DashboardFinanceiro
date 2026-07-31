@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.54.00";
+export const APP_VERSION = "v.02.54.01";
 export const VERSION_DATE = "2026-07-31";
 export const VERSION_CHANGELOG = [
+  "v.02.54.01 - Feat/Faturamentos: Adicionada a ferramenta de Busca Automática no Omie ERP (OmieSyncModal.tsx + /api/faturamento/sync). Permite selecionar a empresa (Mar Brasil / DZM), informar o período e escolher o critério de busca oficial no Omie: por Data de Registro (Contábil), Data de Lançamento / Inclusão (Sistema) ou Data de Vencimento, atualizando a grade de lançamentos em tempo real.",
   "v.02.54.00 - Feat/Faturamentos: Criação do novo Dashboard de Faturamentos (/faturamento). Suporte a 4 referências de datas (Registro, Lançamento/Emissão, Vencimento e Recebimento), classificação B2G/B2B/B2C, Terceirização (Sim/Não), retenções fiscais (PIS, COFINS, ISS, INSS, IRRF), Apuração Trimestral de IRPJ/CSLL com Adicional Reforma LC 224/2025 e vencimentos programados (Abril, Julho, Outubro, Janeiro), motor de comissões integradas com People Board e percentuais de representatividade por segmento para rateio de despesas.",
   "v.02.53.53 - Refactor: Remoção da página legada contratos.html e seu script contratos.js (descontinuados devido à ausência da planilha Consolidado Faturamento.csv) e desvinculação completa dos menus de navegação do portal.",
   "v.02.53.52 - Feat/People: Incluída a Janela Grau entre Janela Camada e Janela Nível na seção Monitoramento de Pessoas em page.tsx. Atualizada a grade de alertas para exibir os 6 cards completos (Glosa na NF, Com Empréstimo, Mesmo R$ Base, Mesma Camada, Mesmo Grau e Mesmo Nível).",
