@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.46";
-export const VERSION_DATE = "2026-07-30";
+export const APP_VERSION = "v.02.53.47";
+export const VERSION_DATE = "2026-07-31";
 export const VERSION_CHANGELOG = [
+  "v.02.53.47 - Fix/People: Auditoria e alinhamento dos cards KPI de Custo PJ e Custo CLT em page.tsx. Corrigida a divergência entre o card e a gaveta detalhada (KPIStatsDrawer) somando Fixo + Bônus/Comissões no valor principal do card. Adicionado o detalhamento em fonte menor abaixo do valor principal (Fixo e Bônus/Variável) em PeopleKpiCard.tsx.",
   "v.02.53.46 - Fix/People: Corrigido o mapeamento e persistência de metadados no PeopleService (mapRawToProfile e mapProfileToRaw em people.service.ts) e no PeopleHRService.insertEmployee. Agora o vínculo linked_previous_employee_id e o is_unified_history são lidos do Supabase e gravados corretamente na criação e salvamento do prontuário, permitindo que a ficha CLT e a ficha PJ se reconheçam e unifiquem 100% dos dados.",
   "v.02.53.45 - Fix/People: Corrigido o fluxo de importação Dianna PJ (PjImportAuditModal.tsx) para garantir que ao selecionar um cadastro CLT existente (ex: Diana CLT), o sistema crie a nova ficha PJ dedicada (mantendo 2 cadastros no banco), vincule os cadastros automaticamente (linked_previous_employee_id) e ative a unificação do histórico (tempo de casa e custos). Adicionado botão '⚡ Auto-Detectar Cadastro CLT' no prontuário.",
   "v.02.53.44 - Feat/People: Criado a ferramenta de 'Replicar Competência em Lote' (BatchReplicateCostsModal.tsx) na Central de Importações para clonar lançamentos de custos mensais de um mês anterior para um novo mês em 1 clique. Implementada a auto-atualização do status para 'Inativo' ao preencher o campo Final de Contrato com data passada ou atual caso o usuário não altere o status manualmente.",

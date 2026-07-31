@@ -276,11 +276,15 @@ export default function PeoplePage() {
     const pjList = activeFiltered.filter(e => isExternalEntity(e.entityType));
     const pjCount = pjList.length;
     
-    // Custo CLT (leitura base remuneração dos CLT/Estágio ativos)
-    const cltCostTotal = cltList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
+    // Custo CLT (Fixo + Bônus + Comissões)
+    const cltCostFixed = cltList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
+    const cltCostBonus = cltList.reduce((sum, e) => sum + (e.remuneration_bonus || 0) + (e.remuneration_commission || 0), 0);
+    const cltCostTotal = cltCostFixed + cltCostBonus;
     
-    // Custo PJ (leitura base do contrato de prestadores ativos)
-    const pjCostTotal = pjList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
+    // Custo PJ (Fixo + Bônus + Comissões)
+    const pjCostFixed = pjList.reduce((sum, e) => sum + (e.remuneration_fixed || e.remuneration || 0), 0);
+    const pjCostBonus = pjList.reduce((sum, e) => sum + (e.remuneration_bonus || 0) + (e.remuneration_commission || 0), 0);
+    const pjCostTotal = pjCostFixed + pjCostBonus;
     
     // Saldo Devedor Consignado (leitura runtime segura)
     const totalLoansDebt = activeFiltered.reduce((sum, e) => sum + (e.balance || 0), 0);
@@ -310,7 +314,11 @@ export default function PeoplePage() {
       totalCount: activeFiltered.length,
       cltCount,
       pjCount,
+      cltCostFixed,
+      cltCostBonus,
       cltCostTotal,
+      pjCostFixed,
+      pjCostBonus,
       pjCostTotal,
       totalLoansDebt,
       totalAuditIssues,
@@ -1367,6 +1375,10 @@ export default function PeoplePage() {
               color="emerald"
               onClick={() => { setActiveKpiMode('payroll_clt'); setIsKpiDrawerOpen(true); }}
               sub="Soma das remunerações CLT/Estágio"
+              breakdown={[
+                { label: "Fixo", value: showValues ? formatCurrency(cockpitKpis.cltCostFixed) : '••••' },
+                { label: "Bônus / Variável", value: showValues ? formatCurrency(cockpitKpis.cltCostBonus) : '••••' },
+              ]}
             />
             <PeopleKpiCard
               title="Custo PJ (Mensal)"
@@ -1375,6 +1387,10 @@ export default function PeoplePage() {
               color="purple"
               onClick={() => { setActiveKpiMode('payroll_pj'); setIsKpiDrawerOpen(true); }}
               sub="Soma dos contratos PJ/MEI ativos"
+              breakdown={[
+                { label: "Fixo", value: showValues ? formatCurrency(cockpitKpis.pjCostFixed) : '••••' },
+                { label: "Bônus / Variável", value: showValues ? formatCurrency(cockpitKpis.pjCostBonus) : '••••' },
+              ]}
             />
             <PeopleKpiCard
               title="Saldo Consignado"

@@ -101,11 +101,11 @@ export function PeopleKpiCard({
       )}
 
       {breakdown && breakdown.length > 0 && (
-        <div className="flex gap-3 pt-1 border-t border-slate-100">
+        <div className="flex items-center gap-3 pt-2 border-t border-slate-200/70 mt-0.5">
           {breakdown.map((b, i) => (
-            <div key={i}>
-              <p className="text-[9px] font-bold text-slate-400 uppercase">{b.label}</p>
-              <p className="text-xs font-bold text-slate-700">{b.value}</p>
+            <div key={i} className="min-w-0 flex-1">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">{b.label}</p>
+              <p className="text-xs font-black text-slate-700 tabular-nums leading-tight mt-0.5 truncate">{b.value}</p>
             </div>
           ))}
         </div>
