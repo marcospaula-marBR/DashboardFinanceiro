@@ -33,12 +33,13 @@ export interface BillingCommissionConfig {
 export interface BillingQuarterlyTaxes {
   quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4'; // Q1 (Jan-Mar), Q2 (Abr-Jun), Q3 (Jul-Set), Q4 (Out-Dez)
   year: number;
+  rule_version: 'LEGACY_2025' | 'LC_224_2026'; // Diferenciação pré-2026 e pós-2026
   due_month_label: string; // Abril, Julho, Outubro, Janeiro
   due_date: string; // YYYY-MM-DD
   gross_revenue_quarter: number;
   irpj_base: number;
   irpj_regular: number; // 15%
-  irpj_excedente: number; // Adicional 10% acima de R$ 60k no trimestre (ou LC 224/2025)
+  irpj_excedente: number; // Adicional 10% acima de R$ 60k no trimestre
   csll_regular: number; // 9%
   total_quarterly_tax: number;
 }

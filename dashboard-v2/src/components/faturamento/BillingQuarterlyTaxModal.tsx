@@ -36,9 +36,16 @@ export const BillingQuarterlyTaxModal: React.FC<Props> = ({ isOpen, onClose, tax
 
         {/* Informação sobre os Trimestres e Vencimentos */}
         <div style={{ background: '#0b1120', padding: '0.85rem', borderRadius: '8px', marginBottom: '1.25rem', border: '1px solid rgba(245, 158, 11, 0.2)', fontSize: '0.78rem', color: '#cbd5e1' }}>
-          <div style={{ fontWeight: 700, color: '#f59e0b', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <Calendar size={14} />
-            <span>Cronograma de Apuração & Vencimentos Oficiais</span>
+          <div style={{ fontWeight: 700, color: '#f59e0b', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Calendar size={14} />
+              <span>Cronograma de Apuração & Vencimentos Oficiais</span>
+            </div>
+            {taxes.length > 0 && (
+              <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '6px', fontWeight: 800, background: taxes[0].rule_version === 'LC_224_2026' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)', color: taxes[0].rule_version === 'LC_224_2026' ? '#34d399' : '#60a5fa', border: `1px solid ${taxes[0].rule_version === 'LC_224_2026' ? '#10b981' : '#3b82f6'}` }}>
+                {taxes[0].rule_version === 'LC_224_2026' ? '⚡ Regra Reforma LC 224/2025 (a partir de Jan/2026)' : '📌 Regra Tradicional (válida até Dez/2025)'}
+              </span>
+            )}
           </div>
           <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.5' }}>
             <li><strong>1º Trimestre (Jan a Mar):</strong> Vencimento em <strong>30 de Abril</strong></li>

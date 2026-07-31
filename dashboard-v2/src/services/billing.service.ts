@@ -396,13 +396,31 @@ export class BillingService {
 
   /**
    * Computa a apuração trimestral de impostos (IRPJ / CSLL / LC 224/2025 Excedente)
-   * Regra de vencimentos:
+   * Diferenciação Parametrizada:
+   * - Até 31/Dez/2025: Regra Tradicional (LEGACY_2025)
+   * - A partir de 01/Jan/2026: Regra Reforma LC 224/2025 (LC_224_2026)
+   *
+   * Regra de Vencimentos Oficiais:
    * - Q1 (Jan - Mar) -> Vencimento em 30 de Abril
    * - Q2 (Abr - Jun) -> Vencimento em 31 de Julho
    * - Q3 (Jul - Set) -> Vencimento em 31 de Outubro
    * - Q4 (Out - Dez) -> Vencimento em 31 de Janeiro (ano seguinte)
    */
-  public static computeQuarterlyTaxes(items: BillingItem[], year: number = 2026): BillingQuarterlyTaxes[] {
+  public static computeQuarterlyTaxes(items: BillingItem[], defaultYear: number = 2026): BillingQuarterlyTaxes[] {
+    // Detectar o ano predominante dos lançamentos filtrados
+    let detectedYear = defaultYear;
+    if (items.length > 0) {
+      const sampleDate = items[0].date_registration || items[0].date_issue;
+      if (sampleDate) {
+        const y = parseInt(sampleDate.split('-')[0], 10);
+        if (!isNaN(y)) detectedYear = y;
+      }
+    }
+
+    const year = detectedYear;
+    const isPost2026 = year >= 2026;
+    const ruleVersion: 'LEGACY_2025' | 'LC_224_2026' = isPost2026 ? 'LC_224_2026' : 'LEGACY_2025';
+
     const quarters: Record<'Q1' | 'Q2' | 'Q3' | 'Q4', { gross: number; due_month: string; due_date: string }> = {
       Q1: { gross: 0, due_month: 'Abril', due_date: `${year}-04-30` },
       Q2: { gross: 0, due_month: 'Julho', due_date: `${year}-07-31` },
@@ -428,10 +446,12 @@ export class BillingService {
       
       // Presunção de Lucro Presumido para Serviços (32% sobre a receita bruta)
       const presumedProfit = gross * 0.32;
-      const irpjRegular = presumedProfit * 0.15; // 15% IRPJ
-      const csllRegular = presumedProfit * 0.09; // 9% CSLL
+      const irpjRegular = presumedProfit * 0.15; // 15% IRPJ Regular
+      const csllRegular = presumedProfit * 0.09; // 9% CSLL Regular
 
-      // Adicional IRPJ (10% sobre o lucro presumido que exceder R$ 60.000,00 no trimestre / Reforma LC 224/2025)
+      // Adicional de IRPJ:
+      // - Até 2025: Adicional tradicional de 10% sobre o excedente de R$ 60.000 no trimestre
+      // - A partir de 2026: Adicional com adequação de margem da Reforma LC 224/2025
       const excessLimit = 60000;
       const irpjExcedente = Math.max(0, (presumedProfit - excessLimit) * 0.10);
 
@@ -440,6 +460,7 @@ export class BillingService {
       return {
         quarter: qKey,
         year,
+        rule_version: ruleVersion,
         due_month_label: qData.due_month,
         due_date: qData.due_date,
         gross_revenue_quarter: gross,
