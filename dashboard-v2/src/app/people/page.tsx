@@ -147,6 +147,7 @@ export default function PeoplePage() {
   const [costDetailMode, setCostDetailMode] = useState<'fixo'|'extras'|'bonus'|'comissao'|'incentivos'|'beneficios'|'decimo_ferias'|'conectividade'|'total'|null>(null);
   const [noPromoMonths, setNoPromoMonths] = useState(6);
   const [noGradeMonths, setNoGradeMonths] = useState(6);
+  const [noNivelMonths, setNoNivelMonths] = useState(6);
   const [filterInsight, setFilterInsight] = useState<string | null>(null);
 
   // Data states
@@ -546,12 +547,18 @@ export default function PeoplePage() {
           const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
           return diffMonths >= noGradeMonths;
         }
+        if (filterInsight === 'nivel') {
+          const d = new Date((e.last_grade_date || e.start_date || '') + 'T00:00:00');
+          if (isNaN(d.getTime())) return false;
+          const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+          return diffMonths >= noNivelMonths;
+        }
         return true;
       });
     }
     
     setFilteredEmployees(result);
-  }, [baseFilteredEmployees, filterInsight, noRaiseMonths, noPromoMonths, noGradeMonths]);
+  }, [baseFilteredEmployees, filterInsight, noRaiseMonths, noPromoMonths, noGradeMonths, noNivelMonths]);
 
   // Pagination slice for grid view
   const paginatedGridEmployees = useMemo(() => {
@@ -627,6 +634,7 @@ export default function PeoplePage() {
     let aumento = 0;
     let promocao = 0;
     let grau = 0;
+    let nivel = 0;
 
     baseFilteredEmployees.forEach(e => {
       if (e.has_invoice_glosa) glosa++;
@@ -649,9 +657,15 @@ export default function PeoplePage() {
         const diffMonths = (now.getFullYear() - dGrade.getFullYear()) * 12 + (now.getMonth() - dGrade.getMonth());
         if (diffMonths >= noGradeMonths) grau++;
       }
+
+      const dNivel = new Date((e.last_grade_date || e.start_date || '') + 'T00:00:00');
+      if (!isNaN(dNivel.getTime())) {
+        const diffMonths = (now.getFullYear() - dNivel.getFullYear()) * 12 + (now.getMonth() - dNivel.getMonth());
+        if (diffMonths >= noNivelMonths) nivel++;
+      }
     });
-    return { glosa, emprestimo, aumento, promocao, grau };
-  }, [baseFilteredEmployees, noRaiseMonths, noPromoMonths, noGradeMonths]);
+    return { glosa, emprestimo, aumento, promocao, grau, nivel };
+  }, [baseFilteredEmployees, noRaiseMonths, noPromoMonths, noGradeMonths, noNivelMonths]);
 
   const handleEmployeeClick = (employeeId: string) => {
     setSelectedEmployee(employeeId);
@@ -1753,9 +1767,6 @@ export default function PeoplePage() {
                                         <span className="ml-1 text-slate-600">· {row.months}mês{row.months !== 1 ? 'es' : ''}</span>
                                       </p>
                                     )}
-                                    {row.months === 0 && costDetailMode === 'conectividade' && (
-                                      <p className="text-[10px] text-slate-500 mt-0.5">Valor mensal fixo</p>
-                                    )}
                                   </td>
                                   <td className="px-4 py-3 text-right align-top">
                                     <div className="flex flex-col items-end gap-1">
@@ -1764,24 +1775,17 @@ export default function PeoplePage() {
                                       </span>
                                       <div className="w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                         <div
-                                          className={`h-full rounded-full ${
-                                            costDetailMode === 'fixo'          ? 'bg-blue-500'
-                                          : costDetailMode === 'bonus'         ? 'bg-emerald-500'
-                                          : costDetailMode === 'comissao'      ? 'bg-amber-500'
-                                          : costDetailMode === 'incentivos'    ? 'bg-indigo-500'
-                                          : costDetailMode === 'conectividade' ? 'bg-cyan-500'
-                                          : 'bg-teal-500'
-                                          }`}
-                                          style={{ width: `${grandTotal > 0 ? (row.value / grandTotal) * 100 : 0}%` }}
+                                           className={`h-full rounded-full ${modalColor.replace('text-', 'bg-')}`}
+                                           style={{ width: `${grandTotal > 0 ? (row.value / grandTotal) * 100 : 0}%` }}
                                         />
                                       </div>
                                     </div>
                                   </td>
                                 </tr>
                               ))}
-                            </tbody>
-                            <tfoot>
-                              <tr className="border-t-2 border-slate-700 bg-slate-950/40">
+                             </tbody>
+                             <tfoot>
+                               <tr className="border-t-2 border-slate-700 bg-slate-950/40">
                                 <td colSpan={2} className="px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-300">Total Acumulado</td>
                                 <td className="px-4 py-3 text-right">
                                   <span className={`text-base font-black tabular-nums ${modalColor}`}>
@@ -1799,19 +1803,17 @@ export default function PeoplePage() {
                                     {showValues && costByEmployee.length > 0 ? (() => {
                                       const totalMonths = costByEmployee.reduce((s, r) => s + (r.months || 1), 0);
                                       return formatCurrency(grandTotal / (totalMonths || costByEmployee.length));
-                                    })() : '•••'}
+                                    })() : '••••••'}
                                   </span>
                                   <p className="text-[10px] text-slate-600 mt-0.5">
                                     {costByEmployee.length} colab. · {costByEmployee.reduce((s, r) => s + r.months, 0)} meses no total
                                   </p>
                                 </td>
-                                <td className="px-4 py-3 text-right text-[10px] text-slate-500">
+                                <td className="px-4 py-3 text-[10px] text-slate-500">
                                   Média geral
                                 </td>
                               </tr>
                             </tfoot>
-
-
                           </table>
                         )}
                       </div>
@@ -1864,7 +1866,7 @@ export default function PeoplePage() {
                      </div>
                   </div>
                   <div className="flex flex-col">
-                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Nível</label>
+                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Grau</label>
                      <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 shadow-sm">
                        <input
                          type="number"
@@ -1876,10 +1878,23 @@ export default function PeoplePage() {
                        <span className="text-[9px] font-bold text-slate-400 uppercase">Meses</span>
                      </div>
                   </div>
+                  <div className="flex flex-col">
+                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Janela Nível</label>
+                     <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 shadow-sm">
+                       <input
+                         type="number"
+                         min={1}
+                         value={noNivelMonths}
+                         onChange={e => setNoNivelMonths(Math.max(1, parseInt(e.target.value) || 1))}
+                         className="w-10 bg-transparent text-xs font-black outline-none text-slate-800 dark:text-slate-200"
+                       />
+                       <span className="text-[9px] font-bold text-slate-400 uppercase">Meses</span>
+                     </div>
+                  </div>
                 </div>
              </div>
 
-             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mt-2">
                <PeopleKpiCard
                  title="Glosa na NF"
                  value={insightCounts.glosa}
@@ -1917,13 +1932,22 @@ export default function PeoplePage() {
                  sub={`Há mais de ${noPromoMonths} meses`}
                />
                <PeopleKpiCard
-                 title="Mesmo Nível"
+                 title="Mesmo Grau"
                  value={insightCounts.grau}
                  icon={<Award size={20} />}
                  color="emerald"
                  onClick={() => setFilterInsight(filterInsight === 'grau' ? null : 'grau')}
                  isActive={filterInsight === 'grau'}
                  sub={`Há mais de ${noGradeMonths} meses`}
+               />
+               <PeopleKpiCard
+                 title="Mesmo Nível"
+                 value={insightCounts.nivel}
+                 icon={<Award size={20} />}
+                 color="purple"
+                 onClick={() => setFilterInsight(filterInsight === 'nivel' ? null : 'nivel')}
+                 isActive={filterInsight === 'nivel'}
+                 sub={`Há mais de ${noNivelMonths} meses`}
                />
              </div>
           </div>

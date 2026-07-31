@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.53.51";
+export const APP_VERSION = "v.02.53.52";
 export const VERSION_DATE = "2026-07-31";
 export const VERSION_CHANGELOG = [
+  "v.02.53.52 - Feat/People: Incluída a Janela Grau entre Janela Camada e Janela Nível na seção Monitoramento de Pessoas em page.tsx. Atualizada a grade de alertas para exibir os 6 cards completos (Glosa na NF, Com Empréstimo, Mesmo R$ Base, Mesma Camada, Mesmo Grau e Mesmo Nível).",
   "v.02.53.51 - Fix/People: Isolamento completo dos seletores de Camada, Grau e Nível em ProfileDrawer.tsx eliminando o descarte de Camada ao alterar Nível. Ajuste dos filtros de busca por Camada (E, T, O) e Nível (I, II, III) em page.tsx. Readequação dos rótulos e janelas no Monitoramento de Pessoas (Janela R$ Base, Janela Camada e Janela Nível).",
   "v.02.53.50 - Fix/People: Corrigida a falha de salvamento de Nível e Grau ('Could not find the nivel_enquadramento column of employees in the schema cache'). Removido nivel_enquadramento da raiz das queries SQL/payloads do Supabase e migrada a persistência de Camada, Grau e Nível para a estrutura segura metadata JSONB.",
   "v.02.53.49 - Feat/People: Alterado o card do Cockpit de 'Níveis' para 'Camada', exibindo a distribuição detalhada de Estratégico (E), Tático (T) e Operacional (O). Adicionados os filtros dinâmicos de 'Camada' e 'Nível' na barra lateral. Corrigida a persistência do campo 'Nível' (I, II, III) nos serviços de dados (people.service.ts e people-hr.service.ts) e prontuário (ProfileDrawer.tsx).",
