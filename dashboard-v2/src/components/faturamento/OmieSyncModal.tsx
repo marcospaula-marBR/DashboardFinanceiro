@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styles from './faturamento.module.css';
 import { DateReferenceType, BillingItem } from '@/types/billing.types';
-import { RefreshCw, Calendar, Check, X, ShieldAlert, Sparkles } from 'lucide-react';
+import { RefreshCw, Check, X, Sparkles, ShieldCheck } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -14,6 +14,7 @@ export const OmieSyncModal: React.FC<Props> = ({ isOpen, onClose, onSyncSuccess 
   const [endDate, setEndDate] = useState<string>('2026-12-31');
   const [filterBy, setFilterBy] = useState<DateReferenceType>('date_registration');
   const [company, setCompany] = useState<'ALL' | 'Mar Brasil' | 'DZM'>('ALL');
+  const [avoidDuplicates, setAvoidDuplicates] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [syncedCount, setSyncedCount] = useState<number | null>(null);
@@ -33,7 +34,8 @@ export const OmieSyncModal: React.FC<Props> = ({ isOpen, onClose, onSyncSuccess 
           startDate,
           endDate,
           filterBy,
-          company
+          company,
+          avoidDuplicates
         })
       });
 
@@ -65,7 +67,7 @@ export const OmieSyncModal: React.FC<Props> = ({ isOpen, onClose, onSyncSuccess 
             <div>
               <h3 className={styles.modalTitle}>Busca Automática no Omie ERP</h3>
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>
-                Importe e atualize os faturamentos reais diretamente das APIs de Mar Brasil e DZM
+                Importação direta dos dados oficiais do Omie com controle de duplicidades
               </p>
             </div>
           </div>
@@ -126,6 +128,20 @@ export const OmieSyncModal: React.FC<Props> = ({ isOpen, onClose, onSyncSuccess 
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
               />
+            </div>
+
+            {/* Prevenção de Duplicidades */}
+            <div className={styles.filterGroup} style={{ gridColumn: 'span 2', marginTop: '0.4rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={avoidDuplicates}
+                  onChange={e => setAvoidDuplicates(e.target.checked)}
+                  style={{ accentColor: '#10b981', width: '16px', height: '16px' }}
+                />
+                <ShieldCheck size={16} />
+                <span>Prevenção de Duplicidades (Evitar importar faturamentos repetidos por ID Omie)</span>
+              </label>
             </div>
           </div>
         </div>

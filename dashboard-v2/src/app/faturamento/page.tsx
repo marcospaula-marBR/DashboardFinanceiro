@@ -10,7 +10,7 @@ import { BillingFilterBar } from '@/components/faturamento/BillingFilterBar';
 import { BillingSegmentCharts } from '@/components/faturamento/BillingSegmentCharts';
 import { BillingTable } from '@/components/faturamento/BillingTable';
 import { BillingQuarterlyTaxModal } from '@/components/faturamento/BillingQuarterlyTaxModal';
-import { BillingCommissionModal } from '@/components/faturamento/BillingCommissionModal';
+import { BillingEditModal } from '@/components/faturamento/BillingEditModal';
 import { OmieSyncModal } from '@/components/faturamento/OmieSyncModal';
 import { ChevronLeft, Landmark, Download, RefreshCw, Sparkles } from 'lucide-react';
 import { APP_VERSION } from '@/version';
@@ -21,9 +21,9 @@ export default function FaturamentoPage() {
 
   // Modais
   const [isTaxModalOpen, setIsTaxModalOpen] = useState<boolean>(false);
-  const [isCommissionModalOpen, setIsCommissionModalOpen] = useState<boolean>(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isOmieSyncModalOpen, setIsOmieSyncModalOpen] = useState<boolean>(false);
-  const [selectedCommissionItem, setSelectedCommissionItem] = useState<BillingItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<BillingItem | null>(null);
 
   // Filtros
   const [filter, setFilter] = useState<BillingFilterState>({
@@ -61,13 +61,13 @@ export default function FaturamentoPage() {
   }, [filteredItems]);
 
   // Handlers
-  const handleOpenCommissionModal = (item: BillingItem) => {
-    setSelectedCommissionItem(item);
-    setIsCommissionModalOpen(true);
+  const handleOpenEditModal = (item: BillingItem) => {
+    setSelectedItem(item);
+    setIsEditModalOpen(true);
   };
 
-  const handleSaveCommission = (itemId: string, updatedCommission: BillingItem['commission']) => {
-    BillingService.saveItemOverride(itemId, { commission: updatedCommission });
+  const handleSaveItemEdit = (itemId: string, updatedFields: Partial<BillingItem>) => {
+    BillingService.saveItemOverride(itemId, updatedFields);
     setAllItems(BillingService.getMockBillingItems());
   };
 
@@ -156,7 +156,7 @@ export default function FaturamentoPage() {
       {/* ── MATRIZ TABULAR DE FATURAMENTOS ────────────────────────────── */}
       <BillingTable
         items={filteredItems}
-        onOpenCommissionModal={handleOpenCommissionModal}
+        onOpenCommissionModal={handleOpenEditModal}
       />
 
       {/* ── MODAIS ──────────────────────────────────────────────────── */}
@@ -164,7 +164,11 @@ export default function FaturamentoPage() {
         isOpen={isOmieSyncModalOpen}
         onClose={() => setIsOmieSyncModalOpen(false)}
         onSyncSuccess={(newSyncedItems) => {
-          setAllItems(prev => [...newSyncedItems, ...prev]);
+          setAllItems(prev => {
+            const seen = new Set(prev.map(p => p.id));
+            const fresh = newSyncedItems.filter(n => !seen.has(n.id));
+            return [...fresh, ...prev];
+          });
         }}
       />
 
@@ -174,11 +178,11 @@ export default function FaturamentoPage() {
         taxes={quarterlyTaxes}
       />
 
-      <BillingCommissionModal
-        isOpen={isCommissionModalOpen}
-        onClose={() => setIsCommissionModalOpen(false)}
-        item={selectedCommissionItem}
-        onSave={handleSaveCommission}
+      <BillingEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        item={selectedItem}
+        onSave={handleSaveItemEdit}
       />
     </div>
   );

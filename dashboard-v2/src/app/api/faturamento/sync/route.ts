@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { startDate, endDate, filterBy, company } = body;
+    const { startDate, endDate, filterBy, company, avoidDuplicates } = body;
 
     if (!startDate || !endDate) {
       return NextResponse.json({ status: 'error', message: 'Selecione a data inicial e data final para busca no Omie.' }, { status: 400 });
@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     }
 
     const syncedItems: any[] = [];
+    const seenOmieIds = new Set<string>();
     let logs: string[] = [];
 
     for (const comp of targetCompanies) {
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
 
       logs.push(`Buscando faturamentos em ${comp.name} por ${filterBy === 'date_registration' ? 'Data de Registro' : filterBy === 'date_issue' ? 'Data de Lançamento' : 'Vencimento'} (${brStart} até ${brEnd})...`);
 
-      // 1. Parametrização de filtros do Omie para Contas a Receber (ListarContasReceber)
+      // Parametrização de filtros do Omie para Contas a Receber (ListarContasReceber)
       const paramCR: any = { pagina: 1, registros_por_pagina: 100 };
       if (filterBy === 'date_registration') {
         paramCR.filtrar_por_registro_de = brStart;
@@ -76,6 +77,14 @@ export async function POST(req: Request) {
           logs.push(`[ContasReceber] Encontrados ${items.length} registros em ${comp.name}.`);
 
           items.forEach((r: any) => {
+            const omieKey = `${comp.name}-${r.codigo_lancamento_omie}`;
+            
+            // Prevenção de duplicidades
+            if (avoidDuplicates && seenOmieIds.has(omieKey)) {
+              return;
+            }
+            seenOmieIds.add(omieKey);
+
             const formatIso = (brDate?: string) => {
               if (!brDate) return '';
               const p = brDate.split('/');
@@ -89,6 +98,7 @@ export async function POST(req: Request) {
             const iss = r.valor_iss || (grossVal * 0.02);
             const inss = r.valor_inss || 0;
             const retainedTotal = ir + pis + cofins + iss + inss;
+            const netVal = grossVal - retainedTotal;
 
             syncedItems.push({
               id: `omie-cr-${comp.name}-${r.codigo_lancamento_omie}`,
@@ -96,11 +106,11 @@ export async function POST(req: Request) {
               company_name: comp.name,
               invoice_number: r.numero_documento_fiscal ? `NF ${r.numero_documento_fiscal}` : (r.numero_documento || `Doc ${r.codigo_lancamento_omie}`),
               contract_number: r.cNumeroContrato || r.numero_pedido || 'N/A',
-              contract_name: r.observacao || 'Contrato Fonte Omie',
+              contract_name: r.observacao || 'Projeto Fonte Omie',
               client_id: r.codigo_cliente_fornecedor,
               client_name: `Cliente ID ${r.codigo_cliente_fornecedor}`,
-              segment_type: 'B2B',
-              is_outsourced: false,
+              segment_type: 'B2B', // Padrão editável pelo usuário
+              is_outsourced: false, // Padrão editável pelo usuário
               date_registration: formatIso(r.data_registro) || formatIso(r.info?.dInc) || startDate,
               date_issue: formatIso(r.data_emissao) || formatIso(r.info?.dInc) || startDate,
               date_due: formatIso(r.data_vencimento) || endDate,
@@ -115,16 +125,14 @@ export async function POST(req: Request) {
               tax_inss: inss,
               tax_irrf: ir,
               tax_retained_total: retainedTotal,
-              value_net: grossVal - retainedTotal,
+              value_net: netVal,
               commission: {
-                has_commission: true,
+                has_commission: false, // Inicia desligado para o usuário preencher/configurar
                 value_non_commissionable: 0,
-                value_commissionable_base: grossVal - retainedTotal,
-                total_commission_percent: 5,
-                total_commission_value: (grossVal - retainedTotal) * 0.05,
-                participants: [
-                  { id: 'p-01', name: 'Equipe Comercial', sector: 'Comercial', type: 'percent', rate: 5, calculated_value: (grossVal - retainedTotal) * 0.05 }
-                ]
+                value_commissionable_base: netVal,
+                total_commission_percent: 0,
+                total_commission_value: 0,
+                participants: []
               },
               segment_allocations: ['B2B']
             });

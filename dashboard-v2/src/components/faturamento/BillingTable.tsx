@@ -122,17 +122,33 @@ export const BillingTable: React.FC<Props> = ({ items, onOpenCommissionModal }) 
                             <span>{formatCurrency(item.commission.total_commission_value)}</span>
                           </button>
                         ) : (
-                          <span style={{ fontSize: '0.7rem', color: '#64748b' }}>N/A</span>
+                          <button
+                            className={styles.btnSecondary}
+                            style={{ padding: '2px 8px', fontSize: '0.7rem', color: '#94a3b8' }}
+                            onClick={() => onOpenCommissionModal(item)}
+                          >
+                            <span>Configurar</span>
+                          </button>
                         )}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        <button
-                          className={styles.btnSecondary}
-                          style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                          onClick={() => toggleExpand(item.id)}
-                        >
-                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </button>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                          <button
+                            className={styles.btnSecondary}
+                            style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#f59e0b', borderColor: 'rgba(245, 158, 11, 0.4)' }}
+                            onClick={() => onOpenCommissionModal(item)}
+                            title="Ajustar Lançamento (Segmento, Terceirização, Comissões)"
+                          >
+                            <span>Ajustar</span>
+                          </button>
+                          <button
+                            className={styles.btnSecondary}
+                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            onClick={() => toggleExpand(item.id)}
+                          >
+                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                        </div>
                       </td>
                     </tr>
 
