@@ -457,8 +457,9 @@ export const PeopleHRService = {
     if (employeePayload.remuneration !== undefined) {
       payload.remuneration = employeePayload.remuneration;
     }
-    if (employeePayload.camada) payload.nivel = employeePayload.camada;
-    if (employeePayload.nivel || employeePayload.nivel_enquadramento) payload.nivel_enquadramento = employeePayload.nivel_enquadramento || employeePayload.nivel;
+    if (employeePayload.camada || employeePayload.nivel) {
+      payload.nivel = employeePayload.camada || employeePayload.nivel;
+    }
 
     // Buscar metadata atual se for atualizar campos do metadata
     const { data: currentEmp } = await supabase.from("employees").select("metadata").eq("id", employeeId).single();

@@ -461,8 +461,7 @@ export class PeopleService {
       // Novos campos RH
       job_role: profile.job_role,
       department: profile.department,
-      nivel: profile.nivel || profile.nivel_enquadramento || '',
-      nivel_enquadramento: profile.nivel_enquadramento || profile.nivel || '',
+      nivel: profile.nivel || profile.camada || '',
       department_start_date: profile.department_start_date && profile.department_start_date.trim() !== '' ? profile.department_start_date : null,
       commission_plan: profile.commission_plan || '',
       
