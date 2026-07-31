@@ -25,7 +25,6 @@
         'indicadores_v2.html': 'indicadores',
         'parcelamentos.html': 'parcelamentos',
         'seguros.html': 'seguros',
-        'contratos.html': 'contratos',
         'comissoes.html': 'comissoes',
         'people.html': 'peopleboard',
         'emprestimos.html': 'emprestimos',
