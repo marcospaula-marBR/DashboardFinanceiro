@@ -269,11 +269,11 @@ export default function PeoplePage() {
     const activeFiltered = filteredEmployees.filter(e => e.status !== 'Inativo');
     
     // CLT/Estágio Físicos
-    const cltList = activeFiltered.filter(e => !isExternalEntity(e.entityType) && (e.linkType === 'CLT' || e.linkType === 'Estagiário'));
+    const cltList = activeFiltered.filter(e => !isExternalEntity(inferEntityType(e)) && (e.linkType === 'CLT' || e.linkType === 'Estagiário'));
     const cltCount = cltList.length;
     
     // PJ / Externos
-    const pjList = activeFiltered.filter(e => isExternalEntity(e.entityType));
+    const pjList = activeFiltered.filter(e => isExternalEntity(inferEntityType(e)));
     const pjCount = pjList.length;
     
     // Custo CLT (Fixo + Bônus + Comissões)
