@@ -458,20 +458,19 @@ export const PeopleHRService = {
       payload.remuneration = employeePayload.remuneration;
     }
     if (employeePayload.camada) payload.nivel = employeePayload.camada;
-    if (employeePayload.nivel) payload.nivel_enquadramento = employeePayload.nivel;
+    if (employeePayload.nivel || employeePayload.nivel_enquadramento) payload.nivel_enquadramento = employeePayload.nivel_enquadramento || employeePayload.nivel;
 
     // Buscar metadata atual se for atualizar campos do metadata
-    if (employeePayload.linked_previous_employee_id !== undefined || employeePayload.is_unified_history !== undefined || employeePayload.grau !== undefined) {
-      const { data: currentEmp } = await supabase.from("employees").select("metadata").eq("id", employeeId).single();
-      const currentMeta = currentEmp?.metadata || {};
-      payload.metadata = {
-        ...currentMeta,
-        ...(employeePayload.linked_previous_employee_id !== undefined ? { linked_previous_employee_id: employeePayload.linked_previous_employee_id } : {}),
-        ...(employeePayload.is_unified_history !== undefined ? { is_unified_history: employeePayload.is_unified_history } : {}),
-        ...(employeePayload.grau !== undefined ? { grau: employeePayload.grau } : {}),
-        ...(employeePayload.camada !== undefined ? { camada: employeePayload.camada } : {})
-      };
-    }
+    const { data: currentEmp } = await supabase.from("employees").select("metadata").eq("id", employeeId).single();
+    const currentMeta = currentEmp?.metadata || {};
+    payload.metadata = {
+      ...currentMeta,
+      ...(employeePayload.linked_previous_employee_id !== undefined ? { linked_previous_employee_id: employeePayload.linked_previous_employee_id } : {}),
+      ...(employeePayload.is_unified_history !== undefined ? { is_unified_history: employeePayload.is_unified_history } : {}),
+      ...(employeePayload.grau !== undefined ? { grau: employeePayload.grau } : {}),
+      ...(employeePayload.camada !== undefined ? { camada: employeePayload.camada } : {}),
+      ...(employeePayload.nivel !== undefined || employeePayload.nivel_enquadramento !== undefined ? { nivel_enquadramento: employeePayload.nivel_enquadramento || employeePayload.nivel } : {})
+    };
 
     const { error } = await supabase
       .from("employees")

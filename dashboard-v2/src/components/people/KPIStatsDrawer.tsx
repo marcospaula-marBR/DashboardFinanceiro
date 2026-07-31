@@ -261,7 +261,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
     loans: { text: "Exposição de Empréstimos Consignados", icon: <Landmark className="text-amber-500" size={24} /> },
     health: { text: "Saúde da Base & Qualidade do Cadastro", icon: <HeartPulse className="text-rose-500" size={24} /> },
     audit: { text: "Auditoria & Incoerências", icon: <AlertCircle className="text-red-500" size={24} /> },
-    strategic: { text: "Estrutura de Níveis Organizacionais (E, T, O)", icon: <Target className="text-indigo-500" size={24} /> },
+    strategic: { text: "Estrutura de Camadas (E, T, O)", icon: <Target className="text-indigo-500" size={24} /> },
     nopbid: { text: "Cadastros Sem PB-ID Associado", icon: <ShieldAlert className="text-amber-500" size={24} /> }
   };
 

@@ -370,7 +370,6 @@ export class PeopleService {
       // Novos campos RH
       job_role: raw.job_role,
       department: raw.department,
-      nivel: raw.nivel,
       department_start_date: raw.department_start_date || '',
       commission_plan: raw.commission_plan || '',
       
@@ -422,7 +421,10 @@ export class PeopleService {
       has_invoice_glosa: raw.metadata?.has_invoice_glosa || false,
       last_raise_date: raw.metadata?.last_raise_date || null,
       last_grade_date: raw.metadata?.last_grade_date || null,
-      grau: raw.metadata?.grau || '',
+      camada: raw.metadata?.camada || raw.camada || '',
+      grau: raw.metadata?.grau || raw.grau || '',
+      nivel: raw.metadata?.nivel_enquadramento || raw.metadata?.nivel || raw.nivel_enquadramento || raw.nivel || '',
+      nivel_enquadramento: raw.metadata?.nivel_enquadramento || raw.metadata?.nivel || raw.nivel_enquadramento || raw.nivel || '',
       pbId: raw.metadata?.pbId || raw.metadata?.pb_id || '',
       entityType: raw.metadata?.entityType || raw.metadata?.entity_type || undefined,
       relationshipNature: raw.metadata?.relationshipNature || raw.metadata?.relationship_nature || 
@@ -459,7 +461,8 @@ export class PeopleService {
       // Novos campos RH
       job_role: profile.job_role,
       department: profile.department,
-      nivel: profile.nivel,
+      nivel: profile.nivel || profile.nivel_enquadramento || '',
+      nivel_enquadramento: profile.nivel_enquadramento || profile.nivel || '',
       department_start_date: profile.department_start_date && profile.department_start_date.trim() !== '' ? profile.department_start_date : null,
       commission_plan: profile.commission_plan || '',
       
@@ -516,7 +519,10 @@ export class PeopleService {
         has_invoice_glosa: profile.has_invoice_glosa || false,
         last_raise_date: profile.last_raise_date || null,
         last_grade_date: profile.last_grade_date || null,
+        camada: profile.camada || '',
         grau: profile.grau || '',
+        nivel: profile.nivel || profile.nivel_enquadramento || '',
+        nivel_enquadramento: profile.nivel_enquadramento || profile.nivel || '',
         remuneration_connectivity: profile.remuneration_connectivity || 0,
         remuneration_incentives: profile.remuneration_incentives || 0,
         linked_previous_employee_id: profile.linked_previous_employee_id || undefined,

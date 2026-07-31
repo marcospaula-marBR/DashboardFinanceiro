@@ -136,6 +136,8 @@ export default function PeoplePage() {
   const [filterEntityType, setFilterEntityType] = useState<string[]>([]);
   const [filterRelationshipNature, setFilterRelationshipNature] = useState<string[]>([]);
   const [filterLevel, setFilterLevel] = useState<string[]>([]);
+  const [filterCamada, setFilterCamada] = useState<string[]>([]);
+  const [filterNivel, setFilterNivel] = useState<string[]>([]);
   const [filterQuality, setFilterQuality] = useState<string[]>([]);
   const [filterHasPbId, setFilterHasPbId] = useState<string[]>([]);
   
@@ -251,6 +253,8 @@ export default function PeoplePage() {
       filterEntityType.length > 0 ||
       filterRelationshipNature.length > 0 ||
       filterLevel.length > 0 ||
+      filterCamada.length > 0 ||
+      filterNivel.length > 0 ||
       filterQuality.length > 0 ||
       filterHasPbId.length > 0 ||
       showInativos ||
@@ -259,7 +263,7 @@ export default function PeoplePage() {
   }, [
     filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau,
     filterTerceirizado, filterLocalPrestacao, filterRegimeTributario,
-    filterEntityType, filterRelationshipNature, filterLevel, filterQuality, filterHasPbId,
+    filterEntityType, filterRelationshipNature, filterLevel, filterCamada, filterNivel, filterQuality, filterHasPbId,
     showInativos, filterInsight
   ]);
 
@@ -301,11 +305,23 @@ export default function PeoplePage() {
       return health.status === "Crítico";
     }).length;
     
-    // Nível Estratégico (E)
-    const strategicCount = activeFiltered.filter(e => {
-      const classification = getPBClassification(e.nivel, e.grau);
-      return classification.startsWith("E");
+    // Estrutura de Camadas (E, T, O)
+    const camadaECount = activeFiltered.filter(e => {
+      const c = e.camada || (getPBClassification(e.nivel, e.grau).startsWith("E") ? "Estratégico" : "");
+      return c === "Estratégico" || c.startsWith("E");
     }).length;
+
+    const camadaTCount = activeFiltered.filter(e => {
+      const c = e.camada || (getPBClassification(e.nivel, e.grau).startsWith("T") ? "Tático" : "");
+      return c === "Tático" || c.startsWith("T");
+    }).length;
+
+    const camadaOCount = activeFiltered.filter(e => {
+      const c = e.camada || (getPBClassification(e.nivel, e.grau).startsWith("O") ? "Operacional" : "");
+      return c === "Operacional" || c.startsWith("O");
+    }).length;
+
+    const totalCamadasCount = camadaECount + camadaTCount + camadaOCount;
     
     // Cadastros sem PB-ID
     const noPbIdCount = activeFiltered.filter(e => !(e.pbId || e.metadata?.pbId)).length;
@@ -323,7 +339,11 @@ export default function PeoplePage() {
       totalLoansDebt,
       totalAuditIssues,
       criticalHealthCount,
-      strategicCount,
+      strategicCount: totalCamadasCount,
+      camadaECount,
+      camadaTCount,
+      camadaOCount,
+      totalCamadasCount,
       noPbIdCount
     };
   }, [filteredEmployees, allAuditIssues]);
@@ -433,6 +453,22 @@ export default function PeoplePage() {
         const classification = getPBClassification(e.nivel, e.grau);
         const lvl = classification.charAt(0);
         return filterLevel.includes(lvl);
+      });
+    }
+
+    // Filtro por Camada (Estratégico, Tático, Operacional)
+    if (filterCamada.length > 0) {
+      result = result.filter(e => {
+        const c = e.camada || (getPBClassification(e.nivel, e.grau).startsWith("E") ? "Estratégico" : getPBClassification(e.nivel, e.grau).startsWith("T") ? "Tático" : "Operacional");
+        return filterCamada.includes(c) || filterCamada.includes(c.charAt(0));
+      });
+    }
+
+    // Filtro por Nível (I, II, III)
+    if (filterNivel.length > 0) {
+      result = result.filter(e => {
+        const n = e.nivel_enquadramento || e.nivel || '';
+        return filterNivel.includes(n);
       });
     }
 
@@ -576,6 +612,8 @@ export default function PeoplePage() {
     setFilterEntityType([]);
     setFilterRelationshipNature([]);
     setFilterLevel([]);
+    setFilterCamada([]);
+    setFilterNivel([]);
     setFilterQuality([]);
     setFilterHasPbId([]);
     setFilterInsight(null);
@@ -840,12 +878,44 @@ export default function PeoplePage() {
           </div>
 
           <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Camada</label>
+            <MultiSelectDropdown
+              value={filterCamada}
+              onChange={setFilterCamada}
+              placeholder="Todas as Camadas"
+              options={[
+                { label: 'Estratégico', value: 'Estratégico' },
+                { label: 'Tático', value: 'Tático' },
+                { label: 'Operacional', value: 'Operacional' }
+              ]}
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Grau de Maturidade</label>
             <MultiSelectDropdown
               value={filterGrau}
               onChange={setFilterGrau}
               placeholder="Todos os Graus"
-              options={graus.map(s => ({ label: s, value: s }))}
+              options={[
+                { label: 'Iniciante', value: 'Iniciante' },
+                { label: 'Intermediário', value: 'Intermediário' },
+                { label: 'Avançado', value: 'Avançado' }
+              ]}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Nível</label>
+            <MultiSelectDropdown
+              value={filterNivel}
+              onChange={setFilterNivel}
+              placeholder="Todos os Níveis"
+              options={[
+                { label: 'I', value: 'I' },
+                { label: 'II', value: 'II' },
+                { label: 'III', value: 'III' }
+              ]}
             />
           </div>
 
@@ -1417,12 +1487,17 @@ export default function PeoplePage() {
               sub="Erros de datas/regime de trabalho"
             />
             <PeopleKpiCard
-              title="Níveis"
-              value={cockpitKpis.strategicCount}
+              title="Camada"
+              value={cockpitKpis.totalCamadasCount}
               icon={<Target size={20} />}
               color="indigo"
               onClick={() => { setActiveKpiMode('strategic'); setIsKpiDrawerOpen(true); }}
-              sub="Estrutura de Níveis E, T, O"
+              sub="Estrutura de Camadas (E, T, O)"
+              breakdown={[
+                { label: "Estratégico (E)", value: String(cockpitKpis.camadaECount) },
+                { label: "Tático (T)", value: String(cockpitKpis.camadaTCount) },
+                { label: "Operacional (O)", value: String(cockpitKpis.camadaOCount) },
+              ]}
             />
             <PeopleKpiCard
               title="Sem PB-ID"

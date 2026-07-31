@@ -378,7 +378,10 @@ export interface PeopleMetadata {
   has_invoice_glosa?: boolean;
   last_raise_date?: string | null;
   last_grade_date?: string | null;
+  camada?: string;
   grau?: string;
+  nivel?: string;
+  nivel_enquadramento?: string;
   remuneration_connectivity?: number;
   remuneration_incentives?: number;
   linked_previous_employee_id?: string;

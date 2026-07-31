@@ -2138,7 +2138,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               <div className="flex-1">
                                <label className={labelClass}>Nível</label>
                                {isEditMode ? (
-                                 <select value={profile.nivel_enquadramento || (['I', 'II', 'III'].includes(profile.grau || '') ? profile.grau : '') || ''} onChange={e => handleChange('nivel_enquadramento' as any, e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
+                                 <select value={profile.nivel_enquadramento || profile.nivel || (['I', 'II', 'III'].includes(profile.grau || '') ? profile.grau : '') || ''} onChange={e => { handleChange('nivel_enquadramento', e.target.value); handleChange('nivel', e.target.value); }} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
                                    <option value="">Selecione...</option>
                                    <option value="I">I</option>
                                    <option value="II">II</option>
