@@ -11,6 +11,7 @@ import { LancamentoModal } from "@/components/comissoes/LancamentoModal";
 import { EquipeModal } from "@/components/comissoes/EquipeModal";
 import { ContratoModal } from "@/components/comissoes/ContratoModal";
 import { UnificacaoModal } from "@/components/comissoes/UnificacaoModal";
+import { OmieImportModal } from "@/components/comissoes/OmieImportModal";
 import { APP_VERSION } from "@/version";
 import {
   Plus,
@@ -21,7 +22,8 @@ import {
   SlidersHorizontal,
   X,
   Coins,
-  Merge
+  Merge,
+  Download
 } from "lucide-react";
 
 export default function RecebiveisPage() {
@@ -38,6 +40,7 @@ export default function RecebiveisPage() {
   const [isEquipeOpen, setIsEquipeOpen] = useState(false);
   const [isContratoOpen, setIsContratoOpen] = useState(false);
   const [isUnificacaoOpen, setIsUnificacaoOpen] = useState(false);
+  const [isOmieImportOpen, setIsOmieImportOpen] = useState(false);
   const [editData, setEditData] = useState<Recebimento | null>(null);
   const [prefilledContractId, setPrefilledContractId] = useState<string | null>(null);
   const [editContratoData, setEditContratoData] = useState<ContratoBase | null>(null);
@@ -324,6 +327,73 @@ export default function RecebiveisPage() {
     setIsLancamentoOpen(true);
   };
 
+  /**
+   * Recebe os candidatos selecionados na auditoria do Omie e grava cada um
+   * no banco de dados via ComissoesService.saveRecebimento (sem comissões iniciais).
+   * O usuário pode editar e adicionar comissões depois, como faz no lançamento manual.
+   */
+  const handleImportFromOmie = async (
+    selected: Array<{
+      omie_id: string;
+      omie_key: string;
+      nota_fiscal: string;
+      client_name: string;
+      contract_name: string;
+      contract_number: string;
+      date_registration: string;
+      date_issue: string;
+      date_due: string;
+      date_payment: string;
+      valor_bruto: number;
+      valor_liquido: number;
+      glosa: number;
+      impostos: number;
+      status: string;
+    }>,
+    contratoMap: Record<string, string>
+  ) => {
+    let imported = 0;
+    const errors: string[] = [];
+
+    for (const item of selected) {
+      const contrato_id = contratoMap[item.omie_key];
+      // Se não houver contrato vinculado, pula (sem contrato não tem como salvar no schema atual)
+      if (!contrato_id) continue;
+
+      // Usa a data de registro como referência principal (data de recebimento no banco)
+      const dataRef = item.date_registration || item.date_issue || item.date_due;
+      // Extrai ciclo (YYYY-MM) da data de referência
+      const ciclo = dataRef ? dataRef.substring(0, 7) : '';
+
+      try {
+        await ComissoesService.saveRecebimento({
+          contrato_id,
+          data_recebimento: dataRef,
+          nota_fiscal:  item.nota_fiscal,
+          ciclo,
+          valor_bruto:  item.valor_bruto,
+          valor_liquido: item.valor_liquido,
+          glosa:        item.glosa,
+          impostos:     item.impostos,
+          status:       item.status,
+          divisoes:     [],   // Sem comissões iniciais — usuário configura após importação
+        });
+        imported++;
+      } catch (err: any) {
+        errors.push(`${item.nota_fiscal}: ${err.message}`);
+      }
+    }
+
+    await fetchHistorico(filters);
+
+    if (errors.length > 0) {
+      const skipped = selected.length - imported - errors.length;
+      throw new Error(
+        `${imported} importado(s) com sucesso. ${errors.length} erro(s): ${errors.slice(0, 3).join('; ')}`
+      );
+    }
+  };
+
   const handleApplyFilters = () => {
     setFilters(filterForm);
     fetchHistorico(filterForm);
@@ -503,6 +573,15 @@ export default function RecebiveisPage() {
                   {Object.values(filters).filter(v => v && v !== "").length}
                 </span>
               )}
+            </button>
+
+            {/* Importar do Omie */}
+            <button
+              onClick={() => setIsOmieImportOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-50 text-xs font-black uppercase tracking-wider text-amber-700 hover:bg-amber-100 transition-all shadow-sm"
+            >
+              <Download size={14} />
+              Importar Omie
             </button>
 
             {/* Unificar Contratos Trigger */}
@@ -773,6 +852,14 @@ export default function RecebiveisPage() {
           </div>
         </div>
       )}
+
+      {/* Importar do Omie ERP */}
+      <OmieImportModal
+        isOpen={isOmieImportOpen}
+        onClose={() => setIsOmieImportOpen(false)}
+        contratos={contratos}
+        onImport={handleImportFromOmie}
+      />
 
       {/* Lançar/Editar Faturamento */}
       <LancamentoModal
