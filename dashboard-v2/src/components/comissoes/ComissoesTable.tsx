@@ -11,7 +11,9 @@ import {
   Plus, 
   FileSpreadsheet,
   Settings,
-  Network
+  Network,
+  Search,
+  X
 } from "lucide-react";
 import { ContratoBase, Recebimento } from "@/types/comissoes";
 import { formatCurrency, formatDate } from "@/services/comissoes.service";
@@ -26,6 +28,7 @@ interface ComissoesTableProps {
   onRevertRecebimento: (id: string) => void;
   isLoading: boolean;
   onEditContrato: (contract: ContratoBase) => void;
+  onDeleteContrato?: (contractId: string, contractName: string) => void;
 }
 
 export function ComissoesTable({
@@ -37,9 +40,11 @@ export function ComissoesTable({
   onLiquidateRecebimento,
   onRevertRecebimento,
   isLoading,
-  onEditContrato
+  onEditContrato,
+  onDeleteContrato
 }: ComissoesTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Agrupa recebimentos por contrato
   const getRecebimentosByContract = (contractId: string) => {
@@ -110,19 +115,56 @@ export function ComissoesTable({
       });
     });
 
-    // Ordena por nome
-    return items.sort((a, b) => a.name.localeCompare(b.name));
-  }, [contratos]);
+    // Ordena e filtra pelo termo de busca
+    let filtered = items;
+    if (searchTerm.trim() !== "") {
+      const term = searchTerm.toLowerCase();
+      filtered = items.filter(item => {
+        if (item.name.toLowerCase().includes(term)) return true;
+        if (item.type === 'single') {
+          return (
+            item.contract.numero_contrato?.toLowerCase().includes(term) ||
+            item.contract.empresa?.toLowerCase().includes(term) ||
+            recebimentos.some(r => r.contrato_id === item.contract.id && (r.nota_fiscal?.toLowerCase().includes(term) || r.contratoNome.toLowerCase().includes(term)))
+          );
+        } else {
+          return item.contracts.some(c => c.nome_contrato.toLowerCase().includes(term) || c.numero_contrato?.toLowerCase().includes(term));
+        }
+      });
+    }
+
+    return filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }, [contratos, recebimentos, searchTerm]);
 
   return (
     <div className="card-premium overflow-hidden mt-6">
-      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-tight">
           Listagem de Contratos & Faturamentos
           <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500 font-bold">
-            {contratos.length} CONTRATOS
+            {tableItems.length} de {contratos.length} CONTRATOS
           </span>
         </h3>
+
+        {/* Input de Busca / Filtro de Contratos */}
+        <div className="relative w-full sm:w-72">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Pesquisar contrato, cliente ou NF..."
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-8 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -266,6 +308,15 @@ export function ComissoesTable({
                                           >
                                             <Settings size={12} />
                                           </button>
+                                          {onDeleteContrato && (
+                                            <button
+                                              onClick={() => onDeleteContrato(c.id, c.nome_contrato)}
+                                              className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 rounded-lg transition-all"
+                                              title="Excluir Contrato Inteiro"
+                                            >
+                                              <Trash2 size={12} />
+                                            </button>
+                                          )}
                                         </div>
                                       </div>
                                     );
@@ -487,6 +538,15 @@ export function ComissoesTable({
                             >
                               <Settings size={14} />
                             </button>
+                            {onDeleteContrato && (
+                              <button
+                                onClick={() => onDeleteContrato(contract.id, contract.nome_contrato)}
+                                className="p-2 border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 rounded-lg transition-all"
+                                title="Excluir Contrato Inteiro"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleToggleRow(item.key)}
                               className={`p-2 rounded-lg border transition-all ${isExpanded ? 'bg-slate-800 text-white border-slate-900' : 'hover:bg-slate-100 text-slate-400 border-transparent'}`}

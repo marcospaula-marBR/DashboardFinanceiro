@@ -390,6 +390,33 @@ export class ComissoesService {
     if (delErr) throw new Error(`Falha ao desativar contrato de origem: ${delErr.message}`);
   }
 
+  /** Remove um contrato e todos os seus recebimentos e comissões associados */
+  static async deleteContrato(id: string): Promise<void> {
+    // 1. Busca todos os recebimentos do contrato para remover comissões
+    const { data: recs } = await supabase
+      .from('recebimentos')
+      .select('id')
+      .eq('contrato_id', id);
+
+    if (recs && recs.length > 0) {
+      const recIds = recs.map(r => r.id);
+      await supabase.from('comissoes').delete().in('recebimento_id', recIds);
+    }
+
+    // 2. Remove recebimentos da tabela 'recebimentos'
+    await supabase.from('recebimentos').delete().eq('contrato_id', id);
+
+    // 3. Remove notas fiscais associadas
+    await supabase.from('notas_fiscais').delete().eq('contrato_id', id);
+
+    // 4. Remove ou desativa da tabela 'contratos_base'
+    const { error } = await supabase.from('contratos_base').delete().eq('id', id);
+    if (error) {
+      // Se houver restrição de FK em outras tabelas, marca como inativo
+      await supabase.from('contratos_base').update({ ativo: false }).eq('id', id);
+    }
+  }
+
   /** Cria um novo membro da equipe */
   static async addMembro(payload: {
     nome: string;

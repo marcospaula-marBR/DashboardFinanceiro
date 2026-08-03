@@ -123,6 +123,36 @@ async function fetchProjectNames(
   return map;
 }
 
+// ── Lookup de Categorias do Omie ───────────────────────────────────────────
+// ListarCategorias busca a árvore completa de categorias da empresa
+// para resolver a descrição textual de códigos como "1.03.04".
+
+async function fetchCategoryMap(appKey: string, appSecret: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    const res = await fetch('https://app.omie.com.br/api/v1/geral/categorias/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        call: 'ListarCategorias',
+        app_key: appKey,
+        app_secret: appSecret,
+        param: [{ pagina: 1, registros_por_pagina: 500 }]
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const list = data.categoria_cadastro || [];
+      list.forEach((cat: any) => {
+        if (cat.codigo && cat.descricao) {
+          map.set(String(cat.codigo), String(cat.descricao));
+        }
+      });
+    }
+  } catch {}
+  return map;
+}
+
 // ── Rota Principal ─────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
@@ -227,25 +257,23 @@ export async function POST(req: Request) {
         const clientNameMap = await fetchClientNamesSerial(clientIds, comp.key, comp.secret, logs);
         logs.push(`✅ ${clientNameMap.size}/${uniqueClients.length} nome(s) resolvido(s).`);
 
+        logs.push(`🔎 Buscando tabela de categorias da empresa ${comp.name}…`);
+        const categoryMap = await fetchCategoryMap(comp.key, comp.secret);
+        logs.push(`✅ ${categoryMap.size} categoria(s) mapeada(s).`);
+
+        let projectNameMap = new Map<string, string>();
         if (uniqueProjects.length > 0) {
           logs.push(`🔎 Buscando nome de ${uniqueProjects.length} projeto(s)…`);
-          const projectNameMap = await fetchProjectNames(projectCodes, comp.key, comp.secret);
+          projectNameMap = await fetchProjectNames(projectCodes, comp.key, comp.secret);
           logs.push(`✅ ${projectNameMap.size}/${uniqueProjects.length} projeto(s) resolvido(s).`);
+        }
 
-          // ── 3. Monta candidatos ────────────────────────────────────────
-          for (const r of items) {
-            const omieKey = `${comp.name}-${r.codigo_lancamento_omie}`;
-            if (seenOmieIds.has(omieKey)) continue;
-            seenOmieIds.add(omieKey);
-            buildCandidate(r, omieKey, comp.name, clientNameMap, projectNameMap, startDate, endDate, candidates);
-          }
-        } else {
-          for (const r of items) {
-            const omieKey = `${comp.name}-${r.codigo_lancamento_omie}`;
-            if (seenOmieIds.has(omieKey)) continue;
-            seenOmieIds.add(omieKey);
-            buildCandidate(r, omieKey, comp.name, clientNameMap, new Map(), startDate, endDate, candidates);
-          }
+        // ── 3. Monta candidatos ────────────────────────────────────────
+        for (const r of items) {
+          const omieKey = `${comp.name}-${r.codigo_lancamento_omie}`;
+          if (seenOmieIds.has(omieKey)) continue;
+          seenOmieIds.add(omieKey);
+          buildCandidate(r, omieKey, comp.name, clientNameMap, projectNameMap, categoryMap, startDate, endDate, candidates);
         }
 
       } catch (err: any) {
@@ -273,6 +301,7 @@ function buildCandidate(
   companyName: string,
   clientNameMap: Map<string, string>,
   projectNameMap: Map<string, string>,
+  categoryMap: Map<string, string>,
   startDate: string,
   endDate: string,
   candidates: any[]
@@ -299,10 +328,10 @@ function buildCandidate(
   const nfNum   = resolveNFNumber(r);
   const nfLabel = resolveNFLabel(r, nfNum);
 
-  // Categoria: nível raiz (confirmado pelo debug)
+  // Categoria: código e descrição resolvida via tabela de categorias
   const categoriaCode = String(r.codigo_categoria || '');
-  // Tenta extrair descrição do array categorias se vier na resposta
-  const categoriaDesc = r.categorias?.[0]?.nome_categoria ||
+  const categoriaDesc = (categoriaCode ? categoryMap.get(categoriaCode) : null) ||
+                        r.categorias?.[0]?.nome_categoria ||
                         r.categorias?.[0]?.descricao     ||
                         r.descricao_categoria              ||
                         '';

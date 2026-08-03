@@ -329,13 +329,14 @@ export default function RecebiveisPage() {
 
   /**
    * Recebe os candidatos selecionados na auditoria do Omie e grava cada um
-   * no banco de dados via ComissoesService.saveRecebimento (sem comissões iniciais).
-   * O usuário pode editar e adicionar comissões depois, como faz no lançamento manual.
+   * no banco de dados. Se o usuário não vinculou um contrato existente, o sistema
+   * cria um contrato base automaticamente com o nome do cliente/projeto Omie!
    */
   const handleImportFromOmie = async (
     selected: Array<{
       omie_id: string;
       omie_key: string;
+      company_name?: string;
       nota_fiscal: string;
       client_name: string;
       contract_name: string;
@@ -355,28 +356,56 @@ export default function RecebiveisPage() {
     let imported = 0;
     const errors: string[] = [];
 
-    for (const item of selected) {
-      const contrato_id = contratoMap[item.omie_key];
-      // Se não houver contrato vinculado, pula (sem contrato não tem como salvar no schema atual)
-      if (!contrato_id) continue;
+    // Mantém uma lista local dos contratos para reaproveitar contratos criados nesta mesma execução
+    let currentContratos = [...contratos];
 
-      // Usa a data de registro como referência principal (data de recebimento no banco)
+    for (const item of selected) {
+      let contrato_id = contratoMap[item.omie_key];
+
+      // SE O USUÁRIO NÃO VINCULOU UM CONTRATO EXISTENTE NO DROPDOWN:
+      if (!contrato_id || contrato_id.trim() === '') {
+        const targetName = (item.contract_name && item.contract_name !== 'Projeto Omie' ? item.contract_name : item.client_name) || 'Contrato Omie';
+
+        // Verifica se já temos um contrato com esse nome
+        const existing = currentContratos.find(
+          c => c.nome_contrato.toLowerCase() === targetName.toLowerCase()
+        );
+
+        if (existing) {
+          contrato_id = existing.id;
+        } else {
+          // Cria o contrato base automaticamente
+          try {
+            const newContract = await ComissoesService.addContrato({
+              nome_contrato: targetName,
+              numero_contrato: item.contract_number || item.nota_fiscal || undefined,
+              observacoes: `Criado automaticamente via Importação Omie ERP (${item.company_name || 'Omie'})`,
+            });
+            contrato_id = newContract.id;
+            currentContratos.push(newContract);
+          } catch (cErr: any) {
+            errors.push(`Erro ao criar contrato para ${targetName}: ${cErr.message}`);
+            continue;
+          }
+        }
+      }
+
+      // Usa a data de registro/emissão como referência
       const dataRef = item.date_registration || item.date_issue || item.date_due;
-      // Extrai ciclo (YYYY-MM) da data de referência
       const ciclo = dataRef ? dataRef.substring(0, 7) : '';
 
       try {
         await ComissoesService.saveRecebimento({
           contrato_id,
           data_recebimento: dataRef,
-          nota_fiscal:  item.nota_fiscal,
+          nota_fiscal: item.nota_fiscal,
           ciclo,
-          valor_bruto:  item.valor_bruto,
+          valor_bruto: item.valor_bruto,
           valor_liquido: item.valor_liquido,
-          glosa:        item.glosa,
-          impostos:     item.impostos,
-          status:       item.status,
-          divisoes:     [],   // Sem comissões iniciais — usuário configura após importação
+          glosa: item.glosa,
+          impostos: item.impostos,
+          status: item.status,
+          divisoes: [], // Sem comissões iniciais — configuradas pelo usuário
         });
         imported++;
       } catch (err: any) {
@@ -384,13 +413,24 @@ export default function RecebiveisPage() {
       }
     }
 
-    await fetchHistorico(filters);
+    // Atualiza os contratos e histórico da tela
+    await Promise.all([fetchInit(), fetchHistorico(filters)]);
 
     if (errors.length > 0) {
-      const skipped = selected.length - imported - errors.length;
       throw new Error(
-        `${imported} importado(s) com sucesso. ${errors.length} erro(s): ${errors.slice(0, 3).join('; ')}`
+        `${imported} importado(s). ${errors.length} erro(s): ${errors.slice(0, 2).join('; ')}`
       );
+    }
+  };
+
+  const handleDeleteContrato = async (contractId: string, contractName: string) => {
+    if (confirm(`Tem certeza que deseja EXCLUIR O CONTRATO '${contractName}' e TODOS os seus faturamentos e comissões associados?\n\nEsta ação não poderá ser desfeita.`)) {
+      try {
+        await ComissoesService.deleteContrato(contractId);
+        await Promise.all([fetchInit(), fetchHistorico(filters)]);
+      } catch (err: any) {
+        alert(err.message || 'Erro ao excluir contrato.');
+      }
     }
   };
 
