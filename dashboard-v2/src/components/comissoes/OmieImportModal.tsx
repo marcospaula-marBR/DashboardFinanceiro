@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   X,
   RefreshCw,
@@ -13,19 +13,20 @@ import {
   CheckCircle2,
   Loader2,
   Calendar,
-  Building2,
+  User,
   FileText,
-  DollarSign,
 } from "lucide-react";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-interface OmieCandidate {
+export interface OmieCandidate {
   omie_id: string;
   omie_key: string;
   company_name: string;
   nota_fiscal: string;
-  client_name: string;
+  numero_nf: string;           // Número limpo da NF
+  client_code: string;
+  client_name: string;         // Razão social (quando disponível)
   contract_name: string;
   contract_number: string;
   date_registration: string;
@@ -48,7 +49,6 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   contratos: { id: string; nome_contrato: string }[];
-  /** Chamado com os candidatos selecionados e prontos para salvar no banco */
   onImport: (selected: OmieCandidate[], contratoMap: Record<string, string>) => Promise<void>;
 }
 
@@ -60,31 +60,57 @@ const formatCurrency = (v: number) => fmt.format(v);
 const formatDateDisplay = (iso?: string) => {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
   return `${d}/${m}/${y}`;
 };
+
+// Estado inicial centralizado para reset limpo
+const defaultFormState = () => ({
+  startDate: (() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  })(),
+  endDate: new Date().toISOString().slice(0, 10),
+  filterBy: "date_registration" as "date_registration" | "date_issue" | "date_due",
+  company: "ALL" as "ALL" | "Mar Brasil" | "DZM",
+});
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props) {
-  // Step 1 — parâmetros de busca
-  const [startDate,  setStartDate]  = useState(() => {
-    const d = new Date();
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-  });
-  const [endDate,    setEndDate]    = useState(() => new Date().toISOString().slice(0, 10));
-  const [filterBy,   setFilterBy]   = useState<"date_registration" | "date_issue" | "date_due">("date_registration");
-  const [company,    setCompany]    = useState<"ALL" | "Mar Brasil" | "DZM">("ALL");
+  const [startDate,  setStartDate]    = useState(defaultFormState().startDate);
+  const [endDate,    setEndDate]      = useState(defaultFormState().endDate);
+  const [filterBy,   setFilterBy]     = useState(defaultFormState().filterBy);
+  const [company,    setCompany]      = useState(defaultFormState().company);
 
-  // Step 2 — resultado / auditoria
-  const [step, setStep]             = useState<"params" | "auditing" | "importing">("params");
-  const [candidates, setCandidates] = useState<OmieCandidate[]>([]);
-  const [selected, setSelected]     = useState<Set<string>>(new Set());
-  const [expanded, setExpanded]     = useState<Set<string>>(new Set());
-  const [contratoMap, setContratoMap] = useState<Record<string, string>>({});  // omie_key → contrato_id
-  const [logs, setLogs]             = useState<string[]>([]);
-  const [isLoading, setIsLoading]   = useState(false);
+  const [step, setStep]               = useState<"params" | "auditing" | "importing">("params");
+  const [candidates, setCandidates]   = useState<OmieCandidate[]>([]);
+  const [selected, setSelected]       = useState<Set<string>>(new Set());
+  const [expanded, setExpanded]       = useState<Set<string>>(new Set());
+  const [contratoMap, setContratoMap] = useState<Record<string, string>>({});
+  const [logs, setLogs]               = useState<string[]>([]);
+  const [isLoading, setIsLoading]     = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // ── Resetar COMPLETAMENTE ao abrir o modal (corrige o bug de dados persistentes) ──
+  useEffect(() => {
+    if (isOpen) {
+      const defaults = defaultFormState();
+      setStartDate(defaults.startDate);
+      setEndDate(defaults.endDate);
+      setFilterBy(defaults.filterBy);
+      setCompany(defaults.company);
+      setStep("params");
+      setCandidates([]);
+      setSelected(new Set());
+      setExpanded(new Set());
+      setContratoMap({});
+      setLogs([]);
+      setIsLoading(false);
+      setImportError(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -111,9 +137,7 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
 
       const list: OmieCandidate[] = data.candidates || [];
       setCandidates(list);
-      // Pré-seleciona todos
       setSelected(new Set(list.map((c) => c.omie_key)));
-      // Inicializa o mapa de contratos vazio
       const initMap: Record<string, string> = {};
       list.forEach((c) => { initMap[c.omie_key] = ""; });
       setContratoMap(initMap);
@@ -127,28 +151,25 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
   };
 
   // ── Seleção / expansão ────────────────────────────────────────────────────
-  const toggleSelect = (key: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  };
-
-  const toggleExpand = (key: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  };
+  const toggleSelect  = (key: string) => setSelected((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleExpand  = (key: string) => setExpanded((prev)  => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const toggleAll = () => {
-    if (selected.size === candidates.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(candidates.map((c) => c.omie_key)));
-    }
+    setSelected(selected.size === candidates.length
+      ? new Set()
+      : new Set(candidates.map((c) => c.omie_key))
+    );
+  };
+
+  // ── Voltar aos parâmetros limpando os resultados anteriores ───────────────
+  const handleBack = () => {
+    setStep("params");
+    setCandidates([]);
+    setSelected(new Set());
+    setExpanded(new Set());
+    setContratoMap({});
+    setImportError(null);
+    setLogs([]);
   };
 
   // ── Step 2 → importar selecionados ───────────────────────────────────────
@@ -158,28 +179,15 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
       setImportError("Selecione ao menos um lançamento para importar.");
       return;
     }
-
     setStep("importing");
     setImportError(null);
-
     try {
       await onImport(toImport, contratoMap);
       onClose();
-      // Reseta
-      setStep("params");
-      setCandidates([]);
-      setSelected(new Set());
     } catch (err: any) {
       setImportError(err.message || "Erro ao importar os lançamentos.");
       setStep("auditing");
     }
-  };
-
-  const handleBack = () => {
-    setStep("params");
-    setCandidates([]);
-    setSelected(new Set());
-    setImportError(null);
   };
 
   const allSelected  = selected.size === candidates.length && candidates.length > 0;
@@ -189,7 +197,6 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Overlay */}
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={step === "params" ? onClose : undefined}
@@ -218,10 +225,7 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
           </div>
 
           {step !== "importing" && (
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-            >
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
               <X size={18} />
             </button>
           )}
@@ -282,9 +286,7 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
               {/* Período */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
-                    Data Inicial
-                  </label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Data Inicial</label>
                   <input
                     type="date"
                     value={startDate}
@@ -293,9 +295,7 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
-                    Data Final
-                  </label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Data Final</label>
                   <input
                     type="date"
                     value={endDate}
@@ -312,22 +312,10 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                   {importError}
                 </div>
               )}
-
-              {/* Logs (se já buscou e voltou) */}
-              {logs.length > 0 && (
-                <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-0.5 max-h-32 overflow-y-auto">
-                  {logs.map((l, i) => (
-                    <p key={i} className="text-[11px] font-mono text-slate-500">{l}</p>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
-              <button
-                onClick={onClose}
-                className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-500 hover:text-slate-700 transition-all"
-              >
+              <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-500 hover:text-slate-700 transition-all">
                 Cancelar
               </button>
               <button
@@ -336,15 +324,9 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md disabled:opacity-50"
               >
                 {isLoading ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    Buscando no Omie…
-                  </>
+                  <><Loader2 size={14} className="animate-spin" />Buscando no Omie…</>
                 ) : (
-                  <>
-                    <RefreshCw size={14} />
-                    Buscar no Omie
-                  </>
+                  <><RefreshCw size={14} />Buscar no Omie</>
                 )}
               </button>
             </div>
@@ -354,24 +336,40 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
         {/* ── STEP 2 — Auditoria ──────────────────────────────────────────── */}
         {step === "auditing" && (
           <>
-            {/* Barra de seleção global */}
-            <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
-              <button
-                onClick={toggleAll}
-                className="flex items-center gap-2 text-xs font-black text-slate-600 hover:text-amber-700 transition-colors"
-              >
-                {allSelected
-                  ? <CheckSquare size={16} className="text-amber-500" />
-                  : someSelected
-                  ? <CheckSquare size={16} className="text-slate-300" />
-                  : <Square size={16} className="text-slate-300" />}
-                {allSelected ? "Desmarcar todos" : "Selecionar todos"}
-              </button>
-
+            {/* Barra de seleção global + resumo do período buscado */}
+            <div className="px-6 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50/60">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={toggleAll}
+                  className="flex items-center gap-2 text-xs font-black text-slate-600 hover:text-amber-700 transition-colors"
+                >
+                  {allSelected
+                    ? <CheckSquare size={16} className="text-amber-500" />
+                    : someSelected
+                    ? <CheckSquare size={16} className="text-slate-300" />
+                    : <Square size={16} className="text-slate-300" />}
+                  {allSelected ? "Desmarcar todos" : "Selecionar todos"}
+                </button>
+                <span className="text-[10px] text-slate-400 font-semibold">
+                  📌 {filterBy === "date_registration" ? "Registro" : filterBy === "date_issue" ? "Lançamento" : "Vencimento"} ·{" "}
+                  {formatDateDisplay(startDate)} → {formatDateDisplay(endDate)} · {company === "ALL" ? "Todas as empresas" : company}
+                </span>
+              </div>
               <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                {selected.size} de {candidates.length} selecionado(s)
+                {selected.size} / {candidates.length} selecionado(s)
               </span>
             </div>
+
+            {/* Logs compactos */}
+            {logs.length > 0 && (
+              <div className="px-6 pt-3">
+                <div className="bg-slate-50 rounded-xl border border-slate-200 px-3 py-2 space-y-0.5 max-h-16 overflow-y-auto">
+                  {logs.map((l, i) => (
+                    <p key={i} className="text-[10px] font-mono text-slate-500">{l}</p>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Lista de candidatos */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -392,10 +390,10 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                       className={`rounded-xl border transition-all ${
                         isSelected
                           ? "border-amber-400 bg-amber-50/40"
-                          : "border-slate-200 bg-white"
+                          : "border-slate-200 bg-white opacity-60"
                       }`}
                     >
-                      {/* Linha principal */}
+                      {/* ── Linha principal ───────────────────────────── */}
                       <div className="flex items-center gap-3 px-4 py-3">
                         {/* Checkbox */}
                         <button onClick={() => toggleSelect(c.omie_key)} className="shrink-0">
@@ -405,17 +403,29 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                         </button>
 
                         {/* Empresa badge */}
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 shrink-0">
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 shrink-0 hidden sm:block">
                           {c.company_name}
                         </span>
 
-                        {/* NF & Cliente */}
+                        {/* NF + NF número limpo */}
+                        <div className="shrink-0 text-center min-w-[60px]">
+                          <p className="text-[9px] font-black text-slate-400 uppercase">NF</p>
+                          <p className="text-xs font-black text-slate-800">{c.numero_nf || "S/N"}</p>
+                        </div>
+
+                        {/* Separador */}
+                        <div className="w-px h-8 bg-slate-200 shrink-0 hidden sm:block" />
+
+                        {/* Cliente + Contrato */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-black text-slate-800 truncate">
-                            {c.nota_fiscal}
+                          <p className="text-xs font-black text-slate-800 truncate flex items-center gap-1">
+                            <User size={11} className="text-slate-400 shrink-0" />
+                            {c.client_name}
                           </p>
-                          <p className="text-[11px] font-semibold text-slate-500 truncate">
-                            {c.client_name} • {c.contract_name || c.contract_number || "—"}
+                          <p className="text-[11px] font-semibold text-slate-500 truncate flex items-center gap-1">
+                            <FileText size={10} className="text-slate-400 shrink-0" />
+                            {c.contract_name || c.contract_number || "Projeto Omie"}
+                            {c.contract_number && c.contract_name && ` (${c.contract_number})`}
                           </p>
                         </div>
 
@@ -429,41 +439,64 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                         </span>
 
                         {/* Vencimento */}
-                        <div className="text-right shrink-0 hidden sm:block">
-                          <p className="text-[10px] text-slate-400 font-semibold">Vencimento</p>
+                        <div className="text-right shrink-0 hidden md:block">
+                          <p className="text-[9px] text-slate-400 font-black uppercase">Venc.</p>
                           <p className="text-xs font-bold text-slate-700">{formatDateDisplay(c.date_due)}</p>
                         </div>
 
-                        {/* Valor */}
+                        {/* Valor bruto */}
                         <div className="text-right shrink-0">
-                          <p className="text-[10px] text-slate-400 font-semibold">Bruto</p>
+                          <p className="text-[9px] text-slate-400 font-black uppercase">Bruto</p>
                           <p className="text-xs font-black text-slate-800">{formatCurrency(c.valor_bruto)}</p>
                         </div>
 
+                        {/* Líquido */}
+                        <div className="text-right shrink-0 hidden sm:block">
+                          <p className="text-[9px] text-slate-400 font-black uppercase">Líquido</p>
+                          <p className="text-xs font-black text-emerald-700">{formatCurrency(c.valor_liquido)}</p>
+                        </div>
+
                         {/* Expand toggle */}
-                        <button
-                          onClick={() => toggleExpand(c.omie_key)}
-                          className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
-                        >
+                        <button onClick={() => toggleExpand(c.omie_key)} className="text-slate-400 hover:text-slate-600 transition-colors shrink-0">
                           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
                       </div>
 
-                      {/* Painel expandido */}
+                      {/* ── Painel expandido ──────────────────────────── */}
                       {isExpanded && (
                         <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-3">
+                          
+                          {/* Identificação completa */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <div className="bg-slate-50 rounded-lg px-3 py-2 col-span-2 sm:col-span-1">
+                              <p className="text-[9px] font-black text-slate-400 uppercase">Cliente (Razão Social / ID Omie)</p>
+                              <p className="text-xs font-bold text-slate-800 mt-0.5">{c.client_name}</p>
+                              <p className="text-[10px] text-slate-400">Cód. Omie: {c.client_code}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-lg px-3 py-2">
+                              <p className="text-[9px] font-black text-slate-400 uppercase">Nota Fiscal / Documento</p>
+                              <p className="text-xs font-bold text-slate-800 mt-0.5">{c.nota_fiscal}</p>
+                              <p className="text-[10px] text-slate-400">Nº: {c.numero_nf || "S/N"}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-lg px-3 py-2">
+                              <p className="text-[9px] font-black text-slate-400 uppercase">Contrato / Projeto Omie</p>
+                              <p className="text-xs font-bold text-slate-800 mt-0.5 truncate">{c.contract_name || "—"}</p>
+                              <p className="text-[10px] text-slate-400">{c.contract_number || "Sem nº de contrato"}</p>
+                            </div>
+                          </div>
+
                           {/* Datas completas */}
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {[
-                              { label: "📌 Registro",  value: c.date_registration },
-                              { label: "📄 Emissão",   value: c.date_issue },
-                              { label: "📅 Vencimento",value: c.date_due },
-                              { label: "💳 Pagamento", value: c.date_payment || "—" },
+                              { label: "📌 Registro",   value: c.date_registration },
+                              { label: "📄 Emissão",    value: c.date_issue },
+                              { label: "📅 Vencimento", value: c.date_due },
+                              { label: "💳 Pagamento",  value: c.date_payment },
                             ].map(({ label, value }) => (
                               <div key={label} className="bg-slate-50 rounded-lg px-3 py-2">
                                 <p className="text-[9px] font-black text-slate-400 uppercase">{label}</p>
                                 <p className="text-xs font-bold text-slate-700 mt-0.5">
-                                  {value && value !== "—" ? formatDateDisplay(value) : "—"}
+                                  {value ? formatDateDisplay(value) : "—"}
                                 </p>
                               </div>
                             ))}
@@ -474,7 +507,7 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                             {[
                               { label: "Bruto",    value: c.valor_bruto,   color: "text-slate-800" },
                               { label: "Impostos", value: c.impostos,      color: "text-red-600"   },
-                              { label: "Glosa",    value: c.glosa,         color: "text-orange-600"},
+                              { label: "Glosa/Desc",value: c.glosa,        color: "text-orange-600"},
                               { label: "Líquido",  value: c.valor_liquido, color: "text-emerald-700" },
                             ].map(({ label, value, color }) => (
                               <div key={label} className="bg-slate-50 rounded-lg px-3 py-2">
@@ -485,31 +518,31 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                           </div>
 
                           {/* Detalhamento fiscal */}
-                          <div className="bg-red-50/60 rounded-lg px-3 py-2 text-[11px] text-slate-600 font-semibold flex flex-wrap gap-x-4 gap-y-1">
-                            <span>IR: {formatCurrency(c.tax_ir)}</span>
-                            <span>PIS: {formatCurrency(c.tax_pis)}</span>
-                            <span>COFINS: {formatCurrency(c.tax_cofins)}</span>
-                            <span>ISS: {formatCurrency(c.tax_iss)}</span>
-                            <span>INSS: {formatCurrency(c.tax_inss)}</span>
+                          <div className="bg-red-50/60 rounded-lg px-3 py-2">
+                            <p className="text-[9px] font-black text-red-500 uppercase mb-1">Detalhamento Fiscal Retido</p>
+                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600 font-semibold">
+                              <span>IR: <strong>{formatCurrency(c.tax_ir)}</strong></span>
+                              <span>PIS: <strong>{formatCurrency(c.tax_pis)}</strong></span>
+                              <span>COFINS: <strong>{formatCurrency(c.tax_cofins)}</strong></span>
+                              <span>ISS: <strong>{formatCurrency(c.tax_iss)}</strong></span>
+                              <span>INSS: <strong>{formatCurrency(c.tax_inss)}</strong></span>
+                            </div>
                           </div>
 
-                          {/* Vínculo com contrato — crítico para gravar no banco */}
+                          {/* Vínculo com contrato */}
                           <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
-                              Vincular a Contrato Cadastrado <span className="text-amber-600">(opcional — se não vincular, será ignorado no rateio)</span>
+                              Vincular a Contrato Cadastrado
+                              <span className="normal-case font-semibold text-amber-600 ml-1">(sem vínculo o lançamento será ignorado no rateio de comissões)</span>
                             </label>
                             <select
                               value={contratoMap[c.omie_key] || ""}
-                              onChange={(e) =>
-                                setContratoMap((prev) => ({ ...prev, [c.omie_key]: e.target.value }))
-                              }
+                              onChange={(e) => setContratoMap((prev) => ({ ...prev, [c.omie_key]: e.target.value }))}
                               className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-700 bg-white"
                             >
-                              <option value="">— Não vincular a contrato —</option>
+                              <option value="">— Não vincular a contrato (importar sem rateio) —</option>
                               {contratos.map((ct) => (
-                                <option key={ct.id} value={ct.id}>
-                                  {ct.nome_contrato}
-                                </option>
+                                <option key={ct.id} value={ct.id}>{ct.nome_contrato}</option>
                               ))}
                             </select>
                           </div>
@@ -531,18 +564,12 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
 
             {/* Footer */}
             <div className="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-1.5 text-xs font-black uppercase text-slate-500 hover:text-slate-700 transition-all"
-              >
-                ← Voltar aos parâmetros
+              <button onClick={handleBack} className="flex items-center gap-1.5 text-xs font-black uppercase text-slate-500 hover:text-slate-700 transition-all">
+                ← Nova Busca (Alterar Período)
               </button>
 
               <div className="flex gap-2">
-                <button
-                  onClick={onClose}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-500 hover:text-slate-700 transition-all"
-                >
+                <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-500 hover:text-slate-700 transition-all">
                   Cancelar
                 </button>
                 <button

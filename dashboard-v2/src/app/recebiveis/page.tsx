@@ -548,6 +548,9 @@ export default function RecebiveisPage() {
                   <span className="hidden sm:inline bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded border border-amber-200/40">
                     Contratos & Comissões
                   </span>
+                  <span className="hidden sm:inline bg-slate-100 text-slate-500 text-[10px] font-black px-2 py-0.5 rounded border border-slate-200/40 tracking-wider">
+                    {APP_VERSION}
+                  </span>
                 </h1>
               </div>
               <p className="text-xs font-semibold text-slate-400">
@@ -746,7 +749,7 @@ export default function RecebiveisPage() {
         <footer className="mt-16 pt-6 border-t border-slate-200/60 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-semibold text-slate-400">
           <p>© 2026 Mar Brasil — Sistema de Recebíveis & Comissões Comerciais</p>
           <span className="text-[10px] font-black uppercase tracking-wider bg-slate-100 px-3 py-1.5 rounded-full text-slate-400">
-            Dianna {APP_VERSION}
+            {APP_VERSION}
           </span>
         </footer>
 
