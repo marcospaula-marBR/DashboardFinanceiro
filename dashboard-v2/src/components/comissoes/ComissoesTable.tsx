@@ -562,15 +562,44 @@ export function ComissoesTable({
                           <td colSpan={9} className="p-0 border-t-0 bg-slate-50/50">
                             <div className="p-6 animate-in slide-in-from-top-2 duration-300">
                               <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                  <FileSpreadsheet size={14} className="text-amber-500" />
-                                  Histórico de Faturamento e Comissões Geradas
-                                </h4>
+                                <div className="flex items-center justify-between mb-4">
+                                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <FileSpreadsheet size={14} className="text-amber-500" />
+                                    Histórico de Faturamento e Comissões Geradas
+                                  </h4>
+                                  {onDeleteContrato && (
+                                    <button
+                                      onClick={() => onDeleteContrato(contract.id, contract.nome_contrato)}
+                                      className="text-[11px] font-black uppercase text-red-600 hover:text-white bg-red-50 hover:bg-red-600 border border-red-200 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                                      title="Excluir este contrato e todas as suas faturas da listagem"
+                                    >
+                                      <Trash2 size={13} /> Excluir Contrato
+                                    </button>
+                                  )}
+                                </div>
 
                                 {contractRecs.length === 0 ? (
-                                  <p className="text-xs text-slate-400 italic py-4 text-center">
-                                    Nenhum faturamento lançado para este contrato. Clique em lançar no botão '+' à direita.
-                                  </p>
+                                  <div className="py-8 text-center space-y-3 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6">
+                                    <p className="text-xs text-slate-500 font-semibold">
+                                      Nenhum faturamento lançado para este contrato.
+                                    </p>
+                                    <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                                      <button
+                                        onClick={() => onAddRecebimento(contract.id)}
+                                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5"
+                                      >
+                                        <Plus size={14} /> Lançar Faturamento
+                                      </button>
+                                      {onDeleteContrato && (
+                                        <button
+                                          onClick={() => onDeleteContrato(contract.id, contract.nome_contrato)}
+                                          className="px-4 py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
+                                        >
+                                          <Trash2 size={14} /> Excluir Estrutura do Contrato
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
                                 ) : (
                                   <div className="overflow-x-auto">
                                     <table className="w-full text-left">
