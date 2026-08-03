@@ -22,6 +22,7 @@ export const metadata: Metadata = {
 };
 
 const SATELLITES = [
+  { href: "/recebiveis", icon: BadgeDollarSign, title: "Recebíveis & Comissões", sub: "Unificado (Omie & Manual)" },
   { href: "/gestao-integrada.html", icon: Receipt, title: "Gestão Integrada", sub: "Faturamento & Impostos" },
   { href: "/dre", icon: TrendingUp, title: "DRE Gerencial", sub: "Visão Financeira" },
   { href: "/analise-setorial.html", icon: PieChart, title: "Análise Setorial", sub: "Custos por Área" },
@@ -30,7 +31,6 @@ const SATELLITES = [
   { href: "/seguros", icon: ShieldCheck, title: "Seguros", sub: "Gestão de Apólices" },
   { href: "/indicadores_v2.html", icon: Gauge, title: "Indicadores", sub: "KPIs Estratégicos" },
   { href: "/faturamento", icon: FileText, title: "Faturamentos", sub: "Vínculo Omie & Fiscal" },
-  { href: "/comissoes-v1", icon: BadgeDollarSign, title: "Comissões", sub: "Divisão Equipe" },
   { href: "/mutuos.html", icon: Landmark, title: "Mútuos & Dividendos", sub: "Transferências" },
   { href: "/fluxo-caixa", icon: HandCoins, title: "Fluxo de Caixa", sub: "Tempo Real (Omie)" },
 ];
