@@ -356,12 +356,20 @@ export class ComissoesService {
       rede?: string | null;
     }
   ): Promise<ContratoBase> {
+    const updatePayload = {
+      nome_contrato: payload.nome_contrato,
+      numero_contrato: payload.numero_contrato ?? null,
+      observacoes: payload.observacoes ?? null,
+      rede: payload.rede ?? null
+    };
+
     const { data, error } = await supabase
       .from('contratos_base')
-      .update(payload)
+      .update(updatePayload)
       .eq('id', id)
       .select('id, nome_contrato, numero_contrato, observacoes, ativo, empresa, rede')
       .single();
+
     if (error) throw new Error(`Falha ao atualizar contrato: ${error.message}`);
     return data as ContratoBase;
   }

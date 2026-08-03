@@ -297,14 +297,12 @@ export default function RecebiveisPage() {
   }) => {
     try {
       if (editContratoData) {
-        const updated = await ComissoesService.updateContrato(editContratoData.id, payload);
-        setContratos(prev => prev.map(c => c.id === editContratoData.id ? updated : c));
+        await ComissoesService.updateContrato(editContratoData.id, payload);
         setEditContratoData(null);
       } else {
-        const novo = await ComissoesService.addContrato(payload);
-        setContratos(prev => [...prev, novo]);
+        await ComissoesService.addContrato(payload);
       }
-      await fetchHistorico(filters);
+      await Promise.all([fetchInit(), fetchHistorico(filters)]);
     } catch (err: any) {
       alert("Erro ao salvar contrato: " + (err.message || "Erro desconhecido"));
     }
