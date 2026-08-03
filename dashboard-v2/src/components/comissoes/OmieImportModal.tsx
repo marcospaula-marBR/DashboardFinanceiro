@@ -24,20 +24,28 @@ export interface OmieCandidate {
   omie_key: string;
   company_name: string;
   nota_fiscal: string;
-  numero_nf: string;           // Número limpo da NF
+  numero_nf: string;
   client_code: string;
-  client_name: string;         // Razão social (quando disponível)
+  client_name: string;
   contract_name: string;
   contract_number: string;
+  // Categoria e Projeto Omie
+  categoria_code: string;
+  categoria_desc: string;
+  projeto_code: string;
+  projeto_nome: string;
+  // Datas
   date_registration: string;
   date_issue: string;
   date_due: string;
   date_payment: string;
+  // Valores
   valor_bruto: number;
   valor_liquido: number;
   glosa: number;
   impostos: number;
   status: string;
+  // Impostos
   tax_ir: number;
   tax_pis: number;
   tax_cofins: number;
@@ -438,10 +446,19 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                           {c.status}
                         </span>
 
-                        {/* Vencimento */}
+                        {/* Vencimento ou Pagamento */}
                         <div className="text-right shrink-0 hidden md:block">
-                          <p className="text-[9px] text-slate-400 font-black uppercase">Venc.</p>
-                          <p className="text-xs font-bold text-slate-700">{formatDateDisplay(c.date_due)}</p>
+                          {c.status === "Pago" && c.date_payment ? (
+                            <>
+                              <p className="text-[9px] text-emerald-500 font-black uppercase">Recebido</p>
+                              <p className="text-xs font-bold text-emerald-700">{formatDateDisplay(c.date_payment)}</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[9px] text-slate-400 font-black uppercase">Venc.</p>
+                              <p className="text-xs font-bold text-slate-700">{formatDateDisplay(c.date_due)}</p>
+                            </>
+                          )}
                         </div>
 
                         {/* Valor bruto */}
@@ -516,6 +533,34 @@ export function OmieImportModal({ isOpen, onClose, contratos, onImport }: Props)
                               </div>
                             ))}
                           </div>
+
+                          {/* Categoria e Projeto */}
+                          {(c.categoria_desc || c.categoria_code || c.projeto_nome || c.projeto_code) && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {(c.categoria_desc || c.categoria_code) && (
+                                <div className="bg-indigo-50/60 rounded-lg px-3 py-2">
+                                  <p className="text-[9px] font-black text-indigo-400 uppercase">Categoria Omie</p>
+                                  <p className="text-xs font-bold text-slate-800 mt-0.5">
+                                    {c.categoria_desc || "—"}
+                                  </p>
+                                  {c.categoria_code && (
+                                    <p className="text-[10px] text-slate-400">Cód: {c.categoria_code}</p>
+                                  )}
+                                </div>
+                              )}
+                              {(c.projeto_nome || c.projeto_code) && (
+                                <div className="bg-violet-50/60 rounded-lg px-3 py-2">
+                                  <p className="text-[9px] font-black text-violet-400 uppercase">Projeto Omie</p>
+                                  <p className="text-xs font-bold text-slate-800 mt-0.5">
+                                    {c.projeto_nome || "—"}
+                                  </p>
+                                  {c.projeto_code && (
+                                    <p className="text-[10px] text-slate-400">Cód: {c.projeto_code}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           {/* Detalhamento fiscal */}
                           <div className="bg-red-50/60 rounded-lg px-3 py-2">
