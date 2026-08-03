@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.56.09";
+export const APP_VERSION = "v.02.56.10";
 export const VERSION_DATE = "2026-08-03";
 export const VERSION_CHANGELOG = [
+  "v.02.56.10 - Fix/Recebíveis: Corrigida a falta do repasse da prop onDeleteContrato na chamada de ComissoesTable em recebiveis/page.tsx. Agora os botões de lixeira vermelha para exclusão de contrato (na linha principal e dentro do detalhamento expandido zerado) são renderizados perfeitamente.",
   "v.02.56.09 - Feat/Recebíveis: Adicionada a opção 'Excluir Estrutura do Contrato' diretamente no painel de detalhamento expandido (especialmente útil quando o contrato fica com 0 faturamentos ou após limpar o conteúdo). Permite excluir o contrato base da listagem da tela com 1 clique.",
   "v.02.56.08 - Feat/Recebíveis: Flexibilizado o rateio de comissão comercial no LancamentoModal. Removida a exigência/bloqueio rígido de 1.00%. Agora a soma é exibida de forma informativa e permite salvar faturamentos com qualquer percentual (0%, 0.35%, 1%, 2.5%, etc.) ou sem comissão.",
   "v.02.56.07 - Fix/Recebíveis: Corrigida a sincronização da edição de contratos. Agora a atualização no Supabase limpa nulos corretamente em updateContrato e a página recarrega síncronamente fetchInit() e fetchHistorico(), garantindo que o novo nome do contrato seja refletido 100% na listagem e nos seus faturamentos.",

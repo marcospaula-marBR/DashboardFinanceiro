@@ -779,6 +779,7 @@ export default function RecebiveisPage() {
             onRevertRecebimento={handleRevertRecebimento}
             isLoading={isLoadingInit || isLoadingHistorico}
             onEditContrato={handleEditContrato}
+            onDeleteContrato={handleDeleteContrato}
           />
 
         </div>
