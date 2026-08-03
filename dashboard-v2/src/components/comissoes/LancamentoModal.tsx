@@ -60,9 +60,8 @@ export function LancamentoModal({
   const membrosAtivos = useMemo(() => equipe.filter(m => m.ativo), [equipe]);
   const liquidoNum = parseFloat(liquido) || 0;
   
-  // A soma dos percentuais cadastrados deve dar aproximadamente 1.00% (com tolerância para conversão R$ <-> %)
+  // A soma dos percentuais cadastrados (informativa, sem bloqueio rígido de 1%)
   const totalPct = divisoes.reduce((s, d) => s + d.porcentagem, 0);
-  const pctOk = Math.abs(totalPct - 1.0) < 0.05;
 
   // Carrega colaboradores globais
   useEffect(() => {
@@ -304,10 +303,6 @@ export function LancamentoModal({
       setError("Informe o valor líquido faturado.");
       return;
     }
-    if (!pctOk && divisoes.length > 0) {
-      setError(`A soma das comissões distribuídas deve ser aproximadamente 1,00%. Atual: ${totalPct.toFixed(2)}%`);
-      return;
-    }
 
     setIsSaving(true);
     setError(null);
@@ -519,14 +514,9 @@ export function LancamentoModal({
                 <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
                   Rateio da Comissão Comercial
                 </h3>
-                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Distribuição do pool de comissão da venda (soma recomendada de 1.00%).</p>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Distribuição do pool de comissão (configurável por contrato/faturamento).</p>
               </div>
-              <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border flex items-center gap-1.5 shadow-sm ${
-                pctOk
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-red-50 text-red-600 border-red-200"
-              }`}>
-                {pctOk && <CheckCircle2 size={12} />}
+              <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md border flex items-center gap-1.5 shadow-sm bg-amber-50 text-amber-700 border-amber-200">
                 Soma: {totalPct.toFixed(2)}%
               </span>
             </div>
