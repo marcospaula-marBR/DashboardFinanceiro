@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.56.10";
-export const VERSION_DATE = "2026-08-03";
+export const APP_VERSION = "v.02.56.11";
+export const VERSION_DATE = "2026-08-04";
 export const VERSION_CHANGELOG = [
+  "v.02.56.11 - Fix/Empréstimos: Re-vinculados os empréstimos corporativos (R$ 3.371,94 e R$ 340,00) na tabela employee_loans para o registro ativo de Deuzelina Almeida e Silva (ID 7bea7bd8-f733-4947-863a-43942a890055), corrigindo a sobrescrita histórica de cadastro que atribuía indevidamente os contratos a Bruno Oliveira Carvalho.",
   "v.02.56.10 - Fix/Recebíveis: Corrigida a falta do repasse da prop onDeleteContrato na chamada de ComissoesTable em recebiveis/page.tsx. Agora os botões de lixeira vermelha para exclusão de contrato (na linha principal e dentro do detalhamento expandido zerado) são renderizados perfeitamente.",
   "v.02.56.09 - Feat/Recebíveis: Adicionada a opção 'Excluir Estrutura do Contrato' diretamente no painel de detalhamento expandido (especialmente útil quando o contrato fica com 0 faturamentos ou após limpar o conteúdo). Permite excluir o contrato base da listagem da tela com 1 clique.",
   "v.02.56.08 - Feat/Recebíveis: Flexibilizado o rateio de comissão comercial no LancamentoModal. Removida a exigência/bloqueio rígido de 1.00%. Agora a soma é exibida de forma informativa e permite salvar faturamentos com qualquer percentual (0%, 0.35%, 1%, 2.5%, etc.) ou sem comissão.",
