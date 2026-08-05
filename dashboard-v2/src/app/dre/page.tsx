@@ -920,7 +920,7 @@ export default function DrePage() {
   // Validação de senha
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (passcode === "marbrasildre2026") {
+    if (passcode === "grupo2ltda") {
       sessionStorage.setItem('marbrasil_dre_auth', 'true');
       setIsAuthenticated(true);
       setAuthError(false);
