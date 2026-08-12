@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.56.12";
-export const VERSION_DATE = "2026-08-05";
+export const APP_VERSION = "v.02.56.13";
+export const VERSION_DATE = "2026-08-12";
 export const VERSION_CHANGELOG = [
+  "v.02.56.13 - Feat/People: Criado o botão de atalho 'Terceirização' e o modal OutsourcingCockpitModal na página PeopleCockpit, permitindo apurar custos históricos de colaboradores terceirizados por competência, integrar a coluna de Empréstimos (fora da folha), incluir colunas e linhas manuais, aplicar taxas fiscais e administrativas, realizar duplo check por localidade e gerenciar a liquidação dos repasses efetuados por banco de origem.",
   "v.02.56.12 - Security/DRE: Alterada a senha de acesso da página DRE de 'marbrasildre2026' para 'grupo2ltda'.",
   "v.02.56.11 - Fix/Empréstimos: Re-vinculados os empréstimos corporativos (R$ 3.371,94 e R$ 340,00) na tabela employee_loans para o registro ativo de Deuzelina Almeida e Silva (ID 7bea7bd8-f733-4947-863a-43942a890055), corrigindo a sobrescrita histórica de cadastro que atribuía indevidamente os contratos a Bruno Oliveira Carvalho.",
   "v.02.56.10 - Fix/Recebíveis: Corrigida a falta do repasse da prop onDeleteContrato na chamada de ComissoesTable em recebiveis/page.tsx. Agora os botões de lixeira vermelha para exclusão de contrato (na linha principal e dentro do detalhamento expandido zerado) são renderizados perfeitamente.",

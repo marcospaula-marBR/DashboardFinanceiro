@@ -15,6 +15,7 @@ import { ClearCostHistoryModal } from "@/components/people/ClearCostHistoryModal
 import { CltImportAuditModal } from "@/components/people/CltImportAuditModal";
 import { PjImportAuditModal } from "@/components/people/PjImportAuditModal";
 import { BatchReplicateCostsModal } from "@/components/people/BatchReplicateCostsModal";
+import { OutsourcingCockpitModal } from "@/components/people/OutsourcingCockpitModal";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
@@ -104,6 +105,7 @@ export default function PeoplePage() {
   const [isCltImportModalOpen, setIsCltImportModalOpen] = useState(false);
   const [isPjImportModalOpen, setIsPjImportModalOpen] = useState(false);
   const [isBatchReplicateModalOpen, setIsBatchReplicateModalOpen] = useState(false);
+  const [isOutsourcingModalOpen, setIsOutsourcingModalOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   
   // C-Level Executive Drawer States
@@ -1254,6 +1256,15 @@ export default function PeoplePage() {
               <Printer size={14} /> Exportar Lote PDF
             </button>
 
+            {/* BOTÃO ATALHO: TERCEIRIZAÇÃO */}
+            <button
+              onClick={() => setIsOutsourcingModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-purple-300 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-md"
+              title="Gestão & Apuração de Terceirização (Custos, Empréstimos e Repasses)"
+            >
+              <Building2 size={15} /> Terceirização
+            </button>
+
             {/* PASTA DE IMPORTAÇÕES (Central Executiva de Cargas) */}
             <div className="relative">
               <button
@@ -2253,6 +2264,12 @@ export default function PeoplePage() {
         onSuccess={() => {
           fetchData();
         }}
+      />
+
+      <OutsourcingCockpitModal
+        isOpen={isOutsourcingModalOpen}
+        onClose={() => setIsOutsourcingModalOpen(false)}
+        isTestMode={isTestMode}
       />
     </div>
   );
