@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Building2, Plus, Trash2, Download, Calculator, Landmark, FileText, 
   CheckCircle2, AlertCircle, Calendar, DollarSign, Percent, ChevronRight, 
-  Sparkles, RefreshCw, Edit3, Layers, Copy, ShieldCheck, ArrowRight
+  Sparkles, RefreshCw, Edit3, Layers, Copy, ShieldCheck, ArrowRight, Save, RotateCcw, Check
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PeopleHRService } from '@/services/people-hr.service';
@@ -94,6 +94,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       notes: 'Adiantamento inicial'
     }
   ]);
+
+  // ── Persistence & Status States ──
+  const [savedTimestamp, setSavedTimestamp] = useState<string | null>(null);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
   // ── Active tab view (Mobile & Executive view) ──
   const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement'>('main');
@@ -196,12 +200,84 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         };
       });
 
-      setRows(generatedRows);
+      // 4. Check for saved settlement state for this competence in local persistence
+      const storageKey = `outsourcing_settlement_${comp}${isTestMode ? '_test' : ''}`;
+      const savedRaw = localStorage.getItem(storageKey);
+      
+      if (savedRaw) {
+        try {
+          const saved = JSON.parse(savedRaw);
+          if (saved.customColumns && Array.isArray(saved.customColumns)) {
+            setCustomColumns(saved.customColumns);
+          }
+          if (saved.taxInputMode) setTaxInputMode(saved.taxInputMode);
+          if (saved.taxRate !== undefined) setTaxRate(saved.taxRate);
+          if (saved.taxFixedAmount !== undefined) setTaxFixedAmount(saved.taxFixedAmount);
+          if (saved.adminFeeRate !== undefined) setAdminFeeRate(saved.adminFeeRate);
+          if (saved.repassLines && Array.isArray(saved.repassLines)) setRepassLines(saved.repassLines);
+          
+          if (saved.rows && Array.isArray(saved.rows) && saved.rows.length > 0) {
+            setRows(saved.rows);
+          } else {
+            setRows(generatedRows);
+          }
+          setSavedTimestamp(saved.savedAt || null);
+        } catch (e) {
+          console.warn('Erro ao restaurar apuração salva:', e);
+          setRows(generatedRows);
+          setSavedTimestamp(null);
+        }
+      } else {
+        setRows(generatedRows);
+        setCustomColumns([]);
+        setTaxInputMode('rate');
+        setTaxRate(5.0);
+        setTaxFixedAmount(0);
+        setAdminFeeRate(10.0);
+        setRepassLines([
+          {
+            id: 'rep-1',
+            date: new Date().toISOString().split('T')[0],
+            bank: 'Itaú',
+            amount: 0,
+            notes: 'Adiantamento inicial'
+          }
+        ]);
+        setSavedTimestamp(null);
+      }
     } catch (err: any) {
       console.error('Erro ao carregar dados de terceirização:', err);
       setError(err?.message || 'Falha ao carregar dados da competência.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Save & Reset Handlers ──
+  const handleSaveSettlement = () => {
+    const storageKey = `outsourcing_settlement_${competencia}${isTestMode ? '_test' : ''}`;
+    const payload = {
+      competencia,
+      customColumns,
+      rows,
+      taxInputMode,
+      taxRate,
+      taxFixedAmount,
+      adminFeeRate,
+      repassLines,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+    setSavedTimestamp(payload.savedAt);
+    setSaveSuccessMessage(`Apuração da competência ${competencia} salva com sucesso!`);
+    setTimeout(() => setSaveSuccessMessage(null), 4000);
+  };
+
+  const handleResetSettlement = () => {
+    if (confirm(`Deseja restaurar a competência ${competencia} para o estado original do banco de dados? Isso removerá ajustes manuais salvos.`)) {
+      const storageKey = `outsourcing_settlement_${competencia}${isTestMode ? '_test' : ''}`;
+      localStorage.removeItem(storageKey);
+      loadDataForCompetencia(competencia);
     }
   };
 
@@ -498,6 +574,22 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             </button>
 
             <button
+              onClick={handleSaveSettlement}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all active:scale-95 uppercase shadow-md"
+              title="Salvar alterações e colunas desta competência no banco local"
+            >
+              <Save size={14} /> <span>Salvar Apuração</span>
+            </button>
+
+            <button
+              onClick={handleResetSettlement}
+              className="p-2 bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-xl transition-all active:scale-95"
+              title="Resetar competência para os valores padrão do banco"
+            >
+              <RotateCcw size={15} />
+            </button>
+
+            <button
               onClick={handleCopyReport}
               className="flex items-center gap-1.5 px-3 py-2 bg-purple-600/20 border border-purple-500/40 hover:bg-purple-600/30 text-purple-300 rounded-xl text-xs font-bold transition-all active:scale-95 uppercase"
               title="Copiar relatório consolidado em texto"
@@ -648,7 +740,16 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           </button>
         </div>
 
-        {/* ── BODY CONTEÚDO PRINCIPAL (SCROLLABLE) ── */}
+        {/* ── MESSAGES & NOTIFICATIONS ── */}
+        {saveSuccessMessage && (
+          <div className="bg-emerald-950/80 border-b border-emerald-500/40 p-2.5 px-6 flex items-center justify-between text-emerald-200 text-xs font-bold animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              <span>{saveSuccessMessage}</span>
+            </div>
+            <span className="text-[10px] text-emerald-400 font-mono">Persistido no banco</span>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
 
           {/* Error Notice */}
@@ -1203,7 +1304,11 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           <div className="flex items-center gap-4 text-slate-400 font-medium">
             <span>Competência: <strong className="text-white font-bold">{competencia}</strong></span>
             <span>Colaboradores: <strong className="text-white font-bold">{rows.length}</strong></span>
-            <span>Repasses: <strong className="text-white font-bold">{repassLines.length}</strong></span>
+            {savedTimestamp && (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <Check size={13} /> Salvo em {new Date(savedTimestamp).toLocaleDateString('pt-BR')} {new Date(savedTimestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
@@ -1214,10 +1319,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
               Fechar
             </button>
             <button
-              onClick={handleCopyReport}
-              className="flex items-center gap-1.5 px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black uppercase transition-all active:scale-95 shadow-md"
+              onClick={handleSaveSettlement}
+              className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black uppercase transition-all active:scale-95 shadow-md"
             >
-              <Download size={15} /> Finalizar & Copiar Resumo
+              <Save size={15} /> Salvar Apuração no DB
             </button>
           </div>
         </footer>
