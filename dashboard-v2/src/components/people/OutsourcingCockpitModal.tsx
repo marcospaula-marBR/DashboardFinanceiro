@@ -124,14 +124,14 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       // 1. Fetch employees
       const allEmps = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true, isTestMode });
       
-      // Filter outsourced employees or PJ/MEI
-      const outsourcedEmps = allEmps.filter(e => 
-        e.is_outsourced === true || 
-        e.linkType === 'PJ' || 
-        e.linkType === 'MEI' || 
-        e.tax_regime ||
-        e.metadata?.is_outsourced === true
-      );
+      // Filter strictly outsourced employees (Faz parte de Terceirização = 'Sim' / is_outsourced === true)
+      const outsourcedEmps = allEmps.filter(e => {
+        const isOut = e.is_outsourced === true || 
+                      (e as any).is_outsourced === 'true' || 
+                      e.metadata?.is_outsourced === true || 
+                      e.metadata?.is_outsourced === 'true';
+        return Boolean(isOut);
+      });
 
       // 2. Fetch monthly costs for selected competence
       const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
@@ -217,7 +217,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           if (saved.repassLines && Array.isArray(saved.repassLines)) setRepassLines(saved.repassLines);
           
           if (saved.rows && Array.isArray(saved.rows) && saved.rows.length > 0) {
-            setRows(saved.rows);
+            // Filtrar linhas salvas para manter apenas as manuais ou colaboradores que continuam com is_outsourced === true
+            const validEmpIds = new Set(outsourcedEmps.map(e => e.id));
+            const filteredSavedRows = saved.rows.filter((r: OutsourcingRow) => r.isManual || (r.employeeId && validEmpIds.has(r.employeeId)));
+            setRows(filteredSavedRows.length > 0 ? filteredSavedRows : generatedRows);
           } else {
             setRows(generatedRows);
           }

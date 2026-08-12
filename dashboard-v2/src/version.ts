@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.56.14";
+export const APP_VERSION = "v.02.56.15";
 export const VERSION_DATE = "2026-08-12";
 export const VERSION_CHANGELOG = [
+  "v.02.56.15 - Fix/People: Corrigido o filtro de apuração de Terceirização em OutsourcingCockpitModal.tsx para ser 100% estrito ao campo 'Faz parte de Terceirização' (is_outsourced === true). Colaboradores PJ/MEI normais com flag 'Não' (contratação direta) foram removidos da apuração de terceirização.",
   "v.02.56.14 - Feat/People: Implementado o mecanismo de persistência completa da apuração de Terceirização em OutsourcingCockpitModal.tsx. As colunas personalizadas inseridas, linhas manuais, taxas tributárias/administrativas e lançamentos de repasses por banco de origem agora são salvos no banco local por competência, mantendo o histórico intacto ao reabrir.",
   "v.02.56.13 - Feat/People: Criado o botão de atalho 'Terceirização' e o modal OutsourcingCockpitModal na página PeopleCockpit, permitindo apurar custos históricos de colaboradores terceirizados por competência, integrar a coluna de Empréstimos (fora da folha), incluir colunas e linhas manuais, aplicar taxas fiscais e administrativas, realizar duplo check por localidade e gerenciar a liquidação dos repasses efetuados por banco de origem.",
   "v.02.56.12 - Security/DRE: Alterada a senha de acesso da página DRE de 'marbrasildre2026' para 'grupo2ltda'.",
