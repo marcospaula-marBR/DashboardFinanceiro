@@ -84,6 +84,8 @@ const EMPLOYEE_TYPE_CONFIG: Record<EmployeeType, { label: string; color: string;
 
 // ─────────────────────────────────────────────
 // COMPONENTE DE INPUT NUMÉRICO COM 2 CASAS DECIMAIS
+// Nota: onChange só notifica o pai no onBlur para evitar
+// re-renders que causam perda de foco durante a digitação.
 // ─────────────────────────────────────────────
 
 const DecimalInput: React.FC<{
@@ -92,32 +94,40 @@ const DecimalInput: React.FC<{
   width?: string;
   className?: string;
 }> = ({ value, onChange, width = 'w-24', className = '' }) => {
-  const [textVal, setTextVal] = useState<string>(() => (value || 0).toFixed(2));
+  const [localVal, setLocalVal] = useState<string>(() => (value || 0).toFixed(2));
+  const isFocused = useRef(false);
 
+  // Sincroniza externamente apenas quando NÃO está em edição
   useEffect(() => {
-    const num = parseFloat(textVal) || 0;
-    if (Math.abs(num - (value || 0)) > 0.0001) {
-      setTextVal((value || 0).toFixed(2));
+    if (!isFocused.current) {
+      const num = parseFloat(localVal) || 0;
+      if (Math.abs(num - (value || 0)) > 0.005) {
+        setLocalVal((value || 0).toFixed(2));
+      }
     }
   }, [value]);
 
+  const handleFocus = () => { isFocused.current = true; };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTextVal(e.target.value);
-    const parsed = parseFloat(e.target.value);
-    onChange(isNaN(parsed) ? 0 : parsed);
+    // Só atualiza o estado local — NÃO chama o pai aqui
+    setLocalVal(e.target.value);
   };
 
   const handleBlur = () => {
-    const parsed = parseFloat(textVal) || 0;
-    setTextVal(parsed.toFixed(2));
-    onChange(parsed);
+    isFocused.current = false;
+    const parsed = parseFloat(localVal.replace(',', '.')) || 0;
+    const formatted = parsed.toFixed(2);
+    setLocalVal(formatted);
+    onChange(parsed); // Notifica o pai apenas ao sair do campo
   };
 
   return (
     <input
-      type="number"
-      step="0.01"
-      value={textVal}
+      type="text"
+      inputMode="decimal"
+      value={localVal}
+      onFocus={handleFocus}
       onChange={handleChange}
       onBlur={handleBlur}
       className={`${width} text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all ${className}`}
@@ -175,11 +185,11 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   // Aba ativa
   const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement'>('main');
 
-  // Refs e estado para sincronização exata da barra de rolagem horizontal
+  // Refs para sincronização exata da barra de rolagem horizontal
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const isScrollingRef = useRef<'top' | 'table' | null>(null);
-  const [tableScrollWidth, setTableScrollWidth] = useState<number>(2200);
+  const phantomRef = useRef<HTMLDivElement>(null); // div fantasma dentro da barra superior
 
   // Upload XLSX/CSV e PDF refs
   const spreadsheetInputRef = useRef<HTMLInputElement>(null);
@@ -188,18 +198,43 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [pdfUploading, setPdfUploading] = useState(false);
 
-  // ── Sincronização de scrollWidth e eventos de rolagem ──
+  // ── ResizeObserver: monitora scrollWidth real da tabela em tempo real ──
   useEffect(() => {
-    const updateScrollWidth = () => {
-      if (tableScrollRef.current) {
-        const sw = tableScrollRef.current.scrollWidth;
-        if (sw > 0) setTableScrollWidth(sw);
+    const tableEl = tableScrollRef.current;
+    if (!tableEl) return;
+
+    const syncPhantomWidth = () => {
+      if (phantomRef.current && tableEl) {
+        // scrollWidth = largura total do conteúdo scrollável (inclui overflow)
+        phantomRef.current.style.width = tableEl.scrollWidth + 'px';
       }
     };
-    updateScrollWidth();
-    const t = setTimeout(updateScrollWidth, 200);
+
+    // Dispara imediatamente
+    syncPhantomWidth();
+
+    // ResizeObserver detecta mudanças de tamanho do conteúdo da tabela
+    const ro = new ResizeObserver(() => syncPhantomWidth());
+    // Observa o elemento filho interno da tabela (onde o conteúdo cresce)
+    const tableInner = tableEl.querySelector('table');
+    if (tableInner) ro.observe(tableInner);
+    ro.observe(tableEl);
+
+    return () => ro.disconnect();
+  }, [activeTab]); // reconnecta ao trocar de aba
+
+  // Re-sincroniza quando linhas ou colunas mudam
+  useEffect(() => {
+    const tableEl = tableScrollRef.current;
+    if (!tableEl || !phantomRef.current) return;
+    // Pequeno delay para garantir que o DOM renderizou
+    const t = setTimeout(() => {
+      if (phantomRef.current && tableEl) {
+        phantomRef.current.style.width = tableEl.scrollWidth + 'px';
+      }
+    }, 50);
     return () => clearTimeout(t);
-  }, [rows, customColumns, activeTab]);
+  }, [rows.length, customColumns.length]);
 
   const handleTopScroll = () => {
     if (isScrollingRef.current === 'table') return;
@@ -207,9 +242,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     if (topScrollRef.current && tableScrollRef.current) {
       tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
     }
-    setTimeout(() => {
-      if (isScrollingRef.current === 'top') isScrollingRef.current = null;
-    }, 40);
+    requestAnimationFrame(() => { isScrollingRef.current = null; });
   };
 
   const handleTableScroll = () => {
@@ -218,9 +251,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     if (topScrollRef.current && tableScrollRef.current) {
       topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
     }
-    setTimeout(() => {
-      if (isScrollingRef.current === 'table') isScrollingRef.current = null;
-    }, 40);
+    requestAnimationFrame(() => { isScrollingRef.current = null; });
   };
 
   // ── Formatação Monetária com 2 casas decimais estritas ──
@@ -1118,14 +1149,15 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                   </div>
 
                   {/* ── BARRA DE ROLAGEM HORIZONTAL SUPERIOR SINCRONIZADA EM TEMPO REAL ── */}
+                  {/* O div interno (phantomRef) tem sua largura definida diretamente pelo ResizeObserver */}
                   <div
                     ref={topScrollRef}
                     onScroll={handleTopScroll}
-                    className="w-full overflow-x-auto bg-gray-100/90 border border-gray-200 rounded-xl py-1 px-1 shadow-inner cursor-pointer"
-                    style={{ minHeight: '16px' }}
+                    className="w-full overflow-x-auto bg-gray-100/90 border border-gray-200 rounded-xl shadow-inner cursor-pointer"
+                    style={{ height: '14px' }}
                     title="Barra de rolagem superior sincronizada"
                   >
-                    <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
+                    <div ref={phantomRef} style={{ height: '1px', minWidth: '100%' }} />
                   </div>
 
                   {/* ── TABELA PRINCIPAL COM COLUNAS FIXAS À ESQUERDA ── */}
