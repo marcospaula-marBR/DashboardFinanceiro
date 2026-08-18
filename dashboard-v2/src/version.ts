@@ -1,8 +1,10 @@
-export const APP_VERSION = "v.02.56.15";
-export const VERSION_DATE = "2026-08-12";
+export const APP_VERSION = "v.02.56.16";
+export const VERSION_DATE = "2026-08-18";
 export const VERSION_CHANGELOG = [
+  "v.02.56.16 - Feat/Terceirização: Modernização completa do modal OutsourcingCockpitModal.tsx. Migração para tema light executivo corporativo. Adicionados campos individuais de verbas: VR (Vale Refeição), VT (Vale Transporte), Seguro, FGTS, GPS/Perfil, 13º Salário (manual), Férias (manual) e badge de tipo de vínculo (CLT/PJ/Estágio). Persistência migrada de localStorage para Supabase (tabelas outsourcing_repasses e outsourcing_apuracao_config). Criada migration SQL 20260818_outsourcing_verbas.sql com novos campos em people_monthly_costs. Cards de localidade com barra proporcional e Duplo Check visual. Botão Importar PDF por competência (placeholder Fase 3). Resumo por localidade com detalhamento por grupo de verba (Benefícios, Encargos, Provisões).",
   "v.02.56.15 - Fix/People: Corrigido o filtro de apuração de Terceirização em OutsourcingCockpitModal.tsx para ser 100% estrito ao campo 'Faz parte de Terceirização' (is_outsourced === true). Colaboradores PJ/MEI normais com flag 'Não' (contratação direta) foram removidos da apuração de terceirização.",
   "v.02.56.14 - Feat/People: Implementado o mecanismo de persistência completa da apuração de Terceirização em OutsourcingCockpitModal.tsx. As colunas personalizadas inseridas, linhas manuais, taxas tributárias/administrativas e lançamentos de repasses por banco de origem agora são salvos no banco local por competência, mantendo o histórico intacto ao reabrir.",
+
   "v.02.56.13 - Feat/People: Criado o botão de atalho 'Terceirização' e o modal OutsourcingCockpitModal na página PeopleCockpit, permitindo apurar custos históricos de colaboradores terceirizados por competência, integrar a coluna de Empréstimos (fora da folha), incluir colunas e linhas manuais, aplicar taxas fiscais e administrativas, realizar duplo check por localidade e gerenciar a liquidação dos repasses efetuados por banco de origem.",
   "v.02.56.12 - Security/DRE: Alterada a senha de acesso da página DRE de 'marbrasildre2026' para 'grupo2ltda'.",
   "v.02.56.11 - Fix/Empréstimos: Re-vinculados os empréstimos corporativos (R$ 3.371,94 e R$ 340,00) na tabela employee_loans para o registro ativo de Deuzelina Almeida e Silva (ID 7bea7bd8-f733-4947-863a-43942a890055), corrigindo a sobrescrita histórica de cadastro que atribuía indevidamente os contratos a Bruno Oliveira Carvalho.",

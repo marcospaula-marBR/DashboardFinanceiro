@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  X, Building2, Plus, Trash2, Download, Calculator, Landmark, FileText, 
-  CheckCircle2, AlertCircle, Calendar, DollarSign, Percent, ChevronRight, 
-  Sparkles, RefreshCw, Edit3, Layers, Copy, ShieldCheck, ArrowRight, Save, RotateCcw, Check
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  X, Building2, Plus, Trash2, Download, Calculator, Landmark, FileText,
+  CheckCircle2, AlertCircle, Calendar, DollarSign, Percent, ChevronRight,
+  Sparkles, RefreshCw, Edit3, Layers, Copy, ShieldCheck, ArrowRight, Save,
+  RotateCcw, Check, MapPin, Upload, Tag, Users
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PeopleHRService } from '@/services/people-hr.service';
 import { Employee } from '@/types/loans';
+
+// ─────────────────────────────────────────────
+// TIPOS
+// ─────────────────────────────────────────────
 
 interface OutsourcingCockpitModalProps {
   isOpen: boolean;
@@ -19,18 +24,34 @@ export interface CustomColumn {
   label: string;
 }
 
+export type EmployeeType = 'CLT' | 'PJ' | 'Estagio' | 'Outro';
+
 export interface OutsourcingRow {
   id: string;
   employeeId?: string;
   name: string;
   location: string;
+  employeeType: EmployeeType;
   isManual: boolean;
+  // Verbas principais
   valorFixo: number;
   valorBonus: number;
   valorComissao: number;
-  valorAjudaCusto: number;
+  valorAjudaCusto: number;  // Adiantamento
+  // Benefícios — campos individuais
+  valorVR: number;
+  valorVT: number;
+  valorSeguro: number;
+  // Encargos patronais — campos individuais
+  valorFGTS: number;
+  valorGPS: number;
+  // Provisões manuais
+  valorDecTerceiro: number;
+  valorFerias: number;
+  // Outros / Fora da folha
   valorOutros: number;
-  valorEmprestimo: number; // Fora do custo histórico / folha
+  valorEmprestimo: number;
+  // Colunas dinâmicas
   customValues: Record<string, number>;
 }
 
@@ -42,303 +63,339 @@ export interface RepassLine {
   notes: string;
 }
 
+// ─────────────────────────────────────────────
+// CONSTANTES
+// ─────────────────────────────────────────────
+
 const BANK_OPTIONS = [
-  'Itaú',
-  'Bradesco',
-  'Banco do Brasil',
-  'Santander',
-  'Inter',
-  'BTG Pactual',
-  'Caixa Econômica',
-  'Pix / Caixinha',
-  'Outro Banco'
+  'Itaú', 'Bradesco', 'Banco do Brasil', 'Santander', 'Inter',
+  'BTG Pactual', 'Caixa Econômica', 'Omie.Cash', 'Pix / Caixinha', 'Outro'
 ];
+
+const EMPLOYEE_TYPE_CONFIG: Record<EmployeeType, { label: string; color: string; bg: string; border: string }> = {
+  CLT:     { label: 'CLT',     color: 'text-blue-700',   bg: 'bg-blue-100',   border: 'border-blue-300' },
+  PJ:      { label: 'PJ/MEI',  color: 'text-violet-700', bg: 'bg-violet-100', border: 'border-violet-300' },
+  Estagio: { label: 'Estágio', color: 'text-orange-700', bg: 'bg-orange-100', border: 'border-orange-300' },
+  Outro:   { label: 'Outro',   color: 'text-gray-600',   bg: 'bg-gray-100',   border: 'border-gray-300' },
+};
+
+// Colunas fixas de verbas (para cálculo de subtotal)
+const FIXED_VERBA_FIELDS: (keyof OutsourcingRow)[] = [
+  'valorFixo', 'valorBonus', 'valorComissao', 'valorAjudaCusto',
+  'valorVR', 'valorVT', 'valorSeguro', 'valorFGTS', 'valorGPS',
+  'valorDecTerceiro', 'valorFerias', 'valorOutros', 'valorEmprestimo'
+];
+
+// ─────────────────────────────────────────────
+// COMPONENTE PRINCIPAL
+// ─────────────────────────────────────────────
 
 export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = ({
   isOpen,
   onClose,
   isTestMode = false
 }) => {
-  // ── Competência Selector State (Default: Mês atual YYYY-MM) ──
+  // Competência (YYYY-MM)
   const [competencia, setCompetencia] = useState<string>(() => {
     const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
-  // ── Data states ──
+  // Dados principais
   const [rows, setRows] = useState<OutsourcingRow[]>([]);
   const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
 
-  // ── Dynamic Custom Column Modal/Input ──
+  // Coluna customizada
   const [newColName, setNewColName] = useState('');
   const [isAddingCol, setIsAddingCol] = useState(false);
 
-  // ── Tax & Admin Fee States ──
+  // Taxas e configurações
   const [taxInputMode, setTaxInputMode] = useState<'rate' | 'amount'>('rate');
-  const [taxRate, setTaxRate] = useState<number>(5.0); // Default 5%
+  const [taxRate, setTaxRate] = useState<number>(5.0);
   const [taxFixedAmount, setTaxFixedAmount] = useState<number>(0);
-  const [adminFeeRate, setAdminFeeRate] = useState<number>(10.0); // Default 10%
+  const [adminFeeRate, setAdminFeeRate] = useState<number>(10.0);
 
-  // ── Repasses Efetuados States ──
-  const [repassLines, setRepassLines] = useState<RepassLine[]>([
-    {
-      id: 'rep-1',
-      date: new Date().toISOString().split('T')[0],
-      bank: 'Itaú',
-      amount: 0,
-      notes: 'Adiantamento inicial'
-    }
-  ]);
+  // Repasses
+  const [repassLines, setRepassLines] = useState<RepassLine[]>([]);
 
-  // ── Persistence & Status States ──
+  // Timestamp do último save
   const [savedTimestamp, setSavedTimestamp] = useState<string | null>(null);
-  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
-  // ── Active tab view (Mobile & Executive view) ──
+  // Aba ativa
   const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement'>('main');
 
-  // Format currency helper
-  const formatMoney = (val: number) => {
-    return (val || 0).toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    });
-  };
+  // Upload PDF ref (Fase 3 — placeholder funcional)
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [pdfUploading, setPdfUploading] = useState(false);
 
-  // ── Fetch & load data when modal opens or competence changes ──
+  // ── Formatação ──────────────────────────────
+  const fmt = (v: number) =>
+    (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // ── Carregar dados ao abrir ──────────────────
   useEffect(() => {
-    if (isOpen) {
-      loadDataForCompetencia(competencia);
-    }
+    if (isOpen) loadData(competencia);
   }, [isOpen, competencia, isTestMode]);
 
-  const loadDataForCompetencia = async (comp: string) => {
+  const loadData = async (comp: string) => {
     setLoading(true);
     setError(null);
     try {
-      // 1. Fetch employees
+      // 1. Colaboradores terceirizados
       const allEmps = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true, isTestMode });
-      
-      // Filter strictly outsourced employees (Faz parte de Terceirização = 'Sim' / is_outsourced === true)
-      const outsourcedEmps = allEmps.filter(e => {
-        const isOut = e.is_outsourced === true || 
-                      (e as any).is_outsourced === 'true' || 
-                      e.metadata?.is_outsourced === true || 
-                      e.metadata?.is_outsourced === 'true';
-        return Boolean(isOut);
-      });
+      const outsourced = allEmps.filter(e =>
+        e.is_outsourced === true ||
+        (e as any).is_outsourced === 'true' ||
+        e.metadata?.is_outsourced === true
+      );
 
-      // 2. Fetch monthly costs for selected competence
+      // 2. Custos mensais da competência
       const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
-      const { data: costsData, error: costsErr } = await supabase
+      const { data: costsData } = await supabase
         .from(costsTable)
         .select('*')
         .eq('competencia', comp);
 
-      if (costsErr && costsErr.code !== '42P01') {
-        console.warn('Aviso ao buscar custos mensais:', costsErr);
-      }
-
       const costsMap = new Map<string, any>();
-      (costsData || []).forEach(row => {
-        costsMap.set(row.employee_id, row);
-      });
+      (costsData || []).forEach(r => costsMap.set(r.employee_id, r));
 
-      // 3. Fetch loan payments for selected competence (outside cost history)
+      // 3. Parcelas de empréstimo
       const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
-      const { data: loanPayments, error: loanErr } = await supabase
+      const { data: loanPayments } = await supabase
         .from(paymentsTable)
         .select('*')
         .eq('month_cycle', comp);
 
-      if (loanErr && loanErr.code !== '42P01') {
-        console.warn('Aviso ao buscar parcelas de empréstimo:', loanErr);
-      }
-
       const loansMap = new Map<string, number>();
       (loanPayments || []).forEach((lp: any) => {
-        const current = loansMap.get(lp.employee_id) || 0;
-        loansMap.set(lp.employee_id, current + (parseFloat(String(lp.amount)) || 0));
+        const cur = loansMap.get(lp.employee_id) || 0;
+        loansMap.set(lp.employee_id, cur + (parseFloat(String(lp.amount)) || 0));
       });
 
-      // Combine into table rows
-      const generatedRows: OutsourcingRow[] = outsourcedEmps.map(emp => {
-        const costRow = costsMap.get(emp.id);
-        const loanVal = loansMap.get(emp.id) || 0;
+      // 4. Repasses salvos no Supabase
+      const repTable = 'outsourcing_repasses';
+      const { data: repData } = await supabase
+        .from(repTable)
+        .select('*')
+        .eq('competencia', comp)
+        .eq('is_test', isTestMode)
+        .order('date', { ascending: true });
 
-        const valorFixo = costRow?.valor_fixo !== undefined && costRow?.valor_fixo !== null
-          ? parseFloat(String(costRow.valor_fixo))
-          : (costRow?.valor_liquido !== undefined 
-              ? parseFloat(String(costRow.valor_liquido)) 
-              : (emp.remuneration_fixed || emp.remuneration || 0));
+      if (repData && repData.length > 0) {
+        setRepassLines(repData.map(r => ({
+          id: r.id,
+          date: r.date,
+          bank: r.bank,
+          amount: parseFloat(String(r.amount)) || 0,
+          notes: r.notes || ''
+        })));
+      } else {
+        setRepassLines([{
+          id: `rep-${Date.now()}`,
+          date: new Date().toISOString().split('T')[0],
+          bank: 'Omie.Cash',
+          amount: 0,
+          notes: ''
+        }]);
+      }
 
-        const valorBonus = costRow?.valor_bonus ? parseFloat(String(costRow.valor_bonus)) : (emp.remuneration_bonus || 0);
-        const valorComissao = costRow?.valor_comissao ? parseFloat(String(costRow.valor_comissao)) : (emp.remuneration_commission || 0);
-        const valorAjudaCusto = costRow?.valor_ajuda_custo ? parseFloat(String(costRow.valor_ajuda_custo)) : (emp.remuneration_connectivity || 0);
-        const valorOutros = costRow?.valor_incentivos ? parseFloat(String(costRow.valor_incentivos)) : (emp.remuneration_incentives || 0);
+      // 5. Configuração de taxas da competência
+      const { data: cfgData } = await supabase
+        .from('outsourcing_apuracao_config')
+        .select('*')
+        .eq('competencia', comp)
+        .eq('is_test', isTestMode)
+        .maybeSingle();
 
-        const location = emp.service_location || emp.city || emp.neighborhood || emp.department || 'Matriz Executiva';
+      if (cfgData) {
+        setTaxInputMode(cfgData.tax_input_mode || 'rate');
+        setTaxRate(parseFloat(String(cfgData.tax_rate)) || 5.0);
+        setTaxFixedAmount(parseFloat(String(cfgData.tax_fixed)) || 0);
+        setAdminFeeRate(parseFloat(String(cfgData.admin_fee_rate)) || 10.0);
+      } else {
+        setTaxInputMode('rate');
+        setTaxRate(5.0);
+        setTaxFixedAmount(0);
+        setAdminFeeRate(10.0);
+      }
+
+      // 6. Montar linhas da tabela principal
+      const generatedRows: OutsourcingRow[] = outsourced.map(emp => {
+        const c = costsMap.get(emp.id);
+        const va = c?.verbas_adicionais || {};
+
+        // Inferir tipo de vínculo
+        const rawType = c?.employee_type || (emp as any).employment_type || emp.metadata?.tipo_vinculo || 'CLT';
+        const empType: EmployeeType =
+          rawType === 'PJ' || rawType === 'MEI' || rawType === 'PJ-MEI' || rawType === 'PJ-Simples' ? 'PJ' :
+          rawType === 'Estagio' || rawType === 'Estágio' || rawType === 'estagio' ? 'Estagio' :
+          rawType === 'CLT' ? 'CLT' : 'Outro';
 
         return {
           id: emp.id,
           employeeId: emp.id,
           name: emp.name,
-          location,
+          location: emp.service_location || emp.city || emp.neighborhood || emp.department || 'Matriz',
+          employeeType: empType,
           isManual: false,
-          valorFixo,
-          valorBonus,
-          valorComissao,
-          valorAjudaCusto,
-          valorOutros,
-          valorEmprestimo: loanVal,
+          valorFixo: parseFloat(String(c?.valor_fixo ?? emp.remuneration_fixed ?? emp.remuneration ?? 0)),
+          valorBonus: parseFloat(String(c?.valor_bonus ?? emp.remuneration_bonus ?? 0)),
+          valorComissao: parseFloat(String(c?.valor_comissao ?? emp.remuneration_commission ?? 0)),
+          valorAjudaCusto: parseFloat(String(c?.valor_ajuda_custo ?? 0)),
+          valorVR: parseFloat(String(c?.valor_vr ?? va?.valor_vr ?? 0)),
+          valorVT: parseFloat(String(c?.valor_vt ?? va?.valor_vt ?? 0)),
+          valorSeguro: parseFloat(String(c?.valor_seguro ?? va?.valor_seguro ?? 0)),
+          valorFGTS: parseFloat(String(c?.valor_fgts ?? va?.valor_fgts ?? 0)),
+          valorGPS: parseFloat(String(c?.valor_gps ?? va?.valor_gps ?? 0)),
+          valorDecTerceiro: parseFloat(String(c?.valor_dec_terceiro ?? va?.valor_dec_terceiro ?? 0)),
+          valorFerias: parseFloat(String(c?.valor_ferias ?? va?.valor_ferias ?? 0)),
+          valorOutros: parseFloat(String(c?.valor_incentivos ?? 0)),
+          valorEmprestimo: loansMap.get(emp.id) || 0,
           customValues: {}
         };
       });
 
-      // 4. Check for saved settlement state for this competence in local persistence
-      const storageKey = `outsourcing_settlement_${comp}${isTestMode ? '_test' : ''}`;
-      const savedRaw = localStorage.getItem(storageKey);
-      
-      if (savedRaw) {
-        try {
-          const saved = JSON.parse(savedRaw);
-          if (saved.customColumns && Array.isArray(saved.customColumns)) {
-            setCustomColumns(saved.customColumns);
-          }
-          if (saved.taxInputMode) setTaxInputMode(saved.taxInputMode);
-          if (saved.taxRate !== undefined) setTaxRate(saved.taxRate);
-          if (saved.taxFixedAmount !== undefined) setTaxFixedAmount(saved.taxFixedAmount);
-          if (saved.adminFeeRate !== undefined) setAdminFeeRate(saved.adminFeeRate);
-          if (saved.repassLines && Array.isArray(saved.repassLines)) setRepassLines(saved.repassLines);
-          
-          if (saved.rows && Array.isArray(saved.rows) && saved.rows.length > 0) {
-            // Filtrar linhas salvas para manter apenas as manuais ou colaboradores que continuam com is_outsourced === true
-            const validEmpIds = new Set(outsourcedEmps.map(e => e.id));
-            const filteredSavedRows = saved.rows.filter((r: OutsourcingRow) => r.isManual || (r.employeeId && validEmpIds.has(r.employeeId)));
-            setRows(filteredSavedRows.length > 0 ? filteredSavedRows : generatedRows);
-          } else {
-            setRows(generatedRows);
-          }
-          setSavedTimestamp(saved.savedAt || null);
-        } catch (e) {
-          console.warn('Erro ao restaurar apuração salva:', e);
-          setRows(generatedRows);
-          setSavedTimestamp(null);
-        }
+      // Colunas customizadas do localStorage (ainda preservamos para compatibilidade)
+      const storageKey = `outsourcing_cols_${comp}${isTestMode ? '_test' : ''}`;
+      const savedCols = localStorage.getItem(storageKey);
+      if (savedCols) {
+        try { setCustomColumns(JSON.parse(savedCols)); } catch {}
       } else {
-        setRows(generatedRows);
         setCustomColumns([]);
-        setTaxInputMode('rate');
-        setTaxRate(5.0);
-        setTaxFixedAmount(0);
-        setAdminFeeRate(10.0);
-        setRepassLines([
-          {
-            id: 'rep-1',
-            date: new Date().toISOString().split('T')[0],
-            bank: 'Itaú',
-            amount: 0,
-            notes: 'Adiantamento inicial'
-          }
-        ]);
-        setSavedTimestamp(null);
       }
+
+      setSavedTimestamp(cfgData?.saved_at || null);
+      setRows(generatedRows);
     } catch (err: any) {
-      console.error('Erro ao carregar dados de terceirização:', err);
-      setError(err?.message || 'Falha ao carregar dados da competência.');
+      console.error('Erro ao carregar terceirização:', err);
+      setError(err?.message || 'Erro ao carregar dados da competência.');
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Save & Reset Handlers ──
-  const handleSaveSettlement = () => {
-    const storageKey = `outsourcing_settlement_${competencia}${isTestMode ? '_test' : ''}`;
-    const payload = {
-      competencia,
-      customColumns,
-      rows,
-      taxInputMode,
-      taxRate,
-      taxFixedAmount,
-      adminFeeRate,
-      repassLines,
-      savedAt: new Date().toISOString()
-    };
-    localStorage.setItem(storageKey, JSON.stringify(payload));
-    setSavedTimestamp(payload.savedAt);
-    setSaveSuccessMessage(`Apuração da competência ${competencia} salva com sucesso!`);
-    setTimeout(() => setSaveSuccessMessage(null), 4000);
-  };
+  // ── Salvar no Supabase ────────────────────────
+  const handleSaveSettlement = async () => {
+    setSaving(true);
+    try {
+      // 1. Salvar configuração de taxas
+      await supabase.from('outsourcing_apuracao_config').upsert({
+        competencia,
+        tax_input_mode: taxInputMode,
+        tax_rate: taxRate,
+        tax_fixed: taxFixedAmount,
+        admin_fee_rate: adminFeeRate,
+        is_test: isTestMode,
+        saved_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'competencia' });
 
-  const handleResetSettlement = () => {
-    if (confirm(`Deseja restaurar a competência ${competencia} para o estado original do banco de dados? Isso removerá ajustes manuais salvos.`)) {
-      const storageKey = `outsourcing_settlement_${competencia}${isTestMode ? '_test' : ''}`;
-      localStorage.removeItem(storageKey);
-      loadDataForCompetencia(competencia);
+      // 2. Salvar repasses — delete + insert para simplificar
+      const repTable = 'outsourcing_repasses';
+      await supabase
+        .from(repTable)
+        .delete()
+        .eq('competencia', competencia)
+        .eq('is_test', isTestMode);
+
+      const repRows = repassLines
+        .filter(l => l.amount > 0 || l.notes)
+        .map(l => ({
+          id: l.id.startsWith('rep-') ? undefined : l.id,
+          competencia,
+          date: l.date,
+          bank: l.bank,
+          amount: l.amount,
+          notes: l.notes,
+          is_test: isTestMode
+        }));
+
+      if (repRows.length > 0) {
+        await supabase.from(repTable).insert(repRows);
+      }
+
+      // 3. Salvar verbas individuais de cada colaborador (update na people_monthly_costs)
+      const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
+      for (const row of rows.filter(r => !r.isManual && r.employeeId)) {
+        await supabase
+          .from(costsTable)
+          .upsert({
+            employee_id: row.employeeId,
+            competencia,
+            valor_fixo: row.valorFixo,
+            valor_bonus: row.valorBonus,
+            valor_comissao: row.valorComissao,
+            valor_ajuda_custo: row.valorAjudaCusto,
+            valor_vr: row.valorVR,
+            valor_vt: row.valorVT,
+            valor_seguro: row.valorSeguro,
+            valor_fgts: row.valorFGTS,
+            valor_gps: row.valorGPS,
+            valor_dec_terceiro: row.valorDecTerceiro,
+            valor_ferias: row.valorFerias,
+            valor_incentivos: row.valorOutros,
+            employee_type: row.employeeType,
+            vinculo_tipo: row.employeeType === 'PJ' ? 'PJ-MEI' : row.employeeType === 'Estagio' ? 'Estagio' : 'CLT',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'employee_id,competencia' });
+      }
+
+      // 4. Salvar colunas customizadas no localStorage
+      const storageKey = `outsourcing_cols_${competencia}${isTestMode ? '_test' : ''}`;
+      localStorage.setItem(storageKey, JSON.stringify(customColumns));
+
+      const ts = new Date().toISOString();
+      setSavedTimestamp(ts);
+      setSaveSuccessMessage(`Apuração de ${competencia} salva com sucesso no banco de dados!`);
+      setTimeout(() => setSaveSuccessMessage(null), 5000);
+    } catch (err: any) {
+      console.error('Erro ao salvar:', err);
+      setError(`Erro ao salvar: ${err?.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ── Row Management Helpers ──
+  const handleResetSettlement = async () => {
+    if (!confirm(`Recarregar competência ${competencia} do banco de dados? Alterações não salvas serão perdidas.`)) return;
+    await loadData(competencia);
+  };
+
+  // ── Gerenciamento de linhas ──────────────────
   const handleAddManualRow = () => {
-    const newRow: OutsourcingRow = {
+    setRows(prev => [...prev, {
       id: `manual-${Date.now()}`,
       name: 'Novo Terceirizado (Manual)',
       location: 'Matriz',
+      employeeType: 'CLT',
       isManual: true,
-      valorFixo: 0,
-      valorBonus: 0,
-      valorComissao: 0,
-      valorAjudaCusto: 0,
-      valorOutros: 0,
-      valorEmprestimo: 0,
+      valorFixo: 0, valorBonus: 0, valorComissao: 0, valorAjudaCusto: 0,
+      valorVR: 0, valorVT: 0, valorSeguro: 0, valorFGTS: 0, valorGPS: 0,
+      valorDecTerceiro: 0, valorFerias: 0, valorOutros: 0, valorEmprestimo: 0,
       customValues: {}
-    };
-    setRows(prev => [...prev, newRow]);
+    }]);
   };
 
-  const handleRemoveRow = (id: string) => {
+  const handleRemoveRow = (id: string) =>
     setRows(prev => prev.filter(r => r.id !== id));
-  };
 
-  const handleRowChange = (id: string, field: keyof OutsourcingRow, value: any) => {
-    setRows(prev => prev.map(r => {
-      if (r.id === id) {
-        return { ...r, [field]: value };
-      }
-      return r;
-    }));
-  };
+  const handleRowChange = (id: string, field: keyof OutsourcingRow, value: any) =>
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
 
-  const handleCustomValueChange = (rowId: string, colId: string, val: number) => {
-    setRows(prev => prev.map(r => {
-      if (r.id === rowId) {
-        return {
-          ...r,
-          customValues: {
-            ...r.customValues,
-            [colId]: val
-          }
-        };
-      }
-      return r;
-    }));
-  };
+  const handleCustomValueChange = (rowId: string, colId: string, val: number) =>
+    setRows(prev => prev.map(r =>
+      r.id === rowId ? { ...r, customValues: { ...r.customValues, [colId]: val } } : r
+    ));
 
-  // ── Custom Column Helpers ──
+  // ── Colunas customizadas ─────────────────────
   const handleAddCustomColumn = () => {
     if (!newColName.trim()) return;
-    const colId = `custom_${Date.now()}`;
-    const newCol: CustomColumn = {
-      id: colId,
-      label: newColName.trim()
-    };
-    setCustomColumns(prev => [...prev, newCol]);
+    setCustomColumns(prev => [...prev, { id: `custom_${Date.now()}`, label: newColName.trim() }]);
     setNewColName('');
     setIsAddingCol(false);
   };
@@ -352,672 +409,604 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     }));
   };
 
-  // ── Repasses Line Helpers ──
-  const handleAddRepassLine = () => {
-    const newLine: RepassLine = {
+  // ── Repasses ────────────────────────────────
+  const handleAddRepassLine = () =>
+    setRepassLines(prev => [...prev, {
       id: `rep-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
-      bank: 'Itaú',
+      bank: 'Omie.Cash',
       amount: 0,
       notes: ''
-    };
-    setRepassLines(prev => [...prev, newLine]);
-  };
+    }]);
 
-  const handleRemoveRepassLine = (id: string) => {
+  const handleRemoveRepassLine = (id: string) =>
     setRepassLines(prev => prev.filter(l => l.id !== id));
+
+  const handleRepassLineChange = (id: string, field: keyof RepassLine, value: any) =>
+    setRepassLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+
+  // ── Upload PDF (placeholder Fase 3) ─────────
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPdfUploading(true);
+    try {
+      // TODO Fase 3: integrar com /api/people/parse-payroll-batch
+      // Por ora exibe aviso informativo
+      alert(`Arquivo "${file.name}" recebido. A leitura automática de PDF de terceirização será integrada na Fase 3. Por enquanto, preencha os valores manualmente.`);
+    } finally {
+      setPdfUploading(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
+    }
   };
 
-  const handleRepassLineChange = (id: string, field: keyof RepassLine, value: any) => {
-    setRepassLines(prev => prev.map(l => {
-      if (l.id === id) {
-        return { ...l, [field]: value };
-      }
-      return l;
-    }));
-  };
-
-  // ── Calculated Financial Totals ──
-  const rowTotals = useMemo(() => {
-    return rows.map(r => {
-      const customSum = Object.values(r.customValues || {}).reduce((acc, v) => acc + (v || 0), 0);
-      const rowSum = (r.valorFixo || 0) + 
-                     (r.valorBonus || 0) + 
-                     (r.valorComissao || 0) + 
-                     (r.valorAjudaCusto || 0) + 
-                     (r.valorOutros || 0) + 
-                     (r.valorEmprestimo || 0) + 
-                     customSum;
-      return { id: r.id, total: rowSum };
-    });
-  }, [rows]);
-
+  // ── Cálculos financeiros ─────────────────────
   const rowTotalMap = useMemo(() => {
     const map = new Map<string, number>();
-    rowTotals.forEach(rt => map.set(rt.id, rt.total));
-    return map;
-  }, [rowTotals]);
-
-  const subtotal = useMemo(() => {
-    return rowTotals.reduce((acc, rt) => acc + rt.total, 0);
-  }, [rowTotals]);
-
-  // Tax calculation
-  const calculatedTax = useMemo(() => {
-    if (taxInputMode === 'rate') {
-      return subtotal * (taxRate / 100);
-    }
-    return taxFixedAmount || 0;
-  }, [subtotal, taxInputMode, taxRate, taxFixedAmount]);
-
-  // Admin fee calculation
-  const calculatedAdminFee = useMemo(() => {
-    return subtotal * (adminFeeRate / 100);
-  }, [subtotal, adminFeeRate]);
-
-  // Gross total apurado
-  const totalApuradoBruto = useMemo(() => {
-    return subtotal + calculatedTax + calculatedAdminFee;
-  }, [subtotal, calculatedTax, calculatedAdminFee]);
-
-  // Total repassado
-  const totalRepassado = useMemo(() => {
-    return repassLines.reduce((acc, l) => acc + (l.amount || 0), 0);
-  }, [repassLines]);
-
-  // Saldo devedor / remanescente
-  const saldoRemanescente = useMemo(() => {
-    return totalApuradoBruto - totalRepassado;
-  }, [totalApuradoBruto, totalRepassado]);
-
-  // ── Location Summary Aggregation (Resumo por Localidade - Duplo Check) ──
-  const locationSummary = useMemo(() => {
-    const summaryMap = new Map<string, {
-      location: string;
-      count: number;
-      valorFixo: number;
-      valorBonus: number;
-      valorComissao: number;
-      valorAjudaCusto: number;
-      valorOutros: number;
-      valorEmprestimo: number;
-      customSums: Record<string, number>;
-      totalGasto: number;
-    }>();
-
     rows.forEach(r => {
-      const loc = r.location || 'Não Especificado';
-      const existing = summaryMap.get(loc) || {
-        location: loc,
-        count: 0,
-        valorFixo: 0,
-        valorBonus: 0,
-        valorComissao: 0,
-        valorAjudaCusto: 0,
-        valorOutros: 0,
-        valorEmprestimo: 0,
-        customSums: {},
-        totalGasto: 0
-      };
+      const customSum = Object.values(r.customValues || {}).reduce((a, v) => a + (v || 0), 0);
+      const total = FIXED_VERBA_FIELDS.reduce((a, f) => a + ((r[f] as number) || 0), 0) + customSum;
+      map.set(r.id, total);
+    });
+    return map;
+  }, [rows]);
 
-      existing.count += 1;
-      existing.valorFixo += (r.valorFixo || 0);
-      existing.valorBonus += (r.valorBonus || 0);
-      existing.valorComissao += (r.valorComissao || 0);
-      existing.valorAjudaCusto += (r.valorAjudaCusto || 0);
-      existing.valorOutros += (r.valorOutros || 0);
-      existing.valorEmprestimo += (r.valorEmprestimo || 0);
+  const subtotal = useMemo(() =>
+    Array.from(rowTotalMap.values()).reduce((a, v) => a + v, 0),
+    [rowTotalMap]
+  );
 
-      customColumns.forEach(col => {
-        const val = r.customValues?.[col.id] || 0;
-        existing.customSums[col.id] = (existing.customSums[col.id] || 0) + val;
+  const calculatedTax = useMemo(() =>
+    taxInputMode === 'rate' ? subtotal * (taxRate / 100) : (taxFixedAmount || 0),
+    [subtotal, taxInputMode, taxRate, taxFixedAmount]
+  );
+
+  const calculatedAdminFee = useMemo(() =>
+    subtotal * (adminFeeRate / 100),
+    [subtotal, adminFeeRate]
+  );
+
+  const totalApuradoBruto = useMemo(() =>
+    subtotal + calculatedTax + calculatedAdminFee,
+    [subtotal, calculatedTax, calculatedAdminFee]
+  );
+
+  const totalRepassado = useMemo(() =>
+    repassLines.reduce((a, l) => a + (l.amount || 0), 0),
+    [repassLines]
+  );
+
+  const saldoRemanescente = useMemo(() =>
+    totalApuradoBruto - totalRepassado,
+    [totalApuradoBruto, totalRepassado]
+  );
+
+  // Totais por coluna
+  const colTotals = useMemo(() => ({
+    valorFixo: rows.reduce((a, r) => a + r.valorFixo, 0),
+    valorBonus: rows.reduce((a, r) => a + r.valorBonus, 0),
+    valorComissao: rows.reduce((a, r) => a + r.valorComissao, 0),
+    valorAjudaCusto: rows.reduce((a, r) => a + r.valorAjudaCusto, 0),
+    valorVR: rows.reduce((a, r) => a + r.valorVR, 0),
+    valorVT: rows.reduce((a, r) => a + r.valorVT, 0),
+    valorSeguro: rows.reduce((a, r) => a + r.valorSeguro, 0),
+    valorFGTS: rows.reduce((a, r) => a + r.valorFGTS, 0),
+    valorGPS: rows.reduce((a, r) => a + r.valorGPS, 0),
+    valorDecTerceiro: rows.reduce((a, r) => a + r.valorDecTerceiro, 0),
+    valorFerias: rows.reduce((a, r) => a + r.valorFerias, 0),
+    valorOutros: rows.reduce((a, r) => a + r.valorOutros, 0),
+    valorEmprestimo: rows.reduce((a, r) => a + r.valorEmprestimo, 0),
+    custom: Object.fromEntries(
+      customColumns.map(col => [col.id, rows.reduce((a, r) => a + (r.customValues?.[col.id] || 0), 0)])
+    )
+  }), [rows, customColumns]);
+
+  // Resumo por localidade
+  const locationSummary = useMemo(() => {
+    const map = new Map<string, any>();
+    rows.forEach(r => {
+      const loc = r.location || 'Não especificado';
+      const ex = map.get(loc) || { location: loc, count: 0, total: 0, verbas: {} };
+      ex.count++;
+      ex.total += rowTotalMap.get(r.id) || 0;
+      FIXED_VERBA_FIELDS.forEach(f => {
+        ex.verbas[f] = (ex.verbas[f] || 0) + ((r[f] as number) || 0);
       });
-
-      const rowTotal = rowTotalMap.get(r.id) || 0;
-      existing.totalGasto += rowTotal;
-
-      summaryMap.set(loc, existing);
+      map.set(loc, ex);
     });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [rows, rowTotalMap]);
 
-    return Array.from(summaryMap.values());
-  }, [rows, customColumns, rowTotalMap]);
-
-  // ── Column Totals for Main Table ──
-  const mainTableColumnTotals = useMemo(() => {
-    const totalFixo = rows.reduce((acc, r) => acc + (r.valorFixo || 0), 0);
-    const totalBonus = rows.reduce((acc, r) => acc + (r.valorBonus || 0), 0);
-    const totalComissao = rows.reduce((acc, r) => acc + (r.valorComissao || 0), 0);
-    const totalAjudaCusto = rows.reduce((acc, r) => acc + (r.valorAjudaCusto || 0), 0);
-    const totalOutros = rows.reduce((acc, r) => acc + (r.valorOutros || 0), 0);
-    const totalEmprestimo = rows.reduce((acc, r) => acc + (r.valorEmprestimo || 0), 0);
-    
-    const customTotals: Record<string, number> = {};
-    customColumns.forEach(col => {
-      customTotals[col.id] = rows.reduce((acc, r) => acc + (r.customValues?.[col.id] || 0), 0);
-    });
-
-    return {
-      totalFixo,
-      totalBonus,
-      totalComissao,
-      totalAjudaCusto,
-      totalOutros,
-      totalEmprestimo,
-      customTotals,
-      grandTotal: subtotal
-    };
-  }, [rows, customColumns, subtotal]);
-
-  // ── Copy Summary Report to Clipboard ──
+  // ── Copiar relatório ─────────────────────────
   const handleCopyReport = () => {
-    let reportText = `=== APURAÇÃO EXECUTIVA DE TERCEIRIZAÇÃO - COMPETÊNCIA ${competencia} ===\n\n`;
-    reportText += `Colaboradores Processados: ${rows.length}\n`;
-    reportText += `Subtotal de Custos & Empréstimos: ${formatMoney(subtotal)}\n`;
-    reportText += `Impostos da Competência (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'}): ${formatMoney(calculatedTax)}\n`;
-    reportText += `Taxa Administrativa (${adminFeeRate}%): ${formatMoney(calculatedAdminFee)}\n`;
-    reportText += `TOTAL APURADO BRUTO: ${formatMoney(totalApuradoBruto)}\n`;
-    reportText += `--------------------------------------------------\n`;
-    reportText += `TOTAL REPASSADO: ${formatMoney(totalRepassado)}\n`;
-    reportText += `SALDO REMANESCENTE: ${formatMoney(saldoRemanescente)}\n\n`;
-    
-    reportText += `=== RESUMO POR LOCALIDADE (DUPLO CHECK) ===\n`;
+    let txt = `=== APURAÇÃO DE TERCEIRIZAÇÃO — ${competencia} ===\n\n`;
+    txt += `Colaboradores: ${rows.length}\n`;
+    txt += `Subtotal de Verbas: ${fmt(subtotal)}\n`;
+    txt += `ISS/Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'}): ${fmt(calculatedTax)}\n`;
+    txt += `Taxa Administrativa (${adminFeeRate}%): ${fmt(calculatedAdminFee)}\n`;
+    txt += `TOTAL APURADO BRUTO: ${fmt(totalApuradoBruto)}\n`;
+    txt += `--------------------------------------------\n`;
+    txt += `TOTAL REPASSADO: ${fmt(totalRepassado)}\n`;
+    txt += `SALDO REMANESCENTE: ${fmt(saldoRemanescente)}\n\n`;
+    txt += `=== RESUMO POR LOCALIDADE ===\n`;
     locationSummary.forEach(ls => {
-      reportText += `- ${ls.location}: ${ls.count} colab(s) | Total: ${formatMoney(ls.totalGasto)}\n`;
+      txt += `- ${ls.location}: ${ls.count} colab(s) | ${fmt(ls.total)}\n`;
     });
-
-    navigator.clipboard.writeText(reportText);
-    alert('Resumo executivo copiado para a área de transferência!');
+    navigator.clipboard.writeText(txt);
+    setSaveSuccessMessage('Resumo executivo copiado para a área de transferência!');
+    setTimeout(() => setSaveSuccessMessage(null), 3000);
   };
+
+  // ── Helpers visuais ───────────────────────────
+  const TypeBadge = ({ type }: { type: EmployeeType }) => {
+    const cfg = EMPLOYEE_TYPE_CONFIG[type] || EMPLOYEE_TYPE_CONFIG.Outro;
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
+        {cfg.label}
+      </span>
+    );
+  };
+
+  const NumInput = ({
+    value, onChange, width = 'w-20'
+  }: { value: number; onChange: (v: number) => void; width?: string }) => (
+    <input
+      type="number"
+      step="1"
+      value={value}
+      onChange={e => onChange(parseFloat(e.target.value) || 0)}
+      className={`${width} text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all`}
+    />
+  );
 
   if (!isOpen) return null;
 
+  // ═══════════════════════════════════════════════
+  // RENDER PRINCIPAL
+  // ═══════════════════════════════════════════════
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl w-full max-w-[1400px] h-[92vh] flex flex-col overflow-hidden text-slate-100">
-        
-        {/* ── HEADER SUPERIOR ── */}
-        <header className="p-4 sm:p-6 bg-slate-950 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+      {/* Modal — tema light */}
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-[1440px] h-[92vh] flex flex-col overflow-hidden text-gray-800 border border-gray-100">
+
+        {/* ══ HEADER ══════════════════════════════════════════════ */}
+        <header className="px-5 sm:px-7 py-4 bg-white border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-inner">
-              <Building2 size={22} />
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center shadow-sm">
+              <Building2 size={20} className="text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-white uppercase">Gestão & Apuração de Terceirização</h2>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <h2 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">Gestão de Terceirização</h2>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-200">
                   PeopleCockpit
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">
-                Custos históricos, empréstimos por competência, duplo check por localidade e fluxo de repasses.
+              <p className="text-xs text-gray-400 mt-0.5">
+                Verbas por competência · Duplo check por localidade · Repasses e encargos
               </p>
             </div>
           </div>
 
-          {/* Direct Controls: Competence Selector & Actions */}
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700/80 px-3 py-1.5 rounded-xl shadow-sm">
-              <Calendar size={15} className="text-purple-400 shrink-0" />
-              <label className="text-[10px] font-black uppercase text-slate-400 shrink-0">Competência:</label>
+          {/* Controles do header */}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* Seletor de competência */}
+            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl">
+              <Calendar size={13} className="text-blue-500 shrink-0" />
+              <label className="text-[10px] font-bold text-gray-400 uppercase shrink-0">Competência:</label>
               <input
                 type="month"
                 value={competencia}
                 onChange={e => setCompetencia(e.target.value)}
-                className="bg-transparent text-xs font-bold text-white outline-none focus:text-purple-300"
+                className="bg-transparent text-xs font-bold text-gray-700 outline-none"
               />
             </div>
 
+            {/* Recarregar */}
             <button
-              onClick={() => loadDataForCompetencia(competencia)}
+              onClick={() => loadData(competencia)}
               disabled={loading}
-              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-xl transition-all active:scale-95 shadow-sm"
-              title="Recarregar dados da competência"
+              title="Recarregar dados"
+              className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-800 transition-all active:scale-95"
             >
-              <RefreshCw size={15} className={loading ? 'animate-spin text-purple-400' : ''} />
+              <RefreshCw size={14} className={loading ? 'animate-spin text-blue-500' : ''} />
             </button>
 
+            {/* Upload PDF */}
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={handlePdfUpload}
+            />
             <button
-              onClick={handleSaveSettlement}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all active:scale-95 uppercase shadow-md"
-              title="Salvar alterações e colunas desta competência no banco local"
+              onClick={() => pdfInputRef.current?.click()}
+              disabled={pdfUploading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold transition-all active:scale-95"
+              title="Importar Folha PDF por competência"
             >
-              <Save size={14} /> <span>Salvar Apuração</span>
+              <Upload size={13} /> <span className="hidden sm:inline">Importar PDF</span>
             </button>
 
-            <button
-              onClick={handleResetSettlement}
-              className="p-2 bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-xl transition-all active:scale-95"
-              title="Resetar competência para os valores padrão do banco"
-            >
-              <RotateCcw size={15} />
-            </button>
-
+            {/* Copiar resumo */}
             <button
               onClick={handleCopyReport}
-              className="flex items-center gap-1.5 px-3 py-2 bg-purple-600/20 border border-purple-500/40 hover:bg-purple-600/30 text-purple-300 rounded-xl text-xs font-bold transition-all active:scale-95 uppercase"
-              title="Copiar relatório consolidado em texto"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold transition-all active:scale-95"
             >
-              <Copy size={14} /> <span className="hidden sm:inline">Copiar Resumo</span>
+              <Copy size={13} /> <span className="hidden sm:inline">Copiar Resumo</span>
             </button>
 
+            {/* Reset */}
+            <button
+              onClick={handleResetSettlement}
+              className="p-2 bg-gray-50 hover:bg-red-50 border border-gray-200 hover:border-red-200 text-gray-400 hover:text-red-500 rounded-xl transition-all active:scale-95"
+              title="Recarregar do banco (perde edições não salvas)"
+            >
+              <RotateCcw size={14} />
+            </button>
+
+            {/* Salvar */}
+            <button
+              onClick={handleSaveSettlement}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase transition-all active:scale-95 shadow-sm disabled:opacity-60"
+            >
+              <Save size={14} />
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+
+            {/* Fechar */}
             <button
               onClick={onClose}
-              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-all active:scale-95"
+              className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-400 hover:text-gray-800 rounded-xl transition-all active:scale-95"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
         </header>
 
-        {/* ── BARRA SUPERIOR DE TAXAS & ALÍQUOTAS DE APURAÇÃO ── */}
-        <div className="bg-slate-900/90 border-b border-slate-800/80 p-3 px-4 sm:px-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
-          
-          {/* Taxa de Impostos */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-2.5 px-3.5 flex items-center justify-between">
+        {/* ══ KPI CARDS ═══════════════════════════════════════════ */}
+        <div className="px-5 sm:px-7 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
+          {/* Subtotal Verbas */}
+          <div className="bg-white border border-blue-100 rounded-2xl px-4 py-3 flex items-center justify-between shadow-sm">
             <div>
-              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Taxa de Impostos</span>
-              <div className="flex items-center gap-2 mt-1">
-                <button
-                  type="button"
-                  onClick={() => setTaxInputMode(taxInputMode === 'rate' ? 'amount' : 'rate')}
-                  className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-purple-300 border border-slate-700 hover:bg-slate-700"
-                >
-                  {taxInputMode === 'rate' ? '%' : 'R$'}
-                </button>
-                {taxInputMode === 'rate' ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={taxRate}
-                      onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
-                      className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-0.5 text-xs font-bold text-white outline-none focus:border-purple-500 text-right"
-                    />
-                    <span className="text-xs font-bold text-slate-400">%</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-slate-400">R$</span>
-                    <input
-                      type="number"
-                      step="100"
-                      min="0"
-                      value={taxFixedAmount}
-                      onChange={e => setTaxFixedAmount(parseFloat(e.target.value) || 0)}
-                      className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-0.5 text-xs font-bold text-white outline-none focus:border-purple-500 text-right"
-                    />
-                  </div>
-                )}
-              </div>
+              <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wide block">Subtotal Verbas</span>
+              <span className="text-base font-black text-blue-700 block mt-0.5">{fmt(subtotal)}</span>
             </div>
-            <div className="text-right">
-              <span className="text-[10px] font-semibold text-slate-400 block">Total Impostos</span>
-              <span className="text-xs font-black text-amber-400">{formatMoney(calculatedTax)}</span>
-            </div>
+            <DollarSign size={20} className="text-blue-200" />
           </div>
 
-          {/* Taxa Administrativa (%) */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-2.5 px-3.5 flex items-center justify-between">
+          {/* ISS / Impostos */}
+          <div className="bg-white border border-amber-100 rounded-2xl px-4 py-3 flex items-center justify-between shadow-sm">
             <div>
-              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">% Taxa Administrativa</span>
-              <div className="flex items-center gap-1 mt-1">
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  value={adminFeeRate}
-                  onChange={e => setAdminFeeRate(parseFloat(e.target.value) || 0)}
-                  className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-0.5 text-xs font-bold text-white outline-none focus:border-purple-500 text-right"
-                />
-                <span className="text-xs font-bold text-slate-400">%</span>
-              </div>
+              <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wide block">ISS / Impostos</span>
+              <span className="text-base font-black text-amber-600 block mt-0.5">{fmt(calculatedTax)}</span>
+              <span className="text-[9px] text-gray-400">{taxInputMode === 'rate' ? `${taxRate}%` : 'Valor fixo'}</span>
             </div>
-            <div className="text-right">
-              <span className="text-[10px] font-semibold text-slate-400 block">Total Admin</span>
-              <span className="text-xs font-black text-indigo-400">{formatMoney(calculatedAdminFee)}</span>
-            </div>
+            <Percent size={20} className="text-amber-200" />
           </div>
 
-          {/* Subtotal Bruto */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-2.5 px-3.5 flex items-center justify-between">
+          {/* Total Apurado */}
+          <div className="bg-white border border-emerald-100 rounded-2xl px-4 py-3 flex items-center justify-between shadow-sm">
             <div>
-              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Total Apurado Bruto</span>
-              <span className="text-sm font-black text-emerald-400 block mt-0.5">{formatMoney(totalApuradoBruto)}</span>
+              <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wide block">Total Apurado</span>
+              <span className="text-base font-black text-emerald-700 block mt-0.5">{fmt(totalApuradoBruto)}</span>
+              <span className="text-[9px] text-gray-400">+ Taxa admin {adminFeeRate}%</span>
             </div>
-            <Calculator size={20} className="text-emerald-500/50" />
+            <Calculator size={20} className="text-emerald-200" />
           </div>
 
           {/* Saldo Remanescente */}
-          <div className={`border rounded-2xl p-2.5 px-3.5 flex items-center justify-between transition-colors ${
-            saldoRemanescente <= 0 
-              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' 
-              : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+          <div className={`rounded-2xl px-4 py-3 flex items-center justify-between shadow-sm border ${
+            saldoRemanescente <= 0
+              ? 'bg-white border-emerald-100'
+              : 'bg-white border-red-100'
           }`}>
             <div>
-              <span className="text-[9px] font-black uppercase tracking-wider block opacity-80">Saldo Remanescente</span>
-              <span className="text-sm font-black block mt-0.5">{formatMoney(saldoRemanescente)}</span>
+              <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wide block">Saldo Remanescente</span>
+              <span className={`text-base font-black block mt-0.5 ${saldoRemanescente <= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {fmt(saldoRemanescente)}
+              </span>
             </div>
-            {saldoRemanescente <= 0 ? (
-              <ShieldCheck size={20} className="text-emerald-400" />
-            ) : (
-              <AlertCircle size={20} className="text-amber-400 animate-pulse" />
-            )}
+            {saldoRemanescente <= 0
+              ? <ShieldCheck size={20} className="text-emerald-300" />
+              : <AlertCircle size={20} className="text-red-300 animate-pulse" />
+            }
           </div>
-
         </div>
 
-        {/* ── NAVEGAÇÃO DE ABAS EXECUTIVAS ── */}
-        <div className="px-4 sm:px-6 pt-3 bg-slate-900 border-b border-slate-800 flex items-center gap-2 overflow-x-auto shrink-0">
-          <button
-            onClick={() => setActiveTab('main')}
-            className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-t-xl border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === 'main'
-                ? 'border-purple-500 text-purple-300 bg-slate-800/80'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-            }`}
-          >
-            <Building2 size={14} /> 1. Colaboradores Terceirizados ({rows.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('summary')}
-            className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-t-xl border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === 'summary'
-                ? 'border-purple-500 text-purple-300 bg-slate-800/80'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-            }`}
-          >
-            <Layers size={14} /> 2. Resumo por Localidade ({locationSummary.length} Locais - Duplo Check)
-          </button>
-
-          <button
-            onClick={() => setActiveTab('settlement')}
-            className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-t-xl border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === 'settlement'
-                ? 'border-purple-500 text-purple-300 bg-slate-800/80'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-            }`}
-          >
-            <Landmark size={14} /> 3. Apuração & Repasses ({repassLines.length} Lançamentos)
-          </button>
+        {/* ══ NAVEGAÇÃO DE ABAS ══════════════════════════════════ */}
+        <div className="px-5 sm:px-7 bg-white border-b border-gray-100 flex items-center gap-1 overflow-x-auto shrink-0">
+          {([
+            { key: 'main',       icon: Users,    label: `Colaboradores Terceirizados (${rows.length})` },
+            { key: 'summary',    icon: Layers,   label: `Resumo por Localidade (${locationSummary.length})` },
+            { key: 'settlement', icon: Landmark, label: `Apuração & Repasses (${repassLines.length})` }
+          ] as const).map(({ key, icon: Icon, label }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+                activeTab === key
+                  ? 'border-blue-600 text-blue-700'
+                  : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Icon size={13} /> {label}
+            </button>
+          ))}
         </div>
 
-        {/* ── MESSAGES & NOTIFICATIONS ── */}
+        {/* ══ MENSAGENS ══════════════════════════════════════════ */}
         {saveSuccessMessage && (
-          <div className="bg-emerald-950/80 border-b border-emerald-500/40 p-2.5 px-6 flex items-center justify-between text-emerald-200 text-xs font-bold animate-in fade-in duration-150">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-emerald-400" />
-              <span>{saveSuccessMessage}</span>
-            </div>
-            <span className="text-[10px] text-emerald-400 font-mono">Persistido no banco</span>
+          <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-2.5 flex items-center gap-2 text-emerald-700 text-xs font-bold animate-in fade-in duration-150 shrink-0">
+            <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+            {saveSuccessMessage}
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
 
-          {/* Error Notice */}
+        {/* ══ CONTEÚDO PRINCIPAL ═════════════════════════════════ */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50 space-y-4">
+
+          {/* Estado de erro */}
           {error && (
-            <div className="p-4 bg-rose-950/60 border border-rose-800 rounded-2xl flex items-center gap-3 text-rose-200 text-xs font-bold">
-              <AlertCircle size={18} className="shrink-0 text-rose-400" />
-              <span>{error}</span>
+            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700 text-xs font-bold">
+              <AlertCircle size={16} className="shrink-0 text-red-400" />
+              {error}
+              <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-700"><X size={13} /></button>
             </div>
           )}
 
-          {/* Loading Indicator */}
+          {/* Loading */}
           {loading && (
-            <div className="p-12 text-center space-y-3">
-              <RefreshCw size={32} className="animate-spin text-purple-500 mx-auto" />
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Carregando custos históricos e empréstimos...</p>
+            <div className="py-16 text-center space-y-3">
+              <RefreshCw size={28} className="animate-spin text-blue-500 mx-auto" />
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Carregando dados da competência...</p>
             </div>
           )}
 
           {!loading && (
             <>
-              {/* ── ABA 1: TABELA DE COLABORADORES TERCEIRIZADOS ── */}
+              {/* ══ ABA 1 — COLABORADORES ═══════════════════════════ */}
               {activeTab === 'main' && (
-                <div className="space-y-4">
-                  {/* Action controls above table */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/80">
+                <div className="space-y-3">
+                  {/* Toolbar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleAddManualRow}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm uppercase"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase transition-all active:scale-95 shadow-sm"
                       >
-                        <Plus size={14} /> Adicionar Linha Manual
+                        <Plus size={13} /> Linha Manual
                       </button>
 
-                      {/* Modal / Input para nova coluna personalizada */}
                       {!isAddingCol ? (
                         <button
                           onClick={() => setIsAddingCol(true)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all active:scale-95 uppercase"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold uppercase transition-all active:scale-95"
                         >
-                          <Plus size={14} /> Adicionar Coluna
+                          <Plus size={13} /> Adicionar Verba
                         </button>
                       ) : (
                         <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
                           <input
                             type="text"
-                            placeholder="Nome da coluna..."
+                            placeholder="Nome da verba..."
                             value={newColName}
                             onChange={e => setNewColName(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleAddCustomColumn()}
-                            className="bg-slate-800 border border-purple-500/50 rounded-xl px-2.5 py-1 text-xs text-white outline-none w-40"
+                            className="bg-white border border-blue-300 rounded-xl px-3 py-1.5 text-xs text-gray-800 outline-none w-40 focus:ring-1 focus:ring-blue-100"
                             autoFocus
                           />
                           <button
                             onClick={handleAddCustomColumn}
-                            className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase"
-                          >
-                            OK
-                          </button>
-                          <button
-                            onClick={() => setIsAddingCol(false)}
-                            className="p-1 text-slate-400 hover:text-white"
-                          >
-                            <X size={14} />
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold"
+                          >OK</button>
+                          <button onClick={() => setIsAddingCol(false)} className="p-1.5 text-gray-400 hover:text-gray-700">
+                            <X size={13} />
                           </button>
                         </div>
                       )}
                     </div>
 
-                    <div className="text-right text-xs text-slate-400 font-semibold">
-                      Total na Tabela: <span className="text-white font-black">{formatMoney(subtotal)}</span>
+                    <div className="text-xs text-gray-500 font-semibold">
+                      Total na tabela: <span className="text-gray-900 font-black">{fmt(subtotal)}</span>
                     </div>
                   </div>
 
-                  {/* Main Table */}
-                  <div className="bg-slate-950/60 border border-slate-800 rounded-2xl overflow-x-auto shadow-xl">
+                  {/* Tabela */}
+                  <div className="bg-white border border-gray-100 rounded-2xl overflow-x-auto shadow-sm">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
-                        <tr className="bg-slate-950 border-b border-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                          <th className="py-3 px-3 min-w-[180px]">Colaborador</th>
-                          <th className="py-3 px-3 min-w-[140px]">Localidade</th>
-                          <th className="py-3 px-3 text-right min-w-[110px]">Fixo / NF</th>
-                          <th className="py-3 px-3 text-right min-w-[100px]">Bônus</th>
-                          <th className="py-3 px-3 text-right min-w-[100px]">Comissão</th>
-                          <th className="py-3 px-3 text-right min-w-[110px]">Ajuda Custo</th>
-                          <th className="py-3 px-3 text-right min-w-[100px]">Outros</th>
-                          <th className="py-3 px-3 text-right min-w-[120px] bg-purple-950/30 text-purple-300 border-x border-purple-500/20">
-                            Empréstimos <span className="block text-[8px] font-normal text-purple-400">(Fora da Folha)</span>
-                          </th>
+                        <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                          <th className="py-3 px-3 min-w-[180px] sticky left-0 bg-gray-50 z-10">Colaborador</th>
+                          <th className="py-3 px-2 min-w-[80px]">Tipo</th>
+                          <th className="py-3 px-3 min-w-[120px]">Localidade</th>
+                          {/* Verbas */}
+                          <th className="py-3 px-2 text-right min-w-[100px] bg-blue-50 text-blue-600">Sal. Base</th>
+                          <th className="py-3 px-2 text-right min-w-[90px]">Adit.</th>
+                          <th className="py-3 px-2 text-right min-w-[90px]">Bônus</th>
+                          <th className="py-3 px-2 text-right min-w-[80px] bg-green-50 text-green-700">VR</th>
+                          <th className="py-3 px-2 text-right min-w-[80px] bg-green-50 text-green-700">VT</th>
+                          <th className="py-3 px-2 text-right min-w-[80px]">Seguro</th>
+                          <th className="py-3 px-2 text-right min-w-[80px] bg-orange-50 text-orange-700">FGTS</th>
+                          <th className="py-3 px-2 text-right min-w-[80px] bg-orange-50 text-orange-700">GPS</th>
+                          <th className="py-3 px-2 text-right min-w-[80px] bg-purple-50 text-purple-700">13º</th>
+                          <th className="py-3 px-2 text-right min-w-[80px] bg-purple-50 text-purple-700">Férias</th>
+                          <th className="py-3 px-2 text-right min-w-[80px]">Outros</th>
+                          <th className="py-3 px-2 text-right min-w-[90px] bg-indigo-50 text-indigo-700">Emprést.</th>
                           {/* Colunas customizadas */}
                           {customColumns.map(col => (
-                            <th key={col.id} className="py-3 px-3 text-right min-w-[110px] bg-slate-900">
+                            <th key={col.id} className="py-3 px-2 text-right min-w-[90px] bg-gray-50">
                               <div className="flex items-center justify-end gap-1">
                                 <span>{col.label}</span>
                                 <button
                                   onClick={() => handleRemoveCustomColumn(col.id)}
-                                  className="text-slate-500 hover:text-rose-400 p-0.5"
-                                  title="Remover coluna"
+                                  className="text-gray-300 hover:text-red-400 p-0.5"
+                                  title="Remover verba"
                                 >
-                                  <X size={12} />
+                                  <X size={10} />
                                 </button>
                               </div>
                             </th>
                           ))}
-                          <th className="py-3 px-3 text-right min-w-[130px] font-black text-white bg-slate-900/80">Total Gasto</th>
-                          <th className="py-3 px-2 w-10 text-center"></th>
+                          <th className="py-3 px-3 text-right min-w-[110px] font-black text-gray-800 bg-white">Total</th>
+                          <th className="py-3 px-2 w-8 text-center"></th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60">
+
+                      <tbody className="divide-y divide-gray-50">
                         {rows.length === 0 ? (
                           <tr>
-                            <td colSpan={10 + customColumns.length} className="py-12 text-center text-slate-500 font-medium">
-                              Nenhum colaborador terceirizado encontrado para esta competência. Clique em "Adicionar Linha Manual" para inserir.
+                            <td colSpan={20} className="py-16 text-center text-gray-400 font-medium">
+                              Nenhum colaborador terceirizado encontrado para esta competência.{' '}
+                              <button onClick={handleAddManualRow} className="text-blue-500 underline">
+                                Adicionar linha manual.
+                              </button>
                             </td>
                           </tr>
-                        ) : (
-                          rows.map((row) => {
-                            const rTotal = rowTotalMap.get(row.id) || 0;
-                            return (
-                              <tr key={row.id} className="hover:bg-slate-800/40 transition-colors">
-                                {/* Nome */}
-                                <td className="py-2.5 px-3">
-                                  {row.isManual ? (
-                                    <input
-                                      type="text"
-                                      value={row.name}
-                                      onChange={e => handleRowChange(row.id, 'name', e.target.value)}
-                                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-white outline-none focus:border-purple-500"
-                                    />
-                                  ) : (
-                                    <div className="font-bold text-slate-100 flex items-center gap-1.5">
-                                      <span>{row.name}</span>
-                                    </div>
-                                  )}
-                                </td>
-
-                                {/* Localidade */}
-                                <td className="py-2.5 px-3">
+                        ) : rows.map(row => {
+                          const rTotal = rowTotalMap.get(row.id) || 0;
+                          return (
+                            <tr key={row.id} className="hover:bg-blue-50/30 transition-colors">
+                              {/* Nome */}
+                              <td className="py-2 px-3 sticky left-0 bg-white hover:bg-blue-50/30 z-10">
+                                {row.isManual ? (
                                   <input
                                     type="text"
-                                    value={row.location}
-                                    onChange={e => handleRowChange(row.id, 'location', e.target.value)}
-                                    className="w-full bg-slate-800/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs text-slate-300 outline-none focus:border-purple-500"
+                                    value={row.name}
+                                    onChange={e => handleRowChange(row.id, 'name', e.target.value)}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
+                                  />
+                                ) : (
+                                  <span className="font-semibold text-gray-800">{row.name}</span>
+                                )}
+                              </td>
+
+                              {/* Tipo */}
+                              <td className="py-2 px-2">
+                                <select
+                                  value={row.employeeType}
+                                  onChange={e => handleRowChange(row.id, 'employeeType', e.target.value as EmployeeType)}
+                                  className="bg-transparent text-[10px] font-bold outline-none cursor-pointer"
+                                  title="Tipo de vínculo"
+                                >
+                                  {(Object.keys(EMPLOYEE_TYPE_CONFIG) as EmployeeType[]).map(t => (
+                                    <option key={t} value={t}>{EMPLOYEE_TYPE_CONFIG[t].label}</option>
+                                  ))}
+                                </select>
+                              </td>
+
+                              {/* Localidade */}
+                              <td className="py-2 px-3">
+                                <input
+                                  type="text"
+                                  value={row.location}
+                                  onChange={e => handleRowChange(row.id, 'location', e.target.value)}
+                                  className="w-full bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 text-xs text-gray-600 outline-none focus:border-blue-300"
+                                />
+                              </td>
+
+                              {/* Sal. Base */}
+                              <td className="py-2 px-2 text-right bg-blue-50/30">
+                                <NumInput value={row.valorFixo} onChange={v => handleRowChange(row.id, 'valorFixo', v)} width="w-24" />
+                              </td>
+                              {/* Adit. */}
+                              <td className="py-2 px-2 text-right">
+                                <NumInput value={row.valorAjudaCusto} onChange={v => handleRowChange(row.id, 'valorAjudaCusto', v)} />
+                              </td>
+                              {/* Bônus */}
+                              <td className="py-2 px-2 text-right">
+                                <NumInput value={row.valorBonus} onChange={v => handleRowChange(row.id, 'valorBonus', v)} />
+                              </td>
+                              {/* VR */}
+                              <td className="py-2 px-2 text-right bg-green-50/40">
+                                <NumInput value={row.valorVR} onChange={v => handleRowChange(row.id, 'valorVR', v)} />
+                              </td>
+                              {/* VT */}
+                              <td className="py-2 px-2 text-right bg-green-50/40">
+                                <NumInput value={row.valorVT} onChange={v => handleRowChange(row.id, 'valorVT', v)} />
+                              </td>
+                              {/* Seguro */}
+                              <td className="py-2 px-2 text-right">
+                                <NumInput value={row.valorSeguro} onChange={v => handleRowChange(row.id, 'valorSeguro', v)} />
+                              </td>
+                              {/* FGTS */}
+                              <td className="py-2 px-2 text-right bg-orange-50/40">
+                                <NumInput value={row.valorFGTS} onChange={v => handleRowChange(row.id, 'valorFGTS', v)} />
+                              </td>
+                              {/* GPS */}
+                              <td className="py-2 px-2 text-right bg-orange-50/40">
+                                <NumInput value={row.valorGPS} onChange={v => handleRowChange(row.id, 'valorGPS', v)} />
+                              </td>
+                              {/* 13º */}
+                              <td className="py-2 px-2 text-right bg-purple-50/40">
+                                <NumInput value={row.valorDecTerceiro} onChange={v => handleRowChange(row.id, 'valorDecTerceiro', v)} />
+                              </td>
+                              {/* Férias */}
+                              <td className="py-2 px-2 text-right bg-purple-50/40">
+                                <NumInput value={row.valorFerias} onChange={v => handleRowChange(row.id, 'valorFerias', v)} />
+                              </td>
+                              {/* Outros */}
+                              <td className="py-2 px-2 text-right">
+                                <NumInput value={row.valorOutros} onChange={v => handleRowChange(row.id, 'valorOutros', v)} />
+                              </td>
+                              {/* Empréstimos */}
+                              <td className="py-2 px-2 text-right bg-indigo-50/40">
+                                <NumInput value={row.valorEmprestimo} onChange={v => handleRowChange(row.id, 'valorEmprestimo', v)} />
+                              </td>
+                              {/* Custom */}
+                              {customColumns.map(col => (
+                                <td key={col.id} className="py-2 px-2 text-right bg-gray-50/60">
+                                  <NumInput
+                                    value={row.customValues?.[col.id] || 0}
+                                    onChange={v => handleCustomValueChange(row.id, col.id, v)}
                                   />
                                 </td>
-
-                                {/* Fixo / NF */}
-                                <td className="py-2.5 px-3 text-right">
-                                  <input
-                                    type="number"
-                                    step="10"
-                                    value={row.valorFixo}
-                                    onChange={e => handleRowChange(row.id, 'valorFixo', parseFloat(e.target.value) || 0)}
-                                    className="w-24 text-right bg-slate-800/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs font-semibold text-slate-200 outline-none focus:border-purple-500"
-                                  />
-                                </td>
-
-                                {/* Bônus */}
-                                <td className="py-2.5 px-3 text-right">
-                                  <input
-                                    type="number"
-                                    step="10"
-                                    value={row.valorBonus}
-                                    onChange={e => handleRowChange(row.id, 'valorBonus', parseFloat(e.target.value) || 0)}
-                                    className="w-20 text-right bg-slate-800/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs font-semibold text-slate-200 outline-none focus:border-purple-500"
-                                  />
-                                </td>
-
-                                {/* Comissão */}
-                                <td className="py-2.5 px-3 text-right">
-                                  <input
-                                    type="number"
-                                    step="10"
-                                    value={row.valorComissao}
-                                    onChange={e => handleRowChange(row.id, 'valorComissao', parseFloat(e.target.value) || 0)}
-                                    className="w-20 text-right bg-slate-800/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs font-semibold text-slate-200 outline-none focus:border-purple-500"
-                                  />
-                                </td>
-
-                                {/* Ajuda Custo */}
-                                <td className="py-2.5 px-3 text-right">
-                                  <input
-                                    type="number"
-                                    step="10"
-                                    value={row.valorAjudaCusto}
-                                    onChange={e => handleRowChange(row.id, 'valorAjudaCusto', parseFloat(e.target.value) || 0)}
-                                    className="w-24 text-right bg-slate-800/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs font-semibold text-slate-200 outline-none focus:border-purple-500"
-                                  />
-                                </td>
-
-                                {/* Outros */}
-                                <td className="py-2.5 px-3 text-right">
-                                  <input
-                                    type="number"
-                                    step="10"
-                                    value={row.valorOutros}
-                                    onChange={e => handleRowChange(row.id, 'valorOutros', parseFloat(e.target.value) || 0)}
-                                    className="w-20 text-right bg-slate-800/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs font-semibold text-slate-200 outline-none focus:border-purple-500"
-                                  />
-                                </td>
-
-                                {/* Empréstimos (Fora da Folha) */}
-                                <td className="py-2.5 px-3 text-right bg-purple-950/20 border-x border-purple-500/20">
-                                  <input
-                                    type="number"
-                                    step="10"
-                                    value={row.valorEmprestimo}
-                                    onChange={e => handleRowChange(row.id, 'valorEmprestimo', parseFloat(e.target.value) || 0)}
-                                    className="w-24 text-right bg-purple-900/30 border border-purple-500/40 rounded-lg px-2 py-1 text-xs font-bold text-purple-200 outline-none focus:border-purple-400"
-                                  />
-                                </td>
-
-                                {/* Custom Columns */}
-                                {customColumns.map(col => (
-                                  <td key={col.id} className="py-2.5 px-3 text-right bg-slate-900/40">
-                                    <input
-                                      type="number"
-                                      step="10"
-                                      value={row.customValues?.[col.id] || 0}
-                                      onChange={e => handleCustomValueChange(row.id, col.id, parseFloat(e.target.value) || 0)}
-                                      className="w-24 text-right bg-slate-800/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs font-semibold text-slate-200 outline-none focus:border-purple-500"
-                                    />
-                                  </td>
-                                ))}
-
-                                {/* Total Gasto */}
-                                <td className="py-2.5 px-3 text-right font-black text-emerald-400 bg-slate-900/60">
-                                  {formatMoney(rTotal)}
-                                </td>
-
-                                {/* Actions */}
-                                <td className="py-2.5 px-2 text-center">
-                                  <button
-                                    onClick={() => handleRemoveRow(row.id)}
-                                    className="text-slate-600 hover:text-rose-400 p-1 transition-colors"
-                                    title="Remover linha"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
+                              ))}
+                              {/* Total */}
+                              <td className="py-2 px-3 text-right font-black text-emerald-700">
+                                {fmt(rTotal)}
+                              </td>
+                              {/* Ações */}
+                              <td className="py-2 px-2 text-center">
+                                <button
+                                  onClick={() => handleRemoveRow(row.id)}
+                                  className="text-gray-300 hover:text-red-400 p-1 transition-colors"
+                                  title="Remover linha"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
-                      {/* Footers with Column Totals */}
+
+                      {/* Footer com totais */}
                       <tfoot>
-                        <tr className="bg-slate-950 border-t-2 border-slate-800 text-xs font-black text-white">
-                          <td className="py-3 px-3 uppercase tracking-wider text-purple-400">Total Acumulado ({rows.length})</td>
-                          <td className="py-3 px-3 text-slate-400 font-normal">—</td>
-                          <td className="py-3 px-3 text-right">{formatMoney(mainTableColumnTotals.totalFixo)}</td>
-                          <td className="py-3 px-3 text-right">{formatMoney(mainTableColumnTotals.totalBonus)}</td>
-                          <td className="py-3 px-3 text-right">{formatMoney(mainTableColumnTotals.totalComissao)}</td>
-                          <td className="py-3 px-3 text-right">{formatMoney(mainTableColumnTotals.totalAjudaCusto)}</td>
-                          <td className="py-3 px-3 text-right">{formatMoney(mainTableColumnTotals.totalOutros)}</td>
-                          <td className="py-3 px-3 text-right text-purple-300 bg-purple-950/40 border-x border-purple-500/20">
-                            {formatMoney(mainTableColumnTotals.totalEmprestimo)}
-                          </td>
+                        <tr className="bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider border-t-2 border-blue-500">
+                          <td className="py-3 px-3 sticky left-0 bg-blue-600 z-10">TOTAIS ({rows.length})</td>
+                          <td className="py-3 px-2">—</td>
+                          <td className="py-3 px-3">—</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorFixo)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorAjudaCusto)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorBonus)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorVR)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorVT)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorSeguro)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorFGTS)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorGPS)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorDecTerceiro)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorFerias)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorOutros)}</td>
+                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorEmprestimo)}</td>
                           {customColumns.map(col => (
-                            <td key={col.id} className="py-3 px-3 text-right">
-                              {formatMoney(mainTableColumnTotals.customTotals[col.id] || 0)}
+                            <td key={col.id} className="py-3 px-2 text-right">
+                              {fmt(colTotals.custom[col.id] || 0)}
                             </td>
                           ))}
-                          <td className="py-3 px-3 text-right text-emerald-400 text-sm font-black bg-slate-900">
-                            {formatMoney(mainTableColumnTotals.grandTotal)}
-                          </td>
+                          <td className="py-3 px-3 text-right text-base font-black">{fmt(subtotal)}</td>
                           <td></td>
                         </tr>
                       </tfoot>
@@ -1026,99 +1015,144 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                 </div>
               )}
 
-              {/* ── ABA 2: RESUMO POR LOCALIDADE (DUPLO CHECK) ── */}
+              {/* ══ ABA 2 — RESUMO POR LOCALIDADE ══════════════════ */}
               {activeTab === 'summary' && (
                 <div className="space-y-4">
-                  <div className="bg-purple-950/30 border border-purple-500/30 rounded-2xl p-4 flex items-center justify-between">
+                  {/* Header da aba */}
+                  <div className="bg-white border border-emerald-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3">
-                      <CheckCircle2 size={24} className="text-purple-400 shrink-0" />
+                      <CheckCircle2 size={22} className="text-emerald-500 shrink-0" />
                       <div>
-                        <h3 className="text-xs font-black text-purple-200 uppercase tracking-wider">Duplo Check por Localidade</h3>
-                        <p className="text-[11px] text-slate-300 mt-0.5">
-                          Consolidação executiva agrupada por local de atendimento. O total geral desta visão confirma e valida o valor da apuração principal.
+                        <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider">Duplo Check por Localidade</h3>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          Consolidação por local de atendimento. O total valida o valor da apuração principal.
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Validado</span>
-                      <span className="text-base font-black text-emerald-400">{formatMoney(subtotal)}</span>
+                    <div className="text-right shrink-0">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase block">Total Validado</span>
+                      <span className="text-lg font-black text-emerald-700">{fmt(subtotal)}</span>
                     </div>
                   </div>
 
-                  {/* Summary Table */}
-                  <div className="bg-slate-950/60 border border-slate-800 rounded-2xl overflow-x-auto shadow-xl">
-                    <table className="w-full text-left text-xs border-collapse">
+                  {/* Cards por localidade */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {locationSummary.length === 0 ? (
+                      <div className="col-span-2 py-12 text-center text-gray-400">Sem dados de localidade disponíveis.</div>
+                    ) : locationSummary.map((ls, idx) => {
+                      const pct = subtotal > 0 ? (ls.total / subtotal) * 100 : 0;
+                      const colorAccents = ['border-blue-400', 'border-emerald-400', 'border-orange-400', 'border-purple-400', 'border-pink-400'];
+                      const accent = colorAccents[idx % colorAccents.length];
+                      return (
+                        <div key={ls.location} className={`bg-white border border-gray-100 rounded-2xl p-4 shadow-sm border-l-4 ${accent}`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <MapPin size={14} className="text-gray-400" />
+                              <span className="font-black text-gray-800 text-sm">{ls.location}</span>
+                              <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-bold">
+                                {ls.count} colab.
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-base font-black text-gray-900">{fmt(ls.total)}</span>
+                              <span className="text-[10px] text-gray-400 block">{pct.toFixed(1)}% do total</span>
+                            </div>
+                          </div>
+
+                          {/* Barra proporcional */}
+                          <div className="h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
+                          </div>
+
+                          {/* Detalhamento de verbas */}
+                          <div className="grid grid-cols-4 gap-1.5 text-[10px]">
+                            {[
+                              { label: 'Sal. Base', key: 'valorFixo', color: 'text-blue-700' },
+                              { label: 'Bônus', key: 'valorBonus', color: 'text-gray-700' },
+                              { label: 'Adit.', key: 'valorAjudaCusto', color: 'text-gray-700' },
+                              { label: 'VR', key: 'valorVR', color: 'text-green-700' },
+                              { label: 'VT', key: 'valorVT', color: 'text-green-700' },
+                              { label: 'FGTS', key: 'valorFGTS', color: 'text-orange-700' },
+                              { label: 'GPS', key: 'valorGPS', color: 'text-orange-700' },
+                              { label: '13º', key: 'valorDecTerceiro', color: 'text-purple-700' },
+                            ].map(({ label, key, color }) => (
+                              ls.verbas[key] > 0 && (
+                                <div key={key} className="bg-gray-50 rounded-lg p-1.5 text-center">
+                                  <span className="text-gray-400 block">{label}</span>
+                                  <span className={`font-bold ${color} block`}>
+                                    {(ls.verbas[key] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0, style: 'currency', currency: 'BRL' })}
+                                  </span>
+                                </div>
+                              )
+                            ))}
+                          </div>
+
+                          {/* Badge duplo check */}
+                          <div className="mt-3 flex justify-end">
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
+                              <CheckCircle2 size={10} /> Duplo Check ✓
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Tabela consolidada */}
+                  <div className="bg-white border border-gray-100 rounded-2xl overflow-x-auto shadow-sm">
+                    <table className="w-full text-xs text-left border-collapse">
                       <thead>
-                        <tr className="bg-slate-950 border-b border-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
                           <th className="py-3 px-4">Localidade</th>
                           <th className="py-3 px-3 text-center">Colaboradores</th>
-                          <th className="py-3 px-3 text-right">Total Fixo / NF</th>
-                          <th className="py-3 px-3 text-right">Total Bônus</th>
-                          <th className="py-3 px-3 text-right">Total Comissão</th>
-                          <th className="py-3 px-3 text-right">Total Ajuda Custo</th>
-                          <th className="py-3 px-3 text-right">Total Outros</th>
-                          <th className="py-3 px-3 text-right text-purple-300 bg-purple-950/30">Empréstimos</th>
-                          {customColumns.map(col => (
-                            <th key={col.id} className="py-3 px-3 text-right">{col.label}</th>
-                          ))}
-                          <th className="py-3 px-4 text-right font-black text-white bg-slate-900">Total Localidade</th>
+                          <th className="py-3 px-3 text-right">Sal. Base</th>
+                          <th className="py-3 px-3 text-right">Benefícios</th>
+                          <th className="py-3 px-3 text-right">Encargos</th>
+                          <th className="py-3 px-3 text-right">Provisões</th>
+                          <th className="py-3 px-3 text-right">Empréstimos</th>
+                          <th className="py-3 px-4 text-right font-black text-gray-800">Total Localidade</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60">
-                        {locationSummary.length === 0 ? (
-                          <tr>
-                            <td colSpan={9 + customColumns.length} className="py-8 text-center text-slate-500 font-medium">
-                              Sem dados de localidade disponíveis.
+                      <tbody className="divide-y divide-gray-50">
+                        {locationSummary.map((ls, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                            <td className="py-3 px-4 font-bold text-gray-800 flex items-center gap-1.5">
+                              <Building2 size={12} className="text-gray-400 shrink-0" />
+                              {ls.location}
                             </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                {ls.count} pss
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-right text-gray-600 font-semibold">{fmt(ls.verbas.valorFixo || 0)}</td>
+                            <td className="py-3 px-3 text-right text-green-700 font-semibold">
+                              {fmt((ls.verbas.valorVR || 0) + (ls.verbas.valorVT || 0) + (ls.verbas.valorSeguro || 0))}
+                            </td>
+                            <td className="py-3 px-3 text-right text-orange-700 font-semibold">
+                              {fmt((ls.verbas.valorFGTS || 0) + (ls.verbas.valorGPS || 0))}
+                            </td>
+                            <td className="py-3 px-3 text-right text-purple-700 font-semibold">
+                              {fmt((ls.verbas.valorDecTerceiro || 0) + (ls.verbas.valorFerias || 0))}
+                            </td>
+                            <td className="py-3 px-3 text-right text-indigo-700 font-semibold">{fmt(ls.verbas.valorEmprestimo || 0)}</td>
+                            <td className="py-3 px-4 text-right font-black text-emerald-700 text-sm">{fmt(ls.total)}</td>
                           </tr>
-                        ) : (
-                          locationSummary.map((ls, idx) => (
-                            <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                              <td className="py-3 px-4 font-bold text-slate-100 flex items-center gap-2">
-                                <Building2 size={14} className="text-purple-400 shrink-0" />
-                                <span>{ls.location}</span>
-                              </td>
-                              <td className="py-3 px-3 text-center font-bold text-slate-300">
-                                <span className="bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full text-[10px]">
-                                  {ls.count} pss
-                                </span>
-                              </td>
-                              <td className="py-3 px-3 text-right text-slate-300 font-semibold">{formatMoney(ls.valorFixo)}</td>
-                              <td className="py-3 px-3 text-right text-slate-300 font-semibold">{formatMoney(ls.valorBonus)}</td>
-                              <td className="py-3 px-3 text-right text-slate-300 font-semibold">{formatMoney(ls.valorComissao)}</td>
-                              <td className="py-3 px-3 text-right text-slate-300 font-semibold">{formatMoney(ls.valorAjudaCusto)}</td>
-                              <td className="py-3 px-3 text-right text-slate-300 font-semibold">{formatMoney(ls.valorOutros)}</td>
-                              <td className="py-3 px-3 text-right text-purple-300 font-bold bg-purple-950/20">{formatMoney(ls.valorEmprestimo)}</td>
-                              {customColumns.map(col => (
-                                <td key={col.id} className="py-3 px-3 text-right text-slate-300 font-semibold">
-                                  {formatMoney(ls.customSums[col.id] || 0)}
-                                </td>
-                              ))}
-                              <td className="py-3 px-4 text-right font-black text-emerald-400 bg-slate-900/60">
-                                {formatMoney(ls.totalGasto)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
+                        ))}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-slate-950 border-t-2 border-slate-800 text-xs font-black text-white">
-                          <td className="py-3.5 px-4 uppercase tracking-wider text-purple-400">Total Consolidado Duplo Check</td>
-                          <td className="py-3.5 px-3 text-center">{rows.length}</td>
-                          <td className="py-3.5 px-3 text-right">{formatMoney(mainTableColumnTotals.totalFixo)}</td>
-                          <td className="py-3.5 px-3 text-right">{formatMoney(mainTableColumnTotals.totalBonus)}</td>
-                          <td className="py-3.5 px-3 text-right">{formatMoney(mainTableColumnTotals.totalComissao)}</td>
-                          <td className="py-3.5 px-3 text-right">{formatMoney(mainTableColumnTotals.totalAjudaCusto)}</td>
-                          <td className="py-3.5 px-3 text-right">{formatMoney(mainTableColumnTotals.totalOutros)}</td>
-                          <td className="py-3.5 px-3 text-right text-purple-300 bg-purple-950/40">{formatMoney(mainTableColumnTotals.totalEmprestimo)}</td>
-                          {customColumns.map(col => (
-                            <td key={col.id} className="py-3.5 px-3 text-right">
-                              {formatMoney(mainTableColumnTotals.customTotals[col.id] || 0)}
-                            </td>
-                          ))}
-                          <td className="py-3.5 px-4 text-right text-emerald-400 text-sm font-black bg-slate-900">
-                            {formatMoney(subtotal)}
-                          </td>
+                        <tr className="bg-blue-600 text-white text-[10px] font-black uppercase">
+                          <td className="py-3 px-4">TOTAL CONSOLIDADO</td>
+                          <td className="py-3 px-3 text-center">{rows.length}</td>
+                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorFixo)}</td>
+                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorVR + colTotals.valorVT + colTotals.valorSeguro)}</td>
+                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorFGTS + colTotals.valorGPS)}</td>
+                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorDecTerceiro + colTotals.valorFerias)}</td>
+                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorEmprestimo)}</td>
+                          <td className="py-3 px-4 text-right text-base font-black">{fmt(subtotal)}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1126,134 +1160,191 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                 </div>
               )}
 
-              {/* ── ABA 3: APURAÇÃO FINAL & REGISTRO DE REPASSES ── */}
+              {/* ══ ABA 3 — APURAÇÃO & REPASSES ═════════════════════ */}
               {activeTab === 'settlement' && (
-                <div className="space-y-6">
-                  {/* Resumo da Apuração Bruta */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-2">
-                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">1. Subtotal de Colaboradores</span>
-                      <p className="text-xl font-black text-white">{formatMoney(subtotal)}</p>
-                      <p className="text-[10px] text-slate-500">Soma de verbas, custos de contrato e empréstimos</p>
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                    {/* Configurações de encargos */}
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+                      <h3 className="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                        <Percent size={14} className="text-blue-500" /> Configurações de Encargos
+                      </h3>
+
+                      <div className="space-y-3">
+                        {/* ISS */}
+                        <div className="flex items-center justify-between gap-4 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-amber-700 tracking-wider block">ISS / Impostos</span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <button
+                                onClick={() => setTaxInputMode(prev => prev === 'rate' ? 'amount' : 'rate')}
+                                className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200 transition-all"
+                              >
+                                {taxInputMode === 'rate' ? '% Alíquota' : 'R$ Fixo'}
+                              </button>
+                              {taxInputMode === 'rate' ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number" step="0.1" min="0"
+                                    value={taxRate}
+                                    onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
+                                    className="w-16 text-right bg-white border border-amber-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-amber-400"
+                                  />
+                                  <span className="text-xs font-bold text-amber-600">%</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-bold text-amber-600">R$</span>
+                                  <input
+                                    type="number" step="100" min="0"
+                                    value={taxFixedAmount}
+                                    onChange={e => setTaxFixedAmount(parseFloat(e.target.value) || 0)}
+                                    className="w-28 text-right bg-white border border-amber-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-amber-400"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-amber-600 block">Total ISS</span>
+                            <span className="text-sm font-black text-amber-700">{fmt(calculatedTax)}</span>
+                          </div>
+                        </div>
+
+                        {/* Taxa Admin */}
+                        <div className="flex items-center justify-between gap-4 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-blue-700 tracking-wider block">Taxa Administrativa</span>
+                            <div className="flex items-center gap-1 mt-1">
+                              <input
+                                type="number" step="0.5" min="0"
+                                value={adminFeeRate}
+                                onChange={e => setAdminFeeRate(parseFloat(e.target.value) || 0)}
+                                className="w-16 text-right bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
+                              />
+                              <span className="text-xs font-bold text-blue-600">%</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-blue-600 block">Total Admin</span>
+                            <span className="text-sm font-black text-blue-700">{fmt(calculatedAdminFee)}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-2">
-                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">2. Encargos & Taxa Admin</span>
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-300 pt-1">
-                        <span>Impostos:</span>
-                        <span className="text-amber-400">{formatMoney(calculatedTax)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-300 border-t border-slate-800/80 pt-1">
-                        <span>Taxa Admin ({adminFeeRate}%):</span>
-                        <span className="text-indigo-400">{formatMoney(calculatedAdminFee)}</span>
-                      </div>
-                    </div>
+                    {/* Resumo financeiro */}
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
+                      <h3 className="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                        <Calculator size={14} className="text-emerald-500" /> Resumo Financeiro
+                      </h3>
 
-                    <div className="bg-purple-950/40 border border-purple-500/40 rounded-2xl p-4 space-y-2">
-                      <span className="text-[10px] font-black uppercase text-purple-300 tracking-wider">3. Total Apurado Bruto</span>
-                      <p className="text-2xl font-black text-emerald-400">{formatMoney(totalApuradoBruto)}</p>
-                      <p className="text-[10px] text-purple-300/70">Valor total a ser repassado na competência</p>
+                      <div className="space-y-2 text-xs">
+                        {[
+                          { label: 'Subtotal de Verbas', value: subtotal, color: 'text-gray-800' },
+                          { label: `ISS / Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'})`, value: calculatedTax, color: 'text-amber-600' },
+                          { label: `Taxa Administrativa (${adminFeeRate}%)`, value: calculatedAdminFee, color: 'text-blue-600' },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className="flex items-center justify-between py-1.5 border-b border-gray-50">
+                            <span className="text-gray-500 font-medium">{label}</span>
+                            <span className={`font-bold ${color}`}>{fmt(value)}</span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between py-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 mt-2">
+                          <span className="font-black text-emerald-800 uppercase tracking-wider">TOTAL APURADO</span>
+                          <span className="text-lg font-black text-emerald-700">{fmt(totalApuradoBruto)}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Tabela de Repasses Efetuados */}
-                  <div className="space-y-3">
+                  {/* Tabela de repasses */}
+                  <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Landmark size={18} className="text-purple-400" />
-                        <h3 className="text-xs font-black text-white uppercase tracking-wider">Valores Repassados (Pagamentos Efetuados)</h3>
-                      </div>
+                      <h3 className="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                        <Landmark size={14} className="text-blue-500" /> Repasses Efetuados
+                      </h3>
                       <button
                         onClick={handleAddRepassLine}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 uppercase"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase transition-all active:scale-95"
                       >
-                        <Plus size={14} /> Novo Repasse
+                        <Plus size={13} /> Novo Repasse
                       </button>
                     </div>
 
-                    <div className="bg-slate-950/60 border border-slate-800 rounded-2xl overflow-x-auto">
-                      <table className="w-full text-left text-xs border-collapse">
+                    <div className="overflow-x-auto rounded-xl border border-gray-100">
+                      <table className="w-full text-xs text-left border-collapse">
                         <thead>
-                          <tr className="bg-slate-950 border-b border-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
                             <th className="py-3 px-4 min-w-[140px]">Data do Repasse</th>
                             <th className="py-3 px-4 min-w-[160px]">Banco de Origem</th>
-                            <th className="py-3 px-4 min-w-[200px]">Observações / Ref.</th>
-                            <th className="py-3 px-4 text-right min-w-[140px]">Valor Repassado (R$)</th>
-                            <th className="py-3 px-2 w-10 text-center"></th>
+                            <th className="py-3 px-4 min-w-[220px]">Observações / Ref.</th>
+                            <th className="py-3 px-4 text-right min-w-[140px]">Valor (R$)</th>
+                            <th className="py-3 px-2 w-8"></th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/60">
+                        <tbody className="divide-y divide-gray-50">
                           {repassLines.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="py-8 text-center text-slate-500 font-medium">
-                                Nenhum repasse inserido. Clique em "Novo Repasse" para registrar pagamentos realizados.
+                              <td colSpan={5} className="py-8 text-center text-gray-400">
+                                Nenhum repasse inserido. Clique em "Novo Repasse" para registrar pagamentos.
                               </td>
                             </tr>
-                          ) : (
-                            repassLines.map(line => (
-                              <tr key={line.id} className="hover:bg-slate-800/40 transition-colors">
-                                {/* Data */}
-                                <td className="py-2.5 px-4">
-                                  <input
-                                    type="date"
-                                    value={line.date}
-                                    onChange={e => handleRepassLineChange(line.id, 'date', e.target.value)}
-                                    className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-purple-500"
-                                  />
-                                </td>
-
-                                {/* Banco de Origem */}
-                                <td className="py-2.5 px-4">
-                                  <select
-                                    value={line.bank}
-                                    onChange={e => handleRepassLineChange(line.id, 'bank', e.target.value)}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-white outline-none focus:border-purple-500"
-                                  >
-                                    {BANK_OPTIONS.map(b => (
-                                      <option key={b} value={b}>{b}</option>
-                                    ))}
-                                  </select>
-                                </td>
-
-                                {/* Observações */}
-                                <td className="py-2.5 px-4">
-                                  <input
-                                    type="text"
-                                    placeholder="Ex: Parcela 1/2, Pix enviado..."
-                                    value={line.notes}
-                                    onChange={e => handleRepassLineChange(line.id, 'notes', e.target.value)}
-                                    className="w-full bg-slate-800/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs text-slate-200 outline-none focus:border-purple-500"
-                                  />
-                                </td>
-
-                                {/* Valor */}
-                                <td className="py-2.5 px-4 text-right">
-                                  <input
-                                    type="number"
-                                    step="100"
-                                    value={line.amount}
-                                    onChange={e => handleRepassLineChange(line.id, 'amount', parseFloat(e.target.value) || 0)}
-                                    className="w-32 text-right bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-emerald-400 outline-none focus:border-purple-500"
-                                  />
-                                </td>
-
-                                {/* Delete */}
-                                <td className="py-2.5 px-2 text-center">
-                                  <button
-                                    onClick={() => handleRemoveRepassLine(line.id)}
-                                    className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          )}
+                          ) : repassLines.map(line => (
+                            <tr key={line.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="py-2.5 px-4">
+                                <input
+                                  type="date"
+                                  value={line.date}
+                                  onChange={e => handleRepassLineChange(line.id, 'date', e.target.value)}
+                                  className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-800 outline-none focus:border-blue-400"
+                                />
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <select
+                                  value={line.bank}
+                                  onChange={e => handleRepassLineChange(line.id, 'bank', e.target.value)}
+                                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
+                                >
+                                  {BANK_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                                </select>
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <input
+                                  type="text"
+                                  placeholder="Ex: Adiantamento, Parcela 1/2..."
+                                  value={line.notes}
+                                  onChange={e => handleRepassLineChange(line.id, 'notes', e.target.value)}
+                                  className="w-full bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 text-xs text-gray-700 outline-none focus:border-blue-400"
+                                />
+                              </td>
+                              <td className="py-2.5 px-4 text-right">
+                                <input
+                                  type="number"
+                                  step="100"
+                                  value={line.amount}
+                                  onChange={e => handleRepassLineChange(line.id, 'amount', parseFloat(e.target.value) || 0)}
+                                  className="w-32 text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 outline-none focus:border-emerald-400"
+                                />
+                              </td>
+                              <td className="py-2.5 px-2 text-center">
+                                <button
+                                  onClick={() => handleRemoveRepassLine(line.id)}
+                                  className="text-gray-300 hover:text-red-400 p-1 transition-colors"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                         <tfoot>
-                          <tr className="bg-slate-950 border-t-2 border-slate-800 text-xs font-black text-white">
-                            <td colSpan={3} className="py-3 px-4 uppercase tracking-wider text-purple-400">Total de Repasses Efetuados</td>
-                            <td className="py-3 px-4 text-right text-emerald-400 text-sm font-black">{formatMoney(totalRepassado)}</td>
+                          <tr className="bg-blue-50 border-t-2 border-blue-100 text-xs font-black">
+                            <td colSpan={3} className="py-3 px-4 uppercase tracking-wider text-blue-700">
+                              Total de Repasses Efetuados
+                            </td>
+                            <td className="py-3 px-4 text-right text-blue-700 text-sm">{fmt(totalRepassado)}</td>
                             <td></td>
                           </tr>
                         </tfoot>
@@ -1261,75 +1352,81 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                     </div>
                   </div>
 
-                  {/* Card de Apuração de Saldo Final */}
-                  <div className={`p-6 rounded-3xl border shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 transition-colors ${
-                    saldoRemanescente <= 0 
-                      ? 'bg-emerald-950/30 border-emerald-500/40' 
-                      : 'bg-amber-950/30 border-amber-500/40'
+                  {/* Card saldo final */}
+                  <div className={`p-6 rounded-3xl border flex flex-col md:flex-row items-center justify-between gap-5 shadow-sm transition-colors ${
+                    saldoRemanescente <= 0
+                      ? 'bg-emerald-50 border-emerald-200'
+                      : 'bg-red-50 border-red-200'
                   }`}>
-                    <div className="space-y-1 text-center md:text-left">
-                      <div className="flex items-center justify-center md:justify-start gap-2">
-                        {saldoRemanescente <= 0 ? (
-                          <CheckCircle2 className="text-emerald-400" size={20} />
-                        ) : (
-                          <AlertCircle className="text-amber-400" size={20} />
-                        )}
-                        <h4 className="text-xs font-black uppercase tracking-wider text-white">
-                          {saldoRemanescente <= 0 ? 'Apuração Quitada / Sem Pendências' : 'Apuração com Saldo Devedor Pendente'}
+                    <div className="flex items-center gap-3">
+                      {saldoRemanescente <= 0
+                        ? <CheckCircle2 className="text-emerald-500 shrink-0" size={24} />
+                        : <AlertCircle className="text-red-400 shrink-0" size={24} />
+                      }
+                      <div>
+                        <h4 className={`text-xs font-black uppercase tracking-wider ${
+                          saldoRemanescente <= 0 ? 'text-emerald-800' : 'text-red-700'
+                        }`}>
+                          {saldoRemanescente <= 0
+                            ? 'Apuração Quitada — Sem Pendências'
+                            : 'Apuração com Saldo Devedor Pendente'
+                          }
                         </h4>
+                        <p className={`text-xs mt-0.5 ${saldoRemanescente <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {saldoRemanescente <= 0
+                            ? 'Todos os repasses cobrem integralmente o Total Apurado.'
+                            : `Resta repassar ${fmt(saldoRemanescente)} para quitar a competência ${competencia}.`
+                          }
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-300">
-                        {saldoRemanescente <= 0
-                          ? 'Todos os repasses cobrem integralmente o Total Apurado Bruto da competência.'
-                          : `Resta repassar o valor de ${formatMoney(saldoRemanescente)} para quitar a competência ${competencia}.`}
-                      </p>
                     </div>
-
-                    <div className="text-center md:text-right shrink-0">
-                      <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-widest">Saldo Devedor Remanescente</span>
-                      <span className={`text-2xl sm:text-3xl font-black block mt-0.5 ${
-                        saldoRemanescente <= 0 ? 'text-emerald-400' : 'text-amber-400'
+                    <div className="text-center shrink-0">
+                      <span className={`text-[10px] font-bold uppercase tracking-widest block ${
+                        saldoRemanescente <= 0 ? 'text-emerald-600' : 'text-red-500'
+                      }`}>Saldo Remanescente</span>
+                      <span className={`text-3xl font-black block mt-0.5 ${
+                        saldoRemanescente <= 0 ? 'text-emerald-700' : 'text-red-600'
                       }`}>
-                        {formatMoney(saldoRemanescente)}
+                        {fmt(saldoRemanescente)}
                       </span>
                     </div>
                   </div>
-
                 </div>
               )}
             </>
           )}
-
         </div>
 
-        {/* ── FOOTER INFERIOR ── */}
-        <footer className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shrink-0">
-          <div className="flex items-center gap-4 text-slate-400 font-medium">
-            <span>Competência: <strong className="text-white font-bold">{competencia}</strong></span>
-            <span>Colaboradores: <strong className="text-white font-bold">{rows.length}</strong></span>
+        {/* ══ FOOTER ══════════════════════════════════════════════ */}
+        <footer className="px-5 sm:px-7 py-3 bg-white border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shrink-0">
+          <div className="flex items-center gap-4 text-gray-400 font-medium">
+            <span>Competência: <strong className="text-gray-700">{competencia}</strong></span>
+            <span>Colaboradores: <strong className="text-gray-700">{rows.length}</strong></span>
             {savedTimestamp && (
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <Check size={13} /> Salvo em {new Date(savedTimestamp).toLocaleDateString('pt-BR')} {new Date(savedTimestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              <span className="text-emerald-600 font-bold flex items-center gap-1">
+                <Check size={12} />
+                Salvo em {new Date(savedTimestamp).toLocaleDateString('pt-BR')} às{' '}
+                {new Date(savedTimestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold uppercase transition-all active:scale-95"
+              className="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold uppercase text-xs transition-all active:scale-95"
             >
               Fechar
             </button>
             <button
               onClick={handleSaveSettlement}
-              className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black uppercase transition-all active:scale-95 shadow-md"
+              disabled={saving}
+              className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black uppercase text-xs transition-all active:scale-95 shadow-sm disabled:opacity-60"
             >
-              <Save size={15} /> Salvar Apuração no DB
+              <Save size={14} /> {saving ? 'Salvando...' : 'Salvar Apuração'}
             </button>
           </div>
         </footer>
-
       </div>
     </div>
   );
