@@ -3,7 +3,7 @@ import {
   X, Building2, Plus, Trash2, Download, Calculator, Landmark, FileText,
   CheckCircle2, AlertCircle, Calendar, DollarSign, Percent, ChevronRight,
   Sparkles, RefreshCw, Edit3, Layers, Copy, ShieldCheck, ArrowRight, Save,
-  RotateCcw, Check, MapPin, Upload, Tag, Users, FileSpreadsheet
+  RotateCcw, Check, MapPin, Upload, Tag, Users, FileSpreadsheet, ArrowLeftRight
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PeopleHRService } from '@/services/people-hr.service';
@@ -34,8 +34,10 @@ export interface OutsourcingRow {
   location: string;
   employeeType: EmployeeType;
   isManual: boolean;
-  // Verbas principais
-  valorFixo: number;
+  // Verbas principais de remuneração
+  valorBruto: number;       // Valor Bruto (Holerite / NF / Salário Base)
+  valorDesconto: number;    // Descontos em folha
+  valorLiquido: number;     // Valor Líquido = Valor Bruto (-) Desconto
   valorBonus: number;
   valorComissao: number;
   valorAjudaCusto: number;  // Adiantamento
@@ -79,13 +81,6 @@ const EMPLOYEE_TYPE_CONFIG: Record<EmployeeType, { label: string; color: string;
   Estagio: { label: 'Estágio', color: 'text-orange-700', bg: 'bg-orange-100', border: 'border-orange-300' },
   Outro:   { label: 'Outro',   color: 'text-gray-600',   bg: 'bg-gray-100',   border: 'border-gray-300' },
 };
-
-// Colunas fixas de verbas (para cálculo de subtotal)
-const FIXED_VERBA_FIELDS: (keyof OutsourcingRow)[] = [
-  'valorFixo', 'valorBonus', 'valorComissao', 'valorAjudaCusto',
-  'valorVR', 'valorVT', 'valorSeguro', 'valorFGTS', 'valorGPS',
-  'valorDecTerceiro', 'valorFerias', 'valorOutros', 'valorEmprestimo'
-];
 
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
@@ -134,12 +129,29 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   // Aba ativa
   const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement'>('main');
 
-  // Upload PDF e XLSX/CSV refs
+  // Refs para barra de rolagem horizontal dupla sincronizada
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  // Upload XLSX/CSV e PDF refs
+  const spreadsheetInputRef = useRef<HTMLInputElement>(null);
+  const [spreadsheetImporting, setSpreadsheetImporting] = useState(false);
+
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [pdfUploading, setPdfUploading] = useState(false);
 
-  const spreadsheetInputRef = useRef<HTMLInputElement>(null);
-  const [spreadsheetImporting, setSpreadsheetImporting] = useState(false);
+  // ── Sincronização de scroll horizontal topo/tabela ──
+  const handleTopScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleTableScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    }
+  };
 
   // ── Formatação ──────────────────────────────
   const fmt = (v: number) =>
@@ -250,6 +262,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           rawType === 'Estagio' || rawType === 'Estágio' || rawType === 'estagio' ? 'Estagio' :
           rawType === 'CLT' ? 'CLT' : 'Outro';
 
+        const valorBruto = parseFloat(String(c?.valor_fixo ?? emp.remuneration_fixed ?? emp.remuneration ?? 0));
+        const valorDesconto = parseFloat(String(c?.valor_desconto ?? 0));
+        const valorLiquido = valorBruto - valorDesconto;
+
         return {
           id: emp.id,
           employeeId: emp.id,
@@ -257,7 +273,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           location: emp.service_location || emp.city || emp.neighborhood || emp.department || 'Matriz',
           employeeType: empType,
           isManual: false,
-          valorFixo: parseFloat(String(c?.valor_fixo ?? emp.remuneration_fixed ?? emp.remuneration ?? 0)),
+          valorBruto,
+          valorDesconto,
+          valorLiquido,
           valorBonus: parseFloat(String(c?.valor_bonus ?? emp.remuneration_bonus ?? 0)),
           valorComissao: parseFloat(String(c?.valor_comissao ?? emp.remuneration_commission ?? 0)),
           valorAjudaCusto: parseFloat(String(c?.valor_ajuda_custo ?? 0)),
@@ -274,7 +292,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         };
       });
 
-      // Colunas customizadas do localStorage (preservadas para compatibilidade)
+      // Colunas customizadas do localStorage
       const storageKey = `outsourcing_cols_${comp}${isTestMode ? '_test' : ''}`;
       const savedCols = localStorage.getItem(storageKey);
       if (savedCols) {
@@ -313,7 +331,6 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         setTaxRate(result.detectedTaxRate);
       }
 
-      // Atualizar lista de colaboradores: mesclando e substituindo
       setRows(result.rows);
       setSaveSuccessMessage(`Planilha "${file.name}" importada com sucesso: ${result.totalParsed} colaboradores carregados!`);
       setTimeout(() => setSaveSuccessMessage(null), 6000);
@@ -344,7 +361,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         updated_at: new Date().toISOString()
       }, { onConflict: 'competencia' });
 
-      // 2. Salvar repasses — delete + insert para consistência
+      // 2. Salvar repasses — delete + insert
       const repTable = 'outsourcing_repasses';
       await supabase
         .from(repTable)
@@ -368,7 +385,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         await supabase.from(repTable).insert(repRows);
       }
 
-      // 3. Salvar verbas individuais de cada colaborador (update na people_monthly_costs)
+      // 3. Salvar verbas individuais de cada colaborador (people_monthly_costs)
       const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
       for (const row of rows.filter(r => !r.isManual && r.employeeId)) {
         await supabase
@@ -376,7 +393,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           .upsert({
             employee_id: row.employeeId,
             competencia,
-            valor_fixo: row.valorFixo,
+            valor_fixo: row.valorBruto,
+            valor_desconto: row.valorDesconto,
+            valor_liquido: row.valorLiquido,
             valor_bonus: row.valorBonus,
             valor_comissao: row.valorComissao,
             valor_ajuda_custo: row.valorAjudaCusto,
@@ -423,7 +442,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       location: 'Matriz',
       employeeType: 'CLT',
       isManual: true,
-      valorFixo: 0, valorBonus: 0, valorComissao: 0, valorAjudaCusto: 0,
+      valorBruto: 0, valorDesconto: 0, valorLiquido: 0,
+      valorBonus: 0, valorComissao: 0, valorAjudaCusto: 0,
       valorVR: 0, valorVT: 0, valorSeguro: 0, valorFGTS: 0, valorGPS: 0,
       valorDecTerceiro: 0, valorFerias: 0, valorOutros: 0, valorEmprestimo: 0,
       customValues: {}
@@ -433,8 +453,19 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const handleRemoveRow = (id: string) =>
     setRows(prev => prev.filter(r => r.id !== id));
 
-  const handleRowChange = (id: string, field: keyof OutsourcingRow, value: any) =>
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  const handleRowChange = (id: string, field: keyof OutsourcingRow, value: any) => {
+    setRows(prev => prev.map(r => {
+      if (r.id === id) {
+        const updated = { ...r, [field]: value };
+        // Atualizar Valor Líquido automaticamente ao editar Bruto ou Desconto
+        if (field === 'valorBruto' || field === 'valorDesconto') {
+          updated.valorLiquido = (updated.valorBruto || 0) - (updated.valorDesconto || 0);
+        }
+        return updated;
+      }
+      return r;
+    }));
+  };
 
   const handleCustomValueChange = (rowId: string, colId: string, val: number) =>
     setRows(prev => prev.map(r =>
@@ -474,13 +505,13 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const handleRepassLineChange = (id: string, field: keyof RepassLine, value: any) =>
     setRepassLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
 
-  // ── Upload PDF (placeholder Fase 3) ─────────
+  // ── Upload PDF (placeholder) ────────────────
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPdfUploading(true);
     try {
-      alert(`Arquivo PDF "${file.name}" recebido. Use a opção "Importar Planilha (.xlsx/.csv)" para importação imediata de verbas estruturadas.`);
+      alert(`Arquivo PDF "${file.name}" recebido. Utilize o botão "Importar Planilha" (.xlsx/.csv) para carregar os valores estruturados.`);
     } finally {
       setPdfUploading(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
@@ -488,11 +519,30 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   };
 
   // ── Cálculos financeiros ─────────────────────
+  // O valor total é a soma do valor líquido mais todas as demais colunas
   const rowTotalMap = useMemo(() => {
     const map = new Map<string, number>();
     rows.forEach(r => {
       const customSum = Object.values(r.customValues || {}).reduce((a, v) => a + (v || 0), 0);
-      const total = FIXED_VERBA_FIELDS.reduce((a, f) => a + ((r[f] as number) || 0), 0) + customSum;
+      const liq = (r.valorLiquido !== undefined && r.valorLiquido !== null)
+        ? r.valorLiquido
+        : ((r.valorBruto || 0) - (r.valorDesconto || 0));
+
+      const total = liq +
+        (r.valorAjudaCusto || 0) +
+        (r.valorBonus || 0) +
+        (r.valorComissao || 0) +
+        (r.valorVR || 0) +
+        (r.valorVT || 0) +
+        (r.valorSeguro || 0) +
+        (r.valorFGTS || 0) +
+        (r.valorGPS || 0) +
+        (r.valorDecTerceiro || 0) +
+        (r.valorFerias || 0) +
+        (r.valorOutros || 0) +
+        (r.valorEmprestimo || 0) +
+        customSum;
+
       map.set(r.id, total);
     });
     return map;
@@ -531,7 +581,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
   // Totais por coluna
   const colTotals = useMemo(() => ({
-    valorFixo: rows.reduce((a, r) => a + r.valorFixo, 0),
+    valorBruto: rows.reduce((a, r) => a + r.valorBruto, 0),
+    valorDesconto: rows.reduce((a, r) => a + r.valorDesconto, 0),
+    valorLiquido: rows.reduce((a, r) => a + r.valorLiquido, 0),
     valorBonus: rows.reduce((a, r) => a + r.valorBonus, 0),
     valorComissao: rows.reduce((a, r) => a + r.valorComissao, 0),
     valorAjudaCusto: rows.reduce((a, r) => a + r.valorAjudaCusto, 0),
@@ -554,12 +606,30 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     const map = new Map<string, any>();
     rows.forEach(r => {
       const loc = r.location || 'Não especificado';
-      const ex = map.get(loc) || { location: loc, count: 0, total: 0, verbas: {} };
+      const ex = map.get(loc) || {
+        location: loc, count: 0, total: 0,
+        valorBruto: 0, valorDesconto: 0, valorLiquido: 0,
+        valorAjudaCusto: 0, valorBonus: 0, valorVR: 0, valorVT: 0,
+        valorSeguro: 0, valorFGTS: 0, valorGPS: 0,
+        valorDecTerceiro: 0, valorFerias: 0, valorEmprestimo: 0, valorOutros: 0
+      };
       ex.count++;
       ex.total += rowTotalMap.get(r.id) || 0;
-      FIXED_VERBA_FIELDS.forEach(f => {
-        ex.verbas[f] = (ex.verbas[f] || 0) + ((r[f] as number) || 0);
-      });
+      ex.valorBruto += r.valorBruto || 0;
+      ex.valorDesconto += r.valorDesconto || 0;
+      ex.valorLiquido += r.valorLiquido || 0;
+      ex.valorAjudaCusto += r.valorAjudaCusto || 0;
+      ex.valorBonus += r.valorBonus || 0;
+      ex.valorVR += r.valorVR || 0;
+      ex.valorVT += r.valorVT || 0;
+      ex.valorSeguro += r.valorSeguro || 0;
+      ex.valorFGTS += r.valorFGTS || 0;
+      ex.valorGPS += r.valorGPS || 0;
+      ex.valorDecTerceiro += r.valorDecTerceiro || 0;
+      ex.valorFerias += r.valorFerias || 0;
+      ex.valorEmprestimo += r.valorEmprestimo || 0;
+      ex.valorOutros += r.valorOutros || 0;
+
       map.set(loc, ex);
     });
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
@@ -569,7 +639,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const handleCopyReport = () => {
     let txt = `=== APURAÇÃO DE TERCEIRIZAÇÃO — ${competencia} ===\n\n`;
     txt += `Colaboradores: ${rows.length}\n`;
-    txt += `Subtotal de Verbas: ${fmt(subtotal)}\n`;
+    txt += `Valor Bruto Total: ${fmt(colTotals.valorBruto)}\n`;
+    txt += `Descontos de Folha: ${fmt(colTotals.valorDesconto)}\n`;
+    txt += `Valor Líquido de Salários: ${fmt(colTotals.valorLiquido)}\n`;
+    txt += `Subtotal de Verbas & Custos: ${fmt(subtotal)}\n`;
     txt += `ISS/Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'}): ${fmt(calculatedTax)}\n`;
     txt += `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate}%` : 'Fixo'}): ${fmt(calculatedAdminFee)}\n`;
     txt += `TOTAL APURADO BRUTO: ${fmt(totalApuradoBruto)}\n`;
@@ -596,14 +669,14 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   };
 
   const NumInput = ({
-    value, onChange, width = 'w-20'
-  }: { value: number; onChange: (v: number) => void; width?: string }) => (
+    value, onChange, width = 'w-20', className = ''
+  }: { value: number; onChange: (v: number) => void; width?: string; className?: string }) => (
     <input
       type="number"
       step="1"
       value={value}
       onChange={e => onChange(parseFloat(e.target.value) || 0)}
-      className={`${width} text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all`}
+      className={`${width} text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all ${className}`}
     />
   );
 
@@ -631,7 +704,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                Verbas por competência · Duplo check por localidade · Importação XLSX/CSV · Repasses e encargos
+                Bruto · Descontos · Líquido · Duplo check por localidade · Importação XLSX/CSV · Repasses
               </p>
             </div>
           </div>
@@ -682,7 +755,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             <button
               onClick={exportOutsourcingTemplate}
               className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-500 hover:text-gray-800 rounded-xl transition-all active:scale-95"
-              title="Baixar planilha modelo Excel (.xlsx) com todas as colunas pré-formatadas"
+              title="Baixar planilha modelo Excel (.xlsx) pré-formatada"
             >
               <Download size={14} />
             </button>
@@ -729,8 +802,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           {/* Subtotal Verbas */}
           <div className="bg-white border border-blue-100 rounded-2xl px-4 py-3 flex items-center justify-between shadow-sm">
             <div>
-              <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wide block">Subtotal Verbas</span>
+              <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wide block">Subtotal Geral</span>
               <span className="text-base font-black text-blue-700 block mt-0.5">{fmt(subtotal)}</span>
+              <span className="text-[9px] text-gray-400">Líquido ({fmt(colTotals.valorLiquido)}) + Verbas</span>
             </div>
             <DollarSign size={20} className="text-blue-200" />
           </div>
@@ -876,29 +950,57 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                       )}
                     </div>
 
-                    <div className="text-xs text-gray-500 font-semibold">
-                      Total na tabela: <span className="text-gray-900 font-black">{fmt(subtotal)}</span>
+                    <div className="text-xs text-gray-500 font-semibold flex items-center gap-3">
+                      <span>Líquido: <strong className="text-blue-700">{fmt(colTotals.valorLiquido)}</strong></span>
+                      <span>Total Geral: <strong className="text-gray-900 font-black">{fmt(subtotal)}</strong></span>
                     </div>
                   </div>
 
-                  {/* Tabela */}
-                  <div className="bg-white border border-gray-100 rounded-2xl overflow-x-auto shadow-sm">
+                  {/* ── BARRA DE ROLAGEM HORIZONTAL SUPERIOR SINCRONIZADA ── */}
+                  <div
+                    ref={topScrollRef}
+                    onScroll={handleTopScroll}
+                    className="w-full overflow-x-auto bg-gray-100/90 border border-gray-200 rounded-xl py-0.5 px-1 shadow-inner cursor-pointer"
+                    style={{ height: '14px' }}
+                    title="Barra de rolagem horizontal superior (arraste para navegar nas colunas)"
+                  >
+                    <div style={{ width: `${1650 + (customColumns.length * 100)}px`, height: '1px' }} />
+                  </div>
+
+                  {/* ── TABELA PRINCIPAL COM COLUNAS FIXAS À ESQUERDA ── */}
+                  <div
+                    ref={tableScrollRef}
+                    onScroll={handleTableScroll}
+                    className="bg-white border border-gray-100 rounded-2xl overflow-x-auto shadow-sm relative"
+                  >
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
-                          <th className="py-3 px-3 min-w-[180px] sticky left-0 bg-gray-50 z-10">Colaborador</th>
-                          <th className="py-3 px-2 min-w-[80px]">Tipo</th>
-                          <th className="py-3 px-3 min-w-[120px]">Localidade</th>
-                          {/* Verbas */}
-                          <th className="py-3 px-2 text-right min-w-[100px] bg-blue-50 text-blue-600">Sal. Base</th>
-                          <th className="py-3 px-2 text-right min-w-[90px]">Adit.</th>
+                          {/* 1. Colaborador (FIXO) */}
+                          <th className="py-3 px-3 min-w-[190px] w-[190px] sticky left-0 bg-gray-50 z-30">
+                            Colaborador
+                          </th>
+                          {/* 2. Localidade (FIXO) */}
+                          <th className="py-3 px-3 min-w-[140px] w-[140px] sticky left-[190px] bg-gray-50 z-30">
+                            Localidade
+                          </th>
+                          {/* 3. Valor Bruto (FIXO com sombra na borda) */}
+                          <th className="py-3 px-2 text-right min-w-[110px] w-[110px] sticky left-[330px] bg-blue-50/80 text-blue-700 z-30 border-r border-gray-200 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                            Valor Bruto
+                          </th>
+
+                          {/* Demais colunas que rolam livremente */}
+                          <th className="py-3 px-2 text-right min-w-[90px] bg-red-50 text-red-700">Desconto (-)</th>
+                          <th className="py-3 px-2 text-right min-w-[110px] bg-blue-100/60 text-blue-800 font-black">Valor Líquido</th>
+                          <th className="py-3 px-2 min-w-[75px] text-center">Tipo</th>
+                          <th className="py-3 px-2 text-right min-w-[90px]">Adiantamento</th>
                           <th className="py-3 px-2 text-right min-w-[90px]">Bônus</th>
                           <th className="py-3 px-2 text-right min-w-[80px] bg-green-50 text-green-700">VR</th>
                           <th className="py-3 px-2 text-right min-w-[80px] bg-green-50 text-green-700">VT</th>
                           <th className="py-3 px-2 text-right min-w-[80px]">Seguro</th>
                           <th className="py-3 px-2 text-right min-w-[80px] bg-orange-50 text-orange-700">FGTS</th>
                           <th className="py-3 px-2 text-right min-w-[80px] bg-orange-50 text-orange-700">GPS</th>
-                          <th className="py-3 px-2 text-right min-w-[80px] bg-purple-50 text-purple-700">13º</th>
+                          <th className="py-3 px-2 text-right min-w-[80px] bg-purple-50 text-purple-700">13º Sal.</th>
                           <th className="py-3 px-2 text-right min-w-[80px] bg-purple-50 text-purple-700">Férias</th>
                           <th className="py-3 px-2 text-right min-w-[80px]">Outros</th>
                           <th className="py-3 px-2 text-right min-w-[90px] bg-indigo-50 text-indigo-700">Emprést.</th>
@@ -917,7 +1019,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                               </div>
                             </th>
                           ))}
-                          <th className="py-3 px-3 text-right min-w-[110px] font-black text-gray-800 bg-white">Total</th>
+                          <th className="py-3 px-3 text-right min-w-[120px] font-black text-gray-800 bg-white">Total</th>
                           <th className="py-3 px-2 w-8 text-center"></th>
                         </tr>
                       </thead>
@@ -925,7 +1027,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                       <tbody className="divide-y divide-gray-50">
                         {rows.length === 0 ? (
                           <tr>
-                            <td colSpan={20} className="py-16 text-center text-gray-400 font-medium">
+                            <td colSpan={22} className="py-16 text-center text-gray-400 font-medium">
                               Nenhum colaborador terceirizado encontrado para esta competência.{' '}
                               <button onClick={handleAddManualRow} className="text-blue-500 underline mr-2">
                                 Adicionar linha manual
@@ -940,8 +1042,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                           const rTotal = rowTotalMap.get(row.id) || 0;
                           return (
                             <tr key={row.id} className="hover:bg-blue-50/30 transition-colors">
-                              {/* Nome */}
-                              <td className="py-2 px-3 sticky left-0 bg-white hover:bg-blue-50/30 z-10">
+                              {/* 1. Nome (FIXO) */}
+                              <td className="py-2 px-3 sticky left-0 min-w-[190px] w-[190px] bg-white hover:bg-blue-50/30 z-20">
                                 {row.isManual ? (
                                   <input
                                     type="text"
@@ -950,26 +1052,12 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                     className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
                                   />
                                 ) : (
-                                  <span className="font-semibold text-gray-800">{row.name}</span>
+                                  <span className="font-semibold text-gray-800 block truncate" title={row.name}>{row.name}</span>
                                 )}
                               </td>
 
-                              {/* Tipo */}
-                              <td className="py-2 px-2">
-                                <select
-                                  value={row.employeeType}
-                                  onChange={e => handleRowChange(row.id, 'employeeType', e.target.value as EmployeeType)}
-                                  className="bg-transparent text-[10px] font-bold outline-none cursor-pointer"
-                                  title="Tipo de vínculo"
-                                >
-                                  {(Object.keys(EMPLOYEE_TYPE_CONFIG) as EmployeeType[]).map(t => (
-                                    <option key={t} value={t}>{EMPLOYEE_TYPE_CONFIG[t].label}</option>
-                                  ))}
-                                </select>
-                              </td>
-
-                              {/* Localidade */}
-                              <td className="py-2 px-3">
+                              {/* 2. Localidade (FIXO) */}
+                              <td className="py-2 px-3 sticky left-[190px] min-w-[140px] w-[140px] bg-white hover:bg-blue-50/30 z-20">
                                 <input
                                   type="text"
                                   value={row.location}
@@ -978,11 +1066,48 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                 />
                               </td>
 
-                              {/* Sal. Base */}
-                              <td className="py-2 px-2 text-right bg-blue-50/30">
-                                <NumInput value={row.valorFixo} onChange={v => handleRowChange(row.id, 'valorFixo', v)} width="w-24" />
+                              {/* 3. Valor Bruto (FIXO com sombra na borda) */}
+                              <td className="py-2 px-2 text-right sticky left-[330px] min-w-[110px] w-[110px] bg-blue-50/60 hover:bg-blue-50 z-20 border-r border-gray-200 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                                <NumInput
+                                  value={row.valorBruto}
+                                  onChange={v => handleRowChange(row.id, 'valorBruto', v)}
+                                  width="w-24"
+                                  className="font-bold text-blue-800"
+                                />
                               </td>
-                              {/* Adit. */}
+
+                              {/* Desconto (-) */}
+                              <td className="py-2 px-2 text-right bg-red-50/40">
+                                <NumInput
+                                  value={row.valorDesconto}
+                                  onChange={v => handleRowChange(row.id, 'valorDesconto', v)}
+                                  width="w-20"
+                                  className="text-red-700"
+                                />
+                              </td>
+
+                              {/* Valor Líquido (Auto Calculado: Bruto - Desconto) */}
+                              <td className="py-2 px-2 text-right bg-blue-100/40">
+                                <span className="text-xs font-black text-blue-900 px-2 py-1 bg-white/80 border border-blue-200 rounded-lg inline-block w-24 text-right">
+                                  {fmt(row.valorLiquido)}
+                                </span>
+                              </td>
+
+                              {/* Tipo */}
+                              <td className="py-2 px-2 text-center">
+                                <select
+                                  value={row.employeeType}
+                                  onChange={e => handleRowChange(row.id, 'employeeType', e.target.value as EmployeeType)}
+                                  className="bg-transparent text-[10px] font-bold outline-none cursor-pointer text-center"
+                                  title="Tipo de vínculo"
+                                >
+                                  {(Object.keys(EMPLOYEE_TYPE_CONFIG) as EmployeeType[]).map(t => (
+                                    <option key={t} value={t}>{EMPLOYEE_TYPE_CONFIG[t].label}</option>
+                                  ))}
+                                </select>
+                              </td>
+
+                              {/* Adiantamento */}
                               <td className="py-2 px-2 text-right">
                                 <NumInput value={row.valorAjudaCusto} onChange={v => handleRowChange(row.id, 'valorAjudaCusto', v)} />
                               </td>
@@ -1035,7 +1160,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                   />
                                 </td>
                               ))}
-                              {/* Total */}
+                              {/* Total (Líquido + Demais Colunas) */}
                               <td className="py-2 px-3 text-right font-black text-emerald-700">
                                 {fmt(rTotal)}
                               </td>
@@ -1057,10 +1182,21 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                       {/* Footer com totais */}
                       <tfoot>
                         <tr className="bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider border-t-2 border-blue-500">
-                          <td className="py-3 px-3 sticky left-0 bg-blue-600 z-10">TOTAIS ({rows.length})</td>
-                          <td className="py-3 px-2">—</td>
-                          <td className="py-3 px-3">—</td>
-                          <td className="py-3 px-2 text-right">{fmt(colTotals.valorFixo)}</td>
+                          {/* Colunas fixas no rodapé */}
+                          <td className="py-3 px-3 sticky left-0 min-w-[190px] w-[190px] bg-blue-600 z-30">
+                            TOTAIS ({rows.length})
+                          </td>
+                          <td className="py-3 px-3 sticky left-[190px] min-w-[140px] w-[140px] bg-blue-600 z-30">
+                            —
+                          </td>
+                          <td className="py-3 px-2 text-right sticky left-[330px] min-w-[110px] w-[110px] bg-blue-700 z-30 border-r border-blue-500 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.15)]">
+                            {fmt(colTotals.valorBruto)}
+                          </td>
+
+                          {/* Demais totais */}
+                          <td className="py-3 px-2 text-right bg-blue-700/80">{fmt(colTotals.valorDesconto)}</td>
+                          <td className="py-3 px-2 text-right bg-blue-800 font-black">{fmt(colTotals.valorLiquido)}</td>
+                          <td className="py-3 px-2 text-center">—</td>
                           <td className="py-3 px-2 text-right">{fmt(colTotals.valorAjudaCusto)}</td>
                           <td className="py-3 px-2 text-right">{fmt(colTotals.valorBonus)}</td>
                           <td className="py-3 px-2 text-right">{fmt(colTotals.valorVR)}</td>
@@ -1141,20 +1277,20 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                           {/* Detalhamento de verbas */}
                           <div className="grid grid-cols-4 gap-1.5 text-[10px]">
                             {[
-                              { label: 'Sal. Base', key: 'valorFixo', color: 'text-blue-700' },
-                              { label: 'Bônus', key: 'valorBonus', color: 'text-gray-700' },
-                              { label: 'Adit.', key: 'valorAjudaCusto', color: 'text-gray-700' },
-                              { label: 'VR', key: 'valorVR', color: 'text-green-700' },
-                              { label: 'VT', key: 'valorVT', color: 'text-green-700' },
-                              { label: 'FGTS', key: 'valorFGTS', color: 'text-orange-700' },
-                              { label: 'GPS', key: 'valorGPS', color: 'text-orange-700' },
-                              { label: '13º', key: 'valorDecTerceiro', color: 'text-purple-700' },
-                            ].map(({ label, key, color }) => (
-                              ls.verbas[key] > 0 && (
-                                <div key={key} className="bg-gray-50 rounded-lg p-1.5 text-center">
+                              { label: 'Bruto', value: ls.valorBruto, color: 'text-blue-700' },
+                              { label: 'Líquido', value: ls.valorLiquido, color: 'text-blue-900 font-black' },
+                              { label: 'Adit.', value: ls.valorAjudaCusto, color: 'text-gray-700' },
+                              { label: 'VR', value: ls.valorVR, color: 'text-green-700' },
+                              { label: 'VT', value: ls.valorVT, color: 'text-green-700' },
+                              { label: 'FGTS', value: ls.valorFGTS, color: 'text-orange-700' },
+                              { label: 'GPS', value: ls.valorGPS, color: 'text-orange-700' },
+                              { label: '13º', value: ls.valorDecTerceiro, color: 'text-purple-700' },
+                            ].map(({ label, value, color }) => (
+                              value > 0 && (
+                                <div key={label} className="bg-gray-50 rounded-lg p-1.5 text-center">
                                   <span className="text-gray-400 block">{label}</span>
                                   <span className={`font-bold ${color} block`}>
-                                    {(ls.verbas[key] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0, style: 'currency', currency: 'BRL' })}
+                                    {(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0, style: 'currency', currency: 'BRL' })}
                                   </span>
                                 </div>
                               )
@@ -1179,7 +1315,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                         <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
                           <th className="py-3 px-4">Localidade</th>
                           <th className="py-3 px-3 text-center">Colaboradores</th>
-                          <th className="py-3 px-3 text-right">Sal. Base</th>
+                          <th className="py-3 px-3 text-right">Valor Bruto</th>
+                          <th className="py-3 px-3 text-right">Descontos</th>
+                          <th className="py-3 px-3 text-right">Valor Líquido</th>
                           <th className="py-3 px-3 text-right">Benefícios</th>
                           <th className="py-3 px-3 text-right">Encargos</th>
                           <th className="py-3 px-3 text-right">Provisões</th>
@@ -1199,17 +1337,19 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                 {ls.count} pss
                               </span>
                             </td>
-                            <td className="py-3 px-3 text-right text-gray-600 font-semibold">{fmt(ls.verbas.valorFixo || 0)}</td>
+                            <td className="py-3 px-3 text-right text-blue-700 font-semibold">{fmt(ls.valorBruto || 0)}</td>
+                            <td className="py-3 px-3 text-right text-red-600 font-semibold">{fmt(ls.valorDesconto || 0)}</td>
+                            <td className="py-3 px-3 text-right text-blue-900 font-black">{fmt(ls.valorLiquido || 0)}</td>
                             <td className="py-3 px-3 text-right text-green-700 font-semibold">
-                              {fmt((ls.verbas.valorVR || 0) + (ls.verbas.valorVT || 0) + (ls.verbas.valorSeguro || 0))}
+                              {fmt((ls.valorVR || 0) + (ls.valorVT || 0) + (ls.valorSeguro || 0))}
                             </td>
                             <td className="py-3 px-3 text-right text-orange-700 font-semibold">
-                              {fmt((ls.verbas.valorFGTS || 0) + (ls.verbas.valorGPS || 0))}
+                              {fmt((ls.valorFGTS || 0) + (ls.valorGPS || 0))}
                             </td>
                             <td className="py-3 px-3 text-right text-purple-700 font-semibold">
-                              {fmt((ls.verbas.valorDecTerceiro || 0) + (ls.verbas.valorFerias || 0))}
+                              {fmt((ls.valorDecTerceiro || 0) + (ls.valorFerias || 0))}
                             </td>
-                            <td className="py-3 px-3 text-right text-indigo-700 font-semibold">{fmt(ls.verbas.valorEmprestimo || 0)}</td>
+                            <td className="py-3 px-3 text-right text-indigo-700 font-semibold">{fmt(ls.valorEmprestimo || 0)}</td>
                             <td className="py-3 px-4 text-right font-black text-emerald-700 text-sm">{fmt(ls.total)}</td>
                           </tr>
                         ))}
@@ -1218,7 +1358,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                         <tr className="bg-blue-600 text-white text-[10px] font-black uppercase">
                           <td className="py-3 px-4">TOTAL CONSOLIDADO</td>
                           <td className="py-3 px-3 text-center">{rows.length}</td>
-                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorFixo)}</td>
+                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorBruto)}</td>
+                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorDesconto)}</td>
+                          <td className="py-3 px-3 text-right">{fmt(colTotals.valorLiquido)}</td>
                           <td className="py-3 px-3 text-right">{fmt(colTotals.valorVR + colTotals.valorVT + colTotals.valorSeguro)}</td>
                           <td className="py-3 px-3 text-right">{fmt(colTotals.valorFGTS + colTotals.valorGPS)}</td>
                           <td className="py-3 px-3 text-right">{fmt(colTotals.valorDecTerceiro + colTotals.valorFerias)}</td>
@@ -1333,7 +1475,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
                       <div className="space-y-2 text-xs">
                         {[
-                          { label: 'Subtotal de Verbas', value: subtotal, color: 'text-gray-800' },
+                          { label: 'Valor Bruto Total', value: colTotals.valorBruto, color: 'text-gray-700' },
+                          { label: 'Descontos de Folha (-)', value: colTotals.valorDesconto, color: 'text-red-600' },
+                          { label: 'Valor Líquido de Salários', value: colTotals.valorLiquido, color: 'text-blue-800 font-bold' },
+                          { label: 'Subtotal Geral (Líquido + Verbas)', value: subtotal, color: 'text-gray-900 font-bold' },
                           { label: `ISS / Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'})`, value: calculatedTax, color: 'text-amber-600' },
                           { label: `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate}%` : fmt(adminFeeFixedAmount)})`, value: calculatedAdminFee, color: 'text-blue-600' },
                         ].map(({ label, value, color }) => (

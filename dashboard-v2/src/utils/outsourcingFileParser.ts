@@ -88,7 +88,6 @@ export function parseOutsourcingFile(fileData: ArrayBuffer | Uint8Array | string
         const nextVal = row[j + 1];
         const num = cleanNumeric(nextVal);
         if (num > 0) {
-          // Se for decimal menor que 1 (ex: 0.1348), converte para percentual (13.48%)
           detectedTaxRate = num < 1 ? parseFloat((num * 100).toFixed(4)) : num;
         }
       }
@@ -106,7 +105,6 @@ export function parseOutsourcingFile(fileData: ArrayBuffer | Uint8Array | string
   }
 
   if (headerRowIndex === -1) {
-    // Fallback: se a primeira linha já contiver colunas conhecidas
     headerRowIndex = 0;
   }
 
@@ -120,7 +118,13 @@ export function parseOutsourcingFile(fileData: ArrayBuffer | Uint8Array | string
   const colIdxTipo = findColIndex('item', 'tipo', 'regime', 'vínculo', 'vinculo');
   const colIdxNome = findColIndex('colaborador', 'nome', 'prestador', 'funcionário', 'funcionario');
   const colIdxLocal = findColIndex('centro de custo', 'localidade', 'filial', 'local', 'setor', 'departamento');
-  const colIdxFixo = findColIndex('valor bruto', 'salário base', 'salario base', 'fixo', 'holerite', 'remuneração', 'remuneracao', 'nf');
+  
+  // Colunas de Valores Bruto, Desconto e Líquido
+  const colIdxBruto = findColIndex('valor bruto', 'salário bruto', 'salario bruto', 'salário base', 'salario base', 'fixo', 'holerite', 'remuneração', 'nf');
+  const colIdxDesconto = findColIndex('desconto', 'descontos', 'desc');
+  const colIdxLiquido = findColIndex('valor líquido', 'valor liquido', 'líquido', 'liquido');
+
+  // Demais verbas
   const colIdxBonus = findColIndex('bonificação', 'bonificao', 'bonificacao', 'bônus', 'bonus', 'comissão', 'comissao');
   const colIdxAdiantamento = findColIndex('adiantamento', 'ajuda custo', 'adit');
   const colIdxEmprestimo = findColIndex('empréstimo', 'emprestimo', 'empréstimos', 'emprestimos');
@@ -171,7 +175,19 @@ export function parseOutsourcingFile(fileData: ArrayBuffer | Uint8Array | string
     const empType = parseEmployeeType(rawTipo);
     const location = String(rawLocal || 'Matriz').trim();
 
-    const valorFixo = colIdxFixo !== -1 ? cleanNumeric(row[colIdxFixo]) : 0;
+    let valorBruto = colIdxBruto !== -1 ? cleanNumeric(row[colIdxBruto]) : 0;
+    let valorDesconto = colIdxDesconto !== -1 ? cleanNumeric(row[colIdxDesconto]) : 0;
+    let valorLiquido = colIdxLiquido !== -1 ? cleanNumeric(row[colIdxLiquido]) : 0;
+
+    // Se o valor bruto ou líquido vieram na planilha mas o desconto não foi informado
+    if (valorBruto > 0 && valorLiquido > 0 && valorDesconto === 0 && valorBruto > valorLiquido) {
+      valorDesconto = valorBruto - valorLiquido;
+    } else if (valorBruto > 0 && valorLiquido === 0) {
+      valorLiquido = valorBruto - valorDesconto;
+    } else if (valorBruto === 0 && valorLiquido > 0) {
+      valorBruto = valorLiquido + valorDesconto;
+    }
+
     const valorBonus = colIdxBonus !== -1 ? cleanNumeric(row[colIdxBonus]) : 0;
     const valorAjudaCusto = colIdxAdiantamento !== -1 ? cleanNumeric(row[colIdxAdiantamento]) : 0;
     const valorEmprestimo = colIdxEmprestimo !== -1 ? cleanNumeric(row[colIdxEmprestimo]) : 0;
@@ -185,7 +201,6 @@ export function parseOutsourcingFile(fileData: ArrayBuffer | Uint8Array | string
     const valorFerias = colIdxFerias !== -1 ? cleanNumeric(row[colIdxFerias]) : 0;
     const valorOutros = colIdxOutros !== -1 ? cleanNumeric(row[colIdxOutros]) : 0;
 
-    // Se houver coluna de perfil separada da GPS, podemos somar ou colocar em verbas
     const gpsFinal = valorGPS > 0 ? valorGPS : valorPerfil;
     const outrosFinal = valorGPS > 0 && valorPerfil > 0 ? valorOutros + valorPerfil : valorOutros;
 
@@ -194,8 +209,10 @@ export function parseOutsourcingFile(fileData: ArrayBuffer | Uint8Array | string
       name: nomeStr,
       location: location || 'Matriz',
       employeeType: empType,
-      isManual: true, // Marcado como manual para permitir edição livre
-      valorFixo,
+      isManual: true,
+      valorBruto,
+      valorDesconto,
+      valorLiquido,
       valorBonus,
       valorComissao: 0,
       valorAjudaCusto,
@@ -228,7 +245,9 @@ export function exportOutsourcingTemplate() {
     'Tipo (CLT/PJ/Estágio)',
     'Colaborador',
     'Localidade / Centro de Custo',
-    'Salário Base (R$)',
+    'Valor Bruto (R$)',
+    'Desconto (R$)',
+    'Valor Líquido (R$)',
     'Adiantamento (R$)',
     'Bônus (R$)',
     'VR (R$)',
@@ -247,23 +266,27 @@ export function exportOutsourcingTemplate() {
       'CLT',
       'Exemplo Colaborador Celetista',
       'Santos',
-      2500.00,
-      1000.00,
+      3037.67,
+      1104.01,
+      1933.66,
+      739.92,
       0,
-      320.00,
-      400.00,
+      0,
+      273.00,
       14.96,
-      200.00,
-      180.00,
-      208.33,
-      277.77,
+      243.01,
+      253.10,
       0,
+      0,
+      45.60,
       0
     ],
     [
       'PJ',
       'Exemplo Prestador PJ',
       'Mar Brasil',
+      5000.00,
+      0,
       5000.00,
       0,
       500.00,
@@ -283,6 +306,8 @@ export function exportOutsourcingTemplate() {
       'Bertioga',
       1500.00,
       0,
+      1500.00,
+      0,
       0,
       0,
       250.00,
@@ -298,11 +323,12 @@ export function exportOutsourcingTemplate() {
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows]);
 
-  // Largura das colunas
   ws['!cols'] = [
     { wch: 22 },
     { wch: 30 },
     { wch: 28 },
+    { wch: 18 },
+    { wch: 16 },
     { wch: 18 },
     { wch: 18 },
     { wch: 15 },

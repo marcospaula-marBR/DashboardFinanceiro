@@ -8,6 +8,7 @@
 -- Cada campo representa uma verba individual da folha de terceirização
 
 ALTER TABLE people_monthly_costs
+  ADD COLUMN IF NOT EXISTS valor_desconto     NUMERIC(12,2) DEFAULT 0,  -- Descontos de folha
   ADD COLUMN IF NOT EXISTS valor_vr           NUMERIC(12,2) DEFAULT 0,  -- Vale Refeição
   ADD COLUMN IF NOT EXISTS valor_vt           NUMERIC(12,2) DEFAULT 0,  -- Vale Transporte
   ADD COLUMN IF NOT EXISTS valor_seguro       NUMERIC(12,2) DEFAULT 0,  -- Seguro de vida/saúde
@@ -19,6 +20,7 @@ ALTER TABLE people_monthly_costs
 
 -- Aplicar as mesmas colunas na tabela de teste
 ALTER TABLE people_monthly_costs_test
+  ADD COLUMN IF NOT EXISTS valor_desconto     NUMERIC(12,2) DEFAULT 0,
   ADD COLUMN IF NOT EXISTS valor_vr           NUMERIC(12,2) DEFAULT 0,
   ADD COLUMN IF NOT EXISTS valor_vt           NUMERIC(12,2) DEFAULT 0,
   ADD COLUMN IF NOT EXISTS valor_seguro       NUMERIC(12,2) DEFAULT 0,
