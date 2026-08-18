@@ -3,11 +3,12 @@ import {
   X, Building2, Plus, Trash2, Download, Calculator, Landmark, FileText,
   CheckCircle2, AlertCircle, Calendar, DollarSign, Percent, ChevronRight,
   Sparkles, RefreshCw, Edit3, Layers, Copy, ShieldCheck, ArrowRight, Save,
-  RotateCcw, Check, MapPin, Upload, Tag, Users
+  RotateCcw, Check, MapPin, Upload, Tag, Users, FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PeopleHRService } from '@/services/people-hr.service';
 import { Employee } from '@/types/loans';
+import { parseOutsourcingFile, exportOutsourcingTemplate } from '@/utils/outsourcingFileParser';
 
 // ─────────────────────────────────────────────
 // TIPOS
@@ -114,11 +115,15 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const [newColName, setNewColName] = useState('');
   const [isAddingCol, setIsAddingCol] = useState(false);
 
-  // Taxas e configurações
+  // Taxas e configurações (ISS)
   const [taxInputMode, setTaxInputMode] = useState<'rate' | 'amount'>('rate');
   const [taxRate, setTaxRate] = useState<number>(5.0);
   const [taxFixedAmount, setTaxFixedAmount] = useState<number>(0);
+
+  // Taxa de Administração (Opção % ou Valor Absoluto R$)
+  const [adminFeeMode, setAdminFeeMode] = useState<'rate' | 'amount'>('rate');
   const [adminFeeRate, setAdminFeeRate] = useState<number>(10.0);
+  const [adminFeeFixedAmount, setAdminFeeFixedAmount] = useState<number>(0);
 
   // Repasses
   const [repassLines, setRepassLines] = useState<RepassLine[]>([]);
@@ -129,9 +134,12 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   // Aba ativa
   const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement'>('main');
 
-  // Upload PDF ref (Fase 3 — placeholder funcional)
+  // Upload PDF e XLSX/CSV refs
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [pdfUploading, setPdfUploading] = useState(false);
+
+  const spreadsheetInputRef = useRef<HTMLInputElement>(null);
+  const [spreadsheetImporting, setSpreadsheetImporting] = useState(false);
 
   // ── Formatação ──────────────────────────────
   const fmt = (v: number) =>
@@ -216,12 +224,18 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         setTaxInputMode(cfgData.tax_input_mode || 'rate');
         setTaxRate(parseFloat(String(cfgData.tax_rate)) || 5.0);
         setTaxFixedAmount(parseFloat(String(cfgData.tax_fixed)) || 0);
+
+        setAdminFeeMode(cfgData.admin_fee_mode || 'rate');
         setAdminFeeRate(parseFloat(String(cfgData.admin_fee_rate)) || 10.0);
+        setAdminFeeFixedAmount(parseFloat(String(cfgData.admin_fee_fixed)) || 0);
       } else {
         setTaxInputMode('rate');
         setTaxRate(5.0);
         setTaxFixedAmount(0);
+
+        setAdminFeeMode('rate');
         setAdminFeeRate(10.0);
+        setAdminFeeFixedAmount(0);
       }
 
       // 6. Montar linhas da tabela principal
@@ -260,7 +274,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         };
       });
 
-      // Colunas customizadas do localStorage (ainda preservamos para compatibilidade)
+      // Colunas customizadas do localStorage (preservadas para compatibilidade)
       const storageKey = `outsourcing_cols_${comp}${isTestMode ? '_test' : ''}`;
       const savedCols = localStorage.getItem(storageKey);
       if (savedCols) {
@@ -279,6 +293,39 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     }
   };
 
+  // ── Importar Planilha (XLSX / CSV) ───────────
+  const handleSpreadsheetUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSpreadsheetImporting(true);
+    setError(null);
+    try {
+      const buffer = await file.arrayBuffer();
+      const result = parseOutsourcingFile(buffer);
+
+      if (result.rows.length === 0) {
+        throw new Error('Nenhum colaborador ou verba foi identificado na planilha importada.');
+      }
+
+      // Se a planilha continha taxa de ISS detectada, atualiza
+      if (result.detectedTaxRate !== undefined && result.detectedTaxRate > 0) {
+        setTaxInputMode('rate');
+        setTaxRate(result.detectedTaxRate);
+      }
+
+      // Atualizar lista de colaboradores: mesclando e substituindo
+      setRows(result.rows);
+      setSaveSuccessMessage(`Planilha "${file.name}" importada com sucesso: ${result.totalParsed} colaboradores carregados!`);
+      setTimeout(() => setSaveSuccessMessage(null), 6000);
+    } catch (err: any) {
+      console.error('Erro ao importar planilha:', err);
+      setError(`Erro na importação da planilha: ${err?.message || 'Arquivo inválido.'}`);
+    } finally {
+      setSpreadsheetImporting(false);
+      if (spreadsheetInputRef.current) spreadsheetInputRef.current.value = '';
+    }
+  };
+
   // ── Salvar no Supabase ────────────────────────
   const handleSaveSettlement = async () => {
     setSaving(true);
@@ -289,13 +336,15 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         tax_input_mode: taxInputMode,
         tax_rate: taxRate,
         tax_fixed: taxFixedAmount,
+        admin_fee_mode: adminFeeMode,
         admin_fee_rate: adminFeeRate,
+        admin_fee_fixed: adminFeeFixedAmount,
         is_test: isTestMode,
         saved_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }, { onConflict: 'competencia' });
 
-      // 2. Salvar repasses — delete + insert para simplificar
+      // 2. Salvar repasses — delete + insert para consistência
       const repTable = 'outsourcing_repasses';
       await supabase
         .from(repTable)
@@ -431,9 +480,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     if (!file) return;
     setPdfUploading(true);
     try {
-      // TODO Fase 3: integrar com /api/people/parse-payroll-batch
-      // Por ora exibe aviso informativo
-      alert(`Arquivo "${file.name}" recebido. A leitura automática de PDF de terceirização será integrada na Fase 3. Por enquanto, preencha os valores manualmente.`);
+      alert(`Arquivo PDF "${file.name}" recebido. Use a opção "Importar Planilha (.xlsx/.csv)" para importação imediata de verbas estruturadas.`);
     } finally {
       setPdfUploading(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
@@ -461,9 +508,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     [subtotal, taxInputMode, taxRate, taxFixedAmount]
   );
 
+  // Taxa de administração (% ou R$ Absoluto)
   const calculatedAdminFee = useMemo(() =>
-    subtotal * (adminFeeRate / 100),
-    [subtotal, adminFeeRate]
+    adminFeeMode === 'rate' ? subtotal * (adminFeeRate / 100) : (adminFeeFixedAmount || 0),
+    [subtotal, adminFeeMode, adminFeeRate, adminFeeFixedAmount]
   );
 
   const totalApuradoBruto = useMemo(() =>
@@ -523,7 +571,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     txt += `Colaboradores: ${rows.length}\n`;
     txt += `Subtotal de Verbas: ${fmt(subtotal)}\n`;
     txt += `ISS/Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'}): ${fmt(calculatedTax)}\n`;
-    txt += `Taxa Administrativa (${adminFeeRate}%): ${fmt(calculatedAdminFee)}\n`;
+    txt += `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate}%` : 'Fixo'}): ${fmt(calculatedAdminFee)}\n`;
     txt += `TOTAL APURADO BRUTO: ${fmt(totalApuradoBruto)}\n`;
     txt += `--------------------------------------------\n`;
     txt += `TOTAL REPASSADO: ${fmt(totalRepassado)}\n`;
@@ -583,7 +631,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                Verbas por competência · Duplo check por localidade · Repasses e encargos
+                Verbas por competência · Duplo check por localidade · Importação XLSX/CSV · Repasses e encargos
               </p>
             </div>
           </div>
@@ -612,21 +660,31 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
               <RefreshCw size={14} className={loading ? 'animate-spin text-blue-500' : ''} />
             </button>
 
-            {/* Upload PDF */}
+            {/* Importar Planilha (XLSX / CSV) */}
             <input
-              ref={pdfInputRef}
+              ref={spreadsheetInputRef}
               type="file"
-              accept=".pdf"
+              accept=".xlsx, .xls, .csv"
               className="hidden"
-              onChange={handlePdfUpload}
+              onChange={handleSpreadsheetUpload}
             />
             <button
-              onClick={() => pdfInputRef.current?.click()}
-              disabled={pdfUploading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold transition-all active:scale-95"
-              title="Importar Folha PDF por competência"
+              onClick={() => spreadsheetInputRef.current?.click()}
+              disabled={spreadsheetImporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm"
+              title="Importar dados de planilha Excel (.xlsx/.xls) ou CSV"
             >
-              <Upload size={13} /> <span className="hidden sm:inline">Importar PDF</span>
+              <FileSpreadsheet size={13} className={spreadsheetImporting ? 'animate-spin' : ''} />
+              <span>{spreadsheetImporting ? 'Lendo...' : 'Importar Planilha'}</span>
+            </button>
+
+            {/* Baixar Modelo XLSX */}
+            <button
+              onClick={exportOutsourcingTemplate}
+              className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-500 hover:text-gray-800 rounded-xl transition-all active:scale-95"
+              title="Baixar planilha modelo Excel (.xlsx) com todas as colunas pré-formatadas"
+            >
+              <Download size={14} />
             </button>
 
             {/* Copiar resumo */}
@@ -687,12 +745,14 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             <Percent size={20} className="text-amber-200" />
           </div>
 
-          {/* Total Apurado */}
+          {/* Total Apurado (com Taxa Admin) */}
           <div className="bg-white border border-emerald-100 rounded-2xl px-4 py-3 flex items-center justify-between shadow-sm">
             <div>
               <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wide block">Total Apurado</span>
               <span className="text-base font-black text-emerald-700 block mt-0.5">{fmt(totalApuradoBruto)}</span>
-              <span className="text-[9px] text-gray-400">+ Taxa admin {adminFeeRate}%</span>
+              <span className="text-[9px] text-gray-400">
+                + Taxa admin ({adminFeeMode === 'rate' ? `${adminFeeRate}%` : fmt(adminFeeFixedAmount)})
+              </span>
             </div>
             <Calculator size={20} className="text-emerald-200" />
           </div>
@@ -772,12 +832,19 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                 <div className="space-y-3">
                   {/* Toolbar */}
                   <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={handleAddManualRow}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase transition-all active:scale-95 shadow-sm"
                       >
                         <Plus size={13} /> Linha Manual
+                      </button>
+
+                      <button
+                        onClick={() => spreadsheetInputRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase transition-all active:scale-95 shadow-sm"
+                      >
+                        <FileSpreadsheet size={13} /> Importar XLSX / CSV
                       </button>
 
                       {!isAddingCol ? (
@@ -860,9 +927,13 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                           <tr>
                             <td colSpan={20} className="py-16 text-center text-gray-400 font-medium">
                               Nenhum colaborador terceirizado encontrado para esta competência.{' '}
-                              <button onClick={handleAddManualRow} className="text-blue-500 underline">
-                                Adicionar linha manual.
+                              <button onClick={handleAddManualRow} className="text-blue-500 underline mr-2">
+                                Adicionar linha manual
                               </button>
+                              ou{' '}
+                              <button onClick={() => spreadsheetInputRef.current?.click()} className="text-emerald-600 underline font-bold">
+                                importar planilha Excel / CSV
+                              </button>.
                             </td>
                           </tr>
                         ) : rows.map(row => {
@@ -1165,10 +1236,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-                    {/* Configurações de encargos */}
+                    {/* Configurações de encargos & taxas */}
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
                       <h3 className="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                        <Percent size={14} className="text-blue-500" /> Configurações de Encargos
+                        <Percent size={14} className="text-blue-500" /> Configurações de Encargos & Taxas
                       </h3>
 
                       <div className="space-y-3">
@@ -1212,18 +1283,38 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                           </div>
                         </div>
 
-                        {/* Taxa Admin */}
+                        {/* Taxa Administrativa (Opção % ou Valor Fixo R$) */}
                         <div className="flex items-center justify-between gap-4 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
                           <div>
                             <span className="text-[10px] font-bold uppercase text-blue-700 tracking-wider block">Taxa Administrativa</span>
-                            <div className="flex items-center gap-1 mt-1">
-                              <input
-                                type="number" step="0.5" min="0"
-                                value={adminFeeRate}
-                                onChange={e => setAdminFeeRate(parseFloat(e.target.value) || 0)}
-                                className="w-16 text-right bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
-                              />
-                              <span className="text-xs font-bold text-blue-600">%</span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <button
+                                onClick={() => setAdminFeeMode(prev => prev === 'rate' ? 'amount' : 'rate')}
+                                className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200 transition-all"
+                              >
+                                {adminFeeMode === 'rate' ? '% Alíquota' : 'R$ Fixo'}
+                              </button>
+                              {adminFeeMode === 'rate' ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number" step="0.5" min="0"
+                                    value={adminFeeRate}
+                                    onChange={e => setAdminFeeRate(parseFloat(e.target.value) || 0)}
+                                    className="w-16 text-right bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
+                                  />
+                                  <span className="text-xs font-bold text-blue-600">%</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-bold text-blue-600">R$</span>
+                                  <input
+                                    type="number" step="100" min="0"
+                                    value={adminFeeFixedAmount}
+                                    onChange={e => setAdminFeeFixedAmount(parseFloat(e.target.value) || 0)}
+                                    className="w-28 text-right bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="text-right">
@@ -1244,7 +1335,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                         {[
                           { label: 'Subtotal de Verbas', value: subtotal, color: 'text-gray-800' },
                           { label: `ISS / Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'})`, value: calculatedTax, color: 'text-amber-600' },
-                          { label: `Taxa Administrativa (${adminFeeRate}%)`, value: calculatedAdminFee, color: 'text-blue-600' },
+                          { label: `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate}%` : fmt(adminFeeFixedAmount)})`, value: calculatedAdminFee, color: 'text-blue-600' },
                         ].map(({ label, value, color }) => (
                           <div key={label} className="flex items-center justify-between py-1.5 border-b border-gray-50">
                             <span className="text-gray-500 font-medium">{label}</span>

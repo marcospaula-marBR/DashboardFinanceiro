@@ -56,7 +56,9 @@ CREATE TABLE IF NOT EXISTS outsourcing_apuracao_config (
   tax_input_mode  TEXT DEFAULT 'rate',            -- 'rate' | 'amount'
   tax_rate        NUMERIC(6,4) DEFAULT 5.0,       -- alíquota ISS (%)
   tax_fixed       NUMERIC(12,2) DEFAULT 0,        -- ISS valor fixo
+  admin_fee_mode  TEXT DEFAULT 'rate',            -- 'rate' | 'amount' (percentual ou fixo)
   admin_fee_rate  NUMERIC(6,4) DEFAULT 10.0,      -- taxa administrativa (%)
+  admin_fee_fixed NUMERIC(12,2) DEFAULT 0,        -- taxa administrativa valor fixo (R$)
   is_test         BOOLEAN DEFAULT FALSE,
   saved_at        TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
