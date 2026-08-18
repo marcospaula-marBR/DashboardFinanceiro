@@ -83,6 +83,49 @@ const EMPLOYEE_TYPE_CONFIG: Record<EmployeeType, { label: string; color: string;
 };
 
 // ─────────────────────────────────────────────
+// COMPONENTE DE INPUT NUMÉRICO COM 2 CASAS DECIMAIS
+// ─────────────────────────────────────────────
+
+const DecimalInput: React.FC<{
+  value: number;
+  onChange: (v: number) => void;
+  width?: string;
+  className?: string;
+}> = ({ value, onChange, width = 'w-24', className = '' }) => {
+  const [textVal, setTextVal] = useState<string>(() => (value || 0).toFixed(2));
+
+  useEffect(() => {
+    const num = parseFloat(textVal) || 0;
+    if (Math.abs(num - (value || 0)) > 0.0001) {
+      setTextVal((value || 0).toFixed(2));
+    }
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTextVal(e.target.value);
+    const parsed = parseFloat(e.target.value);
+    onChange(isNaN(parsed) ? 0 : parsed);
+  };
+
+  const handleBlur = () => {
+    const parsed = parseFloat(textVal) || 0;
+    setTextVal(parsed.toFixed(2));
+    onChange(parsed);
+  };
+
+  return (
+    <input
+      type="number"
+      step="0.01"
+      value={textVal}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      className={`${width} text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all ${className}`}
+    />
+  );
+};
+
+// ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
 
@@ -101,6 +144,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+
+  // Lista de todos os colaboradores do sistema (para mapear IDs ao salvar)
+  const [allEmployeesList, setAllEmployeesList] = useState<Employee[]>([]);
 
   // Dados principais
   const [rows, setRows] = useState<OutsourcingRow[]>([]);
@@ -129,9 +175,11 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   // Aba ativa
   const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement'>('main');
 
-  // Refs para barra de rolagem horizontal dupla sincronizada
+  // Refs e estado para sincronização exata da barra de rolagem horizontal
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
+  const isScrollingRef = useRef<'top' | 'table' | null>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState<number>(2200);
 
   // Upload XLSX/CSV e PDF refs
   const spreadsheetInputRef = useRef<HTMLInputElement>(null);
@@ -140,22 +188,44 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [pdfUploading, setPdfUploading] = useState(false);
 
-  // ── Sincronização de scroll horizontal topo/tabela ──
+  // ── Sincronização de scrollWidth e eventos de rolagem ──
+  useEffect(() => {
+    const updateScrollWidth = () => {
+      if (tableScrollRef.current) {
+        const sw = tableScrollRef.current.scrollWidth;
+        if (sw > 0) setTableScrollWidth(sw);
+      }
+    };
+    updateScrollWidth();
+    const t = setTimeout(updateScrollWidth, 200);
+    return () => clearTimeout(t);
+  }, [rows, customColumns, activeTab]);
+
   const handleTopScroll = () => {
+    if (isScrollingRef.current === 'table') return;
+    isScrollingRef.current = 'top';
     if (topScrollRef.current && tableScrollRef.current) {
       tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
     }
+    setTimeout(() => {
+      if (isScrollingRef.current === 'top') isScrollingRef.current = null;
+    }, 40);
   };
 
   const handleTableScroll = () => {
+    if (isScrollingRef.current === 'top') return;
+    isScrollingRef.current = 'table';
     if (topScrollRef.current && tableScrollRef.current) {
       topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
     }
+    setTimeout(() => {
+      if (isScrollingRef.current === 'table') isScrollingRef.current = null;
+    }, 40);
   };
 
-  // ── Formatação ──────────────────────────────
+  // ── Formatação Monetária com 2 casas decimais estritas ──
   const fmt = (v: number) =>
-    (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // ── Carregar dados ao abrir ──────────────────
   useEffect(() => {
@@ -166,15 +236,17 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     setLoading(true);
     setError(null);
     try {
-      // 1. Colaboradores terceirizados
+      // 1. Colaboradores cadastrados
       const allEmps = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true, isTestMode });
+      setAllEmployeesList(allEmps);
+
       const outsourced = allEmps.filter(e =>
         e.is_outsourced === true ||
         (e as any).is_outsourced === 'true' ||
         e.metadata?.is_outsourced === true
       );
 
-      // 2. Custos mensais da competência
+      // 2. Custos mensais da competência no Supabase
       const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
       const { data: costsData } = await supabase
         .from(costsTable)
@@ -197,23 +269,40 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         loansMap.set(lp.employee_id, cur + (parseFloat(String(lp.amount)) || 0));
       });
 
-      // 4. Repasses salvos no Supabase
+      // 4. Repasses (Supabase + LocalStorage fallback)
       const repTable = 'outsourcing_repasses';
-      const { data: repData } = await supabase
-        .from(repTable)
-        .select('*')
-        .eq('competencia', comp)
-        .eq('is_test', isTestMode)
-        .order('date', { ascending: true });
+      let repLoaded: RepassLine[] = [];
+      try {
+        const { data: repData } = await supabase
+          .from(repTable)
+          .select('*')
+          .eq('competencia', comp)
+          .eq('is_test', isTestMode)
+          .order('date', { ascending: true });
 
-      if (repData && repData.length > 0) {
-        setRepassLines(repData.map(r => ({
-          id: r.id,
-          date: r.date,
-          bank: r.bank,
-          amount: parseFloat(String(r.amount)) || 0,
-          notes: r.notes || ''
-        })));
+        if (repData && repData.length > 0) {
+          repLoaded = repData.map(r => ({
+            id: r.id,
+            date: r.date,
+            bank: r.bank,
+            amount: parseFloat(String(r.amount)) || 0,
+            notes: r.notes || ''
+          }));
+        }
+      } catch (e) {
+        console.warn('Tabela outsourcing_repasses ainda não criada no Supabase:', e);
+      }
+
+      // Se não veio do banco, tentar do localStorage
+      if (repLoaded.length === 0) {
+        const savedRep = localStorage.getItem(`outsourcing_repasses_${comp}${isTestMode ? '_test' : ''}`);
+        if (savedRep) {
+          try { repLoaded = JSON.parse(savedRep); } catch {}
+        }
+      }
+
+      if (repLoaded.length > 0) {
+        setRepassLines(repLoaded);
       } else {
         setRepassLines([{
           id: `rep-${Date.now()}`,
@@ -224,38 +313,79 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         }]);
       }
 
-      // 5. Configuração de taxas da competência
-      const { data: cfgData } = await supabase
-        .from('outsourcing_apuracao_config')
-        .select('*')
-        .eq('competencia', comp)
-        .eq('is_test', isTestMode)
-        .maybeSingle();
+      // 5. Configuração de taxas da competência (Supabase + LocalStorage)
+      let cfgFound = false;
+      try {
+        const { data: cfgData } = await supabase
+          .from('outsourcing_apuracao_config')
+          .select('*')
+          .eq('competencia', comp)
+          .eq('is_test', isTestMode)
+          .maybeSingle();
 
-      if (cfgData) {
-        setTaxInputMode(cfgData.tax_input_mode || 'rate');
-        setTaxRate(parseFloat(String(cfgData.tax_rate)) || 5.0);
-        setTaxFixedAmount(parseFloat(String(cfgData.tax_fixed)) || 0);
+        if (cfgData) {
+          cfgFound = true;
+          setTaxInputMode(cfgData.tax_input_mode || 'rate');
+          setTaxRate(parseFloat(String(cfgData.tax_rate)) || 5.0);
+          setTaxFixedAmount(parseFloat(String(cfgData.tax_fixed)) || 0);
 
-        setAdminFeeMode(cfgData.admin_fee_mode || 'rate');
-        setAdminFeeRate(parseFloat(String(cfgData.admin_fee_rate)) || 10.0);
-        setAdminFeeFixedAmount(parseFloat(String(cfgData.admin_fee_fixed)) || 0);
-      } else {
-        setTaxInputMode('rate');
-        setTaxRate(5.0);
-        setTaxFixedAmount(0);
-
-        setAdminFeeMode('rate');
-        setAdminFeeRate(10.0);
-        setAdminFeeFixedAmount(0);
+          setAdminFeeMode(cfgData.admin_fee_mode || 'rate');
+          setAdminFeeRate(parseFloat(String(cfgData.admin_fee_rate)) || 10.0);
+          setAdminFeeFixedAmount(parseFloat(String(cfgData.admin_fee_fixed)) || 0);
+          setSavedTimestamp(cfgData.saved_at || null);
+        }
+      } catch (e) {
+        console.warn('Tabela outsourcing_apuracao_config ainda não criada no Supabase:', e);
       }
 
-      // 6. Montar linhas da tabela principal
+      if (!cfgFound) {
+        const savedCfg = localStorage.getItem(`outsourcing_config_${comp}${isTestMode ? '_test' : ''}`);
+        if (savedCfg) {
+          try {
+            const parsed = JSON.parse(savedCfg);
+            setTaxInputMode(parsed.taxInputMode || 'rate');
+            setTaxRate(parsed.taxRate || 5.0);
+            setTaxFixedAmount(parsed.taxFixedAmount || 0);
+            setAdminFeeMode(parsed.adminFeeMode || 'rate');
+            setAdminFeeRate(parsed.adminFeeRate || 10.0);
+            setAdminFeeFixedAmount(parsed.adminFeeFixedAmount || 0);
+            setSavedTimestamp(parsed.saved_at || null);
+          } catch {}
+        } else {
+          setTaxInputMode('rate');
+          setTaxRate(5.0);
+          setTaxFixedAmount(0);
+          setAdminFeeMode('rate');
+          setAdminFeeRate(10.0);
+          setAdminFeeFixedAmount(0);
+        }
+      }
+
+      // 6. Verificar se há linhas salvas no LocalStorage para esta competência
+      const savedRowsJson = localStorage.getItem(`outsourcing_rows_${comp}${isTestMode ? '_test' : ''}`);
+      if (savedRowsJson) {
+        try {
+          const parsedRows: OutsourcingRow[] = JSON.parse(savedRowsJson);
+          if (parsedRows && parsedRows.length > 0) {
+            setRows(parsedRows);
+            // Colunas customizadas
+            const savedCols = localStorage.getItem(`outsourcing_cols_${comp}${isTestMode ? '_test' : ''}`);
+            if (savedCols) {
+              try { setCustomColumns(JSON.parse(savedCols)); } catch {}
+            }
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn('Erro ao restaurar linhas do localStorage:', e);
+        }
+      }
+
+      // 7. Montar linhas a partir dos colaboradores do banco
       const generatedRows: OutsourcingRow[] = outsourced.map(emp => {
         const c = costsMap.get(emp.id);
         const va = c?.verbas_adicionais || {};
 
-        // Inferir tipo de vínculo
         const rawType = c?.employee_type || (emp as any).employment_type || emp.metadata?.tipo_vinculo || 'CLT';
         const empType: EmployeeType =
           rawType === 'PJ' || rawType === 'MEI' || rawType === 'PJ-MEI' || rawType === 'PJ-Simples' ? 'PJ' :
@@ -263,7 +393,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           rawType === 'CLT' ? 'CLT' : 'Outro';
 
         const valorBruto = parseFloat(String(c?.valor_fixo ?? emp.remuneration_fixed ?? emp.remuneration ?? 0));
-        const valorDesconto = parseFloat(String(c?.valor_desconto ?? 0));
+        const valorDesconto = parseFloat(String(c?.valor_desconto ?? va?.valor_desconto ?? 0));
         const valorLiquido = valorBruto - valorDesconto;
 
         return {
@@ -292,7 +422,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         };
       });
 
-      // Colunas customizadas do localStorage
+      // Colunas customizadas
       const storageKey = `outsourcing_cols_${comp}${isTestMode ? '_test' : ''}`;
       const savedCols = localStorage.getItem(storageKey);
       if (savedCols) {
@@ -301,7 +431,6 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         setCustomColumns([]);
       }
 
-      setSavedTimestamp(cfgData?.saved_at || null);
       setRows(generatedRows);
     } catch (err: any) {
       console.error('Erro ao carregar terceirização:', err);
@@ -325,13 +454,26 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         throw new Error('Nenhum colaborador ou verba foi identificado na planilha importada.');
       }
 
+      // Mapear IDs de colaboradores existentes pelo nome se possível
+      const mappedRows: OutsourcingRow[] = result.rows.map(r => {
+        const match = allEmployeesList.find(e =>
+          e.name.toLowerCase().trim() === r.name.toLowerCase().trim() ||
+          e.name.toLowerCase().includes(r.name.toLowerCase()) ||
+          r.name.toLowerCase().includes(e.name.toLowerCase())
+        );
+        return {
+          ...r,
+          employeeId: match?.id || r.employeeId
+        };
+      });
+
       // Se a planilha continha taxa de ISS detectada, atualiza
       if (result.detectedTaxRate !== undefined && result.detectedTaxRate > 0) {
         setTaxInputMode('rate');
         setTaxRate(result.detectedTaxRate);
       }
 
-      setRows(result.rows);
+      setRows(mappedRows);
       setSaveSuccessMessage(`Planilha "${file.name}" importada com sucesso: ${result.totalParsed} colaboradores carregados!`);
       setTimeout(() => setSaveSuccessMessage(null), 6000);
     } catch (err: any) {
@@ -343,62 +485,87 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     }
   };
 
-  // ── Salvar no Supabase ────────────────────────
+  // ── SALVAR APURAÇÃO (GARANTIA HÍBRIDA: LOCALSTORAGE + SUPABASE) ──
   const handleSaveSettlement = async () => {
     setSaving(true);
+    setError(null);
+    const nowIso = new Date().toISOString();
+
     try {
-      // 1. Salvar configuração de taxas
-      await supabase.from('outsourcing_apuracao_config').upsert({
-        competencia,
-        tax_input_mode: taxInputMode,
-        tax_rate: taxRate,
-        tax_fixed: taxFixedAmount,
-        admin_fee_mode: adminFeeMode,
-        admin_fee_rate: adminFeeRate,
-        admin_fee_fixed: adminFeeFixedAmount,
-        is_test: isTestMode,
-        saved_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'competencia' });
+      // 1. SALVAR NO LOCALSTORAGE PRIMEIRO (PERSISTÊNCIA 100% GARANTIDA)
+      localStorage.setItem(`outsourcing_rows_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(rows));
+      localStorage.setItem(`outsourcing_cols_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(customColumns));
+      localStorage.setItem(`outsourcing_repasses_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(repassLines));
+      localStorage.setItem(`outsourcing_config_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify({
+        taxInputMode, taxRate, taxFixedAmount,
+        adminFeeMode, adminFeeRate, adminFeeFixedAmount,
+        saved_at: nowIso
+      }));
 
-      // 2. Salvar repasses — delete + insert
-      const repTable = 'outsourcing_repasses';
-      await supabase
-        .from(repTable)
-        .delete()
-        .eq('competencia', competencia)
-        .eq('is_test', isTestMode);
-
-      const repRows = repassLines
-        .filter(l => l.amount > 0 || l.notes)
-        .map(l => ({
-          id: l.id.startsWith('rep-') ? undefined : l.id,
+      // 2. SALVAR NO SUPABASE (TABELA DE CONFIGURAÇÃO DE TAXAS)
+      try {
+        await supabase.from('outsourcing_apuracao_config').upsert({
           competencia,
-          date: l.date,
-          bank: l.bank,
-          amount: l.amount,
-          notes: l.notes,
-          is_test: isTestMode
-        }));
-
-      if (repRows.length > 0) {
-        await supabase.from(repTable).insert(repRows);
+          tax_input_mode: taxInputMode,
+          tax_rate: taxRate,
+          tax_fixed: taxFixedAmount,
+          admin_fee_mode: adminFeeMode,
+          admin_fee_rate: adminFeeRate,
+          admin_fee_fixed: adminFeeFixedAmount,
+          is_test: isTestMode,
+          saved_at: nowIso,
+          updated_at: nowIso
+        }, { onConflict: 'competencia' });
+      } catch (errDb: any) {
+        console.warn('Aviso: Tabela outsourcing_apuracao_config ainda não aplicada no Supabase:', errDb);
       }
 
-      // 3. Salvar verbas individuais de cada colaborador (people_monthly_costs)
-      const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
-      for (const row of rows.filter(r => !r.isManual && r.employeeId)) {
+      // 3. SALVAR REPASSES NO SUPABASE
+      try {
+        const repTable = 'outsourcing_repasses';
         await supabase
-          .from(costsTable)
-          .upsert({
-            employee_id: row.employeeId,
+          .from(repTable)
+          .delete()
+          .eq('competencia', competencia)
+          .eq('is_test', isTestMode);
+
+        const repRows = repassLines
+          .filter(l => l.amount > 0 || l.notes)
+          .map(l => ({
+            id: l.id.startsWith('rep-') ? undefined : l.id,
             competencia,
-            valor_fixo: row.valorBruto,
+            date: l.date,
+            bank: l.bank,
+            amount: l.amount,
+            notes: l.notes,
+            is_test: isTestMode
+          }));
+
+        if (repRows.length > 0) {
+          await supabase.from(repTable).insert(repRows);
+        }
+      } catch (errRep: any) {
+        console.warn('Aviso: Tabela outsourcing_repasses ainda não aplicada no Supabase:', errRep);
+      }
+
+      // 4. SALVAR CUSTOS INDIVIDUAIS DOS COLABORADORES NO SUPABASE
+      const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
+      for (const row of rows) {
+        // Encontrar ou associar employeeId
+        let empId = row.employeeId;
+        if (!empId) {
+          const match = allEmployeesList.find(e =>
+            e.name.toLowerCase().trim() === row.name.toLowerCase().trim()
+          );
+          empId = match?.id;
+        }
+
+        if (empId) {
+          // Empacotar todas as verbas no verbas_adicionais JSONB para garantia de compatibilidade total
+          const extraVerbasJson = {
+            valor_bruto: row.valorBruto,
             valor_desconto: row.valorDesconto,
             valor_liquido: row.valorLiquido,
-            valor_bonus: row.valorBonus,
-            valor_comissao: row.valorComissao,
-            valor_ajuda_custo: row.valorAjudaCusto,
             valor_vr: row.valorVR,
             valor_vt: row.valorVT,
             valor_seguro: row.valorSeguro,
@@ -406,31 +573,45 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             valor_gps: row.valorGPS,
             valor_dec_terceiro: row.valorDecTerceiro,
             valor_ferias: row.valorFerias,
-            valor_incentivos: row.valorOutros,
-            employee_type: row.employeeType,
-            vinculo_tipo: row.employeeType === 'PJ' ? 'PJ-MEI' : row.employeeType === 'Estagio' ? 'Estagio' : 'CLT',
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'employee_id,competencia' });
+            custom_values: row.customValues
+          };
+
+          try {
+            await supabase
+              .from(costsTable)
+              .upsert({
+                employee_id: empId,
+                competencia,
+                valor_fixo: row.valorBruto,
+                valor_bonus: row.valorBonus,
+                valor_comissao: row.valorComissao,
+                valor_ajuda_custo: row.valorAjudaCusto,
+                valor_incentivos: row.valorOutros,
+                verbas_adicionais: extraVerbasJson,
+                employee_type: row.employeeType,
+                vinculo_tipo: row.employeeType === 'PJ' ? 'PJ-MEI' : row.employeeType === 'Estagio' ? 'Estagio' : 'CLT',
+                updated_at: nowIso
+              }, { onConflict: 'employee_id,competencia' });
+          } catch (errRow: any) {
+            console.warn(`Aviso ao salvar colaborador ${row.name} no Supabase:`, errRow);
+          }
+        }
       }
 
-      // 4. Salvar colunas customizadas no localStorage
-      const storageKey = `outsourcing_cols_${competencia}${isTestMode ? '_test' : ''}`;
-      localStorage.setItem(storageKey, JSON.stringify(customColumns));
-
-      const ts = new Date().toISOString();
-      setSavedTimestamp(ts);
-      setSaveSuccessMessage(`Apuração de ${competencia} salva com sucesso no banco de dados!`);
+      setSavedTimestamp(nowIso);
+      setSaveSuccessMessage(`Apuração de ${competencia} salva com sucesso!`);
       setTimeout(() => setSaveSuccessMessage(null), 5000);
     } catch (err: any) {
       console.error('Erro ao salvar:', err);
-      setError(`Erro ao salvar: ${err?.message}`);
+      setError(`Erro ao salvar: ${err?.message || 'Verifique sua conexão.'}`);
     } finally {
       setSaving(false);
     }
   };
 
   const handleResetSettlement = async () => {
-    if (!confirm(`Recarregar competência ${competencia} do banco de dados? Alterações não salvas serão perdidas.`)) return;
+    if (!confirm(`Recarregar competência ${competencia}? Todas as edições não salvas serão revertidas.`)) return;
+    localStorage.removeItem(`outsourcing_rows_${competencia}${isTestMode ? '_test' : ''}`);
     await loadData(competencia);
   };
 
@@ -459,7 +640,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         const updated = { ...r, [field]: value };
         // Atualizar Valor Líquido automaticamente ao editar Bruto ou Desconto
         if (field === 'valorBruto' || field === 'valorDesconto') {
-          updated.valorLiquido = (updated.valorBruto || 0) - (updated.valorDesconto || 0);
+          const bruto = parseFloat(String(field === 'valorBruto' ? value : r.valorBruto)) || 0;
+          const desconto = parseFloat(String(field === 'valorDesconto' ? value : r.valorDesconto)) || 0;
+          updated.valorLiquido = bruto - desconto;
         }
         return updated;
       }
@@ -579,23 +762,23 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     [totalApuradoBruto, totalRepassado]
   );
 
-  // Totais por coluna
+  // Totais por coluna com 2 casas decimais
   const colTotals = useMemo(() => ({
-    valorBruto: rows.reduce((a, r) => a + r.valorBruto, 0),
-    valorDesconto: rows.reduce((a, r) => a + r.valorDesconto, 0),
-    valorLiquido: rows.reduce((a, r) => a + r.valorLiquido, 0),
-    valorBonus: rows.reduce((a, r) => a + r.valorBonus, 0),
-    valorComissao: rows.reduce((a, r) => a + r.valorComissao, 0),
-    valorAjudaCusto: rows.reduce((a, r) => a + r.valorAjudaCusto, 0),
-    valorVR: rows.reduce((a, r) => a + r.valorVR, 0),
-    valorVT: rows.reduce((a, r) => a + r.valorVT, 0),
-    valorSeguro: rows.reduce((a, r) => a + r.valorSeguro, 0),
-    valorFGTS: rows.reduce((a, r) => a + r.valorFGTS, 0),
-    valorGPS: rows.reduce((a, r) => a + r.valorGPS, 0),
-    valorDecTerceiro: rows.reduce((a, r) => a + r.valorDecTerceiro, 0),
-    valorFerias: rows.reduce((a, r) => a + r.valorFerias, 0),
-    valorOutros: rows.reduce((a, r) => a + r.valorOutros, 0),
-    valorEmprestimo: rows.reduce((a, r) => a + r.valorEmprestimo, 0),
+    valorBruto: rows.reduce((a, r) => a + (r.valorBruto || 0), 0),
+    valorDesconto: rows.reduce((a, r) => a + (r.valorDesconto || 0), 0),
+    valorLiquido: rows.reduce((a, r) => a + (r.valorLiquido || 0), 0),
+    valorBonus: rows.reduce((a, r) => a + (r.valorBonus || 0), 0),
+    valorComissao: rows.reduce((a, r) => a + (r.valorComissao || 0), 0),
+    valorAjudaCusto: rows.reduce((a, r) => a + (r.valorAjudaCusto || 0), 0),
+    valorVR: rows.reduce((a, r) => a + (r.valorVR || 0), 0),
+    valorVT: rows.reduce((a, r) => a + (r.valorVT || 0), 0),
+    valorSeguro: rows.reduce((a, r) => a + (r.valorSeguro || 0), 0),
+    valorFGTS: rows.reduce((a, r) => a + (r.valorFGTS || 0), 0),
+    valorGPS: rows.reduce((a, r) => a + (r.valorGPS || 0), 0),
+    valorDecTerceiro: rows.reduce((a, r) => a + (r.valorDecTerceiro || 0), 0),
+    valorFerias: rows.reduce((a, r) => a + (r.valorFerias || 0), 0),
+    valorOutros: rows.reduce((a, r) => a + (r.valorOutros || 0), 0),
+    valorEmprestimo: rows.reduce((a, r) => a + (r.valorEmprestimo || 0), 0),
     custom: Object.fromEntries(
       customColumns.map(col => [col.id, rows.reduce((a, r) => a + (r.customValues?.[col.id] || 0), 0)])
     )
@@ -635,7 +818,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [rows, rowTotalMap]);
 
-  // ── Copiar relatório ─────────────────────────
+  // ── Copiar relatório executivo ────────────────
   const handleCopyReport = () => {
     let txt = `=== APURAÇÃO DE TERCEIRIZAÇÃO — ${competencia} ===\n\n`;
     txt += `Colaboradores: ${rows.length}\n`;
@@ -644,7 +827,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     txt += `Valor Líquido de Salários: ${fmt(colTotals.valorLiquido)}\n`;
     txt += `Subtotal de Verbas & Custos: ${fmt(subtotal)}\n`;
     txt += `ISS/Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'}): ${fmt(calculatedTax)}\n`;
-    txt += `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate}%` : 'Fixo'}): ${fmt(calculatedAdminFee)}\n`;
+    txt += `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate}%` : fmt(adminFeeFixedAmount)}): ${fmt(calculatedAdminFee)}\n`;
     txt += `TOTAL APURADO BRUTO: ${fmt(totalApuradoBruto)}\n`;
     txt += `--------------------------------------------\n`;
     txt += `TOTAL REPASSADO: ${fmt(totalRepassado)}\n`;
@@ -657,28 +840,6 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     setSaveSuccessMessage('Resumo executivo copiado para a área de transferência!');
     setTimeout(() => setSaveSuccessMessage(null), 3000);
   };
-
-  // ── Helpers visuais ───────────────────────────
-  const TypeBadge = ({ type }: { type: EmployeeType }) => {
-    const cfg = EMPLOYEE_TYPE_CONFIG[type] || EMPLOYEE_TYPE_CONFIG.Outro;
-    return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
-        {cfg.label}
-      </span>
-    );
-  };
-
-  const NumInput = ({
-    value, onChange, width = 'w-20', className = ''
-  }: { value: number; onChange: (v: number) => void; width?: string; className?: string }) => (
-    <input
-      type="number"
-      step="1"
-      value={value}
-      onChange={e => onChange(parseFloat(e.target.value) || 0)}
-      className={`${width} text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all ${className}`}
-    />
-  );
 
   if (!isOpen) return null;
 
@@ -784,7 +945,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
               className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase transition-all active:scale-95 shadow-sm disabled:opacity-60"
             >
               <Save size={14} />
-              {saving ? 'Salvando...' : 'Salvar'}
+              {saving ? 'Salvando...' : 'Salvar Apuração'}
             </button>
 
             {/* Fechar */}
@@ -956,15 +1117,15 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                     </div>
                   </div>
 
-                  {/* ── BARRA DE ROLAGEM HORIZONTAL SUPERIOR SINCRONIZADA ── */}
+                  {/* ── BARRA DE ROLAGEM HORIZONTAL SUPERIOR SINCRONIZADA EM TEMPO REAL ── */}
                   <div
                     ref={topScrollRef}
                     onScroll={handleTopScroll}
-                    className="w-full overflow-x-auto bg-gray-100/90 border border-gray-200 rounded-xl py-0.5 px-1 shadow-inner cursor-pointer"
-                    style={{ height: '14px' }}
-                    title="Barra de rolagem horizontal superior (arraste para navegar nas colunas)"
+                    className="w-full overflow-x-auto bg-gray-100/90 border border-gray-200 rounded-xl py-1 px-1 shadow-inner cursor-pointer"
+                    style={{ minHeight: '16px' }}
+                    title="Barra de rolagem superior sincronizada"
                   >
-                    <div style={{ width: `${1650 + (customColumns.length * 100)}px`, height: '1px' }} />
+                    <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
                   </div>
 
                   {/* ── TABELA PRINCIPAL COM COLUNAS FIXAS À ESQUERDA ── */}
@@ -984,29 +1145,29 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                           <th className="py-3 px-3 min-w-[140px] w-[140px] sticky left-[190px] bg-gray-50 z-30">
                             Localidade
                           </th>
-                          {/* 3. Valor Bruto (FIXO com sombra na borda) */}
-                          <th className="py-3 px-2 text-right min-w-[110px] w-[110px] sticky left-[330px] bg-blue-50/80 text-blue-700 z-30 border-r border-gray-200 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          {/* 3. Valor Bruto (FIXO com borda divisória) */}
+                          <th className="py-3 px-2 text-right min-w-[115px] w-[115px] sticky left-[330px] bg-blue-50/90 text-blue-700 z-30 border-r border-gray-200 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.06)]">
                             Valor Bruto
                           </th>
 
                           {/* Demais colunas que rolam livremente */}
-                          <th className="py-3 px-2 text-right min-w-[90px] bg-red-50 text-red-700">Desconto (-)</th>
-                          <th className="py-3 px-2 text-right min-w-[110px] bg-blue-100/60 text-blue-800 font-black">Valor Líquido</th>
+                          <th className="py-3 px-2 text-right min-w-[95px] bg-red-50 text-red-700">Desconto (-)</th>
+                          <th className="py-3 px-2 text-right min-w-[115px] bg-blue-100/60 text-blue-800 font-black">Valor Líquido</th>
                           <th className="py-3 px-2 min-w-[75px] text-center">Tipo</th>
-                          <th className="py-3 px-2 text-right min-w-[90px]">Adiantamento</th>
-                          <th className="py-3 px-2 text-right min-w-[90px]">Bônus</th>
-                          <th className="py-3 px-2 text-right min-w-[80px] bg-green-50 text-green-700">VR</th>
-                          <th className="py-3 px-2 text-right min-w-[80px] bg-green-50 text-green-700">VT</th>
-                          <th className="py-3 px-2 text-right min-w-[80px]">Seguro</th>
-                          <th className="py-3 px-2 text-right min-w-[80px] bg-orange-50 text-orange-700">FGTS</th>
-                          <th className="py-3 px-2 text-right min-w-[80px] bg-orange-50 text-orange-700">GPS</th>
-                          <th className="py-3 px-2 text-right min-w-[80px] bg-purple-50 text-purple-700">13º Sal.</th>
-                          <th className="py-3 px-2 text-right min-w-[80px] bg-purple-50 text-purple-700">Férias</th>
-                          <th className="py-3 px-2 text-right min-w-[80px]">Outros</th>
-                          <th className="py-3 px-2 text-right min-w-[90px] bg-indigo-50 text-indigo-700">Emprést.</th>
+                          <th className="py-3 px-2 text-right min-w-[95px]">Adiantamento</th>
+                          <th className="py-3 px-2 text-right min-w-[95px]">Bônus</th>
+                          <th className="py-3 px-2 text-right min-w-[85px] bg-green-50 text-green-700">VR</th>
+                          <th className="py-3 px-2 text-right min-w-[85px] bg-green-50 text-green-700">VT</th>
+                          <th className="py-3 px-2 text-right min-w-[85px]">Seguro</th>
+                          <th className="py-3 px-2 text-right min-w-[85px] bg-orange-50 text-orange-700">FGTS</th>
+                          <th className="py-3 px-2 text-right min-w-[85px] bg-orange-50 text-orange-700">GPS</th>
+                          <th className="py-3 px-2 text-right min-w-[85px] bg-purple-50 text-purple-700">13º Sal.</th>
+                          <th className="py-3 px-2 text-right min-w-[85px] bg-purple-50 text-purple-700">Férias</th>
+                          <th className="py-3 px-2 text-right min-w-[85px]">Outros</th>
+                          <th className="py-3 px-2 text-right min-w-[95px] bg-indigo-50 text-indigo-700">Emprést.</th>
                           {/* Colunas customizadas */}
                           {customColumns.map(col => (
-                            <th key={col.id} className="py-3 px-2 text-right min-w-[90px] bg-gray-50">
+                            <th key={col.id} className="py-3 px-2 text-right min-w-[95px] bg-gray-50">
                               <div className="flex items-center justify-end gap-1">
                                 <span>{col.label}</span>
                                 <button
@@ -1019,7 +1180,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                               </div>
                             </th>
                           ))}
-                          <th className="py-3 px-3 text-right min-w-[120px] font-black text-gray-800 bg-white">Total</th>
+                          <th className="py-3 px-3 text-right min-w-[125px] font-black text-gray-800 bg-white">Total</th>
                           <th className="py-3 px-2 w-8 text-center"></th>
                         </tr>
                       </thead>
@@ -1066,9 +1227,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                 />
                               </td>
 
-                              {/* 3. Valor Bruto (FIXO com sombra na borda) */}
-                              <td className="py-2 px-2 text-right sticky left-[330px] min-w-[110px] w-[110px] bg-blue-50/60 hover:bg-blue-50 z-20 border-r border-gray-200 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.06)]">
-                                <NumInput
+                              {/* 3. Valor Bruto (FIXO com borda divisória) */}
+                              <td className="py-2 px-2 text-right sticky left-[330px] min-w-[115px] w-[115px] bg-blue-50/70 hover:bg-blue-50 z-20 border-r border-gray-200 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                                <DecimalInput
                                   value={row.valorBruto}
                                   onChange={v => handleRowChange(row.id, 'valorBruto', v)}
                                   width="w-24"
@@ -1078,7 +1239,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
                               {/* Desconto (-) */}
                               <td className="py-2 px-2 text-right bg-red-50/40">
-                                <NumInput
+                                <DecimalInput
                                   value={row.valorDesconto}
                                   onChange={v => handleRowChange(row.id, 'valorDesconto', v)}
                                   width="w-20"
@@ -1088,7 +1249,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
                               {/* Valor Líquido (Auto Calculado: Bruto - Desconto) */}
                               <td className="py-2 px-2 text-right bg-blue-100/40">
-                                <span className="text-xs font-black text-blue-900 px-2 py-1 bg-white/80 border border-blue-200 rounded-lg inline-block w-24 text-right">
+                                <span className="text-xs font-black text-blue-900 px-2 py-1 bg-white/90 border border-blue-200 rounded-lg inline-block w-24 text-right">
                                   {fmt(row.valorLiquido)}
                                 </span>
                               </td>
@@ -1109,54 +1270,55 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
                               {/* Adiantamento */}
                               <td className="py-2 px-2 text-right">
-                                <NumInput value={row.valorAjudaCusto} onChange={v => handleRowChange(row.id, 'valorAjudaCusto', v)} />
+                                <DecimalInput value={row.valorAjudaCusto} onChange={v => handleRowChange(row.id, 'valorAjudaCusto', v)} width="w-20" />
                               </td>
                               {/* Bônus */}
                               <td className="py-2 px-2 text-right">
-                                <NumInput value={row.valorBonus} onChange={v => handleRowChange(row.id, 'valorBonus', v)} />
+                                <DecimalInput value={row.valorBonus} onChange={v => handleRowChange(row.id, 'valorBonus', v)} width="w-20" />
                               </td>
                               {/* VR */}
                               <td className="py-2 px-2 text-right bg-green-50/40">
-                                <NumInput value={row.valorVR} onChange={v => handleRowChange(row.id, 'valorVR', v)} />
+                                <DecimalInput value={row.valorVR} onChange={v => handleRowChange(row.id, 'valorVR', v)} width="w-20" />
                               </td>
                               {/* VT */}
                               <td className="py-2 px-2 text-right bg-green-50/40">
-                                <NumInput value={row.valorVT} onChange={v => handleRowChange(row.id, 'valorVT', v)} />
+                                <DecimalInput value={row.valorVT} onChange={v => handleRowChange(row.id, 'valorVT', v)} width="w-20" />
                               </td>
                               {/* Seguro */}
                               <td className="py-2 px-2 text-right">
-                                <NumInput value={row.valorSeguro} onChange={v => handleRowChange(row.id, 'valorSeguro', v)} />
+                                <DecimalInput value={row.valorSeguro} onChange={v => handleRowChange(row.id, 'valorSeguro', v)} width="w-20" />
                               </td>
                               {/* FGTS */}
                               <td className="py-2 px-2 text-right bg-orange-50/40">
-                                <NumInput value={row.valorFGTS} onChange={v => handleRowChange(row.id, 'valorFGTS', v)} />
+                                <DecimalInput value={row.valorFGTS} onChange={v => handleRowChange(row.id, 'valorFGTS', v)} width="w-20" />
                               </td>
                               {/* GPS */}
                               <td className="py-2 px-2 text-right bg-orange-50/40">
-                                <NumInput value={row.valorGPS} onChange={v => handleRowChange(row.id, 'valorGPS', v)} />
+                                <DecimalInput value={row.valorGPS} onChange={v => handleRowChange(row.id, 'valorGPS', v)} width="w-20" />
                               </td>
                               {/* 13º */}
                               <td className="py-2 px-2 text-right bg-purple-50/40">
-                                <NumInput value={row.valorDecTerceiro} onChange={v => handleRowChange(row.id, 'valorDecTerceiro', v)} />
+                                <DecimalInput value={row.valorDecTerceiro} onChange={v => handleRowChange(row.id, 'valorDecTerceiro', v)} width="w-20" />
                               </td>
                               {/* Férias */}
                               <td className="py-2 px-2 text-right bg-purple-50/40">
-                                <NumInput value={row.valorFerias} onChange={v => handleRowChange(row.id, 'valorFerias', v)} />
+                                <DecimalInput value={row.valorFerias} onChange={v => handleRowChange(row.id, 'valorFerias', v)} width="w-20" />
                               </td>
                               {/* Outros */}
                               <td className="py-2 px-2 text-right">
-                                <NumInput value={row.valorOutros} onChange={v => handleRowChange(row.id, 'valorOutros', v)} />
+                                <DecimalInput value={row.valorOutros} onChange={v => handleRowChange(row.id, 'valorOutros', v)} width="w-20" />
                               </td>
                               {/* Empréstimos */}
                               <td className="py-2 px-2 text-right bg-indigo-50/40">
-                                <NumInput value={row.valorEmprestimo} onChange={v => handleRowChange(row.id, 'valorEmprestimo', v)} />
+                                <DecimalInput value={row.valorEmprestimo} onChange={v => handleRowChange(row.id, 'valorEmprestimo', v)} width="w-20" />
                               </td>
                               {/* Custom */}
                               {customColumns.map(col => (
                                 <td key={col.id} className="py-2 px-2 text-right bg-gray-50/60">
-                                  <NumInput
+                                  <DecimalInput
                                     value={row.customValues?.[col.id] || 0}
                                     onChange={v => handleCustomValueChange(row.id, col.id, v)}
+                                    width="w-20"
                                   />
                                 </td>
                               ))}
@@ -1189,7 +1351,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                           <td className="py-3 px-3 sticky left-[190px] min-w-[140px] w-[140px] bg-blue-600 z-30">
                             —
                           </td>
-                          <td className="py-3 px-2 text-right sticky left-[330px] min-w-[110px] w-[110px] bg-blue-700 z-30 border-r border-blue-500 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.15)]">
+                          <td className="py-3 px-2 text-right sticky left-[330px] min-w-[115px] w-[115px] bg-blue-700 z-30 border-r border-blue-500 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.15)]">
                             {fmt(colTotals.valorBruto)}
                           </td>
 
@@ -1274,7 +1436,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                             />
                           </div>
 
-                          {/* Detalhamento de verbas */}
+                          {/* Detalhamento de verbas com 2 casas decimais */}
                           <div className="grid grid-cols-4 gap-1.5 text-[10px]">
                             {[
                               { label: 'Bruto', value: ls.valorBruto, color: 'text-blue-700' },
@@ -1290,7 +1452,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                 <div key={label} className="bg-gray-50 rounded-lg p-1.5 text-center">
                                   <span className="text-gray-400 block">{label}</span>
                                   <span className={`font-bold ${color} block`}>
-                                    {(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0, style: 'currency', currency: 'BRL' })}
+                                    {fmt(value)}
                                   </span>
                                 </div>
                               )
@@ -1398,22 +1560,22 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                               </button>
                               {taxInputMode === 'rate' ? (
                                 <div className="flex items-center gap-1">
-                                  <input
-                                    type="number" step="0.1" min="0"
+                                  <DecimalInput
                                     value={taxRate}
-                                    onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
-                                    className="w-16 text-right bg-white border border-amber-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-amber-400"
+                                    onChange={v => setTaxRate(v)}
+                                    width="w-20"
+                                    className="border-amber-200 font-bold"
                                   />
                                   <span className="text-xs font-bold text-amber-600">%</span>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-1">
                                   <span className="text-xs font-bold text-amber-600">R$</span>
-                                  <input
-                                    type="number" step="100" min="0"
+                                  <DecimalInput
                                     value={taxFixedAmount}
-                                    onChange={e => setTaxFixedAmount(parseFloat(e.target.value) || 0)}
-                                    className="w-28 text-right bg-white border border-amber-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-amber-400"
+                                    onChange={v => setTaxFixedAmount(v)}
+                                    width="w-28"
+                                    className="border-amber-200 font-bold"
                                   />
                                 </div>
                               )}
@@ -1438,22 +1600,22 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                               </button>
                               {adminFeeMode === 'rate' ? (
                                 <div className="flex items-center gap-1">
-                                  <input
-                                    type="number" step="0.5" min="0"
+                                  <DecimalInput
                                     value={adminFeeRate}
-                                    onChange={e => setAdminFeeRate(parseFloat(e.target.value) || 0)}
-                                    className="w-16 text-right bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
+                                    onChange={v => setAdminFeeRate(v)}
+                                    width="w-20"
+                                    className="border-blue-200 font-bold"
                                   />
                                   <span className="text-xs font-bold text-blue-600">%</span>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-1">
                                   <span className="text-xs font-bold text-blue-600">R$</span>
-                                  <input
-                                    type="number" step="100" min="0"
+                                  <DecimalInput
                                     value={adminFeeFixedAmount}
-                                    onChange={e => setAdminFeeFixedAmount(parseFloat(e.target.value) || 0)}
-                                    className="w-28 text-right bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-blue-400"
+                                    onChange={v => setAdminFeeFixedAmount(v)}
+                                    width="w-28"
+                                    className="border-blue-200 font-bold"
                                   />
                                 </div>
                               )}
@@ -1479,8 +1641,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                           { label: 'Descontos de Folha (-)', value: colTotals.valorDesconto, color: 'text-red-600' },
                           { label: 'Valor Líquido de Salários', value: colTotals.valorLiquido, color: 'text-blue-800 font-bold' },
                           { label: 'Subtotal Geral (Líquido + Verbas)', value: subtotal, color: 'text-gray-900 font-bold' },
-                          { label: `ISS / Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'})`, value: calculatedTax, color: 'text-amber-600' },
-                          { label: `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate}%` : fmt(adminFeeFixedAmount)})`, value: calculatedAdminFee, color: 'text-blue-600' },
+                          { label: `ISS / Impostos (${taxInputMode === 'rate' ? `${taxRate.toFixed(2)}%` : 'Fixo'})`, value: calculatedTax, color: 'text-amber-600' },
+                          { label: `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate.toFixed(2)}%` : fmt(adminFeeFixedAmount)})`, value: calculatedAdminFee, color: 'text-blue-600' },
                         ].map(({ label, value, color }) => (
                           <div key={label} className="flex items-center justify-between py-1.5 border-b border-gray-50">
                             <span className="text-gray-500 font-medium">{label}</span>
@@ -1556,12 +1718,11 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                 />
                               </td>
                               <td className="py-2.5 px-4 text-right">
-                                <input
-                                  type="number"
-                                  step="100"
+                                <DecimalInput
                                   value={line.amount}
-                                  onChange={e => handleRepassLineChange(line.id, 'amount', parseFloat(e.target.value) || 0)}
-                                  className="w-32 text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 outline-none focus:border-emerald-400"
+                                  onChange={v => handleRepassLineChange(line.id, 'amount', v)}
+                                  width="w-32"
+                                  className="font-bold text-emerald-700"
                                 />
                               </td>
                               <td className="py-2.5 px-2 text-center">
