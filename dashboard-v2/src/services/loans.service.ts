@@ -20,6 +20,21 @@ interface RawEmployee {
   corporate_name?: string;
   pj_type?: string;
   tax_regime?: string;
+  photo_url?: string;
+  avatar_url?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  service_location?: string;
+  cnpj_street?: string;
+  cnpj_number?: string;
+  cnpj_neighborhood?: string;
+  cnpj_city?: string;
+  cnpj_state?: string;
+  cnpj_zip_code?: string;
 }
 
 interface RawLoan {
@@ -240,7 +255,7 @@ export async function fetchEmployees(isTestMode: boolean): Promise<RawEmployee[]
   const table = isTestMode ? 'employees_test' : 'employees';
   const { data, error } = await supabase
     .from(table)
-    .select('id,full_name,company,employment_type,remuneration,status,start_date,contract_expiry_date,job_role,links_aditivos,metadata,is_outsourced,corporate_name,pj_type,tax_regime')
+    .select('*')
     .order('full_name');
 
   if (error) {
@@ -443,10 +458,20 @@ export class LoansService {
         aditivoCount,
         remainingInstallments,
         lastInstallmentDate: lastInstallmentDate || null,
-        is_outsourced: emp.is_outsourced,
-        corporate_name: emp.corporate_name,
-        pj_type: emp.pj_type,
-        tax_regime: emp.tax_regime,
+        photo_url: emp.photo_url || emp.avatar_url || emp.metadata?.photo_url || emp.metadata?.avatar_url || emp.metadata?.foto,
+        street: emp.street,
+        number: emp.number,
+        neighborhood: emp.neighborhood,
+        city: emp.city,
+        state: emp.state,
+        zip_code: emp.zip_code,
+        service_location: emp.service_location,
+        cnpj_street: emp.cnpj_street,
+        cnpj_number: emp.cnpj_number,
+        cnpj_neighborhood: emp.cnpj_neighborhood,
+        cnpj_city: emp.cnpj_city,
+        cnpj_state: emp.cnpj_state,
+        cnpj_zip_code: emp.cnpj_zip_code,
         metadata: emp.metadata || {},
         entityType: inferEntityType(emp as any),
         nextInstallmentValue,

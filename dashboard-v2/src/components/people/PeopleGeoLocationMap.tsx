@@ -102,7 +102,7 @@ export function PeopleGeoLocationMap({
       for (const emp of employees) {
         if (isCancelled) return;
 
-        const photo = emp.photo_url || emp.metadata?.photo_url || emp.metadata?.avatar_url || emp.metadata?.foto || undefined;
+        const photo = emp.photo_url || (emp as any).avatar_url || (emp as any).avatar || emp.metadata?.photo_url || emp.metadata?.avatar_url || emp.metadata?.foto || undefined;
 
         // Fallbacks de Endereço (PF + CNPJ + Metadata de Credenciados/PJ)
         const street = emp.street || emp.cnpj_street || emp.metadata?.street || emp.metadata?.logradouro || emp.metadata?.address || '';
@@ -314,14 +314,14 @@ export function PeopleGeoLocationMap({
     return workstations.find(w => w.id === selectedWorkstationId) || null;
   }, [selectedWorkstationId, workstations]);
 
-  // Forçar redimensionamento do Leaflet ao alternar para modo mapa
+  // Forçar redimensionamento do Leaflet ao alternar entre os modos de mapa
   useEffect(() => {
-    if (displayMode === 'map' && leafletMapRef.current) {
+    if ((displayMode === 'map' || displayMode === 'workstations_only') && leafletMapRef.current) {
       setTimeout(() => {
         try {
           leafletMapRef.current.invalidateSize();
         } catch {}
-      }, 100);
+      }, 50);
     }
   }, [displayMode]);
 
@@ -636,7 +636,7 @@ export function PeopleGeoLocationMap({
     return () => {
       isMounted = false;
     };
-  }, [workstations, filteredGeoItems, activeEmployeeGeo, selectedEmployeeId, selectedWsId, mapStyle]);
+  }, [workstations, filteredGeoItems, activeEmployeeGeo, selectedEmployeeId, selectedWsId, mapStyle, displayMode]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
