@@ -38,6 +38,7 @@ export default function EmprestimosPage() {
   const [isNewLoanOpen, setIsNewLoanOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
+  const [isChartsOpen, setIsChartsOpen] = useState(false);
 
   interface CardDetailItem {
     id: string;
@@ -372,7 +373,9 @@ export default function EmprestimosPage() {
 
     if (!filters.incluirQuitados) {
       result = result.filter(e => {
-        if (e.totalTaken > 0 && e.balance <= 0) return false;
+        // Threshold de R$0,01 para cobrir imprecisões de floating-point
+        // (ex: balance = 0.005 exibido como R$ 0,00 mas tecnicamente positivo)
+        if (e.totalTaken > 0 && e.balance < 0.01) return false;
         return true;
       });
     }
@@ -609,16 +612,32 @@ export default function EmprestimosPage() {
         </div>
 
         <div className="mb-6">
-          {isLoadingProjections ? (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 h-[480px] flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+          <button
+            onClick={() => setIsChartsOpen(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-slate-200 rounded-xl hover:border-emerald-300 hover:shadow-sm transition-all text-sm font-bold text-slate-700 group"
+          >
+            <span className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-600 text-xs">📊</span>
+              Painel Analítico de Contratos
+            </span>
+            <span className="text-xs font-medium text-slate-400 group-hover:text-emerald-600 transition-colors">
+              {isChartsOpen ? "Fechar ▲" : "Abrir ▼"}
+            </span>
+          </button>
+          {isChartsOpen && (
+            <div className="mt-3">
+              {isLoadingProjections ? (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 h-[480px] flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+                </div>
+              ) : (
+                <DashboardCharts 
+                  projectionsData={projections} 
+                  historyData={historyData}
+                  employees={filteredEmployees}
+                />
+              )}
             </div>
-          ) : (
-            <DashboardCharts 
-              projectionsData={projections} 
-              historyData={historyData}
-              employees={filteredEmployees}
-            />
           )}
         </div>
 
