@@ -374,13 +374,14 @@ export class PeopleService {
       commission_plan: raw.commission_plan || '',
       
       // Endereço
-      zip_code: raw.zip_code,
-      street: raw.street,
-      number: raw.number,
-      neighborhood: raw.neighborhood,
-      city: raw.city,
-      state: raw.state,
-      complement: raw.complement,
+      // Dados de Endereço (com fallback para endereço CNPJ/Metadata de PJ/Credenciados)
+      zip_code: raw.zip_code || raw.cnpj_zip_code || raw.metadata?.zip_code || raw.metadata?.cep || '',
+      street: raw.street || raw.cnpj_street || raw.metadata?.street || raw.metadata?.logradouro || raw.metadata?.address || '',
+      number: raw.number || raw.cnpj_number || raw.metadata?.number || raw.metadata?.numero || '',
+      neighborhood: raw.neighborhood || raw.cnpj_neighborhood || raw.metadata?.neighborhood || raw.metadata?.bairro || '',
+      city: raw.city || raw.cnpj_city || raw.metadata?.city || raw.metadata?.cidade || '',
+      state: raw.state || raw.cnpj_state || raw.metadata?.state || raw.metadata?.uf || '',
+      complement: raw.complement || raw.cnpj_complement || raw.metadata?.complement || '',
 
       // Novos campos RH v3
       is_outsourced: raw.is_outsourced,

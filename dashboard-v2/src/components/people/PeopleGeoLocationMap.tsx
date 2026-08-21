@@ -99,33 +99,34 @@ export function PeopleGeoLocationMap({
 
         const photo = emp.photo_url || emp.metadata?.photo_url || emp.metadata?.avatar_url || emp.metadata?.foto || undefined;
 
-        const fullAddr = [
-          emp.street,
-          emp.number,
-          emp.neighborhood,
-          emp.city,
-          emp.state || 'SP'
-        ].filter(Boolean).join(', ');
+        // Fallbacks de Endereço (PF + CNPJ + Metadata de Credenciados/PJ)
+        const street = emp.street || emp.cnpj_street || emp.metadata?.street || emp.metadata?.logradouro || emp.metadata?.address || '';
+        const number = emp.number || emp.cnpj_number || emp.metadata?.number || emp.metadata?.numero || '';
+        const neighborhood = emp.neighborhood || emp.cnpj_neighborhood || emp.metadata?.neighborhood || emp.metadata?.bairro || '';
+        const city = emp.city || emp.cnpj_city || emp.metadata?.city || emp.metadata?.cidade || '';
+        const state = emp.state || emp.cnpj_state || emp.metadata?.state || emp.metadata?.uf || 'SP';
+        const zipCode = emp.zip_code || emp.cnpj_zip_code || emp.metadata?.zip_code || emp.metadata?.cep || '';
 
-        const cleanZip = emp.zip_code?.replace(/\D/g, '') || '';
-        const hasAddrInfo = Boolean(cleanZip || emp.street || emp.neighborhood || emp.city);
+        const fullAddr = [street, number, neighborhood, city, state].filter(Boolean).join(', ');
+        const cleanZip = zipCode.replace(/\D/g, '');
+        const hasAddrInfo = Boolean(cleanZip || street || neighborhood || city);
 
         let coords: LatLng | null = null;
         if (hasAddrInfo) {
           coords = await GeocodingService.geocodeAddress({
             zip_code: cleanZip,
-            street: emp.street,
-            number: emp.number,
-            neighborhood: emp.neighborhood,
-            city: emp.city,
-            state: emp.state
+            street,
+            number,
+            neighborhood,
+            city,
+            state
           });
         }
 
         if (!coords) {
           coords = await GeocodingService.geocodeAddress({
-            city: emp.city || 'Santos',
-            state: emp.state || 'SP'
+            city: city || 'Santos',
+            state: state || 'SP'
           });
         }
 
@@ -468,30 +469,15 @@ export function PeopleGeoLocationMap({
         allLatLngs.push([ws.lat, ws.lng]);
       });
 
-      // ── Colaboradores no Mapa com Foto de Perfil ──
+      // ── Colaboradores no Mapa (Iniciais no Pin / Foto no Tooltip e Drawer) ──
       filteredGeoItems.forEach(empItem => {
         const isSelected = selectedEmployeeId === empItem.employee_id;
         const hasOpt = Boolean(empItem.potential_optimization);
         const borderColor = empItem.is_outsourced ? '#f59e0b' : empItem.linkType === 'CLT' ? '#3b82f6' : '#8b5cf6';
         const initials = empItem.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
-        const size = isSelected ? 42 : 32;
+        const size = isSelected ? 38 : 30;
 
-        const photoHtml = empItem.photo_url ? `
-          <img
-            src="${empItem.photo_url}"
-            alt="${empItem.name}"
-            style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;"
-            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-          />
-          <div style="display: none; width: 100%; height: 100%; border-radius: 50%; align-items: center; justify-content: center; background: #e2e8f0; color: #1e293b; font-weight: 900; font-size: 11px;">
-            ${initials}
-          </div>
-        ` : `
-          <div style="width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: ${borderColor}18; color: ${borderColor}; font-weight: 900; font-size: 11px;">
-            ${initials}
-          </div>
-        `;
-
+        // Marcador Padrão: Ícone Circular com as Iniciais
         const empIconHtml = `
           <div style="
             background: white;
@@ -499,18 +485,28 @@ export function PeopleGeoLocationMap({
             height: ${size}px;
             border-radius: 50%;
             border: ${isSelected ? '3.5px solid #0f172a' : `2.5px solid ${borderColor}`};
-            box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.25);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             position: relative;
-            overflow: visible;
             transition: all 0.2s;
             ${hasOpt ? 'box-shadow: 0 0 0 3.5px rgba(244, 63, 94, 0.45);' : ''}
-          ">
-            <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden;">
-              ${photoHtml}
+          " title="${empItem.name}">
+            <div style="
+              width: 100%;
+              height: 100%;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: ${isSelected ? '12px' : '10px'};
+              font-weight: 900;
+              color: ${borderColor};
+              background: ${borderColor}12;
+            ">
+              ${initials}
             </div>
             ${hasOpt ? `<div style="position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:#f43f5e;border:1.5px solid white;z-index:10;"></div>` : ''}
           </div>
@@ -530,17 +526,21 @@ export function PeopleGeoLocationMap({
           setSelectedWorkstationId(null);
         });
 
+        // Tooltip ao passar o mouse (Hover): Exibe a Foto de Perfil + Dados
         marker.bindTooltip(`
-          <div style="display:flex;align-items:center;gap:8px;">
-            ${empItem.photo_url ? `<img src="${empItem.photo_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" />` : ''}
+          <div style="display:flex;align-items:center;gap:10px;padding:2px;">
+            <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;background:#e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid #cbd5e1;">
+              ${empItem.photo_url ? `<img src="${empItem.photo_url}" style="width:100%;height:100%;object-fit:cover;" />` : `<span style="font-weight:900;font-size:11px;color:#334155;">${initials}</span>`}
+            </div>
             <div>
-              <strong>${empItem.name}</strong><br/>
-              <span style="color:#64748b;font-size:10px;">${empItem.neighborhood || empItem.city || 'Residência'} · ${empItem.job_role || empItem.linkType}</span>
+              <strong style="font-size:12px;color:#0f172a;display:block;">${empItem.name}</strong>
+              <span style="color:#64748b;font-size:10px;display:block;">${empItem.neighborhood || empItem.city || 'Residência'} · <strong style="color:${borderColor};">${empItem.linkType}</strong></span>
             </div>
           </div>
         `, {
           direction: 'top',
-          offset: [0, -14]
+          offset: [0, -16],
+          className: 'custom-hover-tooltip'
         });
 
         marker.addTo(markersLayer);
