@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X, Printer, ShieldAlert, CheckCircle2, AlertTriangle, Building2, User, KeyRound, ExternalLink, Calendar, CheckSquare, Square } from 'lucide-react';
 import { Employee, EmployeeSystemAccess } from '@/types/loans';
 import { getCompanyLogoUrl } from './PeopleBadges';
+import { SystemAppIcon } from './SystemAppIcon';
 
 interface OffboardingChecklistModalProps {
   isOpen: boolean;
@@ -78,6 +79,7 @@ export function OffboardingChecklistModal({
           .badge-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
           .badge-warning { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
           .badge-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+          .badge-company { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; margin-right: 3px; }
           .signatures { margin-top: 50px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; text-align: center; }
           .sig-line { border-top: 1px solid #0f172a; padding-top: 6px; font-size: 11px; font-weight: 700; }
           @media print {
@@ -117,8 +119,8 @@ export function OffboardingChecklistModal({
             <tr>
               <th style="width: 25px;">#</th>
               <th>Sistema / Plataforma</th>
+              <th>Empresas do Grupo</th>
               <th>Categoria</th>
-              <th>Origem</th>
               <th>Nível de Acesso</th>
               <th>Identificador / Login</th>
               <th style="text-align: center;">Status de Revogação</th>
@@ -127,12 +129,17 @@ export function OffboardingChecklistModal({
           <tbody>
             ${accesses.map((a, i) => {
               const isRevoked = checkedRevoked[a.system_id];
+              const compList = a.companies || (a.company ? [a.company] : []);
               return `
                 <tr>
                   <td style="text-align: center;">${i + 1}</td>
                   <td><strong>${a.system_name}</strong></td>
+                  <td>
+                    ${compList.length > 0
+                      ? compList.map(c => `<span class="badge badge-company">${c}</span>`).join('')
+                      : '<span style="color:#94a3b8;">Grupo Geral</span>'}
+                  </td>
                   <td>${a.category}</td>
-                  <td>${a.origin === 'interno' ? 'Interno' : 'Contrato'}</td>
                   <td><span class="badge ${a.access_level === 'Estratégico' ? 'badge-danger' : a.access_level === 'Tático' ? 'badge-warning' : 'badge-success'}">${a.access_level}</span></td>
                   <td><code>${a.user_identifier || employee.email || '-'}</code></td>
                   <td style="text-align: center;">
@@ -260,9 +267,10 @@ export function OffboardingChecklistModal({
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+            <div className="divide-y divide-slate-100 border border-slate-200 rounded-3xl overflow-hidden bg-white shadow-xs">
               {accesses.map((acc) => {
                 const isRevoked = checkedRevoked[acc.system_id];
+                const compList = acc.companies || (acc.company ? [acc.company] : []);
                 return (
                   <div
                     key={acc.system_id}
@@ -284,14 +292,26 @@ export function OffboardingChecklistModal({
                         )}
                       </button>
 
+                      {/* App Icon */}
+                      <SystemAppIcon systemName={acc.system_name} category={acc.category} size="md" />
+
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className={`text-xs font-black uppercase tracking-tight ${isRevoked ? 'line-through text-slate-400' : 'text-slate-800'}`}>
                             {acc.system_name}
                           </h4>
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
                             {acc.category}
                           </span>
+                          {compList.length > 0 && (
+                            <div className="flex gap-1">
+                              {compList.map(c => (
+                                <span key={c} className="text-[9px] font-black px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                  {c}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <p className="text-[11px] text-slate-500 font-medium mt-0.5 flex items-center gap-2">
                           <span>Login/Identificador: <strong className="text-slate-700">{acc.user_identifier || employee.email || 'Não informado'}</strong></span>
@@ -385,3 +405,4 @@ export function OffboardingChecklistModal({
     </div>
   );
 }
+

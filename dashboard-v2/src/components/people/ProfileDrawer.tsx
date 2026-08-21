@@ -15,6 +15,8 @@ import { ProfileExportModal } from "./ProfileExportModal";
 import { ClearCostHistoryModal } from "./ClearCostHistoryModal";
 import { SystemsCatalogService } from "@/services/systems-catalog.service";
 import { OffboardingChecklistModal } from "./OffboardingChecklistModal";
+import { SystemAppIcon } from "./SystemAppIcon";
+import { GRUPO_EMPRESAS } from "@/types/loans";
 
 interface HistoryItem {
   id: string;
@@ -4361,35 +4363,47 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       exit={{ opacity: 0, y: -10 }}
                       className="space-y-6"
                     >
-                      {/* Banner de Segurança & Ação Rápida de Offboarding */}
-                      <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                      {/* Banner de Segurança & Botão de Salvar */}
+                      <div className="bg-slate-900 text-white rounded-3xl p-5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                          <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
                             <KeyRound size={20} />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <h4 className="text-xs font-black uppercase tracking-wider text-white">
                                 Credenciais &amp; Sistemas Concedidos
                               </h4>
-                              <span className="bg-indigo-500/30 text-indigo-300 text-[10px] font-black px-2 py-0.5 rounded border border-indigo-400/30">
+                              <span className="bg-indigo-500/30 text-indigo-300 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-indigo-400/30">
                                 {(profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length} Ativos
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-300 mt-0.5">
-                              Mapeie acessos a ERPs, Bancos e plataformas para auditoria e controle de descredenciamento.
+                              Mapeie acessos aos ERPs, Bancos e plataformas corporativas por empresa do Grupo.
                             </p>
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setIsOffboardingOpen(true)}
-                          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-sm transition-all shrink-0"
-                        >
-                          <ShieldAlert size={15} />
-                          <span>Termo de Offboarding (PDF)</span>
-                        </button>
+                        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={() => setIsOffboardingOpen(true)}
+                            className="px-3.5 py-2.5 bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-sm transition-all flex-1 sm:flex-none justify-center"
+                          >
+                            <ShieldAlert size={15} />
+                            <span>Termo Offboarding</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all flex-1 sm:flex-none justify-center disabled:opacity-50"
+                          >
+                            {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                            <span>{isSaving ? 'Salvando...' : 'Salvar Acessos'}</span>
+                          </button>
+                        </div>
                       </div>
 
                       {/* Grade de Sistemas por Categoria */}
@@ -4415,6 +4429,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               category: sys.category,
                               access_level: sys.default_level || 'Operacional',
                               origin: sys.origin,
+                              companies: profile.company ? [profile.company] : ['Mar Brasil'],
+                              company: profile.company || 'Mar Brasil',
                               user_identifier: profile.email_professional || profile.email || '',
                               granted_at: new Date().toISOString().split('T')[0],
                               is_active: true
@@ -4435,6 +4451,25 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           handleChange('system_accesses' as any, updated as any);
                         };
 
+                        const handleToggleCompany = (sysId: string, companyName: string) => {
+                          const access = currentAccesses.find(a => a.system_id === sysId);
+                          if (!access) return;
+
+                          const currentCompanies = access.companies || (access.company ? [access.company] : []);
+                          let newCompanies: string[];
+
+                          if (currentCompanies.includes(companyName)) {
+                            newCompanies = currentCompanies.filter(c => c !== companyName);
+                          } else {
+                            newCompanies = [...currentCompanies, companyName];
+                          }
+
+                          handleUpdateAccess(sysId, {
+                            companies: newCompanies,
+                            company: newCompanies[0] || ''
+                          });
+                        };
+
                         return (
                           <div className="space-y-6">
                             {categories.map(cat => {
@@ -4453,33 +4488,38 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                     </span>
                                   </div>
 
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                                     {systemsInCat.map(sys => {
                                       const access = currentAccesses.find(a => a.system_id === sys.id);
                                       const isGranted = !!access;
+                                      const assignedCompanies = access?.companies || (access?.company ? [access.company] : []);
 
                                       return (
                                         <div
                                           key={sys.id}
-                                          className={`p-3.5 rounded-2xl border transition-all ${
+                                          className={`p-4 rounded-3xl border transition-all ${
                                             isGranted
-                                              ? 'bg-indigo-50/20 border-indigo-300 ring-2 ring-indigo-100 shadow-xs'
-                                              : 'bg-white border-slate-200 opacity-80 hover:opacity-100'
+                                              ? 'bg-white border-indigo-400 ring-2 ring-indigo-100 shadow-sm'
+                                              : 'bg-white border-slate-200 opacity-75 hover:opacity-100 hover:border-slate-300'
                                           }`}
                                         >
-                                          <div className="flex items-start justify-between gap-2">
-                                            <div className="flex items-center gap-2.5 min-w-0">
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
                                               <input
                                                 type="checkbox"
                                                 id={`sys-${sys.id}`}
                                                 checked={isGranted}
                                                 onChange={() => handleToggleSystem(sys)}
-                                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0"
                                               />
-                                              <div className="min-w-0">
+
+                                              {/* Logotipo / Ícone do App */}
+                                              <SystemAppIcon systemName={sys.name} category={sys.category} size="md" />
+
+                                              <div className="min-w-0 flex-1">
                                                 <label
                                                   htmlFor={`sys-${sys.id}`}
-                                                  className="text-xs font-black uppercase text-slate-900 truncate block cursor-pointer"
+                                                  className="text-xs font-black uppercase text-slate-900 truncate block cursor-pointer tracking-tight"
                                                 >
                                                   {sys.name}
                                                 </label>
@@ -4490,15 +4530,42 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             </div>
 
                                             {isGranted && (
-                                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                                Ativo
+                                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                                                ✓ Concedido
                                               </span>
                                             )}
                                           </div>
 
                                           {/* Campos de configuração quando concedido */}
                                           {isGranted && access && (
-                                            <div className="mt-3 pt-2.5 border-t border-indigo-100/80 space-y-2 animate-in fade-in">
+                                            <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-3 animate-in fade-in">
+                                              {/* 1. Seleção de Empresas do Grupo */}
+                                              <div>
+                                                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+                                                  Empresas do Grupo com Acesso:
+                                                </label>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                  {GRUPO_EMPRESAS.map(empresa => {
+                                                    const isChecked = assignedCompanies.includes(empresa);
+                                                    return (
+                                                      <button
+                                                        type="button"
+                                                        key={empresa}
+                                                        onClick={() => handleToggleCompany(sys.id, empresa)}
+                                                        className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
+                                                          isChecked
+                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs scale-[1.02]'
+                                                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                                        }`}
+                                                      >
+                                                        {empresa}
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </div>
+
+                                              {/* 2. Nível e Login */}
                                               <div className="grid grid-cols-2 gap-2">
                                                 <div>
                                                   <label className="text-[9px] font-black uppercase text-slate-500 block mb-0.5">
@@ -4507,7 +4574,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                                   <select
                                                     value={access.access_level || 'Operacional'}
                                                     onChange={(e) => handleUpdateAccess(sys.id, { access_level: e.target.value as any })}
-                                                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800"
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white"
                                                   >
                                                     <option value="Operacional">Operacional</option>
                                                     <option value="Tático">Tático</option>
@@ -4517,25 +4584,26 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                                                 <div>
                                                   <label className="text-[9px] font-black uppercase text-slate-500 block mb-0.5">
-                                                    Login / Credencial
+                                                    Login / Usuário
                                                   </label>
                                                   <input
                                                     type="text"
                                                     value={access.user_identifier || ''}
                                                     onChange={(e) => handleUpdateAccess(sys.id, { user_identifier: e.target.value })}
                                                     placeholder="Login ou e-mail"
-                                                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800"
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white"
                                                   />
                                                 </div>
                                               </div>
 
+                                              {/* 3. Observações */}
                                               <div>
                                                 <input
                                                   type="text"
                                                   value={access.notes || ''}
                                                   onChange={(e) => handleUpdateAccess(sys.id, { notes: e.target.value })}
-                                                  placeholder="Observações (ex: token físico, 2FA no celular...)"
-                                                  className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-600"
+                                                  placeholder="Observações (ex: token físico nº 4, 2FA no celular institucional...)"
+                                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-600 focus:bg-white"
                                                 />
                                               </div>
                                             </div>
@@ -4547,6 +4615,22 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 </div>
                               );
                             })}
+
+                            {/* Botão de Salvar no Rodapé da Aba */}
+                            <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
+                              <span className="text-xs text-slate-400 font-semibold">
+                                {currentAccesses.length} sistemas vinculados a este integrante
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                              >
+                                {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                                <span>{isSaving ? 'Salvando...' : 'Salvar Acessos e Sistemas'}</span>
+                              </button>
+                            </div>
                           </div>
                         );
                       })()}

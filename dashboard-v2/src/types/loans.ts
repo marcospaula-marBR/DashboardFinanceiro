@@ -388,12 +388,26 @@ export interface SystemItem {
   created_at?: string;
 }
 
+export const GRUPO_EMPRESAS = [
+  'Mar Brasil',
+  'DZM',
+  'G2',
+  'Ybox',
+  'Conectius',
+  'Pessoal',
+  'Usatell'
+] as const;
+
+export type GrupoEmpresa = typeof GRUPO_EMPRESAS[number];
+
 export interface EmployeeSystemAccess {
   system_id: string;
   system_name: string;
   category: SystemCategory | string;
   access_level: SystemAccessLevel;
   origin: SystemOrigin;
+  companies?: string[]; // Empresas do Grupo a que este acesso se destina (Mar Brasil, DZM, G2, Ybox, Conectius, Pessoal, Usatell)
+  company?: string;
   user_identifier?: string; // Login, email ou credencial no sistema
   granted_at?: string; // YYYY-MM-DD
   revoked_at?: string; // YYYY-MM-DD

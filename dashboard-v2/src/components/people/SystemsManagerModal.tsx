@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X, Plus, Edit2, Trash2, Shield, Building2, Server, Save, RefreshCw, CheckCircle2, Search, Tag, KeyRound } from 'lucide-react';
 import { SystemItem, SystemCategory, SystemOrigin, SystemAccessLevel } from '@/types/loans';
 import { SystemsCatalogService } from '@/services/systems-catalog.service';
+import { SystemAppIcon } from './SystemAppIcon';
 
 interface SystemsManagerModalProps {
   isOpen: boolean;
@@ -337,7 +338,9 @@ export function SystemsManagerModal({
                   className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 transition-all shadow-xs flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <SystemAppIcon systemName={sys.name} category={sys.category} size="md" />
+
                       <div className="min-w-0 flex-1">
                         <h4 className="text-xs font-black uppercase tracking-tight text-slate-900 truncate">
                           {sys.name}

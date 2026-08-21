@@ -7,11 +7,12 @@ import {
   AlertCircle, ChevronRight, X, Sparkles, Layers, ArrowUpRight,
   HelpCircle, Eye, Settings2, Shield
 } from 'lucide-react';
-import { Employee, SystemItem, SystemCategory, EmployeeSystemAccess, inferEntityType } from '@/types/loans';
+import { Employee, SystemItem, SystemCategory, EmployeeSystemAccess, inferEntityType, GRUPO_EMPRESAS } from '@/types/loans';
 import { isExternalEntity, getCompanyLogoUrl } from './PeopleBadges';
 import { SystemsCatalogService } from '@/services/systems-catalog.service';
 import { OffboardingChecklistModal } from './OffboardingChecklistModal';
 import { SystemsManagerModal } from './SystemsManagerModal';
+import { SystemAppIcon } from './SystemAppIcon';
 
 interface SystemsEcosystemViewProps {
   employees: Employee[];
@@ -35,6 +36,7 @@ export function SystemsEcosystemView({
 }: SystemsEcosystemViewProps) {
   const [catalog, setCatalog] = useState<SystemItem[]>(() => SystemsCatalogService.getSystems());
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCompany, setSelectedCompany] = useState<string>('all');
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,6 +114,15 @@ export function SystemsEcosystemView({
       });
     }
 
+    // Filtro por Empresa do Grupo
+    if (selectedCompany !== 'all') {
+      list = list.filter(emp => {
+        if (emp.company === selectedCompany) return true;
+        const accesses = employeeToSystemsMap[emp.id] || [];
+        return accesses.some(a => (a.companies || []).includes(selectedCompany) || a.company === selectedCompany);
+      });
+    }
+
     // Se um sistema específico foi clicado (Ex: Bradesco) -> Mostra APENAS quem tem acesso àquele sistema
     if (selectedSystemId) {
       const allowedEmployees = (systemToEmployeesMap[selectedSystemId] || []).map(item => item.employee.id);
@@ -125,7 +136,7 @@ export function SystemsEcosystemView({
     }
 
     return list;
-  }, [activeMembers, searchTerm, selectedSystemId, selectedCategory, systemToEmployeesMap, employeeToSystemsMap]);
+  }, [activeMembers, searchTerm, selectedCompany, selectedSystemId, selectedCategory, systemToEmployeesMap, employeeToSystemsMap]);
 
   // Contagem de categorias de sistemas
   const categoryCounts = useMemo(() => {
@@ -138,6 +149,7 @@ export function SystemsEcosystemView({
 
   const handleResetFilters = () => {
     setSelectedCategory('all');
+    setSelectedCompany('all');
     setSelectedSystemId(null);
     setSelectedEmployeeId(null);
     setSearchTerm('');
@@ -161,7 +173,7 @@ export function SystemsEcosystemView({
               </h2>
             </div>
             <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-              Navegação bidirecional de credenciais em Bancos, ERPs e plataformas corporativas. Mapeamento para controle de segurança e offboarding imediato.
+              Navegação bidirecional de credenciais em Bancos, ERPs e plataformas corporativas por empresa do Grupo. Mapeamento para controle de segurança e offboarding imediato.
             </p>
           </div>
 
@@ -201,26 +213,26 @@ export function SystemsEcosystemView({
         </div>
       </div>
 
-      {/* ── Filtros Interativos por Tipo / Categoria de Sistemas ── */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-xs space-y-3">
+      {/* ── Filtros Interativos por Tipo, Empresa e Busca ── */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-3.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-1 min-w-[240px]">
             <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por colaborador, sistema, banco ou ERP..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="Buscar por integrante, sistema, banco ou ERP..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-10 pr-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
           </div>
 
-          {(selectedCategory !== 'all' || selectedSystemId !== null || selectedEmployeeId !== null || searchTerm) && (
+          {(selectedCategory !== 'all' || selectedCompany !== 'all' || selectedSystemId !== null || selectedEmployeeId !== null || searchTerm) && (
             <button
               onClick={handleResetFilters}
-              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all"
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all"
             >
               <X size={14} />
               <span>Limpar Filtros</span>
@@ -228,8 +240,44 @@ export function SystemsEcosystemView({
           )}
         </div>
 
-        {/* Pílulas de Categorias */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+        {/* 1. Pílulas de Empresa do Grupo */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mr-1 shrink-0">
+            Empresa:
+          </span>
+          <button
+            onClick={() => setSelectedCompany('all')}
+            className={`px-3 py-1.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all whitespace-nowrap ${
+              selectedCompany === 'all'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            Todas
+          </button>
+          {GRUPO_EMPRESAS.map(empresa => {
+            const isSelected = selectedCompany === empresa;
+            return (
+              <button
+                key={empresa}
+                onClick={() => setSelectedCompany(empresa)}
+                className={`px-3 py-1.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all whitespace-nowrap ${
+                  isSelected
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {empresa}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 2. Pílulas de Categorias de Sistemas */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs pt-1 border-t border-slate-100">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mr-1 shrink-0">
+            Categoria:
+          </span>
           <button
             onClick={() => {
               setSelectedCategory('all');
@@ -237,12 +285,12 @@ export function SystemsEcosystemView({
             }}
             className={`px-3.5 py-1.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
               selectedCategory === 'all' && !selectedSystemId
-                ? 'bg-slate-900 text-white shadow-xs'
+                ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
             }`}
           >
             <span>🌐 Todos os Tipos</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-slate-200/60 text-[9px]">{catalog.length}</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[9px] ${selectedCategory === 'all' && !selectedSystemId ? 'bg-indigo-700' : 'bg-slate-200/60'}`}>{catalog.length}</span>
           </button>
 
           {Object.keys(categoryCounts).map(cat => {
@@ -256,7 +304,7 @@ export function SystemsEcosystemView({
                   setSelectedCategory(cat);
                   setSelectedSystemId(null);
                 }}
-                className={`px-3.5 py-1.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   isSelected
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
@@ -272,16 +320,17 @@ export function SystemsEcosystemView({
         </div>
       </div>
 
-      {/* ── Barra de Sistemas Disponíveis (Carrossel / Grid de Seleção Rápida) ── */}
-      <div className="space-y-2">
+      {/* ── Barra de Sistemas Disponíveis (App Launchpad / Grid com Logotipos) ── */}
+      <div className="space-y-2.5">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-            Sistemas &amp; Plataformas (Clique em um sistema para filtrar colaboradores)
+            Sistemas &amp; Plataformas (Clique no aplicativo para filtrar os integrantes)
           </h3>
           {activeSystem && (
-            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-lg">
-              Filtrando por: <strong>{activeSystem.name}</strong>
+            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+              <span>Filtrando por:</span>
+              <strong className="uppercase">{activeSystem.name}</strong>
             </span>
           )}
         </div>
@@ -290,7 +339,6 @@ export function SystemsEcosystemView({
           {filteredCatalog.map(sys => {
             const isSelected = selectedSystemId === sys.id;
             const userCount = (systemToEmployeesMap[sys.id] || []).length;
-            const icon = CATEGORY_ICONS[sys.category] || '📦';
 
             return (
               <div
@@ -303,15 +351,17 @@ export function SystemsEcosystemView({
                     setSelectedCategory(sys.category);
                   }
                 }}
-                className={`p-3.5 rounded-2xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
+                className={`p-3.5 rounded-3xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
                   isSelected
-                    ? 'bg-indigo-50/80 border-indigo-500 ring-2 ring-indigo-200 shadow-md scale-[1.02]'
-                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-xs'
+                    ? 'bg-indigo-50/90 border-indigo-500 ring-2 ring-indigo-200 shadow-md scale-[1.02]'
+                    : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-sm'
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between gap-1 mb-1.5">
-                    <span className="text-base">{icon}</span>
+                  <div className="flex items-start justify-between gap-2 mb-2.5">
+                    {/* Logotipo / App Icon */}
+                    <SystemAppIcon systemName={sys.name} category={sys.category} size="md" />
+
                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
                       userCount > 0
                         ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
@@ -321,7 +371,7 @@ export function SystemsEcosystemView({
                     </span>
                   </div>
 
-                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight line-clamp-1">
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight line-clamp-1">
                     {sys.name}
                   </h4>
                   <p className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5">
@@ -329,10 +379,10 @@ export function SystemsEcosystemView({
                   </p>
                 </div>
 
-                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[9px] font-bold text-slate-500">
+                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[9px] font-bold text-slate-500">
                   <span>{sys.origin === 'interno' ? 'Interno' : 'Contrato'}</span>
                   <span className="text-indigo-600 font-black">
-                    {isSelected ? '✓ Selecionado' : 'Filtrar →'}
+                    {isSelected ? '✓ Ativo' : 'Ver Integrantes →'}
                   </span>
                 </div>
               </div>
@@ -343,9 +393,9 @@ export function SystemsEcosystemView({
 
       {/* ── Painel de Destaque do Colaborador Selecionado ── */}
       {activeEmployee && (
-        <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-3xl p-5 border border-indigo-800/60 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-slate-950 text-white rounded-3xl p-5 border border-indigo-800/60 shadow-xl animate-in fade-in zoom-in-95 duration-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-white shrink-0 shadow-inner">
                 <User size={24} />
               </div>
@@ -356,7 +406,7 @@ export function SystemsEcosystemView({
                       ? activeEmployee.corporate_name
                       : activeEmployee.name}
                   </h3>
-                  <span className="bg-indigo-500/30 text-indigo-200 text-[10px] font-black px-2 py-0.5 rounded-md uppercase border border-indigo-400/30">
+                  <span className="bg-indigo-500/30 text-indigo-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-indigo-400/30">
                     {activeEmployee.company} • {activeEmployee.linkType}
                   </span>
                 </div>
@@ -395,34 +445,53 @@ export function SystemsEcosystemView({
 
           {/* Lista dos Sistemas que este colaborador tem acesso */}
           <div className="mt-4 pt-4 border-t border-indigo-800/60">
-            <h4 className="text-[11px] font-black uppercase tracking-wider text-indigo-300 mb-2.5">
-              Sistemas e Credenciais Ativas ({(employeeToSystemsMap[activeEmployee.id] || []).length} Mapeados)
+            <h4 className="text-[11px] font-black uppercase tracking-wider text-indigo-300 mb-2.5 flex items-center gap-1.5">
+              <KeyRound size={13} />
+              <span>Sistemas e Credenciais Ativas ({(employeeToSystemsMap[activeEmployee.id] || []).length} Mapeados)</span>
             </h4>
 
             {(employeeToSystemsMap[activeEmployee.id] || []).length === 0 ? (
-              <p className="text-xs text-slate-400 italic">Nenhum sistema vinculado a este colaborador no momento.</p>
+              <p className="text-xs text-slate-400 italic">Nenhum sistema vinculado a este integrante no momento.</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                {(employeeToSystemsMap[activeEmployee.id] || []).map(acc => (
-                  <div
-                    key={acc.system_id}
-                    className="bg-slate-800/80 border border-slate-700 rounded-xl p-2.5 flex items-center justify-between gap-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-white uppercase truncate">{acc.system_name}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{acc.category} • {acc.user_identifier || activeEmployee.email || 'Sem login'}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {(employeeToSystemsMap[activeEmployee.id] || []).map(acc => {
+                  const compList = acc.companies || (acc.company ? [acc.company] : []);
+                  return (
+                    <div
+                      key={acc.system_id}
+                      className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-3 flex items-start gap-3 shadow-xs"
+                    >
+                      <SystemAppIcon systemName={acc.system_name} category={acc.category} size="md" />
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-black text-white uppercase truncate">{acc.system_name}</p>
+                        <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                          {acc.user_identifier || activeEmployee.email || 'Sem login'}
+                        </p>
+                        
+                        {compList.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {compList.map(c => (
+                              <span key={c} className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 ${
+                        acc.access_level === 'Estratégico'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : acc.access_level === 'Tático'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}>
+                        {acc.access_level}
+                      </span>
                     </div>
-                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
-                      acc.access_level === 'Estratégico'
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                        : acc.access_level === 'Tático'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    }`}>
-                      {acc.access_level}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -437,7 +506,7 @@ export function SystemsEcosystemView({
             Integrantes &amp; Credenciais ({filteredEmployees.length} Encontrados)
           </h3>
           <span className="text-xs text-slate-400 font-semibold">
-            Clique no card para inspecionar acessos ou acionar checklist de segurança
+            Clique no card para inspecionar credenciais ou acionar checklist de desligamento
           </span>
         </div>
 
@@ -446,7 +515,7 @@ export function SystemsEcosystemView({
             <AlertCircle size={36} className="mx-auto text-slate-400 mb-2" />
             <h4 className="text-sm font-bold text-slate-700">Nenhum integrante encontrado</h4>
             <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
-              Nenhum colaborador corresponde aos filtros de sistema ou busca selecionados.
+              Nenhum colaborador corresponde aos filtros de empresa, sistema ou busca selecionados.
             </p>
             <button
               onClick={handleResetFilters}
@@ -468,24 +537,24 @@ export function SystemsEcosystemView({
                 <div
                   key={emp.id}
                   onClick={() => setSelectedEmployeeId(isSelected ? null : emp.id)}
-                  className={`bg-white border rounded-2xl p-4 transition-all duration-200 cursor-pointer select-none flex flex-col justify-between ${
+                  className={`bg-white border rounded-3xl p-4 transition-all duration-200 cursor-pointer select-none flex flex-col justify-between ${
                     isSelected
                       ? 'border-indigo-500 ring-4 ring-indigo-100 bg-indigo-50/10 shadow-md scale-[1.01]'
-                      : 'border-slate-200 hover:border-slate-300 hover:shadow-xs'
+                      : 'border-slate-200 hover:border-indigo-300 hover:shadow-sm'
                   }`}
                 >
                   <div>
                     {/* Header do Card com Foto/Ícone */}
                     <div className="flex items-start gap-3">
                       {isExternal && !(emp.photo_url || emp.avatar) ? (
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
                           <Building2 size={18} />
                         </div>
                       ) : (
                         <img
                           src={avatarSrc}
                           alt={displayName}
-                          className="w-10 h-10 rounded-xl object-cover border border-slate-100 shrink-0 shadow-xs"
+                          className="w-10 h-10 rounded-2xl object-cover border border-slate-100 shrink-0 shadow-xs"
                         />
                       )}
 
@@ -504,9 +573,9 @@ export function SystemsEcosystemView({
                       </div>
                     </div>
 
-                    {/* Tags dos Sistemas Vinculados */}
-                    <div className="mt-3 pt-2.5 border-t border-slate-100">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1.5">
+                    {/* Tags dos Sistemas Vinculados com Logotipos */}
+                    <div className="mt-3.5 pt-2.5 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-2">
                         <span className="uppercase">Sistemas Conectados:</span>
                         <span className={`font-black ${accesses.length > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
                           {accesses.length}
@@ -516,24 +585,32 @@ export function SystemsEcosystemView({
                       {accesses.length === 0 ? (
                         <span className="text-[10px] text-slate-400 italic">Sem sistemas vinculados</span>
                       ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {accesses.slice(0, 4).map(acc => (
-                            <span
-                              key={acc.system_id}
-                              className={`text-[9px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
-                                acc.access_level === 'Estratégico'
-                                  ? 'bg-rose-50 text-rose-700 border-rose-100'
-                                  : acc.access_level === 'Tático'
-                                  ? 'bg-amber-50 text-amber-700 border-amber-100'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                              }`}
-                            >
-                              <span>{CATEGORY_ICONS[acc.category] || '•'}</span>
-                              <span className="truncate max-w-[90px]">{acc.system_name}</span>
-                            </span>
-                          ))}
+                        <div className="flex flex-wrap gap-1.5">
+                          {accesses.slice(0, 4).map(acc => {
+                            const compList = acc.companies || (acc.company ? [acc.company] : []);
+                            return (
+                              <span
+                                key={acc.system_id}
+                                className={`text-[9px] font-bold px-2 py-1 rounded-xl border flex items-center gap-1.5 ${
+                                  acc.access_level === 'Estratégico'
+                                    ? 'bg-rose-50/80 text-rose-800 border-rose-200'
+                                    : acc.access_level === 'Tático'
+                                    ? 'bg-amber-50/80 text-amber-800 border-amber-200'
+                                    : 'bg-emerald-50/80 text-emerald-800 border-emerald-200'
+                                }`}
+                              >
+                                <SystemAppIcon systemName={acc.system_name} category={acc.category} size="sm" className="!w-4 !h-4 !rounded-md" />
+                                <span className="truncate max-w-[85px]">{acc.system_name}</span>
+                                {compList.length > 0 && (
+                                  <span className="text-[8px] font-extrabold opacity-75">
+                                    ({compList[0]})
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })}
                           {accesses.length > 4 && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                            <span className="text-[9px] font-black px-2 py-1 rounded-xl bg-slate-100 text-slate-600 border border-slate-200">
                               +{accesses.length - 4}
                             </span>
                           )}
@@ -543,7 +620,7 @@ export function SystemsEcosystemView({
                   </div>
 
                   {/* Rodapé com Ação Rápida de Offboarding */}
-                  <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <div className="mt-3.5 pt-2.5 border-t border-slate-100 flex items-center justify-between">
                     <button
                       type="button"
                       onClick={(e) => {
@@ -595,7 +672,7 @@ export function SystemsEcosystemView({
           onClose={() => setOffboardingEmployee(null)}
           employee={offboardingEmployee}
           onRevokeAccesses={(empId, revokedSysIds) => {
-            // Callback opcional de persistência de status
+            // Callback opcional
           }}
         />
       )}
@@ -603,3 +680,4 @@ export function SystemsEcosystemView({
     </div>
   );
 }
+
