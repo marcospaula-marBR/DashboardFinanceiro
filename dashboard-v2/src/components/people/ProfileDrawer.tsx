@@ -68,9 +68,10 @@ interface ProfileDrawerProps {
   onDataChanged?: (id?: string) => void;
   isTestMode?: boolean;
   setores?: string[];
+  initialTab?: 'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos';
 }
 
-export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [] }: ProfileDrawerProps) {
+export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [], initialTab = 'pessoal' }: ProfileDrawerProps) {
   const { isTestMode: contextIsTestMode } = useDataMode();
   const isTestMode = propIsTestMode ?? contextIsTestMode;
   
@@ -80,7 +81,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [error, setError] = useState<string | null>(null);
   
   // Abas: 'pessoal', 'endereco', 'complementar', 'fichaExecutiva', 'trajetoria', 'custo', 'auditoria', 'acessos'
-  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos'>('pessoal');
+  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos'>(initialTab);
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab, employeeId]);
   const [isOffboardingOpen, setIsOffboardingOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);

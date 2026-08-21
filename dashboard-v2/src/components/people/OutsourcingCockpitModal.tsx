@@ -277,12 +277,17 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         e.metadata?.is_outsourced === true
       );
 
-      // 2. Custos mensais da competência no Supabase
+      // 2. Custos mensais da competência no Supabase (busca flexível pelo mês completo)
+      const cleanComp = comp.slice(0, 7); // ex: '2026-07'
+      const startDate = `${cleanComp}-01`;
+      const endDate = `${cleanComp}-31`;
+
       const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
       const { data: costsData } = await supabase
         .from(costsTable)
         .select('*')
-        .eq('competencia', comp);
+        .gte('competencia', startDate)
+        .lte('competencia', endDate);
 
       const costsMap = new Map<string, any>();
       (costsData || []).forEach(r => costsMap.set(r.employee_id, r));
@@ -292,7 +297,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       const { data: loanPayments } = await supabase
         .from(paymentsTable)
         .select('*')
-        .eq('month_cycle', comp);
+        .or(`month_cycle.eq.${cleanComp},month_cycle.eq.${startDate},month_cycle.eq.${comp}`);
 
       const loansMap = new Map<string, number>();
       (loanPayments || []).forEach((lp: any) => {
@@ -309,8 +314,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
           .maybeSingle();
 
-        if (globalConfig?.metadata?.outsourcing_configs?.[comp]) {
-          cloudCompetenceData = globalConfig.metadata.outsourcing_configs[comp];
+        if (globalConfig?.metadata?.outsourcing_configs) {
+          cloudCompetenceData = globalConfig.metadata.outsourcing_configs[cleanComp] ||
+            globalConfig.metadata.outsourcing_configs[comp] ||
+            globalConfig.metadata.outsourcing_configs[startDate];
         }
       } catch (e) {
         console.warn('Aviso ao carregar configuração de terceirização do Supabase:', e);
@@ -521,6 +528,11 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       }));
 
       // 2. SALVAR NO SUPABASE: REGISTRO GLOBAL DE APURAÇÃO COMPARTILHADO COM TODOS OS USUÁRIOS
+      const cleanComp = competencia.slice(0, 7);
+      const dbComp = `${cleanComp}-01`;
+      const startDate = `${cleanComp}-01`;
+      const endDate = `${cleanComp}-31`;
+
       try {
         const { data: globalRec } = await supabase
           .from('employees')
@@ -531,7 +543,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         const meta = (globalRec?.metadata as Record<string, any>) || {};
         const outsConfigs = meta.outsourcing_configs || {};
 
-        outsConfigs[competencia] = {
+        outsConfigs[cleanComp] = {
           taxInputMode,
           taxRate,
           taxFixedAmount,
@@ -591,7 +603,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
           const cleanCostPayload = {
             employee_id: empId,
-            competencia,
+            competencia: dbComp,
             valor_fixo: row.valorBruto || 0,
             valor_bonus: row.valorBonus || 0,
             valor_comissao: row.valorComissao || 0,
@@ -607,7 +619,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
               .from(costsTable)
               .select('id')
               .eq('employee_id', empId)
-              .eq('competencia', competencia)
+              .gte('competencia', startDate)
+              .lte('competencia', endDate)
               .maybeSingle();
 
             if (existingCost?.id) {

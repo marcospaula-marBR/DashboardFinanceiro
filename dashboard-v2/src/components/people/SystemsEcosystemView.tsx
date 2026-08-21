@@ -16,7 +16,7 @@ import { SystemAppIcon } from './SystemAppIcon';
 
 interface SystemsEcosystemViewProps {
   employees: Employee[];
-  onEmployeeClick: (id: string) => void;
+  onEmployeeClick: (id: string, initialTab?: any) => void;
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -432,7 +432,7 @@ export function SystemsEcosystemView({
               </button>
 
               <button
-                onClick={() => onEmployeeClick(activeEmployee.id)}
+                onClick={() => onEmployeeClick(activeEmployee.id, 'acessos')}
                 className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider border border-white/20 flex items-center gap-1.5 transition-all"
               >
                 <Eye size={15} />
@@ -643,9 +643,10 @@ export function SystemsEcosystemView({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onEmployeeClick(emp.id);
+                        onEmployeeClick(emp.id, 'acessos');
                       }}
-                      className="text-[10px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-0.5"
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50/70 hover:bg-indigo-100 px-2 py-1 rounded-md flex items-center gap-1 transition-colors"
+                      title="Abrir Ficha de Acessos & Sistemas do integrante"
                     >
                       <span>Ficha</span>
                       <ChevronRight size={12} />
@@ -677,6 +678,10 @@ export function SystemsEcosystemView({
           isOpen={!!offboardingEmployee}
           onClose={() => setOffboardingEmployee(null)}
           employee={offboardingEmployee}
+          onOpenProfileDrawer={(empId, tab) => {
+            setOffboardingEmployee(null);
+            onEmployeeClick(empId, tab || 'acessos');
+          }}
           onRevokeAccesses={(empId, revokedSysIds) => {
             // Callback opcional
           }}

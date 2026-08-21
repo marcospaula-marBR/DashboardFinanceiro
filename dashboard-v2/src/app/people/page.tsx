@@ -96,6 +96,7 @@ export default function PeoplePage() {
   // Drawer / modal states
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
+  const [drawerInitialTab, setDrawerInitialTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos'>('pessoal');
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isPayrollBatchModalOpen, setIsPayrollBatchModalOpen] = useState(false);
@@ -669,8 +670,9 @@ export default function PeoplePage() {
     return { glosa, emprestimo, aumento, promocao, grau, nivel };
   }, [baseFilteredEmployees, noRaiseMonths, noPromoMonths, noGradeMonths, noNivelMonths]);
 
-  const handleEmployeeClick = (employeeId: string) => {
+  const handleEmployeeClick = (employeeId: string, initialTab?: 'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos') => {
     setSelectedEmployee(employeeId);
+    setDrawerInitialTab(initialTab || 'pessoal');
     setIsProfileDrawerOpen(true);
   };
 
@@ -2172,9 +2174,11 @@ export default function PeoplePage() {
       <ProfileDrawer
         isOpen={isProfileDrawerOpen}
         setores={setores}
+        initialTab={drawerInitialTab}
         onClose={() => {
           setIsProfileDrawerOpen(false);
           setSelectedEmployee(undefined);
+          setDrawerInitialTab('pessoal');
         }}
         employeeId={selectedEmployee}
         onDataChanged={(newId) => {

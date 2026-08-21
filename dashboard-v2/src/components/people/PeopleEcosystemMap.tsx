@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 interface PeopleEcosystemMapProps {
   employees: Employee[];
-  onEmployeeClick: (id: string) => void;
+  onEmployeeClick: (id: string, initialTab?: any) => void;
   showValues: boolean;
 }
 
