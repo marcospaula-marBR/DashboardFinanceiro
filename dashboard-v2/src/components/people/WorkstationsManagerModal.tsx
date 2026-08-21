@@ -420,15 +420,38 @@ export function WorkstationsManagerModal({
                   </div>
                 </div>
 
-                {/* Coordenadas Lat / Lng */}
-                <div className="sm:col-span-2 md:col-span-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+                {/* Coordenadas Lat / Lng Editáveis */}
+                <div className="sm:col-span-2 md:col-span-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <Compass size={18} className="text-indigo-600" />
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 shrink-0">
+                      <Compass size={18} />
+                    </div>
                     <div>
-                      <span className="text-[10px] font-bold uppercase text-slate-500 block">Coordenadas Geográficas (GPS)</span>
-                      <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
-                        Lat: {editingWs.lat ? editingWs.lat.toFixed(5) : 'Auto'} | Lng: {editingWs.lng ? editingWs.lng.toFixed(5) : 'Auto'}
-                      </span>
+                      <span className="text-[10px] font-black uppercase text-slate-500 block">Coordenadas Geográficas (GPS / Mapa)</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold text-slate-400">Lat:</span>
+                          <input
+                            type="number"
+                            step="any"
+                            value={editingWs.lat || ''}
+                            onChange={e => setEditingWs({ ...editingWs, lat: parseFloat(e.target.value) || 0 })}
+                            placeholder="-23.9618"
+                            className="w-24 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-slate-800 dark:text-white outline-none"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold text-slate-400">Lng:</span>
+                          <input
+                            type="number"
+                            step="any"
+                            value={editingWs.lng || ''}
+                            onChange={e => setEditingWs({ ...editingWs, lng: parseFloat(e.target.value) || 0 })}
+                            placeholder="-46.3322"
+                            className="w-24 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-slate-800 dark:text-white outline-none"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -436,24 +459,51 @@ export function WorkstationsManagerModal({
                     type="button"
                     onClick={async () => {
                       setIsGeocoding(true);
-                      const coords = await GeocodingService.geocodeAddress({
-                        zip_code: editingWs.zip_code,
-                        street: editingWs.address,
-                        number: editingWs.number,
-                        neighborhood: editingWs.neighborhood,
-                        city: editingWs.city,
-                        state: editingWs.state
-                      });
-                      if (coords) {
-                        setEditingWs(prev => prev ? ({ ...prev, lat: coords.lat, lng: coords.lng }) : null);
+                      try {
+                        const cleanZip = editingWs.zip_code ? editingWs.zip_code.replace(/\D/g, '') : '';
+                        
+                        // 1. Tentar via GeocodingService
+                        let coords = await GeocodingService.geocodeAddress({
+                          zip_code: cleanZip,
+                          street: editingWs.address,
+                          number: editingWs.number,
+                          neighborhood: editingWs.neighborhood,
+                          city: editingWs.city,
+                          state: editingWs.state
+                        });
+
+                        // 2. Se não encontrar, tentar consulta direta no Nominatim
+                        if (!coords || (coords.lat === -23.9618 && coords.lng === -46.3322)) {
+                          const queryParts = [editingWs.address, editingWs.neighborhood, editingWs.city, editingWs.state || 'SP', 'Brasil'].filter(Boolean).join(', ');
+                          const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(queryParts)}`);
+                          if (nomRes.ok) {
+                            const nomData = await nomRes.json();
+                            if (nomData && nomData[0]) {
+                              coords = {
+                                lat: parseFloat(nomData[0].lat),
+                                lng: parseFloat(nomData[0].lon)
+                              };
+                            }
+                          }
+                        }
+
+                        if (coords) {
+                          setEditingWs(prev => prev ? ({ ...prev, lat: coords.lat, lng: coords.lng }) : null);
+                          alert(`GPS Atualizado com sucesso!\nLatitude: ${coords.lat.toFixed(5)}\nLongitude: ${coords.lng.toFixed(5)}`);
+                        } else {
+                          alert('Não foi possível calcular o GPS para este endereço. Você pode informar a Latitude e Longitude manualmente.');
+                        }
+                      } catch (err: any) {
+                        alert('Erro ao calcular GPS: ' + err.message);
+                      } finally {
+                        setIsGeocoding(false);
                       }
-                      setIsGeocoding(false);
                     }}
                     disabled={isGeocoding}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-xs shrink-0 disabled:opacity-50"
                   >
-                    <Navigation size={13} />
-                    <span>Recalcular GPS</span>
+                    {isGeocoding ? <Loader2 size={14} className="animate-spin" /> : <Navigation size={14} />}
+                    <span>{isGeocoding ? 'Buscando GPS...' : 'Recalcular GPS'}</span>
                   </button>
                 </div>
               </div>

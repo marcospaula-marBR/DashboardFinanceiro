@@ -11,7 +11,7 @@ import {
   Building2, MapPin, Navigation, Compass, Search, Filter,
   CheckCircle2, AlertTriangle, ArrowRight, ExternalLink,
   Users, Sparkles, SlidersHorizontal, RefreshCw, Car, Clock,
-  ChevronRight, Layers, Table, Map as MapIcon, ArrowUpRight, Check
+  ChevronRight, Layers, Table, Map as MapIcon, ArrowUpRight, Check, User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -64,6 +64,7 @@ export function PeopleGeoLocationMap({
   const [selectedRadiusKm, setSelectedRadiusKm] = useState<number>(0);
   const [selectedCompany, setSelectedCompany] = useState<string>('all');
   const [selectedLinkType, setSelectedLinkType] = useState<string>('all');
+  const [addressFilterMode, setAddressFilterMode] = useState<'all' | 'with_address' | 'no_address'>('all');
   const [onlyMisallocated, setOnlyMisallocated] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -83,7 +84,7 @@ export function PeopleGeoLocationMap({
     WorkstationsService.fetchWorkstationsAsync().then(setWorkstations);
   }, []);
 
-  // 2. Geocodificar e calcular distâncias
+  // 2. Geocodificar e calcular distâncias para TODOS os colaboradores
   useEffect(() => {
     let isCancelled = false;
 
@@ -93,6 +94,8 @@ export function PeopleGeoLocationMap({
 
       for (const emp of employees) {
         if (isCancelled) return;
+
+        const photo = emp.photo_url || emp.metadata?.photo_url || emp.metadata?.avatar_url || emp.metadata?.foto || undefined;
 
         const fullAddr = [
           emp.street,
@@ -187,7 +190,7 @@ export function PeopleGeoLocationMap({
           company: emp.company,
           linkType: emp.linkType || 'CLT',
           is_outsourced: emp.is_outsourced || emp.metadata?.is_outsourced,
-          photo_url: emp.photo_url,
+          photo_url: photo,
           full_address: fullAddr || 'Endereço não informado',
           neighborhood: emp.neighborhood,
           city: emp.city,
@@ -232,6 +235,11 @@ export function PeopleGeoLocationMap({
   // 3. Filtrar itens
   const filteredGeoItems = useMemo(() => {
     return geoItems.filter(item => {
+      // Filtro de endereço
+      if (addressFilterMode === 'with_address' && !item.has_valid_coords) return false;
+      if (addressFilterMode === 'no_address' && item.has_valid_coords) return false;
+
+      // Busca
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = item.name.toLowerCase().includes(q);
@@ -241,34 +249,36 @@ export function PeopleGeoLocationMap({
         if (!matchesName && !matchesRole && !matchesNeigh && !matchesCity) return false;
       }
 
+      // Cidade
       if (selectedCity !== 'all' && item.city?.toLowerCase() !== selectedCity.toLowerCase()) {
         return false;
       }
 
+      // Empresa
       if (selectedCompany !== 'all' && item.company !== selectedCompany) return false;
 
+      // Regime / Vínculo
       if (selectedLinkType !== 'all') {
         if (selectedLinkType === 'terceirizado' && !item.is_outsourced) return false;
         if (selectedLinkType === 'clt' && (item.is_outsourced || item.linkType !== 'CLT')) return false;
         if (selectedLinkType === 'pj' && (item.is_outsourced || item.linkType === 'CLT')) return false;
       }
 
+      // Apenas com oportunidade de remanejamento
       if (onlyMisallocated && !item.potential_optimization) return false;
 
+      // Posto de trabalho selecionado
       if (selectedWsId !== 'all') {
         const ws = workstations.find(w => w.id === selectedWsId);
         if (ws) {
           const dist = GeocodingService.calculateDistanceKm({ lat: item.lat, lng: item.lng }, { lat: ws.lat, lng: ws.lng });
           if (selectedRadiusKm > 0 && dist > selectedRadiusKm) return false;
-          if (selectedRadiusKm === 0 && item.assigned_workstation?.id !== ws.id && item.nearest_workstation?.workstation.id !== ws.id) {
-            return false;
-          }
         }
       }
 
       return true;
     });
-  }, [geoItems, searchQuery, selectedCity, selectedCompany, selectedLinkType, onlyMisallocated, selectedWsId, selectedRadiusKm, workstations]);
+  }, [geoItems, searchQuery, selectedCity, selectedCompany, selectedLinkType, addressFilterMode, onlyMisallocated, selectedWsId, selectedRadiusKm, workstations]);
 
   // 4. Métricas executivas
   const metrics: WorkstationOptimizationSummary = useMemo(() => {
@@ -296,9 +306,20 @@ export function PeopleGeoLocationMap({
     return workstations.find(w => w.id === selectedWorkstationId) || null;
   }, [selectedWorkstationId, workstations]);
 
+  // Forçar redimensionamento do Leaflet ao alternar para modo mapa
+  useEffect(() => {
+    if (displayMode === 'map' && leafletMapRef.current) {
+      setTimeout(() => {
+        try {
+          leafletMapRef.current.invalidateSize();
+        } catch {}
+      }, 100);
+    }
+  }, [displayMode]);
+
   // 5. Inicializar e Atualizar Mapa Leaflet
   useEffect(() => {
-    if (typeof window === 'undefined' || !mapContainerRef.current || displayMode !== 'map') return;
+    if (typeof window === 'undefined' || !mapContainerRef.current) return;
 
     let isMounted = true;
 
@@ -348,7 +369,6 @@ export function PeopleGeoLocationMap({
 
         leafletMapRef.current = map;
       } else {
-        // Atualizar tile layer se mudou o estilo
         const map = leafletMapRef.current;
         if (tileLayerRef.current) {
           map.removeLayer(tileLayerRef.current);
@@ -389,9 +409,9 @@ export function PeopleGeoLocationMap({
         const wsIconHtml = `
           <div style="
             background-color: ${ws.color || '#2563eb'};
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
             border: 3px solid white;
             box-shadow: 0 4px 14px rgba(0,0,0,0.35);
             display: flex;
@@ -426,8 +446,8 @@ export function PeopleGeoLocationMap({
         const customWsIcon = L.divIcon({
           html: wsIconHtml,
           className: 'custom-ws-marker',
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
+          iconSize: [42, 42],
+          iconAnchor: [21, 21]
         });
 
         const marker = L.marker([ws.lat, ws.lng], { icon: customWsIcon });
@@ -446,42 +466,59 @@ export function PeopleGeoLocationMap({
         allLatLngs.push([ws.lat, ws.lng]);
       });
 
-      // ── Colaboradores no Mapa ──
+      // ── Colaboradores no Mapa com Foto de Perfil ──
       filteredGeoItems.forEach(empItem => {
         const isSelected = selectedEmployeeId === empItem.employee_id;
         const hasOpt = Boolean(empItem.potential_optimization);
         const borderColor = empItem.is_outsourced ? '#f59e0b' : empItem.linkType === 'CLT' ? '#3b82f6' : '#8b5cf6';
         const initials = empItem.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+        const size = isSelected ? 42 : 32;
+
+        const photoHtml = empItem.photo_url ? `
+          <img
+            src="${empItem.photo_url}"
+            alt="${empItem.name}"
+            style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+          />
+          <div style="display: none; width: 100%; height: 100%; border-radius: 50%; align-items: center; justify-content: center; background: #e2e8f0; color: #1e293b; font-weight: 900; font-size: 11px;">
+            ${initials}
+          </div>
+        ` : `
+          <div style="width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: ${borderColor}18; color: ${borderColor}; font-weight: 900; font-size: 11px;">
+            ${initials}
+          </div>
+        `;
 
         const empIconHtml = `
           <div style="
             background: white;
-            width: ${isSelected ? '36px' : '28px'};
-            height: ${isSelected ? '36px' : '28px'};
+            width: ${size}px;
+            height: ${size}px;
             border-radius: 50%;
             border: ${isSelected ? '3.5px solid #0f172a' : `2.5px solid ${borderColor}`};
             box-shadow: 0 3px 10px rgba(0,0,0,0.3);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: ${isSelected ? '12px' : '10px'};
-            font-weight: 900;
-            color: #0f172a;
             cursor: pointer;
             position: relative;
+            overflow: visible;
             transition: all 0.2s;
             ${hasOpt ? 'box-shadow: 0 0 0 3.5px rgba(244, 63, 94, 0.45);' : ''}
           ">
-            ${empItem.photo_url ? `<img src="${empItem.photo_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />` : initials}
-            ${hasOpt ? `<div style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#f43f5e;border:1.5px solid white;"></div>` : ''}
+            <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden;">
+              ${photoHtml}
+            </div>
+            ${hasOpt ? `<div style="position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:#f43f5e;border:1.5px solid white;z-index:10;"></div>` : ''}
           </div>
         `;
 
         const customEmpIcon = L.divIcon({
           html: empIconHtml,
           className: 'custom-emp-marker',
-          iconSize: [isSelected ? 36 : 28, isSelected ? 36 : 28],
-          iconAnchor: [isSelected ? 18 : 14, isSelected ? 18 : 14]
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2]
         });
 
         const marker = L.marker([empItem.lat, empItem.lng], { icon: customEmpIcon });
@@ -491,7 +528,15 @@ export function PeopleGeoLocationMap({
           setSelectedWorkstationId(null);
         });
 
-        marker.bindTooltip(`<strong>${empItem.name}</strong><br/>${empItem.neighborhood || empItem.city || 'Residência'}<br/>${empItem.job_role || empItem.linkType}`, {
+        marker.bindTooltip(`
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${empItem.photo_url ? `<img src="${empItem.photo_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" />` : ''}
+            <div>
+              <strong>${empItem.name}</strong><br/>
+              <span style="color:#64748b;font-size:10px;">${empItem.neighborhood || empItem.city || 'Residência'} · ${empItem.job_role || empItem.linkType}</span>
+            </div>
+          </div>
+        `, {
           direction: 'top',
           offset: [0, -14]
         });
@@ -550,7 +595,7 @@ export function PeopleGeoLocationMap({
     return () => {
       isMounted = false;
     };
-  }, [workstations, filteredGeoItems, activeEmployeeGeo, selectedEmployeeId, selectedWsId, mapStyle, displayMode]);
+  }, [workstations, filteredGeoItems, activeEmployeeGeo, selectedEmployeeId, selectedWsId, mapStyle]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -559,18 +604,18 @@ export function PeopleGeoLocationMap({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Colaboradores Mapeados</span>
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total Mapeado</span>
             <Users size={16} className="text-blue-600" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900 dark:text-white">
-              {metrics.totalEmployeesWithAddress}
+              {filteredGeoItems.length}
             </span>
             <span className="text-xs text-slate-400 font-bold">
-              de {geoItems.length} ({Math.round((metrics.totalEmployeesWithAddress / (geoItems.length || 1)) * 100)}%)
+              de {geoItems.length} ({Math.round((filteredGeoItems.length / (geoItems.length || 1)) * 100)}%)
             </span>
           </div>
-          <div className="text-[10px] text-slate-400 mt-1">Geocodificação de CEP e Logradouro calibrada</div>
+          <div className="text-[10px] text-slate-400 mt-1">{metrics.totalEmployeesWithAddress} com endereço completo</div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
@@ -685,7 +730,7 @@ export function PeopleGeoLocationMap({
         <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
           
           {/* Busca */}
-          <div className="relative flex-1 min-w-[220px]">
+          <div className="relative flex-1 min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -718,6 +763,17 @@ export function PeopleGeoLocationMap({
             {workstations.map(w => (
               <option key={w.id} value={w.id}>🏢 {w.name}</option>
             ))}
+          </select>
+
+          {/* Qualidade de Endereço */}
+          <select
+            value={addressFilterMode}
+            onChange={e => setAddressFilterMode(e.target.value as any)}
+            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500"
+          >
+            <option value="all">👥 Todos Colaboradores ({geoItems.length})</option>
+            <option value="with_address">🏠 Com Endereço Completo ({metrics.totalEmployeesWithAddress})</option>
+            <option value="no_address">⚠️ Sem Endereço Completo ({metrics.totalWithoutCoordinates})</option>
           </select>
 
           {/* Raio de Distância */}
@@ -760,378 +816,411 @@ export function PeopleGeoLocationMap({
         </div>
       </div>
 
-      {/* ── Conteúdo Principal: Modo Mapa vs. Modo Matriz ── */}
-      {displayMode === 'map' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          
-          {/* Viewport do Mapa Leaflet */}
-          <div className="lg:col-span-2 relative bg-slate-100 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-inner h-[620px] flex flex-col">
-            <div ref={mapContainerRef} className="w-full h-full z-10" />
+      {/* ── MODO MAPA CARTOGRÁFICO (Mantido montado para não perder instâncias Leaflet) ── */}
+      <div
+        className="grid grid-cols-1 lg:grid-cols-3 gap-5"
+        style={{ display: displayMode === 'map' ? 'grid' : 'none' }}
+      >
+        {/* Viewport do Mapa Leaflet */}
+        <div className="lg:col-span-2 relative bg-slate-100 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-inner h-[620px] flex flex-col">
+          <div ref={mapContainerRef} className="w-full h-full z-10" />
 
-            {/* Legenda Flutuante */}
-            <div className="absolute top-4 left-4 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-2xl p-3 shadow-md text-xs space-y-2 pointer-events-auto max-w-[240px]">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Legenda do Mapa</span>
-              <div className="space-y-1.5 text-[11px] font-bold">
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 rounded bg-blue-600 border border-white shadow-xs shrink-0" />
-                  <span className="text-slate-700 dark:text-slate-300">Posto de Trabalho (Base)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500 border border-white shadow-xs shrink-0" />
-                  <span className="text-slate-700 dark:text-slate-300">Colaborador CLT</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-purple-500 border border-white shadow-xs shrink-0" />
-                  <span className="text-slate-700 dark:text-slate-300">Colaborador PJ</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-amber-500 border border-white shadow-xs shrink-0" />
-                  <span className="text-slate-700 dark:text-slate-300">Terceirizado</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-rose-500 ring-2 ring-rose-300 shrink-0" />
-                  <span className="text-rose-600 font-black">Oportunidade de Troca</span>
-                </div>
+          {/* Legenda Flutuante */}
+          <div className="absolute top-4 left-4 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-2xl p-3 shadow-md text-xs space-y-2 pointer-events-auto max-w-[240px]">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Legenda do Mapa</span>
+            <div className="space-y-1.5 text-[11px] font-bold">
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded bg-blue-600 border border-white shadow-xs shrink-0" />
+                <span className="text-slate-700 dark:text-slate-300">Posto de Trabalho (Base)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500 border border-white shadow-xs shrink-0" />
+                <span className="text-slate-700 dark:text-slate-300">Colaborador CLT</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-purple-500 border border-white shadow-xs shrink-0" />
+                <span className="text-slate-700 dark:text-slate-300">Colaborador PJ</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-amber-500 border border-white shadow-xs shrink-0" />
+                <span className="text-slate-700 dark:text-slate-300">Terceirizado</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-rose-500 ring-2 ring-rose-300 shrink-0" />
+                <span className="text-rose-600 font-black">Oportunidade de Troca</span>
               </div>
             </div>
-
-            {isLoadingGeo && (
-              <div className="absolute inset-0 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xs z-30 flex items-center justify-center gap-3 text-xs font-black uppercase text-indigo-700">
-                <RefreshCw size={20} className="animate-spin text-indigo-600" />
-                <span>Geocodificando e calibrando coordenadas...</span>
-              </div>
-            )}
           </div>
 
-          {/* Painel Lateral */}
-          <div className="space-y-4 flex flex-col h-[620px]">
-            {activeEmployeeGeo ? (
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm flex-1 flex flex-col justify-between overflow-y-auto animate-in fade-in">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center font-black text-indigo-700 text-sm overflow-hidden shrink-0 shadow-xs">
-                        {activeEmployeeGeo.photo_url ? (
-                          <img src={activeEmployeeGeo.photo_url} alt={activeEmployeeGeo.name} className="w-full h-full object-cover" />
-                        ) : (
-                          activeEmployeeGeo.name.split(' ').map(n => n[0]).slice(0, 2).join('')
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                          {activeEmployeeGeo.name}
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {activeEmployeeGeo.job_role || activeEmployeeGeo.department || 'Colaborador'} · <strong className="text-indigo-600 uppercase">{activeEmployeeGeo.linkType}</strong>
-                        </p>
-                      </div>
-                    </div>
+          {isLoadingGeo && (
+            <div className="absolute inset-0 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xs z-30 flex items-center justify-center gap-3 text-xs font-black uppercase text-indigo-700">
+              <RefreshCw size={20} className="animate-spin text-indigo-600" />
+              <span>Geocodificando e calibrando coordenadas...</span>
+            </div>
+          )}
+        </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setSelectedEmployeeId(null)}
-                      className="text-xs font-bold text-slate-400 hover:text-slate-700"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  {/* Moradia */}
-                  <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 text-xs space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Moradia (Origem)</span>
-                    <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
-                      <MapPin size={14} className="text-indigo-600 shrink-0" />
-                      <span>{activeEmployeeGeo.full_address}</span>
+        {/* Painel Lateral */}
+        <div className="space-y-4 flex flex-col h-[620px]">
+          {activeEmployeeGeo ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm flex-1 flex flex-col justify-between overflow-y-auto animate-in fade-in">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center font-black text-indigo-700 text-sm overflow-hidden shrink-0 shadow-xs">
+                      {activeEmployeeGeo.photo_url ? (
+                        <img src={activeEmployeeGeo.photo_url} alt={activeEmployeeGeo.name} className="w-full h-full object-cover" />
+                      ) : (
+                        activeEmployeeGeo.name.split(' ').map(n => n[0]).slice(0, 2).join('')
+                      )}
                     </div>
-                    <div className="text-[11px] text-slate-500 pl-5">
-                      {activeEmployeeGeo.neighborhood ? `${activeEmployeeGeo.neighborhood} · ` : ''}
-                      {activeEmployeeGeo.city || 'Cidade'} / {activeEmployeeGeo.state || 'SP'}
-                      {activeEmployeeGeo.zip_code ? ` (CEP: ${activeEmployeeGeo.zip_code})` : ''}
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                        {activeEmployeeGeo.name}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {activeEmployeeGeo.job_role || activeEmployeeGeo.department || 'Colaborador'} · <strong className="text-indigo-600 uppercase">{activeEmployeeGeo.linkType}</strong>
+                      </p>
                     </div>
                   </div>
 
-                  {/* Comparativo de Postos */}
-                  <div className="space-y-2.5">
-                    {/* Posto Atual */}
-                    <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-3 bg-white dark:bg-slate-900 flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Posto Atual (Destino)</span>
-                        <span className="text-xs font-bold text-slate-800 dark:text-white">
-                          {activeEmployeeGeo.assigned_workstation?.name || activeEmployeeGeo.current_service_location || 'Não alocado formalmente'}
-                        </span>
-                      </div>
-                      <span className="text-xs font-black text-slate-700 dark:text-slate-300 font-mono">
-                        {activeEmployeeGeo.distance_to_current_workstation_km !== null
-                          ? `${activeEmployeeGeo.distance_to_current_workstation_km} km`
-                          : '—'}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedEmployeeId(null)}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Moradia */}
+                <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 text-xs space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Moradia (Origem)</span>
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                    <MapPin size={14} className="text-indigo-600 shrink-0" />
+                    <span>{activeEmployeeGeo.full_address}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 pl-5">
+                    {activeEmployeeGeo.neighborhood ? `${activeEmployeeGeo.neighborhood} · ` : ''}
+                    {activeEmployeeGeo.city || 'Cidade'} / {activeEmployeeGeo.state || 'SP'}
+                    {activeEmployeeGeo.zip_code ? ` (CEP: ${activeEmployeeGeo.zip_code})` : ''}
+                  </div>
+                </div>
+
+                {/* Comparativo de Postos */}
+                <div className="space-y-2.5">
+                  {/* Posto Atual */}
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-3 bg-white dark:bg-slate-900 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Posto Atual (Destino)</span>
+                      <span className="text-xs font-bold text-slate-800 dark:text-white">
+                        {activeEmployeeGeo.assigned_workstation?.name || activeEmployeeGeo.current_service_location || 'Não alocado formalmente'}
                       </span>
                     </div>
-
-                    {/* Posto Mais Próximo */}
-                    {activeEmployeeGeo.nearest_workstation && (
-                      <div className="border border-emerald-200 dark:border-emerald-800/60 rounded-2xl p-3 bg-emerald-50/60 dark:bg-emerald-950/20 flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <CheckCircle2 size={13} className="text-emerald-600" />
-                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                              Posto Mais Próximo da Moradia
-                            </span>
-                          </div>
-                          <span className="text-xs font-black text-emerald-950 dark:text-emerald-200 block mt-0.5">
-                            {activeEmployeeGeo.nearest_workstation.workstation.name}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 font-mono">
-                            {activeEmployeeGeo.nearest_workstation.distance_km} km
-                          </span>
-                          <span className="text-[9px] text-emerald-600 block">
-                            ~{GeocodingService.estimateTravelTimeMinutes(activeEmployeeGeo.nearest_workstation.distance_km)} min
-                          </span>
-                        </div>
-                      </div>
-                    )}
+                    <span className="text-xs font-black text-slate-700 dark:text-slate-300 font-mono">
+                      {activeEmployeeGeo.distance_to_current_workstation_km !== null
+                        ? `${activeEmployeeGeo.distance_to_current_workstation_km} km`
+                        : '—'}
+                    </span>
                   </div>
 
-                  {activeEmployeeGeo.potential_optimization && (
-                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 text-xs text-rose-800 space-y-1.5">
-                      <div className="flex items-center gap-2 font-black uppercase tracking-tight text-rose-700">
-                        <Sparkles size={16} className="text-rose-600" />
-                        <span>Oportunidade de Remanejamento</span>
+                  {/* Posto Mais Próximo */}
+                  {activeEmployeeGeo.nearest_workstation && (
+                    <div className="border border-emerald-200 dark:border-emerald-800/60 rounded-2xl p-3 bg-emerald-50/60 dark:bg-emerald-950/20 flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 size={13} className="text-emerald-600" />
+                          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                            Posto Mais Próximo da Moradia
+                          </span>
+                        </div>
+                        <span className="text-xs font-black text-emerald-950 dark:text-emerald-200 block mt-0.5">
+                          {activeEmployeeGeo.nearest_workstation.workstation.name}
+                        </span>
                       </div>
-                      <p className="text-[11px] leading-relaxed text-rose-700">
-                        Atuando em <strong>{activeEmployeeGeo.potential_optimization.better_workstation.name}</strong>, a distância é reduzida em <strong>{activeEmployeeGeo.potential_optimization.saved_distance_km} km por trajeto</strong>.
-                      </p>
+                      <div className="text-right">
+                        <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                          {activeEmployeeGeo.nearest_workstation.distance_km} km
+                        </span>
+                        <span className="text-[9px] text-emerald-600 block">
+                          ~{GeocodingService.estimateTravelTimeMinutes(activeEmployeeGeo.nearest_workstation.distance_km)} min
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => onEmployeeClick(activeEmployeeGeo.employee_id, 'pessoal')}
-                    className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all"
-                  >
-                    <ExternalLink size={14} />
-                    <span>Abrir Ficha do Integrante</span>
-                  </button>
-                </div>
-              </div>
-            ) : activeWorkstation ? (
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm flex-1 flex flex-col justify-between overflow-y-auto animate-in fade-in">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black shadow-xs shrink-0"
-                        style={{ backgroundColor: activeWorkstation.color || '#2563eb' }}
-                      >
-                        <Building2 size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                          {activeWorkstation.name}
-                        </h3>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">
-                          {activeWorkstation.neighborhood}, {activeWorkstation.city} · {activeWorkstation.capacity || 0} vagas
-                        </p>
-                      </div>
+                {activeEmployeeGeo.potential_optimization && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 text-xs text-rose-800 space-y-1.5">
+                    <div className="flex items-center gap-2 font-black uppercase tracking-tight text-rose-700">
+                      <Sparkles size={16} className="text-rose-600" />
+                      <span>Oportunidade de Remanejamento</span>
                     </div>
+                    <p className="text-[11px] leading-relaxed text-rose-700">
+                      Atuando em <strong>{activeEmployeeGeo.potential_optimization.better_workstation.name}</strong>, a distância é reduzida em <strong>{activeEmployeeGeo.potential_optimization.saved_distance_km} km por trajeto</strong>.
+                    </p>
+                  </div>
+                )}
+              </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setSelectedWorkstationId(null)}
-                      className="text-xs font-bold text-slate-400 hover:text-slate-700"
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => onEmployeeClick(activeEmployeeGeo.employee_id, 'pessoal')}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all"
+                >
+                  <ExternalLink size={14} />
+                  <span>Abrir Ficha do Integrante</span>
+                </button>
+              </div>
+            </div>
+          ) : activeWorkstation ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm flex-1 flex flex-col justify-between overflow-y-auto animate-in fade-in">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black shadow-xs shrink-0"
+                      style={{ backgroundColor: activeWorkstation.color || '#2563eb' }}
                     >
-                      ✕
-                    </button>
-                  </div>
-
-                  <div className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl">
-                    <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Colaboradores Mais Próximos deste Posto</span>
-                    <div className="divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[320px] overflow-y-auto space-y-1">
-                      {filteredGeoItems
-                        .map(item => ({
-                          ...item,
-                          distToWs: GeocodingService.calculateDistanceKm({ lat: item.lat, lng: item.lng }, { lat: activeWorkstation.lat, lng: activeWorkstation.lng })
-                        }))
-                        .sort((a, b) => a.distToWs - b.distToWs)
-                        .slice(0, 20)
-                        .map(item => (
-                          <div
-                            key={item.employee_id}
-                            onClick={() => setSelectedEmployeeId(item.employee_id)}
-                            className="py-2 flex items-center justify-between hover:bg-white dark:hover:bg-slate-700 p-1.5 rounded-xl cursor-pointer transition-colors"
-                          >
-                            <div className="truncate pr-2">
-                              <span className="font-bold text-slate-800 dark:text-white block truncate">{item.name}</span>
-                              <span className="text-[10px] text-slate-400">{item.neighborhood || item.city} · {item.linkType}</span>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="font-black text-indigo-600 font-mono text-xs block">{item.distToWs} km</span>
-                              <span className="text-[9px] text-slate-400">~{GeocodingService.estimateTravelTimeMinutes(item.distToWs)} min</span>
-                            </div>
-                          </div>
-                        ))}
+                      <Building2 size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                        {activeWorkstation.name}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">
+                        {activeWorkstation.neighborhood}, {activeWorkstation.city} · {activeWorkstation.capacity || 0} vagas
+                      </p>
                     </div>
                   </div>
-                </div>
 
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
                   <button
                     type="button"
-                    onClick={() => setIsWsManagerOpen(true)}
-                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                    onClick={() => setSelectedWorkstationId(null)}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-700"
                   >
-                    Editar Dados Deste Posto
+                    ✕
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm flex-1 flex flex-col overflow-hidden">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-rose-500" />
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white">
-                      Oportunidades de Otimização
-                    </h3>
-                  </div>
-                  <span className="text-[10px] font-black text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                    {metrics.misallocatedCount} Alertas
-                  </span>
-                </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                  {geoItems.filter(g => !!g.potential_optimization).length === 0 ? (
-                    <div className="py-20 text-center text-slate-400 space-y-2">
-                      <CheckCircle2 size={32} className="mx-auto text-emerald-500 opacity-60" />
-                      <p className="text-xs font-bold uppercase text-slate-600">Alocação 100% Otimizada</p>
-                      <p className="text-[11px] text-slate-400">Todos os colaboradores com endereço moram no posto mais próximo.</p>
-                    </div>
-                  ) : (
-                    geoItems
-                      .filter(g => !!g.potential_optimization)
+                <div className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl">
+                  <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Colaboradores Mais Próximos deste Posto</span>
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[320px] overflow-y-auto space-y-1">
+                    {filteredGeoItems
+                      .map(item => ({
+                        ...item,
+                        distToWs: GeocodingService.calculateDistanceKm({ lat: item.lat, lng: item.lng }, { lat: activeWorkstation.lat, lng: activeWorkstation.lng })
+                      }))
+                      .sort((a, b) => a.distToWs - b.distToWs)
+                      .slice(0, 20)
                       .map(item => (
                         <div
                           key={item.employee_id}
                           onClick={() => setSelectedEmployeeId(item.employee_id)}
-                          className="bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50/50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-3 cursor-pointer transition-all hover:shadow-xs group"
+                          className="py-2 flex items-center justify-between hover:bg-white dark:hover:bg-slate-700 p-1.5 rounded-xl cursor-pointer transition-colors"
                         >
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold">
+                              {item.photo_url ? (
+                                <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                item.name.slice(0, 2).toUpperCase()
+                              )}
+                            </div>
+                            <div className="truncate">
+                              <span className="font-bold text-slate-800 dark:text-white block truncate">{item.name}</span>
+                              <span className="text-[10px] text-slate-400">{item.neighborhood || item.city} · {item.linkType}</span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="font-black text-indigo-600 font-mono text-xs block">{item.distToWs} km</span>
+                            <span className="text-[9px] text-slate-400">~{GeocodingService.estimateTravelTimeMinutes(item.distToWs)} min</span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsWsManagerOpen(true)}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                >
+                  Editar Dados Deste Posto
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm flex-1 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} className="text-rose-500" />
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white">
+                    Oportunidades de Otimização
+                  </h3>
+                </div>
+                <span className="text-[10px] font-black text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                  {metrics.misallocatedCount} Alertas
+                </span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                {geoItems.filter(g => !!g.potential_optimization).length === 0 ? (
+                  <div className="py-20 text-center text-slate-400 space-y-2">
+                    <CheckCircle2 size={32} className="mx-auto text-emerald-500 opacity-60" />
+                    <p className="text-xs font-bold uppercase text-slate-600">Alocação 100% Otimizada</p>
+                    <p className="text-[11px] text-slate-400">Todos os colaboradores com endereço moram no posto mais próximo.</p>
+                  </div>
+                ) : (
+                  geoItems
+                    .filter(g => !!g.potential_optimization)
+                    .map(item => (
+                      <div
+                        key={item.employee_id}
+                        onClick={() => setSelectedEmployeeId(item.employee_id)}
+                        className="bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50/50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-3 cursor-pointer transition-all hover:shadow-xs group"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 truncate">
+                            <div className="w-6 h-6 rounded-full bg-slate-200 overflow-hidden shrink-0">
+                              {item.photo_url ? (
+                                <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-[9px] font-black flex items-center justify-center h-full text-slate-600">
+                                  {item.name.slice(0, 2).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
                             <span className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors truncate">
                               {item.name}
                             </span>
-                            <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md font-mono shrink-0">
-                              -{item.potential_optimization?.saved_distance_km} km
-                            </span>
                           </div>
+                          <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md font-mono shrink-0">
+                            -{item.potential_optimization?.saved_distance_km} km
+                          </span>
+                        </div>
 
-                          <div className="text-[10px] text-slate-500 space-y-1">
-                            <div>Mora em: <strong>{item.neighborhood || item.city}</strong></div>
-                            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                              <span className="text-slate-400 line-through truncate">{item.assigned_workstation?.name || 'Local Atual'}</span>
-                              <ArrowRight size={10} className="text-indigo-600 shrink-0" />
-                              <strong className="text-emerald-700 dark:text-emerald-400 truncate">{item.potential_optimization?.better_workstation.name}</strong>
-                            </div>
+                        <div className="text-[10px] text-slate-500 space-y-1 pl-8">
+                          <div>Mora em: <strong>{item.neighborhood || item.city}</strong></div>
+                          <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                            <span className="text-slate-400 line-through truncate">{item.assigned_workstation?.name || 'Local Atual'}</span>
+                            <ArrowRight size={10} className="text-indigo-600 shrink-0" />
+                            <strong className="text-emerald-700 dark:text-emerald-400 truncate">{item.potential_optimization?.better_workstation.name}</strong>
                           </div>
                         </div>
-                      ))
-                  )}
-                </div>
+                      </div>
+                    ))
+                )}
               </div>
-            )}
-          </div>
-
-        </div>
-      ) : (
-        /* ── MODO MATRIZ EXECUTIVA DE DISTÂNCIAS ── */
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white">
-                Matriz Comparativa de Moradias vs. Postos de Trabalho ({filteredGeoItems.length})
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Relação analítica de distâncias em KM entre a moradia e os postos cadastrados
-              </p>
             </div>
-
-            <span className="text-xs font-bold text-slate-500">
-              {metrics.misallocatedCount} colaboradores com ganho potencial de rota
-            </span>
-          </div>
-
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  <th className="py-3 px-4">Colaborador</th>
-                  <th className="py-3 px-3">Bairro / Cidade</th>
-                  <th className="py-3 px-3">Posto Atual</th>
-                  <th className="py-3 px-3 text-right">Distância Atual</th>
-                  <th className="py-3 px-3">Posto Mais Próximo</th>
-                  <th className="py-3 px-3 text-right">Distância Mínima</th>
-                  <th className="py-3 px-3 text-center">Status / Ganho</th>
-                  <th className="py-3 px-3 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredGeoItems.map(item => {
-                  const hasOpt = Boolean(item.potential_optimization);
-                  return (
-                    <tr key={item.employee_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-bold text-slate-900 dark:text-white block">{item.name}</span>
-                        <span className="text-[10px] text-slate-400">{item.job_role || item.department} · {item.linkType}</span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="font-medium text-slate-700 dark:text-slate-300 block">{item.neighborhood || '—'}</span>
-                        <span className="text-[10px] text-slate-400">{item.city || '—'} / {item.state || 'SP'}</span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="font-bold text-slate-700 dark:text-slate-300">
-                          {item.assigned_workstation?.name || item.current_service_location || '—'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-slate-600 dark:text-slate-400">
-                        {item.distance_to_current_workstation_km !== null ? `${item.distance_to_current_workstation_km} km` : '—'}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="font-black text-emerald-700 dark:text-emerald-400">
-                          {item.nearest_workstation?.workstation.name || '—'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-black text-emerald-700 dark:text-emerald-400">
-                        {item.nearest_workstation?.distance_km !== undefined ? `${item.nearest_workstation.distance_km} km` : '—'}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {hasOpt ? (
-                          <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full text-[10px] font-black font-mono">
-                            Economia -{item.potential_optimization?.saved_distance_km} km
-                          </span>
-                        ) : (
-                          <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                            ✓ Otimizado
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => onEmployeeClick(item.employee_id, 'pessoal')}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-colors"
-                        >
-                          Ficha
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* ── MODO MATRIZ EXECUTIVA DE DISTÂNCIAS ── */}
+      <div
+        style={{ display: displayMode === 'matrix' ? 'block' : 'none' }}
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4"
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white">
+              Matriz Comparativa de Moradias vs. Postos de Trabalho ({filteredGeoItems.length})
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Relação analítica de distâncias em KM entre a moradia e os postos cadastrados
+            </p>
+          </div>
+
+          <span className="text-xs font-bold text-slate-500">
+            {metrics.misallocatedCount} colaboradores com ganho potencial de rota
+          </span>
+        </div>
+
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                <th className="py-3 px-4">Colaborador</th>
+                <th className="py-3 px-3">Bairro / Cidade</th>
+                <th className="py-3 px-3">Posto Atual</th>
+                <th className="py-3 px-3 text-right">Distância Atual</th>
+                <th className="py-3 px-3">Posto Mais Próximo</th>
+                <th className="py-3 px-3 text-right">Distância Mínima</th>
+                <th className="py-3 px-3 text-center">Status / Ganho</th>
+                <th className="py-3 px-3 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredGeoItems.map(item => {
+                const hasOpt = Boolean(item.potential_optimization);
+                return (
+                  <tr key={item.employee_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs text-slate-700">
+                          {item.photo_url ? (
+                            <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            item.name.slice(0, 2).toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-900 dark:text-white block">{item.name}</span>
+                          <span className="text-[10px] text-slate-400">{item.job_role || item.department} · {item.linkType}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="font-medium text-slate-700 dark:text-slate-300 block">{item.neighborhood || '—'}</span>
+                      <span className="text-[10px] text-slate-400">{item.city || '—'} / {item.state || 'SP'}</span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {item.assigned_workstation?.name || item.current_service_location || '—'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono font-bold text-slate-600 dark:text-slate-400">
+                      {item.distance_to_current_workstation_km !== null ? `${item.distance_to_current_workstation_km} km` : '—'}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="font-black text-emerald-700 dark:text-emerald-400">
+                        {item.nearest_workstation?.workstation.name || '—'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono font-black text-emerald-700 dark:text-emerald-400">
+                      {item.nearest_workstation?.distance_km !== undefined ? `${item.nearest_workstation.distance_km} km` : '—'}
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      {hasOpt ? (
+                        <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full text-[10px] font-black font-mono">
+                          Economia -{item.potential_optimization?.saved_distance_km} km
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                          ✓ Otimizado
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => onEmployeeClick(item.employee_id, 'pessoal')}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-colors"
+                      >
+                        Ficha
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* ── Modal de Gestão de Postos ── */}
       {isWsManagerOpen && (
