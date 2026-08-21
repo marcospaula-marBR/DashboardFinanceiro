@@ -222,6 +222,7 @@ export function BatchPdfExportModal({
       }
 
       if (includeCostsHistory && empCosts.length > 0 && costTotals) {
+        const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
         const sortedCosts = [...empCosts].sort((a, b) => a.competencia.localeCompare(b.competencia));
         const maxCost = Math.max(...sortedCosts.map(c => (c.valor_liquido || 0) + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0)), 1);
 
@@ -231,11 +232,11 @@ export function BatchPdfExportModal({
             
             <div style="margin-bottom: 12px; background: #fffdf5; border: 1.5px solid #fef3c7; padding: 10px; border-radius: 8px;">
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total Fixo</span><span class="field-value">${formatCurrency(costTotals.fixed)}</span></div>
+                <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">${isPJ ? 'Total Valor Contratual' : 'Total Fixo'}</span><span class="field-value">${formatCurrency(costTotals.fixed)}</span></div>
                 <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total Bônus</span><span class="field-value">${formatCurrency(costTotals.bonus)}</span></div>
                 <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total Comissões</span><span class="field-value">${formatCurrency(costTotals.comissao)}</span></div>
-                <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total FGTS</span><span class="field-value">${formatCurrency(costTotals.fgts)}</span></div>
-                <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Média Mensal</span><span class="field-value" style="color: #047857;">${formatCurrency(avgMonthlyCost)}</span></div>
+                ${!isPJ ? `<div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total FGTS</span><span class="field-value">${formatCurrency(costTotals.fgts)}</span></div>` : ''}
+                <div class="field" style="border-left: 3px solid #10b981;"><span class="field-label" style="color: #047857;">Média Mensal</span><span class="field-value" style="color: #047857;">${formatCurrency(avgMonthlyCost)}</span></div>
                 <div class="field" style="border-left: 4px solid #b45309; background: #fef3c7;"><span class="field-label" style="color: #92400e; font-weight:800;">TOTAL ACUMULADO</span><span class="field-value" style="color: #b45309;">${formatCurrency(costTotals.realCost)}</span></div>
               </div>
             </div>
@@ -247,43 +248,55 @@ export function BatchPdfExportModal({
                   Gráfico de Custo Mês a Mês (Rótulos em R$)
                 </div>
                 
-                <svg width="100%" height="150" viewBox="0 0 500 150" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                  <line x1="0" y1="20" x2="500" y2="20" stroke="#f1f5f9" stroke-width="1" />
-                  <line x1="0" y1="60" x2="500" y2="60" stroke="#f1f5f9" stroke-width="1" />
-                  <line x1="0" y1="105" x2="500" y2="105" stroke="#cbd5e1" stroke-width="1.5" />
+                <svg width="100%" height="200" viewBox="0 0 540 200" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                  <line x1="30" y1="20" x2="540" y2="20" stroke="#f1f5f9" stroke-width="1" />
+                  <line x1="30" y1="55" x2="540" y2="55" stroke="#f1f5f9" stroke-width="1" />
+                  <line x1="30" y1="90" x2="540" y2="90" stroke="#f1f5f9" stroke-width="1" />
+                  <line x1="30" y1="125" x2="540" y2="125" stroke="#cbd5e1" stroke-width="1.5" />
 
-                  ${sortedCosts.map((c, idx) => {
+                  ${(() => {
                     const count = sortedCosts.length;
-                    const slotWidth = 500 / count;
-                    const barWidth = Math.min(slotWidth * 0.55, 34);
-                    const xCenter = idx * slotWidth + slotWidth / 2;
-                    const xBar = xCenter - barWidth / 2;
+                    const chartW = 510;
+                    const slotWidth = chartW / count;
+                    const barMaxH = 100;
+                    const baseY = 125;
 
-                    const isCLT = c.vinculo_tipo === 'CLT';
-                    const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
-                    const maxH = 80;
-                    const barH = Math.max(8, Math.round((realCost / maxCost) * maxH));
-                    const yBar = 105 - barH;
-                    const yValLabel = yBar - 4;
+                    return sortedCosts.map((c, idx) => {
+                      const barWidth = Math.min(slotWidth * 0.55, 28);
+                      const xCenter = 30 + idx * slotWidth + slotWidth / 2;
+                      const xBar = xCenter - barWidth / 2;
 
-                    const compParts = c.competencia.split('-');
-                    const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                    const mLabel = `${monthsShort[parseInt(compParts[1] || '1', 10) - 1]}/${(compParts[0] || '').slice(2)}`;
-                    const valLabel = realCost >= 1000 ? `R$${(realCost / 1000).toFixed(1)}k` : `R$${realCost.toFixed(0)}`;
+                      const isCLT = c.vinculo_tipo === 'CLT';
+                      const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                      const barH = Math.max(8, Math.round((realCost / maxCost) * barMaxH));
+                      const yBar = baseY - barH;
+                      const yValLabel = yBar - 4;
 
-                    return `
-                      <text x="${xCenter}" y="${yValLabel}" text-anchor="middle" font-size="9" font-weight="800" fill="#047857" font-family="sans-serif">${valLabel}</text>
-                      <rect x="${xBar}" y="${yBar}" width="${barWidth}" height="${barH}" rx="3" ry="3" fill="#10b981" stroke="#059669" stroke-width="1" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />
-                      <text x="${xCenter}" y="122" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569" font-family="sans-serif">${mLabel}</text>
-                    `;
-                  }).join('')}
+                      const compParts = c.competencia.split('-');
+                      const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                      const mLabel = monthsShort[parseInt(compParts[1] || '1', 10) - 1] + '/' + (compParts[0] || '').slice(2);
+                      const valLabel = realCost >= 1000 ? 'R$' + (realCost / 1000).toFixed(1) + 'k' : 'R$' + realCost.toFixed(0);
+
+                      return '<text x="' + xCenter + '" y="' + yValLabel + '" text-anchor="middle" font-size="8" font-weight="800" fill="#047857" font-family="sans-serif">' + valLabel + '</text>' +
+                        '<rect x="' + xBar + '" y="' + yBar + '" width="' + barWidth + '" height="' + barH + '" rx="3" ry="3" fill="#10b981" stroke="#059669" stroke-width="1" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />' +
+                        '<text x="' + xCenter + '" y="' + (baseY + 5) + '" text-anchor="end" font-size="8" font-weight="600" fill="#475569" font-family="sans-serif" transform="rotate(-45 ' + xCenter + ' ' + (baseY + 5) + ')">' + mLabel + '</text>';
+                    }).join('');
+                  })()}
                 </svg>
               </div>
             ` : ''}
 
             <table>
               <thead>
-                <tr><th>Competência</th><th>Vínculo</th><th>Fixo</th><th>Bônus</th><th>Comissão</th><th>FGTS</th><th style="text-align: right;">Custo Real</th></tr>
+                <tr>
+                  <th>Competência</th>
+                  <th>Vínculo</th>
+                  <th>${isPJ ? 'Valor Contratual' : 'Fixo'}</th>
+                  <th>Bônus</th>
+                  <th>Comissão</th>
+                  ${!isPJ ? '<th>FGTS</th>' : ''}
+                  <th style="text-align: right;">Custo Real</th>
+                </tr>
               </thead>
               <tbody>
                 ${sortedCosts.map(c => {
@@ -296,7 +309,7 @@ export function BatchPdfExportModal({
                     <td>${formatCurrency(c.valor_fixo || 0)}</td>
                     <td>${formatCurrency(c.valor_bonus || 0)}</td>
                     <td>${formatCurrency(c.valor_comissao || 0)}</td>
-                    <td>${formatCurrency(c.valor_fgts || 0)}</td>
+                    ${!isPJ ? '<td>' + formatCurrency(c.valor_fgts || 0) + '</td>' : ''}
                     <td style="text-align: right; font-weight: 700; color: #b45309;">${formatCurrency(cReal)}</td>
                   </tr>
                   `;

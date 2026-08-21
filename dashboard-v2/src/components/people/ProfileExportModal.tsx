@@ -222,26 +222,30 @@ export function ProfileExportModal({
     }
 
     if (includeCostsHistory && costs.length > 0) {
+      const isCsvPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
+      const sortedCostsCSV = [...costs].sort((a, b) => a.competencia.localeCompare(b.competencia));
       csv += `"7. HISTÓRICO DE CUSTOS MENSAIS E TOTALIZADORES POR VERBA"\n`;
       if (costTotals) {
         csv += `"TOTALIZADORES ACUMULADOS POR VERBA"\n`;
         csv += `Verba;Total Acumulado (R$)\n`;
-        csv += `Salário Fixo;${costTotals.fixed.toFixed(2).replace('.', ',')}\n`;
+        csv += `${isCsvPJ ? 'Valor Contratual' : 'Salário Fixo'};${costTotals.fixed.toFixed(2).replace('.', ',')}\n`;
         csv += `Bônus;${costTotals.bonus.toFixed(2).replace('.', ',')}\n`;
         csv += `Comissão;${costTotals.comissao.toFixed(2).replace('.', ',')}\n`;
-        csv += `Horas Extras;${costTotals.horaExtra.toFixed(2).replace('.', ',')}\n`;
-        csv += `Benefícios (VR/VT/Cesta/Ajuda);${costTotals.beneficios.toFixed(2).replace('.', ',')}\n`;
-        csv += `FGTS Empresa;${costTotals.fgts.toFixed(2).replace('.', ',')}\n`;
-        csv += `13º Salário e Férias;${(costTotals.decimo + costTotals.ferias).toFixed(2).replace('.', ',')}\n`;
-        csv += `Descontos Folha;${costTotals.descontos.toFixed(2).replace('.', ',')}\n`;
+        if (!isCsvPJ) {
+          csv += `Horas Extras;${costTotals.horaExtra.toFixed(2).replace('.', ',')}\n`;
+          csv += `Benefícios (VR/VT/Cesta/Ajuda);${costTotals.beneficios.toFixed(2).replace('.', ',')}\n`;
+          csv += `FGTS Empresa;${costTotals.fgts.toFixed(2).replace('.', ',')}\n`;
+          csv += `13º Salário e Férias;${(costTotals.decimo + costTotals.ferias).toFixed(2).replace('.', ',')}\n`;
+          csv += `Descontos Folha;${costTotals.descontos.toFixed(2).replace('.', ',')}\n`;
+        }
         csv += `TOTAL MENSAL DESEMBOLSADO;${costTotals.realCost.toFixed(2).replace('.', ',')}\n\n`;
       }
       csv += `DETALHAMENTO MENSAL DE CUSTOS\n`;
-      csv += `Período Competência;Tipo Vínculo;Valor Fixo;Bônus;Comissão;FGTS;Custo Real Desembolsado\n`;
-      costs.forEach(c => {
+      csv += `Período Competência;Tipo Vínculo;${isCsvPJ ? 'Valor Contratual' : 'Valor Fixo'};Bônus;Comissão${!isCsvPJ ? ';FGTS' : ''};Custo Real Desembolsado\n`;
+      sortedCostsCSV.forEach(c => {
         const isCLT = c.vinculo_tipo === 'CLT';
         const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
-        csv += `${sanitize(c.competencia)};${sanitize(c.vinculo_tipo)};${(c.valor_fixo || 0).toFixed(2).replace('.', ',')};${(c.valor_bonus || 0).toFixed(2).replace('.', ',')};${(c.valor_comissao || 0).toFixed(2).replace('.', ',')};${(c.valor_fgts || 0).toFixed(2).replace('.', ',')};${cReal.toFixed(2).replace('.', ',')}\n`;
+        csv += `${sanitize(c.competencia)};${sanitize(c.vinculo_tipo)};${(c.valor_fixo || 0).toFixed(2).replace('.', ',')};${(c.valor_bonus || 0).toFixed(2).replace('.', ',')};${(c.valor_comissao || 0).toFixed(2).replace('.', ',')}${!isCsvPJ ? ';' + (c.valor_fgts || 0).toFixed(2).replace('.', ',') : ''};${cReal.toFixed(2).replace('.', ',')}\n`;
       });
       csv += `\n`;
     }
@@ -443,6 +447,7 @@ export function ProfileExportModal({
         totalReceived: profile.totalReceived || 0,
         balance: profile.balance || 0
       } : null);
+      const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
 
       html += `
         <div class="section">
@@ -452,11 +457,11 @@ export function ProfileExportModal({
             <!-- Quadro de Totalizadores por Verbas Recebidas -->
             <div style="margin-bottom: 18px; background: #fffdf5; border: 1.5px solid #fef3c7; padding: 14px; border-radius: 8px;">
               <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #92400e; margin-bottom: 10px; border-bottom: 1px solid #fde68a; padding-bottom: 4px;">
-                Totalizadores Acumulados de Verbas Recebidas do Custo Histórico
+                Totalizadores Acumulados de Verbas ${isPJ ? 'Contratuais' : 'Recebidas'} do Custo Histórico
               </div>
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
                 <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
-                  <span class="field-label">Total Salário Fixo</span>
+                  <span class="field-label">${isPJ ? 'Total Valor Contratual' : 'Total Salário Fixo'}</span>
                   <span class="field-value">${formatCurrency(costTotals.fixed)}</span>
                 </div>
                 <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
@@ -467,6 +472,7 @@ export function ProfileExportModal({
                   <span class="field-label">Total Comissões</span>
                   <span class="field-value">${formatCurrency(costTotals.comissao)}</span>
                 </div>
+                ${!isPJ ? `
                 <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                   <span class="field-label">Total Horas Extras</span>
                   <span class="field-value">${formatCurrency(costTotals.horaExtra)}</span>
@@ -480,9 +486,9 @@ export function ProfileExportModal({
                   <span class="field-value">${formatCurrency(costTotals.fgts)}</span>
                 </div>
                 <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
-                  <span class="field-label">Total 13º & Férias</span>
+                  <span class="field-label">Total 13º &amp; Férias</span>
                   <span class="field-value">${formatCurrency(costTotals.decimo + costTotals.ferias)}</span>
-                </div>
+                </div>` : ''}
                 <div style="background: #ecfdf5; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #10b981; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                   <span class="field-label" style="color: #047857;">Média Mensal Desembolsada</span>
                   <span class="field-value" style="color: #047857; font-weight: 800;">${formatCurrency(avgMonthlyCost)}</span>
@@ -525,55 +531,62 @@ export function ProfileExportModal({
                 Gráfico de Evolução do Custo Histórico Mês a Mês (Rótulos em R$)
               </div>
               
-              <svg width="100%" height="160" viewBox="0 0 500 160" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                <line x1="0" y1="20" x2="500" y2="20" stroke="#f1f5f9" stroke-width="1" />
-                <line x1="0" y1="65" x2="500" y2="65" stroke="#f1f5f9" stroke-width="1" />
-                <line x1="0" y1="110" x2="500" y2="110" stroke="#cbd5e1" stroke-width="1.5" />
+              <svg width="100%" height="220" viewBox="0 0 560 220" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                <!-- Linhas de grade horizontais -->
+                <line x1="40" y1="20" x2="560" y2="20" stroke="#f1f5f9" stroke-width="1" />
+                <line x1="40" y1="60" x2="560" y2="60" stroke="#f1f5f9" stroke-width="1" />
+                <line x1="40" y1="100" x2="560" y2="100" stroke="#f1f5f9" stroke-width="1" />
+                <line x1="40" y1="140" x2="560" y2="140" stroke="#cbd5e1" stroke-width="1.5" />
 
-                ${sortedCosts.map((c, idx) => {
-                  const count = sortedCosts.length;
-                  const slotWidth = 500 / count;
-                  const barWidth = Math.min(slotWidth * 0.55, 36);
-                  const xCenter = idx * slotWidth + slotWidth / 2;
-                  const xBar = xCenter - barWidth / 2;
+                ${(() => {
+                  const chartCosts = sortedCosts;
+                  const count = chartCosts.length;
+                  const chartW = 520; // espaço útil (560 - 40 de margem esquerda)
+                  const slotWidth = chartW / count;
+                  const barMaxH = 115;
+                  const baseY = 140;
+                  const labelAreaH = 55; // espaço para rótulos diagonais
 
-                  const isCLT = c.vinculo_tipo === 'CLT';
-                  const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
-                  const maxH = 85;
-                  const barH = Math.max(8, Math.round((realCost / maxCost) * maxH));
-                  const yBar = 110 - barH;
-                  const yValLabel = yBar - 4;
+                  return chartCosts.map((c, idx) => {
+                    const barWidth = Math.min(slotWidth * 0.55, 30);
+                    const xCenter = 40 + idx * slotWidth + slotWidth / 2;
+                    const xBar = xCenter - barWidth / 2;
 
-                  const compParts = c.competencia.split('-');
-                  const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                  const mLabel = `${monthsShort[parseInt(compParts[1] || '1', 10) - 1]}/${(compParts[0] || '').slice(2)}`;
-                  const valLabel = realCost >= 1000 ? `R$${(realCost / 1000).toFixed(1)}k` : `R$${realCost.toFixed(0)}`;
+                    const isCLT = c.vinculo_tipo === 'CLT';
+                    const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                    const barH = Math.max(8, Math.round((realCost / maxCost) * barMaxH));
+                    const yBar = baseY - barH;
+                    const yValLabel = yBar - 5;
 
-                  return `
-                    <text x="${xCenter}" y="${yValLabel}" text-anchor="middle" font-size="9.5" font-weight="800" fill="#047857" font-family="sans-serif">${valLabel}</text>
-                    <rect x="${xBar}" y="${yBar}" width="${barWidth}" height="${barH}" rx="4" ry="4" fill="#10b981" stroke="#059669" stroke-width="1" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />
-                    <text x="${xCenter}" y="128" text-anchor="middle" font-size="9" font-weight="700" fill="#475569" font-family="sans-serif">${mLabel}</text>
-                  `;
-                }).join('')}
+                    const compParts = c.competencia.split('-');
+                    const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                    const mLabel = monthsShort[parseInt(compParts[1] || '1', 10) - 1] + '/' + (compParts[0] || '').slice(2);
+                    const valLabel = realCost >= 1000 ? 'R$' + (realCost / 1000).toFixed(1) + 'k' : 'R$' + realCost.toFixed(0);
+
+                    return '<text x="' + xCenter + '" y="' + yValLabel + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="#047857" font-family="sans-serif">' + valLabel + '</text>' +
+                      '<rect x="' + xBar + '" y="' + yBar + '" width="' + barWidth + '" height="' + barH + '" rx="4" ry="4" fill="#10b981" stroke="#059669" stroke-width="1" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />' +
+                      '<text x="' + xCenter + '" y="' + (baseY + 6) + '" text-anchor="end" font-size="8.5" font-weight="600" fill="#475569" font-family="sans-serif" transform="rotate(-45 ' + xCenter + ' ' + (baseY + 6) + ')">' + mLabel + '</text>';
+                  }).join('');
+                })()}
               </svg>
             </div>
           ` : ''}
 
-          <!-- Tabela Detalhada por Mês -->
+          <!-- Tabela Detalhada por Mês (ordenada cronologicamente) -->
           <table>
             <thead>
               <tr>
                 <th>Competência</th>
                 <th>Vínculo</th>
-                <th>Valor Fixo</th>
+                <th>${isPJ ? 'Valor Contratual' : 'Valor Fixo'}</th>
                 <th>Bônus</th>
                 <th>Comissão</th>
-                <th>FGTS</th>
+                ${!isPJ ? '<th>FGTS</th>' : ''}
                 <th style="text-align: right;">Custo Real Desembolsado</th>
               </tr>
             </thead>
             <tbody>
-              ${costs.map(c => {
+              ${sortedCosts.map(c => {
                 const isCLT = c.vinculo_tipo === 'CLT';
                 const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
                 return `
@@ -583,7 +596,7 @@ export function ProfileExportModal({
                   <td>${formatCurrency(c.valor_fixo || 0)}</td>
                   <td>${formatCurrency(c.valor_bonus || 0)}</td>
                   <td>${formatCurrency(c.valor_comissao || 0)}</td>
-                  <td>${formatCurrency(c.valor_fgts || 0)}</td>
+                  ${!isPJ ? '<td>' + formatCurrency(c.valor_fgts || 0) + '</td>' : ''}
                   <td style="text-align: right; font-weight: 700; color: #b45309;">${formatCurrency(cReal)}</td>
                 </tr>
                 `;
@@ -596,7 +609,7 @@ export function ProfileExportModal({
                   <td>${formatCurrency(costTotals.fixed)}</td>
                   <td>${formatCurrency(costTotals.bonus)}</td>
                   <td>${formatCurrency(costTotals.comissao)}</td>
-                  <td>${formatCurrency(costTotals.fgts)}</td>
+                  ${!isPJ ? '<td>' + formatCurrency(costTotals.fgts) + '</td>' : ''}
                   <td style="text-align: right; font-size: 13px; color: #b45309;">${formatCurrency(costTotals.realCost)}</td>
                 </tr>
               </tfoot>
