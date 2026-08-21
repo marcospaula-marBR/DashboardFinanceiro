@@ -1776,13 +1776,29 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                         <tfoot>
                           <tr className="bg-blue-50 border-t-2 border-blue-100 text-xs font-black">
                             <td colSpan={3} className="py-3 px-4 uppercase tracking-wider text-blue-700">
-                              Total de Repasses Efetuados
+                              Total de Repasses Efetuados ({repassLines.length})
                             </td>
-                            <td className="py-3 px-4 text-right text-blue-700 text-sm">{fmt(totalRepassado)}</td>
+                            <td className="py-3 px-4 text-right text-blue-700 text-sm font-black">{fmt(totalRepassado)}</td>
                             <td></td>
                           </tr>
                         </tfoot>
                       </table>
+                    </div>
+
+                    {/* Ação rápida no rodapé para listas longas */}
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={handleAddRepassLine}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95"
+                      >
+                        <Plus size={15} />
+                        <span>+ Novo Repasse</span>
+                      </button>
+
+                      <span className="text-xs text-gray-500 font-medium">
+                        {repassLines.length} {repassLines.length === 1 ? 'repasse cadastrado' : 'repasses cadastrados'}
+                      </span>
                     </div>
                   </div>
 

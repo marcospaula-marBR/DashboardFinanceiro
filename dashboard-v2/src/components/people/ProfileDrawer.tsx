@@ -279,15 +279,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         setIsEditMode(true);
       }
 
-      // Abre na tab correta se especificado na URL
+      // Abre na tab correta se especificado na URL ou prop initialTab
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         const tab = params.get('tab');
         if (tab) {
           setActiveTab(tab as any);
+        } else if (initialTab) {
+          setActiveTab(initialTab);
         } else {
           setActiveTab('pessoal');
         }
+      } else if (initialTab) {
+        setActiveTab(initialTab);
       } else {
         setActiveTab('pessoal');
       }
@@ -296,7 +300,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setProfile({});
       setError(null);
     }
-  }, [isOpen, employeeId, isTestMode]);
+  }, [isOpen, employeeId, isTestMode, initialTab]);
 
   // Fetch distinct service locations for autocomplete
   useEffect(() => {
