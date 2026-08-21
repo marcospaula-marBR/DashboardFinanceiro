@@ -23,6 +23,8 @@ export interface Workstation {
 export interface EmployeeGeoItem {
   employee_id: string;
   name: string;
+  corporate_name?: string;
+  responsible_name?: string;
   job_role?: string;
   department?: string;
   company: string;

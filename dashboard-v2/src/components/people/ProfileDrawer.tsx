@@ -1566,6 +1566,57 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     }
   };
 
+  const handleBuscarCEPPorEndereco = async (isCNPJ = false) => {
+    const street = isCNPJ ? (profile.cnpj_street || '') : (profile.street || '');
+    const city = isCNPJ ? (profile.cnpj_city || '') : (profile.city || '');
+    const state = isCNPJ ? (profile.cnpj_state || 'SP') : (profile.state || 'SP');
+
+    if (!street || street.length < 3 || !city) {
+      if (isCNPJ) setCnpjCepError('Preencha Logradouro e Cidade');
+      else setCepError('Preencha Logradouro e Cidade');
+      return;
+    }
+
+    if (isCNPJ) setIsSearchingCNPJCEP(true);
+    else setIsSearchingCEP(true);
+
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${encodeURIComponent(state)}/${encodeURIComponent(city)}/${encodeURIComponent(street)}/json/`);
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0 && data[0].cep) {
+        const match = data[0];
+        if (isCNPJ) {
+          setProfile(prev => ({
+            ...prev,
+            cnpj_zip_code: match.cep,
+            cnpj_neighborhood: prev.cnpj_neighborhood || match.bairro || '',
+            cnpj_city: prev.cnpj_city || match.localidade || '',
+            cnpj_state: prev.cnpj_state || match.uf || ''
+          }));
+          setCnpjCepError(null);
+        } else {
+          setProfile(prev => ({
+            ...prev,
+            zip_code: match.cep,
+            neighborhood: prev.neighborhood || match.bairro || '',
+            city: prev.city || match.localidade || '',
+            state: prev.state || match.uf || ''
+          }));
+          setCepError(null);
+        }
+      } else {
+        if (isCNPJ) setCnpjCepError('CEP não localizado');
+        else setCepError('CEP não localizado');
+      }
+    } catch {
+      if (isCNPJ) setCnpjCepError('Erro na busca de CEP');
+      else setCepError('Erro na busca de CEP');
+    } finally {
+      if (isCNPJ) setIsSearchingCNPJCEP(false);
+      else setIsSearchingCEP(false);
+    }
+  };
+
   const handleCopyAddress = (checked: boolean) => {
     if (checked) {
       setProfile(prev => ({
@@ -2738,8 +2789,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 />
                              </div>
                              <div className="col-span-12 md:col-span-8">
-                                <label className={labelClass}>Logradouro da Empresa</label>
-                                <input type="text" value={profile.cnpj_street || ''} onChange={e => handleChange('cnpj_street', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                                 <div className="flex justify-between items-center">
+                                   <label className={labelClass}>Logradouro da Empresa</label>
+                                   {isEditMode && (
+                                     <button
+                                       type="button"
+                                       onClick={() => handleBuscarCEPPorEndereco(true)}
+                                       className="text-[10px] text-indigo-600 font-bold hover:underline mb-1 flex items-center gap-1 cursor-pointer"
+                                     >
+                                       🔍 Buscar CEP por Endereço
+                                     </button>
+                                   )}
+                                 </div>
+                                 <input type="text" value={profile.cnpj_street || ''} onChange={e => handleChange('cnpj_street', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="Rua / Av..."/>
                              </div>
                              
                              <div className="col-span-4">

@@ -193,6 +193,8 @@ export function PeopleGeoLocationMap({
         items.push({
           employee_id: emp.id,
           name: emp.name,
+          corporate_name: emp.corporate_name || emp.metadata?.corporate_name || emp.metadata?.razao_social,
+          responsible_name: emp.responsible_name || emp.metadata?.responsible_name || emp.metadata?.responsavel,
           job_role: emp.job_role,
           department: emp.department,
           company: emp.company,
@@ -565,15 +567,20 @@ export function PeopleGeoLocationMap({
           setSelectedWorkstationId(null);
         });
 
-        // Tooltip ao passar o mouse (Hover): Exibe a Foto de Perfil + Dados
+        const isPJ = empItem.linkType === 'PJ' || empItem.linkType === 'MEI' || Boolean(empItem.corporate_name);
+        const displayName = isPJ ? (empItem.corporate_name || empItem.name) : empItem.name;
+        const respName = isPJ ? (empItem.responsible_name || empItem.name) : undefined;
+
+        // Tooltip ao passar o mouse (Hover): Exibe a Foto de Perfil + Razão Social / Responsável + Dados
         marker.bindTooltip(`
           <div style="display:flex;align-items:center;gap:10px;padding:2px;">
-            <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;background:#e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid #cbd5e1;">
+            <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;background:#e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid #cbd5e1;">
               ${empItem.photo_url ? `<img src="${empItem.photo_url}" style="width:100%;height:100%;object-fit:cover;" />` : `<span style="font-weight:900;font-size:11px;color:#334155;">${initials}</span>`}
             </div>
             <div>
-              <strong style="font-size:12px;color:#0f172a;display:block;">${empItem.name}</strong>
-              <span style="color:#64748b;font-size:10px;display:block;">${empItem.neighborhood || empItem.city || 'Residência'} · <strong style="color:${borderColor};">${empItem.linkType}</strong></span>
+              <strong style="font-size:12px;color:#0f172a;display:block;line-height:1.2;">${displayName}</strong>
+              ${respName && respName !== displayName ? `<span style="color:#475569;font-size:10.5px;display:block;font-weight:600;">Resp: ${respName}</span>` : ''}
+              <span style="color:#64748b;font-size:10px;display:block;margin-top:1px;">${empItem.neighborhood || empItem.city || 'Residência'} · <strong style="color:${borderColor};">${empItem.linkType}</strong></span>
             </div>
           </div>
         `, {
@@ -889,10 +896,9 @@ export function PeopleGeoLocationMap({
         </div>
       </div>
 
-      {/* ── MODO MAPA CARTOGRÁFICO (Mantido montado para não perder instâncias Leaflet) ── */}
       <div
         className="grid grid-cols-1 lg:grid-cols-3 gap-5"
-        style={{ display: displayMode === 'map' ? 'grid' : 'none' }}
+        style={{ display: (displayMode === 'map' || displayMode === 'workstations_only') ? 'grid' : 'none' }}
       >
         {/* Viewport do Mapa Leaflet */}
         <div className="lg:col-span-2 relative bg-slate-100 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-inner h-[620px] flex flex-col">
@@ -1007,8 +1013,13 @@ export function PeopleGeoLocationMap({
                     </div>
                     <div>
                       <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                        {activeEmployeeGeo.name}
+                        {(activeEmployeeGeo.linkType === 'PJ' || activeEmployeeGeo.linkType === 'MEI' || activeEmployeeGeo.corporate_name) ? (activeEmployeeGeo.corporate_name || activeEmployeeGeo.name) : activeEmployeeGeo.name}
                       </h3>
+                      {(activeEmployeeGeo.linkType === 'PJ' || activeEmployeeGeo.linkType === 'MEI' || activeEmployeeGeo.corporate_name) && (activeEmployeeGeo.responsible_name || activeEmployeeGeo.corporate_name) && (
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
+                          Resp: {activeEmployeeGeo.responsible_name || activeEmployeeGeo.name}
+                        </p>
+                      )}
                       <p className="text-xs text-slate-400 mt-0.5">
                         {activeEmployeeGeo.job_role || activeEmployeeGeo.department || 'Colaborador'} · <strong className="text-indigo-600 uppercase">{activeEmployeeGeo.linkType}</strong>
                       </p>
@@ -1300,7 +1311,14 @@ export function PeopleGeoLocationMap({
                           )}
                         </div>
                         <div>
-                          <span className="font-bold text-slate-900 dark:text-white block">{item.name}</span>
+                          <span className="font-bold text-slate-900 dark:text-white block">
+                            {(item.linkType === 'PJ' || item.linkType === 'MEI' || item.corporate_name) ? (item.corporate_name || item.name) : item.name}
+                          </span>
+                          {(item.linkType === 'PJ' || item.linkType === 'MEI' || item.corporate_name) && (item.responsible_name || item.corporate_name) && (
+                            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold block">
+                              Resp: {item.responsible_name || item.name}
+                            </span>
+                          )}
                           <span className="text-[10px] text-slate-400">{item.job_role || item.department} · {item.linkType}</span>
                         </div>
                       </div>
