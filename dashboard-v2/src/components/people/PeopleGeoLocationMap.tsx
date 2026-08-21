@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
 import { Employee } from '@/types/loans';
 import { Workstation, EmployeeGeoItem, WorkstationOptimizationSummary } from '@/types/workstations';
 import { WorkstationsService } from '@/services/workstations.service';
@@ -64,6 +65,66 @@ export function PeopleGeoLocationMap({
   // Estado de Calibração / Drag & Drop de Postos
   const [pendingWsDrag, setPendingWsDrag] = useState<{ wsId: string; wsName: string; lat: number; lng: number } | null>(null);
   const [isSavingDrag, setIsSavingDrag] = useState(false);
+
+  // Estado para Remanejamento por Drag & Drop de Colaboradores para Postos
+  const [pendingEmployeeRemap, setPendingEmployeeRemap] = useState<{
+    empItem: EmployeeGeoItem;
+    targetWs: Workstation;
+    newDistanceKm: number;
+    currentDistanceKm: number | null;
+    kmDifference: number;
+  } | null>(null);
+  const [isSavingRemap, setIsSavingRemap] = useState(false);
+  const [remapSuccessMessage, setRemapSuccessMessage] = useState<string | null>(null);
+
+  const handleConfirmRemap = async () => {
+    if (!pendingEmployeeRemap) return;
+    setIsSavingRemap(true);
+    try {
+      const { empItem, targetWs, newDistanceKm } = pendingEmployeeRemap;
+      
+      // Persistir service_location no Supabase na tabela employees
+      const { error } = await supabase
+        .from('employees')
+        .update({ service_location: targetWs.name })
+        .eq('id', empItem.employee_id);
+
+      if (error) throw error;
+
+      // Atualizar lista local em memória
+      setGeoItems(prev => prev.map(item => {
+        if (item.employee_id === empItem.employee_id) {
+          const potOpt = (item.nearest_workstation && item.nearest_workstation.workstation.id !== targetWs.id)
+            ? {
+                better_workstation: item.nearest_workstation.workstation,
+                saved_distance_km: Number((newDistanceKm - item.nearest_workstation.distance_km).toFixed(1)),
+                reason: `Mora a ${item.nearest_workstation.distance_km}km de ${item.nearest_workstation.workstation.name}`
+              }
+            : null;
+
+          return {
+            ...item,
+            current_service_location: targetWs.name,
+            assigned_workstation: targetWs,
+            distance_to_current_workstation_km: newDistanceKm,
+            potential_optimization: potOpt
+          };
+        }
+        return item;
+      }));
+
+      const nameStr = empItem.corporate_name || empItem.name;
+      setRemapSuccessMessage(`Ficha de ${nameStr} atualizada! Posto de atuação gravado como ${targetWs.name}.`);
+      setPendingEmployeeRemap(null);
+
+      setTimeout(() => setRemapSuccessMessage(null), 4500);
+    } catch (err: any) {
+      console.error('Erro ao atualizar posto na ficha:', err);
+      alert(`Falha ao salvar remanejamento: ${err.message || 'Erro de conexão'}`);
+    } finally {
+      setIsSavingRemap(false);
+    }
+  };
 
   // Filtros
   const [selectedWsId, setSelectedWsId] = useState<string>('all');
@@ -560,11 +621,51 @@ export function PeopleGeoLocationMap({
           iconAnchor: [size / 2, size / 2]
         });
 
-        const marker = L.marker([empItem.lat, empItem.lng], { icon: customEmpIcon });
+        // Marcador arrastável no mapa para alocação em postos de trabalho
+        const marker = L.marker([empItem.lat, empItem.lng], {
+          icon: customEmpIcon,
+          draggable: true
+        });
 
         marker.on('click', () => {
           setSelectedEmployeeId(empItem.employee_id);
           setSelectedWorkstationId(null);
+        });
+
+        marker.on('dragend', (e: any) => {
+          const dropPos = e.target.getLatLng();
+
+          // Reseta a posição visual do marcador para o ponto residencial até confirmação
+          marker.setLatLng([empItem.lat, empItem.lng]);
+
+          if (workstations.length === 0) return;
+
+          let closestWs: Workstation = workstations[0];
+          let minDropDist = Infinity;
+
+          workstations.forEach(ws => {
+            const dist = GeocodingService.calculateDistanceKm(dropPos, { lat: ws.lat, lng: ws.lng });
+            if (dist < minDropDist) {
+              minDropDist = dist;
+              closestWs = ws;
+            }
+          });
+
+          const newDistanceKm = GeocodingService.calculateDistanceKm(
+            { lat: empItem.lat, lng: empItem.lng },
+            { lat: closestWs.lat, lng: closestWs.lng }
+          );
+
+          const currentDistanceKm = empItem.distance_to_current_workstation_km ?? null;
+          const kmDifference = currentDistanceKm !== null ? Number((currentDistanceKm - newDistanceKm).toFixed(1)) : 0;
+
+          setPendingEmployeeRemap({
+            empItem,
+            targetWs: closestWs,
+            newDistanceKm,
+            currentDistanceKm,
+            kmDifference
+          });
         });
 
         const isPJ = empItem.linkType === 'PJ' || empItem.linkType === 'MEI' || Boolean(empItem.corporate_name);
@@ -1391,6 +1492,135 @@ export function PeopleGeoLocationMap({
           geoItems={geoItems}
           metrics={metrics}
         />
+      )}
+
+      {/* ── Modal Executivo de Confirmação de Remanejamento por Drag & Drop ── */}
+      {pendingEmployeeRemap && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl max-w-md w-full space-y-5 animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black">
+                  <Navigation size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight">
+                    Confirmar Remanejamento
+                  </h3>
+                  <p className="text-xs text-slate-500">Alteração do local de atuação na ficha</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingEmployeeRemap(null)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Informações do Colaborador */}
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 space-y-2 border border-slate-200/80 dark:border-slate-700/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center font-black text-xs text-slate-700">
+                  {pendingEmployeeRemap.empItem.photo_url ? (
+                    <img src={pendingEmployeeRemap.empItem.photo_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    pendingEmployeeRemap.empItem.name.slice(0, 2).toUpperCase()
+                  )}
+                </div>
+                <div>
+                  <strong className="text-sm text-slate-900 dark:text-white block font-black">
+                    {pendingEmployeeRemap.empItem.corporate_name || pendingEmployeeRemap.empItem.name}
+                  </strong>
+                  {pendingEmployeeRemap.empItem.responsible_name && (
+                    <span className="text-xs text-indigo-600 dark:text-indigo-400 font-bold block">
+                      Resp: {pendingEmployeeRemap.empItem.responsible_name}
+                    </span>
+                  )}
+                  <span className="text-[11px] text-slate-500 block">
+                    {pendingEmployeeRemap.empItem.neighborhood || pendingEmployeeRemap.empItem.city} · {pendingEmployeeRemap.empItem.linkType}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Comparativo Logístico (De -> Para) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs bg-slate-100 dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-slate-400 block">Posto Atual</span>
+                  <strong className="text-slate-700 dark:text-slate-300 block truncate max-w-[140px]">
+                    {pendingEmployeeRemap.empItem.assigned_workstation?.name || pendingEmployeeRemap.empItem.current_service_location || 'Não Alocado'}
+                  </strong>
+                  <span className="text-[10px] text-slate-500 block font-mono">
+                    {pendingEmployeeRemap.currentDistanceKm !== null ? `${pendingEmployeeRemap.currentDistanceKm} km da moradia` : 'Sem distância'}
+                  </span>
+                </div>
+                <ArrowRight size={18} className="text-indigo-500 shrink-0 mx-2" />
+                <div className="text-right">
+                  <span className="text-[10px] font-black uppercase text-indigo-500 block">Novo Posto</span>
+                  <strong className="text-indigo-600 dark:text-indigo-400 block truncate max-w-[140px]">
+                    {pendingEmployeeRemap.targetWs.name}
+                  </strong>
+                  <span className="text-[10px] text-emerald-600 font-mono font-bold block">
+                    {pendingEmployeeRemap.newDistanceKm} km da moradia
+                  </span>
+                </div>
+              </div>
+
+              {/* Balanço de Ganho */}
+              {pendingEmployeeRemap.kmDifference > 0 ? (
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-3 text-xs text-emerald-800 dark:text-emerald-300 font-medium flex items-center gap-2">
+                  <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                  <div>
+                    <strong>Ganho de Logística:</strong> Economia de <strong>{pendingEmployeeRemap.kmDifference} km</strong> por trajeto (~{GeocodingService.estimateTravelTimeMinutes(pendingEmployeeRemap.kmDifference)} min/dia a menos em trânsito).
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl p-3 text-xs text-indigo-800 dark:text-indigo-300 font-medium flex items-center gap-2">
+                  <Building2 size={18} className="text-indigo-600 shrink-0" />
+                  <div>
+                    <strong>Remanejamento Solicitado:</strong> Alocação direta no posto {pendingEmployeeRemap.targetWs.name} ({pendingEmployeeRemap.newDistanceKm} km).
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isSavingRemap}
+                onClick={handleConfirmRemap}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-95"
+              >
+                {isSavingRemap ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                <span>Confirmar & Salvar Ficha</span>
+              </button>
+              <button
+                type="button"
+                disabled={isSavingRemap}
+                onClick={() => setPendingEmployeeRemap(null)}
+                className="px-4 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-bold text-xs transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de Sucesso */}
+      {remapSuccessMessage && (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white border border-emerald-500/50 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom max-w-md">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <CheckCircle2 size={20} />
+          </div>
+          <p className="text-xs font-bold text-slate-100 leading-snug">
+            {remapSuccessMessage}
+          </p>
+        </div>
       )}
 
     </div>
