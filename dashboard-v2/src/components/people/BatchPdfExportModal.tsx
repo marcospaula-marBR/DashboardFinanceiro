@@ -242,47 +242,69 @@ export function BatchPdfExportModal({
             </div>
 
             ${includeCostsChart ? `
-              <!-- Gráfico SVG Vetorial de Custo Mês a Mês (Garantido em Impressões PDF) -->
+              <!-- Gráfico SVG Vetorial de Custo Mês a Mês (Garantido em Impressões PDF - 100% Anti-sobreposição) -->
               <div style="margin-top: 10px; margin-bottom: 12px; background: #ffffff; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 8px; font-family: sans-serif;">
-                  Gráfico de Custo Mês a Mês (Rótulos em R$)
+                  Gráfico de Custo Mês a Mês (Valores e Meses em Orientação Vertical)
                 </div>
                 
-                <svg width="100%" height="200" viewBox="0 0 540 200" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                  <line x1="30" y1="20" x2="540" y2="20" stroke="#f1f5f9" stroke-width="1" />
-                  <line x1="30" y1="55" x2="540" y2="55" stroke="#f1f5f9" stroke-width="1" />
-                  <line x1="30" y1="90" x2="540" y2="90" stroke="#f1f5f9" stroke-width="1" />
-                  <line x1="30" y1="125" x2="540" y2="125" stroke="#cbd5e1" stroke-width="1.5" />
+                ${(() => {
+                  const chartCosts = sortedCosts;
+                  const count = chartCosts.length;
+                  const svgW = Math.max(540, count * 22);
+                  const chartW = svgW - 50;
+                  const slotWidth = chartW / count;
+                  const barMaxH = 90;
+                  const baseY = 150;
+                  const svgH = 230;
 
-                  ${(() => {
-                    const count = sortedCosts.length;
-                    const chartW = 510;
-                    const slotWidth = chartW / count;
-                    const barMaxH = 100;
-                    const baseY = 125;
+                  return `
+                  <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                    <line x1="30" y1="20" x2="${svgW}" y2="20" stroke="#f1f5f9" stroke-width="1" />
+                    <line x1="30" y1="60" x2="${svgW}" y2="60" stroke="#f1f5f9" stroke-width="1" />
+                    <line x1="30" y1="105" x2="${svgW}" y2="105" stroke="#f1f5f9" stroke-width="1" />
+                    <line x1="30" y1="${baseY}" x2="${svgW}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1.5" />
 
-                    return sortedCosts.map((c, idx) => {
-                      const barWidth = Math.min(slotWidth * 0.55, 28);
-                      const xCenter = 30 + idx * slotWidth + slotWidth / 2;
+                    ${chartCosts.map((c, idx) => {
+                      const barWidth = Math.max(3, Math.min(slotWidth * 0.65, 22));
+                      const xCenter = 35 + idx * slotWidth + slotWidth / 2;
                       const xBar = xCenter - barWidth / 2;
 
                       const isCLT = c.vinculo_tipo === 'CLT';
                       const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
-                      const barH = Math.max(8, Math.round((realCost / maxCost) * barMaxH));
+                      const hasCost = realCost >= 0.01;
+                      const barH = hasCost ? Math.max(6, Math.round((realCost / maxCost) * barMaxH)) : 2;
                       const yBar = baseY - barH;
-                      const yValLabel = yBar - 4;
+                      const yValLabel = yBar - 6;
 
                       const compParts = c.competencia.split('-');
                       const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                      const mLabel = monthsShort[parseInt(compParts[1] || '1', 10) - 1] + '/' + (compParts[0] || '').slice(2);
-                      const valLabel = realCost >= 1000 ? 'R$' + (realCost / 1000).toFixed(1) + 'k' : 'R$' + realCost.toFixed(0);
+                      const mLabel = `${monthsShort[parseInt(compParts[1] || '1', 10) - 1]}/${(compParts[0] || '').slice(2)}`;
+                      const valLabel = realCost >= 1000 ? `R$ ${(realCost / 1000).toFixed(1)}k` : `R$ ${realCost.toFixed(0)}`;
+                      const fontSize = Math.min(8, Math.max(6, slotWidth * 0.45));
 
-                      return '<text x="' + xCenter + '" y="' + yValLabel + '" text-anchor="middle" font-size="8" font-weight="800" fill="#047857" font-family="sans-serif">' + valLabel + '</text>' +
-                        '<rect x="' + xBar + '" y="' + yBar + '" width="' + barWidth + '" height="' + barH + '" rx="3" ry="3" fill="#10b981" stroke="#059669" stroke-width="1" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />' +
-                        '<text x="' + xCenter + '" y="' + (baseY + 5) + '" text-anchor="end" font-size="8" font-weight="600" fill="#475569" font-family="sans-serif" transform="rotate(-45 ' + xCenter + ' ' + (baseY + 5) + ')">' + mLabel + '</text>';
-                    }).join('');
-                  })()}
-                </svg>
+                      let elements = '';
+
+                      // 1. Rótulo do Valor no topo
+                      if (hasCost) {
+                        elements += `<text x="${xCenter}" y="${yValLabel}" text-anchor="start" font-size="${fontSize}" font-weight="800" fill="#047857" font-family="sans-serif" transform="rotate(-90 ${xCenter} ${yValLabel})">${valLabel}</text>`;
+                      }
+
+                      // 2. Barra
+                      if (hasCost) {
+                        elements += `<rect x="${xBar}" y="${yBar}" width="${barWidth}" height="${barH}" rx="2" fill="#10b981" stroke="#059669" stroke-width="0.5" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />`;
+                      } else {
+                        elements += `<rect x="${xBar}" y="${baseY - 2}" width="${barWidth}" height="2" fill="#e2e8f0" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />`;
+                      }
+
+                      // 3. Rótulo do Mês na base
+                      elements += `<text x="${xCenter}" y="${baseY + 8}" text-anchor="end" font-size="${fontSize}" font-weight="${hasCost ? '700' : '500'}" fill="${hasCost ? '#334155' : '#94a3b8'}" font-family="sans-serif" transform="rotate(-90 ${xCenter} ${baseY + 8})">${mLabel}</text>`;
+
+                      return elements;
+                    }).join('')}
+                  </svg>
+                  `;
+                })()}
               </div>
             ` : ''}
 
