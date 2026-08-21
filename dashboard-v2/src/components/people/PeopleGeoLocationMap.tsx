@@ -6,6 +6,7 @@ import { Workstation, EmployeeGeoItem, WorkstationOptimizationSummary } from '@/
 import { WorkstationsService } from '@/services/workstations.service';
 import { GeocodingService, LatLng } from '@/services/geocoding.service';
 import { WorkstationsManagerModal } from './WorkstationsManagerModal';
+import { GeminiRouteAdvisorModal } from './GeminiRouteAdvisorModal';
 import { getCompanyLogoUrl } from './PeopleBadges';
 import {
   Building2, MapPin, Navigation, Compass, Search, Filter,
@@ -51,6 +52,7 @@ export function PeopleGeoLocationMap({
 }: PeopleGeoLocationMapProps) {
   const [workstations, setWorkstations] = useState<Workstation[]>(() => WorkstationsService.getWorkstations());
   const [isWsManagerOpen, setIsWsManagerOpen] = useState(false);
+  const [isGeminiAdvisorOpen, setIsGeminiAdvisorOpen] = useState(false);
   const [isLoadingGeo, setIsLoadingGeo] = useState(true);
   const [geoItems, setGeoItems] = useState<EmployeeGeoItem[]>([]);
 
@@ -715,15 +717,26 @@ export function PeopleGeoLocationMap({
             </div>
           )}
 
-          {/* Botão Gerenciar Postos */}
-          <button
-            type="button"
-            onClick={() => setIsWsManagerOpen(true)}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 shrink-0"
-          >
-            <Building2 size={15} />
-            <span>Gerenciar Postos</span>
-          </button>
+          {/* Botões de Ação */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsGeminiAdvisorOpen(true)}
+              className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 shrink-0"
+            >
+              <Sparkles size={15} className="animate-pulse text-amber-300" />
+              <span>Parecer IA (Gemini)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsWsManagerOpen(true)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 shrink-0"
+            >
+              <Building2 size={15} />
+              <span>Gerenciar Postos</span>
+            </button>
+          </div>
         </div>
 
         {/* Linha de Filtros Secundários */}
@@ -1230,6 +1243,17 @@ export function PeopleGeoLocationMap({
           onWorkstationsChange={() => {
             setWorkstations(WorkstationsService.getWorkstations());
           }}
+        />
+      )}
+
+      {/* ── Modal do Gemini Route Advisor ── */}
+      {isGeminiAdvisorOpen && (
+        <GeminiRouteAdvisorModal
+          isOpen={isGeminiAdvisorOpen}
+          onClose={() => setIsGeminiAdvisorOpen(false)}
+          workstations={workstations}
+          geoItems={geoItems}
+          metrics={metrics}
         />
       )}
 

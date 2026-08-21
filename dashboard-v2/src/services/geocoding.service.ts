@@ -268,8 +268,39 @@ export class GeocodingService {
       }
     }
 
-    // 3. Consulta via CEP no ViaCEP
+    // 3. Consulta via BrasilAPI v2 (retorna coordenadas oficiais de CEP)
     if (cleanZip && cleanZip.length === 8) {
+      try {
+        const bRes = await fetch(`https://brasilapi.com.br/api/cep/v2/${cleanZip}`, {
+          signal: AbortSignal.timeout(3500)
+        });
+        if (bRes.ok) {
+          const bData = await bRes.json();
+          if (bData.location?.coordinates?.latitude && bData.location?.coordinates?.longitude) {
+            const bCoords: LatLng = {
+              lat: parseFloat(bData.location.coordinates.latitude),
+              lng: parseFloat(bData.location.coordinates.longitude)
+            };
+            const finalCoords = number ? this.addMicroJitter(bCoords) : bCoords;
+            this.memoryCache.set(queryKey, finalCoords);
+            this.saveCache();
+            return finalCoords;
+          }
+          
+          if (bData.neighborhood && bData.city) {
+            const bKey = this.normalizeKey(`${bData.neighborhood}, ${bData.city}`);
+            if (CALIBRATED_NEIGHBORHOOD_COORDS[bKey]) {
+              const exact = CALIBRATED_NEIGHBORHOOD_COORDS[bKey];
+              const finalCoords = this.addMicroJitter(exact);
+              this.memoryCache.set(queryKey, finalCoords);
+              this.saveCache();
+              return finalCoords;
+            }
+          }
+        }
+      } catch {}
+
+      // Fallback ViaCEP
       try {
         const res = await fetch(`https://viacep.com.br/ws/${cleanZip}/json/`, {
           signal: AbortSignal.timeout(3000)
