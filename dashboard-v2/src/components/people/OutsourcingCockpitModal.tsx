@@ -300,32 +300,27 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         loansMap.set(lp.employee_id, cur + (parseFloat(String(lp.amount)) || 0));
       });
 
-      // 4. Repasses (Supabase + LocalStorage fallback)
-      const repTable = 'outsourcing_repasses';
-      let repLoaded: RepassLine[] = [];
+      // 4. Buscar configuração global de terceirização do Supabase (Compartilhada entre todos os usuários)
+      let cloudCompetenceData: any = null;
       try {
-        const { data: repData } = await supabase
-          .from(repTable)
-          .select('*')
-          .eq('competencia', comp)
-          .eq('is_test', isTestMode)
-          .order('date', { ascending: true });
+        const { data: globalConfig } = await supabase
+          .from('employees')
+          .select('metadata')
+          .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+          .maybeSingle();
 
-        if (repData && repData.length > 0) {
-          repLoaded = repData.map(r => ({
-            id: r.id,
-            date: r.date,
-            bank: r.bank,
-            amount: parseFloat(String(r.amount)) || 0,
-            notes: r.notes || ''
-          }));
+        if (globalConfig?.metadata?.outsourcing_configs?.[comp]) {
+          cloudCompetenceData = globalConfig.metadata.outsourcing_configs[comp];
         }
       } catch (e) {
-        console.warn('Tabela outsourcing_repasses ainda não criada no Supabase:', e);
+        console.warn('Aviso ao carregar configuração de terceirização do Supabase:', e);
       }
 
-      // Se não veio do banco, tentar do localStorage
-      if (repLoaded.length === 0) {
+      // 5. Repasses (Nuvem Supabase + Fallback LocalStorage)
+      let repLoaded: RepassLine[] = [];
+      if (cloudCompetenceData?.repassLines && Array.isArray(cloudCompetenceData.repassLines) && cloudCompetenceData.repassLines.length > 0) {
+        repLoaded = cloudCompetenceData.repassLines;
+      } else {
         const savedRep = localStorage.getItem(`outsourcing_repasses_${comp}${isTestMode ? '_test' : ''}`);
         if (savedRep) {
           try { repLoaded = JSON.parse(savedRep); } catch {}
@@ -344,32 +339,16 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         }]);
       }
 
-      // 5. Configuração de taxas da competência (Supabase + LocalStorage)
-      let cfgFound = false;
-      try {
-        const { data: cfgData } = await supabase
-          .from('outsourcing_apuracao_config')
-          .select('*')
-          .eq('competencia', comp)
-          .eq('is_test', isTestMode)
-          .maybeSingle();
-
-        if (cfgData) {
-          cfgFound = true;
-          setTaxInputMode(cfgData.tax_input_mode || 'rate');
-          setTaxRate(parseFloat(String(cfgData.tax_rate)) || 5.0);
-          setTaxFixedAmount(parseFloat(String(cfgData.tax_fixed)) || 0);
-
-          setAdminFeeMode(cfgData.admin_fee_mode || 'rate');
-          setAdminFeeRate(parseFloat(String(cfgData.admin_fee_rate)) || 10.0);
-          setAdminFeeFixedAmount(parseFloat(String(cfgData.admin_fee_fixed)) || 0);
-          setSavedTimestamp(cfgData.saved_at || null);
-        }
-      } catch (e) {
-        console.warn('Tabela outsourcing_apuracao_config ainda não criada no Supabase:', e);
-      }
-
-      if (!cfgFound) {
+      // 6. Configuração de taxas da competência (Nuvem Supabase + Fallback LocalStorage)
+      if (cloudCompetenceData) {
+        setTaxInputMode(cloudCompetenceData.taxInputMode || 'rate');
+        setTaxRate(parseFloat(String(cloudCompetenceData.taxRate)) || 5.0);
+        setTaxFixedAmount(parseFloat(String(cloudCompetenceData.taxFixedAmount)) || 0);
+        setAdminFeeMode(cloudCompetenceData.adminFeeMode || 'rate');
+        setAdminFeeRate(parseFloat(String(cloudCompetenceData.adminFeeRate)) || 10.0);
+        setAdminFeeFixedAmount(parseFloat(String(cloudCompetenceData.adminFeeFixedAmount)) || 0);
+        setSavedTimestamp(cloudCompetenceData.saved_at || null);
+      } else {
         const savedCfg = localStorage.getItem(`outsourcing_config_${comp}${isTestMode ? '_test' : ''}`);
         if (savedCfg) {
           try {
@@ -392,14 +371,22 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         }
       }
 
-      // 6. Verificar se há linhas salvas no LocalStorage para esta competência
+      // 7. Restaurar linhas da apuração (Prioridade: Nuvem Supabase -> LocalStorage -> Montagem automática)
+      if (cloudCompetenceData?.rows && Array.isArray(cloudCompetenceData.rows) && cloudCompetenceData.rows.length > 0) {
+        setRows(cloudCompetenceData.rows);
+        if (cloudCompetenceData.customColumns && Array.isArray(cloudCompetenceData.customColumns)) {
+          setCustomColumns(cloudCompetenceData.customColumns);
+        }
+        setLoading(false);
+        return;
+      }
+
       const savedRowsJson = localStorage.getItem(`outsourcing_rows_${comp}${isTestMode ? '_test' : ''}`);
       if (savedRowsJson) {
         try {
           const parsedRows: OutsourcingRow[] = JSON.parse(savedRowsJson);
           if (parsedRows && parsedRows.length > 0) {
             setRows(parsedRows);
-            // Colunas customizadas
             const savedCols = localStorage.getItem(`outsourcing_cols_${comp}${isTestMode ? '_test' : ''}`);
             if (savedCols) {
               try { setCustomColumns(JSON.parse(savedCols)); } catch {}
@@ -412,7 +399,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         }
       }
 
-      // 7. Montar linhas a partir dos colaboradores do banco
+      // 8. Montar linhas a partir dos colaboradores do banco
       const generatedRows: OutsourcingRow[] = outsourced.map(emp => {
         const c = costsMap.get(emp.id);
         const va = c?.verbas_adicionais || {};
@@ -523,7 +510,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     const nowIso = new Date().toISOString();
 
     try {
-      // 1. SALVAR NO LOCALSTORAGE PRIMEIRO (PERSISTÊNCIA 100% GARANTIDA)
+      // 1. SALVAR NO LOCALSTORAGE (CACHE LOCAL RÁPIDO)
       localStorage.setItem(`outsourcing_rows_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(rows));
       localStorage.setItem(`outsourcing_cols_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(customColumns));
       localStorage.setItem(`outsourcing_repasses_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(repassLines));
@@ -533,56 +520,52 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         saved_at: nowIso
       }));
 
-      // 2. SALVAR NO SUPABASE (TABELA DE CONFIGURAÇÃO DE TAXAS)
+      // 2. SALVAR NO SUPABASE: REGISTRO GLOBAL DE APURAÇÃO COMPARTILHADO COM TODOS OS USUÁRIOS
       try {
-        await supabase.from('outsourcing_apuracao_config').upsert({
-          competencia,
-          tax_input_mode: taxInputMode,
-          tax_rate: taxRate,
-          tax_fixed: taxFixedAmount,
-          admin_fee_mode: adminFeeMode,
-          admin_fee_rate: adminFeeRate,
-          admin_fee_fixed: adminFeeFixedAmount,
-          is_test: isTestMode,
+        const { data: globalRec } = await supabase
+          .from('employees')
+          .select('id, metadata')
+          .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+          .maybeSingle();
+
+        const meta = (globalRec?.metadata as Record<string, any>) || {};
+        const outsConfigs = meta.outsourcing_configs || {};
+
+        outsConfigs[competencia] = {
+          taxInputMode,
+          taxRate,
+          taxFixedAmount,
+          adminFeeMode,
+          adminFeeRate,
+          adminFeeFixedAmount,
+          repassLines,
+          customColumns,
+          rows,
           saved_at: nowIso,
-          updated_at: nowIso
-        }, { onConflict: 'competencia' });
-      } catch (errDb: any) {
-        console.warn('Aviso: Tabela outsourcing_apuracao_config ainda não aplicada no Supabase:', errDb);
-      }
+          is_test: isTestMode
+        };
 
-      // 3. SALVAR REPASSES NO SUPABASE
-      try {
-        const repTable = 'outsourcing_repasses';
-        await supabase
-          .from(repTable)
-          .delete()
-          .eq('competencia', competencia)
-          .eq('is_test', isTestMode);
+        const updatedMeta = { ...meta, outsourcing_configs: outsConfigs };
 
-        const repRows = repassLines
-          .filter(l => l.amount > 0 || l.notes)
-          .map(l => ({
-            id: l.id.startsWith('rep-') ? undefined : l.id,
-            competencia,
-            date: l.date,
-            bank: l.bank,
-            amount: l.amount,
-            notes: l.notes,
-            is_test: isTestMode
-          }));
-
-        if (repRows.length > 0) {
-          await supabase.from(repTable).insert(repRows);
+        if (globalRec?.id) {
+          await supabase.from('employees').update({ metadata: updatedMeta }).eq('id', globalRec.id);
+        } else {
+          await supabase.from('employees').insert([{
+            full_name: '__SYSTEM_GLOBAL_CONFIG__',
+            company: 'MarBR',
+            employment_type: 'CLT',
+            active: false,
+            status: 'Inativo',
+            metadata: updatedMeta
+          }]);
         }
-      } catch (errRep: any) {
-        console.warn('Aviso: Tabela outsourcing_repasses ainda não aplicada no Supabase:', errRep);
+      } catch (errGlobal) {
+        console.error('Erro ao sincronizar snapshot de apuração no Supabase:', errGlobal);
       }
 
-      // 4. SALVAR CUSTOS INDIVIDUAIS DOS COLABORADORES NO SUPABASE
+      // 3. SALVAR CUSTOS INDIVIDUAIS DOS COLABORADORES NO SUPABASE (TABELA people_monthly_costs)
       const costsTable = isTestMode ? 'people_monthly_costs_test' : 'people_monthly_costs';
       for (const row of rows) {
-        // Encontrar ou associar employeeId
         let empId = row.employeeId;
         if (!empId) {
           const match = allEmployeesList.find(e =>
@@ -592,45 +575,54 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         }
 
         if (empId) {
-          // Empacotar todas as verbas no verbas_adicionais JSONB para garantia de compatibilidade total
           const extraVerbasJson = {
-            valor_bruto: row.valorBruto,
-            valor_desconto: row.valorDesconto,
-            valor_liquido: row.valorLiquido,
-            valor_vr: row.valorVR,
-            valor_vt: row.valorVT,
-            valor_seguro: row.valorSeguro,
-            valor_fgts: row.valorFGTS,
-            valor_gps: row.valorGPS,
-            valor_dec_terceiro: row.valorDecTerceiro,
-            valor_ferias: row.valorFerias,
-            custom_values: row.customValues
+            valor_bruto: row.valorBruto || 0,
+            valor_desconto: row.valorDesconto || 0,
+            valor_liquido: row.valorLiquido || row.valorBruto || 0,
+            valor_vr: row.valorVR || 0,
+            valor_vt: row.valorVT || 0,
+            valor_seguro: row.valorSeguro || 0,
+            valor_fgts: row.valorFGTS || 0,
+            valor_gps: row.valorGPS || 0,
+            valor_dec_terceiro: row.valorDecTerceiro || 0,
+            valor_ferias: row.valorFerias || 0,
+            custom_values: row.customValues || {}
+          };
+
+          const cleanCostPayload = {
+            employee_id: empId,
+            competencia,
+            valor_fixo: row.valorBruto || 0,
+            valor_bonus: row.valorBonus || 0,
+            valor_comissao: row.valorComissao || 0,
+            valor_ajuda_custo: row.valorAjudaCusto || 0,
+            valor_incentivos: row.valorOutros || 0,
+            valor_liquido: row.valorLiquido || row.valorBruto || 0,
+            verbas_adicionais: extraVerbasJson,
+            vinculo_tipo: row.employeeType === 'PJ' ? 'PJ-MEI' : row.employeeType === 'Estagio' ? 'Estagio' : 'CLT'
           };
 
           try {
-            await supabase
+            const { data: existingCost } = await supabase
               .from(costsTable)
-              .upsert({
-                employee_id: empId,
-                competencia,
-                valor_fixo: row.valorBruto,
-                valor_bonus: row.valorBonus,
-                valor_comissao: row.valorComissao,
-                valor_ajuda_custo: row.valorAjudaCusto,
-                valor_incentivos: row.valorOutros,
-                verbas_adicionais: extraVerbasJson,
-                employee_type: row.employeeType,
-                vinculo_tipo: row.employeeType === 'PJ' ? 'PJ-MEI' : row.employeeType === 'Estagio' ? 'Estagio' : 'CLT',
-                updated_at: nowIso
-              }, { onConflict: 'employee_id,competencia' });
+              .select('id')
+              .eq('employee_id', empId)
+              .eq('competencia', competencia)
+              .maybeSingle();
+
+            if (existingCost?.id) {
+              await supabase.from(costsTable).update(cleanCostPayload).eq('id', existingCost.id);
+            } else {
+              await supabase.from(costsTable).insert([cleanCostPayload]);
+            }
           } catch (errRow: any) {
-            console.warn(`Aviso ao salvar colaborador ${row.name} no Supabase:`, errRow);
+            console.warn(`Aviso ao salvar custo do colaborador ${row.name} no Supabase:`, errRow);
           }
         }
       }
 
       setSavedTimestamp(nowIso);
-      setSaveSuccessMessage(`Apuração de ${competencia} salva com sucesso!`);
+      setSaveSuccessMessage(`Apuração de ${competencia} salva e sincronizada com a nuvem para todos os usuários!`);
       setTimeout(() => setSaveSuccessMessage(null), 5000);
     } catch (err: any) {
       console.error('Erro ao salvar:', err);

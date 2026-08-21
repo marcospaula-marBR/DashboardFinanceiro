@@ -1,6 +1,8 @@
 import { SystemItem, SystemCategory } from '@/types/loans';
+import { supabase } from '@/lib/supabase';
 
-const SYSTEMS_STORAGE_KEY = 'marbrasil_systems_catalog_v1';
+const SYSTEMS_STORAGE_KEY = 'marbrasil_systems_catalog_v2';
+const GLOBAL_CONFIG_NAME = '__SYSTEM_GLOBAL_CONFIG__';
 
 export const DEFAULT_SYSTEMS_CATALOG: SystemItem[] = [
   // Bancários
@@ -121,63 +123,155 @@ export const DEFAULT_SYSTEMS_CATALOG: SystemItem[] = [
 ];
 
 export class SystemsCatalogService {
+  private static cachedSystems: SystemItem[] | null = null;
+
   /**
-   * Retorna a lista completa de sistemas do catálogo
+   * Retorna a lista síncrona do catálogo (cache em memória ou localStorage)
    */
   static getSystems(): SystemItem[] {
-    if (typeof window === 'undefined') return DEFAULT_SYSTEMS_CATALOG;
-    try {
-      const stored = localStorage.getItem(SYSTEMS_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.warn('Erro ao carregar catálogo de sistemas do localStorage:', e);
+    if (this.cachedSystems && this.cachedSystems.length > 0) {
+      return this.cachedSystems;
     }
-    // Inicializa com padrão se vazio
-    this.saveSystems(DEFAULT_SYSTEMS_CATALOG);
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(SYSTEMS_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.cachedSystems = parsed;
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar catálogo de sistemas do localStorage:', e);
+      }
+    }
+
+    this.cachedSystems = DEFAULT_SYSTEMS_CATALOG;
     return DEFAULT_SYSTEMS_CATALOG;
   }
 
   /**
-   * Salva a lista de sistemas no storage local
+   * Busca a versão mais atual do catálogo diretamente no Supabase e atualiza o cache
    */
-  static saveSystems(systems: SystemItem[]): void {
+  static async fetchSystemsAsync(): Promise<SystemItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('metadata')
+        .eq('full_name', GLOBAL_CONFIG_NAME)
+        .maybeSingle();
+
+      if (data?.metadata?.systems_catalog && Array.isArray(data.metadata.systems_catalog) && data.metadata.systems_catalog.length > 0) {
+        const remoteSystems = data.metadata.systems_catalog as SystemItem[];
+        this.cachedSystems = remoteSystems;
+        this.saveLocalCache(remoteSystems);
+        return remoteSystems;
+      }
+    } catch (e) {
+      console.warn('Aviso ao sincronizar catálogo de sistemas com o Supabase:', e);
+    }
+
+    // Se não encontrou no Supabase, usa local ou padrão e faz o seed no Supabase
+    const current = this.getSystems();
+    this.saveSystemsAsync(current).catch(() => {});
+    return current;
+  }
+
+  /**
+   * Salva o catálogo localmente
+   */
+  private static saveLocalCache(systems: SystemItem[]): void {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(SYSTEMS_STORAGE_KEY, JSON.stringify(systems));
     } catch (e) {
-      console.error('Erro ao salvar catálogo de sistemas:', e);
+      console.error('Erro ao salvar catálogo no localStorage:', e);
     }
+  }
+
+  /**
+   * Salva a lista de sistemas tanto no Supabase (Nuvem compartilhada) quanto no cache local
+   */
+  static async saveSystemsAsync(systems: SystemItem[]): Promise<void> {
+    this.cachedSystems = systems;
+    this.saveLocalCache(systems);
+
+    try {
+      // 1. Obter metadata atual do registro de configuração global
+      const { data: existing } = await supabase
+        .from('employees')
+        .select('id, metadata')
+        .eq('full_name', GLOBAL_CONFIG_NAME)
+        .maybeSingle();
+
+      const existingMeta = (existing?.metadata as Record<string, any>) || {};
+      const updatedMeta = {
+        ...existingMeta,
+        systems_catalog: systems,
+        updated_at: new Date().toISOString()
+      };
+
+      if (existing?.id) {
+        await supabase
+          .from('employees')
+          .update({ metadata: updatedMeta })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('employees')
+          .insert([{
+            full_name: GLOBAL_CONFIG_NAME,
+            company: 'MarBR',
+            employment_type: 'CLT',
+            active: false,
+            status: 'Inativo',
+            metadata: updatedMeta
+          }]);
+      }
+    } catch (e) {
+      console.error('Erro ao persistir catálogo de sistemas no Supabase:', e);
+    }
+  }
+
+  /**
+   * Método síncrono legado que agora também dispara a sincronização assíncrona
+   */
+  static saveSystems(systems: SystemItem[]): void {
+    this.cachedSystems = systems;
+    this.saveLocalCache(systems);
+    this.saveSystemsAsync(systems).catch(err => {
+      console.error('Erro ao sincronizar com Supabase:', err);
+    });
   }
 
   /**
    * Adiciona um novo sistema ao catálogo
    */
   static addSystem(item: Omit<SystemItem, 'id' | 'created_at'>): SystemItem {
-    const systems = this.getSystems();
+    const current = this.getSystems();
+    const newId = `sys-${item.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
     const newSystem: SystemItem = {
       ...item,
-      id: `sys-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      created_at: new Date().toISOString()
+      id: newId,
+      created_at: new Date().toISOString().split('T')[0]
     };
-    systems.push(newSystem);
-    this.saveSystems(systems);
+
+    const updated = [...current, newSystem];
+    this.saveSystems(updated);
     return newSystem;
   }
 
   /**
    * Atualiza um sistema existente
    */
-  static updateSystem(updated: SystemItem): void {
-    const systems = this.getSystems();
-    const idx = systems.findIndex(s => s.id === updated.id);
-    if (idx !== -1) {
-      systems[idx] = updated;
-      this.saveSystems(systems);
+  static updateSystem(updatedItem: SystemItem): void {
+    const current = this.getSystems();
+    const index = current.findIndex(s => s.id === updatedItem.id);
+    if (index !== -1) {
+      current[index] = updatedItem;
+      this.saveSystems([...current]);
     }
   }
 
@@ -185,12 +279,13 @@ export class SystemsCatalogService {
    * Remove um sistema do catálogo
    */
   static deleteSystem(id: string): void {
-    const systems = this.getSystems().filter(s => s.id !== id);
-    this.saveSystems(systems);
+    const current = this.getSystems();
+    const updated = current.filter(s => s.id !== id);
+    this.saveSystems(updated);
   }
 
   /**
-   * Restaura o catálogo para o padrão de fábrica
+   * Restaura o catálogo para a lista padrão inicial
    */
   static resetToDefault(): SystemItem[] {
     this.saveSystems(DEFAULT_SYSTEMS_CATALOG);

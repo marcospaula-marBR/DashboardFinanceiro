@@ -305,6 +305,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         .then(setAllEmployees)
         .catch(err => console.error("Erro ao buscar colaboradores", err))
         .finally(() => setIsSearchingExisting(false));
+      SystemsCatalogService.fetchSystemsAsync().catch(() => {});
     }
   }, [isOpen, isTestMode]);
 

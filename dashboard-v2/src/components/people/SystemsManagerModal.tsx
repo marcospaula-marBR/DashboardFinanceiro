@@ -32,6 +32,15 @@ export function SystemsManagerModal({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   
+  // Sincronizar catálogo da nuvem ao abrir o modal
+  React.useEffect(() => {
+    if (isOpen) {
+      SystemsCatalogService.fetchSystemsAsync().then(sys => {
+        if (sys && sys.length > 0) setSystems(sys);
+      });
+    }
+  }, [isOpen]);
+
   // Estado do formulário de Adição/Edição
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);

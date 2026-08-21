@@ -41,9 +41,15 @@ export function SystemsEcosystemView({
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Modais
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [offboardingEmployee, setOffboardingEmployee] = useState<Employee | null>(null);
+
+  // Sincronizar catálogo da nuvem no mount
+  React.useEffect(() => {
+    SystemsCatalogService.fetchSystemsAsync().then(sys => {
+      if (sys && sys.length > 0) setCatalog(sys);
+    });
+  }, []);
 
   // Apenas membros ativos para a visualização
   const activeMembers = useMemo(() => employees.filter(e => e.status !== 'Inativo'), [employees]);
