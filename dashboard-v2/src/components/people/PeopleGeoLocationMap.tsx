@@ -22,6 +22,7 @@ interface PeopleGeoLocationMapProps {
   showValues: boolean;
 }
 
+type DisplayMode = 'map' | 'workstations_only' | 'matrix';
 type MapTileStyle = 'voyager' | 'streets' | 'satellite';
 
 const MAP_TILE_PROVIDERS: Record<MapTileStyle, { url: string; attribution: string; name: string; icon: string }> = {
@@ -56,9 +57,13 @@ export function PeopleGeoLocationMap({
   const [isLoadingGeo, setIsLoadingGeo] = useState(true);
   const [geoItems, setGeoItems] = useState<EmployeeGeoItem[]>([]);
 
-  // Modo de Exibição: Mapa vs. Tabela/Matriz
-  const [displayMode, setDisplayMode] = useState<'map' | 'matrix'>('map');
+  // Modo de Exibição: Mapa Completo vs. Apenas Postos (Calibração) vs. Matriz
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('map');
   const [mapStyle, setMapStyle] = useState<MapTileStyle>('voyager');
+
+  // Estado de Calibração / Drag & Drop de Postos
+  const [pendingWsDrag, setPendingWsDrag] = useState<{ wsId: string; wsName: string; lat: number; lng: number } | null>(null);
+  const [isSavingDrag, setIsSavingDrag] = useState(false);
 
   // Filtros
   const [selectedWsId, setSelectedWsId] = useState<string>('all');
@@ -391,9 +396,10 @@ export function PeopleGeoLocationMap({
       circlesLayer.clearLayers();
       routeLayer.clearLayers();
 
+      const isWsOnlyMode = displayMode === 'workstations_only';
       const allLatLngs: [number, number][] = [];
 
-      // ── Postos de Trabalho no Mapa ──
+      // ── Postos de Trabalho no Mapa (Com Suporte a Drag & Drop em Modo Calibração) ──
       workstations.forEach(ws => {
         const isWsSelected = selectedWorkstationId === ws.id || selectedWsId === ws.id;
 
@@ -403,8 +409,8 @@ export function PeopleGeoLocationMap({
             radius: ws.coverage_radius_km * 1000,
             color: ws.color || '#2563eb',
             fillColor: ws.color || '#2563eb',
-            fillOpacity: isWsSelected ? 0.12 : 0.04,
-            weight: isWsSelected ? 2 : 1,
+            fillOpacity: isWsSelected || isWsOnlyMode ? 0.14 : 0.04,
+            weight: isWsSelected || isWsOnlyMode ? 2 : 1,
             dashArray: '4, 4'
           }).addTo(circlesLayer);
         }
@@ -412,21 +418,22 @@ export function PeopleGeoLocationMap({
         const wsIconHtml = `
           <div style="
             background-color: ${ws.color || '#2563eb'};
-            width: 42px;
-            height: 42px;
+            width: ${isWsOnlyMode ? '48px' : '42px'};
+            height: ${isWsOnlyMode ? '48px' : '42px'};
             border-radius: 14px;
-            border: 3px solid white;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+            border: 3.5px solid white;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            cursor: pointer;
+            cursor: ${isWsOnlyMode ? 'grab' : 'pointer'};
             position: relative;
             transform: ${isWsSelected ? 'scale(1.15)' : 'scale(1)'};
-            transition: all 0.2s;
+            transition: transform 0.2s;
+            ${isWsOnlyMode ? 'outline: 3px solid rgba(99, 102, 241, 0.6); outline-offset: 2px;' : ''}
           " title="${ws.name}">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="${isWsOnlyMode ? '26' : '22'}" height="${isWsOnlyMode ? '26' : '22'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
               <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
               <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
@@ -449,25 +456,57 @@ export function PeopleGeoLocationMap({
         const customWsIcon = L.divIcon({
           html: wsIconHtml,
           className: 'custom-ws-marker',
-          iconSize: [42, 42],
-          iconAnchor: [21, 21]
+          iconSize: [isWsOnlyMode ? 48 : 42, isWsOnlyMode ? 48 : 42],
+          iconAnchor: [isWsOnlyMode ? 24 : 21, isWsOnlyMode ? 24 : 21]
         });
 
-        const marker = L.marker([ws.lat, ws.lng], { icon: customWsIcon });
+        // Marcador arrastável no modo Apenas Postos de Trabalho (Calibração)
+        const marker = L.marker([ws.lat, ws.lng], {
+          icon: customWsIcon,
+          draggable: isWsOnlyMode
+        });
 
         marker.on('click', () => {
           setSelectedWorkstationId(ws.id);
           setSelectedEmployeeId(null);
         });
 
-        marker.bindTooltip(`<strong>${ws.name}</strong><br/>${ws.neighborhood}, ${ws.city} (${ws.capacity} vagas)`, {
-          direction: 'top',
-          offset: [0, -16]
-        });
+        if (isWsOnlyMode) {
+          marker.on('dragend', (e: any) => {
+            const pos = e.target.getLatLng();
+            setPendingWsDrag({
+              wsId: ws.id,
+              wsName: ws.name,
+              lat: pos.lat,
+              lng: pos.lng
+            });
+          });
+
+          marker.bindTooltip(`<strong>${ws.name}</strong><br/>📍 Arraste para reposicionar no mapa ou clique para editar`, {
+            direction: 'bottom',
+            offset: [0, 14],
+            permanent: false
+          });
+        } else {
+          marker.bindTooltip(`<strong>${ws.name}</strong><br/>${ws.neighborhood}, ${ws.city} (${ws.capacity} vagas)`, {
+            direction: 'top',
+            offset: [0, -16]
+          });
+        }
 
         marker.addTo(markersLayer);
         allLatLngs.push([ws.lat, ws.lng]);
       });
+
+      // ── Ocultar Marcadores de Colaboradores se estiver no Modo Apenas Postos ──
+      if (isWsOnlyMode) {
+        if (allLatLngs.length > 0 && !selectedWorkstationId) {
+          try {
+            map.fitBounds(L.latLngBounds(allLatLngs), { padding: [60, 60], maxZoom: 14 });
+          } catch {}
+        }
+        return;
+      }
 
       // ── Colaboradores no Mapa (Iniciais no Pin / Foto no Tooltip e Drawer) ──
       filteredGeoItems.forEach(empItem => {
@@ -667,11 +706,14 @@ export function PeopleGeoLocationMap({
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 flex-wrap">
           
-          {/* Seletor de Modo (Mapa vs. Matriz) */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+          {/* Seletor de Modo (Mapa Completo vs. Apenas Postos vs. Matriz) */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0 flex-wrap gap-1">
             <button
               type="button"
-              onClick={() => setDisplayMode('map')}
+              onClick={() => {
+                setDisplayMode('map');
+                setPendingWsDrag(null);
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 displayMode === 'map'
                   ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-700 font-black'
@@ -683,7 +725,25 @@ export function PeopleGeoLocationMap({
             </button>
             <button
               type="button"
-              onClick={() => setDisplayMode('matrix')}
+              onClick={() => {
+                setDisplayMode('workstations_only');
+                setSelectedEmployeeId(null);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                displayMode === 'workstations_only'
+                  ? 'bg-amber-500 text-white shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Building2 size={14} />
+              <span>🏢 Apenas Postos (Calibração GPS)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDisplayMode('matrix');
+                setPendingWsDrag(null);
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 displayMode === 'matrix'
                   ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-700 font-black'
@@ -691,7 +751,7 @@ export function PeopleGeoLocationMap({
               }`}
             >
               <Table size={14} />
-              <span>Matriz Comparativa de Distâncias</span>
+              <span>Matriz Comparativa</span>
             </button>
           </div>
 
@@ -864,6 +924,64 @@ export function PeopleGeoLocationMap({
               </div>
             </div>
           </div>
+
+          {/* Banner de Calibração de Postos (Drag & Drop) */}
+          {displayMode === 'workstations_only' && (
+            <div className="absolute top-4 right-4 z-20 bg-amber-500 text-white rounded-2xl p-3.5 shadow-xl border border-amber-400 text-xs max-w-xs space-y-2 pointer-events-auto animate-in slide-in-from-top">
+              <div className="flex items-center gap-2 font-black uppercase text-[11px] tracking-wider">
+                <Building2 size={16} />
+                <span>Calibração de Postos de Trabalho</span>
+              </div>
+              <p className="text-[11px] text-amber-50 leading-relaxed font-medium">
+                Arraste os marcadores dos postos no mapa para reposicionar a Latitude e Longitude da base, ou clique em um posto para editar seus dados.
+              </p>
+              
+              {pendingWsDrag && (
+                <div className="bg-slate-900/95 text-white rounded-xl p-3 space-y-2 border border-slate-700 animate-in zoom-in-95 shadow-lg">
+                  <div className="font-bold text-[11px] text-amber-300 flex items-center gap-1.5">
+                    <CheckCircle2 size={14} />
+                    <span>Confirmar Nova Posição GPS?</span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 font-mono bg-slate-800 p-1.5 rounded border border-slate-700">
+                    <strong className="text-white block">{pendingWsDrag.wsName}</strong>
+                    Lat: {pendingWsDrag.lat.toFixed(6)} | Lng: {pendingWsDrag.lng.toFixed(6)}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={isSavingDrag}
+                      onClick={async () => {
+                        setIsSavingDrag(true);
+                        const updated = await WorkstationsService.updateWorkstationCoords(
+                          pendingWsDrag.wsId,
+                          pendingWsDrag.lat,
+                          pendingWsDrag.lng
+                        );
+                        setWorkstations(updated);
+                        setPendingWsDrag(null);
+                        setIsSavingDrag(false);
+                      }}
+                      className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-black text-[11px] transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                    >
+                      {isSavingDrag ? <RefreshCw size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                      <span>Salvar Posição</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingDrag}
+                      onClick={() => {
+                        setPendingWsDrag(null);
+                        setWorkstations(WorkstationsService.getWorkstations());
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-bold text-[11px] transition-all cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {isLoadingGeo && (
             <div className="absolute inset-0 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xs z-30 flex items-center justify-center gap-3 text-xs font-black uppercase text-indigo-700">

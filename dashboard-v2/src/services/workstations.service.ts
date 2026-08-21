@@ -221,6 +221,16 @@ export class WorkstationsService {
   }
 
   /**
+   * Atualiza as coordenadas de um posto específico e sincroniza na nuvem e local
+   */
+  public static async updateWorkstationCoords(id: string, lat: number, lng: number): Promise<Workstation[]> {
+    const list = this.getWorkstations();
+    const updated = list.map(w => w.id === id ? { ...w, lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) } : w);
+    await this.saveWorkstationsAsync(updated);
+    return updated;
+  }
+
+  /**
    * Adiciona ou atualiza um posto de trabalho
    */
   public static async upsertWorkstation(workstation: Workstation): Promise<Workstation[]> {
