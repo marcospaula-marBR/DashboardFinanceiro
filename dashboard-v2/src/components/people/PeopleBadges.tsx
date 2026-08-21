@@ -69,18 +69,18 @@ export function PeopleClassificationBadge({
   level?: string; 
   degree?: string | number;
 }) {
-  if (!level || !degree) {
+  if (!level) {
     return (
       <span 
         className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 cursor-help"
-        title="Classificação PB não gerada por falta de Nível ou Grau de maturidade."
+        title="Classificação PB não gerada por falta de Camada (Estratégico/Tático/Operacional)."
       >
         ⚠️ S/ Classificação
       </span>
     );
   }
 
-  const code = getPBClassification(level, degree); // Ex: E1, T2
+  const code = getPBClassification(level, degree || '3'); // Ex: E1, T2
   
   const PB_CLASSIFICATION_LABELS: Record<string, string> = {
     E1: "Estratégico Avançado",

@@ -338,7 +338,7 @@ export function PeopleTable({
                       </div>
                     </td>
                     <td className="py-4 px-4 text-center">
-                      <PeopleClassificationBadge level={emp.nivel} degree={emp.grau} />
+                      <PeopleClassificationBadge level={emp.camada} degree={emp.nivel} />
                     </td>
                     <td className="py-4 px-4 text-center">
                       <div className="flex flex-col items-center gap-0.5">

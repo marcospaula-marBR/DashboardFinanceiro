@@ -195,7 +195,7 @@ export function PeopleMobileCard({
             />
           )}
           {/* Nível e Grau (letra+número+estrelas) abaixo da foto */}
-          <PeopleClassificationBadge level={employee.nivel} degree={employee.grau} />
+          <PeopleClassificationBadge level={employee.camada} degree={employee.nivel} />
         </div>
 
         <div className="flex-1 min-w-0 pr-28">

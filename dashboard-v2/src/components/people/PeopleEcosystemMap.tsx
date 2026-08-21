@@ -34,14 +34,20 @@ export function PeopleEcosystemMap({
 
   // Função para classificar o orbit
   const getOrbit = (e: Employee): 'E' | 'T' | 'O' => {
-    const code = getPBClassification(e.nivel, e.grau);
+    // 1. Usar o campo `camada` diretamente — contém "Estratégico" | "Tático" | "Operacional"
+    const camada = String(e.camada || '').trim().toUpperCase();
+    if (camada.startsWith('E')) return 'E';
+    if (camada.startsWith('T')) return 'T';
+    if (camada.startsWith('O')) return 'O';
+    // 2. Fallback: usar getPBClassification com campos corretos (camada como level, nivel como degree)
+    const code = getPBClassification(e.camada, e.nivel);
     if (code.startsWith('E')) return 'E';
     if (code.startsWith('T')) return 'T';
     if (code.startsWith('O')) return 'O';
-    // Fallback baseando-se na string literal
-    const n = String(e.nivel || '').toUpperCase();
-    if (n.includes('ESTRAT') || n === 'E') return 'E';
-    if (n.includes('TAT') || n === 'T') return 'T';
+    // 3. Fallback legado: nivel pode conter o valor antigo (antes da renomeação)
+    const nivelLegacy = String(e.nivel || '').trim().toUpperCase();
+    if (nivelLegacy.startsWith('E') || nivelLegacy.includes('ESTRAT')) return 'E';
+    if (nivelLegacy.startsWith('T') || nivelLegacy.includes('TAT')) return 'T';
     return 'O';
   };
 
@@ -234,7 +240,7 @@ export function PeopleEcosystemMap({
             )}
 
             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-              <PeopleClassificationBadge level={emp.nivel} degree={emp.grau} />
+              <PeopleClassificationBadge level={emp.camada} degree={emp.nivel} />
               <RelationshipNatureBadge nature={emp.relationshipNature} />
             </div>
           </div>

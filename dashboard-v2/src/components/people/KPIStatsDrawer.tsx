@@ -214,21 +214,21 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
   const strategicStats = (() => {
     const activeFiltered = filteredEmployees.filter(e => e.status !== 'Inativo');
     
-    const eList = activeFiltered.filter(e => getPBClassification(e.nivel, e.grau).startsWith("E"));
-    const tList = activeFiltered.filter(e => getPBClassification(e.nivel, e.grau).startsWith("T"));
-    const oList = activeFiltered.filter(e => getPBClassification(e.nivel, e.grau).startsWith("O"));
+    const eList = activeFiltered.filter(e => getPBClassification(e.camada, e.nivel).startsWith("E"));
+    const tList = activeFiltered.filter(e => getPBClassification(e.camada, e.nivel).startsWith("T"));
+    const oList = activeFiltered.filter(e => getPBClassification(e.camada, e.nivel).startsWith("O"));
 
-    const e1Count = eList.filter(e => getPBClassification(e.nivel, e.grau) === "E1").length;
-    const e2Count = eList.filter(e => getPBClassification(e.nivel, e.grau) === "E2").length;
-    const e3Count = eList.filter(e => getPBClassification(e.nivel, e.grau) === "E3").length;
+    const e1Count = eList.filter(e => getPBClassification(e.camada, e.nivel) === "E1").length;
+    const e2Count = eList.filter(e => getPBClassification(e.camada, e.nivel) === "E2").length;
+    const e3Count = eList.filter(e => getPBClassification(e.camada, e.nivel) === "E3").length;
 
-    const t1Count = tList.filter(e => getPBClassification(e.nivel, e.grau) === "T1").length;
-    const t2Count = tList.filter(e => getPBClassification(e.nivel, e.grau) === "T2").length;
-    const t3Count = tList.filter(e => getPBClassification(e.nivel, e.grau) === "T3").length;
+    const t1Count = tList.filter(e => getPBClassification(e.camada, e.nivel) === "T1").length;
+    const t2Count = tList.filter(e => getPBClassification(e.camada, e.nivel) === "T2").length;
+    const t3Count = tList.filter(e => getPBClassification(e.camada, e.nivel) === "T3").length;
 
-    const o1Count = oList.filter(e => getPBClassification(e.nivel, e.grau) === "O1").length;
-    const o2Count = oList.filter(e => getPBClassification(e.nivel, e.grau) === "O2").length;
-    const o3Count = oList.filter(e => getPBClassification(e.nivel, e.grau) === "O3").length;
+    const o1Count = oList.filter(e => getPBClassification(e.camada, e.nivel) === "O1").length;
+    const o2Count = oList.filter(e => getPBClassification(e.camada, e.nivel) === "O2").length;
+    const o3Count = oList.filter(e => getPBClassification(e.camada, e.nivel) === "O3").length;
 
     const marBR = eList.filter(e => e.company === "MarBR").length;
     const dzm = eList.filter(e => e.company === "DZM").length;
@@ -918,7 +918,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 border-b border-slate-800 pb-2">Mapeamento de Lideranças (Nível E - {strategicStats.eCount})</h3>
                     <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-2">
                       {strategicStats.eList.map((emp, i) => {
-                        const level = getPBClassification(emp.nivel, emp.grau);
+                        const level = getPBClassification(emp.camada, emp.nivel);
                         return (
                           <div key={i} className="py-3 flex justify-between items-center text-sm">
                             <div>

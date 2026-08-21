@@ -308,20 +308,20 @@ export default function PeoplePage() {
       return health.status === "Crítico";
     }).length;
     
-    // Estrutura de Camadas (E, T, O)
+    // Estrutura de Camadas (E, T, O) — usa e.camada (campo correto: Estratégico|Tático|Operacional)
     const camadaECount = activeFiltered.filter(e => {
-      const c = e.camada || (getPBClassification(e.nivel, e.grau).startsWith("E") ? "Estratégico" : "");
-      return c === "Estratégico" || c.startsWith("E");
+      const c = e.camada || (getPBClassification(e.camada, e.nivel).startsWith("E") ? "Estratégico" : "");
+      return c === "Estratégico" || c.toUpperCase().startsWith("E");
     }).length;
 
     const camadaTCount = activeFiltered.filter(e => {
-      const c = e.camada || (getPBClassification(e.nivel, e.grau).startsWith("T") ? "Tático" : "");
-      return c === "Tático" || c.startsWith("T");
+      const c = e.camada || (getPBClassification(e.camada, e.nivel).startsWith("T") ? "Tático" : "");
+      return c === "Tático" || c.toUpperCase().startsWith("T");
     }).length;
 
     const camadaOCount = activeFiltered.filter(e => {
-      const c = e.camada || (getPBClassification(e.nivel, e.grau).startsWith("O") ? "Operacional" : "");
-      return c === "Operacional" || c.startsWith("O");
+      const c = e.camada || (getPBClassification(e.camada, e.nivel).startsWith("O") ? "Operacional" : "");
+      return c === "Operacional" || c.toUpperCase().startsWith("O");
     }).length;
 
     const totalCamadasCount = camadaECount + camadaTCount + camadaOCount;
@@ -450,10 +450,10 @@ export default function PeoplePage() {
       });
     }
 
-    // Filtro por Nível PB (E, T, O)
+    // Filtro por Nível PB (E, T, O) — usa camada como campo primário
     if (filterLevel.length > 0) {
       result = result.filter(e => {
-        const classification = getPBClassification(e.nivel, e.grau);
+        const classification = getPBClassification(e.camada, e.nivel);
         const lvl = classification.charAt(0);
         return filterLevel.includes(lvl);
       });
@@ -462,7 +462,7 @@ export default function PeoplePage() {
     // Filtro por Camada (Estratégico, Tático, Operacional)
     if (filterCamada.length > 0) {
       result = result.filter(e => {
-        const c = e.camada || (getPBClassification(e.nivel, e.grau).startsWith("E") ? "Estratégico" : getPBClassification(e.nivel, e.grau).startsWith("T") ? "Tático" : "Operacional");
+        const c = e.camada || (getPBClassification(e.camada, e.nivel).startsWith("E") ? "Estratégico" : getPBClassification(e.camada, e.nivel).startsWith("T") ? "Tático" : "Operacional");
         return filterCamada.includes(c) || filterCamada.includes(c.charAt(0));
       });
     }
