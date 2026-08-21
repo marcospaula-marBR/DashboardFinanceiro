@@ -18,11 +18,16 @@ const BRL = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
+import { SystemsEcosystemView } from "./SystemsEcosystemView";
+
 export function PeopleEcosystemMap({
   employees,
   onEmployeeClick,
   showValues,
 }: PeopleEcosystemMapProps) {
+  // Seletor de Modo: Pessoas/Órbitas vs. Sistemas & Acessos
+  const [ecosystemTab, setEcosystemTab] = useState<'human' | 'systems'>('human');
+
   // Estado local para destacar conexões (hover ou click/toque)
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false); // Para dispositivos móveis / cliques
@@ -279,103 +284,145 @@ export function PeopleEcosystemMap({
   };
 
   return (
-    <div className="space-y-8 mt-6 relative" onClick={handleResetHighlight}>
-      {/* Barra de Ajuda / Feedback do Destaque */}
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 px-4 flex items-center justify-between gap-3 text-xs text-slate-600">
-        <div className="flex items-center gap-2">
-          <Network size={16} className="text-slate-500" />
-          <span>
-            {activeEmployee ? (
-              <>
-                Interfaces conectadas a <strong className="uppercase text-slate-800">{isExternalEntity(inferEntityType(activeEmployee)) && activeEmployee.corporate_name ? activeEmployee.corporate_name : activeEmployee.name}</strong> destacadas. 
-                {isLocked ? " (Destaque travado. Clique no card selecionado para ver os detalhes completos)." : ""}
-              </>
-            ) : (
-              "Passe o mouse ou toque em qualquer cadeira para visualizar suas conexões e interfaces no ecossistema."
-            )}
-          </span>
-        </div>
-        {activeId && (
+    <div className="space-y-6 mt-6">
+      {/* ── Barra de Navegação do Ecossistema: Pessoas vs. Sistemas & Acessos ── */}
+      <div className="flex items-center justify-between gap-4 bg-white border border-slate-200 rounded-3xl p-2 shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl">
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleResetHighlight();
-            }}
-            className="text-[10px] font-black uppercase text-slate-500 hover:text-slate-700 bg-white border border-slate-200 px-3 py-1 rounded-lg transition-all"
+            onClick={() => setEcosystemTab('human')}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+              ecosystemTab === 'human'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
           >
-            Limpar Destaque
+            <Users size={15} className={ecosystemTab === 'human' ? 'text-amber-600' : 'text-slate-400'} />
+            <span>Ecossistema Humano &amp; Órbitas</span>
           </button>
-        )}
-      </div>
 
-      {/* ─── ÓRBITA ESTRATÉGICA ─── */}
-      <div className="bg-slate-50/50 rounded-3xl border border-slate-200/80 p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-          <h3 className="text-xs font-black uppercase tracking-wider text-amber-700 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-            Órbita Estratégica
-          </h3>
-          <span className="bg-amber-100/60 border border-amber-200 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md uppercase">
-            {strategic.length} {strategic.length === 1 ? 'Integrante' : 'Integrantes'}
-          </span>
+          <button
+            onClick={() => setEcosystemTab('systems')}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+              ecosystemTab === 'systems'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Network size={15} className={ecosystemTab === 'systems' ? 'text-white' : 'text-slate-400'} />
+            <span>Ecossistema de Sistemas &amp; Acessos</span>
+          </button>
         </div>
 
-        {strategic.length === 0 ? (
-          <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
-        ) : (
-          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <AnimatePresence mode="popLayout">
-              {strategic.map(renderEcosystemCard)}
-            </AnimatePresence>
-          </motion.div>
-        )}
+        <span className="text-xs text-slate-400 font-semibold px-3 hidden sm:inline">
+          {ecosystemTab === 'human' ? 'Visão hierárquica e interfaces de cadeiras' : 'Governança de credenciais, ERPs e offboarding'}
+        </span>
       </div>
 
-      {/* ─── ÓRBITA TÁTICA ─── */}
-      <div className="bg-slate-50/50 rounded-3xl border border-slate-200/80 p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-          <h3 className="text-xs font-black uppercase tracking-wider text-emerald-700 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            Órbita Tática
-          </h3>
-          <span className="bg-emerald-100/60 border border-emerald-200 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-md uppercase">
-            {tactical.length} {tactical.length === 1 ? 'Integrante' : 'Integrantes'}
-          </span>
+      {ecosystemTab === 'systems' ? (
+        <SystemsEcosystemView
+          employees={employees}
+          onEmployeeClick={onEmployeeClick}
+        />
+      ) : (
+        <div className="space-y-8 relative" onClick={handleResetHighlight}>
+          {/* Barra de Ajuda / Feedback do Destaque */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 px-4 flex items-center justify-between gap-3 text-xs text-slate-600">
+            <div className="flex items-center gap-2">
+              <Network size={16} className="text-slate-500" />
+              <span>
+                {activeEmployee ? (
+                  <>
+                    Interfaces conectadas a <strong className="uppercase text-slate-800">{isExternalEntity(inferEntityType(activeEmployee)) && activeEmployee.corporate_name ? activeEmployee.corporate_name : activeEmployee.name}</strong> destacadas. 
+                    {isLocked ? " (Destaque travado. Clique no card selecionado para ver os detalhes completos)." : ""}
+                  </>
+                ) : (
+                  "Passe o mouse ou toque em qualquer cadeira para visualizar suas conexões e interfaces no ecossistema."
+                )}
+              </span>
+            </div>
+            {activeId && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleResetHighlight();
+                }}
+                className="text-[10px] font-black uppercase text-slate-500 hover:text-slate-700 bg-white border border-slate-200 px-3 py-1 rounded-lg transition-all"
+              >
+                Limpar Destaque
+              </button>
+            )}
+          </div>
+
+          {/* ─── ÓRBITA ESTRATÉGICA ─── */}
+          <div className="bg-slate-50/50 rounded-3xl border border-slate-200/80 p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+              <h3 className="text-xs font-black uppercase tracking-wider text-amber-700 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                Órbita Estratégica
+              </h3>
+              <span className="bg-amber-100/60 border border-amber-200 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md uppercase">
+                {strategic.length} {strategic.length === 1 ? 'Integrante' : 'Integrantes'}
+              </span>
+            </div>
+
+            {strategic.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
+            ) : (
+              <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {strategic.map(renderEcosystemCard)}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </div>
+
+          {/* ─── ÓRBITA TÁTICA ─── */}
+          <div className="bg-slate-50/50 rounded-3xl border border-slate-200/80 p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+              <h3 className="text-xs font-black uppercase tracking-wider text-emerald-700 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                Órbita Tática
+              </h3>
+              <span className="bg-emerald-100/60 border border-emerald-200 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-md uppercase">
+                {tactical.length} {tactical.length === 1 ? 'Integrante' : 'Integrantes'}
+              </span>
+            </div>
+
+            {tactical.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
+            ) : (
+              <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {tactical.map(renderEcosystemCard)}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </div>
+
+          {/* ─── ÓRBITA OPERACIONAL ─── */}
+          <div className="bg-slate-50/50 rounded-3xl border border-slate-200/80 p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+              <h3 className="text-xs font-black uppercase tracking-wider text-sky-700 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
+                Órbita Operacional
+              </h3>
+              <span className="bg-sky-100/60 border border-sky-200 text-sky-800 text-[10px] font-black px-2 py-0.5 rounded-md uppercase">
+                {operational.length} {operational.length === 1 ? 'Integrante' : 'Integrantes'}
+              </span>
+            </div>
+
+            {operational.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
+            ) : (
+              <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {operational.map(renderEcosystemCard)}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </div>
         </div>
-
-        {tactical.length === 0 ? (
-          <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
-        ) : (
-          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <AnimatePresence mode="popLayout">
-              {tactical.map(renderEcosystemCard)}
-            </AnimatePresence>
-          </motion.div>
-        )}
-      </div>
-
-      {/* ─── ÓRBITA OPERACIONAL ─── */}
-      <div className="bg-slate-50/50 rounded-3xl border border-slate-200/80 p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-          <h3 className="text-xs font-black uppercase tracking-wider text-sky-700 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
-            Órbita Operacional
-          </h3>
-          <span className="bg-sky-100/60 border border-sky-200 text-sky-800 text-[10px] font-black px-2 py-0.5 rounded-md uppercase">
-            {operational.length} {operational.length === 1 ? 'Integrante' : 'Integrantes'}
-          </span>
-        </div>
-
-        {operational.length === 0 ? (
-          <p className="text-xs text-slate-400 italic py-4">Nenhum integrante ativo nesta órbita.</p>
-        ) : (
-          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <AnimatePresence mode="popLayout">
-              {operational.map(renderEcosystemCard)}
-            </AnimatePresence>
-          </motion.div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

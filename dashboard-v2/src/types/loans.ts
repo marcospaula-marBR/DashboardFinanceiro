@@ -126,6 +126,7 @@ export interface Employee {
   relationships?: PeopleRelationship[];
   aiAgents?: PeopleAIAgent[];
   permissions?: string[];
+  system_accesses?: EmployeeSystemAccess[];
   temporaryDelegations?: PeopleTemporaryDelegation[];
 }
 
@@ -363,12 +364,50 @@ export interface PeopleRelationship {
     | 'vinculo_governanca';     // Vínculo de governança
 }
 
+export type SystemCategory =
+  | 'Bancário'
+  | 'ERP'
+  | 'RH & Folha'
+  | 'Fiscal & Contábil'
+  | 'CRM & Vendas'
+  | 'Comunicação & Operações'
+  | 'Infra & TI'
+  | 'Outros';
+
+export type SystemOrigin = 'interno' | 'contrato';
+export type SystemAccessLevel = 'Estratégico' | 'Tático' | 'Operacional';
+
+export interface SystemItem {
+  id: string;
+  name: string;
+  category: SystemCategory;
+  origin: SystemOrigin;
+  description?: string;
+  default_level?: SystemAccessLevel;
+  icon_url?: string;
+  created_at?: string;
+}
+
+export interface EmployeeSystemAccess {
+  system_id: string;
+  system_name: string;
+  category: SystemCategory | string;
+  access_level: SystemAccessLevel;
+  origin: SystemOrigin;
+  user_identifier?: string; // Login, email ou credencial no sistema
+  granted_at?: string; // YYYY-MM-DD
+  revoked_at?: string; // YYYY-MM-DD
+  is_active?: boolean;
+  notes?: string;
+}
+
 export interface PeopleMetadata {
   pbId?: string;
   entityType?: EntityType;
   relationshipNature?: RelationshipNature;
   aiAgents?: PeopleAIAgent[];
   permissions?: string[];
+  system_accesses?: EmployeeSystemAccess[];
   temporaryDelegations?: PeopleTemporaryDelegation[];
   relationships?: PeopleRelationship[];
   dataQualityScore?: number;
@@ -471,6 +510,7 @@ export function normalizePeopleMetadata(raw: any): PeopleMetadata {
     relationshipNature: raw.relationshipNature || raw.relationship_nature || undefined,
     aiAgents: Array.isArray(raw.aiAgents || raw.ai_agents) ? (raw.aiAgents || raw.ai_agents) : [],
     permissions: Array.isArray(raw.permissions) ? raw.permissions : [],
+    system_accesses: Array.isArray(raw.system_accesses || raw.systemAccesses) ? (raw.system_accesses || raw.systemAccesses) : [],
     temporaryDelegations: Array.isArray(raw.temporaryDelegations || raw.temporary_delegations) ? (raw.temporaryDelegations || raw.temporary_delegations) : [],
     relationships: Array.isArray(raw.relationships) ? raw.relationships : [],
     dataQualityScore: typeof raw.dataQualityScore === 'number' ? raw.dataQualityScore : (typeof raw.data_quality_score === 'number' ? raw.data_quality_score : 100),

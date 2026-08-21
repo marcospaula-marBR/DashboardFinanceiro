@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
-import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature } from "@/types/loans";
+import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature, EmployeeSystemAccess, SystemItem } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
@@ -13,6 +13,8 @@ import { useDataMode } from "@/contexts/DataModeContext";
 import { isExternalEntity, formatCompanyTime, RELATIONSHIP_NATURE_LABELS } from "./PeopleBadges";
 import { ProfileExportModal } from "./ProfileExportModal";
 import { ClearCostHistoryModal } from "./ClearCostHistoryModal";
+import { SystemsCatalogService } from "@/services/systems-catalog.service";
+import { OffboardingChecklistModal } from "./OffboardingChecklistModal";
 
 interface HistoryItem {
   id: string;
@@ -75,8 +77,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Abas: 'pessoal', 'endereco', 'complementar', 'fichaExecutiva', 'trajetoria', 'custo', 'auditoria'
-  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria'>('pessoal');
+  // Abas: 'pessoal', 'endereco', 'complementar', 'fichaExecutiva', 'trajetoria', 'custo', 'auditoria', 'acessos'
+  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos'>('pessoal');
+  const [isOffboardingOpen, setIsOffboardingOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [bonds, setBonds] = useState<EmploymentContract[]>([]);
@@ -2019,6 +2022,22 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                   {auditIssues.length > 0 && (
                     <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">
                       {auditIssues.length}
+                    </span>
+                  )}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('acessos')}
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
+                    activeTab === 'acessos' 
+                      ? 'border-indigo-600 text-indigo-600 font-extrabold' 
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <KeyRound size={13} className={activeTab === 'acessos' ? 'text-indigo-600' : 'text-slate-400'} />
+                  <span>Acessos &amp; Sistemas</span>
+                  {((profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length > 0) && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-800 text-[9px] font-black">
+                      {(profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length}
                     </span>
                   )}
                 </button>
@@ -4332,11 +4351,231 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       )}
                     </motion.div>
                   )}
+
+                  {/* ─── ABA ACESSOS & SISTEMAS (GOVERNANÇA & OFFBOARDING) ─── */}
+                  {activeTab === 'acessos' && (
+                    <motion.div
+                      key="tab-acessos"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="space-y-6"
+                    >
+                      {/* Banner de Segurança & Ação Rápida de Offboarding */}
+                      <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                            <KeyRound size={20} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                                Credenciais &amp; Sistemas Concedidos
+                              </h4>
+                              <span className="bg-indigo-500/30 text-indigo-300 text-[10px] font-black px-2 py-0.5 rounded border border-indigo-400/30">
+                                {(profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length} Ativos
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-300 mt-0.5">
+                              Mapeie acessos a ERPs, Bancos e plataformas para auditoria e controle de descredenciamento.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsOffboardingOpen(true)}
+                          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-sm transition-all shrink-0"
+                        >
+                          <ShieldAlert size={15} />
+                          <span>Termo de Offboarding (PDF)</span>
+                        </button>
+                      </div>
+
+                      {/* Grade de Sistemas por Categoria */}
+                      {(() => {
+                        const allSystems = SystemsCatalogService.getSystems();
+                        const currentAccesses: EmployeeSystemAccess[] = profile.system_accesses || (profile.metadata as any)?.system_accesses || [];
+                        
+                        // Categorias únicas
+                        const categories = Array.from(new Set(allSystems.map(s => s.category)));
+
+                        const handleToggleSystem = (sys: SystemItem) => {
+                          const exists = currentAccesses.some(a => a.system_id === sys.id);
+                          let updated: EmployeeSystemAccess[];
+
+                          if (exists) {
+                            // Remover acesso
+                            updated = currentAccesses.filter(a => a.system_id !== sys.id);
+                          } else {
+                            // Adicionar novo acesso
+                            const newAccess: EmployeeSystemAccess = {
+                              system_id: sys.id,
+                              system_name: sys.name,
+                              category: sys.category,
+                              access_level: sys.default_level || 'Operacional',
+                              origin: sys.origin,
+                              user_identifier: profile.email_professional || profile.email || '',
+                              granted_at: new Date().toISOString().split('T')[0],
+                              is_active: true
+                            };
+                            updated = [...currentAccesses, newAccess];
+                          }
+
+                          handleChange('system_accesses' as any, updated as any);
+                        };
+
+                        const handleUpdateAccess = (sysId: string, patch: Partial<EmployeeSystemAccess>) => {
+                          const updated = currentAccesses.map(a => {
+                            if (a.system_id === sysId) {
+                              return { ...a, ...patch };
+                            }
+                            return a;
+                          });
+                          handleChange('system_accesses' as any, updated as any);
+                        };
+
+                        return (
+                          <div className="space-y-6">
+                            {categories.map(cat => {
+                              const systemsInCat = allSystems.filter(s => s.category === cat);
+                              if (systemsInCat.length === 0) return null;
+
+                              return (
+                                <div key={cat} className="space-y-3">
+                                  <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-indigo-600" />
+                                      {cat}
+                                    </h4>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                      {systemsInCat.filter(s => currentAccesses.some(a => a.system_id === s.id)).length} de {systemsInCat.length} Ativos
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {systemsInCat.map(sys => {
+                                      const access = currentAccesses.find(a => a.system_id === sys.id);
+                                      const isGranted = !!access;
+
+                                      return (
+                                        <div
+                                          key={sys.id}
+                                          className={`p-3.5 rounded-2xl border transition-all ${
+                                            isGranted
+                                              ? 'bg-indigo-50/20 border-indigo-300 ring-2 ring-indigo-100 shadow-xs'
+                                              : 'bg-white border-slate-200 opacity-80 hover:opacity-100'
+                                          }`}
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                              <input
+                                                type="checkbox"
+                                                id={`sys-${sys.id}`}
+                                                checked={isGranted}
+                                                onChange={() => handleToggleSystem(sys)}
+                                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                                              />
+                                              <div className="min-w-0">
+                                                <label
+                                                  htmlFor={`sys-${sys.id}`}
+                                                  className="text-xs font-black uppercase text-slate-900 truncate block cursor-pointer"
+                                                >
+                                                  {sys.name}
+                                                </label>
+                                                <p className="text-[10px] text-slate-400 font-semibold truncate">
+                                                  {sys.origin === 'interno' ? 'Interno' : 'Contrato Externo'}
+                                                </p>
+                                              </div>
+                                            </div>
+
+                                            {isGranted && (
+                                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                                Ativo
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          {/* Campos de configuração quando concedido */}
+                                          {isGranted && access && (
+                                            <div className="mt-3 pt-2.5 border-t border-indigo-100/80 space-y-2 animate-in fade-in">
+                                              <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                  <label className="text-[9px] font-black uppercase text-slate-500 block mb-0.5">
+                                                    Nível de Acesso
+                                                  </label>
+                                                  <select
+                                                    value={access.access_level || 'Operacional'}
+                                                    onChange={(e) => handleUpdateAccess(sys.id, { access_level: e.target.value as any })}
+                                                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800"
+                                                  >
+                                                    <option value="Operacional">Operacional</option>
+                                                    <option value="Tático">Tático</option>
+                                                    <option value="Estratégico">Estratégico</option>
+                                                  </select>
+                                                </div>
+
+                                                <div>
+                                                  <label className="text-[9px] font-black uppercase text-slate-500 block mb-0.5">
+                                                    Login / Credencial
+                                                  </label>
+                                                  <input
+                                                    type="text"
+                                                    value={access.user_identifier || ''}
+                                                    onChange={(e) => handleUpdateAccess(sys.id, { user_identifier: e.target.value })}
+                                                    placeholder="Login ou e-mail"
+                                                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800"
+                                                  />
+                                                </div>
+                                              </div>
+
+                                              <div>
+                                                <input
+                                                  type="text"
+                                                  value={access.notes || ''}
+                                                  onChange={(e) => handleUpdateAccess(sys.id, { notes: e.target.value })}
+                                                  placeholder="Observações (ex: token físico, 2FA no celular...)"
+                                                  className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-600"
+                                                />
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </motion.div>
+                  )}
                </div>
             )}
           </div>
           </motion.div>
         </div>
+      )}
+
+      {/* Modal de Offboarding */}
+      {isOffboardingOpen && (
+        <OffboardingChecklistModal
+          isOpen={isOffboardingOpen}
+          onClose={() => setIsOffboardingOpen(false)}
+          employee={profile as Employee}
+          onRevokeAccesses={(empId, revokedSysIds) => {
+            const currentAccesses: EmployeeSystemAccess[] = profile.system_accesses || (profile.metadata as any)?.system_accesses || [];
+            const updated = currentAccesses.map(a => {
+              if (revokedSysIds.includes(a.system_id)) {
+                return { ...a, is_active: false, revoked_at: new Date().toISOString().split('T')[0] };
+              }
+              return a;
+            });
+            handleChange('system_accesses' as any, updated as any);
+          }}
+        />
       )}
 
       {/* Dynamic Inline cost editor modal */}
