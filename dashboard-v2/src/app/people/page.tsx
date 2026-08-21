@@ -27,7 +27,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy
+  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy, MapPin
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -39,6 +39,7 @@ import {
 import { getPBClassification, inferEntityType } from "@/types/loans";
 import { PeopleMobileCard } from "@/components/people/PeopleMobileCard";
 import { PeopleEcosystemMap } from "@/components/people/PeopleEcosystemMap";
+import { PeopleGeoLocationMap } from "@/components/people/PeopleGeoLocationMap";
 
 // Custom MultiSelect Dropdown Component
 const MultiSelectDropdown = ({ 
@@ -116,7 +117,7 @@ export default function PeoplePage() {
 
   // UI states
   const [showValues, setShowValues] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'map'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'map' | 'geomap'>('grid');
   
   // Pagination for grid mode
   const [currentPage, setCurrentPage] = useState(1);
@@ -1238,7 +1239,31 @@ export default function PeoplePage() {
               >
                 <Target size={15} />
               </button>
+              <button
+                onClick={() => setViewMode('geomap')}
+                className={`p-1.5 rounded-lg transition-all flex items-center justify-center ${
+                  viewMode === 'geomap'
+                    ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Mapa Geográfico: Moradias vs. Postos de Trabalho & Rotas"
+              >
+                <MapPin size={15} />
+              </button>
             </div>
+
+            {/* BOTÃO ATALHO: MAPA GEOGRÁFICO & POSTOS */}
+            <button
+              onClick={() => setViewMode('geomap')}
+              className={`flex items-center gap-1.5 px-4 py-2 border rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm ${
+                viewMode === 'geomap'
+                  ? 'border-indigo-600 bg-indigo-600 text-white shadow-md'
+                  : 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700'
+              }`}
+              title="Visualizar Mapa Geográfico de Moradias e Postos de Trabalho"
+            >
+              <MapPin size={14} /> Postos &amp; Rotas
+            </button>
 
             {/* Redirect button to the separate Consignado Loans Page */}
             <Link
@@ -1970,6 +1995,12 @@ export default function PeoplePage() {
             <div className="p-12 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm mt-6">
               <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
             </div>
+          ) : viewMode === 'geomap' ? (
+            <PeopleGeoLocationMap
+              employees={filteredEmployees}
+              onEmployeeClick={handleEmployeeClick}
+              showValues={showValues}
+            />
           ) : viewMode === 'map' ? (
             <PeopleEcosystemMap
               employees={filteredEmployees}
