@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    seguros.module.css — Gestão de Apólices de Seguro
    Padrão Dark Premium | Mobile First | Mar Brasil
-   v.02.48.97
+   v.02.58.09 — Pílula de vencimento nos cards
 ═══════════════════════════════════════════════════════════════ */
 
 /* ──────────────────────────────────────────────────────────────
@@ -499,6 +499,54 @@
   text-overflow: ellipsis;
 }
 
+/* ───────────────────────────────────────────────────────────────
+   EXPIRY PILL — Pílula de vencimento no card colapsado
+─────────────────────────────────────────────────────────────── */
+.expiryPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Urgente: vermelho pulsando — vence em ≤7 dias */
+.expiryPillDanger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.3);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Atenção: âmbar — vence em ≤30 dias */
+.expiryPillWarning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+/* Ok: verde discreto — dentro do prazo */
+.expiryPillOk {
+  background: rgba(34, 197, 94, 0.06);
+  color: #6ee7b7;
+  border-color: rgba(34, 197, 94, 0.15);
+}
+
+/* Vencida: cinza riscado */
+.expiryPillExpired {
+  background: rgba(100, 116, 139, 0.08);
+  color: #64748b;
+  border-color: rgba(100, 116, 139, 0.15);
+  text-decoration: line-through;
+}
+
 .seguradora { color: #94a3b8; }
 
 .policyCardRight {
@@ -541,6 +589,30 @@
 .badgeInativo { background: rgba(100,116,139,0.06); color: #64748b; border: 1px solid rgba(100,116,139,0.12); }
 
 .policyCardChevron { color: #475569; }
+
+/* Valores financeiros no card colapsado (substitui hack display:none + <style> inline) */
+.policyValuesCollapsed {
+  text-align: right;
+  display: none;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+@media (min-width: 640px) {
+  .policyValuesCollapsed { display: flex; }
+}
+
+.policyValuePremio {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1.1;
+}
+
+.policyValueSub {
+  font-size: 0.58rem;
+  color: #64748b;
+}
 
 /* Card Details (expanded) */
 .policyCardDetails {

@@ -1,6 +1,7 @@
 /**
  * InsurancePolicyCard — Card expandível de apólice de seguro
  * Estado colapsado: info resumida | Estado expandido: todos os detalhes
+ * @version v.02.58.09 — Pílula de vencimento visível no estado colapsado
  */
 "use client";
 
@@ -61,6 +62,48 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
+/** Pílula de vencimento com cor dinâmica — visível no estado colapsado */
+function ExpiryPill({ policy }: { policy: InsurancePolicy }) {
+  if (!policy.ativo) return null;
+  if (!policy.vencimento) return null;
+
+  const dias = policy.diasParaVencer;
+  const status = policy.statusVencimento;
+
+  const dataFormatada = formatInsuranceDate(policy.vencimento);
+
+  if (status === 'vencido') {
+    return (
+      <span className={`${styles.expiryPill} ${styles.expiryPillExpired}`}>
+        Vencida em {dataFormatada}
+      </span>
+    );
+  }
+
+  if (status === 'urgente') {
+    return (
+      <span className={`${styles.expiryPill} ${styles.expiryPillDanger}`}>
+        ⚠ {dataFormatada} · {dias}d
+      </span>
+    );
+  }
+
+  if (status === 'atencao') {
+    return (
+      <span className={`${styles.expiryPill} ${styles.expiryPillWarning}`}>
+        ⚡ {dataFormatada} · {dias}d
+      </span>
+    );
+  }
+
+  // ok — exibe discretamente apenas a data e os dias
+  return (
+    <span className={`${styles.expiryPill} ${styles.expiryPillOk}`}>
+      {dataFormatada} · {dias}d
+    </span>
+  );
+}
+
 function StatusBadge({ policy }: { policy: InsurancePolicy }) {
   if (!policy.ativo) {
     return <span className={`${styles.statusBadge} ${styles.badgeInativo}`}>Inativa</span>;
@@ -112,7 +155,7 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && setExpanded(!expanded)}
       >
-        {/* Ícone + Segurado + Tipo */}
+        {/* Ícone + Segurado + Tipo + Pílula de vencimento */}
         <div className={styles.policyCardMain}>
           <span className={styles.policyTipoIcon} aria-hidden="true">{tipoIcon}</span>
           <div className={styles.policyCardInfo}>
@@ -122,6 +165,8 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
               {policy.seguradora && <> · <span className={styles.seguradora}>{policy.seguradora}</span></>}
               {policy.apolice && <> · <span style={{ color: '#64748b' }}>#{policy.apolice}</span></>}
             </p>
+            {/* Pílula de vencimento — visível sem expandir o card */}
+            <ExpiryPill policy={policy} />
           </div>
         </div>
 
@@ -129,11 +174,11 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
         <div className={styles.policyCardRight}>
           {/* Valores financeiros — visíveis no card colapsado */}
           {policy.premio > 0 && (
-            <div style={{ textAlign: 'right', display: 'none' }} className="policy-values">
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f1f5f9', lineHeight: 1.1 }}>
+            <div className={styles.policyValuesCollapsed}>
+              <div className={styles.policyValuePremio}>
                 {formatInsuranceCurrency(policy.premio)}
               </div>
-              <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
+              <div className={styles.policyValueSub}>
                 {policy.valor_parcela > 0
                   ? `${formatInsuranceCurrency(policy.valor_parcela)}/mês`
                   : 'prêmio anual'
@@ -141,7 +186,6 @@ export function InsurancePolicyCard({ policy, onEdit, onDelete, onToggleActive }
               </div>
             </div>
           )}
-          <style>{`.policy-values { display: block !important; }`}</style>
           <span className={styles.contratanteBadge}>{policy.contratante}</span>
           <StatusBadge policy={policy} />
           <div className={styles.policyCardChevron}>
