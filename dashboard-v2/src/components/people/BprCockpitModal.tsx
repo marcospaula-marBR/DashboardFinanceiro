@@ -47,11 +47,13 @@ export function BprCockpitModal({
   const [isInativosModalOpen, setIsInativosModalOpen] = useState(false);
   const [isDocImportModalOpen, setIsDocImportModalOpen] = useState(false);
   const [docImportText, setDocImportText] = useState('');
+  const [importedPatch, setImportedPatch] = useState<Partial<BprRuleConfig> | null>(null);
+  const [isConfirmPatchOpen, setIsConfirmPatchOpen] = useState(false);
   const [saveSuccessToast, setSaveSuccessToast] = useState<string | null>(null);
 
   // Seletor de Empresas e Vínculos
   const availableCompanies = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(['Mar Brasil', 'DZM', 'G2']);
     employees.forEach(e => { if (e.company) set.add(e.company); });
     return Array.from(set).sort();
   }, [employees]);
@@ -75,6 +77,26 @@ export function BprCockpitModal({
       periodEndDate: newConf.periodEndDate,
       paymentDate: newConf.paymentDate
     }));
+  };
+
+  // Toggle de Empresas na Seleção Múltipla
+  const handleToggleCompany = (company: string) => {
+    setConfig(prev => {
+      const current = prev.companiesFilter || [];
+      const exists = current.includes(company);
+      const updated = exists ? current.filter(c => c !== company) : [...current, company];
+      return { ...prev, companiesFilter: updated };
+    });
+  };
+
+  // Toggle de Vínculos na Seleção
+  const handleToggleLinkType = (link: string) => {
+    setConfig(prev => {
+      const current = prev.linkTypesFilter || [];
+      const exists = current.includes(link);
+      const updated = exists ? current.filter(l => l !== link) : [...current, link];
+      return { ...prev, linkTypesFilter: updated };
+    });
   };
 
   // Filtragem da Lista para Exibição
@@ -131,8 +153,11 @@ export function BprCockpitModal({
       'Cargo',
       'Vinculo',
       'Camada',
+      'Meta Media Ciclo (%)',
+      'Fator Bonus',
       'Status Elegibilidade',
-      'Valor BPR (R$)',
+      'Valor Base Camada (R$)',
+      'Valor Final BPR (R$)',
       'Motivos Inelegibilidade / Excecoes'
     ];
 
@@ -145,7 +170,10 @@ export function BprCockpitModal({
       `"${c.jobRole}"`,
       `"${c.linkType}"`,
       `"${c.camadaLabel}"`,
+      c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100% (Padrao)',
+      `"${c.performanceFactorLabel || '100%'}"`,
       `"${c.isEligible ? 'Elegível' : 'Inelegível'}"`,
+      c.baseAmount.toFixed(2),
       c.allocatedAmount.toFixed(2),
       `"${c.ineligibilityReasons.join('; ')}"`
     ]);
@@ -159,15 +187,25 @@ export function BprCockpitModal({
     link.click();
   };
 
-  // Importar Regras de Texto
-  const handleApplyImportedText = () => {
+  // Interpretar Texto de Regras e Abrir Modal de Confirmação (Diff)
+  const handlePreviewImportedText = () => {
     if (!docImportText.trim()) return;
     const patch = BprService.parseRulesFromText(docImportText, config);
-    setConfig(prev => ({ ...prev, ...patch }));
+    setImportedPatch(patch);
     setIsDocImportModalOpen(false);
-    setDocImportText('');
-    setSaveSuccessToast('Regras do documento aplicadas com sucesso!');
-    setTimeout(() => setSaveSuccessToast(null), 3500);
+    setIsConfirmPatchOpen(true);
+  };
+
+  // Confirmar e Aplicar o Patch de Regras
+  const handleConfirmApplyPatch = () => {
+    if (importedPatch) {
+      setConfig(prev => ({ ...prev, ...importedPatch }));
+      setImportedPatch(null);
+      setIsConfirmPatchOpen(false);
+      setDocImportText('');
+      setSaveSuccessToast('Novas regras do documento foram aplicadas com sucesso!');
+      setTimeout(() => setSaveSuccessToast(null), 3500);
+    }
   };
 
   if (!isOpen) return null;
@@ -288,7 +326,7 @@ export function BprCockpitModal({
             </div>
 
             {/* Inputs de Datas & Filtros de Escopo */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 text-xs">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                   Ano de Referência
@@ -339,24 +377,100 @@ export function BprCockpitModal({
                   className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold outline-none focus:border-amber-500"
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Empresas Participantes
+            {/* SELEÇÃO MÚLTIPLA DE EMPRESAS E TIPO DE VÍNCULO (PJ / CLT / AMBOS) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2 border-t border-slate-800/60 text-xs">
+              {/* Seleção Múltipla de Empresas */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>🏢 Seleção de Empresas ({config.companiesFilter.length === 0 ? 'Todas' : `${config.companiesFilter.length} marcadas`})</span>
+                  <button
+                    type="button"
+                    onClick={() => setConfig(prev => ({ ...prev, companiesFilter: [] }))}
+                    className="text-[9px] text-amber-400 hover:underline font-normal"
+                  >
+                    Marcar Todas
+                  </button>
                 </label>
-                <select
-                  value={config.companiesFilter[0] || 'all'}
-                  onChange={e => setConfig(prev => ({
-                    ...prev,
-                    companiesFilter: e.target.value === 'all' ? [] : [e.target.value]
-                  }))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-amber-500"
-                >
-                  <option value="all">🏢 Todas as Empresas ({availableCompanies.length})</option>
-                  {availableCompanies.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setConfig(prev => ({ ...prev, companiesFilter: [] }))}
+                    className={`px-3 py-1 rounded-xl text-xs font-black transition-all ${
+                      config.companiesFilter.length === 0 
+                        ? 'bg-amber-500 text-slate-950 shadow-sm' 
+                        : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  {availableCompanies.map(comp => {
+                    const isSelected = config.companiesFilter.includes(comp);
+                    return (
+                      <button
+                        key={comp}
+                        type="button"
+                        onClick={() => handleToggleCompany(comp)}
+                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                          isSelected 
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' 
+                            : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-amber-400' : 'bg-slate-600'}`}></span>
+                        <span>{comp}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Seleção de Vínculo (CLT, PJ, Terceirizado ou Ambos) */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>💼 Tipo de Vínculo ({config.linkTypesFilter.length === 0 ? 'Ambos / Todos' : config.linkTypesFilter.join(' + ')})</span>
+                  <button
+                    type="button"
+                    onClick={() => setConfig(prev => ({ ...prev, linkTypesFilter: [] }))}
+                    className="text-[9px] text-amber-400 hover:underline font-normal"
+                  >
+                    Ambos / Todos
+                  </button>
+                </label>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setConfig(prev => ({ ...prev, linkTypesFilter: [] }))}
+                    className={`px-3 py-1 rounded-xl text-xs font-black transition-all ${
+                      config.linkTypesFilter.length === 0 
+                        ? 'bg-amber-500 text-slate-950 shadow-sm' 
+                        : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    Ambos (Todos)
+                  </button>
+                  {['CLT', 'PJ', 'Terceirizado'].map(lk => {
+                    const isSelected = config.linkTypesFilter.includes(lk);
+                    return (
+                      <button
+                        key={lk}
+                        type="button"
+                        onClick={() => handleToggleLinkType(lk)}
+                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                          isSelected 
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' 
+                            : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-indigo-400' : 'bg-slate-600'}`}></span>
+                        <span>{lk}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -784,6 +898,7 @@ export function BprCockpitModal({
                   <th className="py-3 px-3">Empresa / Vínculo</th>
                   <th className="py-3 px-3">Camada</th>
                   <th className="py-3 px-3">Admissão ➔ Desligamento</th>
+                  <th className="py-3 px-3 text-center">Meta / Desempenho</th>
                   <th className="py-3 px-3 text-center">Status Elegibilidade</th>
                   <th className="py-3 px-4 text-right">Valor BPR (R$)</th>
                   <th className="py-3 px-3 text-center">Ações</th>
@@ -792,7 +907,7 @@ export function BprCockpitModal({
               <tbody className="divide-y divide-slate-800/60">
                 {displayedCandidates.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500 font-bold">
+                    <td colSpan={8} className="py-12 text-center text-slate-500 font-bold">
                       Nenhum colaborador encontrado com os filtros selecionados.
                     </td>
                   </tr>
@@ -845,13 +960,37 @@ export function BprCockpitModal({
                           </span>
                         </td>
 
-                        {/* Datas (NÃO mostrar previsão de contrato como data de saída) */}
+                        {/* Datas */}
                         <td className="py-3 px-3 font-mono text-[11px] text-slate-400">
                           <span>{c.startDate ? c.startDate.slice(0, 10) : '—'}</span>
                           <span className="text-slate-600 mx-1">➔</span>
                           <span className={c.realResignationDate ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
                             {c.realResignationDate ? c.realResignationDate.slice(0, 10) : 'Ativo'}
                           </span>
+                        </td>
+
+                        {/* Metas / Desempenho */}
+                        <td className="py-3 px-3 text-center">
+                          {c.monthlyAverageScore !== undefined ? (
+                            <div className="space-y-0.5">
+                              <span className={`inline-block text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                                c.performanceFactor === 1.0 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                  : c.performanceFactor === 0.75
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                              }`}>
+                                {c.monthlyAverageScore}% ({c.performanceFactor * 100}%)
+                              </span>
+                              <span className="text-[9px] text-slate-400 block font-mono">
+                                {c.performanceFactor === 1.0 ? '100% bônus' : c.performanceFactor === 0.75 ? '75% bônus' : 'Meta < 90%'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-block text-[10px] font-bold text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
+                              100% (Padrão)
+                            </span>
+                          )}
                         </td>
 
                         {/* Status Elegibilidade */}
@@ -878,11 +1017,18 @@ export function BprCockpitModal({
 
                         {/* Valor BPR */}
                         <td className="py-3 px-4 text-right">
-                          <span className={`text-sm font-black font-mono ${
-                            c.isEligible ? 'text-emerald-400' : 'text-slate-600'
-                          }`}>
-                            {c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'}
-                          </span>
+                          <div className="space-y-0.5">
+                            <span className={`text-sm font-black font-mono block ${
+                              c.isEligible ? 'text-emerald-400' : 'text-slate-600'
+                            }`}>
+                              {c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'}
+                            </span>
+                            {c.isEligible && c.performanceFactor < 1.0 && (
+                              <span className="text-[9px] text-amber-400 block font-mono">
+                                Base: {formatCurrency(c.baseAmount)} (75%)
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Ação de Exclusão / Restauração Manual */}
@@ -946,7 +1092,7 @@ export function BprCockpitModal({
 
             {summary.residualAmount > 0 && (
               <div>
-                <span className="text-[10px] font-bold text-slate-500 uppercase block">Resíduo (Sem Membros):</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">Resíduo (Sem Membros/Ajustes):</span>
                 <strong className="text-sm font-black text-amber-400 font-mono">
                   {formatCurrency(summary.residualAmount)}
                 </strong>
@@ -980,15 +1126,15 @@ export function BprCockpitModal({
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
-                <h3 className="text-sm font-black text-white uppercase">Colaboradores Glosados no Período</h3>
-                <p className="text-xs text-slate-400">Marque individualmente quem fará jus ao BPR por exceção</p>
+                <h3 className="text-sm font-black text-white uppercase">Colaboradores com Glosa no Período</h3>
+                <p className="text-xs text-slate-400">Selecione quem fará jus excepcionalmente ao BPR</p>
               </div>
               <button onClick={() => setIsGlosadosModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-800">
               {summary.glosadosCandidates.length === 0 ? (
-                <div className="py-8 text-center text-slate-500 text-xs">Nenhum colaborador com glosa no período.</div>
+                <div className="py-8 text-center text-slate-500 text-xs">Nenhum colaborador com glosa registrado no período.</div>
               ) : (
                 summary.glosadosCandidates.map(g => {
                   const isChecked = config.selectedGlosadosExceptions.includes(g.employeeId);
@@ -1127,7 +1273,7 @@ export function BprCockpitModal({
             </div>
 
             <p className="text-xs text-slate-400">
-              Cole o texto da ata, comunicado ou regulamento do BPR. O sistema extrairá automaticamente o montante total, o ciclo e os percentuais por Camada.
+              Cole o texto da ata, comunicado ou regulamento do BPR. O sistema extrairá automaticamente o montante total, o ciclo e os percentuais por Camada e apresentará um comparativo antes de aplicar.
             </p>
 
             <textarea
@@ -1148,11 +1294,120 @@ export function BprCockpitModal({
               </button>
               <button
                 type="button"
-                onClick={handleApplyImportedText}
-                className="px-4 py-2 bg-amber-500 text-slate-950 rounded-xl text-xs font-black uppercase flex items-center gap-1.5"
+                onClick={handlePreviewImportedText}
+                className="px-4 py-2 bg-amber-500 text-slate-950 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer hover:bg-amber-400 transition-all"
               >
                 <Sparkles size={14} />
-                <span>Interpretar &amp; Aplicar</span>
+                <span>Interpretar &amp; Revisar Alterações</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL COMPARATIVO / DIFF DE REGRAS IMPORTADAS ── */}
+      {isConfirmPatchOpen && importedPatch && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl p-6 max-w-2xl w-full space-y-4 shadow-2xl text-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase">Revisão de Alterações Detectadas</h3>
+                  <p className="text-xs text-slate-400">Confirme os parâmetros extraídos do regulamento antes de aplicá-los ao sistema</p>
+                </div>
+              </div>
+              <button onClick={() => setIsConfirmPatchOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            {/* Tabela de Diff Comparativo Lado a Lado */}
+            <div className="rounded-2xl border border-slate-800 overflow-hidden text-xs">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-950 border-b border-slate-800 text-[10px] font-black uppercase text-slate-400">
+                    <th className="py-2.5 px-3">Parâmetro</th>
+                    <th className="py-2.5 px-3 text-slate-400">Configuração Atual</th>
+                    <th className="py-2.5 px-3 text-amber-400">Novo Valor Detectado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 bg-slate-900/60">
+                  {/* Montante Total */}
+                  <tr>
+                    <td className="py-2.5 px-3 font-bold text-slate-300">Montante Total (R$)</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-400">{formatCurrency(config.totalPoolAmount)}</td>
+                    <td className="py-2.5 px-3 font-mono font-black text-emerald-400">
+                      {importedPatch.totalPoolAmount !== undefined ? formatCurrency(importedPatch.totalPoolAmount) : 'Sem alteração'}
+                    </td>
+                  </tr>
+
+                  {/* Ciclo */}
+                  <tr>
+                    <td className="py-2.5 px-3 font-bold text-slate-300">Ciclo Semestral</td>
+                    <td className="py-2.5 px-3 text-slate-400">{config.cycle === 'ciclo_1' ? 'Ciclo 1 (Pago até Março)' : config.cycle === 'ciclo_2' ? 'Ciclo 2 (Pago até Setembro)' : 'Customizado'}</td>
+                    <td className="py-2.5 px-3 font-bold text-amber-300">
+                      {importedPatch.cycle ? (importedPatch.cycle === 'ciclo_1' ? 'Ciclo 1 (Pago até Março)' : importedPatch.cycle === 'ciclo_2' ? 'Ciclo 2 (Pago até Setembro)' : 'Customizado') : 'Sem alteração'}
+                    </td>
+                  </tr>
+
+                  {/* Período Eletivo */}
+                  <tr>
+                    <td className="py-2.5 px-3 font-bold text-slate-300">Período Eletivo</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-400">{config.periodStartDate} a {config.periodEndDate}</td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-white">
+                      {importedPatch.periodStartDate ? `${importedPatch.periodStartDate} a ${importedPatch.periodEndDate}` : 'Sem alteração'}
+                    </td>
+                  </tr>
+
+                  {/* Splits das Camadas */}
+                  <tr>
+                    <td className="py-2.5 px-3 font-bold text-slate-300">Alíquotas por Camada</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-400">
+                      E: {config.tierSplits.E}% | T: {config.tierSplits.T}% | O: {config.tierSplits.O}%
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-amber-300">
+                      {importedPatch.tierSplits ? `E: ${importedPatch.tierSplits.E}% | T: ${importedPatch.tierSplits.T}% | O: ${importedPatch.tierSplits.O}%` : 'Sem alteração'}
+                    </td>
+                  </tr>
+
+                  {/* Glosas */}
+                  <tr>
+                    <td className="py-2.5 px-3 font-bold text-slate-300">Exceção de Glosados</td>
+                    <td className="py-2.5 px-3 text-slate-400">{config.allowGlosados ? 'Permitir seleção' : 'Desclassificado por padrão'}</td>
+                    <td className="py-2.5 px-3 font-bold text-white">
+                      {importedPatch.allowGlosados !== undefined ? (importedPatch.allowGlosados ? 'Permitir seleção' : 'Desclassificado por padrão') : 'Sem alteração'}
+                    </td>
+                  </tr>
+
+                  {/* Inativos */}
+                  <tr>
+                    <td className="py-2.5 px-3 font-bold text-slate-300">Exceção de Inativos pós-ciclo</td>
+                    <td className="py-2.5 px-3 text-slate-400">{config.allowInativos ? 'Permitir seleção' : 'Desclassificado por padrão'}</td>
+                    <td className="py-2.5 px-3 font-bold text-white">
+                      {importedPatch.allowInativos !== undefined ? (importedPatch.allowInativos ? 'Permitir seleção' : 'Desclassificado por padrão') : 'Sem alteração'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsConfirmPatchOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                ❌ Descartar Alterações
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmApplyPatch}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30 transition-all cursor-pointer active:scale-95"
+              >
+                <CheckCircle2 size={16} />
+                <span>✅ Confirmar &amp; Aplicar Novas Regras</span>
               </button>
             </div>
           </div>

@@ -68,7 +68,7 @@ interface ProfileDrawerProps {
   onDataChanged?: (id?: string) => void;
   isTestMode?: boolean;
   setores?: string[];
-  initialTab?: 'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos';
+  initialTab?: 'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos' | 'bpr';
 }
 
 export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [], initialTab = 'pessoal' }: ProfileDrawerProps) {
@@ -80,8 +80,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Abas: 'pessoal', 'endereco', 'complementar', 'fichaExecutiva', 'trajetoria', 'custo', 'auditoria', 'acessos'
-  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos'>(initialTab);
+  // Abas: 'pessoal', 'endereco', 'complementar', 'fichaExecutiva', 'trajetoria', 'custo', 'auditoria', 'acessos', 'bpr'
+  const [activeTab, setActiveTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos' | 'bpr'>(initialTab);
 
   useEffect(() => {
     if (isOpen && initialTab) {
@@ -95,6 +95,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [costs, setCosts] = useState<MonthlyCost[]>([]);
   const [auditIssues, setAuditIssues] = useState<AuditIssue[]>([]);
   const [loanSummary, setLoanSummary] = useState<{ totalTaken: number; totalReceived: number; balance: number } | null>(null);
+  const [bprYear, setBprYear] = useState<number>(new Date().getFullYear());
 
   // Auditoria quick cost editor state
   const [editingCost, setEditingCost] = useState<MonthlyCost | null>(null);
@@ -2105,6 +2106,18 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       {(profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length}
                     </span>
                   )}
+                </button>
+
+                <button 
+                  onClick={() => setActiveTab('bpr')}
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
+                    activeTab === 'bpr' 
+                      ? 'border-amber-500 text-amber-500 font-extrabold' 
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <Coins size={13} className={activeTab === 'bpr' ? 'text-amber-500' : 'text-slate-400'} />
+                  <span>BPR &amp; Metas</span>
                 </button>
               </>
             )}
@@ -4703,6 +4716,340 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               >
                                 {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                                 <span>{isSaving ? 'Salvando...' : 'Salvar Acessos e Sistemas'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </motion.div>
+                  )}
+
+                  {/* ─── ABA BPR & METAS (AVALIAÇÃO MENSAL E HISTÓRICO DE CICLOS) ─── */}
+                  {activeTab === 'bpr' && (
+                    <motion.div
+                      key="tab-bpr"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="space-y-6"
+                    >
+                      {/* Header da Aba & Seletor de Ano */}
+                      <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 text-white rounded-3xl p-5 border border-amber-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                            <Coins size={22} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                                Metas Mensais &amp; Elegibilidade de BPR
+                              </h4>
+                              <span className="bg-amber-500/30 text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-400/30">
+                                Ano {bprYear}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-300 mt-0.5">
+                              Insira o percentual de atingimento mensal (0 a 100%). O sistema calcula a média do ciclo e aplica o fator de bônus automaticamente.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                          {/* Seletor de Ano */}
+                          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                            {[2024, 2025, 2026, 2027].map(yr => (
+                              <button
+                                key={yr}
+                                type="button"
+                                onClick={() => setBprYear(yr)}
+                                className={`px-2.5 py-1 text-xs font-black rounded-lg transition-all ${
+                                  bprYear === yr ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                {yr}
+                              </button>
+                            ))}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-2 shadow-lg shadow-amber-900/20 transition-all flex-1 sm:flex-none justify-center disabled:opacity-50"
+                          >
+                            {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                            <span>{isSaving ? 'Salvando...' : 'Salvar Metas'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Regras do BPR Banner */}
+                      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div className="flex items-center gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-emerald-900/30">
+                          <span className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-xs">100%</span>
+                          <div>
+                            <strong className="text-emerald-400 block text-[11px]">Média = 100%</strong>
+                            <span className="text-[10px] text-slate-400">Recebe 100% do bônus rateado</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-amber-900/30">
+                          <span className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs">75%</span>
+                          <div>
+                            <strong className="text-amber-400 block text-[11px]">Média ≥ 90% e &lt; 100%</strong>
+                            <span className="text-[10px] text-slate-400">Recebe 75% do bônus rateado</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-rose-900/30">
+                          <span className="w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center font-black text-xs">0%</span>
+                          <div>
+                            <strong className="text-rose-400 block text-[11px]">Média &lt; 90%</strong>
+                            <span className="text-[10px] text-slate-400">Sem direito ao bônus no ciclo</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Conteúdo dos Dois Ciclos Semestrais */}
+                      {(() => {
+                        const currentScores: Record<string, Record<string, number>> = 
+                          profile.bpr_monthly_scores || (profile.metadata as any)?.bpr_monthly_scores || {};
+                        const yearScores = currentScores[String(bprYear)] || {};
+
+                        const handleMonthChange = (monthKey: string, value: number) => {
+                          const val = Math.max(0, Math.min(100, isNaN(value) ? 0 : value));
+                          const updatedYear = { ...yearScores, [monthKey]: val };
+                          const updatedAll = { ...currentScores, [String(bprYear)]: updatedYear };
+                          
+                          handleChange('bpr_monthly_scores' as any, updatedAll as any);
+                          
+                          // Salvar também no metadata para total compatibilidade
+                          const prevMeta = profile.metadata || {};
+                          handleChange('metadata' as any, { ...prevMeta, bpr_monthly_scores: updatedAll } as any);
+                        };
+
+                        const handleSetCycleBatch = (months: string[], value: number) => {
+                          const updatedYear = { ...yearScores };
+                          months.forEach(m => { updatedYear[m] = value; });
+                          const updatedAll = { ...currentScores, [String(bprYear)]: updatedYear };
+                          
+                          handleChange('bpr_monthly_scores' as any, updatedAll as any);
+                          const prevMeta = profile.metadata || {};
+                          handleChange('metadata' as any, { ...prevMeta, bpr_monthly_scores: updatedAll } as any);
+                        };
+
+                        // Ciclo 2: 1º Semestre (Jan a Jun - Pago até Setembro)
+                        const c2Months = [
+                          { key: '01', label: 'Janeiro' },
+                          { key: '02', label: 'Fevereiro' },
+                          { key: '03', label: 'Março' },
+                          { key: '04', label: 'Abril' },
+                          { key: '05', label: 'Maio' },
+                          { key: '06', label: 'Junho' }
+                        ];
+
+                        const c2Values = c2Months
+                          .map(m => yearScores[m.key])
+                          .filter(v => v !== undefined && v !== null && !isNaN(Number(v)));
+                        const c2Average = c2Values.length > 0
+                          ? c2Values.reduce((a, b) => a + Number(b), 0) / c2Values.length
+                          : null;
+
+                        // Ciclo 1: 2º Semestre (Jul a Dez - Pago até Março)
+                        const c1Months = [
+                          { key: '07', label: 'Julho' },
+                          { key: '08', label: 'Agosto' },
+                          { key: '09', label: 'Setembro' },
+                          { key: '10', label: 'Outubro' },
+                          { key: '11', label: 'Novembro' },
+                          { key: '12', label: 'Dezembro' }
+                        ];
+
+                        const c1Values = c1Months
+                          .map(m => yearScores[m.key])
+                          .filter(v => v !== undefined && v !== null && !isNaN(Number(v)));
+                        const c1Average = c1Values.length > 0
+                          ? c1Values.reduce((a, b) => a + Number(b), 0) / c1Values.length
+                          : null;
+
+                        const getBadge = (avg: number | null) => {
+                          if (avg === null) {
+                            return (
+                              <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 text-xs font-bold border border-slate-700">
+                                Sem notas cadastradas (Padrão 100%)
+                              </span>
+                            );
+                          }
+                          if (avg >= 100) {
+                            return (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black border border-emerald-500/40 flex items-center gap-1">
+                                <CheckCircle2 size={13} /> 100% do Bônus (Meta 100%)
+                              </span>
+                            );
+                          }
+                          if (avg >= 90) {
+                            return (
+                              <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs font-black border border-amber-500/40 flex items-center gap-1">
+                                ⚡ 75% do Bônus (Meta {avg.toFixed(1)}%)
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-400 text-xs font-black border border-rose-500/40 flex items-center gap-1">
+                              ✕ 0% — Inelegível (Meta {avg.toFixed(1)}% &lt; 90%)
+                            </span>
+                          );
+                        };
+
+                        return (
+                          <div className="space-y-6">
+                            {/* CICLO 2 — 1º SEMESTRE (JAN A JUN) */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h5 className="text-sm font-black text-white uppercase tracking-wider">
+                                      Ciclo 2 — 1º Semestre (01/01 a 30/06)
+                                    </h5>
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md">
+                                      Pagamento até Setembro
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-400 mt-0.5">
+                                    Média do semestre: <strong className="text-white font-mono">{c2Average !== null ? `${c2Average.toFixed(1)}%` : '—'}</strong>
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {getBadge(c2Average)}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetCycleBatch(c2Months.map(m => m.key), 100)}
+                                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300 rounded-lg transition-all"
+                                    title="Preencher 100% em todos os meses do 1º Semestre"
+                                  >
+                                    Set 100%
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                {c2Months.map(m => {
+                                  const val = yearScores[m.key] !== undefined ? yearScores[m.key] : 100;
+                                  return (
+                                    <div key={m.key} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <span className="font-bold text-slate-300">{m.label}</span>
+                                        <span className={`font-mono font-black ${
+                                          val >= 100 ? 'text-emerald-400' : val >= 90 ? 'text-amber-400' : 'text-rose-400'
+                                        }`}>
+                                          {val}%
+                                        </span>
+                                      </div>
+
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={val}
+                                        onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2 py-1 text-right text-xs font-black text-white font-mono outline-none focus:border-amber-500"
+                                      />
+
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={val}
+                                        onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
+                                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* CICLO 1 — 2º SEMESTRE (JUL A DEZ) */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h5 className="text-sm font-black text-white uppercase tracking-wider">
+                                      Ciclo 1 — 2º Semestre (01/07 a 31/12)
+                                    </h5>
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md">
+                                      Pagamento até Março (ano seguinte)
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-400 mt-0.5">
+                                    Média do semestre: <strong className="text-white font-mono">{c1Average !== null ? `${c1Average.toFixed(1)}%` : '—'}</strong>
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {getBadge(c1Average)}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetCycleBatch(c1Months.map(m => m.key), 100)}
+                                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300 rounded-lg transition-all"
+                                    title="Preencher 100% em todos os meses do 2º Semestre"
+                                  >
+                                    Set 100%
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                {c1Months.map(m => {
+                                  const val = yearScores[m.key] !== undefined ? yearScores[m.key] : 100;
+                                  return (
+                                    <div key={m.key} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <span className="font-bold text-slate-300">{m.label}</span>
+                                        <span className={`font-mono font-black ${
+                                          val >= 100 ? 'text-emerald-400' : val >= 90 ? 'text-amber-400' : 'text-rose-400'
+                                        }`}>
+                                          {val}%
+                                        </span>
+                                      </div>
+
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={val}
+                                        onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2 py-1 text-right text-xs font-black text-white font-mono outline-none focus:border-amber-500"
+                                      />
+
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={val}
+                                        onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
+                                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Rodapé de Ações */}
+                            <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+                              <span className="text-xs text-slate-400 font-semibold">
+                                As metas mensais salvas recalculam automaticamente o valor do bônus no Cockpit do BPR.
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                              >
+                                {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                                <span>{isSaving ? 'Salvando...' : 'Salvar Metas do BPR'}</span>
                               </button>
                             </div>
                           </div>

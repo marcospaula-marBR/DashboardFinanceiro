@@ -98,6 +98,86 @@ export class BprService {
   }
 
   /**
+   * Calcula a média de atingimento de metas e o fator de elegibilidade do ciclo
+   * 100% -> 1.0 (100% do bônus)
+   * 90% a 99.99% -> 0.75 (75% do bônus)
+   * < 90% -> 0.0 (0% do bônus / inelegível)
+   */
+  static calculateCyclePerformance(
+    monthlyScores: Record<string, Record<string, number>> | undefined,
+    cycle: BprCycle,
+    year: number
+  ): {
+    averageScore: number;
+    performanceFactor: number;
+    factorLabel: string;
+    hasRecordedScores: boolean;
+  } {
+    if (!monthlyScores || !monthlyScores[String(year)]) {
+      return {
+        averageScore: 100,
+        performanceFactor: 1.0,
+        factorLabel: '100% do Bônus (Padrão)',
+        hasRecordedScores: false
+      };
+    }
+
+    const yearScores = monthlyScores[String(year)];
+    let months: string[] = [];
+
+    if (cycle === 'ciclo_1') {
+      // Ciclo 1 (2º Semestre): Julho a Dezembro (07 a 12)
+      months = ['07', '08', '09', '10', '11', '12'];
+    } else if (cycle === 'ciclo_2') {
+      // Ciclo 2 (1º Semestre): Janeiro a Junho (01 a 06)
+      months = ['01', '02', '03', '04', '05', '06'];
+    } else {
+      // Custom: todos os 12 meses
+      months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+    }
+
+    const validScores: number[] = [];
+    months.forEach(m => {
+      if (yearScores[m] !== undefined && yearScores[m] !== null && !isNaN(Number(yearScores[m]))) {
+        validScores.push(Number(yearScores[m]));
+      }
+    });
+
+    if (validScores.length === 0) {
+      return {
+        averageScore: 100,
+        performanceFactor: 1.0,
+        factorLabel: '100% do Bônus (Padrão)',
+        hasRecordedScores: false
+      };
+    }
+
+    const sum = validScores.reduce((acc, v) => acc + v, 0);
+    const avg = sum / validScores.length;
+
+    let factor = 1.0;
+    let label = '100% do Bônus';
+
+    if (avg >= 100) {
+      factor = 1.0;
+      label = '100% do Bônus (Meta 100%)';
+    } else if (avg >= 90) {
+      factor = 0.75;
+      label = '75% do Bônus (Meta 90% a 99%)';
+    } else {
+      factor = 0.0;
+      label = '0% (Meta < 90% não atingida)';
+    }
+
+    return {
+      averageScore: Math.round(avg * 10) / 10,
+      performanceFactor: factor,
+      factorLabel: label,
+      hasRecordedScores: true
+    };
+  }
+
+  /**
    * Motor de Cálculo e Apuração Determinística do BPR
    */
   static calculateBpr(
@@ -177,13 +257,13 @@ export class BprService {
       // Inativo na data de pagamento
       const isInactiveAtPaymentDate = !activeAtPaymentDate;
 
-      // REQUISITO ESTREITO: Colaborador inativo entre o 1º dia após o ciclo e a data de pagamento
-      // (cumpriu todo o período eletivo, mas foi desligado entre cycleEnd e paymentDate)
+      // REGRA ESTREITA E INVIOLÁVEL: Colaborador inativo entre o 1º dia após o ciclo e a data de pagamento
+      // (deve comprovar ter trabalhado todo o ciclo e ter data real de rescisão estritamente entre cycleEnd e paymentDate)
       const isInactiveBetweenCycleAndPayment = Boolean(
         admittedBeforeOrAtCycleStart &&
-        activeThroughoutCycle &&
-        isInactiveAtPaymentDate &&
-        (realResignationDate ? (realResignationDate > cycleEnd && realResignationDate < paymentDate) : !isStatusActive)
+        realResignationDate &&
+        realResignationDate > cycleEnd &&
+        realResignationDate <= paymentDate
       );
 
       // Glosa no período eletivo
@@ -191,7 +271,11 @@ export class BprService {
       const hasGlosaInPeriod = glosaInfo.hasGlosa || Boolean(emp.has_invoice_glosa);
       const glosaDetails = glosaInfo.details.join(', ') || (emp.has_invoice_glosa ? 'Glosa sinalizada na fatura' : undefined);
 
-      // 3. Avaliação de Elegibilidade Padrão & Exceções
+      // 3. Avaliação de Metas e Desempenho Mensal
+      const rawScores = emp.bpr_monthly_scores || (emp.metadata as any)?.bpr_monthly_scores;
+      const cyclePerf = this.calculateCyclePerformance(rawScores, config.cycle, config.year);
+
+      // 4. Avaliação de Elegibilidade Padrão & Exceções
       const ineligibilityReasons: string[] = [];
       let isEligible = true;
       let isExceptionApplied = false;
@@ -227,6 +311,12 @@ export class BprService {
         }
       }
 
+      // Meta Mensal < 90% (Inelegível por desempenho)
+      if (cyclePerf.performanceFactor === 0 && cyclePerf.hasRecordedScores) {
+        isEligible = false;
+        ineligibilityReasons.push(`Média de metas do ciclo (${cyclePerf.averageScore}%) abaixo de 90%`);
+      }
+
       // Exclusão Manual pelo Gestor
       const isManuallyExcluded = manuallyExcludedSet.has(emp.id);
       if (isManuallyExcluded) {
@@ -256,6 +346,9 @@ export class BprService {
         resignationDate: realResignationDateStr,
         realResignationDate: realResignationDateStr,
         photoUrl: emp.photo_url || emp.avatar || (emp as any).avatar_url,
+        monthlyAverageScore: cyclePerf.hasRecordedScores ? cyclePerf.averageScore : undefined,
+        performanceFactor: cyclePerf.performanceFactor,
+        performanceFactorLabel: cyclePerf.factorLabel,
         admittedBeforeOrAtCycleStart,
         activeThroughoutCycle,
         activeAtPaymentDate,
@@ -266,6 +359,7 @@ export class BprService {
         isEligible,
         isExceptionApplied,
         ineligibilityReasons,
+        baseAmount: 0,
         allocatedAmount: 0 // Será calculado após a contagem de elegíveis
       };
 
@@ -274,13 +368,13 @@ export class BprService {
       if (hasGlosaInPeriod) {
         glosadosCandidates.push(candidateResult);
       }
-      // Apenas inativos que cumpriram o ciclo e saíram antes da data de pagamento aparecem na lista de exceção
+      // Apenas inativos que cumpriram o ciclo e saíram comprovadamente no intervalo pós-ciclo até pagamento
       if (isInactiveBetweenCycleAndPayment) {
         inativosCandidates.push(candidateResult);
       }
     });
 
-    // 4. Contagem de Elegíveis por Camada
+    // 5. Contagem de Elegíveis por Camada
     const layerEligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
     const layerIneligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
 
@@ -292,7 +386,7 @@ export class BprService {
       }
     });
 
-    // 5. Rateio Financeiro por Camada
+    // 6. Rateio Financeiro por Camada
     const layers: Record<BprCamada, BprLayerSummary> = {
       E: {
         camada: 'E',
@@ -329,29 +423,30 @@ export class BprService {
       }
     };
 
-    // 6. Atribuição do Valor Individual a Cada Elegível
+    // 7. Atribuição do Valor Individual a Cada Elegível (considerando o fator de metas)
     let totalDistributed = 0;
     candidates.forEach(c => {
       if (c.isEligible) {
-        const val = layers[c.camada].amountPerEligible;
-        c.allocatedAmount = val;
-        totalDistributed += val;
+        const baseVal = layers[c.camada].amountPerEligible;
+        const finalVal = Number((baseVal * (c.performanceFactor ?? 1.0)).toFixed(2));
+        c.baseAmount = baseVal;
+        c.allocatedAmount = finalVal;
+        totalDistributed += finalVal;
       } else {
+        c.baseAmount = 0;
         c.allocatedAmount = 0;
       }
     });
 
-    const totalEligible = layerEligibleCounts.E + layerEligibleCounts.T + layerEligibleCounts.O;
-    const totalIneligible = candidates.length - totalEligible;
-    const residual = Math.max(0, Number((config.totalPoolAmount - totalDistributed).toFixed(2)));
+    const residualAmount = Math.max(0, config.totalPoolAmount - totalDistributed);
 
     return {
       totalPoolAmount: config.totalPoolAmount,
       totalDistributedAmount: Number(totalDistributed.toFixed(2)),
-      residualAmount: residual,
+      residualAmount: Number(residualAmount.toFixed(2)),
       totalCandidates: candidates.length,
-      totalEligible,
-      totalIneligible,
+      totalEligible: layerEligibleCounts.E + layerEligibleCounts.T + layerEligibleCounts.O,
+      totalIneligible: layerIneligibleCounts.E + layerIneligibleCounts.T + layerIneligibleCounts.O,
       layers,
       candidates,
       glosadosCandidates,

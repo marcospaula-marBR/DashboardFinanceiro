@@ -95,6 +95,7 @@ export interface Employee {
   contract_expiry_date?: string; // YYYY-MM-DD (Vencimento para renovação)
   linked_previous_employee_id?: string; // ID do cadastro CLT/anterior para unificação de histórico (CLT -> PJ)
   is_unified_history?: boolean; // Flag se une histórico e tempo de empresa dos dois regimes
+  bpr_monthly_scores?: Record<string, Record<string, number>>; // Scores mensais de BPR: { "2026": { "01": 100, "02": 90, ... } }
   links_contratos?: string;
   links_aditivos?: string; // string JSON[]
   links_emprestimos?: string; // string JSON[]

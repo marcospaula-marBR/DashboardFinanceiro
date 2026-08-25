@@ -26,6 +26,22 @@ export interface BprRuleConfig {
   minDaysActiveInPeriod?: number; // Opcional: Dias mínimos trabalhados no período (padrão: período integral)
 }
 
+export interface BprMonthlyScores {
+  [year: string]: {
+    [month: string]: number; // Ex: { "2026": { "01": 100, "02": 100, "03": 90, ... } }
+  };
+}
+
+export interface BprCycleScoreSummary {
+  cycle: BprCycle;
+  year: number;
+  averageScore: number; // Média aritmética dos meses (0 a 100)
+  performanceFactor: number; // 1.0 (se 100%), 0.75 (se >= 90% e < 100%), 0.0 (se < 90%)
+  factorLabel: string; // "100% do Bônus" | "75% do Bônus" | "0% (Meta não atingida)"
+  evaluatedMonthsCount: number;
+  missingMonthsCount: number;
+}
+
 export interface BprCandidateResult {
   employeeId: string;
   name: string;
@@ -46,6 +62,11 @@ export interface BprCandidateResult {
   realResignationDate?: string;
   photoUrl?: string;
   
+  // Metas e Desempenho Mensal
+  monthlyAverageScore?: number; // Média de atingimento dos meses do ciclo (0-100%)
+  performanceFactor: number;   // 1.0 (100%), 0.75 (90-99%), 0.0 (<90%)
+  performanceFactorLabel?: string;
+
   // Condições de Elegibilidade
   admittedBeforeOrAtCycleStart: boolean;
   activeThroughoutCycle: boolean;
@@ -61,7 +82,8 @@ export interface BprCandidateResult {
   ineligibilityReasons: string[];
   
   // Valores Financeiros Calculados
-  allocatedAmount: number; // R$ valor individual do bônus
+  baseAmount: number;      // R$ valor base cheio da camada
+  allocatedAmount: number; // R$ valor individual após aplicar fator de desempenho (baseAmount * performanceFactor)
 }
 
 export interface BprLayerSummary {
