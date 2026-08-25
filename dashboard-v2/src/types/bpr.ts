@@ -20,6 +20,7 @@ export interface BprRuleConfig {
   selectedGlosadosExceptions: string[]; // IDs de colaboradores glosados que farão jus excepcionalmente
   allowInativos: boolean;
   selectedInativosExceptions: string[]; // IDs de colaboradores inativos na data de pagamento que farão jus
+  manuallyExcludedEmployeeIds: string[]; // IDs de colaboradores excluídos manualmente da relação do BPR
   companiesFilter: string[]; // ['MarBR', 'DZM', 'G2'] ou vazia para todas
   linkTypesFilter: string[]; // ['CLT', 'PJ', 'Terceirizado'] ou vazia para todos
   minDaysActiveInPeriod?: number; // Opcional: Dias mínimos trabalhados no período (padrão: período integral)
@@ -42,6 +43,7 @@ export interface BprCandidateResult {
   status: string; // 'Ativo' | 'Férias' | 'Inativo' | ...
   startDate?: string;
   resignationDate?: string;
+  realResignationDate?: string;
   photoUrl?: string;
   
   // Condições de Elegibilidade
@@ -51,6 +53,7 @@ export interface BprCandidateResult {
   hasGlosaInPeriod: boolean;
   glosaDetails?: string;
   isInactiveAtPaymentDate: boolean;
+  isManuallyExcluded: boolean;
   
   // Status Final
   isEligible: boolean;

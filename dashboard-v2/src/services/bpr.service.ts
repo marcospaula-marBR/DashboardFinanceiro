@@ -33,6 +33,7 @@ export class BprService {
         selectedGlosadosExceptions: [],
         allowInativos: false,
         selectedInativosExceptions: [],
+        manuallyExcludedEmployeeIds: [],
         companiesFilter: [],
         linkTypesFilter: []
       };
@@ -50,6 +51,7 @@ export class BprService {
         selectedGlosadosExceptions: [],
         allowInativos: false,
         selectedInativosExceptions: [],
+        manuallyExcludedEmployeeIds: [],
         companiesFilter: [],
         linkTypesFilter: []
       };
@@ -66,6 +68,7 @@ export class BprService {
         selectedGlosadosExceptions: [],
         allowInativos: false,
         selectedInativosExceptions: [],
+        manuallyExcludedEmployeeIds: [],
         companiesFilter: [],
         linkTypesFilter: []
       };
@@ -136,6 +139,7 @@ export class BprService {
     const candidates: BprCandidateResult[] = [];
     const glosadosCandidates: BprCandidateResult[] = [];
     const inativosCandidates: BprCandidateResult[] = [];
+    const manuallyExcludedSet = new Set(config.manuallyExcludedEmployeeIds || []);
 
     employees.forEach(emp => {
       // 1. Filtros de Escopo (Empresa e Vínculo)
@@ -150,22 +154,37 @@ export class BprService {
         if (!matchesLink) return;
       }
 
-      // 2. Análise de Datas
+      // 2. Análise de Datas Real (NÃO usar contract_expiry_date como data de rescisão)
       const startDateStr = emp.start_date;
       const startDate = startDateStr ? new Date(`${startDateStr}T00:00:00`) : null;
       
-      const resignDateStr = emp.resignation_date || emp.contract_expiry_date;
-      const resignDate = resignDateStr ? new Date(`${resignDateStr}T23:59:59`) : null;
+      // Data real de desligamento (apenas se realmente foi desligado)
+      const realResignationDateStr = emp.resignation_date || (emp as any).status_end_date;
+      const realResignationDate = realResignationDateStr ? new Date(`${realResignationDateStr}T23:59:59`) : null;
 
       // Admissão antes ou no início do ciclo
       const admittedBeforeOrAtCycleStart = startDate ? startDate <= cycleStart : true;
 
       // Ativo durante todo o período eletivo (não demitido antes do fim do ciclo)
-      const activeThroughoutCycle = resignDate ? resignDate >= cycleEnd : true;
+      const activeThroughoutCycle = realResignationDate ? realResignationDate >= cycleEnd : true;
 
       // Ativo na data de pagamento (inclusive)
-      const activeAtPaymentDate = resignDate ? resignDate >= paymentDate : (emp.status === 'Ativo' || emp.status === 'Férias');
+      const isStatusActive = emp.status === 'Ativo' || emp.status === 'Férias';
+      const activeAtPaymentDate = realResignationDate 
+        ? realResignationDate >= paymentDate 
+        : isStatusActive;
+
+      // Inativo na data de pagamento
       const isInactiveAtPaymentDate = !activeAtPaymentDate;
+
+      // REQUISITO ESTREITO: Colaborador inativo entre o 1º dia após o ciclo e a data de pagamento
+      // (cumpriu todo o período eletivo, mas foi desligado entre cycleEnd e paymentDate)
+      const isInactiveBetweenCycleAndPayment = Boolean(
+        admittedBeforeOrAtCycleStart &&
+        activeThroughoutCycle &&
+        isInactiveAtPaymentDate &&
+        (realResignationDate ? (realResignationDate > cycleEnd && realResignationDate < paymentDate) : !isStatusActive)
+      );
 
       // Glosa no período eletivo
       const glosaInfo = glosaByEmployeeId.get(emp.id) || { hasGlosa: false, details: [] };
@@ -184,13 +203,12 @@ export class BprService {
 
       if (!activeThroughoutCycle) {
         isEligible = false;
-        ineligibilityReasons.push(`Desligamento em ${resignDateStr || '—'} antes do término do período eletivo (${config.periodEndDate})`);
+        ineligibilityReasons.push(`Desligamento em ${realResignationDateStr || '—'} antes do término do período eletivo (${config.periodEndDate})`);
       }
 
       // Tratamento de Inativos na data de pagamento
       if (isInactiveAtPaymentDate) {
-        const isException = config.allowInativos && config.selectedInativosExceptions.includes(emp.id);
-        if (isException) {
+        if (isInactiveBetweenCycleAndPayment && config.allowInativos && config.selectedInativosExceptions.includes(emp.id)) {
           isExceptionApplied = true;
         } else {
           isEligible = false;
@@ -207,6 +225,14 @@ export class BprService {
           isEligible = false;
           ineligibilityReasons.push(`Glosa registrada no período eletivo (${glosaDetails || 'Desconto'})`);
         }
+      }
+
+      // Exclusão Manual pelo Gestor
+      const isManuallyExcluded = manuallyExcludedSet.has(emp.id);
+      if (isManuallyExcluded) {
+        isEligible = false;
+        isExceptionApplied = false;
+        ineligibilityReasons.push('Excluído manualmente do rateio');
       }
 
       const { camada, label: camadaLabel } = this.getEmployeeCamada(emp);
@@ -227,7 +253,8 @@ export class BprService {
         grau: emp.grau,
         status: emp.status || 'Ativo',
         startDate: startDateStr,
-        resignationDate: resignDateStr,
+        resignationDate: realResignationDateStr,
+        realResignationDate: realResignationDateStr,
         photoUrl: emp.photo_url || emp.avatar || (emp as any).avatar_url,
         admittedBeforeOrAtCycleStart,
         activeThroughoutCycle,
@@ -235,6 +262,7 @@ export class BprService {
         hasGlosaInPeriod,
         glosaDetails,
         isInactiveAtPaymentDate,
+        isManuallyExcluded,
         isEligible,
         isExceptionApplied,
         ineligibilityReasons,
@@ -246,7 +274,8 @@ export class BprService {
       if (hasGlosaInPeriod) {
         glosadosCandidates.push(candidateResult);
       }
-      if (isInactiveAtPaymentDate) {
+      // Apenas inativos que cumpriram o ciclo e saíram antes da data de pagamento aparecem na lista de exceção
+      if (isInactiveBetweenCycleAndPayment) {
         inativosCandidates.push(candidateResult);
       }
     });

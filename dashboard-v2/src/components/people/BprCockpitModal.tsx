@@ -705,7 +705,7 @@ export function BprCockpitModal({
                 }`}
               >
                 <AlertTriangle size={13} />
-                <span>Inelegíveis ({summary.totalIneligible})</span>
+                <span>Inelegíveis / Excluídos ({summary.totalIneligible})</span>
               </button>
             </div>
 
@@ -750,6 +750,18 @@ export function BprCockpitModal({
               </button>
             </div>
 
+            {/* Contador / Restauração de Excluídos */}
+            {(config.manuallyExcludedEmployeeIds || []).length > 0 && (
+              <button
+                type="button"
+                onClick={() => setConfig(prev => ({ ...prev, manuallyExcludedEmployeeIds: [] }))}
+                className="text-[10px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                title="Clique para restaurar todos os colaboradores excluídos manualmente"
+              >
+                <span>Restaurar {config.manuallyExcludedEmployeeIds.length} excluído(s)</span>
+              </button>
+            )}
+
             {/* Busca Rápida */}
             <div className="relative flex-1 min-w-[220px] max-w-xs">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -771,15 +783,16 @@ export function BprCockpitModal({
                   <th className="py-3 px-4">Colaborador</th>
                   <th className="py-3 px-3">Empresa / Vínculo</th>
                   <th className="py-3 px-3">Camada</th>
-                  <th className="py-3 px-3">Admissão ➔ Saída</th>
+                  <th className="py-3 px-3">Admissão ➔ Desligamento</th>
                   <th className="py-3 px-3 text-center">Status Elegibilidade</th>
                   <th className="py-3 px-4 text-right">Valor BPR (R$)</th>
+                  <th className="py-3 px-3 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {displayedCandidates.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500 font-bold">
+                    <td colSpan={7} className="py-12 text-center text-slate-500 font-bold">
                       Nenhum colaborador encontrado com os filtros selecionados.
                     </td>
                   </tr>
@@ -788,6 +801,7 @@ export function BprCockpitModal({
                     const isPJ = c.linkType === 'PJ' || c.linkType === 'MEI' || Boolean(c.corporateName);
                     const displayName = isPJ ? (c.corporateName || c.name) : c.name;
                     const respName = isPJ ? (c.responsibleName || c.name) : undefined;
+                    const isExcluded = (config.manuallyExcludedEmployeeIds || []).includes(c.employeeId);
                     const camadaBadgeColor = c.camada === 'E' 
                       ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' 
                       : c.camada === 'T' 
@@ -795,7 +809,9 @@ export function BprCockpitModal({
                       : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
 
                     return (
-                      <tr key={c.employeeId} className="hover:bg-slate-900/60 transition-colors">
+                      <tr key={c.employeeId} className={`transition-colors ${
+                        isExcluded ? 'bg-rose-950/20 opacity-70' : 'hover:bg-slate-900/60'
+                      }`}>
                         {/* Colaborador */}
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2.5">
@@ -829,18 +845,22 @@ export function BprCockpitModal({
                           </span>
                         </td>
 
-                        {/* Datas */}
+                        {/* Datas (NÃO mostrar previsão de contrato como data de saída) */}
                         <td className="py-3 px-3 font-mono text-[11px] text-slate-400">
                           <span>{c.startDate ? c.startDate.slice(0, 10) : '—'}</span>
                           <span className="text-slate-600 mx-1">➔</span>
-                          <span className={c.resignationDate ? 'text-rose-400' : 'text-emerald-400'}>
-                            {c.resignationDate ? c.resignationDate.slice(0, 10) : 'Ativo'}
+                          <span className={c.realResignationDate ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                            {c.realResignationDate ? c.realResignationDate.slice(0, 10) : 'Ativo'}
                           </span>
                         </td>
 
                         {/* Status Elegibilidade */}
                         <td className="py-3 px-3 text-center">
-                          {c.isEligible ? (
+                          {isExcluded ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-300 bg-rose-950/60 border border-rose-800/60 px-2 py-0.5 rounded-full">
+                              🚫 Excluído Manualmente
+                            </span>
+                          ) : c.isEligible ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
                               <CheckCircle2 size={12} /> Elegível {c.isExceptionApplied ? '(Exceção)' : ''}
                             </span>
@@ -849,7 +869,7 @@ export function BprCockpitModal({
                               <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 rounded-full">
                                 <X size={12} /> Inelegível
                               </span>
-                              <span className="text-[9px] text-slate-500 block truncate max-w-[200px]" title={c.ineligibilityReasons.join(', ')}>
+                              <span className="text-[9px] text-slate-500 block truncate max-w-[180px]" title={c.ineligibilityReasons.join(', ')}>
                                 {c.ineligibilityReasons[0] || 'Critérios não atendidos'}
                               </span>
                             </div>
@@ -863,6 +883,39 @@ export function BprCockpitModal({
                           }`}>
                             {c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'}
                           </span>
+                        </td>
+
+                        {/* Ação de Exclusão / Restauração Manual */}
+                        <td className="py-3 px-3 text-center">
+                          {isExcluded ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConfig(prev => ({
+                                  ...prev,
+                                  manuallyExcludedEmployeeIds: (prev.manuallyExcludedEmployeeIds || []).filter(id => id !== c.employeeId)
+                                }));
+                              }}
+                              className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                              title="Restaurar este colaborador à relação do BPR"
+                            >
+                              Restaurar
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConfig(prev => ({
+                                  ...prev,
+                                  manuallyExcludedEmployeeIds: [...(prev.manuallyExcludedEmployeeIds || []), c.employeeId]
+                                }));
+                              }}
+                              className="px-2 py-1 bg-slate-800 hover:bg-rose-950/50 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-800/60 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                              title="Excluir este colaborador da relação e rateio do BPR"
+                            >
+                              Excluir
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -994,15 +1047,19 @@ export function BprCockpitModal({
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
-                <h3 className="text-sm font-black text-white uppercase">Inativos na Data de Pagamento</h3>
-                <p className="text-xs text-slate-400">Selecione quem trabalhou no ciclo e fará jus excepcionalmente</p>
+                <h3 className="text-sm font-black text-white uppercase">Inativos entre o Fim do Ciclo e a Data de Pagamento</h3>
+                <p className="text-xs text-slate-400">
+                  Exibe apenas colaboradores que cumpriram 100% do período ({config.periodStartDate} a {config.periodEndDate}) e saíram antes do pagamento ({config.paymentDate})
+                </p>
               </div>
               <button onClick={() => setIsInativosModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-800">
               {summary.inativosCandidates.length === 0 ? (
-                <div className="py-8 text-center text-slate-500 text-xs">Nenhum inativo elegível pelo período.</div>
+                <div className="py-8 text-center text-slate-500 text-xs">
+                  Nenhum colaborador cumpriu o ciclo integral e teve desligamento no intervalo pós-ciclo até a data de pagamento.
+                </div>
               ) : (
                 summary.inativosCandidates.map(i => {
                   const isChecked = config.selectedInativosExceptions.includes(i.employeeId);
@@ -1023,7 +1080,7 @@ export function BprCockpitModal({
                         <div>
                           <strong className="text-xs text-white block">{i.corporateName || i.name}</strong>
                           <span className="text-[10px] text-rose-400 block">
-                            Desligado em: {i.resignationDate ? i.resignationDate.slice(0, 10) : 'Inativo'}
+                            Desligado em: {i.realResignationDate ? i.realResignationDate.slice(0, 10) : 'Desligamento pós-ciclo'}
                           </span>
                         </div>
                       </div>
