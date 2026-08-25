@@ -384,6 +384,7 @@ export const PeopleHRService = {
         linked_previous_employee_id: emp.metadata?.linked_previous_employee_id || emp.metadata?.linkedPreviousEmployeeId || undefined,
         is_unified_history: emp.metadata?.is_unified_history ?? emp.metadata?.isUnifiedHistory ?? true,
         bpr_monthly_scores: emp.metadata?.bpr_monthly_scores || (emp as any).bpr_monthly_scores || undefined,
+        bpr_monthly_proofs: emp.metadata?.bpr_monthly_proofs || (emp as any).bpr_monthly_proofs || undefined,
         metadata: emp.metadata || {}
       };
       

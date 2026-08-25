@@ -438,6 +438,7 @@ export class PeopleService {
       linked_previous_employee_id: raw.metadata?.linked_previous_employee_id || raw.metadata?.linkedPreviousEmployeeId || undefined,
       is_unified_history: raw.metadata?.is_unified_history ?? raw.metadata?.isUnifiedHistory ?? true,
       bpr_monthly_scores: raw.metadata?.bpr_monthly_scores || raw.bpr_monthly_scores || undefined,
+      bpr_monthly_proofs: raw.metadata?.bpr_monthly_proofs || raw.bpr_monthly_proofs || undefined,
       metadata: raw.metadata || {}
     };
   }
@@ -530,7 +531,8 @@ export class PeopleService {
         remuneration_incentives: profile.remuneration_incentives || 0,
         linked_previous_employee_id: profile.linked_previous_employee_id || undefined,
         is_unified_history: profile.is_unified_history !== false,
-        bpr_monthly_scores: profile.bpr_monthly_scores || profile.metadata?.bpr_monthly_scores || undefined
+        bpr_monthly_scores: profile.bpr_monthly_scores || profile.metadata?.bpr_monthly_scores || undefined,
+        bpr_monthly_proofs: profile.bpr_monthly_proofs || profile.metadata?.bpr_monthly_proofs || undefined
       })
     };
   }

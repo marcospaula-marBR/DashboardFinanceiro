@@ -96,6 +96,7 @@ export interface Employee {
   linked_previous_employee_id?: string; // ID do cadastro CLT/anterior para unificação de histórico (CLT -> PJ)
   is_unified_history?: boolean; // Flag se une histórico e tempo de empresa dos dois regimes
   bpr_monthly_scores?: Record<string, Record<string, number>>; // Scores mensais de BPR: { "2026": { "01": 100, "02": 90, ... } }
+  bpr_monthly_proofs?: Record<string, Record<string, string>>; // Links de comprovação/auditoria de BPR: { "2026": { "01": "https://...", ... } }
   links_contratos?: string;
   links_aditivos?: string; // string JSON[]
   links_emprestimos?: string; // string JSON[]
@@ -441,6 +442,7 @@ export interface PeopleMetadata {
   linked_previous_employee_id?: string;
   is_unified_history?: boolean;
   bpr_monthly_scores?: Record<string, Record<string, number>>;
+  bpr_monthly_proofs?: Record<string, Record<string, string>>;
 }
 
 // --- Future Payroll PDF Import Types ---
@@ -531,6 +533,7 @@ export function normalizePeopleMetadata(raw: any): PeopleMetadata {
     relationships: Array.isArray(raw.relationships) ? raw.relationships : [],
     dataQualityScore: typeof raw.dataQualityScore === 'number' ? raw.dataQualityScore : (typeof raw.data_quality_score === 'number' ? raw.data_quality_score : 100),
     bpr_monthly_scores: raw.bpr_monthly_scores || raw.bprMonthlyScores || undefined,
+    bpr_monthly_proofs: raw.bpr_monthly_proofs || raw.bprMonthlyProofs || undefined,
     version: typeof raw.version === 'number' ? raw.version : PEOPLE_METADATA_VERSION,
   };
 }

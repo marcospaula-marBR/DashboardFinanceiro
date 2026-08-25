@@ -113,16 +113,18 @@ export function PeopleMobileCard({
     return diffDays >= 0 && diffDays <= 10;
   })() : false;
 
-  // Índices de BPR (Ciclo Atual e Anterior)
+  // Índices de BPR (Ciclos C1 e C2)
   const currentYear = new Date().getFullYear();
   const bprScores = employee.bpr_monthly_scores || (employee.metadata as any)?.bpr_monthly_scores;
   
-  const currentCyclePerf = useMemo(() => {
-    return BprService.calculateCyclePerformance(bprScores, 'ciclo_2', currentYear);
+  // C1: 1º Semestre (Jan a Jun)
+  const c1Perf = useMemo(() => {
+    return BprService.calculateCyclePerformance(bprScores, 'ciclo_1', currentYear);
   }, [bprScores, currentYear]);
 
-  const prevCyclePerf = useMemo(() => {
-    return BprService.calculateCyclePerformance(bprScores, 'ciclo_1', currentYear - 1);
+  // C2: 2º Semestre do ano anterior (Jul a Dez)
+  const c2PrevPerf = useMemo(() => {
+    return BprService.calculateCyclePerformance(bprScores, 'ciclo_2', currentYear - 1);
   }, [bprScores, currentYear]);
 
   const waLink = formatWhatsAppLink(employee.phone_professional);
@@ -303,39 +305,29 @@ export function PeopleMobileCard({
               <RelationshipNatureBadge nature={employee.relationshipNature} />
             </span>
 
-            {/* Badge de BPR Ciclo Atual */}
-            {currentCyclePerf.hasRecordedScores ? (
-              <span 
-                className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${
-                  currentCyclePerf.performanceFactor === 1.0
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : currentCyclePerf.performanceFactor === 0.75
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-rose-50 text-rose-700 border-rose-200'
-                }`}
-                title={`BPR Ciclo Atual (${currentYear}): Média de Atingimento ${currentCyclePerf.averageScore}% — Elegibilidade: ${currentCyclePerf.factorLabel}`}
-              >
-                <Coins size={11} className={currentCyclePerf.performanceFactor === 1.0 ? 'text-emerald-600' : currentCyclePerf.performanceFactor === 0.75 ? 'text-amber-600' : 'text-rose-500'} />
-                <span>BPR: {currentCyclePerf.averageScore}% ({currentCyclePerf.performanceFactor * 100}%)</span>
-              </span>
-            ) : (
-              <span 
-                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200"
-                title={`BPR Ciclo Atual (${currentYear}): Sem metas cadastradas (Elegibilidade Padrão 100%)`}
-              >
-                <Coins size={10} className="text-slate-400" />
-                <span>BPR: 100%</span>
-              </span>
-            )}
+            {/* Badge de BPR C1 (Ciclo Atual - 1º Semestre) */}
+            <span 
+              className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${
+                c1Perf.performanceFactor === 1.0
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : c1Perf.performanceFactor === 0.75
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-rose-50 text-rose-700 border-rose-200'
+              }`}
+              title={`BPR C1 - 1º Semestre (${currentYear}): Média ${c1Perf.averageScore}% — Elegibilidade: ${c1Perf.factorLabel}${!c1Perf.hasRecordedScores ? ' (Padrão 100%)' : ''}`}
+            >
+              <Coins size={11} className={c1Perf.performanceFactor === 1.0 ? 'text-emerald-600' : c1Perf.performanceFactor === 0.75 ? 'text-amber-600' : 'text-rose-500'} />
+              <span>C1: {c1Perf.averageScore}% ({c1Perf.performanceFactor * 100}%)</span>
+            </span>
 
-            {/* Badge de BPR Ciclo Anterior (se houver histórico) */}
-            {prevCyclePerf.hasRecordedScores && (
+            {/* Badge de BPR C2 (Ciclo Anterior - 2º Semestre) */}
+            {c2PrevPerf.hasRecordedScores && (
               <span 
                 className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200"
-                title={`BPR Ciclo Anterior (${currentYear - 1}): Média ${prevCyclePerf.averageScore}% (${prevCyclePerf.performanceFactor * 100}%)`}
+                title={`BPR C2 - 2º Semestre Anterior (${currentYear - 1}): Média ${c2PrevPerf.averageScore}% (${c2PrevPerf.performanceFactor * 100}%)`}
               >
-                <span className="text-slate-400">Ant:</span>
-                <span>{prevCyclePerf.averageScore}%</span>
+                <span className="text-slate-400">C2 Ant:</span>
+                <span>{c2PrevPerf.averageScore}%</span>
               </span>
             )}
           </div>

@@ -45,22 +45,17 @@ export async function POST(req: Request) {
       base64Data = buffer.toString('base64');
     }
 
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
-      generationConfig: { responseMimeType: "application/json" }
-    });
-
     const prompt = `
-Analise este contrato de prestação de serviços (ou contrato de trabalho) e extraia o máximo de informações estruturadas possíveis. 
-Procure também em qualquer página de "checklist", resumo, folha de conferência ou anexos de validação que possam estar incluídos no documento, pois estes costumam conter o resumo das datas de início, validade e outras informações importantes do contrato.
+Analise este contrato de prestação de serviços (ou contrato de trabalho, aditivo ou distrato/rescisão) e extraia o máximo de informações estruturadas possíveis. 
+Procure também em qualquer página de "checklist", resumo, folha de conferência ou anexos de validação que possam estar incluídos no documento, pois estes costumam conter o resumo das datas de início, validade, encerramento e outras informações importantes do contrato.
 
 Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia se não encontrar):
 
 {
-  "document_type": "Qualifique este documento como 'Contrato', 'Aditivo' ou 'Distrato' (Termo de Rescisão)",
+  "document_type": "Qualifique este documento como 'Contrato', 'Aditivo' ou 'Distrato' (Termo de Rescisão/Distrato)",
   "document_title": "TÍTULO EXATO do documento conforme consta no topo/início (ex: 'CONTRATO PRESTAÇÃO DE SERVIÇO', 'TERMO DE DISTRATO DE CONTRATO DE PRESTAÇÃO DE SERVIÇOS', 'ADITIVO CONTRATUAL')",
   "additive_changes": "Se for Aditivo, liste de forma sucinta o que mudou (ex: 'Mudança de Função', 'Aditivo de Remuneração', 'Prorrogação de Prazo'). Se não for, deixe nulo.",
-  "signature_date": "Data EXATA da assinatura do documento ou data de emissão/fechamento. Leia as últimas páginas e procure por trechos como 'cidade, 01 de Junho de 2026' ou o carimbo da assinatura digital (formato YYYY-MM-DD). Atenção redobrada para não omitir esta data.",
+  "signature_date": "Data EXATA da assinatura do documento ou data de emissão/fechamento. Leia as últimas páginas e procure por trechos como 'cidade, 01 de Junho de 2026' ou o carimbo da assinatura digital (formato YYYY-MM-DD).",
   "job_role": "Cargo ou Função do contratado (ex: Médico, Desenvolvedor, Técnico, Assistente). Se houver mudança de cargo no aditivo, extraia o novo cargo/função para cá.",
   "name": "Nome do contratado/colaborador (Pessoa Física representante/prestador)",
   "document_id": "CPF do contratado (formato 000.000.000-00)",
@@ -69,15 +64,15 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "cnpj": "CNPJ da empresa contratada (formato 00.000.000/0000-00, se for PJ)",
   "linkType": "\"PJ\" se houver CNPJ ou menção a prestação de serviço por pessoa jurídica, caso contrário \"CLT\"",
   "remuneration_fixed": Valor monetário base mensal da remuneração/salário/honorário (apenas número decimal),
-  "remuneration_bonus": Valor monetário de BÔNUS VARIÁVEL ligado a metas, desempenho ou resultados (apenas número decimal). ATENÇÃO: bônus é sempre condicional/variável — não confunda com incentivos fixos ou periódicos. Analise o contrato por cláusulas de bônus por meta, remuneração variável, comissão ou prêmio por resultado e extraia o maior valor encontrado. IMPORTANTE: Qualquer bonificação, ajuda de custo ou reembolso para despesas veiculares (como combustível, km rodado, manutenção de carro/moto) NÃO deve entrar como bônus variável. Deve ser incluída obrigatoriamente em remuneration_incentives,
-  "bonus_description": "Breve descrição do bônus variável (ex: Bônus por atingimento de meta de X, Prêmio de produção)",
-  "remuneration_incentives": Valor monetário de INCENTIVOS FIXOS OU PERIÓDICOS que não sejam salário base nem bônus por meta. Exemplos: PLR (Participação nos Lucros), gratificação semestral/anual fixa, incentivo de assiduidade, prêmio mensal fixo, adicional de função fixo. ATENÇÃO MÁXIMA: Qualquer tipo de ajuda de custo, reembolso ou bonificação destinada a despesas veiculares/transporte, tais como: "bonificação para despesas veiculares", "ajuda de custo veicular", "reembolso combustível", "auxílio combustível", "reembolso quilometragem", "locação de veículo", "auxílio locomoção", etc. (mesmo que utilize a palavra "bonificação", "bônus" ou "reembolso" no contrato), DEVE ser incluída integralmente no campo remuneration_incentives e NUNCA em remuneration_bonus (apenas número decimal ou nulo se não houver),
-  "incentives_description": "Breve descrição dos incentivos (ex: PLR anual, Gratificação de função, Ajuda de custo veicular, Incentivo de assiduidade mensal)",
-  "remuneration_connectivity": Valor monetário de auxílio conectividade, ajuda de custo de internet, telefonia ou home office se houver (apenas número decimal ou nulo),
+  "remuneration_bonus": Valor monetário de BÔNUS VARIÁVEL ligado a metas, desempenho ou resultados (apenas número decimal),
+  "bonus_description": "Breve descrição do bônus variável",
+  "remuneration_incentives": Valor monetário de INCENTIVOS FIXOS OU PERIÓDICOS (ajuda de custo veicular, combustível, PLR, etc.),
+  "incentives_description": "Breve descrição dos incentivos",
+  "remuneration_connectivity": Valor monetário de auxílio conectividade se houver,
   "email": "E-mail de contato pessoal",
-  "phone": "Telefone de contato pessoal (DDD + Número. NÃO INCLUA o código de país +55/55 sob nenhuma hipótese)",
-  "email_professional": "E-mail de contato profissional/corporativo (trabalho)",
-  "phone_professional": "Telefone de contato profissional/corporativo (trabalho, DDD + Número. NÃO INCLUA o código de país +55/55)",
+  "phone": "Telefone de contato pessoal (DDD + Número, sem +55)",
+  "email_professional": "E-mail de contato profissional/corporativo",
+  "phone_professional": "Telefone de contato profissional/corporativo (sem +55)",
   "zip_code": "CEP residencial do contratado (formato 00000-000)",
   "street": "Rua/logradouro do endereço residencial",
   "number": "Número do endereço residencial",
@@ -90,37 +85,67 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "cnpj_neighborhood": "Bairro do CNPJ se houver",
   "cnpj_city": "Cidade do CNPJ se houver",
   "cnpj_state": "UF do CNPJ se houver",
-  "responsible_name": "Nome do responsável legal (geralmente igual ao Name em contratos MEI/PJ)",
-  "responsible_cpf": "CPF do responsável legal (formato 000.000.000-00, geralmente igual ao CPF do prestador)",
+  "responsible_name": "Nome do responsável legal",
+  "responsible_cpf": "CPF do responsável legal (formato 000.000.000-00)",
   "start_date": "Data de início do contrato/admissão/início da prestação (formato YYYY-MM-DD)",
   "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato se houver ou DATA DO DISTRATO/RESCISÃO (formato YYYY-MM-DD)",
-  "termination_date": "Se for Distrato (Termo de Rescisão/Encerramento), busque a DATA EFETIVA DO ÚLTIMO DIA TRABALHADO ou data real do encerramento da prestação de serviços. Atenção: pode não ser a data de assinatura! Procure por frases como 'tendo seu término no dia X' ou 'o último dia de serviço será Y' ou 'distratam nesta data X' (formato YYYY-MM-DD)",
+  "termination_date": "Se for Distrato (Termo de Rescisão/Encerramento), busque a DATA EFETIVA DO ÚLTIMO DIA TRABALHADO ou data real do encerramento da prestação de serviços (formato YYYY-MM-DD)",
   "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)",
-  "executive_summary": "Resumo profissional executivo baseado no OBJETO DO CONTRATO. Descreva em 3 a 5 frases as principais atividades, responsabilidades e entregas esperadas do contratado conforme definidas no contrato. Use linguagem formal e objetiva, na terceira pessoa. Exemplo: 'Responsável pela prestação de serviços de consultoria em tecnologia da informação. Deverá desenvolver e manter sistemas conforme especificações técnicas acordadas. Participará de reuniões de acompanhamento e entregará relatórios mensais de progresso.' Se o contrato não descrever o objeto ou atividades, retorne nulo."
+  "executive_summary": "Resumo profissional executivo baseado no OBJETO DO CONTRATO."
 }
 
-Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser EXCLUSIVAMENTE 'PJ'. O termo MEI diz respeito apenas a regime tributário e nunca deve ser listado como linkType.
-IMPORTANTE sobre remuneração: distinga claramente BÔNUS VARIÁVEL (condicional a metas/resultados → remuneration_bonus) de INCENTIVOS FIXOS (periódicos, garantidos → remuneration_incentives). Nunca some ambos no mesmo campo. Se uma verba puder ser de ambas as categorias, prefira incentivos se for garantida, ou bônus se for condicional.
+Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser EXCLUSIVAMENTE 'PJ'.
 ATENÇÃO MÁXIMA A DISTRATOS: Se o documento contiver palavras-chave como 'Distrato', 'Rescisão', 'Encerramento de Contrato', 'Termo de Quitação', defina document_type = 'Distrato'. Preencha Obrigatoriamente 'termination_date' E 'contract_expiry_date' com a data final da prestação de serviços encontrada no documento.
-Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
+Retorne APENAS o JSON puro, sem nenhuma outra formatação markdown.
 `;
 
+    // Lista de modelos suportados com fallback automático
+    const modelCandidates = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    let textResponse = '';
+    let lastModelError: Error | null = null;
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: 'application/pdf'
+    for (const modelName of modelCandidates) {
+      try {
+        const model = genAI.getGenerativeModel({ 
+          model: modelName,
+          generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const result = await model.generateContent([
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: 'application/pdf'
+            }
+          },
+          prompt
+        ]);
+
+        textResponse = result.response.text();
+        if (textResponse && textResponse.trim().length > 0) {
+          break; // Sucesso!
         }
-      },
-      prompt
-    ]);
+      } catch (err: any) {
+        console.warn(`Tentativa com modelo ${modelName} falhou:`, err?.message || err);
+        lastModelError = err;
+      }
+    }
 
-    const textResponse = result.response.text();
+    if (!textResponse) {
+      throw lastModelError || new Error('Nenhum modelo Gemini conseguiu processar o documento PDF.');
+    }
+
+    // Limpar markdown wrappers se presentes (```json ... ```)
+    let cleanedText = textResponse.trim();
+    if (cleanedText.startsWith('```json')) {
+      cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
     
     // Parsear a resposta para garantir que seja um JSON válido
     try {
-      const parsedData = JSON.parse(textResponse);
+      const parsedData = JSON.parse(cleanedText);
       return NextResponse.json(parsedData);
     } catch {
       return NextResponse.json({ 
@@ -130,9 +155,10 @@ Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos
     }
 
   } catch (error: unknown) {
-    console.error('Erro ao processar contrato por IA:', error);
+    const err = error as Error;
+    console.error('Erro ao processar contrato por IA:', err);
     return NextResponse.json(
-      { error: 'Erro interno durante o processamento do contrato.' },
+      { error: err?.message || 'Erro interno durante o processamento do contrato.' },
       { status: 500 }
     );
   }

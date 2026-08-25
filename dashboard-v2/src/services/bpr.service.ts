@@ -20,13 +20,13 @@ export class BprService {
    */
   static getDefaultConfig(cycle: BprCycle = 'ciclo_1', year: number = new Date().getFullYear()): BprRuleConfig {
     if (cycle === 'ciclo_1') {
-      // Ciclo 1: Pago até Março (Ref: 01/07 a 31/12 do ano anterior)
+      // Ciclo 1 (C1 - 1º Semestre): Pago até Setembro (Ref: 01/01 a 30/06 do ano)
       return {
         cycle: 'ciclo_1',
         year,
-        periodStartDate: `${year - 1}-07-01`,
-        periodEndDate: `${year - 1}-12-31`,
-        paymentDate: `${year}-03-31`,
+        periodStartDate: `${year}-01-01`,
+        periodEndDate: `${year}-06-30`,
+        paymentDate: `${year}-09-30`,
         totalPoolAmount: 100000,
         tierSplits: { E: 30, T: 40, O: 30 },
         allowGlosados: false,
@@ -38,13 +38,13 @@ export class BprService {
         linkTypesFilter: []
       };
     } else if (cycle === 'ciclo_2') {
-      // Ciclo 2: Pago até Setembro (Ref: 01/01 a 30/06 do ano vigente)
+      // Ciclo 2 (C2 - 2º Semestre): Pago até Março (Ref: 01/07 a 31/12 do ano)
       return {
         cycle: 'ciclo_2',
         year,
-        periodStartDate: `${year}-01-01`,
-        periodEndDate: `${year}-06-30`,
-        paymentDate: `${year}-09-30`,
+        periodStartDate: `${year}-07-01`,
+        periodEndDate: `${year}-12-31`,
+        paymentDate: `${year + 1}-03-31`,
         totalPoolAmount: 100000,
         tierSplits: { E: 30, T: 40, O: 30 },
         allowGlosados: false,
@@ -126,11 +126,11 @@ export class BprService {
     let months: string[] = [];
 
     if (cycle === 'ciclo_1') {
-      // Ciclo 1 (2º Semestre): Julho a Dezembro (07 a 12)
-      months = ['07', '08', '09', '10', '11', '12'];
-    } else if (cycle === 'ciclo_2') {
-      // Ciclo 2 (1º Semestre): Janeiro a Junho (01 a 06)
+      // Ciclo 1 (C1 - 1º Semestre): Janeiro a Junho (01 a 06)
       months = ['01', '02', '03', '04', '05', '06'];
+    } else if (cycle === 'ciclo_2') {
+      // Ciclo 2 (C2 - 2º Semestre): Julho a Dezembro (07 a 12)
+      months = ['07', '08', '09', '10', '11', '12'];
     } else {
       // Custom: todos os 12 meses
       months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];

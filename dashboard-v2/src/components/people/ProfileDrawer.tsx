@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
-import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature, EmployeeSystemAccess, SystemItem } from "@/types/loans";
+import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature, EmployeeSystemAccess, SystemItem, inferEntityType } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
@@ -1223,20 +1223,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
 
         // Se for distrato ou houver data de encerramento/rescisao
-        if ((data.document_type === 'Distrato' || data.termination_date) && (data.termination_date || data.contract_expiry_date)) {
-          const endDate = data.termination_date || data.contract_expiry_date;
+        if (data.document_type === 'Distrato' || data.termination_date) {
+          const endDate = data.termination_date || data.contract_expiry_date || data.signature_date || new Date().toISOString().split('T')[0];
           next.contract_expiry_date = endDate;
           next.resignation_date = endDate;
           next.status_end_date = endDate;
-          
-          // Se a data já passou ou é hoje, inativar automaticamente
-          const termDate = new Date(endDate + "T12:00:00");
-          const now = new Date();
-          termDate.setHours(0,0,0,0);
-          now.setHours(0,0,0,0);
-          if (termDate <= now) {
-            next.status = 'Inativo';
-          }
+          next.status = 'Inativo';
         }
 
         // Se for PJ e não houver responsável_name ou responsável_cpf, sincronizar reativamente
@@ -1950,178 +1942,190 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
             onClick={(e) => e.stopPropagation()}
           >
           {/* Menu Fixo Topo */}
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0">
-            <div className="flex items-center gap-3">
-               <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-600">
-                  <UserRound size={20} />
-               </div>
-               <div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
-                    {employeeId ? 'Ficha do Colaborador' : 'Novo Colaborador'}
-                  </h2>
-                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Perfil Recursos Humanos</p>
-               </div>
-            </div>
-            
-            <div className="flex gap-2">
-              {employeeId && !isEditMode && (
-                <>
-                  <button
-                    onClick={() => setIsExportModalOpen(true)}
-                    className="flex items-center gap-1.5 p-2 px-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 rounded-lg transition-all text-amber-950 font-bold text-xs shadow-xs active:scale-95 cursor-pointer"
-                    title="Exportar Ficha do Colaborador (Selecionar Abas)"
-                  >
-                    <Download size={14} />
-                    <span>Exportar Ficha</span>
-                  </button>
-                  <a 
-                    href={`/emprestimos?employeeId=${employeeId}`}
-                    className="flex items-center gap-1.5 p-2 px-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg transition-all text-amber-700 dark:text-amber-500 font-semibold text-xs border border-amber-200 dark:border-amber-900/50"
-                    title="Gerenciar Empréstimos deste Colaborador"
-                  >
-                    <Coins size={14} />
-                    <span>Empréstimos</span>
-                  </a>
-                  <button 
-                    onClick={() => setIsEditMode(true)}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all text-slate-600"
-                    title="Editar Ficha"
-                  >
-                    <PenBox size={18} />
-                  </button>
-                </>
-              )}
-              {isEditMode && (
-                <>
-                  {!employeeId && (
-                    <button
-                      type="button"
-                      onClick={() => setIsSearchExistingOpen(true)}
-                      className="flex items-center gap-1.5 p-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-all text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-slate-700"
-                    >
-                      <Search size={14} />
-                      <span>Já é cadastrado?</span>
-                    </button>
+          {(() => {
+            const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile));
+            return (
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0">
+                <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-600">
+                      {isPJ ? <Building2 size={20} /> : <UserRound size={20} />}
+                   </div>
+                   <div>
+                      <h2 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
+                        {employeeId ? (isPJ ? (profile.corporate_name || 'Ficha do Prestador de Serviços (PJ)') : 'Ficha do Colaborador') : (isPJ ? 'Novo Prestador PJ / Fornecedor' : 'Novo Colaborador')}
+                      </h2>
+                      <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        {isPJ ? 'Gestão de Contratos & Parceiros (PJ)' : 'Perfil Recursos Humanos'}
+                      </p>
+                   </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  {employeeId && !isEditMode && (
+                    <>
+                      <button
+                        onClick={() => setIsExportModalOpen(true)}
+                        className="flex items-center gap-1.5 p-2 px-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 rounded-lg transition-all text-amber-950 font-bold text-xs shadow-xs active:scale-95 cursor-pointer"
+                        title={isPJ ? "Exportar Ficha do Prestador (PDF/CSV)" : "Exportar Ficha do Colaborador (PDF/CSV)"}
+                      >
+                        <Download size={14} />
+                        <span>Exportar Ficha</span>
+                      </button>
+                      <a 
+                        href={`/emprestimos?employeeId=${employeeId}`}
+                        className="flex items-center gap-1.5 p-2 px-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg transition-all text-amber-700 dark:text-amber-500 font-semibold text-xs border border-amber-200 dark:border-amber-900/50"
+                        title="Gerenciar Adiantamentos / Empréstimos"
+                      >
+                        <Coins size={14} />
+                        <span>Empréstimos</span>
+                      </a>
+                      <button 
+                        onClick={() => setIsEditMode(true)}
+                        className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all text-slate-600"
+                        title="Editar Ficha"
+                      >
+                        <PenBox size={18} />
+                      </button>
+                    </>
                   )}
-                  <label className={`flex items-center gap-2 p-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-all text-white font-semibold text-xs cursor-pointer select-none ${isParsingContract ? 'opacity-70 pointer-events-none' : ''}`}>
-                    {isParsingContract ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-                    <span>Importar Contrato (PDF)</span>
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      accept=".pdf" 
-                      onChange={handleParseContractPDF} 
-                      disabled={isParsingContract} 
-                    />
-                  </label>
-                  
+                  {isEditMode && (
+                    <>
+                      {!employeeId && (
+                        <button
+                          type="button"
+                          onClick={() => setIsSearchExistingOpen(true)}
+                          className="flex items-center gap-1.5 p-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-all text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-slate-700"
+                        >
+                          <Search size={14} />
+                          <span>Já é cadastrado?</span>
+                        </button>
+                      )}
+                      <label className={`flex items-center gap-2 p-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-all text-white font-semibold text-xs cursor-pointer select-none ${isParsingContract ? 'opacity-70 pointer-events-none' : ''}`}>
+                        {isParsingContract ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                        <span>Importar Contrato / Distrato (PDF)</span>
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept=".pdf" 
+                          onChange={handleParseContractPDF} 
+                          disabled={isParsingContract} 
+                        />
+                      </label>
+                      
+                      <button 
+                        onClick={handleSave}
+                        disabled={isSaving || isParsingContract}
+                        className="flex items-center gap-2 p-2 px-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-all text-white font-semibold text-xs"
+                      >
+                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        Salvar
+                      </button>
+                    </>
+                  )}
                   <button 
-                    onClick={handleSave}
-                    disabled={isSaving || isParsingContract}
-                    className="flex items-center gap-2 p-2 px-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-all text-white font-semibold text-xs"
+                    onClick={handleClose}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-400 hover:text-red-500"
                   >
-                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Salvar
+                    <X size={20} />
                   </button>
-                </>
-              )}
-              <button 
-                onClick={handleClose}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-400 hover:text-red-500"
-              >
-                <X size={20} />
-              </button>
-            </div>
-          </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Abas */}
-          <div className="flex border-b border-slate-100 px-6 shrink-0 bg-slate-50/50 overflow-x-auto whitespace-nowrap scrollbar-none">
-            <button 
-              onClick={() => setActiveTab('pessoal')}
-              className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'pessoal' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-            >
-              Info Pessoal
-            </button>
-            <button 
-              onClick={() => setActiveTab('endereco')}
-              className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'endereco' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-            >
-              Contato & Endereço
-            </button>
-            <button 
-              onClick={() => setActiveTab('complementar')}
-              className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'complementar' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-            >
-              Dados Auxiliares
-            </button>
-            <button 
-              onClick={() => setActiveTab('fichaExecutiva')}
-              className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'fichaExecutiva' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-            >
-              Ficha Executiva
-            </button>
-            {employeeId && (
-              <>
+          {(() => {
+            const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile));
+            return (
+              <div className="flex border-b border-slate-100 px-6 shrink-0 bg-slate-50/50 overflow-x-auto whitespace-nowrap scrollbar-none">
                 <button 
-                  onClick={() => setActiveTab('trajetoria')}
-                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'trajetoria' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                  onClick={() => setActiveTab('pessoal')}
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'pessoal' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
-                  Trajetória
+                  {isPJ ? 'Empresa & Prestador' : 'Info Pessoal'}
                 </button>
                 <button 
-                  onClick={() => setActiveTab('custo')}
-                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'custo' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                  onClick={() => setActiveTab('endereco')}
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'endereco' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
-                  Custo Histórico
+                  {isPJ ? 'Contato & Sede PJ' : 'Contato & Endereço'}
                 </button>
                 <button 
-                  onClick={() => setActiveTab('auditoria')}
-                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
-                    activeTab === 'auditoria' 
-                      ? 'border-emerald-600 text-emerald-600 font-extrabold' 
-                      : auditIssues.length > 0 
-                        ? 'border-transparent text-amber-500 hover:text-amber-600' 
-                        : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
+                  onClick={() => setActiveTab('complementar')}
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'complementar' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
-                  <span>Auditoria</span>
-                  {auditIssues.length > 0 && (
-                    <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">
-                      {auditIssues.length}
-                    </span>
-                  )}
+                  Dados Auxiliares
                 </button>
                 <button 
-                  onClick={() => setActiveTab('acessos')}
-                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
-                    activeTab === 'acessos' 
-                      ? 'border-indigo-600 text-indigo-600 font-extrabold' 
-                      : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
+                  onClick={() => setActiveTab('fichaExecutiva')}
+                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'fichaExecutiva' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
-                  <KeyRound size={13} className={activeTab === 'acessos' ? 'text-indigo-600' : 'text-slate-400'} />
-                  <span>Acessos &amp; Sistemas</span>
-                  {((profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length > 0) && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-800 text-[9px] font-black">
-                      {(profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length}
-                    </span>
-                  )}
+                  Ficha Executiva
                 </button>
+                {employeeId && (
+                  <>
+                    <button 
+                      onClick={() => setActiveTab('trajetoria')}
+                      className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'trajetoria' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                      Trajetória
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('custo')}
+                      className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'custo' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                      {isPJ ? 'Faturamento & Custos' : 'Custo Histórico'}
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('auditoria')}
+                      className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
+                        activeTab === 'auditoria' 
+                          ? 'border-emerald-600 text-emerald-600 font-extrabold' 
+                          : auditIssues.length > 0 
+                            ? 'border-transparent text-amber-500 hover:text-amber-600' 
+                            : 'border-transparent text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      <span>Auditoria</span>
+                      {auditIssues.length > 0 && (
+                        <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">
+                          {auditIssues.length}
+                        </span>
+                      )}
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('acessos')}
+                      className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
+                        activeTab === 'acessos' 
+                          ? 'border-indigo-600 text-indigo-600 font-extrabold' 
+                          : 'border-transparent text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      <KeyRound size={13} className={activeTab === 'acessos' ? 'text-indigo-600' : 'text-slate-400'} />
+                      <span>Acessos &amp; Sistemas</span>
+                      {((profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length > 0) && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-800 text-[9px] font-black">
+                          {(profile.system_accesses || (profile.metadata as any)?.system_accesses || []).length}
+                        </span>
+                      )}
+                    </button>
 
-                <button 
-                  onClick={() => setActiveTab('bpr')}
-                  className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
-                    activeTab === 'bpr' 
-                      ? 'border-amber-500 text-amber-500 font-extrabold' 
-                      : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  <Coins size={13} className={activeTab === 'bpr' ? 'text-amber-500' : 'text-slate-400'} />
-                  <span>BPR &amp; Metas</span>
-                </button>
-              </>
-            )}
-          </div>
+                    <button 
+                      onClick={() => setActiveTab('bpr')}
+                      className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all flex items-center gap-1.5 ${
+                        activeTab === 'bpr' 
+                          ? 'border-amber-500 text-amber-500 font-extrabold' 
+                          : 'border-transparent text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      <Coins size={13} className={activeTab === 'bpr' ? 'text-amber-500' : 'text-slate-400'} />
+                      <span>BPR &amp; Metas</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
            {/* Corpo Escrolável */}
           <div className="p-6 overflow-y-auto flex-1">
@@ -4816,6 +4820,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           profile.bpr_monthly_scores || (profile.metadata as any)?.bpr_monthly_scores || {};
                         const yearScores = currentScores[String(bprYear)] || {};
 
+                        const currentProofs: Record<string, Record<string, string>> = 
+                          profile.bpr_monthly_proofs || (profile.metadata as any)?.bpr_monthly_proofs || {};
+                        const yearProofs = currentProofs[String(bprYear)] || {};
+
                         const handleMonthChange = (monthKey: string, value: number) => {
                           const val = Math.max(0, Math.min(100, isNaN(value) ? 0 : value));
                           const updatedYear = { ...yearScores, [monthKey]: val };
@@ -4828,6 +4836,15 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           handleChange('metadata' as any, { ...prevMeta, bpr_monthly_scores: updatedAll } as any);
                         };
 
+                        const handleProofLinkChange = (monthKey: string, url: string) => {
+                          const updatedYearProofs = { ...yearProofs, [monthKey]: url };
+                          const updatedAllProofs = { ...currentProofs, [String(bprYear)]: updatedYearProofs };
+                          
+                          handleChange('bpr_monthly_proofs' as any, updatedAllProofs as any);
+                          const prevMeta = profile.metadata || {};
+                          handleChange('metadata' as any, { ...prevMeta, bpr_monthly_proofs: updatedAllProofs } as any);
+                        };
+
                         const handleSetCycleBatch = (months: string[], value: number) => {
                           const updatedYear = { ...yearScores };
                           months.forEach(m => { updatedYear[m] = value; });
@@ -4838,8 +4855,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           handleChange('metadata' as any, { ...prevMeta, bpr_monthly_scores: updatedAll } as any);
                         };
 
-                        // Ciclo 2: 1º Semestre (Jan a Jun - Pago até Setembro)
-                        const c2Months = [
+                        // Ciclo 1 (C1): 1º Semestre (Jan a Jun - Pago até Setembro)
+                        const c1Months = [
                           { key: '01', label: 'Janeiro' },
                           { key: '02', label: 'Fevereiro' },
                           { key: '03', label: 'Março' },
@@ -4848,14 +4865,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           { key: '06', label: 'Junho' }
                         ];
 
-                        const hasC2Recorded = c2Months.some(m => yearScores[m.key] !== undefined && yearScores[m.key] !== null);
-                        const c2Values = c2Months.map(m => (yearScores[m.key] !== undefined && yearScores[m.key] !== null && !isNaN(Number(yearScores[m.key]))) ? Number(yearScores[m.key]) : 100);
-                        const c2Average = hasC2Recorded
-                          ? c2Values.reduce((a, b) => a + Number(b), 0) / 6
+                        const hasC1Recorded = c1Months.some(m => yearScores[m.key] !== undefined && yearScores[m.key] !== null);
+                        const c1Values = c1Months.map(m => (yearScores[m.key] !== undefined && yearScores[m.key] !== null && !isNaN(Number(yearScores[m.key]))) ? Number(yearScores[m.key]) : 100);
+                        const c1Average = hasC1Recorded
+                          ? c1Values.reduce((a, b) => a + Number(b), 0) / 6
                           : null;
 
-                        // Ciclo 1: 2º Semestre (Jul a Dez - Pago até Março)
-                        const c1Months = [
+                        // Ciclo 2 (C2): 2º Semestre (Jul a Dez - Pago até Março)
+                        const c2Months = [
                           { key: '07', label: 'Julho' },
                           { key: '08', label: 'Agosto' },
                           { key: '09', label: 'Setembro' },
@@ -4864,10 +4881,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           { key: '12', label: 'Dezembro' }
                         ];
 
-                        const hasC1Recorded = c1Months.some(m => yearScores[m.key] !== undefined && yearScores[m.key] !== null);
-                        const c1Values = c1Months.map(m => (yearScores[m.key] !== undefined && yearScores[m.key] !== null && !isNaN(Number(yearScores[m.key]))) ? Number(yearScores[m.key]) : 100);
-                        const c1Average = hasC1Recorded
-                          ? c1Values.reduce((a, b) => a + Number(b), 0) / 6
+                        const hasC2Recorded = c2Months.some(m => yearScores[m.key] !== undefined && yearScores[m.key] !== null);
+                        const c2Values = c2Months.map(m => (yearScores[m.key] !== undefined && yearScores[m.key] !== null && !isNaN(Number(yearScores[m.key]))) ? Number(yearScores[m.key]) : 100);
+                        const c2Average = hasC2Recorded
+                          ? c2Values.reduce((a, b) => a + Number(b), 0) / 6
                           : null;
 
                         const getBadge = (avg: number | null) => {
@@ -4901,83 +4918,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                         return (
                           <div className="space-y-6">
-                            {/* CICLO 2 — 1º SEMESTRE (JAN A JUN) */}
+                            {/* CICLO 1 (C1) — 1º SEMESTRE (JAN A JUN) */}
                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm">
                               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <h5 className="text-sm font-black text-white uppercase tracking-wider">
-                                      Ciclo 2 — 1º Semestre (01/01 a 30/06)
+                                      Ciclo 1 (C1) — 1º Semestre (01/01 a 30/06)
                                     </h5>
                                     <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md">
                                       Pagamento até Setembro
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-slate-400 mt-0.5">
-                                    Média do semestre: <strong className="text-white font-mono">{c2Average !== null ? `${c2Average.toFixed(1)}%` : '—'}</strong>
-                                  </p>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  {getBadge(c2Average)}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSetCycleBatch(c2Months.map(m => m.key), 100)}
-                                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300 rounded-lg transition-all"
-                                    title="Preencher 100% em todos os meses do 1º Semestre"
-                                  >
-                                    Set 100%
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                                {c2Months.map(m => {
-                                  const val = yearScores[m.key] !== undefined ? yearScores[m.key] : 100;
-                                  return (
-                                    <div key={m.key} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
-                                      <div className="flex justify-between items-center text-xs">
-                                        <span className="font-bold text-slate-300">{m.label}</span>
-                                        <span className={`font-mono font-black ${
-                                          val >= 100 ? 'text-emerald-400' : val >= 90 ? 'text-amber-400' : 'text-rose-400'
-                                        }`}>
-                                          {val}%
-                                        </span>
-                                      </div>
-
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={val}
-                                        onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2 py-1 text-right text-xs font-black text-white font-mono outline-none focus:border-amber-500"
-                                      />
-
-                                      <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        value={val}
-                                        onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
-                                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                                      />
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* CICLO 1 — 2º SEMESTRE (JUL A DEZ) */}
-                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm">
-                              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <h5 className="text-sm font-black text-white uppercase tracking-wider">
-                                      Ciclo 1 — 2º Semestre (01/07 a 31/12)
-                                    </h5>
-                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md">
-                                      Pagamento até Março (ano seguinte)
                                     </span>
                                   </div>
                                   <p className="text-xs text-slate-400 mt-0.5">
@@ -4991,7 +4941,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                     type="button"
                                     onClick={() => handleSetCycleBatch(c1Months.map(m => m.key), 100)}
                                     className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300 rounded-lg transition-all"
-                                    title="Preencher 100% em todos os meses do 2º Semestre"
+                                    title="Preencher 100% em todos os meses do 1º Semestre"
                                   >
                                     Set 100%
                                   </button>
@@ -5001,6 +4951,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                                 {c1Months.map(m => {
                                   const val = yearScores[m.key] !== undefined ? yearScores[m.key] : 100;
+                                  const proofVal = yearProofs[m.key] || '';
                                   return (
                                     <div key={m.key} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
                                       <div className="flex justify-between items-center text-xs">
@@ -5029,6 +4980,124 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
                                         className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                                       />
+
+                                      {/* Campo para Link de Comprovação / Auditoria */}
+                                      <div className="pt-1.5 border-t border-slate-800/80">
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="url"
+                                            placeholder="Link comprovação..."
+                                            value={proofVal}
+                                            onChange={e => handleProofLinkChange(m.key, e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-1 text-[10px] text-slate-300 placeholder-slate-500 outline-none focus:border-amber-400 font-mono"
+                                            title="URL da comprovação da avaliação mensal para auditoria"
+                                          />
+                                          {proofVal && (
+                                            <a
+                                              href={proofVal}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="p-1 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-400 rounded-lg transition-colors shrink-0"
+                                              title="Abrir link da comprovação em nova aba"
+                                            >
+                                              <ExternalLink size={11} />
+                                            </a>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* CICLO 2 (C2) — 2º SEMESTRE (JUL A DEZ) */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h5 className="text-sm font-black text-white uppercase tracking-wider">
+                                      Ciclo 2 (C2) — 2º Semestre (01/07 a 31/12)
+                                    </h5>
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md">
+                                      Pagamento até Março (ano seguinte)
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-400 mt-0.5">
+                                    Média do semestre: <strong className="text-white font-mono">{c2Average !== null ? `${c2Average.toFixed(1)}%` : '—'}</strong>
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {getBadge(c2Average)}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetCycleBatch(c2Months.map(m => m.key), 100)}
+                                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300 rounded-lg transition-all"
+                                    title="Preencher 100% em todos os meses do 2º Semestre"
+                                  >
+                                    Set 100%
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                {c2Months.map(m => {
+                                  const val = yearScores[m.key] !== undefined ? yearScores[m.key] : 100;
+                                  const proofVal = yearProofs[m.key] || '';
+                                  return (
+                                    <div key={m.key} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <span className="font-bold text-slate-300">{m.label}</span>
+                                        <span className={`font-mono font-black ${
+                                          val >= 100 ? 'text-emerald-400' : val >= 90 ? 'text-amber-400' : 'text-rose-400'
+                                        }`}>
+                                          {val}%
+                                        </span>
+                                      </div>
+
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={val}
+                                        onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2 py-1 text-right text-xs font-black text-white font-mono outline-none focus:border-amber-500"
+                                      />
+
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={val}
+                                        onChange={e => handleMonthChange(m.key, parseInt(e.target.value) || 0)}
+                                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                      />
+
+                                      {/* Campo para Link de Comprovação / Auditoria */}
+                                      <div className="pt-1.5 border-t border-slate-800/80">
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="url"
+                                            placeholder="Link comprovação..."
+                                            value={proofVal}
+                                            onChange={e => handleProofLinkChange(m.key, e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-1 text-[10px] text-slate-300 placeholder-slate-500 outline-none focus:border-amber-400 font-mono"
+                                            title="URL da comprovação da avaliação mensal para auditoria"
+                                          />
+                                          {proofVal && (
+                                            <a
+                                              href={proofVal}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="p-1 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-400 rounded-lg transition-colors shrink-0"
+                                              title="Abrir link da comprovação em nova aba"
+                                            >
+                                              <ExternalLink size={11} />
+                                            </a>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
                                   );
                                 })}
@@ -5038,7 +5107,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             {/* Rodapé de Ações */}
                             <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
                               <span className="text-xs text-slate-400 font-semibold">
-                                As metas mensais salvas recalculam automaticamente o valor do bônus no Cockpit do BPR.
+                                As metas mensais e links comprobatórios recalculam e auditam o bônus no Cockpit do BPR.
                               </span>
                               <button
                                 type="button"

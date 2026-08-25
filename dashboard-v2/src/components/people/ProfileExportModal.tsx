@@ -269,6 +269,7 @@ export function ProfileExportModal({
       return;
     }
 
+    const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
     let html = `
       <!DOCTYPE html>
       <html>
@@ -300,10 +301,10 @@ export function ProfileExportModal({
             <div>
               <h1 style="font-size: 22px; margin: 0; color: #0f172a; font-weight: 800;">${employeeName}</h1>
               <p style="margin: 3px 0 0 0; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
-                Ficha Cadastral Executiva • ${profile.job_role || 'Função não informada'}
+                ${isPJ ? 'Ficha do Prestador de Serviços (PJ)' : 'Ficha Cadastral Executiva'} • ${profile.job_role || (isPJ ? 'Escopo Especializado' : 'Função não informada')}
               </p>
               <p style="margin: 2px 0 0 0; color: #334155; font-size: 11px; font-weight: 600;">
-                Empresa: <strong style="color: #b45309;">${profile.company || 'MarBR'}</strong> &nbsp;|&nbsp; Vínculo: <strong>${profile.linkType || 'CLT'}</strong>
+                Empresa Contratante: <strong style="color: #b45309;">${profile.company || 'MarBR'}</strong> &nbsp;|&nbsp; Regime: <strong>${profile.linkType || 'CLT'}</strong>
               </p>
             </div>
           </div>
@@ -318,12 +319,17 @@ export function ProfileExportModal({
     if (includePersonal) {
       html += `
         <div class="section">
-          <div class="section-title">1. Identificação e Dados Pessoais</div>
+          <div class="section-title">${isPJ ? '1. Identificação da Empresa e Representante Legal' : '1. Identificação e Dados Pessoais'}</div>
           <div class="grid">
-            <div class="field"><span class="field-label">Nome Completo</span><span class="field-value">${profile.name || '-'}</span></div>
+            <div class="field"><span class="field-label">${isPJ ? 'Nome do Representante / Prestador' : 'Nome Completo'}</span><span class="field-value">${profile.name || '-'}</span></div>
             <div class="field"><span class="field-label">CPF</span><span class="field-value">${profile.document_id || '-'}</span></div>
             <div class="field"><span class="field-label">RG</span><span class="field-value">${profile.document_rg || '-'}</span></div>
-            <div class="field"><span class="field-label">Gênero</span><span class="field-value">${profile.gender || '-'}</span></div>
+            ${isPJ ? `
+              <div class="field"><span class="field-label">Razão Social (PJ)</span><span class="field-value">${profile.corporate_name || '-'}</span></div>
+              <div class="field"><span class="field-label">CNPJ (PJ)</span><span class="field-value">${profile.pj_type || '-'}</span></div>
+            ` : `
+              <div class="field"><span class="field-label">Gênero</span><span class="field-value">${profile.gender || '-'}</span></div>
+            `}
             <div class="field"><span class="field-label">Nível</span><span class="field-value">${profile.nivel || '-'}</span></div>
             <div class="field"><span class="field-label">Grau</span><span class="field-value">${profile.grau || '-'}</span></div>
           </div>
@@ -335,19 +341,18 @@ export function ProfileExportModal({
     if (includeContractual) {
       html += `
         <div class="section">
-          <div class="section-title">2. Dados Contratuais e Empresa</div>
+          <div class="section-title">${isPJ ? '2. Dados do Contrato e Prestação de Serviços' : '2. Dados Contratuais e Empresa'}</div>
           <div class="grid">
-            <div class="field"><span class="field-label">Empresa</span><span class="field-value">${profile.company || '-'}</span></div>
+            <div class="field"><span class="field-label">Empresa Contratante</span><span class="field-value">${profile.company || '-'}</span></div>
             <div class="field"><span class="field-label">Vínculo Contratual</span><span class="field-value">${profile.linkType || '-'}</span></div>
-            <div class="field"><span class="field-label">Escopo do Contrato</span><span class="field-value">${profile.job_role || '-'}</span></div>
-            <div class="field"><span class="field-label">Setor / Departamento</span><span class="field-value">${profile.department || '-'}</span></div>
-            <div class="field"><span class="field-label">Data de Admissão</span><span class="field-value">${formatDate(profile.start_date)}</span></div>
-            <div class="field"><span class="field-label">Vencimento do Contrato</span><span class="field-value">${formatDate(profile.contract_expiry_date)}</span></div>
+            <div class="field"><span class="field-label">${isPJ ? 'Escopo / Objeto do Serviço' : 'Escopo do Contrato'}</span><span class="field-value">${profile.job_role || '-'}</span></div>
+            <div class="field"><span class="field-label">${isPJ ? 'Área Atendida / Unidade' : 'Setor / Departamento'}</span><span class="field-value">${profile.department || '-'}</span></div>
+            <div class="field"><span class="field-label">${isPJ ? 'Início da Vigência / Prestação' : 'Data de Admissão'}</span><span class="field-value">${formatDate(profile.start_date)}</span></div>
+            <div class="field"><span class="field-label">${isPJ ? 'Vencimento / Término da Vigência' : 'Vencimento do Contrato'}</span><span class="field-value">${formatDate(profile.contract_expiry_date)}</span></div>
+            ${profile.resignation_date ? `<div class="field"><span class="field-label">${isPJ ? 'Data do Distrato / Rescisão' : 'Data de Demissão / Rescisão'}</span><span class="field-value">${formatDate(profile.resignation_date)}</span></div>` : ''}
             <div class="field"><span class="field-label">Status do Cadastro</span><span class="field-value">${profile.status || 'Ativo'}</span></div>
-            ${profile.corporate_name ? `<div class="field"><span class="field-label">Razão Social (PJ)</span><span class="field-value">${profile.corporate_name}</span></div>` : ''}
-            ${profile.pj_type ? `<div class="field"><span class="field-label">CNPJ (PJ)</span><span class="field-value">${profile.pj_type}</span></div>` : ''}
-            ${profile.responsible_name ? `<div class="field"><span class="field-label">Nome do Responsável</span><span class="field-value">${profile.responsible_name}</span></div>` : ''}
-            ${profile.responsible_cpf ? `<div class="field"><span class="field-label">CPF do Responsável</span><span class="field-value">${profile.responsible_cpf}</span></div>` : ''}
+            ${profile.corporate_name && !isPJ ? `<div class="field"><span class="field-label">Razão Social (PJ)</span><span class="field-value">${profile.corporate_name}</span></div>` : ''}
+            ${profile.pj_type && !isPJ ? `<div class="field"><span class="field-label">CNPJ (PJ)</span><span class="field-value">${profile.pj_type}</span></div>` : ''}
           </div>
         </div>
       `;
