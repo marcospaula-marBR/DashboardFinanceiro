@@ -16,6 +16,7 @@ import { CltImportAuditModal } from "@/components/people/CltImportAuditModal";
 import { PjImportAuditModal } from "@/components/people/PjImportAuditModal";
 import { BatchReplicateCostsModal } from "@/components/people/BatchReplicateCostsModal";
 import { OutsourcingCockpitModal } from "@/components/people/OutsourcingCockpitModal";
+import { BprCockpitModal } from "@/components/people/BprCockpitModal";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
@@ -108,6 +109,7 @@ export default function PeoplePage() {
   const [isPjImportModalOpen, setIsPjImportModalOpen] = useState(false);
   const [isBatchReplicateModalOpen, setIsBatchReplicateModalOpen] = useState(false);
   const [isOutsourcingModalOpen, setIsOutsourcingModalOpen] = useState(false);
+  const [isBprModalOpen, setIsBprModalOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   
   // C-Level Executive Drawer States
@@ -1292,6 +1294,15 @@ export default function PeoplePage() {
               <Building2 size={15} /> Terceirização
             </button>
 
+            {/* BOTÃO ATALHO: BPR (BÔNUS POR PARTICIPAÇÃO NOS RESULTADOS) */}
+            <button
+              onClick={() => setIsBprModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-amber-400/80 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-md shadow-amber-500/20 cursor-pointer"
+              title="Apuração e Rateio do BPR (Bônus por Participação nos Resultados)"
+            >
+              <Award size={15} /> BPR (Bônus)
+            </button>
+
             {/* PASTA DE IMPORTAÇÕES (Central Executiva de Cargas) */}
             <div className="relative">
               <button
@@ -2305,6 +2316,13 @@ export default function PeoplePage() {
         isOpen={isOutsourcingModalOpen}
         onClose={() => setIsOutsourcingModalOpen(false)}
         isTestMode={isTestMode}
+      />
+
+      <BprCockpitModal
+        isOpen={isBprModalOpen}
+        onClose={() => setIsBprModalOpen(false)}
+        employees={employees}
+        monthlyCosts={monthlyCosts}
       />
     </div>
   );
