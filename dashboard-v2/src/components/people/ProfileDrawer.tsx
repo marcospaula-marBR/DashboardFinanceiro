@@ -2626,39 +2626,58 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                         </div>
 
                         <div className="col-span-2 pt-4 border-t border-dashed border-slate-200">
-                          <h4 className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-2 mb-3">
-                            <Briefcase size={11}/> Posição Atual — Histórico de Setor/Função
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                              <label className={labelClass}>Setor</label>
-                              <input 
-                                type="text" 
-                                value={profile.department || ''} 
-                                onChange={e => {
-                                  // Capitalize first letter logic applied dynamically to standardise on type
-                                  const val = e.target.value;
-                                  const normalized = val ? val.charAt(0).toUpperCase() + val.slice(1) : val;
-                                  handleChange('department', normalized);
-                                }} 
-                                readOnly={!isEditMode} 
-                                className={inputClass} 
-                                placeholder="Ex: Administrativo"
-                                list="setores-list"
-                              />
-                              <datalist id="setores-list">
-                                {setores.map(s => <option key={s} value={s} />)}
-                              </datalist>
-                            </div>
-                            <div>
-                              <label className={labelClass}>Escopo do Contrato</label>
-                              <input type="text" value={profile.job_role || ''} onChange={e => handleChange('job_role', e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="Ex: Analista Financeiro"/>
-                            </div>
-                            <div>
-                              <label className={labelClass}>Início neste Setor/Função</label>
-                              <input type="date" value={profile.department_start_date || ''} onChange={e => handleChange('department_start_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                            </div>
-                          </div>
+                          {(() => {
+                            const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile));
+                            return (
+                              <>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-2 mb-3">
+                                  <Briefcase size={11}/> {isPJ ? 'Atuação — Área Atendida & Escopo do Serviço' : 'Posição Atual — Histórico de Setor & Cargo'}
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <label className={labelClass}>{isPJ ? 'Área Atendida / Unidade' : 'Setor / Departamento'}</label>
+                                    <input 
+                                      type="text" 
+                                      value={profile.department || ''} 
+                                      onChange={e => {
+                                        const val = e.target.value;
+                                        const normalized = val ? val.charAt(0).toUpperCase() + val.slice(1) : val;
+                                        handleChange('department', normalized);
+                                      }} 
+                                      readOnly={!isEditMode} 
+                                      className={inputClass} 
+                                      placeholder={isPJ ? "Ex: Operações, Jurídico..." : "Ex: Administrativo"}
+                                      list="setores-list"
+                                    />
+                                    <datalist id="setores-list">
+                                      {setores.map(s => <option key={s} value={s} />)}
+                                    </datalist>
+                                  </div>
+                                  <div>
+                                    <label className={labelClass}>{isPJ ? 'Escopo do Serviço / Especialidade' : 'Cargo / Função'}</label>
+                                    <input 
+                                      type="text" 
+                                      value={profile.job_role || ''} 
+                                      onChange={e => handleChange('job_role', e.target.value)} 
+                                      readOnly={!isEditMode} 
+                                      className={inputClass} 
+                                      placeholder={isPJ ? "Ex: Consultoria em TI, Médico..." : "Ex: Analista Financeiro"}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className={labelClass}>{isPJ ? 'Início nesta Atuação / Escopo' : 'Início neste Setor/Função'}</label>
+                                    <input 
+                                      type="date" 
+                                      value={profile.department_start_date || ''} 
+                                      onChange={e => handleChange('department_start_date', e.target.value)} 
+                                      readOnly={!isEditMode} 
+                                      className={inputClass}
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })()}
                           <div className="mt-3 space-y-2">
                               <p className="text-[10px] font-bold text-slate-400 uppercase">Histórico de Mudanças</p>
                               {history.filter(h => h.event_type?.toLowerCase().includes('setor') || h.event_type?.toLowerCase().includes('cargo') || h.event_type?.toLowerCase().includes('função')).map((h, i) => (

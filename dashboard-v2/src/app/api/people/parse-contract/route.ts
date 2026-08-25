@@ -99,12 +99,19 @@ ATENÇÃO MÁXIMA A DISTRATOS: Se o documento contiver palavras-chave como 'Dist
 Retorne APENAS o JSON puro, sem nenhuma outra formatação markdown.
 `;
 
-    // Lista de modelos suportados com fallback automático
-    const modelCandidates = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    // Lista de modelos suportados em ordem de preferência (removido gemini-1.5-pro descontinuado)
+    const modelCandidates = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-2.0-flash-lite'
+    ];
     let textResponse = '';
     let lastModelError: Error | null = null;
 
     for (const modelName of modelCandidates) {
+      // Tentativa 1: com responseMimeType JSON
       try {
         const model = genAI.getGenerativeModel({ 
           model: modelName,
@@ -121,13 +128,37 @@ Retorne APENAS o JSON puro, sem nenhuma outra formatação markdown.
           prompt
         ]);
 
-        textResponse = result.response.text();
+        const resp = await result.response;
+        textResponse = resp.text();
         if (textResponse && textResponse.trim().length > 0) {
           break; // Sucesso!
         }
       } catch (err: any) {
-        console.warn(`Tentativa com modelo ${modelName} falhou:`, err?.message || err);
+        console.warn(`Tentativa com modelo ${modelName} (JSON config) falhou:`, err?.message || err);
         lastModelError = err;
+
+        // Tentativa 2: sem responseMimeType (texto padrão com extração)
+        try {
+          const fallbackModel = genAI.getGenerativeModel({ model: modelName });
+          const result = await fallbackModel.generateContent([
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: 'application/pdf'
+              }
+            },
+            prompt
+          ]);
+
+          const resp = await result.response;
+          textResponse = resp.text();
+          if (textResponse && textResponse.trim().length > 0) {
+            break; // Sucesso!
+          }
+        } catch (err2: any) {
+          console.warn(`Tentativa com modelo ${modelName} (raw fallback) falhou:`, err2?.message || err2);
+          lastModelError = err2;
+        }
       }
     }
 
@@ -148,6 +179,14 @@ Retorne APENAS o JSON puro, sem nenhuma outra formatação markdown.
       const parsedData = JSON.parse(cleanedText);
       return NextResponse.json(parsedData);
     } catch {
+      // Tenta regex para extrair o primeiro bloco JSON {...}
+      const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const recovered = JSON.parse(jsonMatch[0]);
+          return NextResponse.json(recovered);
+        } catch {}
+      }
       return NextResponse.json({ 
         rawText: textResponse,
         error: 'A IA não retornou um JSON perfeitamente válido.' 

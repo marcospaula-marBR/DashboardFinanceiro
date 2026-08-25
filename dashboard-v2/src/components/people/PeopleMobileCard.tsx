@@ -122,9 +122,9 @@ export function PeopleMobileCard({
     return BprService.calculateCyclePerformance(bprScores, 'ciclo_1', currentYear);
   }, [bprScores, currentYear]);
 
-  // C2: 2º Semestre do ano anterior (Jul a Dez)
-  const c2PrevPerf = useMemo(() => {
-    return BprService.calculateCyclePerformance(bprScores, 'ciclo_2', currentYear - 1);
+  // C2: 2º Semestre (Jul a Dez)
+  const c2Perf = useMemo(() => {
+    return BprService.calculateCyclePerformance(bprScores, 'ciclo_2', currentYear);
   }, [bprScores, currentYear]);
 
   const waLink = formatWhatsAppLink(employee.phone_professional);
@@ -305,7 +305,7 @@ export function PeopleMobileCard({
               <RelationshipNatureBadge nature={employee.relationshipNature} />
             </span>
 
-            {/* Badge de BPR C1 (Ciclo Atual - 1º Semestre) */}
+            {/* Badge de BPR C1 (1º Semestre) */}
             <span 
               className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${
                 c1Perf.performanceFactor === 1.0
@@ -320,16 +320,20 @@ export function PeopleMobileCard({
               <span>C1: {c1Perf.averageScore}% ({c1Perf.performanceFactor * 100}%)</span>
             </span>
 
-            {/* Badge de BPR C2 (Ciclo Anterior - 2º Semestre) */}
-            {c2PrevPerf.hasRecordedScores && (
-              <span 
-                className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200"
-                title={`BPR C2 - 2º Semestre Anterior (${currentYear - 1}): Média ${c2PrevPerf.averageScore}% (${c2PrevPerf.performanceFactor * 100}%)`}
-              >
-                <span className="text-slate-400">C2 Ant:</span>
-                <span>{c2PrevPerf.averageScore}%</span>
-              </span>
-            )}
+            {/* Badge de BPR C2 (2º Semestre) */}
+            <span 
+              className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${
+                c2Perf.performanceFactor === 1.0
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : c2Perf.performanceFactor === 0.75
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-rose-50 text-rose-700 border-rose-200'
+              }`}
+              title={`BPR C2 - 2º Semestre (${currentYear}): Média ${c2Perf.averageScore}% — Elegibilidade: ${c2Perf.factorLabel}${!c2Perf.hasRecordedScores ? ' (Padrão 100%)' : ''}`}
+            >
+              <Coins size={11} className={c2Perf.performanceFactor === 1.0 ? 'text-emerald-600' : c2Perf.performanceFactor === 0.75 ? 'text-amber-600' : 'text-rose-500'} />
+              <span>C2: {c2Perf.averageScore}% ({c2Perf.performanceFactor * 100}%)</span>
+            </span>
           </div>
         </div>
       </div>
