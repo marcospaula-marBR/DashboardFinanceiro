@@ -51,6 +51,9 @@ const MERGE_FIELDS = [
   { key: 'neighborhood', label: 'Bairro' },
   { key: 'city', label: 'Cidade' },
   { key: 'state', label: 'UF' },
+  { key: 'status', label: 'Status Cadastral' },
+  { key: 'resignation_date', label: 'Data de Encerramento / Distrato', isDate: true },
+  { key: 'status_end_date', label: 'Fim de Status', isDate: true },
   { key: 'start_date', label: 'Data de Admissão', isDate: true },
   { key: 'contract_expiry_date', label: 'Vencimento Contrato', isDate: true },
   { key: 'job_role', label: 'Cargo / Função' },
@@ -804,14 +807,36 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       if (resolved) next.company = resolved;
     }
 
+    // Tratamento Robusto de Distratos / Rescisões
+    const isDistrato = data.document_type === 'Distrato' || 
+      (data.document_title && (
+        data.document_title.toLowerCase().includes('distrato') || 
+        data.document_title.toLowerCase().includes('rescis') || 
+        data.document_title.toLowerCase().includes('encerra') ||
+        data.document_title.toLowerCase().includes('quita') ||
+        data.document_title.toLowerCase().includes('resili')
+      )) ||
+      data.status === 'Inativo' ||
+      !!data.termination_date;
+
+    if (isDistrato) {
+      next.status = 'Inativo';
+      const termDate = data.termination_date || data.resignation_date || data.contract_expiry_date || data.signature_date || new Date().toISOString().split('T')[0];
+      next.resignation_date = termDate;
+      next.status_end_date = termDate;
+      next.contract_expiry_date = termDate;
+    } else {
+      if (data.status) next.status = data.status;
+      if (data.contract_expiry_date) {
+        next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
+      }
+    }
+
     if (data.start_date) {
       next.start_date = getOldestDate(prev.start_date, data.start_date);
     }
     if (data.job_role || data.department) {
       next.department_start_date = data.signature_date || data.start_date || new Date().toISOString().split('T')[0];
-    }
-    if (data.contract_expiry_date) {
-      next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
     }
 
     if (next.linkType === 'PJ') {
@@ -903,6 +928,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
             defaults[field.key] = d1 ? 'existing' : 'incoming';
           }
         } else if ([
+          'status', 'resignation_date', 'status_end_date',
           'job_role', 'department', 'department_start_date',
           'remuneration_fixed', 'remuneration_bonus', 'remuneration_incentives', 'remuneration_connectivity',
           'contract_expiry_date', 'corporate_name', 'pj_type', 'links_contratos', 'links_aditivos'
@@ -1211,20 +1237,32 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           if (resolved) next.company = resolved;
         }
 
+        // Tratamento de Distrato / Rescisão / Encerramento
+        const isDistrato = data.document_type === 'Distrato' || 
+          (data.document_title && (
+            data.document_title.toLowerCase().includes('distrato') || 
+            data.document_title.toLowerCase().includes('rescis') || 
+            data.document_title.toLowerCase().includes('encerra') ||
+            data.document_title.toLowerCase().includes('quita') ||
+            data.document_title.toLowerCase().includes('resili')
+          )) ||
+          data.status === 'Inativo' ||
+          !!data.termination_date;
+
         // Datas: Admissão (Mais antiga) e Vencimento (Maior/Mais recente)
-        if (data.start_date && data.document_type !== 'Distrato') {
+        if (data.start_date && !isDistrato) {
           next.start_date = getOldestDate(prev.start_date, data.start_date);
         }
         if (data.job_role || data.department) {
           next.department_start_date = data.signature_date || data.start_date || new Date().toISOString().split('T')[0];
         }
-        if (data.contract_expiry_date && data.document_type !== 'Distrato') {
+        if (data.contract_expiry_date && !isDistrato) {
           next.contract_expiry_date = getLatestDate(prev.contract_expiry_date, data.contract_expiry_date);
         }
 
         // Se for distrato ou houver data de encerramento/rescisao
-        if (data.document_type === 'Distrato' || data.termination_date) {
-          const endDate = data.termination_date || data.contract_expiry_date || data.signature_date || new Date().toISOString().split('T')[0];
+        if (isDistrato) {
+          const endDate = data.termination_date || data.resignation_date || data.contract_expiry_date || data.signature_date || new Date().toISOString().split('T')[0];
           next.contract_expiry_date = endDate;
           next.resignation_date = endDate;
           next.status_end_date = endDate;

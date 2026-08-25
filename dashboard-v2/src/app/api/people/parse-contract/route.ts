@@ -46,17 +46,26 @@ export async function POST(req: Request) {
     }
 
     const prompt = `
-Analise este contrato de prestação de serviços (ou contrato de trabalho, aditivo ou distrato/rescisão) e extraia o máximo de informações estruturadas possíveis. 
-Procure também em qualquer página de "checklist", resumo, folha de conferência ou anexos de validação que possam estar incluídos no documento, pois estes costumam conter o resumo das datas de início, validade, encerramento e outras informações importantes do contrato.
+Analise este documento (que pode ser um Contrato de Prestação de Serviços, Aditivo Contratual, Contrato de Trabalho CLT, Termo de Rescisão, Termo de Distrato, Acordo de Encerramento, Notificação de Rescisão ou Quitação) e extraia todas as informações estruturadas possíveis.
+Procure também em qualquer página de "checklist", resumo, folha de conferência ou anexos de validação que possam estar incluídos no documento, pois estes costumam conter o resumo das datas de início, validade, encerramento e outras informações importantes.
+
+IDENTIFICAÇÃO RIGOROSA DE DISTRATOS / RESCISÕES:
+Se o documento contiver palavras como "Distrato", "Rescisão", "Encerramento", "Quitação", "Resilição", "Termo de Desligamento", "Revogação" ou frases indicando o fim da prestação de serviços ou da relação contratual:
+- "document_type" DEVE ser OBRIGATORIAMENTE "Distrato".
+- "status" DEVE ser "Inativo".
+- "termination_date" DEVE conter a data de encerramento/fim dos serviços ou data de assinatura do distrato (formato YYYY-MM-DD).
+- "contract_expiry_date" DEVE ser preenchido com essa mesma data final de encerramento.
+- "resignation_date" DEVE ser preenchido com essa mesma data final de encerramento.
 
 Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia se não encontrar):
 
 {
-  "document_type": "Qualifique este documento como 'Contrato', 'Aditivo' ou 'Distrato' (Termo de Rescisão/Distrato)",
-  "document_title": "TÍTULO EXATO do documento conforme consta no topo/início (ex: 'CONTRATO PRESTAÇÃO DE SERVIÇO', 'TERMO DE DISTRATO DE CONTRATO DE PRESTAÇÃO DE SERVIÇOS', 'ADITIVO CONTRATUAL')",
+  "document_type": "Qualifique este documento como 'Contrato', 'Aditivo' ou 'Distrato' (Termo de Rescisão/Distrato/Encerramento)",
+  "document_title": "TÍTULO EXATO do documento conforme consta no topo/início (ex: 'TERMO DE DISTRATO DE CONTRATO DE PRESTAÇÃO DE SERVIÇOS', 'CONTRATO PRESTAÇÃO DE SERVIÇO', 'ADITIVO CONTRATUAL')",
+  "status": "Se for Distrato, retorne 'Inativo'. Caso contrário, retorne 'Ativo'",
   "additive_changes": "Se for Aditivo, liste de forma sucinta o que mudou (ex: 'Mudança de Função', 'Aditivo de Remuneração', 'Prorrogação de Prazo'). Se não for, deixe nulo.",
-  "signature_date": "Data EXATA da assinatura do documento ou data de emissão/fechamento. Leia as últimas páginas e procure por trechos como 'cidade, 01 de Junho de 2026' ou o carimbo da assinatura digital (formato YYYY-MM-DD).",
-  "job_role": "Cargo ou Função do contratado (ex: Médico, Desenvolvedor, Técnico, Assistente). Se houver mudança de cargo no aditivo, extraia o novo cargo/função para cá.",
+  "signature_date": "Data EXATA da assinatura do documento ou data de emissão/fechamento (formato YYYY-MM-DD).",
+  "job_role": "Cargo ou Função do contratado (ex: Médico, Desenvolvedor, Técnico, Assistente, Consultor). Se houver mudança de cargo no aditivo, extraia o novo cargo/função para cá.",
   "name": "Nome do contratado/colaborador (Pessoa Física representante/prestador)",
   "document_id": "CPF do contratado (formato 000.000.000-00)",
   "document_rg": "RG do contratado se houver",
@@ -88,14 +97,14 @@ Retorne um objeto JSON estrito com os seguintes campos (use nulo ou string vazia
   "responsible_name": "Nome do responsável legal",
   "responsible_cpf": "CPF do responsável legal (formato 000.000.000-00)",
   "start_date": "Data de início do contrato/admissão/início da prestação (formato YYYY-MM-DD)",
-  "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato se houver ou DATA DO DISTRATO/RESCISÃO (formato YYYY-MM-DD)",
-  "termination_date": "Se for Distrato (Termo de Rescisão/Encerramento), busque a DATA EFETIVA DO ÚLTIMO DIA TRABALHADO ou data real do encerramento da prestação de serviços (formato YYYY-MM-DD)",
+  "contract_expiry_date": "Data de término/vencimento/validade/fim da vigência do contrato ou DATA FINAL DO DISTRATO/RESCISÃO (formato YYYY-MM-DD)",
+  "termination_date": "Se for Distrato (Termo de Rescisão/Encerramento), data do distrato ou do último dia prestado (formato YYYY-MM-DD)",
+  "resignation_date": "Se for Distrato, mesma data de encerramento/rescisão (formato YYYY-MM-DD)",
   "contracting_company": "Nome/Razão Social da empresa contratante (ex: G2 Tecnologia e Inovação, Mar Brasil Serviços e Locações, D.Z.M, etc.)",
-  "executive_summary": "Resumo profissional executivo baseado no OBJETO DO CONTRATO."
+  "executive_summary": "Resumo profissional executivo baseado no OBJETO DO CONTRATO ou motivo do distrato."
 }
 
 Trabalhe com máxima precisão. Caso seja um contrato PJ (MEI ou outro), o 'linkType' deve ser EXCLUSIVAMENTE 'PJ'.
-ATENÇÃO MÁXIMA A DISTRATOS: Se o documento contiver palavras-chave como 'Distrato', 'Rescisão', 'Encerramento de Contrato', 'Termo de Quitação', defina document_type = 'Distrato'. Preencha Obrigatoriamente 'termination_date' E 'contract_expiry_date' com a data final da prestação de serviços encontrada no documento.
 Retorne APENAS o JSON puro, sem nenhuma outra formatação markdown.
 `;
 
