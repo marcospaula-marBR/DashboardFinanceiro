@@ -1,9 +1,10 @@
 /**
  * Serviço de Gestão de Postos de Trabalho & Bases Operacionais
  * Sincronização em Nuvem Supabase + Fallback Local
+ * v.02.58.10 — Adicionado CostCentersService (Centro de Custo + Regiões + Unidades)
  */
 
-import { Workstation } from '@/types/workstations';
+import { Workstation, CostCenter, WorkstationUnit, ServiceRegion } from '@/types/workstations';
 import { supabase } from '@/lib/supabase';
 
 const WORKSTATIONS_STORAGE_KEY = 'marbr_workstations_list_v1';
@@ -259,3 +260,197 @@ export class WorkstationsService {
     return updated;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COST CENTERS SERVICE — Centro de Custo + Regiões de Atendimento + Unidades
+// ─────────────────────────────────────────────────────────────────────────────
+
+const COST_CENTERS_STORAGE_KEY = 'marbr_cost_centers_v1';
+
+export class CostCentersService {
+  // ── Sync local cache ──
+
+  public static getCostCenters(): CostCenter[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem(COST_CENTERS_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  }
+
+  private static saveLocal(list: CostCenter[]): void {
+    if (typeof window === 'undefined') return;
+    try { localStorage.setItem(COST_CENTERS_STORAGE_KEY, JSON.stringify(list)); } catch {}
+  }
+
+  // ── Supabase fetch ──
+
+  public static async fetchCostCentersAsync(): Promise<CostCenter[]> {
+    try {
+      const { data } = await supabase
+        .from('employees')
+        .select('metadata')
+        .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+        .maybeSingle();
+
+      if (data?.metadata?.cost_centers && Array.isArray(data.metadata.cost_centers)) {
+        this.saveLocal(data.metadata.cost_centers);
+        return data.metadata.cost_centers;
+      }
+    } catch (e) {
+      console.warn('[CostCentersService] Aviso ao carregar centros de custo:', e);
+    }
+    return this.getCostCenters();
+  }
+
+  // ── Supabase save ──
+
+  public static async saveCostCentersAsync(list: CostCenter[]): Promise<boolean> {
+    this.saveLocal(list);
+    try {
+      const { data: globalRec } = await supabase
+        .from('employees')
+        .select('id, metadata')
+        .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+        .maybeSingle();
+
+      const meta = (globalRec?.metadata as Record<string, any>) || {};
+      const updatedMeta = { ...meta, cost_centers: list };
+
+      if (globalRec?.id) {
+        await supabase.from('employees').update({ metadata: updatedMeta }).eq('id', globalRec.id);
+      } else {
+        await supabase.from('employees').insert([{
+          full_name: '__SYSTEM_GLOBAL_CONFIG__',
+          company: 'MarBR',
+          employment_type: 'CLT',
+          active: false,
+          status: 'Inativo',
+          metadata: updatedMeta
+        }]);
+      }
+      return true;
+    } catch (e) {
+      console.error('[CostCentersService] Erro ao salvar centros de custo:', e);
+      return false;
+    }
+  }
+
+  // ── CRUD: CostCenter ──
+
+  public static async upsertCostCenter(cc: CostCenter): Promise<CostCenter[]> {
+    const list = this.getCostCenters();
+    const idx = list.findIndex(c => c.id === cc.id);
+    const updated = idx >= 0
+      ? list.map((c, i) => i === idx ? cc : c)
+      : [...list, cc];
+    await this.saveCostCentersAsync(updated);
+    return updated;
+  }
+
+  public static async deleteCostCenter(id: string): Promise<CostCenter[]> {
+    const list = this.getCostCenters();
+    const updated = list.filter(c => c.id !== id);
+    await this.saveCostCentersAsync(updated);
+    return updated;
+  }
+
+  // ── CRUD: WorkstationUnit ──
+
+  public static async upsertUnit(costCenterId: string, unit: WorkstationUnit): Promise<CostCenter[]> {
+    const list = this.getCostCenters();
+    const updated = list.map(cc => {
+      if (cc.id !== costCenterId) return cc;
+      const units = cc.units || [];
+      const idx = units.findIndex(u => u.id === unit.id);
+      return {
+        ...cc,
+        units: idx >= 0 ? units.map((u, i) => i === idx ? unit : u) : [...units, unit]
+      };
+    });
+    await this.saveCostCentersAsync(updated);
+    return updated;
+  }
+
+  public static async deleteUnit(costCenterId: string, unitId: string): Promise<CostCenter[]> {
+    const list = this.getCostCenters();
+    const updated = list.map(cc => {
+      if (cc.id !== costCenterId) return cc;
+      return { ...cc, units: (cc.units || []).filter(u => u.id !== unitId) };
+    });
+    await this.saveCostCentersAsync(updated);
+    return updated;
+  }
+
+  // ── CRUD: ServiceRegion ──
+
+  public static async upsertRegion(costCenterId: string, region: ServiceRegion): Promise<CostCenter[]> {
+    const list = this.getCostCenters();
+    const updated = list.map(cc => {
+      if (cc.id !== costCenterId) return cc;
+      const regions = cc.regions || [];
+      const idx = regions.findIndex(r => r.id === region.id);
+      return {
+        ...cc,
+        regions: idx >= 0 ? regions.map((r, i) => i === idx ? region : r) : [...regions, region]
+      };
+    });
+    await this.saveCostCentersAsync(updated);
+    return updated;
+  }
+
+  public static async deleteRegion(costCenterId: string, regionId: string): Promise<CostCenter[]> {
+    const list = this.getCostCenters();
+    const updated = list.map(cc => {
+      if (cc.id !== costCenterId) return cc;
+      // Desvincular unidades que pertencem a esta região
+      const updatedUnits = (cc.units || []).map(u =>
+        u.region_id === regionId ? { ...u, region_id: undefined } : u
+      );
+      return {
+        ...cc,
+        regions: (cc.regions || []).filter(r => r.id !== regionId),
+        units: updatedUnits
+      };
+    });
+    await this.saveCostCentersAsync(updated);
+    return updated;
+  }
+
+  // ── Helper: resolver hierarquia de um unit_id ──
+
+  /**
+   * Dado o ID de uma WorkstationUnit, retorna o CostCenter pai,
+   * a própria unidade e (se aplicável) a ServiceRegion.
+   * Útil para o mapa ao identificar onde um colaborador foi alocado.
+   */
+  public static findUnitContext(
+    unitId: string,
+    list?: CostCenter[]
+  ): { costCenter: CostCenter; unit: WorkstationUnit; region?: ServiceRegion } | null {
+    const costCenters = list || this.getCostCenters();
+    for (const cc of costCenters) {
+      const unit = (cc.units || []).find(u => u.id === unitId);
+      if (unit) {
+        const region = unit.region_id
+          ? (cc.regions || []).find(r => r.id === unit.region_id)
+          : undefined;
+        return { costCenter: cc, unit, region };
+      }
+    }
+    return null;
+  }
+
+  /** Retorna todas as unidades de todos os centros de custo ativos em lista plana */
+  public static getAllUnits(list?: CostCenter[]): WorkstationUnit[] {
+    const costCenters = list || this.getCostCenters();
+    return costCenters
+      .filter(cc => cc.active)
+      .flatMap(cc => (cc.units || []).filter(u => u.active));
+  }
+}
+

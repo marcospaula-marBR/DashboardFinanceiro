@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Employee } from '@/types/loans';
-import { Workstation, EmployeeGeoItem, WorkstationOptimizationSummary } from '@/types/workstations';
-import { WorkstationsService } from '@/services/workstations.service';
+import { Workstation, CostCenter, WorkstationUnit, ServiceRegion, EmployeeGeoItem, WorkstationOptimizationSummary } from '@/types/workstations';
+import { WorkstationsService, CostCentersService } from '@/services/workstations.service';
 import { GeocodingService, LatLng } from '@/services/geocoding.service';
 import { WorkstationsManagerModal } from './WorkstationsManagerModal';
 import { GeminiRouteAdvisorModal } from './GeminiRouteAdvisorModal';
@@ -13,7 +13,8 @@ import {
   Building2, MapPin, Navigation, Compass, Search, Filter,
   CheckCircle2, AlertTriangle, ArrowRight, ExternalLink,
   Users, Sparkles, SlidersHorizontal, RefreshCw, Car, Clock,
-  ChevronRight, Layers, Table, Map as MapIcon, ArrowUpRight, Check, User
+  ChevronRight, Layers, Table, Map as MapIcon, ArrowUpRight, Check, User,
+  School, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -53,6 +54,7 @@ export function PeopleGeoLocationMap({
   showValues
 }: PeopleGeoLocationMapProps) {
   const [workstations, setWorkstations] = useState<Workstation[]>(() => WorkstationsService.getWorkstations());
+  const [costCenters, setCostCenters] = useState<CostCenter[]>(() => CostCentersService.getCostCenters());
   const [isWsManagerOpen, setIsWsManagerOpen] = useState(false);
   const [isGeminiAdvisorOpen, setIsGeminiAdvisorOpen] = useState(false);
   const [isLoadingGeo, setIsLoadingGeo] = useState(true);
@@ -66,10 +68,20 @@ export function PeopleGeoLocationMap({
   const [pendingWsDrag, setPendingWsDrag] = useState<{ wsId: string; wsName: string; lat: number; lng: number } | null>(null);
   const [isSavingDrag, setIsSavingDrag] = useState(false);
 
-  // Estado para Remanejamento por Drag & Drop de Colaboradores para Postos
+  // Estado para Remanejamento por Drag & Drop de Colaboradores para Postos / Unidades
   const [pendingEmployeeRemap, setPendingEmployeeRemap] = useState<{
     empItem: EmployeeGeoItem;
-    targetWs: Workstation;
+    target: {
+      id: string;
+      name: string;
+      lat: number;
+      lng: number;
+      type: 'workstation' | 'unit';
+      costCenterName?: string;
+      regionName?: string;
+      unitCode?: string;
+      color?: string;
+    };
     newDistanceKm: number;
     currentDistanceKm: number | null;
     kmDifference: number;
@@ -81,12 +93,12 @@ export function PeopleGeoLocationMap({
     if (!pendingEmployeeRemap) return;
     setIsSavingRemap(true);
     try {
-      const { empItem, targetWs, newDistanceKm } = pendingEmployeeRemap;
+      const { empItem, target, newDistanceKm } = pendingEmployeeRemap;
       
       // Persistir service_location no Supabase na tabela employees
       const { error } = await supabase
         .from('employees')
-        .update({ service_location: targetWs.name })
+        .update({ service_location: target.name })
         .eq('id', empItem.employee_id);
 
       if (error) throw error;
@@ -94,7 +106,7 @@ export function PeopleGeoLocationMap({
       // Atualizar lista local em memória
       setGeoItems(prev => prev.map(item => {
         if (item.employee_id === empItem.employee_id) {
-          const potOpt = (item.nearest_workstation && item.nearest_workstation.workstation.id !== targetWs.id)
+          const potOpt = (item.nearest_workstation && item.nearest_workstation.workstation.id !== target.id)
             ? {
                 better_workstation: item.nearest_workstation.workstation,
                 saved_distance_km: Number((newDistanceKm - item.nearest_workstation.distance_km).toFixed(1)),
@@ -104,8 +116,9 @@ export function PeopleGeoLocationMap({
 
           return {
             ...item,
-            current_service_location: targetWs.name,
-            assigned_workstation: targetWs,
+            current_service_location: target.name,
+            assigned_workstation: target.type === 'workstation' ? (workstations.find(w => w.id === target.id) || null) : null,
+            assigned_unit: target.type === 'unit' ? (CostCentersService.getAllUnits(costCenters).find(u => u.id === target.id) || null) : null,
             distance_to_current_workstation_km: newDistanceKm,
             potential_optimization: potOpt
           };
@@ -114,7 +127,8 @@ export function PeopleGeoLocationMap({
       }));
 
       const nameStr = empItem.corporate_name || empItem.name;
-      setRemapSuccessMessage(`Ficha de ${nameStr} atualizada! Posto de atuação gravado como ${targetWs.name}.`);
+      const targetDesc = target.regionName ? `${target.name} (${target.regionName})` : target.name;
+      setRemapSuccessMessage(`Ficha de ${nameStr} atualizada! Local gravado como ${targetDesc}.`);
       setPendingEmployeeRemap(null);
 
       setTimeout(() => setRemapSuccessMessage(null), 4500);
@@ -128,6 +142,7 @@ export function PeopleGeoLocationMap({
 
   // Filtros
   const [selectedWsId, setSelectedWsId] = useState<string>('all');
+  const [selectedCostCenterId, setSelectedCostCenterId] = useState<string>('all');
   const [selectedCity, setSelectedCity] = useState<string>('all');
   const [selectedRadiusKm, setSelectedRadiusKm] = useState<number>(0);
   const [selectedCompany, setSelectedCompany] = useState<string>('all');
@@ -147,9 +162,10 @@ export function PeopleGeoLocationMap({
   const circlesLayerRef = useRef<any>(null);
   const routeLayerRef = useRef<any>(null);
 
-  // 1. Sincronizar postos do Supabase ao montar
+  // 1. Sincronizar postos e centros de custo do Supabase ao montar
   useEffect(() => {
     WorkstationsService.fetchWorkstationsAsync().then(setWorkstations);
+    CostCentersService.fetchCostCentersAsync().then(setCostCenters);
   }, []);
 
   // 2. Geocodificar e calcular distâncias para TODOS os colaboradores
@@ -159,6 +175,7 @@ export function PeopleGeoLocationMap({
     async function processGeocoding() {
       setIsLoadingGeo(true);
       const items: EmployeeGeoItem[] = [];
+      const allUnits = CostCentersService.getAllUnits(costCenters);
 
       for (const emp of employees) {
         if (isCancelled) return;
@@ -198,16 +215,40 @@ export function PeopleGeoLocationMap({
 
         const validCoords = coords || { lat: -23.9618, lng: -46.3322 };
 
-        // Identificar posto atual
+        // Identificar local atual: Posto tradicional OU Unidade de Centro de Custo
         const currentLoc = (emp.service_location || '').toLowerCase();
         let assignedWs: Workstation | null = null;
+        let assignedUnit: WorkstationUnit | null = null;
+        let assignedRegion: ServiceRegion | null = null;
+        let assignedCc: CostCenter | null = null;
+
         if (currentLoc) {
+          // 1. Procurar em postos tradicionais
           assignedWs = workstations.find(w =>
             currentLoc.includes(w.name.toLowerCase()) ||
             (w.code && currentLoc.includes(w.code.toLowerCase())) ||
             (w.neighborhood && currentLoc.includes(w.neighborhood.toLowerCase())) ||
             (w.city && currentLoc.includes(w.city.toLowerCase()))
           ) || null;
+
+          // 2. Procurar em Unidades de Centros de Custo (ex: Escolas)
+          if (!assignedWs) {
+            for (const cc of costCenters) {
+              const u = (cc.units || []).find(unit =>
+                currentLoc.includes(unit.name.toLowerCase()) ||
+                (unit.code && currentLoc.includes(unit.code.toLowerCase())) ||
+                unit.id === emp.service_location
+              );
+              if (u) {
+                assignedUnit = u;
+                assignedCc = cc;
+                if (u.region_id) {
+                  assignedRegion = (cc.regions || []).find(r => r.id === u.region_id) || null;
+                }
+                break;
+              }
+            }
+          }
         }
 
         // Calcular distâncias para todos os postos
@@ -235,6 +276,11 @@ export function PeopleGeoLocationMap({
               distance_km: minDistance
             };
           }
+        }
+
+        // Se estiver alocado em uma unidade/escola, calcular a distância até a unidade
+        if (assignedUnit) {
+          distanceToCurrent = GeocodingService.calculateDistanceKm(validCoords, { lat: assignedUnit.lat, lng: assignedUnit.lng });
         }
 
         // Oportunidade de remanejamento
@@ -272,6 +318,9 @@ export function PeopleGeoLocationMap({
           has_valid_coords: hasAddrInfo,
           current_service_location: emp.service_location,
           assigned_workstation: assignedWs,
+          assigned_unit: assignedUnit,
+          assigned_region: assignedRegion,
+          assigned_cost_center: assignedCc,
           nearest_workstation: nearestWs,
           distance_to_current_workstation_km: distanceToCurrent,
           potential_optimization: potentialOpt
@@ -289,7 +338,7 @@ export function PeopleGeoLocationMap({
     return () => {
       isCancelled = true;
     };
-  }, [employees, workstations]);
+  }, [employees, workstations, costCenters]);
 
   // Lista de Cidades Únicas com contagem
   const availableCities = useMemo(() => {
@@ -317,7 +366,10 @@ export function PeopleGeoLocationMap({
         const matchesRole = (item.job_role || '').toLowerCase().includes(q);
         const matchesNeigh = (item.neighborhood || '').toLowerCase().includes(q);
         const matchesCity = (item.city || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesRole && !matchesNeigh && !matchesCity) return false;
+        const matchesUnit = item.assigned_unit?.name.toLowerCase().includes(q) || false;
+        const matchesRegion = item.assigned_region?.name.toLowerCase().includes(q) || false;
+        const matchesCc = item.assigned_cost_center?.name.toLowerCase().includes(q) || false;
+        if (!matchesName && !matchesRole && !matchesNeigh && !matchesCity && !matchesUnit && !matchesRegion && !matchesCc) return false;
       }
 
       // Cidade
@@ -347,9 +399,14 @@ export function PeopleGeoLocationMap({
         }
       }
 
+      // Centro de Custo selecionado
+      if (selectedCostCenterId !== 'all') {
+        if (item.assigned_cost_center?.id !== selectedCostCenterId) return false;
+      }
+
       return true;
     });
-  }, [geoItems, searchQuery, selectedCity, selectedCompany, selectedLinkType, addressFilterMode, onlyMisallocated, selectedWsId, selectedRadiusKm, workstations]);
+  }, [geoItems, searchQuery, selectedCity, selectedCompany, selectedLinkType, addressFilterMode, onlyMisallocated, selectedWsId, selectedCostCenterId, selectedRadiusKm, workstations]);
 
   // 4. Métricas executivas
   const metrics: WorkstationOptimizationSummary = useMemo(() => {
@@ -561,6 +618,62 @@ export function PeopleGeoLocationMap({
         allLatLngs.push([ws.lat, ws.lng]);
       });
 
+      // ── Unidades de Centros de Custo (Escolas / Postos de Atendimento) ──
+      costCenters.forEach(cc => {
+        if (!cc.active) return;
+        (cc.units || []).forEach(unit => {
+          if (!unit.active) return;
+
+          const region = unit.region_id ? (cc.regions || []).find(r => r.id === unit.region_id) : undefined;
+          const unitColor = region?.color || cc.color || '#10b981';
+
+          const unitIconHtml = `
+            <div style="
+              background-color: ${unitColor};
+              width: 34px;
+              height: 34px;
+              border-radius: 10px;
+              border: 2.5px solid white;
+              box-shadow: 0 3px 12px rgba(0,0,0,0.35);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              cursor: pointer;
+              position: relative;
+            " title="${unit.name}">
+              <span style="font-size: 16px;">🏫</span>
+            </div>
+          `;
+
+          const customUnitIcon = L.divIcon({
+            html: unitIconHtml,
+            className: 'custom-unit-marker',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
+          });
+
+          const unitMarker = L.marker([unit.lat, unit.lng], { icon: customUnitIcon });
+
+          unitMarker.bindTooltip(`
+            <div style="font-size: 11px; line-height: 1.35; padding: 2px;">
+              <strong style="color: #0f172a; font-size: 12px;">🏫 ${unit.name}</strong>
+              ${unit.code ? `<span style="font-family: monospace; font-size: 10px; color: #64748b; margin-left: 4px;">[${unit.code}]</span>` : ''}<br/>
+              <span style="color: #6366f1; font-weight: 700;">🏢 ${cc.name}</span>
+              ${region ? ` · <span style="color: ${region.color}; font-weight: 800;">🏷️ ${region.name}</span>` : ''}<br/>
+              <span style="color: #475569; font-size: 10px;">📍 ${unit.address}${unit.number ? `, ${unit.number}` : ''} — ${unit.neighborhood}, ${unit.city}</span>
+            </div>
+          `, {
+            direction: 'top',
+            offset: [0, -14],
+            className: 'custom-hover-tooltip'
+          });
+
+          unitMarker.addTo(markersLayer);
+          allLatLngs.push([unit.lat, unit.lng]);
+        });
+      });
+
       // ── Ocultar Marcadores de Colaboradores se estiver no Modo Apenas Postos ──
       if (isWsOnlyMode) {
         if (allLatLngs.length > 0 && !selectedWorkstationId) {
@@ -621,7 +734,7 @@ export function PeopleGeoLocationMap({
           iconAnchor: [size / 2, size / 2]
         });
 
-        // Marcador arrastável no mapa para alocação em postos de trabalho
+        // Marcador arrastável no mapa para alocação em postos de trabalho ou unidades
         const marker = L.marker([empItem.lat, empItem.lng], {
           icon: customEmpIcon,
           draggable: true
@@ -638,22 +751,60 @@ export function PeopleGeoLocationMap({
           // Reseta a posição visual do marcador para o ponto residencial até confirmação
           marker.setLatLng([empItem.lat, empItem.lng]);
 
-          if (workstations.length === 0) return;
+          // Coletar todos os alvos possíveis: Postos + Unidades de Centros de Custo
+          type TargetCandidate = {
+            id: string;
+            name: string;
+            lat: number;
+            lng: number;
+            type: 'workstation' | 'unit';
+            costCenterName?: string;
+            regionName?: string;
+            unitCode?: string;
+            color?: string;
+          };
 
-          let closestWs: Workstation = workstations[0];
+          const candidates: TargetCandidate[] = [
+            ...workstations.map(w => ({
+              id: w.id,
+              name: w.name,
+              lat: w.lat,
+              lng: w.lng,
+              type: 'workstation' as const,
+              color: w.color
+            })),
+            ...costCenters.flatMap(cc => (cc.units || []).filter(u => u.active).map(u => {
+              const reg = u.region_id ? (cc.regions || []).find(r => r.id === u.region_id) : undefined;
+              return {
+                id: u.id,
+                name: u.name,
+                lat: u.lat,
+                lng: u.lng,
+                type: 'unit' as const,
+                costCenterName: cc.name,
+                regionName: reg?.name,
+                unitCode: u.code,
+                color: reg?.color || cc.color
+              };
+            }))
+          ];
+
+          if (candidates.length === 0) return;
+
+          let closest = candidates[0];
           let minDropDist = Infinity;
 
-          workstations.forEach(ws => {
-            const dist = GeocodingService.calculateDistanceKm(dropPos, { lat: ws.lat, lng: ws.lng });
+          candidates.forEach(cand => {
+            const dist = GeocodingService.calculateDistanceKm(dropPos, { lat: cand.lat, lng: cand.lng });
             if (dist < minDropDist) {
               minDropDist = dist;
-              closestWs = ws;
+              closest = cand;
             }
           });
 
           const newDistanceKm = GeocodingService.calculateDistanceKm(
             { lat: empItem.lat, lng: empItem.lng },
-            { lat: closestWs.lat, lng: closestWs.lng }
+            { lat: closest.lat, lng: closest.lng }
           );
 
           const currentDistanceKm = empItem.distance_to_current_workstation_km ?? null;
@@ -661,7 +812,7 @@ export function PeopleGeoLocationMap({
 
           setPendingEmployeeRemap({
             empItem,
-            targetWs: closestWs,
+            target: closest,
             newDistanceKm,
             currentDistanceKm,
             kmDifference
@@ -672,7 +823,7 @@ export function PeopleGeoLocationMap({
         const displayName = isPJ ? (empItem.corporate_name || empItem.name) : empItem.name;
         const respName = isPJ ? (empItem.responsible_name || empItem.name) : undefined;
 
-        // Tooltip ao passar o mouse (Hover): Exibe a Foto de Perfil + Razão Social / Responsável + Dados
+        // Tooltip ao passar o mouse (Hover): Exibe a Foto de Perfil + Razão Social / Responsável + Unidade/Região
         marker.bindTooltip(`
           <div style="display:flex;align-items:center;gap:10px;padding:2px;">
             <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;background:#e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid #cbd5e1;">
@@ -681,7 +832,14 @@ export function PeopleGeoLocationMap({
             <div>
               <strong style="font-size:12px;color:#0f172a;display:block;line-height:1.2;">${displayName}</strong>
               ${respName && respName !== displayName ? `<span style="color:#475569;font-size:10.5px;display:block;font-weight:600;">Resp: ${respName}</span>` : ''}
-              <span style="color:#64748b;font-size:10px;display:block;margin-top:1px;">${empItem.neighborhood || empItem.city || 'Residência'} · <strong style="color:${borderColor};">${empItem.linkType}</strong></span>
+              <span style="color:#64748b;font-size:10px;display:block;margin-top:1px;">
+                ${empItem.neighborhood || empItem.city || 'Residência'} · <strong style="color:${borderColor};">${empItem.linkType}</strong>
+              </span>
+              ${empItem.assigned_unit ? `
+                <span style="color:#059669;font-size:9.5px;display:block;font-weight:700;margin-top:1px;">
+                  🏫 ${empItem.assigned_unit.name} ${empItem.assigned_region ? `(${empItem.assigned_region.name})` : ''}
+                </span>
+              ` : ''}
             </div>
           </div>
         `, {
@@ -715,7 +873,22 @@ export function PeopleGeoLocationMap({
           });
         }
 
-        if (activeEmployeeGeo.assigned_workstation && activeEmployeeGeo.nearest_workstation?.workstation.id !== activeEmployeeGeo.assigned_workstation.id) {
+        if (activeEmployeeGeo.assigned_unit) {
+          const unit = activeEmployeeGeo.assigned_unit;
+          const unitCoords: [number, number] = [unit.lat, unit.lng];
+
+          const line = L.polyline([empCoords, unitCoords], {
+            color: '#6366f1',
+            weight: 4,
+            opacity: 0.9,
+            dashArray: '6, 6'
+          }).addTo(routeLayer);
+
+          line.bindTooltip(`Unidade Atribuída: ${unit.name} (${activeEmployeeGeo.distance_to_current_workstation_km || 0} km)`, {
+            permanent: true,
+            direction: 'center'
+          });
+        } else if (activeEmployeeGeo.assigned_workstation && activeEmployeeGeo.nearest_workstation?.workstation.id !== activeEmployeeGeo.assigned_workstation.id) {
           const assignedWs = activeEmployeeGeo.assigned_workstation;
           const assignedCoords: [number, number] = [assignedWs.lat, assignedWs.lng];
 
@@ -945,6 +1118,20 @@ export function PeopleGeoLocationMap({
               <option key={w.id} value={w.id}>🏢 {w.name}</option>
             ))}
           </select>
+
+          {/* Filtro de Centro de Custo */}
+          {costCenters.length > 0 && (
+            <select
+              value={selectedCostCenterId}
+              onChange={e => setSelectedCostCenterId(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 outline-none focus:border-emerald-500"
+            >
+              <option value="all">🏛️ Todos Centros de Custo ({costCenters.length})</option>
+              {costCenters.map(cc => (
+                <option key={cc.id} value={cc.id}>🏛️ {cc.name} ({(cc.units || []).length} unid.)</option>
+              ))}
+            </select>
+          )}
 
           {/* Qualidade de Endereço */}
           <select
@@ -1429,9 +1616,21 @@ export function PeopleGeoLocationMap({
                       <span className="text-[10px] text-slate-400">{item.city || '—'} / {item.state || 'SP'}</span>
                     </td>
                     <td className="py-3 px-3">
-                      <span className="font-bold text-slate-700 dark:text-slate-300">
-                        {item.assigned_workstation?.name || item.current_service_location || '—'}
+                      <span className="font-bold text-slate-700 dark:text-slate-300 block">
+                        {item.assigned_unit
+                          ? `🏫 ${item.assigned_unit.name}`
+                          : item.assigned_workstation?.name || item.current_service_location || '—'}
                       </span>
+                      {item.assigned_region && (
+                        <span className="text-[10px] text-emerald-600 font-bold block">
+                          🏷️ {item.assigned_region.name}
+                        </span>
+                      )}
+                      {item.assigned_cost_center && (
+                        <span className="text-[9px] text-slate-400 block">
+                          {item.assigned_cost_center.name}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-3 text-right font-mono font-bold text-slate-600 dark:text-slate-400">
                       {item.distance_to_current_workstation_km !== null ? `${item.distance_to_current_workstation_km} km` : '—'}
@@ -1549,9 +1748,11 @@ export function PeopleGeoLocationMap({
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs bg-slate-100 dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700">
                 <div>
-                  <span className="text-[10px] font-black uppercase text-slate-400 block">Posto Atual</span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 block">Local Atual</span>
                   <strong className="text-slate-700 dark:text-slate-300 block truncate max-w-[140px]">
-                    {pendingEmployeeRemap.empItem.assigned_workstation?.name || pendingEmployeeRemap.empItem.current_service_location || 'Não Alocado'}
+                    {pendingEmployeeRemap.empItem.assigned_unit
+                      ? `🏫 ${pendingEmployeeRemap.empItem.assigned_unit.name}`
+                      : pendingEmployeeRemap.empItem.assigned_workstation?.name || pendingEmployeeRemap.empItem.current_service_location || 'Não Alocado'}
                   </strong>
                   <span className="text-[10px] text-slate-500 block font-mono">
                     {pendingEmployeeRemap.currentDistanceKm !== null ? `${pendingEmployeeRemap.currentDistanceKm} km da moradia` : 'Sem distância'}
@@ -1559,11 +1760,23 @@ export function PeopleGeoLocationMap({
                 </div>
                 <ArrowRight size={18} className="text-indigo-500 shrink-0 mx-2" />
                 <div className="text-right">
-                  <span className="text-[10px] font-black uppercase text-indigo-500 block">Novo Posto</span>
-                  <strong className="text-indigo-600 dark:text-indigo-400 block truncate max-w-[140px]">
-                    {pendingEmployeeRemap.targetWs.name}
+                  <span className="text-[10px] font-black uppercase text-indigo-500 block">
+                    {pendingEmployeeRemap.target.type === 'unit' ? 'Nova Unidade / Escola' : 'Novo Posto'}
+                  </span>
+                  <strong className="text-indigo-600 dark:text-indigo-400 block truncate max-w-[150px]">
+                    {pendingEmployeeRemap.target.type === 'unit' ? '🏫 ' : '🏢 '}{pendingEmployeeRemap.target.name}
                   </strong>
-                  <span className="text-[10px] text-emerald-600 font-mono font-bold block">
+                  {pendingEmployeeRemap.target.costCenterName && (
+                    <span className="text-[10px] text-slate-500 block">
+                      {pendingEmployeeRemap.target.costCenterName}
+                    </span>
+                  )}
+                  {pendingEmployeeRemap.target.regionName && (
+                    <span className="text-[10px] text-emerald-600 font-bold block">
+                      Região: {pendingEmployeeRemap.target.regionName}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-emerald-600 font-mono font-bold block mt-0.5">
                     {pendingEmployeeRemap.newDistanceKm} km da moradia
                   </span>
                 </div>
@@ -1581,7 +1794,7 @@ export function PeopleGeoLocationMap({
                 <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl p-3 text-xs text-indigo-800 dark:text-indigo-300 font-medium flex items-center gap-2">
                   <Building2 size={18} className="text-indigo-600 shrink-0" />
                   <div>
-                    <strong>Remanejamento Solicitado:</strong> Alocação direta no posto {pendingEmployeeRemap.targetWs.name} ({pendingEmployeeRemap.newDistanceKm} km).
+                    <strong>Remanejamento Solicitado:</strong> Alocação em {pendingEmployeeRemap.target.name} {pendingEmployeeRemap.target.regionName ? `(${pendingEmployeeRemap.target.regionName})` : ''} — {pendingEmployeeRemap.newDistanceKm} km da residência.
                   </div>
                 </div>
               )}
