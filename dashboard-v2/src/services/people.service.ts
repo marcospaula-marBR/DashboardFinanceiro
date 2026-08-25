@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
-import { Employee, PeopleMetadata, EntityType, RelationshipNature, PeopleAIAgent, PeopleTemporaryDelegation, PeopleRelationship, mergePeopleMetadata, inferEntityType } from '@/types/loans';
+import { Employee, PeopleMetadata, EntityType, RelationshipNature, PeopleAIAgent, PeopleTemporaryDelegation, PeopleRelationship, mergePeopleMetadata, inferEntityType, normalizeCompanyName } from '@/types/loans';
 
 export class PeopleService {
   /**
@@ -355,7 +355,7 @@ export class PeopleService {
       document_rg: raw.document_rg,
       pj_type: raw.pj_type,
       linkType: (raw.employment_type || raw.link_type) as any,
-      company: raw.company,
+      company: normalizeCompanyName(raw.company),
       remuneration: parseFloat(String(raw.remuneration)) || 0,
       remuneration_fixed: raw.remuneration_fixed ? parseFloat(String(raw.remuneration_fixed)) : 0,
       remuneration_bonus: raw.remuneration_bonus ? parseFloat(String(raw.remuneration_bonus)) : 0,
@@ -437,6 +437,7 @@ export class PeopleService {
       temporaryDelegations: Array.isArray(raw.metadata?.temporaryDelegations || raw.metadata?.temporary_delegations) ? (raw.metadata.temporaryDelegations || raw.metadata.temporary_delegations) : [],
       linked_previous_employee_id: raw.metadata?.linked_previous_employee_id || raw.metadata?.linkedPreviousEmployeeId || undefined,
       is_unified_history: raw.metadata?.is_unified_history ?? raw.metadata?.isUnifiedHistory ?? true,
+      bpr_monthly_scores: raw.metadata?.bpr_monthly_scores || raw.bpr_monthly_scores || undefined,
       metadata: raw.metadata || {}
     };
   }
@@ -453,7 +454,7 @@ export class PeopleService {
       document_rg: profile.document_rg,
       pj_type: profile.pj_type,
       employment_type: profile.linkType,
-      company: profile.company,
+      company: normalizeCompanyName(profile.company),
       remuneration: (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0),
       remuneration_fixed: profile.remuneration_fixed || 0,
       remuneration_bonus: profile.remuneration_bonus || 0,
@@ -528,7 +529,8 @@ export class PeopleService {
         remuneration_connectivity: profile.remuneration_connectivity || 0,
         remuneration_incentives: profile.remuneration_incentives || 0,
         linked_previous_employee_id: profile.linked_previous_employee_id || undefined,
-        is_unified_history: profile.is_unified_history !== false
+        is_unified_history: profile.is_unified_history !== false,
+        bpr_monthly_scores: profile.bpr_monthly_scores || profile.metadata?.bpr_monthly_scores || undefined
       })
     };
   }

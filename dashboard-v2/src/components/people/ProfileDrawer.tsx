@@ -4848,11 +4848,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           { key: '06', label: 'Junho' }
                         ];
 
-                        const c2Values = c2Months
-                          .map(m => yearScores[m.key])
-                          .filter(v => v !== undefined && v !== null && !isNaN(Number(v)));
-                        const c2Average = c2Values.length > 0
-                          ? c2Values.reduce((a, b) => a + Number(b), 0) / c2Values.length
+                        const hasC2Recorded = c2Months.some(m => yearScores[m.key] !== undefined && yearScores[m.key] !== null);
+                        const c2Values = c2Months.map(m => (yearScores[m.key] !== undefined && yearScores[m.key] !== null && !isNaN(Number(yearScores[m.key]))) ? Number(yearScores[m.key]) : 100);
+                        const c2Average = hasC2Recorded
+                          ? c2Values.reduce((a, b) => a + Number(b), 0) / 6
                           : null;
 
                         // Ciclo 1: 2º Semestre (Jul a Dez - Pago até Março)
@@ -4865,11 +4864,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           { key: '12', label: 'Dezembro' }
                         ];
 
-                        const c1Values = c1Months
-                          .map(m => yearScores[m.key])
-                          .filter(v => v !== undefined && v !== null && !isNaN(Number(v)));
-                        const c1Average = c1Values.length > 0
-                          ? c1Values.reduce((a, b) => a + Number(b), 0) / c1Values.length
+                        const hasC1Recorded = c1Months.some(m => yearScores[m.key] !== undefined && yearScores[m.key] !== null);
+                        const c1Values = c1Months.map(m => (yearScores[m.key] !== undefined && yearScores[m.key] !== null && !isNaN(Number(yearScores[m.key]))) ? Number(yearScores[m.key]) : 100);
+                        const c1Average = hasC1Recorded
+                          ? c1Values.reduce((a, b) => a + Number(b), 0) / 6
                           : null;
 
                         const getBadge = (avg: number | null) => {

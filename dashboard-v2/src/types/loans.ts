@@ -440,6 +440,7 @@ export interface PeopleMetadata {
   remuneration_incentives?: number;
   linked_previous_employee_id?: string;
   is_unified_history?: boolean;
+  bpr_monthly_scores?: Record<string, Record<string, number>>;
 }
 
 // --- Future Payroll PDF Import Types ---
@@ -529,6 +530,7 @@ export function normalizePeopleMetadata(raw: any): PeopleMetadata {
     temporaryDelegations: Array.isArray(raw.temporaryDelegations || raw.temporary_delegations) ? (raw.temporaryDelegations || raw.temporary_delegations) : [],
     relationships: Array.isArray(raw.relationships) ? raw.relationships : [],
     dataQualityScore: typeof raw.dataQualityScore === 'number' ? raw.dataQualityScore : (typeof raw.data_quality_score === 'number' ? raw.data_quality_score : 100),
+    bpr_monthly_scores: raw.bpr_monthly_scores || raw.bprMonthlyScores || undefined,
     version: typeof raw.version === 'number' ? raw.version : PEOPLE_METADATA_VERSION,
   };
 }
@@ -582,12 +584,30 @@ export function getPBClassification(level?: string, degree?: string | number): s
   let d: 1 | 2 | 3 = 3;
   if (degree !== undefined && degree !== null) {
     const strDegree = String(degree).trim().toUpperCase();
-    if (strDegree === "1" || strDegree === "I") d = 1;
-    else if (strDegree === "2" || strDegree === "II") d = 2;
-    else if (strDegree === "3" || strDegree === "III") d = 3;
+    if (strDegree === "1" || strDegree === "I" || strDegree === "AVANÇADO" || strDegree === "AVANCADO") d = 1;
+    else if (strDegree === "2" || strDegree === "II" || strDegree === "INTERMEDIÁRIO" || strDegree === "INTERMEDIARIO") d = 2;
+    else if (strDegree === "3" || strDegree === "III" || strDegree === "INICIANTE") d = 3;
   }
 
   return `${l}${d}`;
 }
+
+export function getGrauLabel(degree?: string | number): string {
+  if (degree === undefined || degree === null || degree === '') return 'Iniciante';
+  const str = String(degree).trim().toUpperCase();
+  if (str === '1' || str === 'I' || str.startsWith('AVAN')) return 'Avançado';
+  if (str === '2' || str === 'II' || str.startsWith('INTER')) return 'Intermediário';
+  return 'Iniciante';
+}
+
+export function normalizeCompanyName(company?: string): string {
+  if (!company) return 'MarBR';
+  const c = company.trim();
+  if (/^mar\s*brasil$/i.test(c) || /^marbr$/i.test(c) || /^mar\s*br$/i.test(c) || /^marbrasil$/i.test(c)) {
+    return 'MarBR';
+  }
+  return c;
+}
+
 
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Employee, getRemunerationLabel, inferEntityType } from "@/types/loans";
-import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar, MapPin } from "lucide-react";
+import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar, MapPin, Coins } from "lucide-react";
+import { BprService } from "@/services/bpr.service";
 import { 
   isExternalEntity, 
   formatWhatsAppLink, 
@@ -111,6 +112,18 @@ export function PeopleMobileCard({
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays >= 0 && diffDays <= 10;
   })() : false;
+
+  // Índices de BPR (Ciclo Atual e Anterior)
+  const currentYear = new Date().getFullYear();
+  const bprScores = employee.bpr_monthly_scores || (employee.metadata as any)?.bpr_monthly_scores;
+  
+  const currentCyclePerf = useMemo(() => {
+    return BprService.calculateCyclePerformance(bprScores, 'ciclo_2', currentYear);
+  }, [bprScores, currentYear]);
+
+  const prevCyclePerf = useMemo(() => {
+    return BprService.calculateCyclePerformance(bprScores, 'ciclo_1', currentYear - 1);
+  }, [bprScores, currentYear]);
 
   const waLink = formatWhatsAppLink(employee.phone_professional);
 
@@ -277,7 +290,7 @@ export function PeopleMobileCard({
             </div>
           )}
 
-          {/* Badges do Cockpit (Vínculo) */}
+          {/* Badges do Cockpit (Vínculo & Performance BPR) */}
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
             <span 
               onClick={(e) => {
@@ -289,6 +302,42 @@ export function PeopleMobileCard({
             >
               <RelationshipNatureBadge nature={employee.relationshipNature} />
             </span>
+
+            {/* Badge de BPR Ciclo Atual */}
+            {currentCyclePerf.hasRecordedScores ? (
+              <span 
+                className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${
+                  currentCyclePerf.performanceFactor === 1.0
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : currentCyclePerf.performanceFactor === 0.75
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                }`}
+                title={`BPR Ciclo Atual (${currentYear}): Média de Atingimento ${currentCyclePerf.averageScore}% — Elegibilidade: ${currentCyclePerf.factorLabel}`}
+              >
+                <Coins size={11} className={currentCyclePerf.performanceFactor === 1.0 ? 'text-emerald-600' : currentCyclePerf.performanceFactor === 0.75 ? 'text-amber-600' : 'text-rose-500'} />
+                <span>BPR: {currentCyclePerf.averageScore}% ({currentCyclePerf.performanceFactor * 100}%)</span>
+              </span>
+            ) : (
+              <span 
+                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200"
+                title={`BPR Ciclo Atual (${currentYear}): Sem metas cadastradas (Elegibilidade Padrão 100%)`}
+              >
+                <Coins size={10} className="text-slate-400" />
+                <span>BPR: 100%</span>
+              </span>
+            )}
+
+            {/* Badge de BPR Ciclo Anterior (se houver histórico) */}
+            {prevCyclePerf.hasRecordedScores && (
+              <span 
+                className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200"
+                title={`BPR Ciclo Anterior (${currentYear - 1}): Média ${prevCyclePerf.averageScore}% (${prevCyclePerf.performanceFactor * 100}%)`}
+              >
+                <span className="text-slate-400">Ant:</span>
+                <span>{prevCyclePerf.averageScore}%</span>
+              </span>
+            )}
           </div>
         </div>
       </div>

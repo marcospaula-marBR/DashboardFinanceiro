@@ -1,4 +1,4 @@
-import { Employee, MonthlyCost, getPBClassification } from '@/types/loans';
+import { Employee, MonthlyCost, getPBClassification, normalizeCompanyName } from '@/types/loans';
 import { 
   BprRuleConfig, 
   BprCandidateResult, 
@@ -136,14 +136,17 @@ export class BprService {
       months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
     }
 
-    const validScores: number[] = [];
-    months.forEach(m => {
+    // Para cada mês do ciclo, considera a nota gravada ou 100% como base padrão
+    let hasAnyRecorded = false;
+    const scores = months.map(m => {
       if (yearScores[m] !== undefined && yearScores[m] !== null && !isNaN(Number(yearScores[m]))) {
-        validScores.push(Number(yearScores[m]));
+        hasAnyRecorded = true;
+        return Number(yearScores[m]);
       }
+      return 100;
     });
 
-    if (validScores.length === 0) {
+    if (!hasAnyRecorded) {
       return {
         averageScore: 100,
         performanceFactor: 1.0,
@@ -152,8 +155,8 @@ export class BprService {
       };
     }
 
-    const sum = validScores.reduce((acc, v) => acc + v, 0);
-    const avg = sum / validScores.length;
+    const sum = scores.reduce((acc, v) => acc + v, 0);
+    const avg = sum / scores.length;
 
     let factor = 1.0;
     let label = '100% do Bônus';
@@ -223,8 +226,11 @@ export class BprService {
 
     employees.forEach(emp => {
       // 1. Filtros de Escopo (Empresa e Vínculo)
-      if (config.companiesFilter.length > 0 && !config.companiesFilter.includes(emp.company || '')) {
-        return;
+      if (config.companiesFilter.length > 0) {
+        const normFilter = config.companiesFilter.map(c => normalizeCompanyName(c));
+        if (!normFilter.includes(normalizeCompanyName(emp.company))) {
+          return;
+        }
       }
       
       const link = emp.linkType || 'CLT';

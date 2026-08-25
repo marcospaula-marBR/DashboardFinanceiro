@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Employee, MonthlyCost } from "@/types/loans";
+import { Employee, MonthlyCost, normalizeCompanyName } from "@/types/loans";
 import { 
   BprRuleConfig, 
   BprCandidateResult, 
@@ -53,8 +53,8 @@ export function BprCockpitModal({
 
   // Seletor de Empresas e Vínculos
   const availableCompanies = useMemo(() => {
-    const set = new Set<string>(['Mar Brasil', 'DZM', 'G2']);
-    employees.forEach(e => { if (e.company) set.add(e.company); });
+    const set = new Set<string>(['MarBR', 'DZM', 'G2']);
+    employees.forEach(e => { if (e.company) set.add(normalizeCompanyName(e.company)); });
     return Array.from(set).sort();
   }, [employees]);
 
@@ -81,10 +81,11 @@ export function BprCockpitModal({
 
   // Toggle de Empresas na Seleção Múltipla
   const handleToggleCompany = (company: string) => {
+    const norm = normalizeCompanyName(company);
     setConfig(prev => {
-      const current = prev.companiesFilter || [];
-      const exists = current.includes(company);
-      const updated = exists ? current.filter(c => c !== company) : [...current, company];
+      const current = (prev.companiesFilter || []).map(c => normalizeCompanyName(c));
+      const exists = current.includes(norm);
+      const updated = exists ? current.filter(c => c !== norm) : [...current, norm];
       return { ...prev, companiesFilter: updated };
     });
   };

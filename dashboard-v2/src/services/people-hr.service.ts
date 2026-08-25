@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { Employee, EmploymentContract, ContractAllocation, EmployeeEvent, MonthlyCost, AuditIssue } from '@/types/loans';
+import { Employee, EmploymentContract, ContractAllocation, EmployeeEvent, MonthlyCost, AuditIssue, normalizeCompanyName } from '@/types/loans';
 import { LoansService } from './loans.service';
 
 interface RawEmployeeDb {
@@ -309,7 +309,7 @@ export const PeopleHRService = {
       const employee = {
         id: emp.id,
         name: emp.full_name,
-        company: emp.company || 'MarBR',
+        company: normalizeCompanyName(emp.company),
         linkType: emp.employment_type || undefined,
         remuneration: parseFloat(String(emp.remuneration)) || 0,
         totalTaken: l ? l.totalTaken : (parseFloat(String(emp.loan_amount)) || 0),
@@ -383,6 +383,7 @@ export const PeopleHRService = {
         temporaryDelegations: Array.isArray(emp.metadata?.temporaryDelegations || emp.metadata?.temporary_delegations) ? (emp.metadata.temporaryDelegations || emp.metadata.temporary_delegations) : [],
         linked_previous_employee_id: emp.metadata?.linked_previous_employee_id || emp.metadata?.linkedPreviousEmployeeId || undefined,
         is_unified_history: emp.metadata?.is_unified_history ?? emp.metadata?.isUnifiedHistory ?? true,
+        bpr_monthly_scores: emp.metadata?.bpr_monthly_scores || (emp as any).bpr_monthly_scores || undefined,
         metadata: emp.metadata || {}
       };
       

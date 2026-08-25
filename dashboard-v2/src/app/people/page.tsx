@@ -18,7 +18,8 @@ import { BatchReplicateCostsModal } from "@/components/people/BatchReplicateCost
 import { OutsourcingCockpitModal } from "@/components/people/OutsourcingCockpitModal";
 import { BprCockpitModal } from "@/components/people/BprCockpitModal";
 import { PeopleHRService } from "@/services/people-hr.service";
-import { Employee, MonthlyCost, AuditIssue, LoanStats } from "@/types/loans";
+import { BprService } from "@/services/bpr.service";
+import { Employee, MonthlyCost, AuditIssue, LoanStats, normalizeCompanyName } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { APP_VERSION } from "@/version";
 import { LoansService, formatCurrency } from "@/services/loans.service";
@@ -146,6 +147,7 @@ export default function PeoplePage() {
   const [filterNivel, setFilterNivel] = useState<string[]>([]);
   const [filterQuality, setFilterQuality] = useState<string[]>([]);
   const [filterHasPbId, setFilterHasPbId] = useState<string[]>([]);
+  const [filterBpr, setFilterBpr] = useState<string[]>([]);
   
   // Insights & Alerts states
   const [noRaiseMonths, setNoRaiseMonths] = useState(6);
@@ -241,6 +243,7 @@ export default function PeoplePage() {
     filterLevel,
     filterQuality,
     filterHasPbId,
+    filterBpr,
     showInativos,
     filterInsight
   ]);
@@ -264,13 +267,14 @@ export default function PeoplePage() {
       filterNivel.length > 0 ||
       filterQuality.length > 0 ||
       filterHasPbId.length > 0 ||
+      filterBpr.length > 0 ||
       showInativos ||
       filterInsight !== null
     );
   }, [
     filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau,
     filterTerceirizado, filterLocalPrestacao, filterRegimeTributario,
-    filterEntityType, filterRelationshipNature, filterLevel, filterCamada, filterNivel, filterQuality, filterHasPbId,
+    filterEntityType, filterRelationshipNature, filterLevel, filterCamada, filterNivel, filterQuality, filterHasPbId, filterBpr,
     showInativos, filterInsight
   ]);
 
@@ -429,9 +433,26 @@ export default function PeoplePage() {
         (e.job_role || '').toLowerCase().includes(t)
       );
     }
-    if (filterEmpresa.length > 0) result = result.filter(e => filterEmpresa.includes(e.company || ''));
+    if (filterEmpresa.length > 0) {
+      const normFilters = filterEmpresa.map(f => normalizeCompanyName(f));
+      result = result.filter(e => normFilters.includes(normalizeCompanyName(e.company)));
+    }
     if (filterStatus.length > 0) result = result.filter(e => filterStatus.includes(e.status || ''));
     if (filterVinculo.length > 0) result = result.filter(e => filterVinculo.includes(e.linkType || ''));
+    
+    // Filtro por Performance BPR (Ciclo Atual)
+    if (filterBpr.length > 0) {
+      const currentYear = new Date().getFullYear();
+      result = result.filter(e => {
+        const rawScores = e.bpr_monthly_scores || e.metadata?.bpr_monthly_scores;
+        const perf = BprService.calculateCyclePerformance(rawScores, 'ciclo_2', currentYear);
+        if (filterBpr.includes('performing') && perf.performanceFactor > 0) return true;
+        if (filterBpr.includes('100') && perf.performanceFactor === 1.0) return true;
+        if (filterBpr.includes('75') && perf.performanceFactor === 0.75) return true;
+        if (filterBpr.includes('0') && perf.performanceFactor === 0.0) return true;
+        return false;
+      });
+    }
     
     // Filtro por Tipo de Entidade (PF vs PJ)
     if (filterEntityType.length > 0) {
@@ -521,7 +542,7 @@ export default function PeoplePage() {
   }, [
     employees, filterSearch, filterEmpresa, filterStatus, filterVinculo, filterSetor, filterGrau,
     filterTerceirizado, filterLocalPrestacao, filterRegimeTributario,
-    filterEntityType, filterRelationshipNature, filterLevel, filterQuality, filterHasPbId,
+    filterEntityType, filterRelationshipNature, filterLevel, filterQuality, filterHasPbId, filterBpr,
     showInativos
   ]);
 
@@ -629,6 +650,7 @@ export default function PeoplePage() {
     setFilterNivel([]);
     setFilterQuality([]);
     setFilterHasPbId([]);
+    setFilterBpr([]);
     setFilterInsight(null);
     setShowInativos(false);
   };
@@ -816,6 +838,24 @@ export default function PeoplePage() {
             />
           </div>
 
+          {/* Performance BPR */}
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+              <Coins size={11} /> Performance BPR
+            </label>
+            <MultiSelectDropdown
+              value={filterBpr}
+              onChange={setFilterBpr}
+              placeholder="Todos os Integrantes"
+              options={[
+                { label: '🔥 Performando (100% ou 75%)', value: 'performing' },
+                { label: '⭐ 100% do Bônus (Meta 100%)', value: '100' },
+                { label: '⚡ 75% do Bônus (Meta 90% a 99%)', value: '75' },
+                { label: '✕ 0% — Inelegível (Meta < 90%)', value: '0' }
+              ]}
+            />
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Empresa</label>
             <MultiSelectDropdown
@@ -823,7 +863,7 @@ export default function PeoplePage() {
               onChange={setFilterEmpresa}
               placeholder="Todas as Empresas"
               options={[
-                { label: 'MarBR', value: 'MarBR' },
+                { label: 'Mar Brasil (MarBR)', value: 'MarBR' },
                 { label: 'DZM', value: 'DZM' },
                 { label: 'G2', value: 'G2' }
               ]}
@@ -1090,6 +1130,24 @@ export default function PeoplePage() {
                   />
                 </div>
 
+                {/* Performance BPR select */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                    <Coins size={11} /> Performance BPR
+                  </label>
+                  <MultiSelectDropdown
+                    value={filterBpr}
+                    onChange={setFilterBpr}
+                    placeholder="Todos os Integrantes"
+                    options={[
+                      { label: '🔥 Performando (100% ou 75%)', value: 'performing' },
+                      { label: '⭐ 100% do Bônus (Meta 100%)', value: '100' },
+                      { label: '⚡ 75% do Bônus (Meta 90% a 99%)', value: '75' },
+                      { label: '✕ 0% — Inelegível (Meta < 90%)', value: '0' }
+                    ]}
+                  />
+                </div>
+
                 {/* Company select */}
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Empresa</label>
@@ -1098,7 +1156,7 @@ export default function PeoplePage() {
                     onChange={setFilterEmpresa}
                     placeholder="Todas as Empresas"
                     options={[
-                      { label: 'MarBR', value: 'MarBR' },
+                      { label: 'Mar Brasil (MarBR)', value: 'MarBR' },
                       { label: 'DZM', value: 'DZM' },
                       { label: 'G2', value: 'G2' }
                     ]}

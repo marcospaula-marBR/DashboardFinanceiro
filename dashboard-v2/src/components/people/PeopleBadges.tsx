@@ -62,12 +62,16 @@ export function formatCompanyTime(startDateStr?: string, endDateStr?: string): s
 
 // ─── Classification Badge (E1 to O3 with Stars) ──────────────────────────────
 
+import { getGrauLabel } from '@/types/loans';
+
 export function PeopleClassificationBadge({ 
   level, 
-  degree 
+  degree,
+  showSubtitle = true
 }: { 
   level?: string; 
   degree?: string | number;
+  showSubtitle?: boolean;
 }) {
   if (!level) {
     return (
@@ -105,15 +109,23 @@ export function PeopleClassificationBadge({
   else if (levelChar === "T") bgStyles = "bg-emerald-50 text-emerald-700 border-emerald-100"; // Tático
 
   const label = PB_CLASSIFICATION_LABELS[code] || "Classificação Desconhecida";
+  const grauText = getGrauLabel(degree || stars);
 
   return (
-    <span 
-      className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border uppercase leading-tight select-none shadow-sm cursor-help ${bgStyles}`}
-      title={`Classificação PB: ${code} - ${label}`}
-    >
-      <span>{code}</span>
-      <span className="text-[8px] tracking-tighter opacity-90">{starSymbol}</span>
-    </span>
+    <div className="flex flex-col items-center">
+      <span 
+        className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border uppercase leading-tight select-none shadow-sm cursor-help ${bgStyles}`}
+        title={`Classificação PB: ${code} - ${label}`}
+      >
+        <span>{code}</span>
+        <span className="text-[8px] tracking-tighter opacity-90">{starSymbol}</span>
+      </span>
+      {showSubtitle && (
+        <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter block text-center leading-none mt-0.5">
+          {grauText}
+        </span>
+      )}
+    </div>
   );
 }
 
