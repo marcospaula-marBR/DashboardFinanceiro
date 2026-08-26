@@ -4,6 +4,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft, ChevronDown, Search } from 'lucide-react';
 import { DreFilters, DreMetadata, DreRow } from '@/types/dre';
+import { normalizeEmpresa } from '@/services/dre.service';
 
 // ── Extrai anos únicos de uma lista de períodos (ex: "Jan/24" → "2024") ───────
 function extractYears(periodos: string[]): string[] {
@@ -180,7 +181,9 @@ export function DreSidebar({
 
   // 1. Available Empresas (global metadata)
   const availableEmpresas = useMemo(() => {
-    return metadata?.empresas || [];
+    const raw = metadata?.empresas || [];
+    const normalized = raw.map(e => normalizeEmpresa(e));
+    return Array.from(new Set(normalized)).sort();
   }, [metadata]);
 
   // 2. Available Periodos (global metadata)
@@ -245,7 +248,7 @@ export function DreSidebar({
   // 3. Filter raw data based on selected Empresa
   const rowsFilteredByEmpresa = useMemo(() => {
     if (!filters.empresas || filters.empresas.length === 0) return rawData;
-    return rawData.filter(r => filters.empresas.includes(r.Empresa));
+    return rawData.filter(r => filters.empresas.includes(normalizeEmpresa(r.Empresa)) || filters.empresas.includes(r.Empresa));
   }, [rawData, filters.empresas]);
 
   // 4. Available Departamentos from current Empresa subset

@@ -125,8 +125,11 @@ export const CATEGORIAS_MAP: Record<string, string> = {
 
 export const normalizeEmpresa = (empresa: string): string => {
   const norm = (empresa || '').trim().toUpperCase();
-  if (norm.includes('MAR BRASIL') || norm.includes('MARBR') || norm.includes('MAR BR')) return 'MarBR';
+  if (norm.includes('CONECTIUS')) return 'Conectius';
+  if (norm.includes('MAR BRASIL') || norm.includes('MARBR') || norm.includes('MAR BR') || norm === 'MAR_BR') return 'MarBR';
   if (norm.includes('DZM') || norm.includes('D.Z.M') || norm.includes('D Z M')) return 'DZM';
+  if (norm.includes('YBOX') || norm.includes('Y BOX')) return 'Ybox';
+  if (norm.includes('G2') || norm.includes('G 2')) return 'G2';
   return empresa || 'Geral';
 };
 
@@ -473,7 +476,9 @@ export class DreService {
   ): DreCalculatedResult {
     let df = [...data];
 
-    if (filters.empresas.length > 0) df = df.filter(row => filters.empresas.includes(row.Empresa));
+    if (filters.empresas.length > 0) {
+      df = df.filter(row => filters.empresas.includes(normalizeEmpresa(row.Empresa)) || filters.empresas.includes(row.Empresa));
+    }
     if (filters.departamentos.length > 0) df = df.filter(row => filters.departamentos.includes(row.Departamento));
     if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
     if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
