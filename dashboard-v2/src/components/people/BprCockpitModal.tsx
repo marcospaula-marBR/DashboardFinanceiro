@@ -452,7 +452,7 @@ export function BprCockpitModal({
                   >
                     Ambos (Todos)
                   </button>
-                  {['CLT', 'PJ', 'Terceirizado'].map(lk => {
+                  {['CLT', 'PJ', 'Estagiário', 'Terceirizado'].map(lk => {
                     const isSelected = config.linkTypesFilter.includes(lk);
                     return (
                       <button

@@ -284,7 +284,11 @@ export default function PeoplePage() {
     const activeFiltered = filteredEmployees.filter(e => e.status !== 'Inativo');
     
     // CLT/Estágio Físicos
-    const cltList = activeFiltered.filter(e => !isExternalEntity(inferEntityType(e)) && (e.linkType === 'CLT' || e.linkType === 'Estagiário'));
+    const cltList = activeFiltered.filter(e => {
+      const lk = (e.linkType || '').toLowerCase();
+      const isEstagio = lk.includes('estag') || lk.includes('estág');
+      return !isExternalEntity(inferEntityType(e)) && (e.linkType === 'CLT' || e.linkType === 'Estagiário' || isEstagio);
+    });
     const cltCount = cltList.length;
     
     // PJ / Externos
@@ -438,7 +442,14 @@ export default function PeoplePage() {
       result = result.filter(e => normFilters.includes(normalizeCompanyName(e.company)));
     }
     if (filterStatus.length > 0) result = result.filter(e => filterStatus.includes(e.status || ''));
-    if (filterVinculo.length > 0) result = result.filter(e => filterVinculo.includes(e.linkType || ''));
+    if (filterVinculo.length > 0) {
+      result = result.filter(e => {
+        const lk = e.linkType || '';
+        const isEstagio = lk.toLowerCase().includes('estag') || lk.toLowerCase().includes('estág');
+        if (filterVinculo.includes('Estagiário') && isEstagio) return true;
+        return filterVinculo.includes(lk);
+      });
+    }
     
     // Filtro por Performance BPR (Ciclo Atual)
     if (filterBpr.length > 0) {

@@ -548,8 +548,8 @@ export function mergePeopleMetadata(currentMetadata: any, patch: Partial<PeopleM
 }
 
 export function inferEntityType(employee: Partial<Employee>): EntityType {
-  const linkType = employee.linkType || '';
-  if (linkType === 'CLT' || linkType === 'Estagiário') {
+  const linkType = (employee.linkType || '').trim().toLowerCase();
+  if (linkType === 'clt' || linkType.includes('estag') || linkType.includes('estág')) {
     return "internal_person";
   }
 

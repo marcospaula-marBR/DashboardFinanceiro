@@ -2985,7 +2985,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 </span>
                               )}
                             </div>
-                            <div className="col-span-2">
+                            <div className="col-span-2 space-y-2">
                               <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded-xl hover:bg-amber-100 transition-colors">
                                 <input
                                   type="checkbox"
@@ -2994,8 +2994,38 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   disabled={!isEditMode}
                                   className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
                                 />
-                                <span className="flex items-center gap-1.5"><AlertCircle size={14}/> Houve Glosa na última NF deste prestador</span>
+                                <span className="flex items-center gap-1.5"><AlertCircle size={14}/> Houve Glosa na última NF deste prestador (Sinalizador Manual)</span>
                               </label>
+
+                              {/* Glosas Apuradas Automaticamente no Histórico Financeiro Mês a Mês */}
+                              {(() => {
+                                const glosaCosts = (costs || []).filter(c => 
+                                  Number(c.valor_glosa_base || 0) > 0 || 
+                                  Number(c.valor_glosa_bonus || 0) > 0 || 
+                                  Number((c as any).glosa || (c as any).desconto_glosa || 0) > 0
+                                );
+                                if (glosaCosts.length === 0) return null;
+                                return (
+                                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs font-black text-rose-800 uppercase">
+                                      <span className="flex items-center gap-1.5">
+                                        <AlertCircle size={14} className="text-rose-600" />
+                                        Glosas Apuradas no Histórico ({glosaCosts.length} competência{glosaCosts.length > 1 ? 's' : ''})
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                      {glosaCosts.map(gc => {
+                                        const totalG = Number(gc.valor_glosa_base || 0) + Number(gc.valor_glosa_bonus || 0) + Number((gc as any).glosa || (gc as any).desconto_glosa || 0);
+                                        return (
+                                          <span key={gc.id || gc.competencia} className="px-2.5 py-1 bg-white border border-rose-300 rounded-lg text-rose-800 font-mono text-xs font-bold shadow-xs">
+                                            {gc.competencia}: {formatCurrency(totalG)}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -4097,9 +4127,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                     <div key={i} className="p-3 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 flex flex-col gap-2">
                                       <div className="flex justify-between items-center">
                                         <div>
-                                          <p className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase">
-                                            {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                                          </p>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase">
+                                              {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                            </p>
+                                            {(() => {
+                                              const glosaVal = Number(c.valor_glosa_base || 0) + Number(c.valor_glosa_bonus || 0) + Number((c as any).glosa || (c as any).desconto_glosa || 0);
+                                              if (glosaVal <= 0) return null;
+                                              return (
+                                                <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-800 rounded-md text-[10px] font-black uppercase flex items-center gap-1">
+                                                  <AlertCircle size={10} />
+                                                  Glosa: {formatCurrency(glosaVal)}
+                                                </span>
+                                              );
+                                            })()}
+                                          </div>
                                           <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
                                         </div>
                                         <div className="flex items-center gap-3">
@@ -5009,6 +5051,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 {c1Months.map(m => {
                                   const val = yearScores[m.key] !== undefined ? yearScores[m.key] : 100;
                                   const proofVal = yearProofs[m.key] || '';
+                                  const compKey = `${bprYear}-${m.key}`;
+                                  const monthCost = (costs || []).find(c => c.competencia && c.competencia.startsWith(compKey));
+                                  const monthGlosaVal = monthCost ? (Number(monthCost.valor_glosa_base || 0) + Number(monthCost.valor_glosa_bonus || 0) + Number((monthCost as any).glosa || (monthCost as any).desconto_glosa || 0)) : 0;
                                   return (
                                     <div key={m.key} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
                                       <div className="flex justify-between items-center text-xs">
@@ -5019,6 +5064,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           {val}%
                                         </span>
                                       </div>
+
+                                      {monthGlosaVal > 0 && (
+                                        <div className="flex items-center gap-1 text-[9px] font-black text-rose-400 bg-rose-950/60 border border-rose-800/60 px-1.5 py-0.5 rounded-md">
+                                          <AlertCircle size={9} />
+                                          <span>Glosa: {formatCurrency(monthGlosaVal)}</span>
+                                        </div>
+                                      )}
 
                                       <input
                                         type="number"
@@ -5102,6 +5154,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 {c2Months.map(m => {
                                   const val = yearScores[m.key] !== undefined ? yearScores[m.key] : 100;
                                   const proofVal = yearProofs[m.key] || '';
+                                  const compKey = `${bprYear}-${m.key}`;
+                                  const monthCost = (costs || []).find(c => c.competencia && c.competencia.startsWith(compKey));
+                                  const monthGlosaVal = monthCost ? (Number(monthCost.valor_glosa_base || 0) + Number(monthCost.valor_glosa_bonus || 0) + Number((monthCost as any).glosa || (monthCost as any).desconto_glosa || 0)) : 0;
                                   return (
                                     <div key={m.key} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
                                       <div className="flex justify-between items-center text-xs">
@@ -5112,6 +5167,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           {val}%
                                         </span>
                                       </div>
+
+                                      {monthGlosaVal > 0 && (
+                                        <div className="flex items-center gap-1 text-[9px] font-black text-rose-400 bg-rose-950/60 border border-rose-800/60 px-1.5 py-0.5 rounded-md">
+                                          <AlertCircle size={9} />
+                                          <span>Glosa: {formatCurrency(monthGlosaVal)}</span>
+                                        </div>
+                                      )}
 
                                       <input
                                         type="number"

@@ -22,7 +22,7 @@ export interface BprRuleConfig {
   selectedInativosExceptions: string[]; // IDs de colaboradores inativos na data de pagamento que farão jus
   manuallyExcludedEmployeeIds: string[]; // IDs de colaboradores excluídos manualmente da relação do BPR
   companiesFilter: string[]; // ['MarBR', 'DZM', 'G2'] ou vazia para todas
-  linkTypesFilter: string[]; // ['CLT', 'PJ', 'Terceirizado'] ou vazia para todos
+  linkTypesFilter: string[]; // ['CLT', 'PJ', 'Estagiário', 'Terceirizado'] ou vazia para todos
   minDaysActiveInPeriod?: number; // Opcional: Dias mínimos trabalhados no período (padrão: período integral)
 }
 

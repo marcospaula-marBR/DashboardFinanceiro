@@ -234,8 +234,10 @@ export class BprService {
       }
       
       const link = emp.linkType || 'CLT';
+      const isEstagio = link.toLowerCase().includes('estag') || link.toLowerCase().includes('estág');
       if (config.linkTypesFilter.length > 0) {
         const matchesLink = config.linkTypesFilter.includes(link) || 
+          (config.linkTypesFilter.includes('Estagiário') && isEstagio) ||
           (config.linkTypesFilter.includes('Terceirizado') && emp.is_outsourced);
         if (!matchesLink) return;
       }

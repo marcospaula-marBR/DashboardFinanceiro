@@ -354,7 +354,11 @@ export class PeopleService {
       document_id: raw.document_id,
       document_rg: raw.document_rg,
       pj_type: raw.pj_type,
-      linkType: (raw.employment_type || raw.link_type) as any,
+      linkType: (() => {
+        const t = (raw.employment_type || raw.link_type || 'CLT') as string;
+        if (t.toLowerCase().includes('estag') || t.toLowerCase().includes('estág')) return 'Estagiário';
+        return t as any;
+      })(),
       company: normalizeCompanyName(raw.company),
       remuneration: parseFloat(String(raw.remuneration)) || 0,
       remuneration_fixed: raw.remuneration_fixed ? parseFloat(String(raw.remuneration_fixed)) : 0,

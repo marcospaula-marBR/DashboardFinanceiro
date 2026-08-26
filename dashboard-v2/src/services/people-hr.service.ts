@@ -310,7 +310,11 @@ export const PeopleHRService = {
         id: emp.id,
         name: emp.full_name,
         company: normalizeCompanyName(emp.company),
-        linkType: emp.employment_type || undefined,
+        linkType: (() => {
+          const t = emp.employment_type || undefined;
+          if (t && (t.toLowerCase().includes('estag') || t.toLowerCase().includes('estág'))) return 'Estagiário';
+          return t;
+        })(),
         remuneration: parseFloat(String(emp.remuneration)) || 0,
         totalTaken: l ? l.totalTaken : (parseFloat(String(emp.loan_amount)) || 0),
         totalReceived: l ? l.totalReceived : 0,

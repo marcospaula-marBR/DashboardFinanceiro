@@ -439,11 +439,14 @@ export class LoansService {
           .reduce((sum, p) => sum + p.amount, 0);
       }
 
+      const rawEmpType = (emp.employment_type || '').trim();
+      const normLinkType = (rawEmpType.toLowerCase().includes('estag') || rawEmpType.toLowerCase().includes('estág')) ? 'Estagiário' : (emp.employment_type || 'CLT');
+
       result.push({
         id: emp.id,
         name: emp.full_name,
         company: emp.company || 'MarBR',
-        linkType: emp.employment_type || 'CLT',
+        linkType: normLinkType,
         remuneration: parseFloat(String(emp.remuneration)) || 0,
         totalTaken,
         totalReceived,
@@ -895,11 +898,14 @@ export class LoansService {
     const totalReceived = loans.reduce((a, ln) => a + calcReceivedForLoan(ln, paymentsByContract.get(ln.id)), 0);
     const monthInstallment = loans.reduce((a, ln) => a + calcInstallmentForMonth(ln, currentMonthStr, paymentsByContract.get(ln.id)), 0);
 
+    const rawEmpType = (emp.employment_type || '').trim();
+    const normLinkType = (rawEmpType.toLowerCase().includes('estag') || rawEmpType.toLowerCase().includes('estág')) ? 'Estagiário' : (emp.employment_type || 'CLT');
+
     return {
       id: emp.id,
       name: emp.full_name,
       company: emp.company || 'MarBR',
-      linkType: emp.employment_type || 'CLT',
+      linkType: normLinkType,
       remuneration: parseFloat(String(emp.remuneration)) || 0,
       totalTaken,
       totalReceived,
