@@ -61,10 +61,28 @@ export class DreSimulatorEngine {
     equipamentoCounts?: Record<string, Record<string, number>>
   ): DreCalculatedResult {
 
-    // 1. Filtragem Inicial (Empresa)
+    // 1. Filtragem Inicial
     let df = [...rawData];
     if (filters.empresas.length > 0) {
       df = df.filter(row => filters.empresas.includes(row.Empresa));
+    }
+    if (filters.departamentos && filters.departamentos.length > 0) {
+      df = df.filter(row => filters.departamentos.includes(row.Departamento));
+    }
+    if (filters.contasDre && filters.contasDre.length > 0) {
+      df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
+    }
+    if (filters.projetos && filters.projetos.length > 0) {
+      df = df.filter(row => filters.projetos.includes(row.Projeto));
+    }
+    if (filters.categorias && filters.categorias.length > 0) {
+      df = df.filter(row => filters.categorias.includes(row.Categoria));
+    }
+    if (filters.fornecedores && filters.fornecedores.length > 0) {
+      df = df.filter(row => filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
+    }
+    if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
+      df = df.filter(row => filters.contasCorrentes!.includes(row.ContaCorrente || 'Sem Conta Corrente'));
     }
 
     // 2. Mapeamento e Ordenação de Colunas

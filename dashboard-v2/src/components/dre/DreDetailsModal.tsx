@@ -88,6 +88,12 @@ export function DreDetailsModal({
         md += `- **Conta(s) DRE:** ${formatFilterList(filters.contasDre)}\n`;
         md += `- **Projeto(s):** ${formatFilterList(filters.projetos)}\n`;
         md += `- **Categoria(s):** ${formatFilterList(filters.categorias)}\n`;
+        if (filters.fornecedores && filters.fornecedores.length > 0) {
+          md += `- **Fornecedor(es):** ${formatFilterList(filters.fornecedores)}\n`;
+        }
+        if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
+          md += `- **Conta(s) Corrente:** ${formatFilterList(filters.contasCorrentes)}\n`;
+        }
         md += `- **Rateio de Despesas:** ${filters.excludeSharedExpenses ? 'Excluído (Sem Rateio)' : 'Incluído (Com Rateio)'}\n\n`;
       }
 

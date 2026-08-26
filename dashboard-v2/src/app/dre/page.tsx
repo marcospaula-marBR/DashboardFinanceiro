@@ -132,6 +132,8 @@ export default function DrePage() {
     contasDre: [],
     projetos: [],
     categorias: [],
+    fornecedores: [],
+    contasCorrentes: [],
     excludeSharedExpenses: false
   });
 
@@ -178,6 +180,12 @@ export default function DrePage() {
       }
       if (filters.categorias && filters.categorias.length > 0) {
         filteredRows = filteredRows.filter(row => filters.categorias.includes(row.Categoria));
+      }
+      if (filters.fornecedores && filters.fornecedores.length > 0) {
+        filteredRows = filteredRows.filter(row => filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
+      }
+      if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
+        filteredRows = filteredRows.filter(row => filters.contasCorrentes!.includes(row.ContaCorrente || 'Sem Conta Corrente'));
       }
 
       localStorage.setItem('dre_raw_data', JSON.stringify(filteredRows));
@@ -367,6 +375,8 @@ export default function DrePage() {
         contasDre: [],
         projetos: [],
         categorias: [],
+        fornecedores: [],
+        contasCorrentes: [],
         excludeSharedExpenses: false
       });
 
@@ -436,6 +446,12 @@ export default function DrePage() {
     if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
     if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
     if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
+    if (filters.fornecedores && filters.fornecedores.length > 0) {
+      df = df.filter(row => filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
+    }
+    if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
+      df = df.filter(row => filters.contasCorrentes!.includes(row.ContaCorrente || 'Sem Conta Corrente'));
+    }
     
     // Filtra apenas pelas categorias selecionadas pelo usuário no Card Livre
     df = df.filter(row => customCardCategories.includes(row.Categoria) || customCardCategories.includes(row.ContaDRE));

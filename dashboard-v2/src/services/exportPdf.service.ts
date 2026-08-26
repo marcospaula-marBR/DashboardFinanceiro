@@ -65,7 +65,7 @@ export class ExportPdfService {
 
       pdf.setDrawColor(241, 245, 249); // slate-100
       pdf.setFillColor(248, 250, 252); // slate-50
-      pdf.roundedRect(margin, currentY, contentWidth, 18, 1, 1, 'FD');
+      pdf.roundedRect(margin, currentY, contentWidth, 22, 1, 1, 'FD');
       
       pdf.setTextColor(15, 23, 42);
       pdf.setFontSize(8);
@@ -81,8 +81,10 @@ export class ExportPdfService {
       pdf.text(`Depto/Centro Custo: ${formatFilterList(filters.departamentos)}`, margin + 4 + (filterColWidth * 2), currentY + 10.5);
       pdf.text(`Projeto: ${formatFilterList(filters.projetos)}`, margin + 4, currentY + 14.5);
       pdf.text(`Categoria DRE: ${formatFilterList(filters.categorias)}`, margin + 4 + filterColWidth, currentY + 14.5);
+      pdf.text(`Fornecedor: ${formatFilterList(filters.fornecedores)}`, margin + 4 + (filterColWidth * 2), currentY + 14.5);
+      pdf.text(`Conta Corrente: ${formatFilterList(filters.contasCorrentes)}`, margin + 4, currentY + 18.5);
       
-      currentY += 26;
+      currentY += 30;
 
       // --- 2. ANÁLISE DE IA (BrisinhAI) ---
       if (selections.includeAiAnalysis && aiText) {

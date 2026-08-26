@@ -5,6 +5,8 @@ export interface DreFilters {
   contasDre: string[];     // Rebatizado do antigo 'categorias'
   projetos: string[];      // Novo filtro
   categorias: string[];    // Novo filtro
+  fornecedores?: string[]; // Filtro por fornecedor/prestador/cliente
+  contasCorrentes?: string[]; // Filtro por conta corrente/banco
   excludeSharedExpenses?: boolean;
 }
 
@@ -59,7 +61,9 @@ export interface DreRow {
   ContaDRE: string;        // Rebatizado de 'Categoria'
   Projeto: string;         // Novo campo bruto
   Categoria: string;       // Novo campo bruto
-  [key: string]: string | number; // dynamic month columns, like "Jan/24"
+  Fornecedor?: string;     // Fornecedor / Cliente / Prestador
+  ContaCorrente?: string;  // Conta Corrente / Banco / Caixa
+  [key: string]: string | number | undefined; // dynamic month columns, like "Jan/24"
 }
 
 export type DreItemType = 
@@ -128,5 +132,7 @@ export interface DreMetadata {
   contasDre: string[];
   projetos: string[];
   categorias: string[];
+  fornecedores?: string[];
+  contasCorrentes?: string[];
   mapaMeses: Record<string, string>;
 }

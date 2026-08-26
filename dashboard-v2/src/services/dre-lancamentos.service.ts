@@ -24,6 +24,8 @@ export interface DreLancamento {
   conta_dre: string;
   projeto: string;
   categoria: string;
+  fornecedor?: string;
+  conta_corrente?: string;
   periodo: string;   // "Jan/24", "Jun/25"
   valor: number;
   fonte: 'omie' | 'manual';
@@ -102,7 +104,7 @@ export class DreLancamentosService {
    * Busca todos os lançamentos e os converte para DreRow[],
    * formato compatível com DreService.calculate() e rawData[] do dashboard.
    *
-   * Cada registro (empresa, dept, conta, projeto, categoria, periodo, valor)
+   * Cada registro (empresa, dept, conta, projeto, categoria, fornecedor, conta_corrente, periodo, valor)
    * vira uma entrada no pivotMap e depois é exportado como DreRow com
    * uma chave dinâmica de período.
    */
@@ -151,6 +153,8 @@ export class DreLancamentosService {
         ContaDRE: string;
         Projeto: string;
         Categoria: string;
+        Fornecedor: string;
+        ContaCorrente: string;
         valores: Record<string, number>;
       }
     >();
@@ -176,16 +180,24 @@ export class DreLancamentosService {
         categoria = conta_dre;
       }
 
-      const key = `${emp}|${departamento}|${conta_dre}|${projeto}|${categoria}`;
+      const rawForn      = (rec as any).fornecedor ? String((rec as any).fornecedor).trim() : 'Sem Fornecedor';
+      const fornecedor   = rawForn || 'Sem Fornecedor';
+
+      const rawCC        = (rec as any).conta_corrente ? String((rec as any).conta_corrente).trim() : 'Sem Conta Corrente';
+      const conta_corrente = rawCC || 'Sem Conta Corrente';
+
+      const key = `${emp}|${departamento}|${conta_dre}|${projeto}|${categoria}|${fornecedor}|${conta_corrente}`;
 
       if (!pivotMap.has(key)) {
         pivotMap.set(key, {
-          Empresa:      emp,
-          Departamento: departamento,
-          ContaDRE:     conta_dre,
-          Projeto:      projeto,
-          Categoria:    categoria,
-          valores:      {},
+          Empresa:        emp,
+          Departamento:   departamento,
+          ContaDRE:       conta_dre,
+          Projeto:        projeto,
+          Categoria:      categoria,
+          Fornecedor:     fornecedor,
+          ContaCorrente:  conta_corrente,
+          valores:        {},
         });
       }
 
@@ -199,11 +211,13 @@ export class DreLancamentosService {
     const rows: DreRow[] = [];
     for (const item of pivotMap.values()) {
       const row: DreRow = {
-        Empresa:      item.Empresa,
-        Departamento: item.Departamento,
-        ContaDRE:     item.ContaDRE,
-        Projeto:      item.Projeto,
-        Categoria:    item.Categoria,
+        Empresa:        item.Empresa,
+        Departamento:   item.Departamento,
+        ContaDRE:       item.ContaDRE,
+        Projeto:        item.Projeto,
+        Categoria:      item.Categoria,
+        Fornecedor:     item.Fornecedor,
+        ContaCorrente:  item.ContaCorrente,
       };
       for (const [periodo, valor] of Object.entries(item.valores)) {
         row[periodo] = valor;
@@ -382,11 +396,13 @@ export class DreLancamentosService {
     const periodsToDelete = new Set<string>();
 
     for (const row of rows) {
-      const empresa      = (row.Empresa      as string) || '';
-      const departamento = (row.Departamento as string) || '';
-      const conta_dre    = (row.ContaDRE     as string) || '';
-      const projeto      = (row.Projeto      as string) || 'N/D';
-      const categoria    = (row.Categoria    as string) || '';
+      const empresa        = (row.Empresa        as string) || '';
+      const departamento   = (row.Departamento   as string) || '';
+      const conta_dre      = (row.ContaDRE       as string) || '';
+      const projeto        = (row.Projeto        as string) || 'N/D';
+      const categoria      = (row.Categoria      as string) || '';
+      const fornecedor     = (row.Fornecedor     as string) || 'Sem Fornecedor';
+      const conta_corrente = (row.ContaCorrente as string) || 'Sem Conta Corrente';
 
       if (!empresa || !categoria) continue;
 
@@ -403,6 +419,8 @@ export class DreLancamentosService {
           conta_dre,
           projeto,
           categoria,
+          fornecedor,
+          conta_corrente,
           periodo: key,
           valor:   Math.abs(numVal),
           fonte:   'omie',
@@ -439,11 +457,22 @@ export class DreLancamentosService {
       const { error } = await supabase
         .from(TABLE)
         .upsert(batch, {
-          onConflict: 'empresa,departamento,conta_dre,projeto,categoria,periodo,fonte',
+          onConflict: 'empresa,departamento,conta_dre,projeto,categoria,fornecedor,conta_corrente,periodo,fonte',
         });
 
       if (error) {
-        errors.push(`Batch ${Math.floor(i / BATCH) + 1}: ${error.message}`);
+        // Fallback resiliente caso a migration no banco ainda não tenha aplicado o novo unique constraint
+        const { error: fallbackError } = await supabase
+          .from(TABLE)
+          .upsert(batch, {
+            onConflict: 'empresa,departamento,conta_dre,projeto,categoria,periodo,fonte',
+          });
+
+        if (fallbackError) {
+          errors.push(`Batch ${Math.floor(i / BATCH) + 1}: ${error.message} (Fallback: ${fallbackError.message})`);
+        } else {
+          total += batch.length;
+        }
       } else {
         total += batch.length;
       }
@@ -462,6 +491,8 @@ export class DreLancamentosService {
     const contasDreSet = new Set<string>();
     const projetosSet = new Set<string>();
     const categoriasSet = new Set<string>();
+    const fornecedoresSet = new Set<string>();
+    const contasCorrentesSet = new Set<string>();
     const allPeriodsSet = new Set<string>();
 
     for (const r of rows) {
@@ -470,6 +501,8 @@ export class DreLancamentosService {
       if (r.ContaDRE) contasDreSet.add(r.ContaDRE);
       if (r.Projeto) projetosSet.add(r.Projeto);
       if (r.Categoria) categoriasSet.add(r.Categoria);
+      if (r.Fornecedor) fornecedoresSet.add(r.Fornecedor);
+      if (r.ContaCorrente) contasCorrentesSet.add(r.ContaCorrente);
 
       for (const key of Object.keys(r)) {
         if (key.includes('/')) {
@@ -500,6 +533,8 @@ export class DreLancamentosService {
       contasDre: Array.from(contasDreSet).sort(),
       projetos: Array.from(projetosSet).sort(),
       categorias: Array.from(categoriasSet).sort(),
+      fornecedores: Array.from(fornecedoresSet).sort(),
+      contasCorrentes: Array.from(contasCorrentesSet).sort(),
       periodos: periodosList,
       mapaMeses
     };

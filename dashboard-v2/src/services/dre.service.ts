@@ -217,6 +217,8 @@ export class DreService {
       let colContaDRE = '';
       let colProjeto = '';
       let colCategoria = '';
+      let colFornecedor = '';
+      let colContaCorrente = '';
       let colData = '';
       let colValor = '';
 
@@ -225,7 +227,7 @@ export class DreService {
         const lowerKey = cleanKey.toLowerCase();
         
         // Mapeamento flexível das colunas transacionais
-        if (lowerKey.includes('empresa') || lowerKey.includes('fantasia') || lowerKey.includes('razão') || lowerKey === 'empresa') {
+        if (lowerKey.includes('empresa') || lowerKey.includes('fantasia') || (lowerKey.includes('razão') && !lowerKey.includes('cliente') && !lowerKey.includes('fornecedor')) || lowerKey === 'empresa') {
           if (!colEmpresa || lowerKey.includes('fantasia')) {
             colEmpresa = key;
           }
@@ -237,6 +239,12 @@ export class DreService {
           colProjeto = key;
         } else if (lowerKey === 'categoria') {
           colCategoria = key;
+        } else if (lowerKey.includes('cliente ou fornecedor') || lowerKey.includes('cliente / fornecedor') || lowerKey.includes('fornecedor') || lowerKey === 'cliente_fornecedor') {
+          colFornecedor = key;
+        } else if (lowerKey.includes('conta corrente') || lowerKey.includes('conta_corrente') || lowerKey.includes('conta bancária') || lowerKey.includes('conta bancaria') || lowerKey === 'banco') {
+          if (!colContaCorrente || lowerKey === 'conta corrente' || lowerKey === 'conta_corrente') {
+            colContaCorrente = key;
+          }
         } else if (lowerKey === 'data' || lowerKey === 'data (completa)') {
           if (!colData || lowerKey === 'data') colData = key;
         } else if (lowerKey === 'valor') {
@@ -251,6 +259,8 @@ export class DreService {
         ContaDRE: string;
         Projeto: string;
         Categoria: string;
+        Fornecedor: string;
+        ContaCorrente: string;
         valores: Record<string, number>;
       }>();
 
@@ -304,8 +314,10 @@ export class DreService {
         const cDre = colContaDRE ? row[colContaDRE]?.toString().trim() : 'Sem Conta DRE';
         const proj = colProjeto ? row[colProjeto]?.toString().trim() : 'Sem Projeto';
         const cat = colCategoria ? row[colCategoria]?.toString().trim() : 'Sem Categoria';
+        const forn = colFornecedor ? row[colFornecedor]?.toString().trim() : 'Sem Fornecedor';
+        const cCorr = colContaCorrente ? row[colContaCorrente]?.toString().trim() : 'Sem Conta Corrente';
 
-        const groupKey = `${emp || 'Geral'}|${dep || 'Sem Departamento'}|${cDre || 'Sem Conta DRE'}|${proj || 'Sem Projeto'}|${cat || 'Sem Categoria'}`;
+        const groupKey = `${emp || 'Geral'}|${dep || 'Sem Departamento'}|${cDre || 'Sem Conta DRE'}|${proj || 'Sem Projeto'}|${cat || 'Sem Categoria'}|${forn || 'Sem Fornecedor'}|${cCorr || 'Sem Conta Corrente'}`;
 
         if (!pivotMap.has(groupKey)) {
           pivotMap.set(groupKey, {
@@ -314,6 +326,8 @@ export class DreService {
             ContaDRE: cDre || 'Sem Conta DRE',
             Projeto: proj || 'Sem Projeto',
             Categoria: cat || 'Sem Categoria',
+            Fornecedor: forn || 'Sem Fornecedor',
+            ContaCorrente: cCorr || 'Sem Conta Corrente',
             valores: {}
           });
         }
@@ -329,7 +343,9 @@ export class DreService {
           Departamento: item.Departamento,
           ContaDRE: item.ContaDRE,
           Projeto: item.Projeto,
-          Categoria: item.Categoria
+          Categoria: item.Categoria,
+          Fornecedor: item.Fornecedor,
+          ContaCorrente: item.ContaCorrente
         };
         Object.keys(item.valores).forEach(mes => {
           rowObj[mes] = Math.round(item.valores[mes] * 100) / 100;
@@ -360,6 +376,10 @@ export class DreService {
           finalKey = 'Projeto';
         } else if (lowerKey === 'categoria') {
           finalKey = 'Categoria';
+        } else if (lowerKey === 'fornecedor' || lowerKey.includes('cliente ou fornecedor') || lowerKey.includes('cliente / fornecedor') || lowerKey === 'cliente_fornecedor') {
+          finalKey = 'Fornecedor';
+        } else if (lowerKey === 'contacorrente' || lowerKey.includes('conta corrente') || lowerKey.includes('conta_corrente') || lowerKey === 'banco') {
+          finalKey = 'ContaCorrente';
         }
 
         newRow[finalKey] = row[key];
@@ -385,6 +405,8 @@ export class DreService {
       if (!row.ContaDRE) row.ContaDRE = 'Sem Conta DRE';
       if (!row.Projeto) row.Projeto = 'Sem Projeto';
       if (!row.Categoria) row.Categoria = 'Sem Categoria';
+      if (!row.Fornecedor) row.Fornecedor = 'Sem Fornecedor';
+      if (!row.ContaCorrente) row.ContaCorrente = 'Sem Conta Corrente';
     });
 
     // Filtrar apenas linhas que possuem dados válidos de Departamento e ContaDRE (Empresa é opcional)
@@ -414,6 +436,12 @@ export class DreService {
         normalizedCat = row['ContaDRE'];
       }
       row['Categoria'] = normalizedCat;
+
+      const rawForn = row['Fornecedor'] ? row['Fornecedor'].toString().trim() : 'Sem Fornecedor';
+      row['Fornecedor'] = rawForn || 'Sem Fornecedor';
+
+      const rawCC = row['ContaCorrente'] ? row['ContaCorrente'].toString().trim() : 'Sem Conta Corrente';
+      row['ContaCorrente'] = rawCC || 'Sem Conta Corrente';
     });
 
     // Coleta todas as chaves de meses únicas existentes em todas as linhas da tabela
@@ -451,11 +479,13 @@ export class DreService {
     const contasDre = Array.from(new Set(data.map(d => d.ContaDRE).filter(Boolean))).sort() as string[];
     const projetos = Array.from(new Set(data.map(d => d.Projeto).filter(Boolean))).sort() as string[];
     const categorias = Array.from(new Set(data.map(d => d.Categoria).filter(Boolean))).sort() as string[];
+    const fornecedores = Array.from(new Set(data.map(d => d.Fornecedor).filter(Boolean))).sort() as string[];
+    const contasCorrentes = Array.from(new Set(data.map(d => d.ContaCorrente).filter(Boolean))).sort() as string[];
     const periodosList = periodos.map(p => `${p.mes}/${p.ano}`);
 
     return {
       data: data as DreRow[],
-      metadata: { empresas, departamentos, contasDre, projetos, categorias, periodos: periodosList, mapaMeses }
+      metadata: { empresas, departamentos, contasDre, projetos, categorias, fornecedores, contasCorrentes, periodos: periodosList, mapaMeses }
     };
   }
 
@@ -478,6 +508,12 @@ export class DreService {
     if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
     if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
     if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
+    if (filters.fornecedores && filters.fornecedores.length > 0) {
+      df = df.filter(row => filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
+    }
+    if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
+      df = df.filter(row => filters.contasCorrentes!.includes(row.ContaCorrente || 'Sem Conta Corrente'));
+    }
 
     const sortColumns = (cols: string[]) => {
       return [...cols].sort((a, b) => {

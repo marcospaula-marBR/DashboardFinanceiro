@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft, ChevronDown, Search } from 'lucide-react';
+import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft, ChevronDown, Search, Store, CreditCard } from 'lucide-react';
 import { DreFilters, DreMetadata, DreRow } from '@/types/dre';
 
 // ── Extrai anos únicos de uma lista de períodos (ex: "Jan/24" → "2024") ───────
@@ -302,6 +302,36 @@ export function DreSidebar({
     return Array.from(cats).sort();
   }, [rowsFilteredByProjeto]);
 
+  // 11. Filter subset further by selected Categorias
+  const rowsFilteredByCategoria = useMemo(() => {
+    if (!filters.categorias || filters.categorias.length === 0) return rowsFilteredByProjeto;
+    return rowsFilteredByProjeto.filter(r => filters.categorias.includes(r.Categoria));
+  }, [rowsFilteredByProjeto, filters.categorias]);
+
+  // 12. Available Fornecedores from current subset
+  const availableFornecedores = useMemo(() => {
+    const forns = new Set<string>();
+    rowsFilteredByCategoria.forEach(r => {
+      if (r.Fornecedor) forns.add(r.Fornecedor);
+    });
+    return Array.from(forns).sort();
+  }, [rowsFilteredByCategoria]);
+
+  // 13. Filter subset further by selected Fornecedores
+  const rowsFilteredByFornecedor = useMemo(() => {
+    if (!filters.fornecedores || filters.fornecedores.length === 0) return rowsFilteredByCategoria;
+    return rowsFilteredByCategoria.filter(r => filters.fornecedores!.includes(r.Fornecedor || 'Sem Fornecedor'));
+  }, [rowsFilteredByCategoria, filters.fornecedores]);
+
+  // 14. Available Contas Correntes from current subset
+  const availableContasCorrentes = useMemo(() => {
+    const ccs = new Set<string>();
+    rowsFilteredByFornecedor.forEach(r => {
+      if (r.ContaCorrente) ccs.add(r.ContaCorrente);
+    });
+    return Array.from(ccs).sort();
+  }, [rowsFilteredByFornecedor]);
+
   // Helper to handle filter selection
   const toggleFilter = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, value: string) => {
     const current = [...(filters[key] || [])];
@@ -312,14 +342,7 @@ export function DreSidebar({
       current.push(value);
     }
     
-    // Cascading reset: when a parent level changes, reset child filters if they are no longer in available list
     const updatedFilters = { ...filters, [key]: current };
-    
-    if (key === 'empresas') {
-      // Re-verify depts, contas, projects, cats are still in valid available lists after this change
-      // For simplicity, we can let the parent render resolve them or reset them if they no longer apply
-    }
-    
     onFilterChange(updatedFilters);
   };
 
@@ -331,6 +354,8 @@ export function DreSidebar({
       contasDre: [],
       projetos: [],
       categorias: [],
+      fornecedores: [],
+      contasCorrentes: [],
       excludeSharedExpenses: false
     });
   };
@@ -359,6 +384,8 @@ export function DreSidebar({
     filters.contasDre.length > 0 || 
     filters.projetos.length > 0 || 
     filters.categorias.length > 0 ||
+    (filters.fornecedores && filters.fornecedores.length > 0) ||
+    (filters.contasCorrentes && filters.contasCorrentes.length > 0) ||
     !!filters.excludeSharedExpenses;
 
   return (
@@ -601,6 +628,38 @@ export function DreSidebar({
                 onSelectAll={() => selectAllGroup('categorias', availableCategorias)}
                 searchable={availableCategorias.length > 5}
                 placeholder="Buscar categoria..."
+                fullWidth
+              />
+            </div>
+
+            {/* 7. FORNECEDOR */}
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Fornecedor"
+                icon={<Store size={13} />}
+                options={availableFornecedores}
+                selected={filters.fornecedores || []}
+                onToggle={(v) => toggleFilter('fornecedores', v)}
+                onClear={() => clearGroup('fornecedores')}
+                onSelectAll={() => selectAllGroup('fornecedores', availableFornecedores)}
+                searchable={true}
+                placeholder="Buscar fornecedor..."
+                fullWidth
+              />
+            </div>
+
+            {/* 8. CONTA CORRENTE */}
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Conta Corrente"
+                icon={<CreditCard size={13} />}
+                options={availableContasCorrentes}
+                selected={filters.contasCorrentes || []}
+                onToggle={(v) => toggleFilter('contasCorrentes', v)}
+                onClear={() => clearGroup('contasCorrentes')}
+                onSelectAll={() => selectAllGroup('contasCorrentes', availableContasCorrentes)}
+                searchable={true}
+                placeholder="Buscar conta corrente..."
                 fullWidth
               />
             </div>
