@@ -15,7 +15,7 @@ import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
 import { DreIndicatorsModal } from '@/components/dre/DreIndicatorsModal';
 import { DreReportBuilderModal } from '@/components/dre/DreReportBuilderModal';
 import { DreLancamentosService } from '@/services/dre-lancamentos.service';
-import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
+import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
 import { supabase } from '@/lib/supabase';
@@ -132,6 +132,8 @@ export default function DrePage() {
     contasDre: [],
     projetos: [],
     categorias: [],
+    fornecedores: [],
+    contasCorrentes: [],
     excludeSharedExpenses: false
   });
 
@@ -367,6 +369,8 @@ export default function DrePage() {
         contasDre: [],
         projetos: [],
         categorias: [],
+        fornecedores: [],
+        contasCorrentes: [],
         excludeSharedExpenses: false
       });
 
@@ -431,11 +435,17 @@ export default function DrePage() {
     if (rawData.length === 0 || customCardCategories.length === 0 || !results) return 0;
     
     let df = rawData;
-    if (filters.empresas.length > 0) df = df.filter(row => filters.empresas.includes(row.Empresa));
+    if (filters.empresas.length > 0) df = df.filter(row => filters.empresas.includes(normalizeEmpresa(row.Empresa)) || filters.empresas.includes(row.Empresa));
     if (filters.departamentos.length > 0) df = df.filter(row => filters.departamentos.includes(row.Departamento));
     if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
     if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
     if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
+    if (filters.fornecedores && filters.fornecedores.length > 0) {
+      df = df.filter(row => filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
+    }
+    if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
+      df = df.filter(row => filters.contasCorrentes!.includes(row.ContaCorrente || 'Sem Conta Corrente'));
+    }
     
     // Filtra apenas pelas categorias selecionadas pelo usuário no Card Livre
     df = df.filter(row => customCardCategories.includes(row.Categoria) || customCardCategories.includes(row.ContaDRE));

@@ -123,14 +123,49 @@ export const CATEGORIAS_MAP: Record<string, string> = {
   "Táxi e/ou aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
 };
 
+export const fixMojibake = (str: string): string => {
+  if (!str) return '';
+  let result = str.trim();
+  try {
+    if (/[\u00C2\u00C3]/.test(result)) {
+      const decoded = decodeURIComponent(escape(result));
+      if (decoded && !/[\u00C2\u00C3]/.test(decoded)) {
+        return decoded.trim();
+      }
+    }
+  } catch (e) {}
+
+  const replacements: Record<string, string> = {
+    'Ã£': 'ã', 'Ã¡': 'á', 'Ã ': 'à', 'Ã¢': 'â', 'Ã¤': 'ä',
+    'Ã©': 'é', 'Ã¨': 'è', 'Ãª': 'ê', 'Ã«': 'ë',
+    'Ã­': 'í', 'Ã¬': 'ì', 'Ã®': 'î', 'Ã¯': 'ï',
+    'Ã³': 'ó', 'Ã²': 'ò', 'Ã´': 'ô', 'Ãµ': 'õ', 'Ã¶': 'ö',
+    'Ãº': 'ú', 'Ã¹': 'ù', 'Ã»': 'û', 'Ã¼': 'ü',
+    'Ã§': 'ç', 'Ã±': 'ñ',
+    'Ãƒ': 'Ã', 'Ã': 'Á', 'Ã€': 'À', 'Ã‚': 'Â',
+    'Ã‰': 'É', 'Ãˆ': 'È', 'ÃŠ': 'Ê',
+    'Ã': 'Í', 'ÃŒ': 'Ì', 'ÃŽ': 'Î',
+    'Ã“': 'Ó', 'Ã’': 'Ò', 'Ã”': 'Ô', 'Ã•': 'Õ',
+    'Ãš': 'Ú', 'Ã™': 'Ù', 'Ã›': 'Û',
+    'Ã‡': 'Ç',
+    'Âº': 'º', 'Âª': 'ª', 'Â§': '§', 'Â°': '°'
+  };
+
+  for (const [bad, good] of Object.entries(replacements)) {
+    result = result.split(bad).join(good);
+  }
+  return result.trim();
+};
+
 export const normalizeEmpresa = (empresa: string): string => {
-  const norm = (empresa || '').trim().toUpperCase();
+  const clean = fixMojibake(empresa);
+  const norm = clean.trim().toUpperCase();
   if (norm.includes('CONECTIUS')) return 'Conectius';
   if (norm.includes('MAR BRASIL') || norm.includes('MARBR') || norm.includes('MAR BR') || norm === 'MAR_BR') return 'MarBR';
   if (norm.includes('DZM') || norm.includes('D.Z.M') || norm.includes('D Z M')) return 'DZM';
   if (norm.includes('YBOX') || norm.includes('Y BOX')) return 'Ybox';
   if (norm.includes('G2') || norm.includes('G 2')) return 'G2';
-  return empresa || 'Geral';
+  return clean || 'Geral';
 };
 
 export class DreService {
@@ -222,6 +257,8 @@ export class DreService {
       let colCategoria = '';
       let colData = '';
       let colValor = '';
+      let colFornecedor = '';
+      let colContaCorrente = '';
 
       Object.keys(firstRow).forEach(key => {
         const cleanKey = key.trim().replace(/["']/g, '');
@@ -244,6 +281,10 @@ export class DreService {
           if (!colData || lowerKey === 'data') colData = key;
         } else if (lowerKey === 'valor') {
           colValor = key;
+        } else if (lowerKey.includes('fornecedor') || lowerKey.includes('cliente ou fornecedor') || lowerKey.includes('cliente_fornecedor')) {
+          colFornecedor = key;
+        } else if (lowerKey.includes('conta corrente') || lowerKey.includes('conta_corrente') || lowerKey === 'banco') {
+          colContaCorrente = key;
         }
       });
 
@@ -254,6 +295,8 @@ export class DreService {
         ContaDRE: string;
         Projeto: string;
         Categoria: string;
+        Fornecedor: string;
+        ContaCorrente: string;
         valores: Record<string, number>;
       }>();
 
@@ -307,8 +350,10 @@ export class DreService {
         const cDre = colContaDRE ? row[colContaDRE]?.toString().trim() : 'Sem Conta DRE';
         const proj = colProjeto ? row[colProjeto]?.toString().trim() : 'Sem Projeto';
         const cat = colCategoria ? row[colCategoria]?.toString().trim() : 'Sem Categoria';
+        const forn = colFornecedor ? fixMojibake(row[colFornecedor]?.toString().trim()) : 'Sem Fornecedor';
+        const cCorr = colContaCorrente ? fixMojibake(row[colContaCorrente]?.toString().trim()) : 'Sem Conta Corrente';
 
-        const groupKey = `${emp || 'Geral'}|${dep || 'Sem Departamento'}|${cDre || 'Sem Conta DRE'}|${proj || 'Sem Projeto'}|${cat || 'Sem Categoria'}`;
+        const groupKey = `${emp || 'Geral'}|${dep || 'Sem Departamento'}|${cDre || 'Sem Conta DRE'}|${proj || 'Sem Projeto'}|${cat || 'Sem Categoria'}|${forn || 'Sem Fornecedor'}|${cCorr || 'Sem Conta Corrente'}`;
 
         if (!pivotMap.has(groupKey)) {
           pivotMap.set(groupKey, {
@@ -317,6 +362,8 @@ export class DreService {
             ContaDRE: cDre || 'Sem Conta DRE',
             Projeto: proj || 'Sem Projeto',
             Categoria: cat || 'Sem Categoria',
+            Fornecedor: forn || 'Sem Fornecedor',
+            ContaCorrente: cCorr || 'Sem Conta Corrente',
             valores: {}
           });
         }
@@ -332,7 +379,9 @@ export class DreService {
           Departamento: item.Departamento,
           ContaDRE: item.ContaDRE,
           Projeto: item.Projeto,
-          Categoria: item.Categoria
+          Categoria: item.Categoria,
+          Fornecedor: item.Fornecedor,
+          ContaCorrente: item.ContaCorrente
         };
         Object.keys(item.valores).forEach(mes => {
           rowObj[mes] = Math.round(item.valores[mes] * 100) / 100;
@@ -363,6 +412,10 @@ export class DreService {
           finalKey = 'Projeto';
         } else if (lowerKey === 'categoria') {
           finalKey = 'Categoria';
+        } else if (lowerKey.includes('fornecedor') || lowerKey.includes('cliente ou fornecedor')) {
+          finalKey = 'Fornecedor';
+        } else if (lowerKey.includes('conta corrente') || lowerKey.includes('contacorrente')) {
+          finalKey = 'ContaCorrente';
         }
 
         newRow[finalKey] = row[key];
@@ -388,6 +441,8 @@ export class DreService {
       if (!row.ContaDRE) row.ContaDRE = 'Sem Conta DRE';
       if (!row.Projeto) row.Projeto = 'Sem Projeto';
       if (!row.Categoria) row.Categoria = 'Sem Categoria';
+      if (!row.Fornecedor) row.Fornecedor = 'Sem Fornecedor';
+      if (!row.ContaCorrente) row.ContaCorrente = 'Sem Conta Corrente';
     });
 
     // Filtrar apenas linhas que possuem dados válidos de Departamento e ContaDRE (Empresa é opcional)
@@ -417,6 +472,8 @@ export class DreService {
         normalizedCat = row['ContaDRE'];
       }
       row['Categoria'] = normalizedCat;
+      row['Fornecedor'] = fixMojibake(row['Fornecedor'] ? row['Fornecedor'].toString().trim() : 'Sem Fornecedor');
+      row['ContaCorrente'] = fixMojibake(row['ContaCorrente'] ? row['ContaCorrente'].toString().trim() : 'Sem Conta Corrente');
     });
 
     // Coleta todas as chaves de meses únicas existentes em todas as linhas da tabela
@@ -454,11 +511,13 @@ export class DreService {
     const contasDre = Array.from(new Set(data.map(d => d.ContaDRE).filter(Boolean))).sort() as string[];
     const projetos = Array.from(new Set(data.map(d => d.Projeto).filter(Boolean))).sort() as string[];
     const categorias = Array.from(new Set(data.map(d => d.Categoria).filter(Boolean))).sort() as string[];
+    const fornecedores = Array.from(new Set(data.map(d => d.Fornecedor).filter(Boolean))).sort((a, b) => a!.localeCompare(b!, 'pt-BR')) as string[];
+    const contasCorrentes = Array.from(new Set(data.map(d => d.ContaCorrente).filter(Boolean))).sort((a, b) => a!.localeCompare(b!, 'pt-BR')) as string[];
     const periodosList = periodos.map(p => `${p.mes}/${p.ano}`);
 
     return {
       data: data as DreRow[],
-      metadata: { empresas, departamentos, contasDre, projetos, categorias, periodos: periodosList, mapaMeses }
+      metadata: { empresas, departamentos, contasDre, projetos, categorias, fornecedores, contasCorrentes, periodos: periodosList, mapaMeses }
     };
   }
 
@@ -483,6 +542,12 @@ export class DreService {
     if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
     if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
     if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
+    if (filters.fornecedores && filters.fornecedores.length > 0) {
+      df = df.filter(row => filters.fornecedores!.includes(fixMojibake(row.Fornecedor || 'Sem Fornecedor')) || filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
+    }
+    if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
+      df = df.filter(row => filters.contasCorrentes!.includes(fixMojibake(row.ContaCorrente || 'Sem Conta Corrente')) || filters.contasCorrentes!.includes(row.ContaCorrente || 'Sem Conta Corrente'));
+    }
 
     const sortColumns = (cols: string[]) => {
       return [...cols].sort((a, b) => {

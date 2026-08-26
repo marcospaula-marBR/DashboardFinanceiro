@@ -2,9 +2,9 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft, ChevronDown, Search } from 'lucide-react';
+import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft, ChevronDown, Search, Store, CreditCard } from 'lucide-react';
 import { DreFilters, DreMetadata, DreRow } from '@/types/dre';
-import { normalizeEmpresa } from '@/services/dre.service';
+import { normalizeEmpresa, fixMojibake } from '@/services/dre.service';
 
 // ── Extrai anos únicos de uma lista de períodos (ex: "Jan/24" → "2024") ───────
 function extractYears(periodos: string[]): string[] {
@@ -305,9 +305,53 @@ export function DreSidebar({
     return Array.from(cats).sort();
   }, [rowsFilteredByProjeto]);
 
+  // 11. Filter subset further by selected Categorias
+  const rowsFilteredByCategoria = useMemo(() => {
+    if (!filters.categorias || filters.categorias.length === 0) return rowsFilteredByProjeto;
+    return rowsFilteredByProjeto.filter(r => filters.categorias.includes(r.Categoria));
+  }, [rowsFilteredByProjeto, filters.categorias]);
+
+  // 12. Available Fornecedores from current subset
+  const availableFornecedores = useMemo(() => {
+    const forns = new Set<string>();
+    rowsFilteredByCategoria.forEach(r => {
+      if (r.Fornecedor && r.Fornecedor !== 'Sem Fornecedor') {
+        forns.add(fixMojibake(r.Fornecedor));
+      }
+    });
+    if (forns.size === 0 && metadata?.fornecedores) {
+      metadata.fornecedores.forEach(f => {
+        if (f && f !== 'Sem Fornecedor') forns.add(fixMojibake(f));
+      });
+    }
+    return Array.from(forns).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [rowsFilteredByCategoria, metadata?.fornecedores]);
+
+  // 13. Filter subset further by selected Fornecedores
+  const rowsFilteredByFornecedor = useMemo(() => {
+    if (!filters.fornecedores || filters.fornecedores.length === 0) return rowsFilteredByCategoria;
+    return rowsFilteredByCategoria.filter(r => filters.fornecedores!.includes(fixMojibake(r.Fornecedor || '')));
+  }, [rowsFilteredByCategoria, filters.fornecedores]);
+
+  // 14. Available Contas Correntes from current subset
+  const availableContasCorrentes = useMemo(() => {
+    const contas = new Set<string>();
+    rowsFilteredByFornecedor.forEach(r => {
+      if (r.ContaCorrente && r.ContaCorrente !== 'Sem Conta Corrente') {
+        contas.add(fixMojibake(r.ContaCorrente));
+      }
+    });
+    if (contas.size === 0 && metadata?.contasCorrentes) {
+      metadata.contasCorrentes.forEach(c => {
+        if (c && c !== 'Sem Conta Corrente') contas.add(fixMojibake(c));
+      });
+    }
+    return Array.from(contas).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [rowsFilteredByFornecedor, metadata?.contasCorrentes]);
+
   // Helper to handle filter selection
   const toggleFilter = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, value: string) => {
-    const current = [...(filters[key] || [])];
+    const current = [...((filters[key] as string[]) || [])];
     const index = current.indexOf(value);
     if (index > -1) {
       current.splice(index, 1);
@@ -315,14 +359,7 @@ export function DreSidebar({
       current.push(value);
     }
     
-    // Cascading reset: when a parent level changes, reset child filters if they are no longer in available list
     const updatedFilters = { ...filters, [key]: current };
-    
-    if (key === 'empresas') {
-      // Re-verify depts, contas, projects, cats are still in valid available lists after this change
-      // For simplicity, we can let the parent render resolve them or reset them if they no longer apply
-    }
-    
     onFilterChange(updatedFilters);
   };
 
@@ -334,6 +371,8 @@ export function DreSidebar({
       contasDre: [],
       projetos: [],
       categorias: [],
+      fornecedores: [],
+      contasCorrentes: [],
       excludeSharedExpenses: false
     });
   };
@@ -347,7 +386,7 @@ export function DreSidebar({
 
   const selectAllGroup = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, availableItems: string[]) => {
     if (availableItems.length === 0) return;
-    const current = filters[key] || [];
+    const current = (filters[key] as string[]) || [];
     const merged = Array.from(new Set([...current, ...availableItems]));
     onFilterChange({
       ...filters,
@@ -362,6 +401,8 @@ export function DreSidebar({
     filters.contasDre.length > 0 || 
     filters.projetos.length > 0 || 
     filters.categorias.length > 0 ||
+    (filters.fornecedores && filters.fornecedores.length > 0) ||
+    (filters.contasCorrentes && filters.contasCorrentes.length > 0) ||
     !!filters.excludeSharedExpenses;
 
   return (
@@ -607,6 +648,42 @@ export function DreSidebar({
                 fullWidth
               />
             </div>
+
+            {/* 7. FORNECEDOR / CLIENTE */}
+            {availableFornecedores.length > 0 && (
+              <div className="w-full">
+                <MultiSelectDropdown
+                  label="Fornecedor / Cliente"
+                  icon={<Store size={13} />}
+                  options={availableFornecedores}
+                  selected={filters.fornecedores || []}
+                  onToggle={(v) => toggleFilter('fornecedores', v)}
+                  onClear={() => clearGroup('fornecedores')}
+                  onSelectAll={() => selectAllGroup('fornecedores', availableFornecedores)}
+                  searchable={availableFornecedores.length > 5}
+                  placeholder="Buscar fornecedor..."
+                  fullWidth
+                />
+              </div>
+            )}
+
+            {/* 8. CONTA CORRENTE / BANCO */}
+            {availableContasCorrentes.length > 0 && (
+              <div className="w-full">
+                <MultiSelectDropdown
+                  label="Conta Corrente"
+                  icon={<CreditCard size={13} />}
+                  options={availableContasCorrentes}
+                  selected={filters.contasCorrentes || []}
+                  onToggle={(v) => toggleFilter('contasCorrentes', v)}
+                  onClear={() => clearGroup('contasCorrentes')}
+                  onSelectAll={() => selectAllGroup('contasCorrentes', availableContasCorrentes)}
+                  searchable={availableContasCorrentes.length > 5}
+                  placeholder="Buscar conta bancária..."
+                  fullWidth
+                />
+              </div>
+            )}
 
           </div>
         )}
