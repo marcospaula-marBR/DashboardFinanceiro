@@ -123,14 +123,49 @@ export const CATEGORIAS_MAP: Record<string, string> = {
   "Táxi e/ou aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
 };
 
+export const fixMojibake = (str: string): string => {
+  if (!str) return '';
+  let result = str.trim();
+  try {
+    if (/[\u00C2\u00C3]/.test(result)) {
+      const decoded = decodeURIComponent(escape(result));
+      if (decoded && !/[\u00C2\u00C3]/.test(decoded)) {
+        return decoded;
+      }
+    }
+  } catch (e) {}
+
+  const replacements: Record<string, string> = {
+    'Ã£': 'ã', 'Ã¡': 'á', 'Ã ': 'à', 'Ã¢': 'â', 'Ã¤': 'ä',
+    'Ã©': 'é', 'Ã¨': 'è', 'Ãª': 'ê', 'Ã«': 'ë',
+    'Ã­': 'í', 'Ã¬': 'ì', 'Ã®': 'î', 'Ã¯': 'ï',
+    'Ã³': 'ó', 'Ã²': 'ò', 'Ã´': 'ô', 'Ãµ': 'õ', 'Ã¶': 'ö',
+    'Ãº': 'ú', 'Ã¹': 'ù', 'Ã»': 'û', 'Ã¼': 'ü',
+    'Ã§': 'ç', 'Ã±': 'ñ',
+    'Ãƒ': 'Ã', 'Ã': 'Á', 'Ã€': 'À', 'Ã‚': 'Â',
+    'Ã‰': 'É', 'Ãˆ': 'È', 'ÃŠ': 'Ê',
+    'Ã': 'Í', 'ÃŒ': 'Ì', 'ÃŽ': 'Î',
+    'Ã“': 'Ó', 'Ã’': 'Ò', 'Ã”': 'Ô', 'Ã•': 'Õ',
+    'Ãš': 'Ú', 'Ã™': 'Ù', 'Ã›': 'Û',
+    'Ã‡': 'Ç',
+    'Âº': 'º', 'Âª': 'ª', 'Â§': '§', 'Â°': '°'
+  };
+
+  for (const [bad, good] of Object.entries(replacements)) {
+    result = result.split(bad).join(good);
+  }
+  return result;
+};
+
 export const normalizeEmpresa = (empresa: string): string => {
-  const norm = (empresa || '').trim().toUpperCase();
+  const clean = fixMojibake(empresa);
+  const norm = clean.trim().toUpperCase();
   if (norm.includes('CONECTIUS')) return 'Conectius';
   if (norm.includes('MAR BRASIL') || norm.includes('MARBR') || norm.includes('MAR BR') || norm === 'MAR_BR') return 'MarBR';
   if (norm.includes('DZM') || norm.includes('D.Z.M') || norm.includes('D Z M')) return 'DZM';
   if (norm.includes('YBOX') || norm.includes('Y BOX')) return 'Ybox';
   if (norm.includes('G2') || norm.includes('G 2')) return 'G2';
-  return empresa || 'Geral';
+  return clean || 'Geral';
 };
 
 export class DreService {
