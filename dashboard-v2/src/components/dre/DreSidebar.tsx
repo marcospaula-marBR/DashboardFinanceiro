@@ -2,9 +2,8 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft, ChevronDown, Search, Store, CreditCard } from 'lucide-react';
+import { UploadCloud, Filter, XCircle, Building2, Calendar, FolderTree, Landmark, Target, Tags, ChevronLeft, ChevronDown, Search } from 'lucide-react';
 import { DreFilters, DreMetadata, DreRow } from '@/types/dre';
-import { fixMojibake, normalizeEmpresa } from '@/services/dre.service';
 
 // ── Extrai anos únicos de uma lista de períodos (ex: "Jan/24" → "2024") ───────
 function extractYears(periodos: string[]): string[] {
@@ -181,7 +180,7 @@ export function DreSidebar({
 
   // 1. Available Empresas (global metadata)
   const availableEmpresas = useMemo(() => {
-    return (metadata?.empresas || []).map(e => normalizeEmpresa(e));
+    return metadata?.empresas || [];
   }, [metadata]);
 
   // 2. Available Periodos (global metadata)
@@ -246,114 +245,62 @@ export function DreSidebar({
   // 3. Filter raw data based on selected Empresa
   const rowsFilteredByEmpresa = useMemo(() => {
     if (!filters.empresas || filters.empresas.length === 0) return rawData;
-    return rawData.filter(r => filters.empresas.includes(normalizeEmpresa(r.Empresa)));
+    return rawData.filter(r => filters.empresas.includes(r.Empresa));
   }, [rawData, filters.empresas]);
 
   // 4. Available Departamentos from current Empresa subset
   const availableDepartamentos = useMemo(() => {
     const depts = new Set<string>();
     rowsFilteredByEmpresa.forEach(r => {
-      if (r.Departamento) depts.add(fixMojibake(r.Departamento));
+      if (r.Departamento) depts.add(r.Departamento);
     });
-    return Array.from(depts).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    return Array.from(depts).sort();
   }, [rowsFilteredByEmpresa]);
 
   // 5. Filter subset further by selected Departamentos
   const rowsFilteredByDept = useMemo(() => {
     if (!filters.departamentos || filters.departamentos.length === 0) return rowsFilteredByEmpresa;
-    return rowsFilteredByEmpresa.filter(r => filters.departamentos.includes(fixMojibake(r.Departamento)));
+    return rowsFilteredByEmpresa.filter(r => filters.departamentos.includes(r.Departamento));
   }, [rowsFilteredByEmpresa, filters.departamentos]);
 
   // 6. Available ContaDRE from current Dept subset
   const availableContasDre = useMemo(() => {
     const contas = new Set<string>();
     rowsFilteredByDept.forEach(r => {
-      if (r.ContaDRE) contas.add(fixMojibake(r.ContaDRE));
+      if (r.ContaDRE) contas.add(r.ContaDRE);
     });
-    return Array.from(contas).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    return Array.from(contas).sort();
   }, [rowsFilteredByDept]);
 
   // 7. Filter subset further by selected ContaDRE
   const rowsFilteredByConta = useMemo(() => {
     if (!filters.contasDre || filters.contasDre.length === 0) return rowsFilteredByDept;
-    return rowsFilteredByDept.filter(r => filters.contasDre.includes(fixMojibake(r.ContaDRE)));
+    return rowsFilteredByDept.filter(r => filters.contasDre.includes(r.ContaDRE));
   }, [rowsFilteredByDept, filters.contasDre]);
 
   // 8. Available Projetos from current ContaDRE subset
   const availableProjetos = useMemo(() => {
     const projs = new Set<string>();
     rowsFilteredByConta.forEach(r => {
-      if (r.Projeto) projs.add(fixMojibake(r.Projeto));
+      if (r.Projeto) projs.add(r.Projeto);
     });
-    return Array.from(projs).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    return Array.from(projs).sort();
   }, [rowsFilteredByConta]);
 
   // 9. Filter subset further by selected Projetos
   const rowsFilteredByProjeto = useMemo(() => {
     if (!filters.projetos || filters.projetos.length === 0) return rowsFilteredByConta;
-    return rowsFilteredByConta.filter(r => filters.projetos.includes(fixMojibake(r.Projeto)));
+    return rowsFilteredByConta.filter(r => filters.projetos.includes(r.Projeto));
   }, [rowsFilteredByConta, filters.projetos]);
 
   // 10. Available Categorias from current Projetos subset
   const availableCategorias = useMemo(() => {
     const cats = new Set<string>();
     rowsFilteredByProjeto.forEach(r => {
-      if (r.Categoria) cats.add(fixMojibake(r.Categoria));
+      if (r.Categoria) cats.add(r.Categoria);
     });
-    return Array.from(cats).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    return Array.from(cats).sort();
   }, [rowsFilteredByProjeto]);
-
-  // 11. Filter subset further by selected Categorias
-  const rowsFilteredByCategoria = useMemo(() => {
-    if (!filters.categorias || filters.categorias.length === 0) return rowsFilteredByProjeto;
-    return rowsFilteredByProjeto.filter(r => filters.categorias.includes(fixMojibake(r.Categoria)));
-  }, [rowsFilteredByProjeto, filters.categorias]);
-
-  // 12. Available Fornecedores from current subset
-  const availableFornecedores = useMemo(() => {
-    const forns = new Set<string>();
-    rowsFilteredByCategoria.forEach(r => {
-      const f = fixMojibake(r.Fornecedor || '');
-      if (f && f !== 'Sem Fornecedor') {
-        forns.add(f);
-      }
-    });
-
-    if (forns.size === 0 && metadata?.fornecedores && metadata.fornecedores.length > 0) {
-      metadata.fornecedores.forEach(f => {
-        const clean = fixMojibake(f || '');
-        if (clean && clean !== 'Sem Fornecedor') forns.add(clean);
-      });
-    }
-
-    return Array.from(forns).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-  }, [rowsFilteredByCategoria, metadata?.fornecedores]);
-
-  // 13. Filter subset further by selected Fornecedores
-  const rowsFilteredByFornecedor = useMemo(() => {
-    if (!filters.fornecedores || filters.fornecedores.length === 0) return rowsFilteredByCategoria;
-    return rowsFilteredByCategoria.filter(r => filters.fornecedores!.includes(fixMojibake(r.Fornecedor || 'Sem Fornecedor')));
-  }, [rowsFilteredByCategoria, filters.fornecedores]);
-
-  // 14. Available Contas Correntes from current subset
-  const availableContasCorrentes = useMemo(() => {
-    const ccs = new Set<string>();
-    rowsFilteredByFornecedor.forEach(r => {
-      const c = fixMojibake(r.ContaCorrente || '');
-      if (c && c !== 'Sem Conta Corrente') {
-        ccs.add(c);
-      }
-    });
-
-    if (ccs.size === 0 && metadata?.contasCorrentes && metadata.contasCorrentes.length > 0) {
-      metadata.contasCorrentes.forEach(c => {
-        const clean = fixMojibake(c || '');
-        if (clean && clean !== 'Sem Conta Corrente') ccs.add(clean);
-      });
-    }
-
-    return Array.from(ccs).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-  }, [rowsFilteredByFornecedor, metadata?.contasCorrentes]);
 
   // Helper to handle filter selection
   const toggleFilter = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, value: string) => {
@@ -365,7 +312,14 @@ export function DreSidebar({
       current.push(value);
     }
     
+    // Cascading reset: when a parent level changes, reset child filters if they are no longer in available list
     const updatedFilters = { ...filters, [key]: current };
+    
+    if (key === 'empresas') {
+      // Re-verify depts, contas, projects, cats are still in valid available lists after this change
+      // For simplicity, we can let the parent render resolve them or reset them if they no longer apply
+    }
+    
     onFilterChange(updatedFilters);
   };
 
@@ -377,8 +331,6 @@ export function DreSidebar({
       contasDre: [],
       projetos: [],
       categorias: [],
-      fornecedores: [],
-      contasCorrentes: [],
       excludeSharedExpenses: false
     });
   };
@@ -407,8 +359,6 @@ export function DreSidebar({
     filters.contasDre.length > 0 || 
     filters.projetos.length > 0 || 
     filters.categorias.length > 0 ||
-    (filters.fornecedores && filters.fornecedores.length > 0) ||
-    (filters.contasCorrentes && filters.contasCorrentes.length > 0) ||
     !!filters.excludeSharedExpenses;
 
   return (
@@ -651,38 +601,6 @@ export function DreSidebar({
                 onSelectAll={() => selectAllGroup('categorias', availableCategorias)}
                 searchable={availableCategorias.length > 5}
                 placeholder="Buscar categoria..."
-                fullWidth
-              />
-            </div>
-
-            {/* 7. FORNECEDOR */}
-            <div className="w-full">
-              <MultiSelectDropdown
-                label="Fornecedor"
-                icon={<Store size={13} />}
-                options={availableFornecedores}
-                selected={filters.fornecedores || []}
-                onToggle={(v) => toggleFilter('fornecedores', v)}
-                onClear={() => clearGroup('fornecedores')}
-                onSelectAll={() => selectAllGroup('fornecedores', availableFornecedores)}
-                searchable={true}
-                placeholder="Buscar fornecedor..."
-                fullWidth
-              />
-            </div>
-
-            {/* 8. CONTA CORRENTE */}
-            <div className="w-full">
-              <MultiSelectDropdown
-                label="Conta Corrente"
-                icon={<CreditCard size={13} />}
-                options={availableContasCorrentes}
-                selected={filters.contasCorrentes || []}
-                onToggle={(v) => toggleFilter('contasCorrentes', v)}
-                onClear={() => clearGroup('contasCorrentes')}
-                onSelectAll={() => selectAllGroup('contasCorrentes', availableContasCorrentes)}
-                searchable={true}
-                placeholder="Buscar conta corrente..."
                 fullWidth
               />
             </div>

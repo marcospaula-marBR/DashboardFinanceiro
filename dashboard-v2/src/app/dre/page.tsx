@@ -15,7 +15,7 @@ import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
 import { DreIndicatorsModal } from '@/components/dre/DreIndicatorsModal';
 import { DreReportBuilderModal } from '@/components/dre/DreReportBuilderModal';
 import { DreLancamentosService } from '@/services/dre-lancamentos.service';
-import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa } from '@/services/dre.service';
+import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
 import { supabase } from '@/lib/supabase';
@@ -132,8 +132,6 @@ export default function DrePage() {
     contasDre: [],
     projetos: [],
     categorias: [],
-    fornecedores: [],
-    contasCorrentes: [],
     excludeSharedExpenses: false
   });
 
@@ -181,12 +179,6 @@ export default function DrePage() {
       if (filters.categorias && filters.categorias.length > 0) {
         filteredRows = filteredRows.filter(row => filters.categorias.includes(row.Categoria));
       }
-      if (filters.fornecedores && filters.fornecedores.length > 0) {
-        filteredRows = filteredRows.filter(row => filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
-      }
-      if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
-        filteredRows = filteredRows.filter(row => filters.contasCorrentes!.includes(row.ContaCorrente || 'Sem Conta Corrente'));
-      }
 
       localStorage.setItem('dre_raw_data', JSON.stringify(filteredRows));
       localStorage.setItem('dre_filters', JSON.stringify(filters));
@@ -205,33 +197,9 @@ export default function DrePage() {
 
       if (data && data.length > 0) {
         const snapshot = data[0];
-        
-        // Normalizar nomes de empresas no raw_data (unificar Conectius, MarBR, etc.)
-        const normalizedRows = (snapshot.raw_data || []).map((r: any) => ({
-          ...r,
-          Empresa: normalizeEmpresa(r.Empresa)
-        }));
-
-        let metadata = snapshot.metadata || {};
-        if (metadata.empresas) {
-          metadata.empresas = Array.from(new Set(metadata.empresas.map((e: string) => normalizeEmpresa(e)))).sort();
-        }
-
-        // Se o snapshot não tiver fornecedores e contas nos metadados, extrair das linhas
-        if (!metadata.fornecedores || metadata.fornecedores.length === 0) {
-          const forns = new Set<string>();
-          const ccs = new Set<string>();
-          normalizedRows.forEach((r: any) => {
-            if (r.Fornecedor && r.Fornecedor !== 'Sem Fornecedor') forns.add(r.Fornecedor);
-            if (r.ContaCorrente && r.ContaCorrente !== 'Sem Conta Corrente') ccs.add(r.ContaCorrente);
-          });
-          metadata.fornecedores = Array.from(forns).sort();
-          metadata.contasCorrentes = Array.from(ccs).sort();
-        }
-
-        setRawData(normalizedRows);
-        setMetadata(metadata);
-        setFileName(snapshot.filename || 'Banco de Dados Nuvem (Consolidado)');
+        setRawData(snapshot.raw_data);
+        setMetadata(snapshot.metadata);
+        setFileName(snapshot.filename || 'Banco de Dados Nuvem (Legacy Snapshot)');
         
         const timestamp = new Date(snapshot.created_at);
         setLastUpdate(timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString());
@@ -255,30 +223,15 @@ export default function DrePage() {
       }
 
       if (rows && rows.length > 0) {
-        const normalizedRows = rows.map(r => ({
-          ...r,
-          Empresa: normalizeEmpresa(r.Empresa)
-        }));
-
-        const generatedMetadata = DreLancamentosService.generateMetadataFromRows(normalizedRows);
-        if (generatedMetadata.empresas) {
-          generatedMetadata.empresas = Array.from(new Set(generatedMetadata.empresas.map(e => normalizeEmpresa(e)))).sort();
-        }
-
-        const hasEnrichedFornecedores = generatedMetadata.fornecedores && generatedMetadata.fornecedores.some(f => f !== 'Sem Fornecedor');
-        const hasEnrichedContas = generatedMetadata.contasCorrentes && generatedMetadata.contasCorrentes.some(c => c !== 'Sem Conta Corrente');
-
-        if (!hasEnrichedFornecedores && !hasEnrichedContas) {
-          console.warn("dre_lancamentos não possui fornecedores/contas populados. Carregando snapshot enriquecido...");
-          await loadFallbackSnapshot();
-        } else {
-          setRawData(normalizedRows);
-          setMetadata(generatedMetadata);
-          setFileName('Banco de Dados Nuvem (dre_lancamentos)');
-          
-          const timestamp = new Date();
-          setLastUpdate(timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString());
-        }
+        setRawData(rows);
+        
+        // Gerar metadados de forma dinâmica a partir das colunas e valores atuais
+        const generatedMetadata = DreLancamentosService.generateMetadataFromRows(rows);
+        setMetadata(generatedMetadata);
+        setFileName('Banco de Dados Nuvem (dre_lancamentos)');
+        
+        const timestamp = new Date();
+        setLastUpdate(timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString());
       } else {
         console.warn("Tabela dre_lancamentos vazia. Tentando fallback para dre_snapshots...");
         await loadFallbackSnapshot();
@@ -414,8 +367,6 @@ export default function DrePage() {
         contasDre: [],
         projetos: [],
         categorias: [],
-        fornecedores: [],
-        contasCorrentes: [],
         excludeSharedExpenses: false
       });
 
@@ -485,12 +436,6 @@ export default function DrePage() {
     if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
     if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
     if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
-    if (filters.fornecedores && filters.fornecedores.length > 0) {
-      df = df.filter(row => filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
-    }
-    if (filters.contasCorrentes && filters.contasCorrentes.length > 0) {
-      df = df.filter(row => filters.contasCorrentes!.includes(row.ContaCorrente || 'Sem Conta Corrente'));
-    }
     
     // Filtra apenas pelas categorias selecionadas pelo usuário no Card Livre
     df = df.filter(row => customCardCategories.includes(row.Categoria) || customCardCategories.includes(row.ContaDRE));
