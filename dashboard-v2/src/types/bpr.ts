@@ -53,7 +53,7 @@ export interface BprCandidateResult {
   linkType: string;
   isOutsourced: boolean;
   camada: BprCamada;
-  camadaLabel: string; // 'Estratégico' | 'Tático' | 'Operacional'
+  camadaLabel: string; // 'Estratégico' | 'Tático' | 'Operacional/CLTs'
   nivel?: string;
   grau?: string;
   status: string; // 'Ativo' | 'Férias' | 'Inativo' | ...

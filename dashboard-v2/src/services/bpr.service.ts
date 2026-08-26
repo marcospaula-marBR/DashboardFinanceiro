@@ -94,7 +94,7 @@ export class BprService {
     if (camadaStr.startsWith('T') || camadaStr === 'TÁTICO' || camadaStr === 'TATICO') {
       return { camada: 'T', label: 'Tático' };
     }
-    return { camada: 'O', label: 'Operacional' };
+    return { camada: 'O', label: 'Operacional/CLTs' };
   }
 
   /**
@@ -237,10 +237,17 @@ export class BprService {
       }
       
       const link = emp.linkType || 'CLT';
-      const isEstagio = link.toLowerCase().includes('estag') || link.toLowerCase().includes('estág');
+      const isEstagio = link.toLowerCase().includes('estag') || 
+        link.toLowerCase().includes('estág') || 
+        (emp.job_role || '').toLowerCase().includes('estag') || 
+        (emp.job_role || '').toLowerCase().includes('estág') ||
+        ((emp as any).employment_type || '').toLowerCase().includes('estag') ||
+        ((emp as any).employment_type || '').toLowerCase().includes('estág');
+
       if (config.linkTypesFilter.length > 0) {
         const matchesLink = config.linkTypesFilter.includes(link) || 
           (config.linkTypesFilter.includes('Estagiário') && isEstagio) ||
+          (config.linkTypesFilter.includes('CLT') && (link === 'CLT' || isEstagio)) ||
           (config.linkTypesFilter.includes('Terceirizado') && emp.is_outsourced);
         if (!matchesLink) return;
       }
@@ -345,8 +352,8 @@ export class BprService {
         responsibleName: emp.responsible_name,
         company: emp.company || 'MarBR',
         department: emp.department || 'Geral',
-        jobRole: emp.job_role || 'Colaborador',
-        linkType: link,
+        jobRole: emp.job_role || (isEstagio ? 'Estagiário' : 'Colaborador'),
+        linkType: isEstagio ? 'Estagiário' : link,
         isOutsourced: Boolean(emp.is_outsourced),
         camada,
         camadaLabel,
@@ -423,7 +430,7 @@ export class BprService {
       },
       O: {
         camada: 'O',
-        label: 'Operacional',
+        label: 'Operacional/CLTs',
         allocatedPercentage: config.tierSplits.O,
         totalLayerAmount: (config.totalPoolAmount * config.tierSplits.O) / 100,
         eligibleCount: layerEligibleCounts.O,

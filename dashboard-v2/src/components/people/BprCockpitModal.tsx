@@ -14,7 +14,7 @@ import { formatCurrency } from "@/services/loans.service";
 import { 
   Award, X, CheckCircle2, AlertTriangle,
   DollarSign, FileSpreadsheet, Save, FileUp, Sparkles, 
-  Search, Calendar
+  Search, Calendar, ArrowLeft
 } from "lucide-react";
 
 interface BprCockpitModalProps {
@@ -219,6 +219,16 @@ export function BprCockpitModal({
         {/* ── HEADER EXECUTIVO ── */}
         <header className="px-6 sm:px-10 py-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0 shadow-sm">
           <div className="flex items-center gap-3.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold transition-all active:scale-95 cursor-pointer mr-1"
+              title="Voltar para a página People"
+            >
+              <ArrowLeft size={16} className="text-slate-600" />
+              <span className="hidden sm:inline">Voltar ao People</span>
+            </button>
+
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-black shadow-lg shadow-amber-500/20 shrink-0">
               <Award size={24} />
             </div>
@@ -232,7 +242,7 @@ export function BprCockpitModal({
                 </span>
               </div>
               <p className="text-sm text-slate-500 mt-0.5">
-                Apuração determinística per capita com distribuição entre Estratégico, Tático e Operacional
+                Apuração determinística per capita com distribuição entre Estratégico, Tático e Operacional/CLTs
               </p>
             </div>
           </div>
@@ -267,9 +277,11 @@ export function BprCockpitModal({
 
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-all cursor-pointer ml-1"
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-all cursor-pointer ml-1 font-bold text-sm"
+              title="Fechar cockpit e voltar à página People"
             >
               <X size={18} />
+              <span className="hidden md:inline">Fechar</span>
             </button>
           </div>
         </header>
@@ -589,12 +601,12 @@ export function BprCockpitModal({
                   />
                 </div>
 
-                {/* Operacional */}
+                {/* Operacional/CLTs */}
                 <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-100 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-black text-emerald-700 flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                      Operacional (O)
+                      Operacional/CLTs (O)
                     </span>
                     <div className="flex items-center gap-1">
                       <input
@@ -671,10 +683,10 @@ export function BprCockpitModal({
                   </div>
                 </div>
 
-                {/* Operacional */}
+                {/* Operacional/CLTs */}
                 <div className="bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-2xl p-5 space-y-2.5 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black uppercase text-emerald-600 tracking-wider">Operacional ({config.tierSplits.O}%)</span>
+                    <span className="text-xs font-black uppercase text-emerald-600 tracking-wider">Operacional/CLTs ({config.tierSplits.O}%)</span>
                     <span className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm font-black">O</span>
                   </div>
                   <div>
@@ -860,7 +872,7 @@ export function BprCockpitModal({
                   camadaFilter === 'O' ? 'bg-emerald-600 text-white' : 'text-emerald-600 hover:text-emerald-700'
                 }`}
               >
-                Operacional
+                Operacional/CLTs
               </button>
             </div>
 
@@ -1280,7 +1292,7 @@ export function BprCockpitModal({
               rows={6}
               value={docImportText}
               onChange={e => setDocImportText(e.target.value)}
-              placeholder="Exemplo: Fica aprovada a distribuição do BPR referente ao 2º semestre no montante total de R$ 150.000,00, sendo 35% para o Estratégico, 40% para o Tático e 25% para o Operacional..."
+              placeholder="Exemplo: Fica aprovada a distribuição do BPR referente ao 2º semestre no montante total de R$ 150.000,00, sendo 35% para o Estratégico, 40% para o Tático e 25% para o Operacional/CLTs..."
               className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 font-sans"
             />
 
@@ -1364,10 +1376,10 @@ export function BprCockpitModal({
                   <tr>
                     <td className="py-3 px-4 font-bold text-slate-700">Alíquotas por Camada</td>
                     <td className="py-3 px-4 font-mono text-slate-500">
-                      E: {config.tierSplits.E}% | T: {config.tierSplits.T}% | O: {config.tierSplits.O}%
+                      E: {config.tierSplits.E}% | T: {config.tierSplits.T}% | O (Operacional/CLTs): {config.tierSplits.O}%
                     </td>
                     <td className="py-3 px-4 font-mono font-bold text-amber-700">
-                      {importedPatch.tierSplits ? `E: ${importedPatch.tierSplits.E}% | T: ${importedPatch.tierSplits.T}% | O: ${importedPatch.tierSplits.O}%` : 'Sem alteração'}
+                      {importedPatch.tierSplits ? `E: ${importedPatch.tierSplits.E}% | T: ${importedPatch.tierSplits.T}% | O (Operacional/CLTs): ${importedPatch.tierSplits.O}%` : 'Sem alteração'}
                     </td>
                   </tr>
 
