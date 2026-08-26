@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.58.27";
+export const APP_VERSION = "v.02.58.28";
 export const VERSION_DATE = "2026-08-26";
 export const VERSION_CHANGELOG = [
+  "v.02.58.28 - Fix/DRE-Sidebar-Dropdowns-Display: Exibição explícita e permanente dos seletores de 'Fornecedor / Cliente' e 'Conta Corrente' na barra lateral de filtros (DreSidebar.tsx) com placeholders contextuais e suporte imediato a dados populados e uploads do Omie.",
   "v.02.58.27 - Feat/DRE-Filtros-Fornecedor-ContaCorrente-Safe: (1) Adição dos seletores dinâmicos de Fornecedor / Cliente e Conta Corrente na DreSidebar com ordenação alfabética em português e sanitização de mojibake (fixMojibake); (2) Suporte a Fornecedor e Conta Corrente no parsing de arquivos do Omie (normalizeData) e no motor de cálculo da DRE (DreService.calculate e DreSimulatorEngine); (3) Preservação estrita dos dados existentes no Supabase sem afetar os períodos de Junho/26 e Julho/26.",
   "v.02.58.26 - Feat/DRE-Unifica-Conectius: Unificação do nome da empresa 'CONECTIUS DO BRASIL LTDA' para 'Conectius' em normalizeEmpresa (dre.service.ts), filtros disponíveis e cálculo da DRE (DreSidebar.tsx e dre.service.ts), sem alteração na base de dados ou nas regras de apuração financeira.",
   "v.02.58.25 - Rollback/DRE-Restoration: (1) Reversão completa e restauração segura da página DRE para o estado estável anterior de v.02.58.21, restabelecendo as regras originais de agregação e integridade financeira; (2) Restauração total dos dados de Junho e Julho/2026 e das fontes de dados nativas de dre_lancamentos e dre_snapshots; (3) Remoção dos snapshots de teste mantendo o histórico de apuração intacto.",

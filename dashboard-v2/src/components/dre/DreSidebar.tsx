@@ -650,40 +650,36 @@ export function DreSidebar({
             </div>
 
             {/* 7. FORNECEDOR / CLIENTE */}
-            {availableFornecedores.length > 0 && (
-              <div className="w-full">
-                <MultiSelectDropdown
-                  label="Fornecedor / Cliente"
-                  icon={<Store size={13} />}
-                  options={availableFornecedores}
-                  selected={filters.fornecedores || []}
-                  onToggle={(v) => toggleFilter('fornecedores', v)}
-                  onClear={() => clearGroup('fornecedores')}
-                  onSelectAll={() => selectAllGroup('fornecedores', availableFornecedores)}
-                  searchable={availableFornecedores.length > 5}
-                  placeholder="Buscar fornecedor..."
-                  fullWidth
-                />
-              </div>
-            )}
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Fornecedor / Cliente"
+                icon={<Store size={13} />}
+                options={availableFornecedores}
+                selected={filters.fornecedores || []}
+                onToggle={(v) => toggleFilter('fornecedores', v)}
+                onClear={() => clearGroup('fornecedores')}
+                onSelectAll={() => selectAllGroup('fornecedores', availableFornecedores)}
+                searchable={availableFornecedores.length > 5}
+                placeholder={availableFornecedores.length === 0 ? "Nenhum fornecedor disponível" : "Buscar fornecedor..."}
+                fullWidth
+              />
+            </div>
 
             {/* 8. CONTA CORRENTE / BANCO */}
-            {availableContasCorrentes.length > 0 && (
-              <div className="w-full">
-                <MultiSelectDropdown
-                  label="Conta Corrente"
-                  icon={<CreditCard size={13} />}
-                  options={availableContasCorrentes}
-                  selected={filters.contasCorrentes || []}
-                  onToggle={(v) => toggleFilter('contasCorrentes', v)}
-                  onClear={() => clearGroup('contasCorrentes')}
-                  onSelectAll={() => selectAllGroup('contasCorrentes', availableContasCorrentes)}
-                  searchable={availableContasCorrentes.length > 5}
-                  placeholder="Buscar conta bancária..."
-                  fullWidth
-                />
-              </div>
-            )}
+            <div className="w-full">
+              <MultiSelectDropdown
+                label="Conta Corrente"
+                icon={<CreditCard size={13} />}
+                options={availableContasCorrentes}
+                selected={filters.contasCorrentes || []}
+                onToggle={(v) => toggleFilter('contasCorrentes', v)}
+                onClear={() => clearGroup('contasCorrentes')}
+                onSelectAll={() => selectAllGroup('contasCorrentes', availableContasCorrentes)}
+                searchable={availableContasCorrentes.length > 5}
+                placeholder={availableContasCorrentes.length === 0 ? "Nenhuma conta disponível" : "Buscar conta bancária..."}
+                fullWidth
+              />
+            </div>
 
           </div>
         )}
