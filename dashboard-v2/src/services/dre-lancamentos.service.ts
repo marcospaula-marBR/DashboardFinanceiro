@@ -377,7 +377,7 @@ export class DreLancamentosService {
     total: number;
     errors: string[];
   }> {
-    const records: Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'>[] = [];
+    const recordsMap = new Map<string, Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'>>();
     const mesesPattern = /^[A-Z][a-z]{2}\/\d{2}$/;
     const periodsToDelete = new Set<string>();
 
@@ -397,18 +397,26 @@ export class DreLancamentosService {
 
         periodsToDelete.add(key);
 
-        records.push({
-          empresa,
-          departamento,
-          conta_dre,
-          projeto,
-          categoria,
-          periodo: key,
-          valor:   Math.abs(numVal),
-          fonte:   'omie',
-        });
+        const mapKey = `${empresa}|${departamento}|${conta_dre}|${projeto}|${categoria}|${key}|omie`;
+        if (recordsMap.has(mapKey)) {
+          const existing = recordsMap.get(mapKey)!;
+          existing.valor = Math.round((existing.valor + Math.abs(numVal)) * 100) / 100;
+        } else {
+          recordsMap.set(mapKey, {
+            empresa,
+            departamento,
+            conta_dre,
+            projeto,
+            categoria,
+            periodo: key,
+            valor:   Math.abs(numVal),
+            fonte:   'omie',
+          });
+        }
       }
     }
+
+    const records = Array.from(recordsMap.values());
 
     if (records.length === 0) {
       return { total: 0, errors: [] };

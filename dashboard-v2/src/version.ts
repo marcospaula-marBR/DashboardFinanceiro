@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.58.28";
+export const APP_VERSION = "v.02.58.29";
 export const VERSION_DATE = "2026-08-26";
 export const VERSION_CHANGELOG = [
+  "v.02.58.29 - Fix/DRE-Upsert-Batch-PreAggregation: Agregação prévia e consolidação de registros no DreLancamentosService.upsertOmieRows por chave de unicidade (empresa, departamento, conta_dre, projeto, categoria, periodo, fonte) antes do envio em lotes ao Supabase, eliminando o erro de ON CONFLICT DO UPDATE do PostgreSQL e garantindo persistência atômica.",
   "v.02.58.28 - Fix/DRE-Sidebar-Dropdowns-Display: Exibição explícita e permanente dos seletores de 'Fornecedor / Cliente' e 'Conta Corrente' na barra lateral de filtros (DreSidebar.tsx) com placeholders contextuais e suporte imediato a dados populados e uploads do Omie.",
   "v.02.58.27 - Feat/DRE-Filtros-Fornecedor-ContaCorrente-Safe: (1) Adição dos seletores dinâmicos de Fornecedor / Cliente e Conta Corrente na DreSidebar com ordenação alfabética em português e sanitização de mojibake (fixMojibake); (2) Suporte a Fornecedor e Conta Corrente no parsing de arquivos do Omie (normalizeData) e no motor de cálculo da DRE (DreService.calculate e DreSimulatorEngine); (3) Preservação estrita dos dados existentes no Supabase sem afetar os períodos de Junho/26 e Julho/26.",
   "v.02.58.26 - Feat/DRE-Unifica-Conectius: Unificação do nome da empresa 'CONECTIUS DO BRASIL LTDA' para 'Conectius' em normalizeEmpresa (dre.service.ts), filtros disponíveis e cálculo da DRE (DreSidebar.tsx e dre.service.ts), sem alteração na base de dados ou nas regras de apuração financeira.",
