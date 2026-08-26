@@ -312,10 +312,19 @@ export function DreSidebar({
   const availableFornecedores = useMemo(() => {
     const forns = new Set<string>();
     rowsFilteredByCategoria.forEach(r => {
-      if (r.Fornecedor) forns.add(r.Fornecedor);
+      if (r.Fornecedor && r.Fornecedor.trim() !== '') {
+        forns.add(r.Fornecedor.trim());
+      }
     });
-    return Array.from(forns).sort();
-  }, [rowsFilteredByCategoria]);
+
+    if (forns.size === 0 && metadata?.fornecedores && metadata.fornecedores.length > 0) {
+      metadata.fornecedores.forEach(f => {
+        if (f && f.trim() !== '') forns.add(f.trim());
+      });
+    }
+
+    return Array.from(forns).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  }, [rowsFilteredByCategoria, metadata?.fornecedores]);
 
   // 13. Filter subset further by selected Fornecedores
   const rowsFilteredByFornecedor = useMemo(() => {
@@ -327,10 +336,19 @@ export function DreSidebar({
   const availableContasCorrentes = useMemo(() => {
     const ccs = new Set<string>();
     rowsFilteredByFornecedor.forEach(r => {
-      if (r.ContaCorrente) ccs.add(r.ContaCorrente);
+      if (r.ContaCorrente && r.ContaCorrente.trim() !== '') {
+        ccs.add(r.ContaCorrente.trim());
+      }
     });
-    return Array.from(ccs).sort();
-  }, [rowsFilteredByFornecedor]);
+
+    if (ccs.size === 0 && metadata?.contasCorrentes && metadata.contasCorrentes.length > 0) {
+      metadata.contasCorrentes.forEach(c => {
+        if (c && c.trim() !== '') ccs.add(c.trim());
+      });
+    }
+
+    return Array.from(ccs).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  }, [rowsFilteredByFornecedor, metadata?.contasCorrentes]);
 
   // Helper to handle filter selection
   const toggleFilter = (key: Exclude<keyof DreFilters, 'excludeSharedExpenses'>, value: string) => {
