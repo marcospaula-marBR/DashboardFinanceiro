@@ -192,12 +192,15 @@ export class BprService {
     const cycleEnd = new Date(`${config.periodEndDate}T23:59:59`);
     const paymentDate = new Date(`${config.paymentDate}T23:59:59`);
 
-    // Obter lista de competências do ciclo para checagem de glosas (ex: 2025-07 até 2025-12)
+    // Obter lista de competências do ciclo para checagem de glosas (ex: 2025-01 até 2025-06 ou 2025-07 até 2025-12)
     const cycleMonths: string[] = [];
     const curMonth = new Date(cycleStart);
     while (curMonth <= cycleEnd) {
       const comp = `${curMonth.getFullYear()}-${String(curMonth.getMonth() + 1).padStart(2, '0')}`;
-      cycleMonths.push(comp);
+      if (!cycleMonths.includes(comp)) {
+        cycleMonths.push(comp);
+      }
+      curMonth.setDate(1);
       curMonth.setMonth(curMonth.getMonth() + 1);
     }
 
@@ -274,10 +277,10 @@ export class BprService {
         realResignationDate <= paymentDate
       );
 
-      // Glosa no período eletivo
+      // Glosa no período eletivo (considera estritamente os meses pertencentes ao ciclo apurado)
       const glosaInfo = glosaByEmployeeId.get(emp.id) || { hasGlosa: false, details: [] };
-      const hasGlosaInPeriod = glosaInfo.hasGlosa || Boolean(emp.has_invoice_glosa);
-      const glosaDetails = glosaInfo.details.join(', ') || (emp.has_invoice_glosa ? 'Glosa sinalizada na fatura' : undefined);
+      const hasGlosaInPeriod = glosaInfo.hasGlosa;
+      const glosaDetails = glosaInfo.details.length > 0 ? glosaInfo.details.join(', ') : undefined;
 
       // 3. Avaliação de Metas e Desempenho Mensal
       const rawScores = emp.bpr_monthly_scores || (emp.metadata as any)?.bpr_monthly_scores;
