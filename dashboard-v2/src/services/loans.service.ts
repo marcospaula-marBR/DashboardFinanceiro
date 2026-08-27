@@ -256,6 +256,7 @@ export async function fetchEmployees(isTestMode: boolean): Promise<RawEmployee[]
   const { data, error } = await supabase
     .from(table)
     .select('*')
+    .neq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
     .order('full_name');
 
   if (error) {
@@ -263,7 +264,11 @@ export async function fetchEmployees(isTestMode: boolean): Promise<RawEmployee[]
     if (isTestMode && error.code === '42P01') return [];
     throw new Error(`Falha ao buscar colaboradores: ${error.message}`);
   }
-  return (data || []) as RawEmployee[];
+  return ((data || []) as RawEmployee[]).filter(e => 
+    e.full_name !== '__SYSTEM_GLOBAL_CONFIG__' && 
+    !e.full_name?.toUpperCase().includes('SYSTEM_GLOBAL') &&
+    !e.name?.toUpperCase().includes('SYSTEM_GLOBAL')
+  );
 }
 
 // ─── LoansService ────────────────────────────────────────────────────────────

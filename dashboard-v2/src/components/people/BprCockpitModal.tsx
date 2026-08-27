@@ -53,7 +53,10 @@ export function BprCockpitModal({
   // Seletor de Empresas e Vínculos
   const availableCompanies = useMemo(() => {
     const set = new Set<string>(['MarBR', 'DZM', 'G2']);
-    employees.forEach(e => { if (e.company) set.add(normalizeCompanyName(e.company)); });
+    employees.forEach(e => {
+      if (e.name?.toUpperCase().includes('SYSTEM_GLOBAL') || e.corporate_name?.toUpperCase().includes('SYSTEM_GLOBAL')) return;
+      if (e.company) set.add(normalizeCompanyName(e.company));
+    });
     return Array.from(set).sort();
   }, [employees]);
 

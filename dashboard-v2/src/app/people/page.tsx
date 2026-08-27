@@ -612,7 +612,12 @@ export default function PeoplePage() {
     try {
       setIsLoadingEmployees(true);
       const employeesData = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true, isTestMode });
-      setEmployees(employeesData);
+      const cleanData = employeesData.filter(e => 
+        e.name !== '__SYSTEM_GLOBAL_CONFIG__' && 
+        !e.name?.toUpperCase().includes('SYSTEM_GLOBAL') && 
+        !e.corporate_name?.toUpperCase().includes('SYSTEM_GLOBAL')
+      );
+      setEmployees(cleanData);
     } catch { 
       setError('Falha ao carregar colaboradores'); 
     } finally { 

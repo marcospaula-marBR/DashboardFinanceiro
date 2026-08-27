@@ -285,6 +285,7 @@ export const PeopleHRService = {
     let query = supabase
       .from(table)
       .select('*')
+      .neq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
       .order('full_name', { ascending: true });
 
     if (!filters?.mostrarInativos) {
@@ -302,7 +303,12 @@ export const PeopleHRService = {
     const loansData = await LoansService.getEmployees({ showAll: true }, filters?.isTestMode);
     const loansMap = new Map(loansData.map(e => [e.id, e]));
 
-    return (data || []).map((emp: RawEmployeeDb) => {
+    const validRows = (data || []).filter((emp: RawEmployeeDb) => 
+      emp.full_name !== '__SYSTEM_GLOBAL_CONFIG__' && 
+      !emp.full_name?.toUpperCase().includes('SYSTEM_GLOBAL')
+    );
+
+    return validRows.map((emp: RawEmployeeDb) => {
       const aditivos = emp.links_aditivos ? emp.links_aditivos.split('\n').filter(Boolean) : [];
       const l = loansMap.get(emp.id);
       

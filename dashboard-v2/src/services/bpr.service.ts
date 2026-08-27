@@ -228,6 +228,13 @@ export class BprService {
     const manuallyExcludedSet = new Set(config.manuallyExcludedEmployeeIds || []);
 
     employees.forEach(emp => {
+      // 0. Bloqueio estrito de registros de configuração global do sistema
+      const nameUpper = (emp.name || '').toUpperCase();
+      const corpUpper = (emp.corporate_name || '').toUpperCase();
+      if (!emp.name || nameUpper.includes('SYSTEM_GLOBAL') || corpUpper.includes('SYSTEM_GLOBAL') || emp.id === '__SYSTEM_GLOBAL_CONFIG__') {
+        return;
+      }
+
       // 1. Filtros de Escopo (Empresa e Vínculo)
       if (config.companiesFilter.length > 0) {
         const normFilter = config.companiesFilter.map(c => normalizeCompanyName(c));
