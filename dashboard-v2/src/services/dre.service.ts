@@ -260,12 +260,27 @@ export class DreService {
       let colFornecedor = '';
       let colContaCorrente = '';
 
-      Object.keys(firstRow).forEach(key => {
+      const allHeaderKeys = Object.keys(firstRow);
+
+      // 1. Detecção posicional de alta precisão (Layout padrão Omie: Col U / índice 20 = Conta Corrente, Col X / índice 23 = Cliente ou Fornecedor)
+      if (allHeaderKeys.length >= 24) {
+        const kU = allHeaderKeys[20]; // Coluna U
+        const kX = allHeaderKeys[23]; // Coluna X
+        if (kU && (kU.toLowerCase().includes('conta') || kU.toLowerCase().includes('banco')) && !kU.toLowerCase().includes('tipo')) {
+          colContaCorrente = kU;
+        }
+        if (kX && (kX.toLowerCase().includes('fornecedor') || kX.toLowerCase().includes('cliente')) && !kX.toLowerCase().startsWith('tag')) {
+          colFornecedor = kX;
+        }
+      }
+
+      // 2. Mapeamento por nome de cabeçalho
+      allHeaderKeys.forEach(key => {
         const cleanKey = key.trim().replace(/["']/g, '');
         const lowerKey = cleanKey.toLowerCase();
         
-        // Ignora tags binárias de marcação ao procurar fornecedor e conta corrente
-        if (lowerKey.startsWith('tag') || lowerKey.includes('tag -') || lowerKey.includes('tipo da conta') || lowerKey.includes('tipo de conta')) {
+        // Ignora tags binárias e tipos de conta
+        if (lowerKey.startsWith('tag') || lowerKey.includes('tag -') || lowerKey.includes('tag_') || lowerKey.includes('tipo da conta') || lowerKey.includes('tipo de conta') || lowerKey.includes('tipo conta')) {
           return;
         }
 
@@ -286,10 +301,16 @@ export class DreService {
           if (!colData || lowerKey === 'data' || lowerKey === 'data (completa)') colData = key;
         } else if (lowerKey === 'valor' || lowerKey.includes('valor')) {
           if (!colValor || lowerKey === 'valor') colValor = key;
-        } else if (lowerKey.includes('cliente ou fornecedor') || lowerKey.includes('cliente_fornecedor') || lowerKey.includes('fornecedor') || lowerKey.includes('cliente')) {
-          if (!colFornecedor || lowerKey.includes('cliente ou fornecedor')) colFornecedor = key;
-        } else if (lowerKey === 'conta corrente' || lowerKey === 'conta_corrente' || lowerKey === 'banco' || (lowerKey.includes('conta corrente') && !lowerKey.includes('tipo'))) {
-          if (!colContaCorrente || lowerKey === 'conta corrente') colContaCorrente = key;
+        }
+        
+        // Fornecedor / Cliente (Coluna X)
+        if (!colFornecedor && (lowerKey === 'cliente ou fornecedor' || lowerKey === 'cliente/fornecedor' || lowerKey === 'cliente_fornecedor' || lowerKey === 'fornecedor' || lowerKey.includes('cliente ou fornecedor'))) {
+          colFornecedor = key;
+        }
+        
+        // Conta Corrente / Banco (Coluna U - NUNCA Coluna V / Tipo da Conta)
+        if (!colContaCorrente && (lowerKey === 'conta corrente' || lowerKey === 'conta_corrente' || lowerKey === 'banco' || lowerKey === 'conta bancaria')) {
+          colContaCorrente = key;
         }
       });
 
@@ -439,9 +460,9 @@ export class DreService {
           finalKey = 'Projeto';
         } else if (lowerKey === 'categoria') {
           finalKey = 'Categoria';
-        } else if (lowerKey.includes('cliente ou fornecedor') || (lowerKey.includes('fornecedor') && !lowerKey.includes('tag'))) {
+        } else if (lowerKey === 'fornecedor' || lowerKey.includes('cliente ou fornecedor') || (lowerKey.includes('fornecedor') && !lowerKey.includes('tag'))) {
           finalKey = 'Fornecedor';
-        } else if (lowerKey === 'conta corrente' || lowerKey === 'conta_corrente' || (lowerKey.includes('conta corrente') && !lowerKey.includes('tipo'))) {
+        } else if (lowerKey === 'contacorrente' || lowerKey === 'conta corrente' || lowerKey === 'conta_corrente' || (lowerKey.includes('conta corrente') && !lowerKey.includes('tipo'))) {
           finalKey = 'ContaCorrente';
         }
 
