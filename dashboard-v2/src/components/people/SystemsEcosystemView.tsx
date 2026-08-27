@@ -569,9 +569,7 @@ export function SystemsEcosystemView({
                           {displayName}
                         </h4>
                         <p className="text-[10px] text-slate-400 font-semibold truncate mt-0.5">
-                          {isExternal
-                            ? `RL: ${(emp.responsible_name || 'Indefinido').toUpperCase()}`
-                            : (emp.job_role || 'Sem Cadeira')}
+                          {emp.job_role || (isExternal ? 'Sem Escopo' : 'Sem Cadeira')}
                         </p>
                         <p className="text-[9px] text-slate-500 font-bold mt-0.5">
                           {emp.company} • {emp.linkType}
