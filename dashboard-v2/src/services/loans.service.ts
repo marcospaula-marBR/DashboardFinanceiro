@@ -267,7 +267,7 @@ export async function fetchEmployees(isTestMode: boolean): Promise<RawEmployee[]
   return ((data || []) as RawEmployee[]).filter(e => 
     e.full_name !== '__SYSTEM_GLOBAL_CONFIG__' && 
     !e.full_name?.toUpperCase().includes('SYSTEM_GLOBAL') &&
-    !e.name?.toUpperCase().includes('SYSTEM_GLOBAL')
+    !e.corporate_name?.toUpperCase().includes('SYSTEM_GLOBAL')
   );
 }
 

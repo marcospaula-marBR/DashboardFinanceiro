@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.58.36";
+export const APP_VERSION = "v.02.58.37";
 export const VERSION_DATE = "2026-08-27";
 export const VERSION_CHANGELOG = [
+  "v.02.58.37 - Fix/Build-TypeCheck: Corrige erro de tipagem no filtro de fetchEmployees em loans.service.ts ajustando a referência de propriedade para RawEmployee (full_name e corporate_name).",
   "v.02.58.36 - Fix/People-BPR-SystemConfig-Filter: Bloqueio estrito de registros técnicos e de metadados globais (__SYSTEM_GLOBAL_CONFIG__) na listagem de colaboradores e no motor de apuração do BPR (BprService.calculateBpr, BprCockpitModal, PeopleHRService, LoansService e people/page.tsx), impedindo que registros de configuração em nuvem apareçam como colaboradores.",
   "v.02.58.35 - Fix/People-Systems-PJ-Scope: Corrige a exibição de Escopo nos cards de prestadores PJ no Ecossistema de Sistemas & Acessos (SystemsEcosystemView.tsx) e Mapa de Ecossistemas (PeopleEcosystemMap.tsx). Substituído 'RL: INDEFINIDO' pelo campo de Escopo do Serviço (emp.job_role com fallback 'Sem Escopo' para PJ e 'Sem Cadeira' para CLT).",
   "v.02.58.34 - Feat/DRE-Master-31Periods-AutoMerge-Upload: (1) Sincronização da Base Mestre Total no Supabase (ID 25) contendo 10.856 registros, 31 períodos completos (Jan/24 a Jul/26), 1.253 fornecedores reais (Coluna X) e 34 contas bancárias (Coluna U), cobrindo integralmente Junho/26 (R$ 2,38M) e Julho/26 (R$ 1,92M); (2) Auto-merge inteligente no upload de novos CSVs em page.tsx e dre.service.ts (mergeWithHistoricalRows), garantindo que o envio de novos arquivos do Omie NUNCA apague os dados históricos anteriores a Jun/25.",
