@@ -257,13 +257,17 @@ export function DreSidebar({
     rowsFilteredByEmpresa.forEach(r => {
       if (r.Departamento) depts.add(r.Departamento);
     });
+    if (depts.size === 0 && metadata?.departamentos) {
+      metadata.departamentos.forEach(d => { if (d) depts.add(d); });
+    }
     return Array.from(depts).sort();
-  }, [rowsFilteredByEmpresa]);
+  }, [rowsFilteredByEmpresa, metadata?.departamentos]);
 
   // 5. Filter subset further by selected Departamentos
   const rowsFilteredByDept = useMemo(() => {
     if (!filters.departamentos || filters.departamentos.length === 0) return rowsFilteredByEmpresa;
-    return rowsFilteredByEmpresa.filter(r => filters.departamentos.includes(r.Departamento));
+    const res = rowsFilteredByEmpresa.filter(r => filters.departamentos.includes(r.Departamento));
+    return res.length > 0 ? res : rowsFilteredByEmpresa;
   }, [rowsFilteredByEmpresa, filters.departamentos]);
 
   // 6. Available ContaDRE from current Dept subset
@@ -272,13 +276,17 @@ export function DreSidebar({
     rowsFilteredByDept.forEach(r => {
       if (r.ContaDRE) contas.add(r.ContaDRE);
     });
+    if (contas.size === 0 && metadata?.contasDre) {
+      metadata.contasDre.forEach(c => { if (c) contas.add(c); });
+    }
     return Array.from(contas).sort();
-  }, [rowsFilteredByDept]);
+  }, [rowsFilteredByDept, metadata?.contasDre]);
 
   // 7. Filter subset further by selected ContaDRE
   const rowsFilteredByConta = useMemo(() => {
     if (!filters.contasDre || filters.contasDre.length === 0) return rowsFilteredByDept;
-    return rowsFilteredByDept.filter(r => filters.contasDre.includes(r.ContaDRE));
+    const res = rowsFilteredByDept.filter(r => filters.contasDre.includes(r.ContaDRE));
+    return res.length > 0 ? res : rowsFilteredByDept;
   }, [rowsFilteredByDept, filters.contasDre]);
 
   // 8. Available Projetos from current ContaDRE subset
@@ -287,13 +295,17 @@ export function DreSidebar({
     rowsFilteredByConta.forEach(r => {
       if (r.Projeto) projs.add(r.Projeto);
     });
+    if (projs.size === 0 && metadata?.projetos) {
+      metadata.projetos.forEach(p => { if (p) projs.add(p); });
+    }
     return Array.from(projs).sort();
-  }, [rowsFilteredByConta]);
+  }, [rowsFilteredByConta, metadata?.projetos]);
 
   // 9. Filter subset further by selected Projetos
   const rowsFilteredByProjeto = useMemo(() => {
     if (!filters.projetos || filters.projetos.length === 0) return rowsFilteredByConta;
-    return rowsFilteredByConta.filter(r => filters.projetos.includes(r.Projeto));
+    const res = rowsFilteredByConta.filter(r => filters.projetos.includes(r.Projeto));
+    return res.length > 0 ? res : rowsFilteredByConta;
   }, [rowsFilteredByConta, filters.projetos]);
 
   // 10. Available Categorias from current Projetos subset
@@ -302,26 +314,31 @@ export function DreSidebar({
     rowsFilteredByProjeto.forEach(r => {
       if (r.Categoria) cats.add(r.Categoria);
     });
+    if (cats.size === 0 && metadata?.categorias) {
+      metadata.categorias.forEach(c => { if (c) cats.add(c); });
+    }
     return Array.from(cats).sort();
-  }, [rowsFilteredByProjeto]);
+  }, [rowsFilteredByProjeto, metadata?.categorias]);
 
   // 11. Filter subset further by selected Categorias
   const rowsFilteredByCategoria = useMemo(() => {
     if (!filters.categorias || filters.categorias.length === 0) return rowsFilteredByProjeto;
-    return rowsFilteredByProjeto.filter(r => filters.categorias.includes(r.Categoria));
+    const res = rowsFilteredByProjeto.filter(r => filters.categorias.includes(r.Categoria));
+    return res.length > 0 ? res : rowsFilteredByProjeto;
   }, [rowsFilteredByProjeto, filters.categorias]);
 
   // 12. Available Fornecedores from current subset
   const availableFornecedores = useMemo(() => {
+    const invalidForn = new Set(['', 'Sem Fornecedor', 'N/D', 'ND', 'Não', 'Sim', 'nao', 'sim']);
     const forns = new Set<string>();
     rowsFilteredByCategoria.forEach(r => {
-      if (r.Fornecedor && r.Fornecedor !== 'Sem Fornecedor') {
+      if (r.Fornecedor && !invalidForn.has(r.Fornecedor)) {
         forns.add(fixMojibake(r.Fornecedor));
       }
     });
     if (forns.size === 0 && metadata?.fornecedores) {
       metadata.fornecedores.forEach(f => {
-        if (f && f !== 'Sem Fornecedor') forns.add(fixMojibake(f));
+        if (f && !invalidForn.has(f)) forns.add(fixMojibake(f));
       });
     }
     return Array.from(forns).sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -330,20 +347,22 @@ export function DreSidebar({
   // 13. Filter subset further by selected Fornecedores
   const rowsFilteredByFornecedor = useMemo(() => {
     if (!filters.fornecedores || filters.fornecedores.length === 0) return rowsFilteredByCategoria;
-    return rowsFilteredByCategoria.filter(r => filters.fornecedores!.includes(fixMojibake(r.Fornecedor || '')));
+    const res = rowsFilteredByCategoria.filter(r => filters.fornecedores!.includes(fixMojibake(r.Fornecedor || '')));
+    return res.length > 0 ? res : rowsFilteredByCategoria;
   }, [rowsFilteredByCategoria, filters.fornecedores]);
 
   // 14. Available Contas Correntes from current subset
   const availableContasCorrentes = useMemo(() => {
+    const invalidContas = new Set(['', 'Sem Conta Corrente', 'N/D', 'ND']);
     const contas = new Set<string>();
     rowsFilteredByFornecedor.forEach(r => {
-      if (r.ContaCorrente && r.ContaCorrente !== 'Sem Conta Corrente') {
+      if (r.ContaCorrente && !invalidContas.has(r.ContaCorrente)) {
         contas.add(fixMojibake(r.ContaCorrente));
       }
     });
     if (contas.size === 0 && metadata?.contasCorrentes) {
       metadata.contasCorrentes.forEach(c => {
-        if (c && c !== 'Sem Conta Corrente') contas.add(fixMojibake(c));
+        if (c && !invalidContas.has(c)) contas.add(fixMojibake(c));
       });
     }
     return Array.from(contas).sort((a, b) => a.localeCompare(b, 'pt-BR'));

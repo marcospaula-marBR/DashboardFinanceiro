@@ -225,10 +225,30 @@ export default function DrePage() {
       }
 
       if (rows && rows.length > 0) {
+        let generatedMetadata = DreLancamentosService.generateMetadataFromRows(rows);
+
+        // Se a tabela dre_lancamentos não tiver fornecedores/contas populados, enriquece com o snapshot mais recente
+        if (!generatedMetadata.fornecedores || generatedMetadata.fornecedores.length === 0 || !generatedMetadata.contasCorrentes || generatedMetadata.contasCorrentes.length === 0) {
+          try {
+            const { data: snapData } = await supabase
+              .from('dre_snapshots')
+              .select('*')
+              .order('created_at', { ascending: false })
+              .limit(1);
+            if (snapData && snapData.length > 0 && snapData[0].metadata) {
+              const snapMeta = snapData[0].metadata;
+              generatedMetadata = {
+                ...generatedMetadata,
+                fornecedores: (snapMeta.fornecedores && snapMeta.fornecedores.length > 0) ? snapMeta.fornecedores : generatedMetadata.fornecedores,
+                contasCorrentes: (snapMeta.contasCorrentes && snapMeta.contasCorrentes.length > 0) ? snapMeta.contasCorrentes : generatedMetadata.contasCorrentes
+              };
+            }
+          } catch (snapErr) {
+            console.warn("Erro ao enriquecer metadados com snapshot:", snapErr);
+          }
+        }
+
         setRawData(rows);
-        
-        // Gerar metadados de forma dinâmica a partir das colunas e valores atuais
-        const generatedMetadata = DreLancamentosService.generateMetadataFromRows(rows);
         setMetadata(generatedMetadata);
         setFileName('Banco de Dados Nuvem (dre_lancamentos)');
         

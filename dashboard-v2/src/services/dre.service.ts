@@ -247,7 +247,7 @@ export class DreService {
     // 1. Detectar se o arquivo é transacional bruto (possui colunas de Data e Valor)
     const firstRow = rawData[0] || {};
     const keys = Object.keys(firstRow).map(k => k.trim().toLowerCase());
-    const isTransactional = keys.includes('data') && keys.includes('valor');
+    const isTransactional = keys.some(k => k.includes('data')) && keys.some(k => k.includes('valor'));
 
     if (isTransactional) {
       let colEmpresa = '';
@@ -264,29 +264,54 @@ export class DreService {
         const cleanKey = key.trim().replace(/["']/g, '');
         const lowerKey = cleanKey.toLowerCase();
         
-        // Mapeamento flexível das colunas transacionais
+        // Ignora tags binárias de marcação ao procurar fornecedor e conta corrente
+        if (lowerKey.startsWith('tag') || lowerKey.includes('tag -') || lowerKey.includes('tipo da conta') || lowerKey.includes('tipo de conta')) {
+          return;
+        }
+
+        // Mapeamento flexível das colunas transacionais com prioridade precisa
         if (lowerKey.includes('empresa') || lowerKey.includes('fantasia') || lowerKey.includes('razão') || lowerKey === 'empresa') {
           if (!colEmpresa || lowerKey.includes('fantasia')) {
             colEmpresa = key;
           }
-        } else if (lowerKey === 'departamento' || lowerKey === 'departamento_dre' || lowerKey === 'departamento dre') {
-          colDept = key;
-        } else if (lowerKey === 'conta do dre' || lowerKey === 'conta dre' || lowerKey === 'contadre' || lowerKey === 'conta_dre') {
-          colContaDRE = key;
-        } else if (lowerKey === 'projeto') {
-          colProjeto = key;
-        } else if (lowerKey === 'categoria') {
-          colCategoria = key;
-        } else if (lowerKey === 'data' || lowerKey === 'data (completa)') {
-          if (!colData || lowerKey === 'data') colData = key;
-        } else if (lowerKey === 'valor') {
-          colValor = key;
-        } else if (lowerKey.includes('fornecedor') || lowerKey.includes('cliente ou fornecedor') || lowerKey.includes('cliente_fornecedor')) {
-          colFornecedor = key;
-        } else if (lowerKey.includes('conta corrente') || lowerKey.includes('conta_corrente') || lowerKey === 'banco') {
-          colContaCorrente = key;
+        } else if (lowerKey === 'departamento' || lowerKey === 'departamento_dre' || lowerKey === 'departamento dre' || lowerKey.includes('departamento')) {
+          if (!colDept) colDept = key;
+        } else if (lowerKey === 'conta do dre' || lowerKey === 'conta dre' || lowerKey === 'contadre' || lowerKey === 'conta_dre' || lowerKey.includes('conta do dre')) {
+          if (!colContaDRE || lowerKey === 'conta do dre' || lowerKey === 'conta dre') colContaDRE = key;
+        } else if (lowerKey === 'projeto' || lowerKey.includes('projeto')) {
+          if (!colProjeto || lowerKey === 'projeto') colProjeto = key;
+        } else if (lowerKey === 'categoria' || lowerKey.includes('categoria')) {
+          if (!colCategoria || lowerKey === 'categoria') colCategoria = key;
+        } else if (lowerKey === 'data' || lowerKey === 'data (completa)' || lowerKey.includes('data')) {
+          if (!colData || lowerKey === 'data' || lowerKey === 'data (completa)') colData = key;
+        } else if (lowerKey === 'valor' || lowerKey.includes('valor')) {
+          if (!colValor || lowerKey === 'valor') colValor = key;
+        } else if (lowerKey.includes('cliente ou fornecedor') || lowerKey.includes('cliente_fornecedor') || lowerKey.includes('fornecedor') || lowerKey.includes('cliente')) {
+          if (!colFornecedor || lowerKey.includes('cliente ou fornecedor')) colFornecedor = key;
+        } else if (lowerKey === 'conta corrente' || lowerKey === 'conta_corrente' || lowerKey === 'banco' || (lowerKey.includes('conta corrente') && !lowerKey.includes('tipo'))) {
+          if (!colContaCorrente || lowerKey === 'conta corrente') colContaCorrente = key;
         }
       });
+
+      // Detecção inteligente do formato de data predominante (MM/DD/YYYY vs DD/MM/YYYY)
+      let detectedFormat: 'MM/DD' | 'DD/MM' | 'UNKNOWN' = 'UNKNOWN';
+      for (let i = 0; i < Math.min(rawData.length, 200); i++) {
+        const dStr = colData ? rawData[i][colData]?.toString().trim() : '';
+        if (dStr) {
+          const parts = dStr.split('/');
+          if (parts.length === 3) {
+            const p0 = parseInt(parts[0], 10);
+            const p1 = parseInt(parts[1], 10);
+            if (p0 > 12 && p1 <= 12) {
+              detectedFormat = 'DD/MM';
+              break;
+            } else if (p1 > 12 && p0 <= 12) {
+              detectedFormat = 'MM/DD';
+              break;
+            }
+          }
+        }
+      }
 
       // Agrupar as transações e pivotear
       const pivotMap = new Map<string, {
@@ -308,8 +333,6 @@ export class DreService {
         if (!dataStr) return;
 
         // Parse do valor (converte formato brasileiro ex: -1065,5 ou -1.065,50 para float)
-        // Usamos Math.abs para forçar valores positivos absolutos (as saídas vêm negativas no CSV bruto),
-        // mantendo a compatibilidade com a estrutura de cálculos e KPIs do dashboard que realiza as subtrações.
         const valor = Math.abs(parseFloat(valorStr.replace(/\./g, '').replace(',', '.')));
         if (isNaN(valor)) return;
 
@@ -317,15 +340,19 @@ export class DreService {
         let mesLabel = '';
         const partes = dataStr.split('/');
         if (partes.length === 3) {
-          let mes = parseInt(partes[0]);
-          let dia = parseInt(partes[1]);
+          let num1 = parseInt(partes[0], 10);
+          let num2 = parseInt(partes[1], 10);
           let anoCompleto = partes[2].trim().split(' ')[0]; // Remove qualquer componente de hora (ex: "2026 00:00" -> "2026")
           
-          // Se o primeiro elemento for maior que 12, significa que é o dia (formato DD/MM/YYYY), então invertemos
-          if (mes > 12) {
-            const temp = mes;
-            mes = dia;
-            dia = temp;
+          let mes = num1;
+          if (detectedFormat === 'MM/DD') {
+            mes = num1;
+          } else if (detectedFormat === 'DD/MM') {
+            mes = num2;
+          } else {
+            if (num1 > 12 && num2 <= 12) mes = num2;
+            else if (num2 > 12 && num1 <= 12) mes = num1;
+            else mes = num1;
           }
           
           if (mes >= 1 && mes <= 12) {
@@ -412,9 +439,9 @@ export class DreService {
           finalKey = 'Projeto';
         } else if (lowerKey === 'categoria') {
           finalKey = 'Categoria';
-        } else if (lowerKey.includes('fornecedor') || lowerKey.includes('cliente ou fornecedor')) {
+        } else if (lowerKey.includes('cliente ou fornecedor') || (lowerKey.includes('fornecedor') && !lowerKey.includes('tag'))) {
           finalKey = 'Fornecedor';
-        } else if (lowerKey.includes('conta corrente') || lowerKey.includes('contacorrente')) {
+        } else if (lowerKey === 'conta corrente' || lowerKey === 'conta_corrente' || (lowerKey.includes('conta corrente') && !lowerKey.includes('tipo'))) {
           finalKey = 'ContaCorrente';
         }
 
@@ -459,7 +486,7 @@ export class DreService {
       const mappedDept = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
       row['Departamento'] = toTitleCase(mappedDept);
       
-      row['ContaDRE'] = row['ContaDRE'].toString().trim().replace(/^\d+\.\s*/, '');
+      row['ContaDRE'] = row['ContaDRE'].toString().trim().replace(/^[\d.]+\s*/, '');
       
       const rawProj = row['Projeto'] ? row['Projeto'].toString().trim() : 'Sem Projeto';
       const mappedProj = PROJETOS_MAP[rawProj] || PROJETOS_MAP[toTitleCase(rawProj)] || rawProj;
@@ -511,8 +538,10 @@ export class DreService {
     const contasDre = Array.from(new Set(data.map(d => d.ContaDRE).filter(Boolean))).sort() as string[];
     const projetos = Array.from(new Set(data.map(d => d.Projeto).filter(Boolean))).sort() as string[];
     const categorias = Array.from(new Set(data.map(d => d.Categoria).filter(Boolean))).sort() as string[];
-    const fornecedores = Array.from(new Set(data.map(d => d.Fornecedor).filter(Boolean))).sort((a, b) => a!.localeCompare(b!, 'pt-BR')) as string[];
-    const contasCorrentes = Array.from(new Set(data.map(d => d.ContaCorrente).filter(Boolean))).sort((a, b) => a!.localeCompare(b!, 'pt-BR')) as string[];
+    const invalidForn = new Set(['', 'Sem Fornecedor', 'N/D', 'ND', 'Não', 'Sim', 'nao', 'sim']);
+    const fornecedores = Array.from(new Set(data.map(d => fixMojibake(d.Fornecedor || '')).filter(f => f && !invalidForn.has(f)))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const invalidContas = new Set(['', 'Sem Conta Corrente', 'N/D', 'ND']);
+    const contasCorrentes = Array.from(new Set(data.map(d => fixMojibake(d.ContaCorrente || '')).filter(c => c && !invalidContas.has(c)))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
     const periodosList = periodos.map(p => `${p.mes}/${p.ano}`);
 
     return {

@@ -151,6 +151,8 @@ export class DreLancamentosService {
         ContaDRE: string;
         Projeto: string;
         Categoria: string;
+        Fornecedor: string;
+        ContaCorrente: string;
         valores: Record<string, number>;
       }
     >();
@@ -163,7 +165,7 @@ export class DreLancamentosService {
       const mappedDept   = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
       const departamento = toTitleCase(mappedDept);
       
-      const conta_dre    = rec.conta_dre.trim().replace(/^\d+\.\s*/, '');
+      const conta_dre    = rec.conta_dre.trim().replace(/^[\d.]+\s*/, '');
       
       const rawProj      = rec.projeto ? rec.projeto.trim() : '';
       const mappedProj   = PROJETOS_MAP[rawProj] || PROJETOS_MAP[toTitleCase(rawProj)] || rawProj;
@@ -176,7 +178,10 @@ export class DreLancamentosService {
         categoria = conta_dre;
       }
 
-      const key = `${emp}|${departamento}|${conta_dre}|${projeto}|${categoria}`;
+      const forn         = (rec as any).fornecedor ? (rec as any).fornecedor.trim() : 'Sem Fornecedor';
+      const cCorr        = (rec as any).conta_corrente ? (rec as any).conta_corrente.trim() : 'Sem Conta Corrente';
+
+      const key = `${emp}|${departamento}|${conta_dre}|${projeto}|${categoria}|${forn}|${cCorr}`;
 
       if (!pivotMap.has(key)) {
         pivotMap.set(key, {
@@ -185,6 +190,8 @@ export class DreLancamentosService {
           ContaDRE:     conta_dre,
           Projeto:      projeto,
           Categoria:    categoria,
+          Fornecedor:   forn,
+          ContaCorrente: cCorr,
           valores:      {},
         });
       }
@@ -204,6 +211,8 @@ export class DreLancamentosService {
         ContaDRE:     item.ContaDRE,
         Projeto:      item.Projeto,
         Categoria:    item.Categoria,
+        Fornecedor:   item.Fornecedor,
+        ContaCorrente: item.ContaCorrente,
       };
       for (const [periodo, valor] of Object.entries(item.valores)) {
         row[periodo] = valor;
@@ -470,7 +479,12 @@ export class DreLancamentosService {
     const contasDreSet = new Set<string>();
     const projetosSet = new Set<string>();
     const categoriasSet = new Set<string>();
+    const fornecedoresSet = new Set<string>();
+    const contasCorrentesSet = new Set<string>();
     const allPeriodsSet = new Set<string>();
+
+    const invalidForn = new Set(['', 'Sem Fornecedor', 'N/D', 'ND', 'Não', 'Sim', 'nao', 'sim']);
+    const invalidContas = new Set(['', 'Sem Conta Corrente', 'N/D', 'ND']);
 
     for (const r of rows) {
       if (r.Empresa) empresasSet.add(r.Empresa);
@@ -478,6 +492,8 @@ export class DreLancamentosService {
       if (r.ContaDRE) contasDreSet.add(r.ContaDRE);
       if (r.Projeto) projetosSet.add(r.Projeto);
       if (r.Categoria) categoriasSet.add(r.Categoria);
+      if (r.Fornecedor && !invalidForn.has(r.Fornecedor)) fornecedoresSet.add(r.Fornecedor);
+      if (r.ContaCorrente && !invalidContas.has(r.ContaCorrente)) contasCorrentesSet.add(r.ContaCorrente);
 
       for (const key of Object.keys(r)) {
         if (key.includes('/')) {
@@ -508,6 +524,8 @@ export class DreLancamentosService {
       contasDre: Array.from(contasDreSet).sort(),
       projetos: Array.from(projetosSet).sort(),
       categorias: Array.from(categoriasSet).sort(),
+      fornecedores: Array.from(fornecedoresSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      contasCorrentes: Array.from(contasCorrentesSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
       periodos: periodosList,
       mapaMeses
     };
