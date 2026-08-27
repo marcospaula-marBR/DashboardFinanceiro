@@ -255,18 +255,18 @@ export function DreSidebar({
   const availableDepartamentos = useMemo(() => {
     const depts = new Set<string>();
     rowsFilteredByEmpresa.forEach(r => {
-      if (r.Departamento) depts.add(r.Departamento);
+      if (r.Departamento) depts.add(fixMojibake(r.Departamento));
     });
     if (depts.size === 0 && metadata?.departamentos) {
-      metadata.departamentos.forEach(d => { if (d) depts.add(d); });
+      metadata.departamentos.forEach(d => { if (d) depts.add(fixMojibake(d)); });
     }
-    return Array.from(depts).sort();
+    return Array.from(depts).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [rowsFilteredByEmpresa, metadata?.departamentos]);
 
   // 5. Filter subset further by selected Departamentos
   const rowsFilteredByDept = useMemo(() => {
     if (!filters.departamentos || filters.departamentos.length === 0) return rowsFilteredByEmpresa;
-    const res = rowsFilteredByEmpresa.filter(r => filters.departamentos.includes(r.Departamento));
+    const res = rowsFilteredByEmpresa.filter(r => filters.departamentos.includes(fixMojibake(r.Departamento || '')) || filters.departamentos.includes(r.Departamento));
     return res.length > 0 ? res : rowsFilteredByEmpresa;
   }, [rowsFilteredByEmpresa, filters.departamentos]);
 
@@ -274,18 +274,18 @@ export function DreSidebar({
   const availableContasDre = useMemo(() => {
     const contas = new Set<string>();
     rowsFilteredByDept.forEach(r => {
-      if (r.ContaDRE) contas.add(r.ContaDRE);
+      if (r.ContaDRE) contas.add(fixMojibake(r.ContaDRE));
     });
     if (contas.size === 0 && metadata?.contasDre) {
-      metadata.contasDre.forEach(c => { if (c) contas.add(c); });
+      metadata.contasDre.forEach(c => { if (c) contas.add(fixMojibake(c)); });
     }
-    return Array.from(contas).sort();
+    return Array.from(contas).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [rowsFilteredByDept, metadata?.contasDre]);
 
   // 7. Filter subset further by selected ContaDRE
   const rowsFilteredByConta = useMemo(() => {
     if (!filters.contasDre || filters.contasDre.length === 0) return rowsFilteredByDept;
-    const res = rowsFilteredByDept.filter(r => filters.contasDre.includes(r.ContaDRE));
+    const res = rowsFilteredByDept.filter(r => filters.contasDre.includes(fixMojibake(r.ContaDRE || '')) || filters.contasDre.includes(r.ContaDRE));
     return res.length > 0 ? res : rowsFilteredByDept;
   }, [rowsFilteredByDept, filters.contasDre]);
 
@@ -293,18 +293,18 @@ export function DreSidebar({
   const availableProjetos = useMemo(() => {
     const projs = new Set<string>();
     rowsFilteredByConta.forEach(r => {
-      if (r.Projeto) projs.add(r.Projeto);
+      if (r.Projeto) projs.add(fixMojibake(r.Projeto));
     });
     if (projs.size === 0 && metadata?.projetos) {
-      metadata.projetos.forEach(p => { if (p) projs.add(p); });
+      metadata.projetos.forEach(p => { if (p) projs.add(fixMojibake(p)); });
     }
-    return Array.from(projs).sort();
+    return Array.from(projs).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [rowsFilteredByConta, metadata?.projetos]);
 
   // 9. Filter subset further by selected Projetos
   const rowsFilteredByProjeto = useMemo(() => {
     if (!filters.projetos || filters.projetos.length === 0) return rowsFilteredByConta;
-    const res = rowsFilteredByConta.filter(r => filters.projetos.includes(r.Projeto));
+    const res = rowsFilteredByConta.filter(r => filters.projetos.includes(fixMojibake(r.Projeto || '')) || filters.projetos.includes(r.Projeto));
     return res.length > 0 ? res : rowsFilteredByConta;
   }, [rowsFilteredByConta, filters.projetos]);
 
@@ -312,18 +312,18 @@ export function DreSidebar({
   const availableCategorias = useMemo(() => {
     const cats = new Set<string>();
     rowsFilteredByProjeto.forEach(r => {
-      if (r.Categoria) cats.add(r.Categoria);
+      if (r.Categoria) cats.add(fixMojibake(r.Categoria));
     });
     if (cats.size === 0 && metadata?.categorias) {
-      metadata.categorias.forEach(c => { if (c) cats.add(c); });
+      metadata.categorias.forEach(c => { if (c) cats.add(fixMojibake(c)); });
     }
-    return Array.from(cats).sort();
+    return Array.from(cats).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [rowsFilteredByProjeto, metadata?.categorias]);
 
   // 11. Filter subset further by selected Categorias
   const rowsFilteredByCategoria = useMemo(() => {
     if (!filters.categorias || filters.categorias.length === 0) return rowsFilteredByProjeto;
-    const res = rowsFilteredByProjeto.filter(r => filters.categorias.includes(r.Categoria));
+    const res = rowsFilteredByProjeto.filter(r => filters.categorias.includes(fixMojibake(r.Categoria || '')) || filters.categorias.includes(r.Categoria));
     return res.length > 0 ? res : rowsFilteredByProjeto;
   }, [rowsFilteredByProjeto, filters.categorias]);
 
@@ -347,7 +347,7 @@ export function DreSidebar({
   // 13. Filter subset further by selected Fornecedores
   const rowsFilteredByFornecedor = useMemo(() => {
     if (!filters.fornecedores || filters.fornecedores.length === 0) return rowsFilteredByCategoria;
-    const res = rowsFilteredByCategoria.filter(r => filters.fornecedores!.includes(fixMojibake(r.Fornecedor || '')));
+    const res = rowsFilteredByCategoria.filter(r => filters.fornecedores!.includes(fixMojibake(r.Fornecedor || '')) || filters.fornecedores!.includes(r.Fornecedor || ''));
     return res.length > 0 ? res : rowsFilteredByCategoria;
   }, [rowsFilteredByCategoria, filters.fornecedores]);
 
