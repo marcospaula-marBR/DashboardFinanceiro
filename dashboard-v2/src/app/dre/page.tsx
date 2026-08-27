@@ -226,31 +226,34 @@ export default function DrePage() {
 
       if (rows && rows.length > 0) {
         let generatedMetadata = DreLancamentosService.generateMetadataFromRows(rows);
+        let finalRows = rows;
 
-        // Se a tabela dre_lancamentos não tiver fornecedores/contas populados, enriquece com o snapshot mais recente
-        if (!generatedMetadata.fornecedores || generatedMetadata.fornecedores.length === 0 || !generatedMetadata.contasCorrentes || generatedMetadata.contasCorrentes.length === 0) {
+        // Se a tabela dre_lancamentos não tiver fornecedores/contas granulares populados, carrega o snapshot enriquecido
+        const hasGranularData = rows.some(r => r.Fornecedor && r.Fornecedor !== 'Sem Fornecedor' && r.ContaCorrente && r.ContaCorrente !== 'Sem Conta Corrente');
+        if (!hasGranularData || !generatedMetadata.fornecedores || generatedMetadata.fornecedores.length === 0 || !generatedMetadata.contasCorrentes || generatedMetadata.contasCorrentes.length === 0) {
           try {
             const { data: snapData } = await supabase
               .from('dre_snapshots')
               .select('*')
               .order('created_at', { ascending: false })
               .limit(1);
-            if (snapData && snapData.length > 0 && snapData[0].metadata) {
-              const snapMeta = snapData[0].metadata;
-              generatedMetadata = {
-                ...generatedMetadata,
-                fornecedores: (snapMeta.fornecedores && snapMeta.fornecedores.length > 0) ? snapMeta.fornecedores : generatedMetadata.fornecedores,
-                contasCorrentes: (snapMeta.contasCorrentes && snapMeta.contasCorrentes.length > 0) ? snapMeta.contasCorrentes : generatedMetadata.contasCorrentes
-              };
+            if (snapData && snapData.length > 0) {
+              const snap = snapData[0];
+              if (snap.raw_data && snap.raw_data.length > 0) {
+                finalRows = snap.raw_data;
+              }
+              if (snap.metadata) {
+                generatedMetadata = snap.metadata;
+              }
             }
           } catch (snapErr) {
-            console.warn("Erro ao enriquecer metadados com snapshot:", snapErr);
+            console.warn("Erro ao enriquecer dados com snapshot:", snapErr);
           }
         }
 
-        setRawData(rows);
+        setRawData(finalRows);
         setMetadata(generatedMetadata);
-        setFileName('Banco de Dados Nuvem (dre_lancamentos)');
+        setFileName('Banco de Dados Nuvem (Consolidado Oficial)');
         
         const timestamp = new Date();
         setLastUpdate(timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString());
