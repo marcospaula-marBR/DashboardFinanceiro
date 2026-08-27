@@ -381,8 +381,40 @@ export default function DrePage() {
         return;
       }
 
-      setRawData(data);
-      setMetadata(newMetadata);
+      // Preservar períodos históricos (Jan/24 a Mai/25) caso o novo upload seja apenas do Omie recente
+      let finalData = data;
+      let finalMeta = newMetadata;
+
+      // Verifica se o estado atual ou a nuvem tem os períodos de 2024/início de 2025
+      let historicalRows = rawData.filter(r => 
+        Object.keys(r).some(k => k.includes('/24') || k.toLowerCase().startsWith('jan/25') || k.toLowerCase().startsWith('fev/25') || k.toLowerCase().startsWith('mar/25') || k.toLowerCase().startsWith('abr/25') || k.toLowerCase().startsWith('mai/25'))
+      );
+
+      // Se o estado local não tiver os históricos (ex: tela abriu agora), busca do snapshot mestre no banco
+      if (historicalRows.length === 0) {
+        try {
+          const { data: snapData } = await supabase
+            .from('dre_snapshots')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (snapData && snapData.length > 0 && snapData[0].raw_data) {
+            historicalRows = snapData[0].raw_data.filter((r: any) => 
+              Object.keys(r).some(k => k.includes('/24') || k.toLowerCase().startsWith('jan/25') || k.toLowerCase().startsWith('fev/25') || k.toLowerCase().startsWith('mar/25') || k.toLowerCase().startsWith('abr/25') || k.toLowerCase().startsWith('mai/25'))
+            );
+          }
+        } catch (e) {
+          console.warn("Erro ao buscar histórico mestre para merge:", e);
+        }
+      }
+
+      if (historicalRows.length > 0) {
+        finalData = DreService.mergeWithHistoricalRows(historicalRows, data);
+        finalMeta = DreService.generateCombinedMetadata(finalData);
+      }
+
+      setRawData(finalData);
+      setMetadata(finalMeta);
 
       // Reset filters when a new file is uploaded
       setFilters({

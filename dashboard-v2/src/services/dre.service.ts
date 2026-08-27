@@ -572,6 +572,104 @@ export class DreService {
   }
 
   /**
+   * Mescla linhas de um novo upload do Omie com as linhas históricas existentes (ex: Jan/24 a Mai/25)
+   * garantindo que nenhum período anterior seja descartado.
+   */
+  static mergeWithHistoricalRows(existingRows: DreRow[], newRows: DreRow[]): DreRow[] {
+    const pivotMap = new Map<string, any>();
+
+    const getGroupKey = (r: any) => {
+      const emp = normalizeEmpresa(r.Empresa);
+      const dep = fixMojibake(r.Departamento || 'Sem Departamento');
+      const cDre = fixMojibake(r.ContaDRE || 'Sem Conta DRE').replace(/^[\d.]+\s*/, '');
+      const proj = fixMojibake(r.Projeto || 'Sem Projeto');
+      const cat = fixMojibake(r.Categoria || 'Sem Categoria');
+      const forn = fixMojibake(r.Fornecedor || 'Sem Fornecedor');
+      const cCorr = fixMojibake(r.ContaCorrente || 'Sem Conta Corrente');
+      return `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
+    };
+
+    // 1. Inserir dados históricos existentes
+    existingRows.forEach(r => {
+      const k = getGroupKey(r);
+      if (!pivotMap.has(k)) {
+        pivotMap.set(k, { ...r });
+      } else {
+        const item = pivotMap.get(k);
+        Object.keys(r).forEach(col => {
+          if (col.includes('/') && r[col] !== undefined && r[col] !== null) {
+            item[col] = r[col];
+          }
+        });
+      }
+    });
+
+    // 2. Mesclar/Sobrescrever com novos dados do upload
+    newRows.forEach(r => {
+      const k = getGroupKey(r);
+      if (!pivotMap.has(k)) {
+        pivotMap.set(k, { ...r });
+      } else {
+        const item = pivotMap.get(k);
+        Object.keys(r).forEach(col => {
+          if (col.includes('/') && r[col] !== undefined && r[col] !== null) {
+            item[col] = r[col];
+          }
+        });
+      }
+    });
+
+    return Array.from(pivotMap.values());
+  }
+
+  /**
+   * Gera metadados completos combinados a partir de um conjunto de linhas
+   */
+  static generateCombinedMetadata(rows: DreRow[]): DreMetadata {
+    const allKeysSet = new Set<string>();
+    rows.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (key.includes('/')) {
+          allKeysSet.add(key);
+        }
+      });
+    });
+    const validCols = Array.from(allKeysSet);
+
+    const periodos: { col: string, mes: string, ano: string, full: string }[] = [];
+    const mapaMeses: Record<string, string> = {};
+
+    validCols.forEach(col => {
+      const partes = col.split('/');
+      if (partes.length === 2) {
+        const mesNormalizado = normalizeMes(partes[0].trim());
+        mapaMeses[col] = mesNormalizado;
+        periodos.push({ col, mes: mesNormalizado, ano: partes[1].trim(), full: col });
+      }
+    });
+
+    periodos.sort((a, b) => {
+      const yA = parseInt(a.ano) < 100 ? 2000 + parseInt(a.ano) : parseInt(a.ano);
+      const yB = parseInt(b.ano) < 100 ? 2000 + parseInt(b.ano) : parseInt(b.ano);
+      if (yA !== yB) return yA - yB;
+      return MESES_ORDEM.indexOf(a.mes) - MESES_ORDEM.indexOf(b.mes);
+    });
+
+    const empresas = Array.from(new Set(rows.map(d => normalizeEmpresa(d.Empresa)).filter(Boolean))).sort() as string[];
+    const departamentos = Array.from(new Set(rows.map(d => fixMojibake(d.Departamento || '')).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const contasDre = Array.from(new Set(rows.map(d => fixMojibake(d.ContaDRE || '')).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const projetos = Array.from(new Set(rows.map(d => fixMojibake(d.Projeto || '')).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const categorias = Array.from(new Set(rows.map(d => fixMojibake(d.Categoria || '')).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const invalidForn = new Set(['', 'Sem Fornecedor', 'N/D', 'ND', 'Não', 'Sim', 'nao', 'sim']);
+    const fornecedores = Array.from(new Set(rows.map(d => fixMojibake(d.Fornecedor || '')).filter(f => f && !invalidForn.has(f)))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const invalidContas = new Set(['', 'Sem Conta Corrente', 'N/D', 'ND']);
+    const contasCorrentes = Array.from(new Set(rows.map(d => fixMojibake(d.ContaCorrente || '')).filter(c => c && !invalidContas.has(c)))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const periodosList = periodos.map(p => `${p.mes}/${p.ano}`);
+
+    return { empresas, departamentos, contasDre, projetos, categorias, fornecedores, contasCorrentes, periodos: periodosList, mapaMeses };
+  }
+
+  /**
    * LAYER 3: CALCULATION
    * Processa os filtros, totaliza as categorias e executa a DRE estrutural baseada no legado
    */
