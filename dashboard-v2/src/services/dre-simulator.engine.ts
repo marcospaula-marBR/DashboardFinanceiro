@@ -631,7 +631,7 @@ export class DreSimulatorEngine {
     const totalDividendos = getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos");
     const totalIntermedioSaidas = getCatTotal("Intermediação de Negócios");
     const totalMutuoSaidas = getCatTotal("Mútuo - Saídas");
-    const totalRetiradas = totalDividendos + totalIntermedioSaidas + totalMutuoSaidas;
+    const totalRetiradas = totalIntermedioSaidas + totalMutuoSaidas;
 
     const outrasEntradas = getVal("Outras Receitas") + getVal("Receitas Financeiras") + getVal("Honorários") + getVal("Juros e Devoluções") + getVal("Recuperação de Despesas Variáveis") + totalIntermediReceitas + totalMutuoEntradas;
     const totalImpostos = getVal("Impostos") + getVal("Provisão IRPJ e CSSL Trimestral");
@@ -791,7 +791,7 @@ export class DreSimulatorEngine {
       const dividendosCol = getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col);
       const intermedioSaidasCol = getCatMonthly("Intermediação de Negócios", col);
       const mutuoSaidasCol = getCatMonthly("Mútuo - Saídas", col);
-      const retiradasCol = dividendosCol + intermedioSaidasCol + mutuoSaidasCol;
+      const retiradasCol = intermedioSaidasCol + mutuoSaidasCol;
 
       valoresMensal["Intermediação de Negócios - Receitas"][col] = intermReceitasCol;
       sourceRows["Intermediação de Negócios - Receitas"][col] = getCatSourceRowsSafe("Intermediação de Negócios - Receitas", col);
@@ -805,7 +805,6 @@ export class DreSimulatorEngine {
       sourceRows["Mútuo - Saídas"][col] = getCatSourceRowsSafe("Mútuo - Saídas", col);
       valoresMensal["Total Retiradas dos Sócios"][col] = retiradasCol;
       sourceRows["Total Retiradas dos Sócios"][col] = [
-        ...sourceRows["Distribuição de Dividendos"][col],
         ...sourceRows["Intermediação de Negócios"][col],
         ...sourceRows["Mútuo - Saídas"][col]
       ];

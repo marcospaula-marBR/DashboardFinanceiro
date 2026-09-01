@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.58.37";
-export const VERSION_DATE = "2026-08-27";
+export const APP_VERSION = "v.02.58.38";
+export const VERSION_DATE = "2026-09-01";
 export const VERSION_CHANGELOG = [
+  "v.02.58.38 - Feat/DRE-FCL-Composicao-Retiradas: Atualiza o demonstrativo de composição do card FCL: remove 'Distribuição de Dividendos' da lista de retiradas de sócios, renomeia '(+) Intermediação de Negócios (Saídas)' para '(+) Intermediação/Retiradas', recalcula o 'Total Retiradas dos Sócios' e adiciona a linha de saldo '(=) Saldo (FCL (-) Total Retiradas)' no DreDetailsModal, DreService e DreSimulatorEngine.",
   "v.02.58.37 - Fix/Build-TypeCheck: Corrige erro de tipagem no filtro de fetchEmployees em loans.service.ts ajustando a referência de propriedade para RawEmployee (full_name e corporate_name).",
   "v.02.58.36 - Fix/People-BPR-SystemConfig-Filter: Bloqueio estrito de registros técnicos e de metadados globais (__SYSTEM_GLOBAL_CONFIG__) na listagem de colaboradores e no motor de apuração do BPR (BprService.calculateBpr, BprCockpitModal, PeopleHRService, LoansService e people/page.tsx), impedindo que registros de configuração em nuvem apareçam como colaboradores.",
   "v.02.58.35 - Fix/People-Systems-PJ-Scope: Corrige a exibição de Escopo nos cards de prestadores PJ no Ecossistema de Sistemas & Acessos (SystemsEcosystemView.tsx) e Mapa de Ecossistemas (PeopleEcosystemMap.tsx). Substituído 'RL: INDEFINIDO' pelo campo de Escopo do Serviço (emp.job_role com fallback 'Sem Escopo' para PJ e 'Sem Cadeira' para CLT).",
