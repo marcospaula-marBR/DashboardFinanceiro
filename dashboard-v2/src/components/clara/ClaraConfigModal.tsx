@@ -13,7 +13,7 @@ import {
   RefreshCw,
   Lock
 } from "lucide-react";
-import { ClaraConfig, OmieAccountOption, OmieCategoryOption, OmieDepartmentOption } from "@/types/clara.types";
+import { ClaraConfig, OmieAccountOption, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption } from "@/types/clara.types";
 
 interface ClaraConfigModalProps {
   isOpen: boolean;
@@ -26,6 +26,7 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
   const [accounts, setAccounts] = useState<OmieAccountOption[]>([]);
   const [categories, setCategories] = useState<OmieCategoryOption[]>([]);
   const [departments, setDepartments] = useState<OmieDepartmentOption[]>([]);
+  const [projects, setProjects] = useState<OmieProjectOption[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,6 +53,7 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
         setAccounts(resRes.data.accounts || []);
         setCategories(resRes.data.categories || []);
         setDepartments(resRes.data.departments || []);
+        setProjects(resRes.data.projects || []);
       }
     } catch (e: any) {
       console.error('Erro ao carregar dados de configuração:', e);
@@ -413,7 +415,7 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Categoria Padrão (Fallback)</label>
                   <select
@@ -422,7 +424,7 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                     className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
                   >
                     <option value="">Nenhuma (Exigir classificação)</option>
-                    {categories.slice(0, 50).map(c => (
+                    {categories.map(c => (
                       <option key={c.codigo} value={c.codigo}>
                         {c.codigo} - {c.descricao}
                       </option>
@@ -441,6 +443,22 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                     {departments.map(d => (
                       <option key={d.codigo} value={d.codigo}>
                         {d.descricao}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Projeto Padrão (Fallback)</label>
+                  <select
+                    value={config.default_omie_project || ''}
+                    onChange={e => setConfig({ ...config, default_omie_project: e.target.value || null })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  >
+                    <option value="">Nenhum (Sem projeto)</option>
+                    {projects.map(p => (
+                      <option key={p.codigo} value={p.codigo}>
+                        {p.descricao}
                       </option>
                     ))}
                   </select>

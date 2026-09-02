@@ -408,7 +408,8 @@ export class ClaraSyncService {
               tx,
               nCodCC!,
               tx.omie_category_code || config.default_omie_category || '1.01.01',
-              tx.omie_department_code
+              tx.omie_department_code,
+              tx.omie_project_code || config.default_omie_project
             );
 
             const res = await axios.post('https://app.omie.com.br/api/v1/financas/contacorrentelancamentos/', {
@@ -719,7 +720,8 @@ export class ClaraSyncService {
         tx,
         nCodCC!,
         tx.omie_category_code || config.default_omie_category || '1.01.01',
-        tx.omie_department_code
+        tx.omie_department_code,
+        tx.omie_project_code || config.default_omie_project
       );
 
       const res = await axios.post('https://app.omie.com.br/api/v1/financas/contacorrentelancamentos/', {
@@ -770,5 +772,86 @@ export class ClaraSyncService {
 
     await this.saveLocalTransaction(tx);
     return tx;
+  }
+
+  /**
+   * Atualiza diretamente categoria, departamento e/ou projeto de uma transação
+   */
+  public static async updateTransactionFields(
+    idOrUuid: string,
+    fields: {
+      omie_category_code?: string | null;
+      omie_department_code?: string | null;
+      omie_project_code?: string | null;
+      sync_status?: any;
+    }
+  ): Promise<ClaraTransactionRecord> {
+    let tx: ClaraTransactionRecord | null = null;
+    try {
+      const { data } = await supabase
+        .from('clara_transactions')
+        .select('*')
+        .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
+        .maybeSingle();
+      if (data) tx = data;
+    } catch {
+      tx = memoryTransactions.get(idOrUuid) || null;
+    }
+
+    if (!tx) {
+      throw new Error(`Transação ${idOrUuid} não encontrada.`);
+    }
+
+    if (fields.omie_category_code !== undefined) tx.omie_category_code = fields.omie_category_code;
+    if (fields.omie_department_code !== undefined) tx.omie_department_code = fields.omie_department_code;
+    if (fields.omie_project_code !== undefined) tx.omie_project_code = fields.omie_project_code;
+
+    // Se categoria foi preenchida e status era MAPPING_REQUIRED, atualiza para READY
+    if (tx.omie_category_code && tx.sync_status === 'MAPPING_REQUIRED') {
+      tx.sync_status = 'READY';
+      tx.last_sync_error = null;
+    } else if (fields.sync_status) {
+      tx.sync_status = fields.sync_status;
+    }
+
+    await this.saveLocalTransaction(tx);
+    return tx;
+  }
+
+  /**
+   * Dispara envio ao Omie para múltiplas transações selecionadas
+   */
+  public static async syncSelectedTransactions(uuids: string[]): Promise<{
+    total: number;
+    success: number;
+    failed: number;
+    results: Array<{ uuid: string; status: string; message?: string }>;
+  }> {
+    const results: Array<{ uuid: string; status: string; message?: string }> = [];
+    let success = 0;
+    let failed = 0;
+
+    for (const uuid of uuids) {
+      try {
+        const updated = await this.retryTransaction(uuid);
+        if (updated.sync_status === 'SYNCED' || updated.sync_status === 'READY') {
+          success++;
+          results.push({ uuid, status: updated.sync_status });
+        } else {
+          failed++;
+          results.push({ uuid, status: updated.sync_status, message: updated.last_sync_error || 'Status não sincronizado' });
+        }
+      } catch (err: any) {
+        failed++;
+        results.push({ uuid, status: 'ERROR', message: err.message });
+      }
+    }
+
+    return {
+      total: uuids.length,
+      success,
+      failed,
+      results,
+    };
   }
 }

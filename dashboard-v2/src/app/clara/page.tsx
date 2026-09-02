@@ -8,7 +8,7 @@ import { ClaraCategoryMappingModal } from "@/components/clara/ClaraCategoryMappi
 import { ClaraDepartmentMappingModal } from "@/components/clara/ClaraDepartmentMappingModal";
 import { ClaraTransactionDrawer } from "@/components/clara/ClaraTransactionDrawer";
 import { ClaraSyncHistoryModal } from "@/components/clara/ClaraSyncHistoryModal";
-import { ClaraTransactionRecord, ClaraSyncStatus } from "@/types/clara.types";
+import { ClaraTransactionRecord, ClaraSyncStatus, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption } from "@/types/clara.types";
 import { 
   CreditCard, 
   RefreshCw, 
@@ -27,7 +27,13 @@ import {
   ChevronRight, 
   ArrowUpDown,
   Loader2,
-  Calendar
+  Calendar,
+  CheckSquare,
+  Square,
+  Check,
+  Layers,
+  FolderKanban,
+  Send
 } from "lucide-react";
 
 export default function ClaraIntegrationPage() {
@@ -66,6 +72,37 @@ export default function ClaraIntegrationPage() {
   const [departmentMapOpen, setDepartmentMapOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<ClaraTransactionRecord | null>(null);
+
+  // Recursos Omie para edição em lote e inline
+  const [categories, setCategories] = useState<OmieCategoryOption[]>([]);
+  const [departments, setDepartments] = useState<OmieDepartmentOption[]>([]);
+  const [projects, setProjects] = useState<OmieProjectOption[]>([]);
+
+  // Seleção Múltipla
+  const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchCategory, setBatchCategory] = useState("");
+  const [batchDepartment, setBatchDepartment] = useState("");
+  const [batchProject, setBatchProject] = useState("");
+
+  const loadOmieResources = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clara/omie-resources');
+      const json = await res.json();
+      if (json.status === 'success' && json.data) {
+        setCategories(json.data.categories || []);
+        setDepartments(json.data.departments || []);
+        setProjects(json.data.projects || []);
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar recursos Omie na página Clara:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOmieResources();
+  }, [loadOmieResources]);
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
@@ -118,6 +155,89 @@ export default function ClaraIntegrationPage() {
       alert(`Falha de rede ao sincronizar: ${e.message}`);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUuids.length === transactions.length) {
+      setSelectedUuids([]);
+    } else {
+      setSelectedUuids(transactions.map(t => t.clara_uuid));
+    }
+  };
+
+  const toggleSelectOne = (uuid: string) => {
+    setSelectedUuids(prev => 
+      prev.includes(uuid) ? prev.filter(id => id !== uuid) : [...prev, uuid]
+    );
+  };
+
+  // Dispara envio das transações marcadas para o Omie
+  const handleBatchSync = async () => {
+    if (selectedUuids.length === 0) return;
+    if (!confirm(`Deseja enviar as ${selectedUuids.length} transações selecionadas para o Omie?`)) return;
+
+    setBatchActionLoading(true);
+    try {
+      const res = await fetch('/api/clara/transactions/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync',
+          uuids: selectedUuids,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        alert(data.message);
+        setSelectedUuids([]);
+        await fetchTransactions();
+      } else {
+        alert(`Erro ao processar lote: ${data.message}`);
+      }
+    } catch (e: any) {
+      alert(`Falha ao processar lote: ${e.message}`);
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
+
+  // Aplica categoria, departamento e/ou projeto em lote
+  const handleBatchUpdateFields = async () => {
+    if (selectedUuids.length === 0) return;
+    if (!batchCategory && !batchDepartment && !batchProject) {
+      alert('Selecione ao menos um campo (Categoria, Departamento ou Projeto) para aplicar em lote.');
+      return;
+    }
+
+    setBatchActionLoading(true);
+    try {
+      const res = await fetch('/api/clara/transactions/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_fields',
+          uuids: selectedUuids,
+          omie_category_code: batchCategory || undefined,
+          omie_department_code: batchDepartment || undefined,
+          omie_project_code: batchProject || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        alert(data.message);
+        setBatchModalOpen(false);
+        setBatchCategory("");
+        setBatchDepartment("");
+        setBatchProject("");
+        await fetchTransactions();
+      } else {
+        alert(`Erro: ${data.message}`);
+      }
+    } catch (e: any) {
+      alert(`Falha: ${e.message}`);
+    } finally {
+      setBatchActionLoading(false);
     }
   };
 
@@ -365,6 +485,54 @@ export default function ClaraIntegrationPage() {
           </div>
         </div>
 
+        {/* Barra de Ações em Lote (Flutuante quando selecionado) */}
+        {selectedUuids.length > 0 && (
+          <div className="mb-4 p-3.5 bg-emerald-950 text-white rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg border border-emerald-800 animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
+              <span className="w-7 h-7 bg-emerald-500/20 text-emerald-300 rounded-lg flex items-center justify-center font-bold text-xs">
+                {selectedUuids.length}
+              </span>
+              <span className="text-xs font-semibold text-emerald-100">
+                {selectedUuids.length === 1 ? '1 transação selecionada' : `${selectedUuids.length} transações selecionadas`}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBatchModalOpen(true)}
+                disabled={batchActionLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Layers size={14} className="text-emerald-400" />
+                <span>Classificar em Lote</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBatchSync}
+                disabled={batchActionLoading}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-black rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {batchActionLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Send size={14} />
+                )}
+                <span>Enviar {selectedUuids.length} ao Omie</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedUuids([])}
+                className="px-2 py-1 text-slate-400 hover:text-white text-xs font-medium cursor-pointer"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Tabela de Transações (Desktop + Mobile First) */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           
@@ -400,33 +568,57 @@ export default function ClaraIntegrationPage() {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="py-3 px-4">Data</th>
-                      <th className="py-3 px-4">Portador & Cartão</th>
-                      <th className="py-3 px-4">Estabelecimento</th>
-                      <th className="py-3 px-4 text-right">Valor</th>
-                      <th className="py-3 px-4 text-center">Status Clara</th>
-                      <th className="py-3 px-4">Categoria Omie</th>
-                      <th className="py-3 px-4">Centro de Custo</th>
-                      <th className="py-3 px-4 text-center">Status Omie</th>
-                      <th className="py-3 px-4 text-center">Anexo</th>
-                      <th className="py-3 px-4 text-center">Ações</th>
+                      <th className="py-3 px-3 text-center w-10">
+                        <input
+                          type="checkbox"
+                          checked={transactions.length > 0 && selectedUuids.length === transactions.length}
+                          onChange={toggleSelectAll}
+                          className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                          title="Selecionar todas as transações desta página"
+                        />
+                      </th>
+                      <th className="py-3 px-3">Data</th>
+                      <th className="py-3 px-3">Portador & Cartão</th>
+                      <th className="py-3 px-3">Estabelecimento</th>
+                      <th className="py-3 px-3 text-right">Valor</th>
+                      <th className="py-3 px-3 text-center">Status Clara</th>
+                      <th className="py-3 px-3">Categoria Omie</th>
+                      <th className="py-3 px-3">Centro de Custo</th>
+                      <th className="py-3 px-3">Projeto</th>
+                      <th className="py-3 px-3 text-center">Status Omie</th>
+                      <th className="py-3 px-3 text-center">Anexos</th>
+                      <th className="py-3 px-3 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {transactions.map(tx => {
                       const isSynced = tx.sync_status === 'SYNCED' || Boolean(tx.omie_launch_id);
+                      const isSelected = selectedUuids.includes(tx.clara_uuid);
+                      const attachCount = tx.raw_payload?.documents?.length || tx.raw_payload?.receipts?.length || (tx.has_attachments ? 1 : 0);
+
                       return (
                         <tr 
                           key={tx.id || tx.clara_uuid} 
                           onClick={() => setSelectedTx(tx)}
-                          className="hover:bg-slate-50/70 transition-colors cursor-pointer"
+                          className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${
+                            isSelected ? 'bg-emerald-50/40' : ''
+                          }`}
                         >
-                          <td className="py-3 px-4 whitespace-nowrap font-medium text-slate-900">
+                          <td className="py-3 px-3 text-center" onClick={e => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectOne(tx.clara_uuid)}
+                              className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                            />
+                          </td>
+
+                          <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-900">
                             {formatDate(tx.operation_date)}
                           </td>
 
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            <span className="font-bold text-slate-900 block truncate max-w-[160px]">
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span className="font-bold text-slate-900 block truncate max-w-[150px]">
                               {tx.user_name || 'N/A'}
                             </span>
                             <span className="font-mono text-[10px] text-slate-400 block">
@@ -434,22 +626,22 @@ export default function ClaraIntegrationPage() {
                             </span>
                           </td>
 
-                          <td className="py-3 px-4">
-                            <span className="font-semibold text-slate-800 block truncate max-w-[200px]" title={tx.merchant_name || ''}>
+                          <td className="py-3 px-3">
+                            <span className="font-semibold text-slate-800 block truncate max-w-[180px]" title={tx.merchant_name || ''}>
                               {tx.merchant_name || 'Estabelecimento Desconhecido'}
                             </span>
                             {tx.merchant_category && (
-                              <span className="text-[10px] text-slate-400 block truncate max-w-[200px]">
+                              <span className="text-[10px] text-slate-400 block truncate max-w-[180px]">
                                 {tx.merchant_category}
                               </span>
                             )}
                           </td>
 
-                          <td className="py-3 px-4 text-right font-black text-slate-900 tabular-nums whitespace-nowrap">
+                          <td className="py-3 px-3 text-right font-black text-slate-900 tabular-nums whitespace-nowrap">
                             {formatCurrency(tx.amount)}
                           </td>
 
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-3 px-3 text-center">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               tx.transaction_status === 'AUTHORIZED'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -459,9 +651,9 @@ export default function ClaraIntegrationPage() {
                             </span>
                           </td>
 
-                          <td className="py-3 px-4">
+                          <td className="py-3 px-3">
                             {tx.omie_category_code ? (
-                              <span className="font-medium text-slate-800 text-[11px] block truncate max-w-[150px]">
+                              <span className="font-medium text-slate-800 text-[11px] block truncate max-w-[140px]" title={tx.omie_category_code}>
                                 {tx.omie_category_code}
                               </span>
                             ) : (
@@ -471,14 +663,20 @@ export default function ClaraIntegrationPage() {
                             )}
                           </td>
 
-                          <td className="py-3 px-4">
-                            <span className="text-slate-600 text-[11px] block truncate max-w-[140px]">
+                          <td className="py-3 px-3">
+                            <span className="text-slate-600 text-[11px] block truncate max-w-[120px]" title={tx.omie_department_code || ''}>
                               {tx.omie_department_code || '-'}
                             </span>
                           </td>
 
-                          <td className="py-3 px-4 text-center whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border inline-flex items-center gap-1 ${
+                          <td className="py-3 px-3">
+                            <span className="text-slate-600 text-[11px] block truncate max-w-[120px]" title={tx.omie_project_code || ''}>
+                              {tx.omie_project_code || '-'}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border inline-flex items-center gap-1 ${
                               isSynced
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 : tx.sync_status === 'READY'
@@ -495,24 +693,28 @@ export default function ClaraIntegrationPage() {
                             </span>
                           </td>
 
-                          <td className="py-3 px-4 text-center">
-                            {tx.attachments_synced ? (
-                              <span className="inline-flex p-1 text-emerald-600 bg-emerald-50 rounded" title="Comprovante enviado ao Omie">
-                                <CheckCircle2 size={15} />
-                              </span>
-                            ) : tx.has_attachments ? (
-                              <span className="inline-flex p-1 text-blue-600 bg-blue-50 rounded" title="Possui comprovante pendente">
-                                <Paperclip size={15} />
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {attachCount > 0 ? (
+                              <span 
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  tx.attachments_synced
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}
+                                title={tx.attachments_synced ? `${attachCount} anexo(s) enviado(s) ao Omie` : `${attachCount} anexo(s) pendente(s)`}
+                              >
+                                <Paperclip size={11} />
+                                {attachCount}
                               </span>
                             ) : (
-                              <span className="text-slate-300">-</span>
+                              <span className="text-slate-300 text-[11px] font-mono">0</span>
                             )}
                           </td>
 
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-3 px-3 text-center">
                             <button
                               onClick={e => { e.stopPropagation(); setSelectedTx(tx); }}
-                              className="text-xs text-slate-500 hover:text-slate-900 font-semibold p-1 hover:bg-slate-100 rounded"
+                              className="text-xs text-slate-500 hover:text-slate-900 font-semibold p-1 hover:bg-slate-100 rounded cursor-pointer"
                             >
                               Ver
                             </button>
@@ -528,26 +730,41 @@ export default function ClaraIntegrationPage() {
               <div className="block lg:hidden divide-y divide-slate-100">
                 {transactions.map(tx => {
                   const isSynced = tx.sync_status === 'SYNCED' || Boolean(tx.omie_launch_id);
+                  const isSelected = selectedUuids.includes(tx.clara_uuid);
+                  const attachCount = tx.raw_payload?.documents?.length || tx.raw_payload?.receipts?.length || (tx.has_attachments ? 1 : 0);
+
                   return (
                     <div
                       key={tx.id || tx.clara_uuid}
                       onClick={() => setSelectedTx(tx)}
-                      className="p-4 hover:bg-slate-50 transition-colors cursor-pointer space-y-2"
+                      className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer space-y-2 ${
+                        isSelected ? 'bg-emerald-50/40' : ''
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-medium block">
-                            {formatDate(tx.operation_date)}
-                          </span>
-                          <h4 className="text-xs font-bold text-slate-900 truncate max-w-[220px]">
-                            {tx.merchant_name || 'Estabelecimento Desconhecido'}
-                          </h4>
-                          <span className="text-[11px] text-slate-500">
-                            {tx.user_name || 'Portador'} {tx.card_last_digits ? `(**** ${tx.card_last_digits})` : ''}
-                          </span>
+                        <div className="flex items-start gap-2.5">
+                          <div className="pt-0.5" onClick={e => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectOne(tx.clara_uuid)}
+                              className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-medium block">
+                              {formatDate(tx.operation_date)}
+                            </span>
+                            <h4 className="text-xs font-bold text-slate-900 truncate max-w-[190px]">
+                              {tx.merchant_name || 'Estabelecimento Desconhecido'}
+                            </h4>
+                            <span className="text-[11px] text-slate-500">
+                              {tx.user_name || 'Portador'} {tx.card_last_digits ? `(**** ${tx.card_last_digits})` : ''}
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <span className="text-sm font-black text-slate-900 tabular-nums block">
                             {formatCurrency(tx.amount)}
                           </span>
@@ -563,13 +780,23 @@ export default function ClaraIntegrationPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                        <span>Cat: {tx.omie_category_code || <em className="text-amber-600">Sem categoria</em>}</span>
-                        {tx.attachments_synced && (
-                          <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
-                            <Paperclip size={11} /> Comprovante OK
-                          </span>
-                        )}
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 pl-6">
+                        <div className="space-y-0.5 truncate max-w-[200px]">
+                          <div className="truncate">Cat: {tx.omie_category_code || <em className="text-amber-600">Sem categoria</em>}</div>
+                          {tx.omie_project_code && <div className="text-[10px] text-slate-400 truncate">Proj: {tx.omie_project_code}</div>}
+                        </div>
+
+                        <div>
+                          {attachCount > 0 ? (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                              tx.attachments_synced ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              <Paperclip size={11} /> {attachCount}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 text-[10px] font-mono">0 anexos</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -633,11 +860,120 @@ export default function ClaraIntegrationPage() {
         transaction={selectedTx}
         isOpen={Boolean(selectedTx)}
         onClose={() => setSelectedTx(null)}
+        categories={categories}
+        departments={departments}
+        projects={projects}
         onTransactionUpdated={updated => {
           setSelectedTx(updated);
           setTransactions(transactions.map(t => t.clara_uuid === updated.clara_uuid ? updated : t));
         }}
       />
+
+      {/* Modal de Edição em Lote */}
+      {batchModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[20000] p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
+                  <Layers size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Classificação em Lote</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Aplicar em {selectedUuids.length} lançamentos selecionados
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Selecione os campos contábeis que deseja aplicar a todas as transações marcadas. Os campos deixados em branco não serão alterados.
+            </p>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Categoria Omie:
+                </label>
+                <select
+                  value={batchCategory}
+                  onChange={e => setBatchCategory(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                >
+                  <option value="">Não alterar categoria</option>
+                  {categories.map(c => (
+                    <option key={c.codigo} value={c.codigo}>
+                      {c.codigo} - {c.descricao}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Centro de Custo (Departamento):
+                </label>
+                <select
+                  value={batchDepartment}
+                  onChange={e => setBatchDepartment(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                >
+                  <option value="">Não alterar centro de custo</option>
+                  {departments.map(d => (
+                    <option key={d.codigo} value={d.codigo}>
+                      {d.descricao}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Projeto Omie:
+                </label>
+                <select
+                  value={batchProject}
+                  onChange={e => setBatchProject(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                >
+                  <option value="">Não alterar projeto</option>
+                  {projects.map(p => (
+                    <option key={p.codigo} value={p.codigo}>
+                      {p.descricao}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setBatchModalOpen(false)}
+                className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleBatchUpdateFields}
+                disabled={batchActionLoading || (!batchCategory && !batchDepartment && !batchProject)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-40"
+              >
+                {batchActionLoading ? 'Aplicando...' : 'Aplicar em Lote'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

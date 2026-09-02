@@ -6,7 +6,8 @@ import {
   ClaraDepartmentMapping, 
   OmieAccountOption, 
   OmieDepartmentOption, 
-  OmieCategoryOption 
+  OmieCategoryOption,
+  OmieProjectOption 
 } from '@/types/clara.types';
 
 // Configuração padrão populada com as credenciais oficiais da Clara
@@ -439,4 +440,74 @@ export class ClaraConfigService {
       return [];
     }
   }
+
+  /**
+   * Busca os projetos reais do Omie (Supabase omie_dim_projetos / projetos ou API direta)
+   */
+  public static async getOmieProjects(): Promise<OmieProjectOption[]> {
+    const map = new Map<string, string>();
+
+    try {
+      // 1. Tenta omie_dim_projetos
+      const { data: dimProjs } = await supabase
+        .from('omie_dim_projetos')
+        .select('codigo_projeto, descricao_projeto')
+        .order('descricao_projeto', { ascending: true });
+
+      if (dimProjs && dimProjs.length > 0) {
+        dimProjs.forEach(p => {
+          if (p.codigo_projeto && !map.has(p.codigo_projeto)) {
+            map.set(String(p.codigo_projeto).trim(), (p.descricao_projeto || String(p.codigo_projeto)).trim());
+          }
+        });
+      }
+
+      // 2. Tenta tabela projetos (ativos)
+      const { data: projs } = await supabase
+        .from('projetos')
+        .select('omie_id, nome')
+        .order('nome', { ascending: true });
+
+      if (projs && projs.length > 0) {
+        projs.forEach(p => {
+          if (p.omie_id && !map.has(String(p.omie_id))) {
+            map.set(String(p.omie_id).trim(), (p.nome || String(p.omie_id)).trim());
+          }
+        });
+      }
+
+      if (map.size > 0) {
+        return Array.from(map.entries())
+          .map(([codigo, descricao]) => ({ codigo, descricao }))
+          .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+      }
+    } catch (e: any) {
+      console.warn('[ClaraConfigService] Erro ao consultar projetos no Supabase:', e.message);
+    }
+
+    // Fallback: consulta direta à API Omie
+    const { appKey, appSecret } = this.getOmieCredentials();
+    if (!appKey || !appSecret) return [];
+
+    try {
+      const response = await axios.post('https://app.omie.com.br/api/v1/geral/projetos/', {
+        call: 'ListarProjetos',
+        app_key: appKey,
+        app_secret: appSecret,
+        param: [{ pagina: 1, registros_por_pagina: 200, apenas_importado_api: 'N' }],
+      }, { timeout: 15000 });
+
+      const list = response.data?.cadastro || response.data?.projetos || response.data?.projeto_cadastro || [];
+      return list
+        .map((p: any) => ({
+          codigo: String(p.codigo || p.nCodProjeto || p.codigo_projeto),
+          descricao: String(p.nome || p.descricao || p.descricao_projeto || p.codigo).trim(),
+        }))
+        .filter((p: any) => Boolean(p.codigo && p.descricao))
+        .sort((a: any, b: any) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+    } catch {
+      return [];
+    }
+  }
 }
+

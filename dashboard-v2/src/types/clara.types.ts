@@ -31,6 +31,7 @@ export interface ClaraConfig {
   safe_mode: boolean; // Modo de Teste: gera payloads sem disparar IncluirLancCC real
   default_omie_category?: string | null;
   default_omie_department?: string | null;
+  default_omie_project?: string | null;
   block_if_unmapped: boolean;
   overlap_days: number;
   last_connection_test?: string | null;
@@ -160,6 +161,7 @@ export interface ClaraTransactionRecord {
   omie_account_id?: number | null;
   omie_category_code?: string | null;
   omie_department_code?: string | null;
+  omie_project_code?: string | null;
   
   // Anexos
   has_attachments: boolean;
@@ -236,6 +238,7 @@ export interface OmieLancCCPayload {
   cNumDoc: string; // authorization_number
   cObs: string;
   cCodIntLanc: string; // ID determinístico (CL + hash)
+  nCodProjeto?: number | null;
   departamentos?: Array<{
     cCodDepto: string;
     nPerc: number;
@@ -264,6 +267,11 @@ export interface OmieDepartmentOption {
 }
 
 export interface OmieCategoryOption {
+  codigo: string;
+  descricao: string;
+}
+
+export interface OmieProjectOption {
   codigo: string;
   descricao: string;
 }

@@ -3,10 +3,11 @@ import { ClaraConfigService } from '@/services/clara/clara-config.service';
 
 export async function GET() {
   try {
-    const [accounts, departments, categories] = await Promise.all([
+    const [accounts, departments, categories, projects] = await Promise.all([
       ClaraConfigService.getOmieAccounts(false), // busca todas as contas para permitir filtrar tipo CR
       ClaraConfigService.getOmieDepartments(),
       ClaraConfigService.getOmieCategories(),
+      ClaraConfigService.getOmieProjects(),
     ]);
 
     // Separa contas tipo CR (Cartão de Crédito) com prioridade
@@ -20,6 +21,7 @@ export async function GET() {
         creditCardAccounts,
         departments,
         categories,
+        projects,
       },
     });
   } catch (error: any) {

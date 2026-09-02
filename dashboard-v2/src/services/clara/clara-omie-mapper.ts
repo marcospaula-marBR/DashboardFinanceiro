@@ -88,7 +88,8 @@ export class ClaraOmieMapper {
     tx: ClaraTransactionRecord,
     nCodCC: number,
     categoryCode: string,
-    departmentCode?: string | null
+    departmentCode?: string | null,
+    projectCode?: string | null
   ): OmieLancCCPayload {
     if (!nCodCC) {
       throw new Error('Conta Corrente da Clara (nCodCC) não definida na configuração.');
@@ -113,6 +114,11 @@ export class ClaraOmieMapper {
       cObs,
       cCodIntLanc,
     };
+
+    const proj = projectCode || tx.omie_project_code;
+    if (proj && !isNaN(Number(proj))) {
+      payload.nCodProjeto = Number(proj);
+    }
 
     if (departmentCode && departmentCode.trim()) {
       payload.departamentos = [

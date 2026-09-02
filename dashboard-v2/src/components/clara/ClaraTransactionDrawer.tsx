@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   X, 
   ExternalLink, 
@@ -19,13 +19,16 @@ import {
   FileText,
   Clock
 } from "lucide-react";
-import { ClaraTransactionRecord } from "@/types/clara.types";
+import { ClaraTransactionRecord, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption } from "@/types/clara.types";
 
 interface ClaraTransactionDrawerProps {
   transaction: ClaraTransactionRecord | null;
   isOpen: boolean;
   onClose: () => void;
   onTransactionUpdated: (updated: ClaraTransactionRecord) => void;
+  categories?: OmieCategoryOption[];
+  departments?: OmieDepartmentOption[];
+  projects?: OmieProjectOption[];
 }
 
 export function ClaraTransactionDrawer({
@@ -33,12 +36,55 @@ export function ClaraTransactionDrawer({
   isOpen,
   onClose,
   onTransactionUpdated,
+  categories = [],
+  departments = [],
+  projects = [],
 }: ClaraTransactionDrawerProps) {
   const [retrying, setRetrying] = useState(false);
+  const [savingFields, setSavingFields] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
 
+  // Estados locais dos campos editáveis
+  const [selectedCat, setSelectedCat] = useState(transaction?.omie_category_code || '');
+  const [selectedDepto, setSelectedDepto] = useState(transaction?.omie_department_code || '');
+  const [selectedProj, setSelectedProj] = useState(transaction?.omie_project_code || '');
+
+  useEffect(() => {
+    if (transaction) {
+      setSelectedCat(transaction.omie_category_code || '');
+      setSelectedDepto(transaction.omie_department_code || '');
+      setSelectedProj(transaction.omie_project_code || '');
+    }
+  }, [transaction]);
+
   if (!isOpen || !transaction) return null;
+
+  const handleSaveFields = async () => {
+    setSavingFields(true);
+    try {
+      const res = await fetch(`/api/clara/transactions/${transaction.clara_uuid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          omie_category_code: selectedCat || null,
+          omie_department_code: selectedDepto || null,
+          omie_project_code: selectedProj || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'success' && data.data) {
+        onTransactionUpdated(data.data);
+      } else {
+        alert(`Erro ao salvar campos: ${data.message}`);
+      }
+    } catch (e: any) {
+      alert(`Erro: ${e.message}`);
+    } finally {
+      setSavingFields(false);
+    }
+  };
 
   const handleCopyJson = () => {
     navigator.clipboard.writeText(JSON.stringify(transaction.raw_payload || transaction, null, 2));
@@ -188,24 +234,88 @@ export function ClaraTransactionDrawer({
                   {transaction.omie_integration_id || '-'}
                 </span>
               </div>
+            </div>
+
+            {/* Edição / Vinculação Omie */}
+            <div className="pt-2 border-t border-emerald-200/60 space-y-2.5">
+              <span className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider block">
+                Classificação Contábil Omie:
+              </span>
 
               <div>
-                <span className="text-slate-500 text-[11px] block">Categoria Omie:</span>
-                <span className="font-medium text-slate-900">
-                  {transaction.omie_category_code || (
-                    <span className="text-amber-600 font-bold inline-flex items-center gap-1">
-                      <AlertCircle size={12} /> Não mapeada
-                    </span>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Categoria Omie:</label>
+                {transaction.sync_status === 'SYNCED' ? (
+                  <span className="font-bold text-slate-900 text-xs">{transaction.omie_category_code}</span>
+                ) : (
+                  <select
+                    value={selectedCat}
+                    onChange={e => setSelectedCat(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  >
+                    <option value="">Selecione a categoria Omie...</option>
+                    {categories.map(c => (
+                      <option key={c.codigo} value={c.codigo}>
+                        {c.codigo} - {c.descricao}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-700 block mb-1">Centro de Custo (Depto):</label>
+                  {transaction.sync_status === 'SYNCED' ? (
+                    <span className="text-slate-900 text-xs">{transaction.omie_department_code || '-'}</span>
+                  ) : (
+                    <select
+                      value={selectedDepto}
+                      onChange={e => setSelectedDepto(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                    >
+                      <option value="">Sem departamento</option>
+                      {departments.map(d => (
+                        <option key={d.codigo} value={d.codigo}>
+                          {d.descricao}
+                        </option>
+                      ))}
+                    </select>
                   )}
-                </span>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-700 block mb-1">Projeto Omie:</label>
+                  {transaction.sync_status === 'SYNCED' ? (
+                    <span className="text-slate-900 text-xs">{transaction.omie_project_code || '-'}</span>
+                  ) : (
+                    <select
+                      value={selectedProj}
+                      onChange={e => setSelectedProj(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                    >
+                      <option value="">Sem projeto</option>
+                      {projects.map(p => (
+                        <option key={p.codigo} value={p.codigo}>
+                          {p.descricao}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
-              <div>
-                <span className="text-slate-500 text-[11px] block">Departamento Omie:</span>
-                <span className="font-medium text-slate-900">
-                  {transaction.omie_department_code || 'Sem departamento'}
-                </span>
-              </div>
+              {transaction.sync_status !== 'SYNCED' && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSaveFields}
+                    disabled={savingFields}
+                    className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold rounded-lg shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {savingFields ? 'Salvando...' : 'Salvar Classificação'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {transaction.sync_status === 'MAPPING_REQUIRED' && (

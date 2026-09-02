@@ -23,6 +23,19 @@ export async function POST(
       return NextResponse.json({ status: 'success', message: 'Transação marcada como ignorada.' });
     }
 
+    if (action === 'update') {
+      const updated = await ClaraSyncService.updateTransactionFields(id, {
+        omie_category_code: body.omie_category_code,
+        omie_department_code: body.omie_department_code,
+        omie_project_code: body.omie_project_code,
+      });
+      return NextResponse.json({
+        status: 'success',
+        data: updated,
+        message: 'Campos atualizados com sucesso!',
+      });
+    }
+
     // Ação de retry / sincronização pontual
     const updated = await ClaraSyncService.retryTransaction(id);
 
