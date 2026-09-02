@@ -36,6 +36,9 @@ export interface ClaraConfig {
   last_connection_test?: string | null;
   last_connection_status?: 'SUCCESS' | 'ERROR' | null;
   last_connection_message?: string | null;
+  has_certificate?: boolean;
+  has_private_key?: boolean;
+  client_secret_masked?: string;
   updated_at?: string;
 }
 

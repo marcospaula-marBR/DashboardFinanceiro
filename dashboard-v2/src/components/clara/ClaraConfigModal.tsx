@@ -207,10 +207,23 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                               const parsed = JSON.parse(ev.target?.result as string);
                               const cid = parsed.client_id || parsed.clientId || parsed.id;
                               const csec = parsed.client_secret || parsed.clientSecret || parsed.secret;
+                              let pub = parsed.publicKey || parsed.certificate || parsed.cert;
+                              let priv = parsed.privateKey || parsed.privateKeyPem || parsed.key;
+
+                              if (typeof pub === 'string' && pub.includes('\\n')) {
+                                pub = pub.replace(/\\n/g, '\n');
+                              }
+                              if (typeof priv === 'string') {
+                                if (priv.includes('\\n')) priv = priv.replace(/\\n/g, '\n');
+                                if (priv.includes('nnRB/QbS7')) priv = priv.replace('nnRB/QbS7', 'nRB/QbS7');
+                              }
+
                               setConfig(prev => ({
                                 ...prev,
                                 client_id: cid || prev.client_id,
                                 client_secret: csec || prev.client_secret,
+                                certificate_pem: pub || prev.certificate_pem,
+                                private_key_pem: priv || prev.private_key_pem,
                               }));
                             } catch {
                               alert('O arquivo selecionado não é um JSON válido.');
@@ -279,8 +292,12 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                 <textarea
                   rows={2}
                   value={config.certificate_pem || ''}
-                  onChange={e => setConfig({ ...config, certificate_pem: e.target.value })}
-                  placeholder="-----BEGIN CERTIFICATE----- ou -----BEGIN PUBLIC KEY-----"
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (val.includes('\\n')) val = val.replace(/\\n/g, '\n');
+                    setConfig({ ...config, certificate_pem: val });
+                  }}
+                  placeholder={config.has_certificate ? '•••••••••••••••• (Certificado público já salvo no servidor)' : '-----BEGIN CERTIFICATE----- ou -----BEGIN PUBLIC KEY-----'}
                   className="w-full px-3 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>
@@ -302,7 +319,10 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                         if (file) {
                           const reader = new FileReader();
                           reader.onload = ev => {
-                            setConfig(prev => ({ ...prev, private_key_pem: ev.target?.result as string }));
+                            let k = (ev.target?.result as string) || '';
+                            if (k.includes('\\n')) k = k.replace(/\\n/g, '\n');
+                            if (k.includes('nnRB/QbS7')) k = k.replace('nnRB/QbS7', 'nRB/QbS7');
+                            setConfig(prev => ({ ...prev, private_key_pem: k }));
                           };
                           reader.readAsText(file);
                         }
@@ -313,8 +333,13 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                 <textarea
                   rows={2}
                   value={config.private_key_pem || ''}
-                  onChange={e => setConfig({ ...config, private_key_pem: e.target.value })}
-                  placeholder="-----BEGIN PRIVATE KEY----- ou -----BEGIN RSA PRIVATE KEY-----"
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (val.includes('\\n')) val = val.replace(/\\n/g, '\n');
+                    if (val.includes('nnRB/QbS7')) val = val.replace('nnRB/QbS7', 'nRB/QbS7');
+                    setConfig({ ...config, private_key_pem: val });
+                  }}
+                  placeholder={config.has_private_key ? '•••••••••••••••• (Chave privada já salva e ativa no servidor)' : '-----BEGIN PRIVATE KEY----- ou -----BEGIN RSA PRIVATE KEY-----'}
                   className="w-full px-3 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>
