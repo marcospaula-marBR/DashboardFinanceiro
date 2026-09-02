@@ -107,7 +107,7 @@ export function ClaraTransactionDrawer({
   const docs = transaction.raw_payload?.documents || transaction.raw_payload?.receipts || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs transition-opacity">
+    <div className="fixed inset-0 z-[20000] flex justify-end bg-slate-900/50 backdrop-blur-xs transition-opacity">
       <div className="relative w-full max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 overflow-hidden">
         
         {/* Top Header */}
@@ -192,7 +192,11 @@ export function ClaraTransactionDrawer({
               <div>
                 <span className="text-slate-500 text-[11px] block">Categoria Omie:</span>
                 <span className="font-medium text-slate-900">
-                  {transaction.omie_category_code || <em className="text-amber-600">Não mapeada</em>}
+                  {transaction.omie_category_code || (
+                    <span className="text-amber-600 font-bold inline-flex items-center gap-1">
+                      <AlertCircle size={12} /> Não mapeada
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -203,6 +207,18 @@ export function ClaraTransactionDrawer({
                 </span>
               </div>
             </div>
+
+            {transaction.sync_status === 'MAPPING_REQUIRED' && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 mt-2 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <AlertCircle size={14} className="text-amber-600" />
+                  Mapeamento Obrigatório Pendente
+                </div>
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  A categoria <strong>&quot;{transaction.merchant_category || 'Geral'}&quot;</strong> ainda não possui uma Categoria Omie correspondente. Use o botão <strong>Mapear Categorias</strong> na tela principal para associá-la, ou configure uma Categoria Padrão nas Configurações.
+                </p>
+              </div>
+            )}
 
             {transaction.last_sync_error && (
               <div className="p-2.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs mt-2">
@@ -333,12 +349,12 @@ export function ClaraTransactionDrawer({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3 shrink-0">
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0 pb-6">
           <button
             type="button"
             onClick={handleIgnore}
             disabled={retrying || transaction.sync_status === 'SYNCED'}
-            className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-lg transition-all disabled:opacity-40"
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-xl transition-all disabled:opacity-40 cursor-pointer"
           >
             Ignorar
           </button>
@@ -348,10 +364,14 @@ export function ClaraTransactionDrawer({
               type="button"
               onClick={handleRetry}
               disabled={retrying}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg shadow-sm transition-all disabled:opacity-50"
+              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer ${
+                transaction.sync_status === 'SYNCED'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-slate-900 hover:bg-black'
+              }`}
             >
-              {retrying ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />}
-              <span>{transaction.sync_status === 'SYNCED' ? 'Reenviar Anexos' : 'Processar p/ Omie'}</span>
+              {retrying ? <Loader2 className="animate-spin" size={15} /> : <RefreshCw size={15} />}
+              <span>{transaction.sync_status === 'SYNCED' ? 'Reenviar Anexos' : 'Enviar Lançamento ao Omie'}</span>
             </button>
           </div>
         </div>

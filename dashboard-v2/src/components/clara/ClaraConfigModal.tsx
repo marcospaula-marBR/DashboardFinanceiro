@@ -112,7 +112,7 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
   const creditCardAccounts = accounts.filter(a => a.tipo === 'CR');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[20000] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
       <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6">
         
         {/* Header */}
