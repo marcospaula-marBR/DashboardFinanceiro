@@ -65,11 +65,13 @@ console.log('   ✅ Filtros de elegibilidade estritos validados com sucesso.');
 
 // 5. Estrutura do Payload Omie IncluirAnexo
 function buildOmieAnexoPayload(nCodLanc, fileName, base64) {
+  const cMd5 = crypto.createHash('md5').update(base64).digest('hex');
   return {
     cTabela: 'conta-corrente-lancamento',
     nId: nCodLanc,
     cNomeArquivo: fileName,
     cArquivo: base64,
+    cMd5,
   };
 }
 
@@ -78,6 +80,7 @@ const payloadAnexo = buildOmieAnexoPayload(7654321, 'recibo_uber.pdf', 'JVBERi0x
 assert.strictEqual(payloadAnexo.cTabela, 'conta-corrente-lancamento');
 assert.strictEqual(payloadAnexo.nId, 7654321);
 assert.strictEqual(payloadAnexo.cNomeArquivo, 'recibo_uber.pdf');
-console.log('   ✅ Payload para /api/v1/geral/anexo/ (IncluirAnexo) validado.');
+assert.ok(payloadAnexo.cMd5, 'O campo cMd5 deve ser gerado.');
+console.log('   ✅ Payload para /api/v1/geral/anexo/ (IncluirAnexo com cMd5) validado.');
 
 console.log('\n🎉 TODOS OS TESTES PASSARAM COM SUCESSO!\n');

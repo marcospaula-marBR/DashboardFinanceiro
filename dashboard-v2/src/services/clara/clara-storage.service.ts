@@ -114,8 +114,7 @@ export class ClaraStorageService {
   public static async saveTransaction(tx: ClaraTransactionRecord, defaultConfig: ClaraConfig): Promise<void> {
     const state = await this.getState(defaultConfig);
     state.transactions[tx.clara_uuid] = tx;
-    // Persiste no Supabase em segundo plano
-    this.persistRemoteState(state).catch(() => {});
+    await this.persistRemoteState(state);
   }
 
   public static async saveTransactionsBatch(txList: ClaraTransactionRecord[], defaultConfig: ClaraConfig): Promise<void> {

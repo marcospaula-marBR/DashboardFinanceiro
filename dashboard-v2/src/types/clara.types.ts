@@ -228,17 +228,21 @@ export interface ClaraSyncLog {
   created_at: string;
 }
 
-// Payload para Omie IncluirLancCC
+// Payload oficial para Omie IncluirLancCC
 export interface OmieLancCCPayload {
-  nCodCC: number;
-  dDtLanc: string; // DD/MM/AAAA
-  nValorLanc: number;
-  cCodCateg: string;
-  cTipo: 'CRT'; // Cartão de crédito
-  cNumDoc: string; // authorization_number
-  cObs: string;
   cCodIntLanc: string; // ID determinístico (CL + hash)
-  nCodProjeto?: number | null;
+  cabecalho: {
+    nCodCC: number;
+    dDtLanc: string; // DD/MM/AAAA
+    nValorLanc: number;
+  };
+  detalhes: {
+    cCodCateg: string;
+    cTipo: string; // Cartão de crédito: 'CRT'
+    cNumDoc: string; // authorization_number ou identificador
+    cObs: string;
+    nCodProjeto?: number | null;
+  };
   departamentos?: Array<{
     cCodDepto: string;
     nPerc: number;
@@ -251,6 +255,7 @@ export interface OmieAnexoPayload {
   nId: number; // nCodLanc
   cNomeArquivo: string;
   cArquivo: string; // Base64
+  cMd5: string; // MD5 do conteúdo Base64
 }
 
 // Opções de Recursos Omie

@@ -61,16 +61,16 @@ export function ClaraTransactionDrawer({
       setSelectedProj(transaction.omie_project_code || '');
       setFetchedDocs(null);
 
-      // Se a transação tem anexos sinalizados ou se a lista local estiver vazia, busca sob demanda
+      // Se a transação tem anexos sinalizados ou se a lista local estiver vazia, busca sob demanda na API Clara
       const existingDocs = transaction.raw_payload?.documents || transaction.raw_payload?.receipts || [];
       if (existingDocs.length > 0) {
         setFetchedDocs(existingDocs);
-      } else if (transaction.has_attachments || (transaction.attachments_count && transaction.attachments_count > 0)) {
+      } else if (transaction.has_attachments || (transaction.attachments_count && transaction.attachments_count > 0) || transaction.raw_payload?.hasAttachments?.value) {
         setLoadingDocs(true);
         fetch(`/api/clara/transactions/${transaction.clara_uuid}/attachments`)
           .then(res => res.json())
           .then(data => {
-            if (data.status === 'success' && Array.isArray(data.data)) {
+            if (data.status === 'success' && Array.isArray(data.data) && data.data.length > 0) {
               setFetchedDocs(data.data);
             }
           })
@@ -95,11 +95,12 @@ export function ClaraTransactionDrawer({
           omie_project_code: selectedProj || null,
         }),
       });
-      const data = await res.json();
-      if (data.status === 'success' && data.data) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.status === 'success' && data.data) {
         onTransactionUpdated(data.data);
+        alert('Classificação contábil salva com sucesso!');
       } else {
-        alert(`Erro ao salvar campos: ${data.message}`);
+        alert(`Erro ao salvar campos: ${data.message || `Status HTTP ${res.status}`}`);
       }
     } catch (e: any) {
       alert(`Erro: ${e.message}`);

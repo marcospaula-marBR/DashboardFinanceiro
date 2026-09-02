@@ -105,19 +105,23 @@ export class ClaraOmieMapper {
     const cObs = this.buildOmieObservation(tx);
 
     const payload: OmieLancCCPayload = {
-      nCodCC,
-      dDtLanc,
-      nValorLanc,
-      cCodCateg: categoryCode,
-      cTipo: 'CRT', // Cartão de Crédito
-      cNumDoc,
-      cObs,
       cCodIntLanc,
+      cabecalho: {
+        nCodCC,
+        dDtLanc,
+        nValorLanc,
+      },
+      detalhes: {
+        cCodCateg: categoryCode,
+        cTipo: 'CRT', // Cartão de Crédito
+        cNumDoc,
+        cObs,
+      },
     };
 
     const proj = projectCode || tx.omie_project_code;
     if (proj && !isNaN(Number(proj))) {
-      payload.nCodProjeto = Number(proj);
+      payload.detalhes.nCodProjeto = Number(proj);
     }
 
     if (departmentCode && departmentCode.trim()) {
@@ -140,11 +144,14 @@ export class ClaraOmieMapper {
     fileName: string,
     base64Content: string
   ): OmieAnexoPayload {
+    const cMd5 = crypto.createHash('md5').update(base64Content).digest('hex');
+
     return {
       cTabela: 'conta-corrente-lancamento',
       nId: nCodLanc,
       cNomeArquivo: fileName || 'comprovante_clara.pdf',
       cArquivo: base64Content,
+      cMd5,
     };
   }
 }

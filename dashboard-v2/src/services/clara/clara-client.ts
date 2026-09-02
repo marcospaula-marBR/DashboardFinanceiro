@@ -157,10 +157,26 @@ export class ClaraClient {
   public async getTransactionDocuments(transactionUuid: string): Promise<ClaraDocument[]> {
     try {
       const response = await this.request('GET', `/api/v3/transactions/${transactionUuid}/documents`);
-      const docs: ClaraDocument[] = 
+      const rawList = 
+        response.attachments || 
         response.data || 
         response.documents || 
         (Array.isArray(response) ? response : []);
+
+      // Normaliza para o formato ClaraDocument
+      const docs: ClaraDocument[] = rawList.map((item: any) => {
+        const downloadUrl = item.download?.url || item.url || item.downloadUrl;
+        return {
+          uuid: item.uuid || item.id,
+          fileName: item.fileName || item.name || 'comprovante.pdf',
+          name: item.fileName || item.name || 'comprovante.pdf',
+          fileType: item.format || item.fileType || 'pdf',
+          url: downloadUrl,
+          downloadUrl: downloadUrl,
+          createdAt: item.updateAt || item.createdAt,
+        };
+      });
+
       return docs;
     } catch (error: any) {
       console.warn(`[ClaraClient] Não foi possível consultar documentos para ${transactionUuid}:`, error.message);
@@ -172,20 +188,30 @@ export class ClaraClient {
    * Faz o download do binário de um comprovante e retorna o conteúdo em base64 para envio ao Omie
    */
   public async downloadDocumentAsBase64(documentUrl: string): Promise<{ base64: string; fileName: string; mimeType: string }> {
-    const agent = ClaraAuthService.createHttpsAgent(this.config);
-    const token = await ClaraAuthService.getAccessToken(this.config);
-
     const isFullUrl = documentUrl.startsWith('http://') || documentUrl.startsWith('https://');
-    const targetUrl = isFullUrl ? documentUrl : `${this.baseUrl}${documentUrl.startsWith('/') ? documentUrl : `/${documentUrl}`}`;
+    const isAwsS3Presigned = isFullUrl && (documentUrl.includes('amazonaws.com') || documentUrl.includes('X-Amz-Signature') || documentUrl.includes('X-Amz-Credential'));
 
-    const res = await axios.get(targetUrl, {
-      responseType: 'arraybuffer',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      httpsAgent: agent,
-      timeout: 30000,
-    });
+    let res;
+    if (isAwsS3Presigned) {
+      // URLs pré-assinadas do S3 rejeitam cabeçalho Authorization
+      res = await axios.get(documentUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+    } else {
+      const agent = ClaraAuthService.createHttpsAgent(this.config);
+      const token = await ClaraAuthService.getAccessToken(this.config);
+      const targetUrl = isFullUrl ? documentUrl : `${this.baseUrl}${documentUrl.startsWith('/') ? documentUrl : `/${documentUrl}`}`;
+
+      res = await axios.get(targetUrl, {
+        responseType: 'arraybuffer',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        httpsAgent: agent,
+        timeout: 30000,
+      });
+    }
 
     const buffer = Buffer.from(res.data);
     const base64 = buffer.toString('base64');
@@ -200,9 +226,11 @@ export class ClaraClient {
       const match = contentDisposition.match(/filename="?([^"]+)"?/);
       if (match && match[1]) fileName = match[1];
     } else {
-      const urlPath = new URL(targetUrl).pathname;
-      const lastSegment = urlPath.split('/').pop();
-      if (lastSegment && lastSegment.includes('.')) fileName = lastSegment;
+      try {
+        const urlPath = new URL(documentUrl).pathname;
+        const lastSegment = urlPath.split('/').pop();
+        if (lastSegment && lastSegment.includes('.')) fileName = lastSegment;
+      } catch {}
     }
 
     return { base64, fileName, mimeType };
