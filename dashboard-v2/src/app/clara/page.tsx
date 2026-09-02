@@ -374,12 +374,24 @@ export default function ClaraIntegrationPage() {
               <p className="text-xs text-slate-500 font-medium">Carregando transações do cartão Clara...</p>
             </div>
           ) : transactions.length === 0 ? (
-            <div className="py-16 text-center text-slate-500 space-y-3">
-              <CreditCard size={36} className="mx-auto text-slate-300" />
-              <div className="text-sm font-bold text-slate-700">Nenhuma transação encontrada</div>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Clique em <strong>Sincronizar Agora</strong> para buscar as transações da API Clara ou ajuste os filtros acima.
-              </p>
+            <div className="py-16 text-center text-slate-500 space-y-4">
+              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-2xs">
+                <CreditCard size={28} />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-slate-800">Nenhuma transação encontrada no espelho</div>
+                <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                  A conexão com a Clara está autenticada. Clique abaixo para buscar as transações da Clara para este painel:
+                </p>
+              </div>
+              <button
+                onClick={handleSyncNow}
+                disabled={syncing}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
+                <span>{syncing ? 'Buscando transações da Clara...' : 'Sincronizar da Clara Agora'}</span>
+              </button>
             </div>
           ) : (
             <>

@@ -70,7 +70,7 @@ export class ClaraClient {
       }
 
       // Faz uma consulta de 1 registro para validar permissões de leitura
-      const data = await this.request('GET', '/api/v3/transactions', undefined, { page: 1, size: 1 });
+      const data = await this.request('GET', '/api/v3/transactions', undefined, { page: 0, size: 1 });
       const items = data.content || data.data || data.transactions || data.items || [];
       const total = data.totalElements ?? data.total ?? items.length;
 
@@ -92,7 +92,7 @@ export class ClaraClient {
    */
   public async getAllTransactions(params: GetTransactionsParams = {}): Promise<ClaraRawTransaction[]> {
     const size = params.size || 100;
-    let page = params.page || 1;
+    let page = params.page !== undefined ? params.page : 0;
     let allTransactions: ClaraRawTransaction[] = [];
     let hasMore = true;
     const MAX_PAGES = 50; // Limite de segurança para 5.000 transações por execução
@@ -122,10 +122,10 @@ export class ClaraClient {
       if (items.length > 0) {
         allTransactions.push(...items);
         
-        // Verifica se há mais páginas
-        const totalPages = response.totalPages || response.pages;
+        // Verifica se há mais páginas (base 0: última página é totalPages - 1)
+        const totalPages = response.totalPages ?? response.pages;
         if (totalPages !== undefined) {
-          hasMore = page < totalPages;
+          hasMore = page < (totalPages - 1);
         } else {
           hasMore = items.length === size;
         }

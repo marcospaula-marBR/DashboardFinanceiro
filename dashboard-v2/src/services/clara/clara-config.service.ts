@@ -368,6 +368,29 @@ export class ClaraConfigService {
    * Busca as categorias reais do Omie (primeiro tenta a tabela omie_dim_categorias do Supabase)
    */
   public static async getOmieCategories(): Promise<OmieCategoryOption[]> {
+    const decodeHtml = (str: string) => (str || '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+
+    const isIgnored = (desc: string) => {
+      const d = desc.toLowerCase();
+      return (
+        d.includes('<disponível>') ||
+        d.includes('<disponivel>') ||
+        d.includes('disponível') ||
+        d.includes('disponivel') ||
+        d.includes('não usar') ||
+        d.includes('nao usar') ||
+        d.includes('inativo') ||
+        d.includes('inativa') ||
+        d === ''
+      );
+    };
+
     try {
       const { data, error } = await supabase
         .from('omie_dim_categorias')
@@ -375,14 +398,18 @@ export class ClaraConfigService {
         .order('descricao_categoria', { ascending: true });
 
       if (!error && data && data.length > 0) {
-        // Remove duplicados de categorias
+        // Remove duplicados de categorias e placeholders
         const map = new Map<string, string>();
         data.forEach(c => {
-          if (c.codigo_categoria && !map.has(c.codigo_categoria)) {
-            map.set(c.codigo_categoria, c.descricao_categoria || c.codigo_categoria);
+          if (!c.codigo_categoria) return;
+          const cleanDesc = decodeHtml(c.descricao_categoria || '');
+          if (!isIgnored(cleanDesc) && !map.has(c.codigo_categoria)) {
+            map.set(c.codigo_categoria, cleanDesc);
           }
         });
-        return Array.from(map.entries()).map(([codigo, descricao]) => ({ codigo, descricao }));
+        return Array.from(map.entries())
+          .map(([codigo, descricao]) => ({ codigo, descricao }))
+          .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
       }
     } catch (e: any) {
       console.warn('[ClaraConfigService] Erro ao consultar omie_dim_categorias:', e.message);
@@ -401,10 +428,13 @@ export class ClaraConfigService {
       }, { timeout: 15000 });
 
       const list = response.data?.categoria_cadastro || [];
-      return list.map((c: any) => ({
-        codigo: String(c.codigo),
-        descricao: c.descricao || String(c.codigo),
-      }));
+      return list
+        .map((c: any) => ({
+          codigo: String(c.codigo),
+          descricao: decodeHtml(c.descricao || String(c.codigo)),
+        }))
+        .filter((c: any) => !isIgnored(c.descricao))
+        .sort((a: any, b: any) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
     } catch {
       return [];
     }

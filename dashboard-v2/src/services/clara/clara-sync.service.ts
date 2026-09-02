@@ -241,21 +241,35 @@ export class ClaraSyncService {
       // 1. Configura cliente da Clara
       const claraClient = new ClaraClient(config);
 
-      // 2. Calcula janela de busca incremental
-      const overlapDays = config.overlap_days || 3;
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - (options.forceFullSync ? 60 : overlapDays));
-      const startDateIso = startDate.toISOString();
-
+      // 2. Determina estratégia de busca
+      // Se for a primeira execução ou forceFullSync, busca sem filtro restritivo de data para trazer o histórico da Clara
       let claraRawList: ClaraRawTransaction[] = [];
+      const isInitialSync = options.forceFullSync || memoryTransactions.size === 0;
+
       try {
-        claraRawList = await claraClient.getAllTransactions({
-          lastUpdateDateRangeStart: startDateIso,
-        });
+        if (isInitialSync) {
+          claraRawList = await claraClient.getAllTransactions({ size: 100, page: 0 });
+        } else {
+          const overlapDays = config.overlap_days || 15;
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - overlapDays);
+          const startDateStr = startDate.toISOString().split('T')[0];
+          claraRawList = await claraClient.getAllTransactions({
+            lastUpdateDateRangeStart: startDateStr,
+            size: 100,
+            page: 0,
+          });
+        }
       } catch (err: any) {
-        // Se a busca com filtro de data falhar na Clara, tenta busca padrão das primeiras páginas
-        console.warn('[ClaraSyncService] Busca por range falhou, buscando sem filtro de data:', err.message);
-        claraRawList = await claraClient.getAllTransactions({ size: 100, page: 1 });
+        console.warn('[ClaraSyncService] Busca com filtro falhou, buscando sem filtro de data:', err.message);
+        claraRawList = await claraClient.getAllTransactions({ size: 100, page: 0 });
+      }
+
+      // Fallback: se a busca com filtro retornou vazia, busca todas as páginas disponíveis
+      if (claraRawList.length === 0) {
+        try {
+          claraRawList = await claraClient.getAllTransactions({ size: 100, page: 0 });
+        } catch {}
       }
 
       received = claraRawList.length;
