@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.58.38";
-export const VERSION_DATE = "2026-09-01";
+export const APP_VERSION = "v.02.58.39";
+export const VERSION_DATE = "2026-09-02";
 export const VERSION_CHANGELOG = [
+  "v.02.58.39 - Feat/Clara-Omie-Integration: Implementação da ponte operacional Clara Cartões → Omie ERP com envio de lançamentos em conta corrente (IncluirLancCC) e seus respectivos comprovantes/anexos em base64 (IncluirAnexo). Isolamento total dos relatórios e DRE do dashboard (que permanecem 100% via CSV do Omie). Inclui autenticação mTLS + OAuth2, idempotência estrita por clara_uuid (CL + SHA256), de-para de categorias e centros de custo, painel de controle executivo (/clara), modo de teste seguro (safe_mode) e testes unitários automatizados.",
   "v.02.58.38 - Feat/DRE-FCL-Composicao-Retiradas: Atualiza o demonstrativo de composição do card FCL: remove 'Distribuição de Dividendos' da lista de retiradas de sócios, renomeia '(+) Intermediação de Negócios (Saídas)' para '(+) Intermediação/Retiradas', recalcula o 'Total Retiradas dos Sócios' e adiciona a linha de saldo '(=) Saldo (FCL (-) Total Retiradas)' no DreDetailsModal, DreService e DreSimulatorEngine.",
   "v.02.58.37 - Fix/Build-TypeCheck: Corrige erro de tipagem no filtro de fetchEmployees em loans.service.ts ajustando a referência de propriedade para RawEmployee (full_name e corporate_name).",
   "v.02.58.36 - Fix/People-BPR-SystemConfig-Filter: Bloqueio estrito de registros técnicos e de metadados globais (__SYSTEM_GLOBAL_CONFIG__) na listagem de colaboradores e no motor de apuração do BPR (BprService.calculateBpr, BprCockpitModal, PeopleHRService, LoansService e people/page.tsx), impedindo que registros de configuração em nuvem apareçam como colaboradores.",
