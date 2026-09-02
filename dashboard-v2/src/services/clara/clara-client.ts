@@ -139,6 +139,19 @@ export class ClaraClient {
   }
 
   /**
+   * Busca uma transação específica pelo UUID na API Clara
+   */
+  public async getTransaction(transactionUuid: string): Promise<ClaraRawTransaction | null> {
+    try {
+      const response = await this.request('GET', `/api/v3/transactions/${transactionUuid}`);
+      return response.data || response || null;
+    } catch (error: any) {
+      console.warn(`[ClaraClient] Não foi possível consultar transação ${transactionUuid}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
    * Busca documentos / comprovantes anexados a uma transação específica
    */
   public async getTransactionDocuments(transactionUuid: string): Promise<ClaraDocument[]> {

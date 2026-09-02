@@ -10,8 +10,10 @@ import {
   OmieProjectOption 
 } from '@/types/clara.types';
 
+import { ClaraStorageService } from './clara-storage.service';
+
 // Configuração padrão populada com as credenciais oficiais da Clara
-const DEFAULT_CONFIG: ClaraConfig = {
+export const DEFAULT_CLARA_CONFIG: ClaraConfig = {
   id: 'default',
   client_id: process.env.CLARA_CLIENT_ID || '6yXY8UZIhWXDeA4BcfgSmnIndyF9Rubt',
   client_secret: process.env.CLARA_CLIENT_SECRET || 'tIjHySePnmoya3rxexAUCwLvvt9lsaz7WsH2Pob5_BrtTE-w0J6Pixpqhao09DvB',
@@ -109,7 +111,7 @@ qoGpIkoVP5eXQlsFHt45ow+pv1H7bbxZlL7uW3srbcaJjrLdERBEk9ZljA==
 };
 
 // Cache em memória para fallback resiliente
-let memoryConfigCache: ClaraConfig = { ...DEFAULT_CONFIG };
+let memoryConfigCache: ClaraConfig = { ...DEFAULT_CLARA_CONFIG };
 let memoryCategoryMappings: ClaraCategoryMapping[] = [];
 let memoryDepartmentMappings: ClaraDepartmentMapping[] = [];
 
@@ -140,75 +142,21 @@ export class ClaraConfigService {
    * Obtém a configuração atual da integração Clara
    */
   public static async getConfig(): Promise<ClaraConfig> {
-    try {
-      const { data, error } = await supabase
-        .from('clara_config')
-        .select('*')
-        .eq('id', 'default')
-        .maybeSingle();
-
-      if (error || !data) {
-        return memoryConfigCache;
-      }
-
-      memoryConfigCache = {
-        ...DEFAULT_CONFIG,
-        ...data,
-      };
-
-      return memoryConfigCache;
-    } catch {
-      return memoryConfigCache;
-    }
+    return ClaraStorageService.getConfig(DEFAULT_CLARA_CONFIG);
   }
 
   /**
    * Salva ou atualiza a configuração da integração Clara
    */
   public static async saveConfig(partial: Partial<ClaraConfig>): Promise<ClaraConfig> {
-    const current = await this.getConfig();
-    const updated: ClaraConfig = {
-      ...current,
-      ...partial,
-      updated_at: new Date().toISOString(),
-    };
-
-    memoryConfigCache = updated;
-
-    try {
-      const { error } = await supabase
-        .from('clara_config')
-        .upsert(updated);
-
-      if (error) {
-        console.warn('[ClaraConfigService] Aviso ao salvar clara_config no Supabase:', error.message);
-      }
-    } catch (e: any) {
-      console.warn('[ClaraConfigService] Erro ao persistir no Supabase, mantido em memória:', e.message);
-    }
-
-    return updated;
+    return ClaraStorageService.saveConfig(partial, DEFAULT_CLARA_CONFIG);
   }
 
   /**
    * Retorna os mapeamentos de categorias salvos
    */
   public static async getCategoryMappings(): Promise<ClaraCategoryMapping[]> {
-    try {
-      const { data, error } = await supabase
-        .from('clara_category_mappings')
-        .select('*')
-        .order('clara_category', { ascending: true });
-
-      if (error || !data) {
-        return memoryCategoryMappings;
-      }
-
-      memoryCategoryMappings = data;
-      return data;
-    } catch {
-      return memoryCategoryMappings;
-    }
+    return ClaraStorageService.getCategoryMappings(DEFAULT_CLARA_CONFIG);
   }
 
   /**
@@ -221,50 +169,21 @@ export class ClaraConfigService {
       omie_category_desc: mapping.omie_category_desc?.trim() || null,
       updated_at: new Date().toISOString(),
     };
-
-    // Atualiza memória
-    const idx = memoryCategoryMappings.findIndex(m => m.clara_category.toLowerCase() === item.clara_category.toLowerCase());
-    if (idx >= 0) memoryCategoryMappings[idx] = item;
-    else memoryCategoryMappings.push(item);
-
-    try {
-      await supabase.from('clara_category_mappings').upsert(item, { onConflict: 'clara_category' });
-    } catch (e: any) {
-      console.warn('[ClaraConfigService] Erro ao salvar clara_category_mappings:', e.message);
-    }
+    await ClaraStorageService.saveCategoryMapping(item, DEFAULT_CLARA_CONFIG);
   }
 
   /**
    * Remove mapeamento de categoria
    */
   public static async deleteCategoryMapping(claraCategory: string): Promise<void> {
-    memoryCategoryMappings = memoryCategoryMappings.filter(m => m.clara_category !== claraCategory);
-    try {
-      await supabase.from('clara_category_mappings').delete().eq('clara_category', claraCategory);
-    } catch (e: any) {
-      console.warn('[ClaraConfigService] Erro ao deletar categoria:', e.message);
-    }
+    await ClaraStorageService.deleteCategoryMapping(claraCategory, DEFAULT_CLARA_CONFIG);
   }
 
   /**
    * Retorna os mapeamentos de departamentos salvos
    */
   public static async getDepartmentMappings(): Promise<ClaraDepartmentMapping[]> {
-    try {
-      const { data, error } = await supabase
-        .from('clara_department_mappings')
-        .select('*')
-        .order('clara_key', { ascending: true });
-
-      if (error || !data) {
-        return memoryDepartmentMappings;
-      }
-
-      memoryDepartmentMappings = data;
-      return data;
-    } catch {
-      return memoryDepartmentMappings;
-    }
+    return ClaraStorageService.getDepartmentMappings(DEFAULT_CLARA_CONFIG);
   }
 
   /**
@@ -278,28 +197,14 @@ export class ClaraConfigService {
       omie_department_desc: mapping.omie_department_desc?.trim() || null,
       updated_at: new Date().toISOString(),
     };
-
-    const idx = memoryDepartmentMappings.findIndex(m => m.mapping_type === item.mapping_type && m.clara_key.toLowerCase() === item.clara_key.toLowerCase());
-    if (idx >= 0) memoryDepartmentMappings[idx] = item;
-    else memoryDepartmentMappings.push(item);
-
-    try {
-      await supabase.from('clara_department_mappings').upsert(item, { onConflict: 'mapping_type,clara_key' });
-    } catch (e: any) {
-      console.warn('[ClaraConfigService] Erro ao salvar clara_department_mappings:', e.message);
-    }
+    await ClaraStorageService.saveDepartmentMapping(item, DEFAULT_CLARA_CONFIG);
   }
 
   /**
    * Remove mapeamento de departamento
    */
   public static async deleteDepartmentMapping(mappingType: string, claraKey: string): Promise<void> {
-    memoryDepartmentMappings = memoryDepartmentMappings.filter(m => !(m.mapping_type === mappingType && m.clara_key === claraKey));
-    try {
-      await supabase.from('clara_department_mappings').delete().match({ mapping_type: mappingType, clara_key: claraKey });
-    } catch (e: any) {
-      console.warn('[ClaraConfigService] Erro ao deletar departamento:', e.message);
-    }
+    await ClaraStorageService.deleteDepartmentMapping(mappingType, claraKey, DEFAULT_CLARA_CONFIG);
   }
 
   /**

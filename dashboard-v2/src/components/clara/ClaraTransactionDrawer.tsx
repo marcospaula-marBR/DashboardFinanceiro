@@ -49,12 +49,34 @@ export function ClaraTransactionDrawer({
   const [selectedCat, setSelectedCat] = useState(transaction?.omie_category_code || '');
   const [selectedDepto, setSelectedDepto] = useState(transaction?.omie_department_code || '');
   const [selectedProj, setSelectedProj] = useState(transaction?.omie_project_code || '');
+  
+  // Estado para documentos frescos consultados da Clara API
+  const [fetchedDocs, setFetchedDocs] = useState<any[] | null>(null);
+  const [loadingDocs, setLoadingDocs] = useState(false);
 
   useEffect(() => {
     if (transaction) {
       setSelectedCat(transaction.omie_category_code || '');
       setSelectedDepto(transaction.omie_department_code || '');
       setSelectedProj(transaction.omie_project_code || '');
+      setFetchedDocs(null);
+
+      // Se a transação tem anexos sinalizados ou se a lista local estiver vazia, busca sob demanda
+      const existingDocs = transaction.raw_payload?.documents || transaction.raw_payload?.receipts || [];
+      if (existingDocs.length > 0) {
+        setFetchedDocs(existingDocs);
+      } else if (transaction.has_attachments || (transaction.attachments_count && transaction.attachments_count > 0)) {
+        setLoadingDocs(true);
+        fetch(`/api/clara/transactions/${transaction.clara_uuid}/attachments`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === 'success' && Array.isArray(data.data)) {
+              setFetchedDocs(data.data);
+            }
+          })
+          .catch(() => {})
+          .finally(() => setLoadingDocs(false));
+      }
     }
   }, [transaction]);
 
@@ -150,7 +172,9 @@ export function ClaraTransactionDrawer({
     }
   };
 
-  const docs = transaction.raw_payload?.documents || transaction.raw_payload?.receipts || [];
+  const docs = fetchedDocs !== null 
+    ? fetchedDocs 
+    : (transaction.raw_payload?.documents || transaction.raw_payload?.receipts || []);
 
   return (
     <div className="fixed inset-0 z-[20000] flex justify-end bg-slate-900/50 backdrop-blur-xs transition-opacity">
@@ -343,7 +367,7 @@ export function ClaraTransactionDrawer({
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Paperclip size={14} className="text-slate-500" />
-                Comprovantes / Anexos ({docs.length})
+                Comprovantes / Anexos ({loadingDocs ? '...' : docs.length})
               </h3>
               {transaction.attachments_synced && (
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -352,33 +376,44 @@ export function ClaraTransactionDrawer({
               )}
             </div>
 
-            {docs.length === 0 ? (
+            {loadingDocs ? (
+              <div className="flex items-center gap-2 py-2 text-xs text-slate-500 italic">
+                <Loader2 size={14} className="animate-spin text-emerald-600" />
+                Consultando comprovantes na API Clara...
+              </div>
+            ) : docs.length === 0 ? (
               <p className="text-xs text-slate-400 italic">
                 Nenhum comprovante ou recibo foi anexado pelo portador na Clara.
               </p>
             ) : (
               <div className="space-y-1.5">
-                {docs.map((d: any, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200 text-xs">
-                    <div className="flex items-center gap-2 truncate pr-2">
-                      <FileText size={16} className="text-slate-400 shrink-0" />
-                      <span className="truncate font-medium text-slate-800">
-                        {d.name || d.fileName || `Comprovante #${idx + 1}`}
-                      </span>
+                {docs.map((d: any, idx: number) => {
+                  const targetUrl = d.url || d.downloadUrl || d.link || (d.id ? `https://app.clara.com/documents/${d.id}` : null);
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200 text-xs">
+                      <div className="flex items-center gap-2 truncate pr-2">
+                        <FileText size={16} className="text-slate-400 shrink-0" />
+                        <span className="truncate font-medium text-slate-800">
+                          {d.name || d.fileName || d.filename || `Comprovante #${idx + 1}`}
+                        </span>
+                      </div>
+                      {targetUrl ? (
+                        <a
+                          href={targetUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition-colors"
+                          title="Visualizar ou baixar anexo"
+                        >
+                          <span>Ver</span>
+                          <ExternalLink size={12} />
+                        </a>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic">Registrado</span>
+                      )}
                     </div>
-                    {d.url && (
-                      <a
-                        href={d.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
-                        title="Visualizar anexo"
-                      >
-                        <ExternalLink size={14} />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

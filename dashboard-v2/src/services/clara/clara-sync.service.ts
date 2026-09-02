@@ -9,9 +9,10 @@ import {
   ClaraTransactionType,
   ClaraTransactionStatus
 } from '@/types/clara.types';
-import { ClaraConfigService } from './clara-config.service';
+import { ClaraConfigService, DEFAULT_CLARA_CONFIG } from './clara-config.service';
 import { ClaraClient } from './clara-client';
 import { ClaraOmieMapper } from './clara-omie-mapper';
+import { ClaraStorageService } from './clara-storage.service';
 
 // Armazenamento em memória para caso a tabela ainda não exista no Supabase
 let memoryTransactions: Map<string, ClaraTransactionRecord> = new Map();
@@ -86,12 +87,7 @@ export class ClaraSyncService {
     };
 
     memorySyncRuns.unshift(run);
-
-    try {
-      await supabase.from('clara_sync_runs').insert(run);
-    } catch (e: any) {
-      console.warn('[ClaraSyncService] Aviso ao criar clara_sync_runs no Supabase:', e.message);
-    }
+    await ClaraStorageService.addSyncRun(run, DEFAULT_CLARA_CONFIG).catch(() => {});
 
     return run;
   }
@@ -107,25 +103,7 @@ export class ClaraSyncService {
     const idx = memorySyncRuns.findIndex(r => r.id === run.id);
     if (idx >= 0) memorySyncRuns[idx] = run;
 
-    try {
-      await supabase
-        .from('clara_sync_runs')
-        .update({
-          finished_at: run.finished_at,
-          status: run.status,
-          transactions_received: run.transactions_received,
-          transactions_created: run.transactions_created,
-          transactions_updated: run.transactions_updated,
-          transactions_ignored: run.transactions_ignored,
-          transactions_synced: run.transactions_synced,
-          transactions_failed: run.transactions_failed,
-          attachments_uploaded: run.attachments_uploaded,
-          error_message: run.error_message,
-        })
-        .eq('id', run.id);
-    } catch (e: any) {
-      console.warn('[ClaraSyncService] Aviso ao finalizar clara_sync_runs no Supabase:', e.message);
-    }
+    await ClaraStorageService.updateSyncRun(run, DEFAULT_CLARA_CONFIG).catch(() => {});
   }
 
   /**
@@ -290,16 +268,18 @@ export class ClaraSyncService {
         if (!normalized.clara_uuid) continue;
 
         // Verifica se já existe no banco
-        let existingRecord: ClaraTransactionRecord | null = null;
-        try {
-          const { data } = await supabase
-            .from('clara_transactions')
-            .select('*')
-            .eq('clara_uuid', normalized.clara_uuid)
-            .maybeSingle();
-          if (data) existingRecord = data;
-        } catch {
-          existingRecord = memoryTransactions.get(normalized.clara_uuid) || null;
+        let existingRecord: ClaraTransactionRecord | null = await ClaraStorageService.getTransaction(normalized.clara_uuid, DEFAULT_CLARA_CONFIG);
+        if (!existingRecord) {
+          try {
+            const { data } = await supabase
+              .from('clara_transactions')
+              .select('*')
+              .eq('clara_uuid', normalized.clara_uuid)
+              .maybeSingle();
+            if (data) existingRecord = data;
+          } catch {
+            existingRecord = memoryTransactions.get(normalized.clara_uuid) || null;
+          }
         }
 
         if (existingRecord) {
@@ -521,9 +501,15 @@ export class ClaraSyncService {
   /**
    * Salva transação localmente com persistência dupla (Supabase + fallback memória)
    */
+  /**
+   * Salva transação localmente com persistência dupla (ClaraStorageService + Supabase + memória)
+   */
   private static async saveLocalTransaction(tx: ClaraTransactionRecord): Promise<void> {
     tx.updated_at = new Date().toISOString();
     memoryTransactions.set(tx.clara_uuid, tx);
+
+    // Persiste no storage seguro do Supabase
+    await ClaraStorageService.saveTransaction(tx, DEFAULT_CLARA_CONFIG).catch(() => {});
 
     try {
       await supabase
@@ -578,14 +564,21 @@ export class ClaraSyncService {
 
       const { data, count, error } = await query;
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         return { transactions: data, total: count || data.length };
       }
     } catch {
-      // Fallback memória
+      // Fallback para ClaraStorageService
     }
 
-    // Filtro em memória
+    // Busca itens do storage compartilhado e memória
+    const storedItems = await ClaraStorageService.getAllTransactions(DEFAULT_CLARA_CONFIG);
+    for (const item of storedItems) {
+      if (!memoryTransactions.has(item.clara_uuid)) {
+        memoryTransactions.set(item.clara_uuid, item);
+      }
+    }
+
     let items = Array.from(memoryTransactions.values());
     if (params.syncStatus && params.syncStatus !== 'ALL') {
       items = items.filter(t => t.sync_status === params.syncStatus);
@@ -634,12 +627,18 @@ export class ClaraSyncService {
       const { data } = await supabase
         .from('clara_transactions')
         .select('sync_status, amount, omie_launch_id, updated_at');
-      if (data) rows = data as any;
+      if (data && data.length > 0) rows = data as any;
     } catch {
-      rows = Array.from(memoryTransactions.values());
+      // Fallback
     }
 
     if (rows.length === 0) {
+      const storedItems = await ClaraStorageService.getAllTransactions(DEFAULT_CLARA_CONFIG);
+      for (const item of storedItems) {
+        if (!memoryTransactions.has(item.clara_uuid)) {
+          memoryTransactions.set(item.clara_uuid, item);
+        }
+      }
       rows = Array.from(memoryTransactions.values());
     }
 
@@ -684,16 +683,38 @@ export class ClaraSyncService {
    * Reprocessa manualmente uma transação específica
    */
   public static async retryTransaction(idOrUuid: string): Promise<ClaraTransactionRecord> {
-    let tx: ClaraTransactionRecord | null = null;
-    try {
-      const { data } = await supabase
-        .from('clara_transactions')
-        .select('*')
-        .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
-        .maybeSingle();
-      if (data) tx = data;
-    } catch {
-      tx = memoryTransactions.get(idOrUuid) || null;
+    let tx: ClaraTransactionRecord | null = await ClaraStorageService.getTransaction(idOrUuid, DEFAULT_CLARA_CONFIG);
+
+    if (!tx) {
+      try {
+        const { data } = await supabase
+          .from('clara_transactions')
+          .select('*')
+          .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
+          .maybeSingle();
+        if (data) tx = data;
+      } catch {
+        tx = memoryTransactions.get(idOrUuid) || null;
+      }
+    }
+
+    if (!tx) {
+      try {
+        const config = await ClaraConfigService.getConfig();
+        const claraClient = new ClaraClient(config);
+        const raw = await claraClient.getTransaction(idOrUuid);
+        if (raw && (raw.uuid || raw.id)) {
+          tx = this.normalizeClaraTransaction(raw);
+          const docs = await claraClient.getTransactionDocuments(tx.clara_uuid);
+          if (docs && docs.length > 0) {
+            tx.has_attachments = true;
+            tx.attachments_count = docs.length;
+            if (tx.raw_payload) tx.raw_payload.documents = docs;
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[retryTransaction] Falha ao recuperar transação na Clara API:`, err.message);
+      }
     }
 
     if (!tx) {
@@ -786,16 +807,40 @@ export class ClaraSyncService {
       sync_status?: any;
     }
   ): Promise<ClaraTransactionRecord> {
-    let tx: ClaraTransactionRecord | null = null;
-    try {
-      const { data } = await supabase
-        .from('clara_transactions')
-        .select('*')
-        .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
-        .maybeSingle();
-      if (data) tx = data;
-    } catch {
-      tx = memoryTransactions.get(idOrUuid) || null;
+    let tx: ClaraTransactionRecord | null = await ClaraStorageService.getTransaction(idOrUuid, DEFAULT_CLARA_CONFIG);
+
+    if (!tx) {
+      try {
+        const { data } = await supabase
+          .from('clara_transactions')
+          .select('*')
+          .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
+          .maybeSingle();
+        if (data) tx = data;
+      } catch {
+        tx = memoryTransactions.get(idOrUuid) || null;
+      }
+    }
+
+    // Se ainda não encontrou no storage nem em memória, busca diretamente na API Clara
+    if (!tx) {
+      try {
+        const config = await ClaraConfigService.getConfig();
+        const claraClient = new ClaraClient(config);
+        const raw = await claraClient.getTransaction(idOrUuid);
+        if (raw && (raw.uuid || raw.id)) {
+          tx = this.normalizeClaraTransaction(raw);
+          // Se tiver anexos, contabiliza
+          const docs = await claraClient.getTransactionDocuments(tx.clara_uuid);
+          if (docs && docs.length > 0) {
+            tx.has_attachments = true;
+            tx.attachments_count = docs.length;
+            if (tx.raw_payload) tx.raw_payload.documents = docs;
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[updateTransactionFields] Falha ao recuperar transação na Clara API:`, err.message);
+      }
     }
 
     if (!tx) {
