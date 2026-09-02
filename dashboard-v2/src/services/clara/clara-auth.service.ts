@@ -56,18 +56,18 @@ export class ClaraAuthService {
     const agent = this.createHttpsAgent(config);
 
     try {
-      // Endpoint padrão OAuth 2.0 Client Credentials
+      // Endpoint OAuth 2.0 Clara Brasil com Basic Auth
       const tokenUrl = `${baseUrl}/oauth/token`;
+      const basicAuth = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
       
       const response = await axios.post(
         tokenUrl,
         new URLSearchParams({
           grant_type: 'client_credentials',
-          client_id: clientId,
-          client_secret: clientSecret,
         }).toString(),
         {
           headers: {
+            'Authorization': basicAuth,
             'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'application/json',
           },

@@ -175,57 +175,146 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
 
             {/* Seção 1: Credenciais Clara (mTLS + OAuth) */}
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <Lock size={14} className="text-slate-400" />
-                Credenciais da API Clara (Brasil)
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <Lock size={14} className="text-slate-400" />
+                  Credenciais da API Clara (Brasil)
+                </h3>
+                <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-medium">
+                  3 itens gerados pela Clara
+                </span>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Client ID</label>
-                  <input
-                    type="text"
-                    value={config.client_id || ''}
-                    onChange={e => setConfig({ ...config, client_id: e.target.value })}
-                    placeholder="clara-client-id"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                  />
+              {/* Item 3 da Clara: Credenciais do Cliente (JSON) */}
+              <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                    <Key size={14} className="text-blue-600" />
+                    Credenciais do Cliente (JSON)
+                  </span>
+                  <label className="text-[11px] font-semibold text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 px-2.5 py-1 rounded-lg cursor-pointer shadow-2xs transition-all">
+                    <span>📁 Carregar arquivo .json</span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = ev => {
+                            try {
+                              const parsed = JSON.parse(ev.target?.result as string);
+                              const cid = parsed.client_id || parsed.clientId || parsed.id;
+                              const csec = parsed.client_secret || parsed.clientSecret || parsed.secret;
+                              setConfig(prev => ({
+                                ...prev,
+                                client_id: cid || prev.client_id,
+                                client_secret: csec || prev.client_secret,
+                              }));
+                            } catch {
+                              alert('O arquivo selecionado não é um JSON válido.');
+                            }
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                    />
+                  </label>
                 </div>
+                <p className="text-[11px] text-blue-800/80">
+                  Faça o download do JSON no painel da Clara e carregue aqui ou cole os valores nos campos abaixo:
+                </p>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Client Secret</label>
-                  <input
-                    type="password"
-                    value={config.client_secret || ''}
-                    onChange={e => setConfig({ ...config, client_secret: e.target.value })}
-                    placeholder={config.client_secret ? '••••••••••••••••' : 'Inserir secret'}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Client ID</label>
+                    <input
+                      type="text"
+                      value={config.client_id || ''}
+                      onChange={e => setConfig({ ...config, client_id: e.target.value })}
+                      placeholder="clara-client-id"
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Client Secret</label>
+                    <input
+                      type="password"
+                      value={config.client_secret || ''}
+                      onChange={e => setConfig({ ...config, client_secret: e.target.value })}
+                      placeholder={config.client_secret ? '••••••••••••••••' : 'Inserir client secret'}
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 
+              {/* Item 1 da Clara: Chave pública */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Certificado mTLS (client.crt / PEM)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Chave pública <span className="text-slate-400 font-normal">(Chave aberta para criptografia/verificação)</span>
+                  </label>
+                  <label className="text-[10px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded cursor-pointer transition-all">
+                    <span>📁 Carregar arquivo</span>
+                    <input
+                      type="file"
+                      accept=".crt,.pem,.pub,.txt"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = ev => {
+                            setConfig(prev => ({ ...prev, certificate_pem: ev.target?.result as string }));
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
                 <textarea
                   rows={2}
                   value={config.certificate_pem || ''}
                   onChange={e => setConfig({ ...config, certificate_pem: e.target.value })}
-                  placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                  placeholder="-----BEGIN CERTIFICATE----- ou -----BEGIN PUBLIC KEY-----"
                   className="w-full px-3 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>
 
+              {/* Item 2 da Clara: Chave privada */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Chave Privada mTLS (client.key / PEM)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Chave privada <span className="text-slate-400 font-normal">(Chave secreta para descriptografia/assinatura)</span>
+                  </label>
+                  <label className="text-[10px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded cursor-pointer transition-all">
+                    <span>📁 Carregar arquivo</span>
+                    <input
+                      type="file"
+                      accept=".key,.pem,.txt"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = ev => {
+                            setConfig(prev => ({ ...prev, private_key_pem: ev.target?.result as string }));
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
                 <textarea
                   rows={2}
                   value={config.private_key_pem || ''}
                   onChange={e => setConfig({ ...config, private_key_pem: e.target.value })}
-                  placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                  placeholder="-----BEGIN PRIVATE KEY----- ou -----BEGIN RSA PRIVATE KEY-----"
                   className="w-full px-3 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>

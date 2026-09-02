@@ -46,12 +46,22 @@ export interface ClaraRawTransaction {
   type?: string;
   status?: string;
   label?: string;
+  transactionLabel?: string;
   operationDate?: string;
   accountingDate?: string;
   lastUpdateDate?: string;
+  audit?: {
+    operationDate?: string;
+    accountingDate?: string;
+    lastUpdateDate?: string;
+  };
   amount?: number;
   currency?: string;
-  originalAmount?: number;
+  amountValue?: {
+    currency?: string;
+    amount?: number;
+  };
+  originalAmount?: any;
   originalCurrency?: string;
   authorizationNumber?: string;
   comment?: string;
@@ -65,15 +75,30 @@ export interface ClaraRawTransaction {
     uuid?: string;
     lastFourDigits?: string;
     cardholderName?: string;
+    maskedPan?: string;
   };
   user?: {
     id?: string;
     uuid?: string;
     name?: string;
     email?: string;
+    holderName?: string;
+  };
+  billingStatement?: {
+    uuid?: string | null;
+    periodStartDate?: string | null;
+    periodEndDate?: string | null;
   };
   billingStatementUuid?: string;
   billingStatementId?: string;
+  hasAttachments?: {
+    value?: boolean;
+    links?: any[];
+  };
+  hasInvoice?: {
+    value?: boolean;
+    links?: any[];
+  };
   labels?: Array<{ id?: string; name?: string }>;
   accountingFields?: Record<string, any>;
   documents?: ClaraDocument[];

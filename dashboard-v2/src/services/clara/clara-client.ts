@@ -71,7 +71,7 @@ export class ClaraClient {
 
       // Faz uma consulta de 1 registro para validar permissões de leitura
       const data = await this.request('GET', '/api/v3/transactions', undefined, { page: 1, size: 1 });
-      const items = data.data || data.transactions || data.items || [];
+      const items = data.content || data.data || data.transactions || data.items || [];
       const total = data.totalElements ?? data.total ?? items.length;
 
       return {
@@ -113,6 +113,7 @@ export class ClaraClient {
       const response = await this.request('GET', '/api/v3/transactions', undefined, queryParams);
 
       const items: ClaraRawTransaction[] = 
+        response.content ||
         response.data || 
         response.transactions || 
         response.items || 

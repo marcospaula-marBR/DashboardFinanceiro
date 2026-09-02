@@ -146,34 +146,48 @@ export class ClaraSyncService {
         ? (statusStr as ClaraTransactionStatus)
         : 'AUTHORIZED';
 
-    const opDate = raw.operationDate || raw.accountingDate || new Date().toISOString();
-    const amountVal = typeof raw.amount === 'number' ? raw.amount : parseFloat(String(raw.amount || 0));
+    const opDate = raw.audit?.operationDate || raw.operationDate || raw.audit?.accountingDate || raw.accountingDate || new Date().toISOString();
+    const acDate = raw.audit?.accountingDate || raw.accountingDate || null;
+    const updDate = raw.audit?.lastUpdateDate || raw.lastUpdateDate || opDate;
+    
+    // Suporte ao formato amountValue.amount da Clara v3
+    const amountVal = raw.amountValue?.amount !== undefined 
+      ? Number(raw.amountValue.amount) 
+      : (typeof raw.amount === 'number' ? raw.amount : parseFloat(String(raw.amount || 0)));
 
-    const docs = raw.documents || raw.receipts || [];
-    const hasAttachments = docs.length > 0;
+    const currencyVal = raw.amountValue?.currency || raw.currency || 'BRL';
+
+    const cardDigits = raw.card?.maskedPan 
+      ? raw.card.maskedPan.replace(/\D/g, '').slice(-4) 
+      : (raw.card?.lastFourDigits || null);
+
+    const userName = raw.user?.holderName || raw.user?.name || null;
+
+    const docs = raw.documents || raw.receipts || raw.hasAttachments?.links || raw.hasInvoice?.links || [];
+    const hasAttachments = Boolean(raw.hasAttachments?.value || docs.length > 0);
 
     return {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `tx_${Date.now()}_${Math.random().toString(36).substring(7)}`,
       clara_uuid: claraUuid,
       transaction_type: txType,
       transaction_status: txStatus,
-      transaction_label: raw.label || null,
+      transaction_label: raw.transactionLabel || raw.label || null,
       operation_date: opDate,
-      accounting_date: raw.accountingDate || null,
-      last_update_date: raw.lastUpdateDate || opDate,
+      accounting_date: acDate,
+      last_update_date: updDate,
       merchant_name: raw.merchant?.name || 'Estabelecimento Desconhecido',
       merchant_category: raw.merchant?.category || null,
-      original_amount: raw.originalAmount || amountVal,
-      original_currency: raw.originalCurrency || 'BRL',
+      original_amount: raw.originalAmount?.amount || amountVal,
+      original_currency: raw.originalAmount?.currency || currencyVal,
       amount: amountVal,
-      currency: raw.currency || 'BRL',
+      currency: currencyVal,
       authorization_number: raw.authorizationNumber || null,
       card_uuid: raw.card?.uuid || raw.card?.id || null,
-      card_last_digits: raw.card?.lastFourDigits || null,
+      card_last_digits: cardDigits,
       user_uuid: raw.user?.uuid || raw.user?.id || null,
-      user_name: raw.user?.name || null,
+      user_name: userName,
       user_email: raw.user?.email || null,
-      billing_statement_uuid: raw.billingStatementUuid || raw.billingStatementId || null,
+      billing_statement_uuid: raw.billingStatement?.uuid || raw.billingStatementUuid || null,
       comment: raw.comment || null,
       labels: raw.labels || [],
       accounting_fields: raw.accountingFields || {},
