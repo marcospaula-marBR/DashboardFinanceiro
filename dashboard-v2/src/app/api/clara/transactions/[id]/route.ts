@@ -31,6 +31,9 @@ export async function POST(
         omie_category_code: body.omie_category_code,
         omie_department_code: body.omie_department_code,
         omie_project_code: body.omie_project_code,
+        invoice_issue_date: body.invoice_issue_date,
+        registration_date: body.registration_date,
+        due_date: body.due_date,
       });
       return NextResponse.json({
         status: 'success',

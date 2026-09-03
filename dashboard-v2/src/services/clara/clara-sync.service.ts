@@ -226,7 +226,7 @@ export class ClaraSyncService {
       labels: raw.labels || [],
       accounting_fields: raw.accountingFields || {},
       raw_payload: raw,
-      omie_integration_id: ClaraOmieMapper.generateOmieIntegrationId(claraUuid),
+      omie_integration_id: ClaraOmieMapper.generateOmieContaPagarIntegrationId(claraUuid),
       omie_launch_id: null,
       omie_account_id: null,
       omie_category_code: null,
@@ -234,6 +234,21 @@ export class ClaraSyncService {
       has_attachments: hasAttachments,
       attachments_count: docs.length,
       attachments_synced: false,
+      cnpj_match_status: hasAttachments ? 'PENDING' : 'NOT_FOUND',
+      installments_info: (() => {
+        const rawInst = raw.installmentNumber || raw.installments;
+        if (typeof rawInst === 'string' && rawInst.includes('/')) {
+          const parts = rawInst.split('/').map((p: string) => parseInt(p.trim(), 10));
+          if (!isNaN(parts[0]) && !isNaN(parts[1])) {
+            return {
+              current: parts[0],
+              total: parts[1],
+              installment_group_uuid: raw.installment || undefined,
+            };
+          }
+        }
+        return null;
+      })(),
       sync_status: 'PENDING',
       sync_attempts: 0,
       created_at: new Date().toISOString(),
@@ -875,6 +890,11 @@ export class ClaraSyncService {
       omie_category_code?: string | null;
       omie_department_code?: string | null;
       omie_project_code?: string | null;
+      invoice_issue_date?: string | null;
+      registration_date?: string | null;
+      due_date?: string | null;
+      invoice_cnpj_tomador?: string | null;
+      cnpj_match_status?: any;
       sync_status?: any;
     }
   ): Promise<ClaraTransactionRecord> {
@@ -921,6 +941,11 @@ export class ClaraSyncService {
     if (fields.omie_category_code !== undefined) tx.omie_category_code = fields.omie_category_code;
     if (fields.omie_department_code !== undefined) tx.omie_department_code = fields.omie_department_code;
     if (fields.omie_project_code !== undefined) tx.omie_project_code = fields.omie_project_code;
+    if (fields.invoice_issue_date !== undefined) tx.invoice_issue_date = fields.invoice_issue_date;
+    if (fields.registration_date !== undefined) tx.registration_date = fields.registration_date;
+    if (fields.due_date !== undefined) tx.due_date = fields.due_date;
+    if (fields.invoice_cnpj_tomador !== undefined) tx.invoice_cnpj_tomador = fields.invoice_cnpj_tomador;
+    if (fields.cnpj_match_status !== undefined) tx.cnpj_match_status = fields.cnpj_match_status;
 
     // Se categoria foi preenchida e status era MAPPING_REQUIRED, atualiza para READY
     if (tx.omie_category_code && tx.sync_status === 'MAPPING_REQUIRED') {

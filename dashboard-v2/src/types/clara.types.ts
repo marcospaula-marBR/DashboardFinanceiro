@@ -41,6 +41,9 @@ export interface ClaraConfig {
   has_certificate?: boolean;
   has_private_key?: boolean;
   client_secret_masked?: string;
+  active_company_id?: string;
+  active_company_name?: string;
+  active_company_cnpj?: string;
   updated_at?: string;
 }
 
@@ -180,6 +183,26 @@ export interface ClaraTransactionRecord {
   last_sync_attempt?: string | null;
   last_sync_error?: string | null;
   
+  // Auditoria Fiscal & OCR
+  invoice_cnpj_tomador?: string | null;
+  invoice_cnpj_emitente?: string | null;
+  invoice_razao_social_tomador?: string | null;
+  invoice_numero?: string | null;
+  cnpj_match_status?: 'MATCH' | 'DIVERGENT' | 'NOT_FOUND' | 'PENDING';
+  cnpj_divergence_reason?: string | null;
+  
+  // Datas Contábeis e Financeiras
+  invoice_issue_date?: string | null; // Data de emissão da NF
+  registration_date?: string | null;  // Data de registro (Competência Omie - data_entrada)
+  due_date?: string | null;           // Data de vencimento da fatura/parcela
+  
+  // Parcelamento
+  installments_info?: {
+    current: number;
+    total: number;
+    installment_group_uuid?: string;
+  } | null;
+
   created_at: string;
   updated_at: string;
   synced_at?: string | null;
@@ -268,7 +291,9 @@ export interface OmieContaPagarPayload {
   codigo_lancamento_integracao: string; // ID determinístico idempotente
   codigo_cliente_fornecedor: number;    // codigo_cliente_omie do fornecedor Clara
   data_vencimento: string;              // DD/MM/AAAA
-  data_emissao: string;                 // DD/MM/AAAA
+  data_previsao?: string;               // DD/MM/AAAA
+  data_emissao: string;                 // DD/MM/AAAA (Data da NF-e)
+  data_entrada?: string;                // DD/MM/AAAA (Data de Registro / Competência Omie)
   valor_documento: number;
   codigo_categoria: string;
   numero_documento?: string | null;

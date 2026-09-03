@@ -15,7 +15,13 @@ export async function POST(req: Request) {
     }
 
     if (action === 'update_fields') {
-      const { omie_category_code, omie_department_code, omie_project_code } = body;
+      const { 
+        omie_category_code, 
+        omie_department_code, 
+        omie_project_code,
+        registration_date,
+        due_date 
+      } = body;
       const updatedList = [];
 
       for (const uuid of uuids) {
@@ -24,6 +30,8 @@ export async function POST(req: Request) {
             omie_category_code,
             omie_department_code,
             omie_project_code,
+            registration_date,
+            due_date,
           });
           updatedList.push(u);
         } catch (e: any) {

@@ -20,7 +20,11 @@ import {
   Clock,
   Send,
   ShieldCheck,
-  XCircle
+  XCircle,
+  Sparkles,
+  AlertTriangle,
+  Layers,
+  CalendarDays
 } from "lucide-react";
 import { ClaraTransactionRecord, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption } from "@/types/clara.types";
 
@@ -32,6 +36,8 @@ interface ClaraTransactionDrawerProps {
   categories?: OmieCategoryOption[];
   departments?: OmieDepartmentOption[];
   projects?: OmieProjectOption[];
+  activeCompanyCnpj?: string;
+  activeCompanyName?: string;
 }
 
 export function ClaraTransactionDrawer({
@@ -42,6 +48,8 @@ export function ClaraTransactionDrawer({
   categories = [],
   departments = [],
   projects = [],
+  activeCompanyCnpj = '02.233.923/0001-19',
+  activeCompanyName = 'Mar Brasil',
 }: ClaraTransactionDrawerProps) {
   const [retrying, setRetrying] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
@@ -62,6 +70,13 @@ export function ClaraTransactionDrawer({
   const [selectedCat, setSelectedCat] = useState(transaction?.omie_category_code || '');
   const [selectedDepto, setSelectedDepto] = useState(transaction?.omie_department_code || '');
   const [selectedProj, setSelectedProj] = useState(transaction?.omie_project_code || '');
+  const [selectedIssueDate, setSelectedIssueDate] = useState(transaction?.invoice_issue_date || '');
+  const [selectedRegDate, setSelectedRegDate] = useState(transaction?.registration_date || '');
+  const [selectedDueDate, setSelectedDueDate] = useState(transaction?.due_date || '');
+
+  // Estado para OCR
+  const [runningOcr, setRunningOcr] = useState(false);
+  const [ocrFeedback, setOcrFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
   
   // Estado para documentos frescos consultados da Clara API
   const [fetchedDocs, setFetchedDocs] = useState<any[] | null>(null);
@@ -72,9 +87,13 @@ export function ClaraTransactionDrawer({
       setSelectedCat(transaction.omie_category_code || '');
       setSelectedDepto(transaction.omie_department_code || '');
       setSelectedProj(transaction.omie_project_code || '');
+      setSelectedIssueDate(transaction.invoice_issue_date || '');
+      setSelectedRegDate(transaction.registration_date || '');
+      setSelectedDueDate(transaction.due_date || '');
       setFetchedDocs(null);
       setSyncResult(null);
       setSyncStep(null);
+      setOcrFeedback(null);
 
       // Se a transação tem anexos sinalizados ou se a lista local estiver vazia, busca sob demanda na API Clara
       const existingDocs = transaction.raw_payload?.documents || transaction.raw_payload?.receipts || [];
@@ -108,19 +127,51 @@ export function ClaraTransactionDrawer({
           omie_category_code: selectedCat || null,
           omie_department_code: selectedDepto || null,
           omie_project_code: selectedProj || null,
+          invoice_issue_date: selectedIssueDate || null,
+          registration_date: selectedRegDate || null,
+          due_date: selectedDueDate || null,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.status === 'success' && data.data) {
         onTransactionUpdated(data.data);
-        alert('Classificação contábil salva com sucesso!');
+        alert('Classificação contábil e datas salvas com sucesso!');
       } else {
         alert(`Erro ao salvar campos: ${data.message || `Status HTTP ${res.status}`}`);
       }
     } catch (e: any) {
-      alert(`Erro: ${e.message}`);
+      alert(`Erro de conexão: ${e.message}`);
     } finally {
       setSavingFields(false);
+    }
+  };
+
+  const handleRunOcr = async () => {
+    setRunningOcr(true);
+    setOcrFeedback(null);
+    try {
+      const res = await fetch('/api/clara/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: transaction.clara_uuid,
+          companyCnpj: activeCompanyCnpj,
+          companyName: activeCompanyName,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.status === 'success' && data.data) {
+        onTransactionUpdated(data.data);
+        if (data.data.invoice_issue_date) setSelectedIssueDate(data.data.invoice_issue_date);
+        if (data.data.registration_date) setSelectedRegDate(data.data.registration_date);
+        setOcrFeedback({ type: 'success', message: data.message });
+      } else {
+        setOcrFeedback({ type: 'error', message: data.message || 'Falha na leitura OCR do comprovante.' });
+      }
+    } catch (e: any) {
+      setOcrFeedback({ type: 'error', message: `Erro ao conectar com serviço OCR: ${e.message}` });
+    } finally {
+      setRunningOcr(false);
     }
   };
 
@@ -476,6 +527,45 @@ export function ClaraTransactionDrawer({
                 </div>
               </div>
 
+              {/* Datas Fiscais e Financeiras (Emissão, Competência/Registro e Vencimento) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-emerald-100">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                    Data Emissão (NF):
+                  </label>
+                  <input
+                    type="date"
+                    value={selectedIssueDate}
+                    onChange={e => setSelectedIssueDate(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                    Data Registro (Competência):
+                  </label>
+                  <input
+                    type="date"
+                    value={selectedRegDate}
+                    onChange={e => setSelectedRegDate(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                    Data Vencimento:
+                  </label>
+                  <input
+                    type="date"
+                    value={selectedDueDate}
+                    onChange={e => setSelectedDueDate(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  />
+                </div>
+              </div>
+
               <div className="flex justify-end pt-1">
                 <button
                   type="button"
@@ -562,6 +652,86 @@ export function ClaraTransactionDrawer({
                 })}
               </div>
             )}
+
+            {/* Auditoria Fiscal OCR & Compliance Tomador vs Titular */}
+            <div className="mt-3 p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-indigo-600" />
+                  <span>Auditoria Fiscal (OCR)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRunOcr}
+                  disabled={runningOcr || docs.length === 0}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-lg transition-all disabled:opacity-40 cursor-pointer border border-indigo-200"
+                  title="Executar leitura por IA do PDF/comprovante para extrair CNPJ tomador, emissão e parcelas"
+                >
+                  {runningOcr ? (
+                    <Loader2 size={12} className="animate-spin text-indigo-600" />
+                  ) : (
+                    <Sparkles size={12} className="text-indigo-600" />
+                  )}
+                  <span>{runningOcr ? 'Lendo com IA...' : 'Ler com IA (OCR)'}</span>
+                </button>
+              </div>
+
+              {/* Status de Confronto CNPJ */}
+              {transaction.cnpj_match_status === 'MATCH' ? (
+                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-2 text-xs">
+                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block text-[11px] text-emerald-900">Tomador Compatível:</strong>
+                    <span className="text-[10px] text-emerald-700">
+                      NF emitida para <strong>{transaction.invoice_cnpj_tomador}</strong> ({activeCompanyName}), conferindo com o CNPJ do titular do cartão.
+                    </span>
+                  </div>
+                </div>
+              ) : transaction.cnpj_match_status === 'DIVERGENT' ? (
+                <div className="p-2 bg-amber-50 border border-amber-300 rounded-lg flex items-start gap-2 text-xs">
+                  <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block text-[11px] text-amber-900">⚠️ CNPJ do Tomador Divergente:</strong>
+                    <p className="text-[10px] text-amber-800 mt-0.5 leading-tight">
+                      {transaction.cnpj_divergence_reason || `NF emitida para o CNPJ ${transaction.invoice_cnpj_tomador}, divergindo de ${activeCompanyName} (${activeCompanyCnpj}).`}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[10px] text-slate-500 italic flex items-center justify-between pt-0.5">
+                  <span>
+                    {docs.length > 0 
+                      ? 'Comprovante disponível. Clique em "Ler com IA" para auditar o CNPJ do tomador.'
+                      : 'Sem comprovante anexado para validação de CNPJ.'}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-medium shrink-0 ml-2">Alvo: {activeCompanyName}</span>
+                </div>
+              )}
+
+              {/* Feedback de execução OCR */}
+              {ocrFeedback && (
+                <div className={`p-2 text-[10px] rounded-lg border ${
+                  ocrFeedback.type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                    : 'bg-red-50 text-red-700 border-red-200'
+                }`}>
+                  {ocrFeedback.message}
+                </div>
+              )}
+
+              {/* Informações de Parcelamento */}
+              {transaction.installments_info && (
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-slate-600 font-medium text-[11px] flex items-center gap-1">
+                    <Layers size={13} className="text-indigo-500" />
+                    Parcelamento Detectado:
+                  </span>
+                  <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-[10px]">
+                    Parcela {transaction.installments_info.current} de {transaction.installments_info.total}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Dados Clara */}

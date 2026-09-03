@@ -36,7 +36,17 @@ import {
   Send
 } from "lucide-react";
 
+const COMPANIES_LIST = [
+  { id: 'mar-brasil', name: 'Mar Brasil', cnpj: '02.233.923/0001-19', fullName: 'Mar Brasil Serviços e Locações Ltda' },
+  { id: 'dzm', name: 'DZM', cnpj: '46.394.311/0001-83', fullName: 'D.Z.M Ltda' },
+  { id: 'g2', name: 'G2', cnpj: '62.763.387/0001-95', fullName: 'G2 Tecnologia e Inovação Sustentável Ltda' },
+];
+
 export default function ClaraIntegrationPage() {
+  // Empresa Ativa para Sincronização e Auditoria Fiscal de CNPJ
+  const [selectedCompanyId, setSelectedCompanyId] = useState('mar-brasil');
+  const activeCompany = COMPANIES_LIST.find(c => c.id === selectedCompanyId) || COMPANIES_LIST[0];
+
   // Dados
   const [transactions, setTransactions] = useState<ClaraTransactionRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -85,6 +95,8 @@ export default function ClaraIntegrationPage() {
   const [batchCategory, setBatchCategory] = useState("");
   const [batchDepartment, setBatchDepartment] = useState("");
   const [batchProject, setBatchProject] = useState("");
+  const [batchRegistrationDate, setBatchRegistrationDate] = useState("");
+  const [batchDueDate, setBatchDueDate] = useState("");
 
   const loadOmieResources = useCallback(async () => {
     try {
@@ -221,6 +233,8 @@ export default function ClaraIntegrationPage() {
           omie_category_code: batchCategory || undefined,
           omie_department_code: batchDepartment || undefined,
           omie_project_code: batchProject || undefined,
+          registration_date: batchRegistrationDate || undefined,
+          due_date: batchDueDate || undefined,
         }),
       });
       const data = await res.json();
@@ -230,6 +244,8 @@ export default function ClaraIntegrationPage() {
         setBatchCategory("");
         setBatchDepartment("");
         setBatchProject("");
+        setBatchRegistrationDate("");
+        setBatchDueDate("");
         await fetchTransactions();
       } else {
         alert(`Erro: ${data.message}`);
@@ -284,6 +300,25 @@ export default function ClaraIntegrationPage() {
 
           {/* Botões de Ação Principal */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Seletor de Empresa Ativa para Auditoria Fiscal de CNPJ */}
+            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs">
+              <Building2 size={16} className="text-emerald-600 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Empresa Alvo (OCR):</span>
+                <select
+                  value={selectedCompanyId}
+                  onChange={e => setSelectedCompanyId(e.target.value)}
+                  className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer pr-1"
+                >
+                  {COMPANIES_LIST.map(comp => (
+                    <option key={comp.id} value={comp.id}>
+                      {comp.name} ({comp.cnpj})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <button
               onClick={handleSyncNow}
               disabled={syncing}
@@ -640,7 +675,12 @@ export default function ClaraIntegrationPage() {
                           </td>
 
                           <td className="py-2.5 px-2 text-right font-black text-slate-900 tabular-nums whitespace-nowrap">
-                            {formatCurrency(tx.amount)}
+                            <div>{formatCurrency(tx.amount)}</div>
+                            {tx.installments_info && (
+                              <span className="inline-block text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded mt-0.5">
+                                Parc. {tx.installments_info.current}/{tx.installments_info.total}
+                              </span>
+                            )}
                           </td>
 
                           <td className="py-2.5 px-2 text-center">
@@ -697,17 +737,29 @@ export default function ClaraIntegrationPage() {
 
                           <td className="py-2.5 px-2 text-center whitespace-nowrap">
                             {attachCount > 0 ? (
-                              <span 
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  tx.attachments_synced
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
-                                }`}
-                                title={tx.attachments_synced ? `${attachCount} anexo(s) enviado(s) ao Omie` : `${attachCount} anexo(s) pendente(s)`}
-                              >
-                                <Paperclip size={11} />
-                                {attachCount}
-                              </span>
+                              <div className="flex flex-col items-center gap-1">
+                                <span 
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    tx.attachments_synced
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  }`}
+                                  title={tx.attachments_synced ? `${attachCount} anexo(s) enviado(s) ao Omie` : `${attachCount} anexo(s) pendente(s)`}
+                                >
+                                  <Paperclip size={11} />
+                                  {attachCount}
+                                </span>
+
+                                {tx.cnpj_match_status === 'MATCH' ? (
+                                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded" title={`CNPJ ${tx.invoice_cnpj_tomador} confere com ${activeCompany.name}`}>
+                                    ✅ CNPJ OK
+                                  </span>
+                                ) : tx.cnpj_match_status === 'DIVERGENT' ? (
+                                  <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-1 py-0.2 rounded" title={tx.cnpj_divergence_reason || 'CNPJ do tomador diverge da empresa ativa'}>
+                                    ⚠️ Divergente
+                                  </span>
+                                ) : null}
+                              </div>
                             ) : (
                               <span className="text-slate-300 text-[11px] font-mono">0</span>
                             )}
@@ -770,6 +822,11 @@ export default function ClaraIntegrationPage() {
                           <span className="text-sm font-black text-slate-900 tabular-nums block">
                             {formatCurrency(tx.amount)}
                           </span>
+                          {tx.installments_info && (
+                            <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.2 rounded inline-block mt-0.5">
+                              Parc. {tx.installments_info.current}/{tx.installments_info.total}
+                            </span>
+                          )}
                           <span className={`px-2 py-0.5 rounded text-[9px] font-bold border inline-block mt-0.5 ${
                             isSynced
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -790,11 +847,22 @@ export default function ClaraIntegrationPage() {
 
                         <div>
                           {attachCount > 0 ? (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                              tx.attachments_synced ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                            }`}>
-                              <Paperclip size={11} /> {attachCount}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                tx.attachments_synced ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                <Paperclip size={11} /> {attachCount}
+                              </span>
+                              {tx.cnpj_match_status === 'MATCH' ? (
+                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded">
+                                  CNPJ OK
+                                </span>
+                              ) : tx.cnpj_match_status === 'DIVERGENT' ? (
+                                <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-1 rounded" title={tx.cnpj_divergence_reason || ''}>
+                                  ⚠️ Divergente
+                                </span>
+                              ) : null}
+                            </div>
                           ) : (
                             <span className="text-slate-300 text-[10px] font-mono">0 anexos</span>
                           )}
@@ -865,6 +933,8 @@ export default function ClaraIntegrationPage() {
         categories={categories}
         departments={departments}
         projects={projects}
+        activeCompanyCnpj={activeCompany.cnpj}
+        activeCompanyName={activeCompany.name}
         onTransactionUpdated={updated => {
           setSelectedTx(updated);
           setTransactions(transactions.map(t => t.clara_uuid === updated.clara_uuid ? updated : t));
@@ -954,6 +1024,34 @@ export default function ClaraIntegrationPage() {
                   ))}
                 </select>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Data Registro (Competência):
+                  </label>
+                  <input
+                    type="date"
+                    value={batchRegistrationDate}
+                    onChange={e => setBatchRegistrationDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Define a competência no Omie</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Data Vencimento (Cartão):
+                  </label>
+                  <input
+                    type="date"
+                    value={batchDueDate}
+                    onChange={e => setBatchDueDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Vencimento da fatura</span>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
@@ -967,7 +1065,7 @@ export default function ClaraIntegrationPage() {
               <button
                 type="button"
                 onClick={handleBatchUpdateFields}
-                disabled={batchActionLoading || (!batchCategory && !batchDepartment && !batchProject)}
+                disabled={batchActionLoading || (!batchCategory && !batchDepartment && !batchProject && !batchRegistrationDate && !batchDueDate)}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-40"
               >
                 {batchActionLoading ? 'Aplicando...' : 'Aplicar em Lote'}

@@ -277,21 +277,38 @@ export class ClaraOmieMapper {
       throw new Error(`Categoria Omie não definida para a transação ${tx.clara_uuid}.`);
     }
 
-    const dData = this.formatDateToOmie(tx.operation_date);
+    const dDataOperacao = this.formatDateToOmie(tx.operation_date);
+    const dDataEmissao = tx.invoice_issue_date 
+      ? this.formatDateToOmie(tx.invoice_issue_date) 
+      : dDataOperacao;
+    const dDataEntrada = tx.registration_date 
+      ? this.formatDateToOmie(tx.registration_date) 
+      : dDataEmissao;
+    const dDataVencimento = tx.due_date 
+      ? this.formatDateToOmie(tx.due_date) 
+      : dDataOperacao;
+
     const valor = this.getOmieTransactionAmount(tx);
     const cCodInt = (tx.omie_integration_id && tx.omie_integration_id.startsWith('CP'))
       ? tx.omie_integration_id
       : this.generateOmieContaPagarIntegrationId(tx.clara_uuid);
     const obs = this.buildOmieObservation(tx);
 
+    let numDoc = tx.invoice_numero || tx.authorization_number || tx.clara_uuid.substring(0, 20);
+    if (tx.installments_info && tx.installments_info.total > 1) {
+      numDoc = `${numDoc}-${tx.installments_info.current}/${tx.installments_info.total}`;
+    }
+
     const payload: OmieContaPagarPayload = {
       codigo_lancamento_integracao: cCodInt,
       codigo_cliente_fornecedor: supplierCode,
-      data_vencimento: dData,
-      data_emissao: dData,
+      data_vencimento: dDataVencimento,
+      data_previsao: dDataVencimento,
+      data_emissao: dDataEmissao,
+      data_entrada: dDataEntrada,
       valor_documento: valor,
       codigo_categoria: categoryCode,
-      numero_documento: tx.authorization_number || tx.clara_uuid.substring(0, 20),
+      numero_documento: numDoc.substring(0, 20),
       observacao: obs.substring(0, 500),
     };
 
