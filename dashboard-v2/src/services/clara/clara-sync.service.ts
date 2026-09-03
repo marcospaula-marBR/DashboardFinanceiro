@@ -665,7 +665,11 @@ export class ClaraSyncService {
         query = query.ilike('company_id', `%${params.companyId}%`);
       }
       if (params.syncStatus && params.syncStatus !== 'ALL') {
-        query = query.eq('sync_status', params.syncStatus);
+        if (params.syncStatus === 'PENDING_SYNC') {
+          query = query.neq('sync_status', 'SYNCED').neq('sync_status', 'IGNORED');
+        } else {
+          query = query.eq('sync_status', params.syncStatus);
+        }
       }
       if (params.claraStatus && params.claraStatus !== 'ALL') {
         query = query.eq('transaction_status', params.claraStatus);
@@ -713,7 +717,11 @@ export class ClaraSyncService {
       });
     }
     if (params.syncStatus && params.syncStatus !== 'ALL') {
-      items = items.filter(t => t.sync_status === params.syncStatus);
+      if (params.syncStatus === 'PENDING_SYNC') {
+        items = items.filter(t => t.sync_status !== 'SYNCED' && t.sync_status !== 'IGNORED');
+      } else {
+        items = items.filter(t => t.sync_status === params.syncStatus);
+      }
     }
     if (params.claraStatus && params.claraStatus !== 'ALL') {
       items = items.filter(t => t.transaction_status === params.claraStatus);

@@ -35,7 +35,8 @@ import {
   FolderKanban,
   Send,
   Sparkles,
-  Zap
+  Zap,
+  Inbox,
 } from "lucide-react";
 import { calculateCardDueDate } from "@/utils/clara-billing-cycle";
 
@@ -65,14 +66,23 @@ export default function ClaraIntegrationPage() {
     safeMode: true,
   });
 
-  // Filtros
+  // Filtros e Navegação da Fila (Inbox Zero)
+  const [viewTab, setViewTab] = useState<'PENDING' | 'SYNCED' | 'ALL'>('PENDING');
   const [search, setSearch] = useState("");
-  const [syncStatus, setSyncStatus] = useState("ALL");
+  const [syncStatus, setSyncStatus] = useState("PENDING_SYNC");
   const [claraStatus, setClaraStatus] = useState("ALL");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 25;
+
+  const handleTabChange = (tab: 'PENDING' | 'SYNCED' | 'ALL') => {
+    setViewTab(tab);
+    if (tab === 'PENDING') setSyncStatus('PENDING_SYNC');
+    else if (tab === 'SYNCED') setSyncStatus('SYNCED');
+    else setSyncStatus('ALL');
+    setPage(1);
+  };
 
   // Estados de Carregamento e Execução
   const [loading, setLoading] = useState(true);
@@ -489,6 +499,7 @@ export default function ClaraIntegrationPage() {
             icon={<CreditCard size={20} />}
             color="slate"
             description="Total consultadas no espelho"
+            onClick={() => handleTabChange('ALL')}
           />
 
           <StatCard
@@ -497,6 +508,7 @@ export default function ClaraIntegrationPage() {
             icon={<CheckCircle2 size={20} />}
             color="emerald"
             description={metrics.syncedAmountTotal > 0 ? formatCurrency(metrics.syncedAmountTotal) : 'Lançamentos confirmados'}
+            onClick={() => handleTabChange('SYNCED')}
           />
 
           <StatCard
@@ -505,6 +517,7 @@ export default function ClaraIntegrationPage() {
             icon={<Clock size={20} />}
             color="blue"
             description="Aguardando disparo ou seguras"
+            onClick={() => handleTabChange('PENDING')}
           />
 
           <StatCard
@@ -513,7 +526,7 @@ export default function ClaraIntegrationPage() {
             icon={<Tag size={20} />}
             color="amber"
             description="Exigem mapeamento De-Para"
-            onClick={() => setCategoryMapOpen(true)}
+            onClick={() => { setSyncStatus('MAPPING_REQUIRED'); setPage(1); }}
           />
 
           <StatCard
@@ -522,6 +535,7 @@ export default function ClaraIntegrationPage() {
             icon={<AlertCircle size={20} />}
             color="red"
             description="Com erro de inclusão"
+            onClick={() => { setSyncStatus('ERROR'); setPage(1); }}
           />
         </div>
 
@@ -544,11 +558,19 @@ export default function ClaraIntegrationPage() {
             <div>
               <select
                 value={syncStatus}
-                onChange={e => { setSyncStatus(e.target.value); setPage(1); }}
+                onChange={e => {
+                  const val = e.target.value;
+                  setSyncStatus(val);
+                  if (val === 'PENDING_SYNC') setViewTab('PENDING');
+                  else if (val === 'SYNCED') setViewTab('SYNCED');
+                  else if (val === 'ALL') setViewTab('ALL');
+                  setPage(1);
+                }}
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-700"
               >
-                <option value="ALL">Status Integração (Todos)</option>
-                <option value="SYNCED">Sincronizado no Omie</option>
+                <option value="PENDING_SYNC">📥 A Conciliar / Fila Ativa</option>
+                <option value="SYNCED">✅ Sincronizado no Omie</option>
+                <option value="ALL">📁 Todas as Transações</option>
                 <option value="READY">Pronto para Envio (Ready)</option>
                 <option value="MAPPING_REQUIRED">Aguardando Categoria</option>
                 <option value="ERROR">Com Erro</option>
@@ -573,11 +595,11 @@ export default function ClaraIntegrationPage() {
 
             {/* Botão de Limpar Filtros */}
             <div className="flex items-center gap-2">
-              {(search || syncStatus !== 'ALL' || claraStatus !== 'ALL' || startDate || endDate) && (
+              {(search || syncStatus !== 'PENDING_SYNC' || claraStatus !== 'ALL' || startDate || endDate) && (
                 <button
                   onClick={() => {
                     setSearch('');
-                    setSyncStatus('ALL');
+                    handleTabChange('PENDING');
                     setClaraStatus('ALL');
                     setStartDate('');
                     setEndDate('');
@@ -585,7 +607,7 @@ export default function ClaraIntegrationPage() {
                   }}
                   className="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer w-full text-center"
                 >
-                  Limpar Filtros
+                  Restaurar Fila Padrão
                 </button>
               )}
             </div>
@@ -655,6 +677,83 @@ export default function ClaraIntegrationPage() {
           </div>
         )}
 
+        {/* Abas de Navegação da Fila Operacional (Fila Limpa / Inbox Zero) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-2xl w-fit">
+            <button
+              onClick={() => handleTabChange('PENDING')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewTab === 'PENDING'
+                  ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-900/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/40'
+              }`}
+            >
+              <Inbox size={15} className={viewTab === 'PENDING' ? 'text-blue-600' : 'text-slate-400'} />
+              <span>A Conciliar</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                viewTab === 'PENDING'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-slate-300/80 text-slate-600'
+              }`}>
+                {metrics.pendingCount + metrics.mappingRequiredCount + metrics.errorCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => handleTabChange('SYNCED')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewTab === 'SYNCED'
+                  ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-900/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/40'
+              }`}
+            >
+              <CheckCircle2 size={15} className={viewTab === 'SYNCED' ? 'text-emerald-600' : 'text-slate-400'} />
+              <span>Sincronizados no Omie</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                viewTab === 'SYNCED'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-300/80 text-slate-600'
+              }`}>
+                {metrics.syncedCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => handleTabChange('ALL')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewTab === 'ALL'
+                  ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-900/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/40'
+              }`}
+            >
+              <Layers size={15} className={viewTab === 'ALL' ? 'text-slate-700' : 'text-slate-400'} />
+              <span>Todas</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                viewTab === 'ALL'
+                  ? 'bg-slate-100 text-slate-800 border border-slate-300'
+                  : 'bg-slate-300/80 text-slate-600'
+              }`}>
+                {metrics.totalTransactions}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-xs text-slate-500 font-medium">
+            {viewTab === 'PENDING' && (
+              <span className="inline-flex items-center gap-1.5 text-blue-700 bg-blue-50/80 px-3 py-1.5 rounded-xl border border-blue-200/60">
+                <Sparkles size={13} className="text-blue-500" />
+                Fila Ativa: ao enviar ao Omie, o lançamento sai naturalmente desta tela.
+              </span>
+            )}
+            {viewTab === 'SYNCED' && (
+              <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50/80 px-3 py-1.5 rounded-xl border border-emerald-200/60">
+                <CheckCircle2 size={13} className="text-emerald-500" />
+                Histórico: transações confirmadas com título gerado no Omie ERP.
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* Tabela de Transações (Desktop + Mobile First) */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
           
@@ -665,23 +764,54 @@ export default function ClaraIntegrationPage() {
             </div>
           ) : transactions.length === 0 ? (
             <div className="py-16 text-center text-slate-500 space-y-4">
-              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-2xs">
-                <CreditCard size={28} />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-slate-800">Nenhuma transação encontrada no espelho</div>
-                <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
-                  A conexão com a Clara está autenticada. Clique abaixo para buscar as transações da Clara para este painel:
-                </p>
-              </div>
-              <button
-                onClick={handleSyncNow}
-                disabled={syncing}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
-                <span>{syncing ? 'Buscando transações da Clara...' : 'Sincronizar da Clara Agora'}</span>
-              </button>
+              {viewTab === 'PENDING' ? (
+                <>
+                  <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-2xs">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">Fila Limpa! Nenhuma transação pendente</div>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                      Todas as transações do cartão foram conciliadas e enviadas ao Omie com sucesso.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={() => handleTabChange('SYNCED')}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    >
+                      <CheckCircle2 size={14} />
+                      <span>Ver transações no Omie ({metrics.syncedCount})</span>
+                    </button>
+                    <button
+                      onClick={handleSyncNow}
+                      disabled={syncing}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+                      <span>{syncing ? 'Buscando na Clara...' : 'Buscar novas da Clara'}</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 bg-slate-100 text-slate-600 rounded-2xl flex items-center justify-center mx-auto shadow-2xs">
+                    <CreditCard size={28} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">Nenhuma transação encontrada</div>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                      Nenhuma transação corresponde aos filtros selecionados.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleTabChange('ALL')}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                  >
+                    <span>Ver todas as transações</span>
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -1029,7 +1159,7 @@ export default function ClaraIntegrationPage() {
         activeCompanyName={activeCompany.name}
         onTransactionUpdated={updated => {
           setSelectedTx(updated);
-          setTransactions(transactions.map(t => t.clara_uuid === updated.clara_uuid ? updated : t));
+          fetchTransactions();
         }}
       />
 
