@@ -235,10 +235,19 @@ let memoryDepartmentMappings: ClaraDepartmentMapping[] = [];
 
 export class ClaraConfigService {
   /**
+   * Identifica de forma universal e resiliente se a empresa é DZM (tratando D.Z.M, D.Z.M LTDA, dzm, etc)
+   */
+  public static isDZMCompany(nameOrId?: string): boolean {
+    if (!nameOrId) return false;
+    const clean = nameOrId.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return clean.includes('dzm');
+  }
+
+  /**
    * Obtém as credenciais ativas do Omie do ambiente
    */
   public static getOmieCredentials(company = 'Mar Brasil'): { appKey: string; appSecret: string } {
-    const isDZM = (company || '').toLowerCase().includes('dzm');
+    const isDZM = this.isDZMCompany(company);
     const appKey = isDZM 
       ? (process.env.OMIE_APP_KEY_DZM || '6107206892787') 
       : (process.env.OMIE_APP_KEY_MARBRASIL || '6107191559469');
@@ -253,7 +262,7 @@ export class ClaraConfigService {
    * Obtém a configuração atual da integração Clara (com suporte multi-empresa)
    */
   public static async getConfig(company = 'Mar Brasil'): Promise<ClaraConfig> {
-    const isDZM = company.toLowerCase().includes('dzm');
+    const isDZM = this.isDZMCompany(company);
     const defaultConf = isDZM ? DEFAULT_CLARA_CONFIG_DZM : DEFAULT_CLARA_CONFIG_MARBRASIL;
     return ClaraStorageService.getConfig(defaultConf, isDZM ? 'dzm' : 'marbrasil');
   }
@@ -262,7 +271,7 @@ export class ClaraConfigService {
    * Salva ou atualiza a configuração da integração Clara (com suporte multi-empresa)
    */
   public static async saveConfig(partial: Partial<ClaraConfig>, company = 'Mar Brasil'): Promise<ClaraConfig> {
-    const isDZM = (partial.active_company_id?.toLowerCase().includes('dzm') || company.toLowerCase().includes('dzm'));
+    const isDZM = this.isDZMCompany(partial.active_company_id) || this.isDZMCompany(partial.company_name) || this.isDZMCompany(company);
     const defaultConf = isDZM ? DEFAULT_CLARA_CONFIG_DZM : DEFAULT_CLARA_CONFIG_MARBRASIL;
     return ClaraStorageService.saveConfig(partial, defaultConf, isDZM ? 'dzm' : 'marbrasil');
   }
@@ -322,13 +331,99 @@ export class ClaraConfigService {
     await ClaraStorageService.deleteDepartmentMapping(mappingType, claraKey, DEFAULT_CLARA_CONFIG);
   }
 
+  // Caches em memória com TTL de 1 hora para contornar a trava de 'Consumo redundante' da Omie API
+  private static accountsCache: Record<string, { timestamp: number; data: OmieAccountOption[] }> = {};
+  private static departmentsCache: Record<string, { timestamp: number; data: OmieDepartmentOption[] }> = {};
+  private static categoriesCache: Record<string, { timestamp: number; data: OmieCategoryOption[] }> = {};
+
+  // Seeds de contas correntes reais obtidas diretamente do Omie ERP
+  private static SEED_ACCOUNTS_MARBRASIL: OmieAccountOption[] = [
+    { nCodCC: 12291364271, descricao: 'Clara - Prestadores', tipo: 'CR' },
+    { nCodCC: 7665602672, descricao: 'Bradesco - cartão 8583  / 2192', tipo: 'CR' },
+    { nCodCC: 7669310486, descricao: 'Cartão - Sicredi 0137 / 0129', tipo: 'CR' },
+    { nCodCC: 7687200485, descricao: 'Elo - 9693', tipo: 'CR' },
+    { nCodCC: 7769825595, descricao: 'Visa - 6391 BNDS', tipo: 'CR' },
+    { nCodCC: 7918604403, descricao: 'Diretoria - 1924', tipo: 'CR' },
+    { nCodCC: 12211377291, descricao: 'Omie.CASH - Cartão Omie', tipo: 'CR' },
+    { nCodCC: 7654276902, descricao: 'Caixinha', tipo: 'CX' },
+    { nCodCC: 7654276943, descricao: 'Omie.CASH', tipo: 'CC' },
+    { nCodCC: 7662736722, descricao: 'Bradesco', tipo: 'CC' },
+    { nCodCC: 7662737142, descricao: 'PagBank (PagSeguro)', tipo: 'CC' },
+    { nCodCC: 7662738731, descricao: 'Banco do Brasil', tipo: 'CC' },
+    { nCodCC: 7662742215, descricao: 'Itaú Unibanco', tipo: 'CC' },
+    { nCodCC: 7662747917, descricao: 'Sicredi', tipo: 'CC' },
+    { nCodCC: 7670894051, descricao: 'Flash - Prestadores', tipo: 'AC' },
+    { nCodCC: 7687296428, descricao: 'PagSeguro - Pessoal', tipo: 'CC' },
+    { nCodCC: 7687299201, descricao: 'Flash - Funcionários', tipo: 'AC' },
+    { nCodCC: 7701412641, descricao: 'Consórcio Contemplado - Massey Ferguson', tipo: 'CC' },
+    { nCodCC: 7721355816, descricao: 'Provisão - Impostos Trimestrais', tipo: 'AD' },
+    { nCodCC: 7721357315, descricao: 'Provisão - 13o salário e encargos', tipo: 'AD' },
+    { nCodCC: 7721358027, descricao: 'Provisão - Férias e encargos', tipo: 'AD' },
+    { nCodCC: 7721360080, descricao: 'Provisão - Contingências', tipo: 'AD' },
+    { nCodCC: 7722457245, descricao: 'Investimentos - Bradesco', tipo: 'CA' },
+    { nCodCC: 7727306587, descricao: 'Banco do Brasil - Investimentos', tipo: 'CA' },
+    { nCodCC: 7769416232, descricao: 'Sicredi - Investimentos', tipo: 'CA' },
+    { nCodCC: 7845157479, descricao: 'Pri PF - Itaú Unibanco', tipo: 'CC' },
+    { nCodCC: 7845159602, descricao: 'Pri PF - Bradesco', tipo: 'CC' },
+    { nCodCC: 7845161677, descricao: 'Pri PF - Banco do Brasil', tipo: 'CC' },
+    { nCodCC: 7845162357, descricao: 'Pri PF - Nubank', tipo: 'CC' },
+    { nCodCC: 7845165094, descricao: 'Dauren PF - Itaú Unibanco', tipo: 'CC' },
+    { nCodCC: 7845166213, descricao: 'Dauren PF -Bradesco', tipo: 'CC' },
+    { nCodCC: 7845167362, descricao: 'Dauren PF - Nubank', tipo: 'CC' },
+    { nCodCC: 7854722119, descricao: 'Créditos - DZM', tipo: 'AD' },
+    { nCodCC: 7854729147, descricao: 'Terceirização DZM', tipo: 'AD' },
+    { nCodCC: 7854729354, descricao: 'Intermediação DZM', tipo: 'AD' },
+    { nCodCC: 12211377371, descricao: 'Omie.CASH - Cartão Omie (Garantia)', tipo: 'CV' }
+  ];
+
+  private static SEED_ACCOUNTS_DZM: OmieAccountOption[] = [
+    { nCodCC: 11704272090, descricao: 'Clara - Prestadores', tipo: 'CR' },
+    { nCodCC: 11376418802, descricao: 'Bradesco - Visa 6827 / 1787', tipo: 'CR' },
+    { nCodCC: 11617365367, descricao: 'Omie.CASH - Cartão Omie', tipo: 'CR' },
+    { nCodCC: 11674122399, descricao: 'Visa - G2', tipo: 'CR' },
+    { nCodCC: 11336184940, descricao: 'Caixinha', tipo: 'CX' },
+    { nCodCC: 11336185283, descricao: 'Omie.CASH', tipo: 'CC' },
+    { nCodCC: 11342253946, descricao: 'Bradesco - DZM', tipo: 'CC' },
+    { nCodCC: 11342254146, descricao: 'PagBank', tipo: 'CC' },
+    { nCodCC: 11382946596, descricao: 'Flash - Prestadores', tipo: 'AC' },
+    { nCodCC: 11382947215, descricao: 'Flash - Funcionários', tipo: 'AC' },
+    { nCodCC: 11407026355, descricao: 'Provisão - Impostos Trimestrais', tipo: 'AD' },
+    { nCodCC: 11407027456, descricao: 'Provisão - 13o salário e encargos', tipo: 'AD' },
+    { nCodCC: 11407027813, descricao: 'Provisão - Férias e encargos', tipo: 'AD' },
+    { nCodCC: 11407033136, descricao: 'Provisão - Contingências', tipo: 'AD' },
+    { nCodCC: 11432492826, descricao: 'Bradesco - DAUREN UNIPESSOAL LTDA', tipo: 'CC' },
+    { nCodCC: 11437305971, descricao: 'Omie.CASH (Recebíveis de Cartões)', tipo: 'CC' },
+    { nCodCC: 11491956521, descricao: 'Conta Gestão Click', tipo: 'CX' },
+    { nCodCC: 11550021250, descricao: 'PagBank Pessoal', tipo: 'CC' },
+    { nCodCC: 11563485368, descricao: 'Pri PF - Itaú Unibanco', tipo: 'CC' },
+    { nCodCC: 11599289752, descricao: 'Sicredi - DZM', tipo: 'CC' },
+    { nCodCC: 11615886788, descricao: 'Cartão G2 - 0021', tipo: 'CC' },
+    { nCodCC: 11617365735, descricao: 'Omie.CASH - Cartão Omie (Garantia)', tipo: 'CV' },
+    { nCodCC: 11667394630, descricao: 'Bradesco - G2', tipo: 'CC' },
+    { nCodCC: 11672312219, descricao: 'Dauren PF - Nubank', tipo: 'CC' },
+    { nCodCC: 11678121338, descricao: 'Nubank - D.Z.M LTDA', tipo: 'CC' },
+    { nCodCC: 11682709851, descricao: 'Investimentos Sicredi - DZM', tipo: 'CA' },
+    { nCodCC: 11695465517, descricao: 'Pri PF - Itaú Unibanco', tipo: 'CC' },
+    { nCodCC: 11723376524, descricao: 'Bradesco - DZM - Investimento', tipo: 'CC' }
+  ];
+
   /**
    * Busca contas correntes do Omie (com filtro preferencial para tipo 'CR' - Cartão de Crédito)
    */
   public static async getOmieAccounts(onlyCreditCard = false, company = 'Mar Brasil'): Promise<OmieAccountOption[]> {
+    const isDZM = (company || '').toLowerCase().includes('dzm');
+    const companyKey = isDZM ? 'dzm' : 'marbrasil';
+    const fallbackSeed = isDZM ? this.SEED_ACCOUNTS_DZM : this.SEED_ACCOUNTS_MARBRASIL;
+
+    // Retorna cache recente (TTL 1 hora) se disponível
+    const cached = this.accountsCache[companyKey];
+    if (cached && Date.now() - cached.timestamp < 3600000 && cached.data.length > 0) {
+      return onlyCreditCard ? cached.data.filter(a => a.tipo === 'CR') : cached.data;
+    }
+
     const { appKey, appSecret } = this.getOmieCredentials(company);
     if (!appKey || !appSecret) {
-      throw new Error(`Credenciais do Omie para ${company} não configuradas no sistema.`);
+      return onlyCreditCard ? fallbackSeed.filter(a => a.tipo === 'CR') : fallbackSeed;
     }
 
     try {
@@ -340,30 +435,42 @@ export class ClaraConfigService {
       }, { timeout: 15000 });
 
       const list = response.data?.ListarContasCorrentes || [];
-      const accounts: OmieAccountOption[] = list.map((c: any) => ({
-        nCodCC: Number(c.nCodCC),
-        descricao: c.descricao || `Conta ${c.nCodCC}`,
-        tipo: c.tipo || 'CC',
-      }));
+      if (list.length > 0) {
+        const accounts: OmieAccountOption[] = list.map((c: any) => ({
+          nCodCC: Number(c.nCodCC),
+          descricao: c.descricao || `Conta ${c.nCodCC}`,
+          tipo: c.tipo || 'CC',
+        }));
 
-      if (onlyCreditCard) {
-        return accounts.filter(a => a.tipo === 'CR');
+        this.accountsCache[companyKey] = { timestamp: Date.now(), data: accounts };
+        return onlyCreditCard ? accounts.filter(a => a.tipo === 'CR') : accounts;
       }
-
-      return accounts;
     } catch (error: any) {
-      console.warn(`[ClaraConfigService] Falha ao consultar contas Omie (${company}):`, error.message);
-      return [];
+      console.warn(`[ClaraConfigService] Falha ao consultar contas Omie (${company}): ${error.message}. Aplicando fallback seed.`);
     }
+
+    // Se houve erro de consumo redundante (500) ou timeout, usa o cache existente ou seed real
+    const finalAccounts = (cached && cached.data.length > 0) ? cached.data : fallbackSeed;
+    this.accountsCache[companyKey] = { timestamp: Date.now(), data: finalAccounts };
+
+    return onlyCreditCard ? finalAccounts.filter(a => a.tipo === 'CR') : finalAccounts;
   }
 
   /**
    * Busca departamentos (centros de custo) do Omie
    */
   public static async getOmieDepartments(company = 'Mar Brasil'): Promise<OmieDepartmentOption[]> {
+    const isDZM = (company || '').toLowerCase().includes('dzm');
+    const companyKey = isDZM ? 'dzm' : 'marbrasil';
+
+    const cached = this.departmentsCache[companyKey];
+    if (cached && Date.now() - cached.timestamp < 3600000 && cached.data.length > 0) {
+      return cached.data;
+    }
+
     const { appKey, appSecret } = this.getOmieCredentials(company);
     if (!appKey || !appSecret) {
-      return [];
+      return cached?.data || [];
     }
 
     try {
@@ -375,21 +482,27 @@ export class ClaraConfigService {
       }, { timeout: 15000 });
 
       const list = response.data?.departamentos || [];
-      return list.map((d: any) => ({
-        codigo: String(d.codigo),
-        descricao: d.descricao || String(d.codigo),
-      }));
+      if (list.length > 0) {
+        const departments = list.map((d: any) => ({
+          codigo: String(d.codigo),
+          descricao: d.descricao || String(d.codigo),
+        }));
+
+        this.departmentsCache[companyKey] = { timestamp: Date.now(), data: departments };
+        return departments;
+      }
     } catch (error: any) {
       console.warn('[ClaraConfigService] Falha ao consultar departamentos Omie:', error.message);
-      return [];
     }
+
+    return cached?.data || [];
   }
 
   /**
    * Busca as categorias reais do Omie (com suporte multi-empresa)
    */
   public static async getOmieCategories(company = 'Mar Brasil'): Promise<OmieCategoryOption[]> {
-    const isDZM = company.toLowerCase().includes('dzm');
+    const isDZM = this.isDZMCompany(company);
     const decodeHtml = (str: string) => (str || '')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
@@ -480,7 +593,7 @@ export class ClaraConfigService {
    * Busca os projetos reais do Omie (Supabase para Mar Brasil ou API direta por tenant)
    */
   public static async getOmieProjects(company = 'Mar Brasil'): Promise<OmieProjectOption[]> {
-    const isDZM = company.toLowerCase().includes('dzm');
+    const isDZM = this.isDZMCompany(company);
     const map = new Map<string, string>();
 
     if (!isDZM) {
