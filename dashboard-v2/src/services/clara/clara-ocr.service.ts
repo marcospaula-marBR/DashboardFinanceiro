@@ -44,21 +44,15 @@ export class ClaraOcrService {
     expectedCompanyCnpj?: string | null,
     expectedCompanyName?: string | null
   ): Promise<ClaraOcrResult> {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.gemini_api_key;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY não configurada no ambiente.');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    });
 
     const prompt = `
-Você é um auditor fiscal contábil experiente. Analise detalhadamente este comprovante / Nota Fiscal (DANFE, NFC-e, NFS-e, Recibo ou Extrato) e extraia os dados fiscais em formato JSON estrito.
+Você é um auditor fiscal contábil experiente. Analise detalhadamente este comprovante / Nota Fiscal (DANFE, NFC-e, NFS-e, Recibo, Extrato ou Foto de comprovante) e extraia os dados fiscais em formato JSON estrito.
 
 Campos obrigatórios a extrair:
 - "cnpj_tomador": CNPJ do TOMADOR / DESTINATÁRIO / CLIENTE / PAGADOR da nota fiscal ou serviço (apenas números ou formatado). Procure na seção "DESTINATÁRIO / REMETENTE" ou "TOMADOR DE SERVIÇOS". Se for pessoa física (CPF), retorne o CPF.
@@ -83,22 +77,52 @@ Retorne SOMENTE o JSON puro com essa estrutura:
 }
     `;
 
-    // Detecta mimeType adequado para o inlineData
-    const resolvedMime = mimeType.toLowerCase().includes('png') 
-      ? 'image/png' 
-      : mimeType.toLowerCase().includes('jpg') || mimeType.toLowerCase().includes('jpeg')
-        ? 'image/jpeg'
-        : 'application/pdf';
+    // Detecta mimeType adequado para fotos (JPEG/PNG) e PDFs
+    let resolvedMime = 'application/pdf';
+    const lowerMime = (mimeType || '').toLowerCase();
+    if (lowerMime.includes('png')) {
+      resolvedMime = 'image/png';
+    } else if (lowerMime.includes('jpg') || lowerMime.includes('jpeg')) {
+      resolvedMime = 'image/jpeg';
+    } else if (lowerMime.includes('webp')) {
+      resolvedMime = 'image/webp';
+    } else if (lowerMime.includes('pdf')) {
+      resolvedMime = 'application/pdf';
+    }
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          mimeType: resolvedMime,
-          data: base64Data,
-        },
-      },
-    ]);
+    const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    let result: any = null;
+    let lastError: any = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: 'application/json',
+          },
+        });
+
+        result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              mimeType: resolvedMime,
+              data: base64Data,
+            },
+          },
+        ]);
+
+        if (result) break;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[ClaraOcrService] Tentativa com modelo ${modelName} falhou:`, err.message);
+      }
+    }
+
+    if (!result) {
+      throw new Error(`Falha ao processar OCR com Gemini: ${lastError?.message || 'Nenhum modelo respondeu.'}`);
+    }
 
     const responseText = result.response.text();
     let parsed: any = {};
@@ -172,23 +196,52 @@ Retorne SOMENTE o JSON puro com essa estrutura:
         return { success: false, error: 'Nenhum comprovante anexado na Clara.' };
       }
 
-      // 2. Baixa o anexo principal
-      const primaryDoc = docs[0];
-      const docUrl = (primaryDoc as any).download?.url || primaryDoc.url || primaryDoc.downloadUrl;
-      if (!docUrl) {
-        return { success: false, error: 'URL do anexo não acessível.' };
-      }
-
-      const { base64, mimeType } = await claraClient.downloadDocumentAsBase64(docUrl);
-      if (!base64) {
-        return { success: false, error: 'Falha ao baixar binário do comprovante.' };
-      }
-
-      // 3. Executa OCR
+      // 2. Itera sobre os comprovantes (fotos e PDFs)
       const targetCnpj = expectedCompanyCnpj || config.active_company_cnpj || '02.233.923/0001-19';
       const targetName = expectedCompanyName || config.active_company_name || 'Mar Brasil';
 
-      const result = await this.analyzeDocument(base64, mimeType || 'application/pdf', targetCnpj, targetName);
+      let bestResult: ClaraOcrResult | null = null;
+      let anyDownloaded = false;
+
+      for (const doc of docs) {
+        const docUrl = (doc as any).download?.url || doc.url || doc.downloadUrl;
+        if (!docUrl) continue;
+
+        try {
+          const { base64, mimeType, fileName } = await claraClient.downloadDocumentAsBase64(docUrl);
+          if (!base64) continue;
+          anyDownloaded = true;
+
+          const docFormat = ((doc as any).format || doc.fileType || '').toLowerCase();
+          let effectiveMime = mimeType;
+          if (docFormat === 'jpeg' || docFormat === 'jpg' || fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.jpeg')) {
+            effectiveMime = 'image/jpeg';
+          } else if (docFormat === 'png' || fileName.toLowerCase().endsWith('.png')) {
+            effectiveMime = 'image/png';
+          }
+
+          const result = await this.analyzeDocument(base64, effectiveMime, targetCnpj, targetName);
+
+          if (!bestResult) {
+            bestResult = result;
+          }
+
+          if (result.cnpj_match_status === 'MATCH') {
+            bestResult = result;
+            break; // CNPJ compatível encontrado!
+          } else if (result.cnpj_tomador && !bestResult.cnpj_tomador) {
+            bestResult = result;
+          }
+        } catch (docErr: any) {
+          console.warn(`[auditTransaction] Erro ao ler anexo (${doc.fileName || doc.name}):`, docErr.message);
+        }
+      }
+
+      if (!anyDownloaded || !bestResult) {
+        return { success: false, error: 'Falha ao baixar ou analisar anexos da transação.' };
+      }
+
+      const result = bestResult;
 
       // 4. Atualiza campos fiscais
       tx.invoice_cnpj_tomador = result.cnpj_tomador;

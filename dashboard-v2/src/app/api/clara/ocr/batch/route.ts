@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import { ClaraOcrService } from '@/services/clara/clara-ocr.service';
 import { ClaraStorageService } from '@/services/clara/clara-storage.service';
-import { DEFAULT_CLARA_CONFIG } from '@/services/clara/clara-config.service';
+import { DEFAULT_CLARA_CONFIG, DEFAULT_CLARA_CONFIG_DZM } from '@/services/clara/clara-config.service';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { uuids, onlyPending = true, companyCnpj, companyName } = body;
+    const { uuids, onlyPending = true, companyCnpj, companyName, companyId } = body;
 
-    const config = await ClaraStorageService.getConfig(DEFAULT_CLARA_CONFIG);
+    const compId = companyId || (companyName?.toLowerCase().includes('dzm') ? 'dzm' : 'marbrasil');
+    const isDZM = compId.toLowerCase().includes('dzm');
+    const defaultConfig = isDZM ? DEFAULT_CLARA_CONFIG_DZM : DEFAULT_CLARA_CONFIG;
+
+    const config = await ClaraStorageService.getConfig(defaultConfig, isDZM ? 'dzm' : 'marbrasil');
     const state = await ClaraStorageService.getState(config);
     const allTransactions = Object.values(state.transactions || {});
 

@@ -153,11 +153,13 @@ export function ClaraTransactionDrawer({
     setRunningOcr(true);
     setOcrFeedback(null);
     try {
+      const compId = transaction.company_id || activeCompanyId || (activeCompanyName?.toLowerCase().includes('dzm') ? 'dzm' : 'marbrasil');
       const res = await fetch('/api/clara/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transactionId: transaction.clara_uuid,
+          companyId: compId,
           companyCnpj: activeCompanyCnpj,
           companyName: activeCompanyName,
         }),

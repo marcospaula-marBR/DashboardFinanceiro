@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { Home, ExternalLink } from "lucide-react";
 import { APP_VERSION } from "@/version";
 
-export function HeaderFinanceiro() {
+interface HeaderFinanceiroProps {
+  showHomeButton?: boolean;
+}
+
+export function HeaderFinanceiro({ showHomeButton = true }: HeaderFinanceiroProps) {
   const router = useRouter();
 
   const handleGoHome = () => {
@@ -58,13 +62,15 @@ export function HeaderFinanceiro() {
           <span>Abrir Omie</span>
         </button>
 
-        <button
-          onClick={handleGoHome}
-          className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md shadow-slate-200"
-        >
-          <Home size={16} />
-          <span>Voltar ao Início</span>
-        </button>
+        {showHomeButton && (
+          <button
+            onClick={handleGoHome}
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md shadow-slate-200"
+          >
+            <Home size={16} />
+            <span>Voltar ao Início</span>
+          </button>
+        )}
       </div>
     </header>
   );
