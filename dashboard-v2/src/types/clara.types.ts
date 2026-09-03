@@ -44,6 +44,9 @@ export interface ClaraConfig {
   active_company_id?: string;
   active_company_name?: string;
   active_company_cnpj?: string;
+  card_closing_day?: number;
+  card_due_day?: number;
+  auto_ocr_on_sync?: boolean;
   updated_at?: string;
 }
 

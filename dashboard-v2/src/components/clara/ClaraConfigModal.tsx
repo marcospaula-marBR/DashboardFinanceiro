@@ -11,7 +11,8 @@ import {
   CreditCard, 
   Building2, 
   RefreshCw,
-  Lock
+  Lock,
+  Calendar
 } from "lucide-react";
 import { ClaraConfig, OmieAccountOption, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption } from "@/types/clara.types";
 
@@ -476,6 +477,64 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                 <label htmlFor="block_unmapped" className="text-xs text-slate-700 font-medium cursor-pointer">
                   Bloquear envio automático de transações sem categoria mapeada (Status: MAPPING_REQUIRED)
                 </label>
+              </div>
+            </div>
+
+            {/* Seção 3: Ciclo da Fatura do Cartão & Auditoria Fiscal IA */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <Calendar size={14} className="text-slate-400" />
+                Ciclo da Fatura & Regras de Auditoria Fiscal IA
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Dia de Corte/Fechamento da Fatura:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={config.card_closing_day ?? 23}
+                    onChange={e => setConfig({ ...config, card_closing_day: parseInt(e.target.value, 10) || 23 })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Ex: 23 (ciclo de compras de 24 do mês anterior a 23 do mês atual)</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Dia de Vencimento da Fatura:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={config.card_due_day ?? 30}
+                    onChange={e => setConfig({ ...config, card_due_day: parseInt(e.target.value, 10) || 30 })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Ex: 30 (vencimento do boleto/fatura no Omie)</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl space-y-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="auto_ocr_on_sync"
+                    checked={config.auto_ocr_on_sync !== false}
+                    onChange={e => setConfig({ ...config, auto_ocr_on_sync: e.target.checked })}
+                    className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="auto_ocr_on_sync" className="text-xs text-indigo-950 font-bold cursor-pointer">
+                    Executar Auditoria Fiscal com IA (OCR) automaticamente ao importar comprovantes
+                  </label>
+                </div>
+                <p className="text-[11px] text-indigo-800/80 pl-6 leading-relaxed">
+                  Lê comprovantes anexados com Gemini 2.5 Flash para validar se o CNPJ do tomador na NF confere com a empresa ativa, avisando na tela caso haja divergência.
+                </p>
               </div>
             </div>
 

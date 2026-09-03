@@ -33,8 +33,11 @@ import {
   Check,
   Layers,
   FolderKanban,
-  Send
+  Send,
+  Sparkles,
+  Zap
 } from "lucide-react";
+import { calculateCardDueDate } from "@/utils/clara-billing-cycle";
 
 const COMPANIES_LIST = [
   { id: 'mar-brasil', name: 'Mar Brasil', cnpj: '02.233.923/0001-19', fullName: 'Mar Brasil Serviços e Locações Ltda' },
@@ -97,6 +100,8 @@ export default function ClaraIntegrationPage() {
   const [batchProject, setBatchProject] = useState("");
   const [batchRegistrationDate, setBatchRegistrationDate] = useState("");
   const [batchDueDate, setBatchDueDate] = useState("");
+  const [batchOcrLoading, setBatchOcrLoading] = useState(false);
+  const [autoOcrNotice, setAutoOcrNotice] = useState<string | null>(null);
 
   const loadOmieResources = useCallback(async () => {
     try {
@@ -159,6 +164,9 @@ export default function ClaraIntegrationPage() {
       const data = await res.json();
       if (data.status === 'success') {
         setSyncResult(data.data);
+        if (data.data?.autoOcr && data.data.autoOcr.processed > 0) {
+          setAutoOcrNotice(`⚡ Auditoria Fiscal IA: ${data.data.autoOcr.processed} comprovante(s) analisados automaticamente (${data.data.autoOcr.matches} compatíveis, ${data.data.autoOcr.divergent} divergentes).`);
+        }
         await fetchTransactions();
       } else {
         alert(`Erro na sincronização: ${data.message}`);
@@ -167,6 +175,45 @@ export default function ClaraIntegrationPage() {
       alert(`Falha de rede ao sincronizar: ${e.message}`);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleBatchOcr = async () => {
+    if (selectedUuids.length === 0) return;
+    setBatchOcrLoading(true);
+    try {
+      const res = await fetch('/api/clara/ocr/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uuids: selectedUuids,
+          companyCnpj: activeCompany.cnpj,
+          companyName: activeCompany.name,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        alert(data.message);
+        await fetchTransactions();
+      } else {
+        alert(`Erro na auditoria em lote: ${data.message}`);
+      }
+    } catch (e: any) {
+      alert(`Falha de conexão ao auditar em lote: ${e.message}`);
+    } finally {
+      setBatchOcrLoading(false);
+    }
+  };
+
+  const handleApplyCalculatedDueDate = () => {
+    // Pega a primeira transação selecionada para sugerir a data no input
+    const firstSelected = transactions.find(t => selectedUuids.includes(t.clara_uuid));
+    if (firstSelected?.operation_date) {
+      const calculated = calculateCardDueDate(firstSelected.operation_date, 23, 30);
+      setBatchDueDate(calculated);
+    } else {
+      const calculated = calculateCardDueDate(new Date(), 23, 30);
+      setBatchDueDate(calculated);
     }
   };
 
@@ -409,6 +456,25 @@ export default function ClaraIntegrationPage() {
           </div>
         )}
 
+        {/* Notificação Transparente de Auto-OCR */}
+        {autoOcrNotice && (
+          <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center justify-between shadow-xs animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
+              <Sparkles size={20} className="text-indigo-600 shrink-0" />
+              <div className="text-xs text-indigo-950 font-medium">
+                <strong className="block text-indigo-900 font-bold">Auditoria Fiscal IA em Segundo Plano:</strong>
+                {autoOcrNotice}
+              </div>
+            </div>
+            <button
+              onClick={() => setAutoOcrNotice(null)}
+              className="text-indigo-500 hover:text-indigo-800 text-xs font-bold px-2 py-1 cursor-pointer"
+            >
+              OK
+            </button>
+          </div>
+        )}
+
         {/* Cards de KPIs do Topo */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
           <StatCard
@@ -541,6 +607,21 @@ export default function ClaraIntegrationPage() {
               >
                 <Layers size={14} className="text-emerald-400" />
                 <span>Classificar em Lote</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBatchOcr}
+                disabled={batchActionLoading || batchOcrLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50 border border-indigo-400/40"
+                title="Executar leitura OCR com IA em todos os comprovantes selecionados para validar CNPJ do Tomador"
+              >
+                {batchOcrLoading ? (
+                  <Loader2 size={14} className="animate-spin text-indigo-200" />
+                ) : (
+                  <Sparkles size={14} className="text-indigo-200" />
+                )}
+                <span>{batchOcrLoading ? 'Auditando...' : 'Auditar CNPJs com IA'}</span>
               </button>
 
               <button
@@ -1040,9 +1121,19 @@ export default function ClaraIntegrationPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Data Vencimento (Cartão):
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700">
+                      Data Vencimento (Cartão):
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleApplyCalculatedDueDate}
+                      className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                      title="Calcula data de vencimento (dia 30) pela regra do ciclo da fatura"
+                    >
+                      ⚡ Regra da Fatura (Dia 30)
+                    </button>
+                  </div>
                   <input
                     type="date"
                     value={batchDueDate}

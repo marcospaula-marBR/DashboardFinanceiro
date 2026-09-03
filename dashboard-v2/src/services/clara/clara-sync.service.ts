@@ -14,6 +14,8 @@ import { ClaraConfigService, DEFAULT_CLARA_CONFIG } from './clara-config.service
 import { ClaraClient } from './clara-client';
 import { ClaraOmieMapper } from './clara-omie-mapper';
 import { ClaraStorageService } from './clara-storage.service';
+import { ClaraOcrService } from './clara-ocr.service';
+import { calculateCardDueDate } from '@/utils/clara-billing-cycle';
 
 // Armazenamento em memória para caso a tabela ainda não exista no Supabase
 let memoryTransactions: Map<string, ClaraTransactionRecord> = new Map();
@@ -40,6 +42,7 @@ export interface SyncResultSummary {
   attachmentsUploaded: number;
   errors: number;
   errorMessage?: string;
+  autoOcr?: any;
 }
 
 export class ClaraSyncService {
@@ -165,7 +168,7 @@ export class ClaraSyncService {
   /**
    * Normaliza o objeto retornado pela Clara para o registro local
    */
-  private static normalizeClaraTransaction(raw: ClaraRawTransaction): ClaraTransactionRecord {
+  private static normalizeClaraTransaction(raw: ClaraRawTransaction, config?: ClaraConfig): ClaraTransactionRecord {
     const claraUuid = (raw.uuid || raw.id || '').trim();
     const typeStr = (raw.transactionType || raw.type || 'PURCHASE').toUpperCase();
     const statusStr = (raw.status || 'AUTHORIZED').toUpperCase();
@@ -200,6 +203,12 @@ export class ClaraSyncService {
     const docs = raw.documents || raw.receipts || raw.hasAttachments?.links || raw.hasInvoice?.links || [];
     const hasAttachments = Boolean(raw.hasAttachments?.value || docs.length > 0);
 
+    // Cálculo automático de vencimento determinístico por ciclo de fatura (corte dia 23, vencimento dia 30)
+    const closingDay = config?.card_closing_day || 23;
+    const dueDay = config?.card_due_day || 30;
+    const computedDueDate = calculateCardDueDate(opDate, closingDay, dueDay);
+    const initialRegDate = opDate.split('T')[0];
+
     return {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `tx_${Date.now()}_${Math.random().toString(36).substring(7)}`,
       clara_uuid: claraUuid,
@@ -231,6 +240,8 @@ export class ClaraSyncService {
       omie_account_id: null,
       omie_category_code: null,
       omie_department_code: null,
+      registration_date: initialRegDate,
+      due_date: computedDueDate,
       has_attachments: hasAttachments,
       attachments_count: docs.length,
       attachments_synced: false,
@@ -335,7 +346,7 @@ export class ClaraSyncService {
       const toSyncReady: ClaraTransactionRecord[] = [];
 
       for (const raw of claraRawList) {
-        const normalized = this.normalizeClaraTransaction(raw);
+        const normalized = this.normalizeClaraTransaction(raw, config);
         if (!normalized.clara_uuid) continue;
 
         // Verifica se já existe no banco
@@ -543,9 +554,38 @@ export class ClaraSyncService {
         await this.saveLocalTransaction(tx);
       }
 
+      // 7. AUDITORIA FISCAL IA AUTOMÁTICA (Auto-OCR): se habilitada, analisa novos comprovantes
+      let autoOcrSummary: any = null;
+      if (config.auto_ocr_on_sync !== false) {
+        try {
+          const state = await ClaraStorageService.getState(config);
+          const pendingTxs = Object.values(state.transactions).filter(
+            t => (t.has_attachments || (t.attachments_count && t.attachments_count > 0)) &&
+                 (!t.cnpj_match_status || t.cnpj_match_status === 'PENDING')
+          );
+
+          if (pendingTxs.length > 0) {
+            const targetCnpj = config.active_company_cnpj || '02.233.923/0001-19';
+            const targetName = config.active_company_name || 'Mar Brasil';
+            autoOcrSummary = await ClaraOcrService.processBatchOcr(
+              pendingTxs.slice(0, 15), // Processa até 15 comprovantes concorrentes
+              config,
+              targetCnpj,
+              targetName,
+              3
+            );
+          }
+        } catch (ocrErr: any) {
+          console.warn('[ClaraSyncService] Aviso no Auto-OCR durante sync:', ocrErr.message);
+        }
+      }
+
       run.transactions_synced = synced;
       run.transactions_failed = errors;
       run.attachments_uploaded = attachmentsUploaded;
+      if (autoOcrSummary) {
+        run.details = { ...(run.details || {}), auto_ocr: autoOcrSummary };
+      }
 
       const finalStatus = errors === 0 ? 'SUCCESS' : (synced > 0 ? 'PARTIAL' : 'ERROR');
       await this.finishSyncRun(run, finalStatus);
@@ -564,6 +604,7 @@ export class ClaraSyncService {
         ignored,
         attachmentsUploaded,
         errors,
+        autoOcr: autoOcrSummary,
       };
     } catch (err: any) {
       await this.finishSyncRun(run, 'ERROR', err.message);

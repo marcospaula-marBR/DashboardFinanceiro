@@ -1,4 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ClaraTransactionRecord, ClaraConfig } from '@/types/clara.types';
+import { ClaraClient } from '@/services/clara/clara-client';
+import { ClaraStorageService } from '@/services/clara/clara-storage.service';
+import { supabase } from '@/lib/supabase';
 
 export interface ClaraOcrResult {
   cnpj_tomador?: string | null;
@@ -143,6 +147,154 @@ Retorne SOMENTE o JSON puro com essa estrutura:
       cnpj_match_status: matchStatus,
       cnpj_divergence_reason: divergenceReason,
       raw_ai_text: responseText,
+    };
+  }
+
+  /**
+   * Audita uma única transação: localiza anexo, faz download do binário, roda OCR via Gemini
+   * e persiste o enriquecimento fiscal no Supabase.
+   */
+  public static async auditTransaction(
+    tx: ClaraTransactionRecord,
+    claraClient: ClaraClient,
+    config: ClaraConfig,
+    expectedCompanyCnpj?: string | null,
+    expectedCompanyName?: string | null
+  ): Promise<{ success: boolean; result?: ClaraOcrResult; error?: string }> {
+    try {
+      // 1. Localiza documentos
+      let docs = tx.raw_payload?.documents || tx.raw_payload?.receipts || [];
+      if (docs.length === 0) {
+        docs = await claraClient.getTransactionDocuments(tx.clara_uuid);
+      }
+
+      if (!docs || docs.length === 0) {
+        return { success: false, error: 'Nenhum comprovante anexado na Clara.' };
+      }
+
+      // 2. Baixa o anexo principal
+      const primaryDoc = docs[0];
+      const docUrl = (primaryDoc as any).download?.url || primaryDoc.url || primaryDoc.downloadUrl;
+      if (!docUrl) {
+        return { success: false, error: 'URL do anexo não acessível.' };
+      }
+
+      const { base64, mimeType } = await claraClient.downloadDocumentAsBase64(docUrl);
+      if (!base64) {
+        return { success: false, error: 'Falha ao baixar binário do comprovante.' };
+      }
+
+      // 3. Executa OCR
+      const targetCnpj = expectedCompanyCnpj || config.active_company_cnpj || '02.233.923/0001-19';
+      const targetName = expectedCompanyName || config.active_company_name || 'Mar Brasil';
+
+      const result = await this.analyzeDocument(base64, mimeType || 'application/pdf', targetCnpj, targetName);
+
+      // 4. Atualiza campos fiscais
+      tx.invoice_cnpj_tomador = result.cnpj_tomador;
+      tx.invoice_cnpj_emitente = result.cnpj_emitente;
+      tx.invoice_razao_social_tomador = result.razao_social_tomador;
+      tx.invoice_numero = result.numero_documento;
+      tx.cnpj_match_status = result.cnpj_match_status;
+      tx.cnpj_divergence_reason = result.cnpj_divergence_reason;
+
+      if (result.data_emissao) {
+        tx.invoice_issue_date = result.data_emissao;
+        if (!tx.registration_date) {
+          tx.registration_date = result.data_emissao;
+        }
+      }
+
+      if (result.parcelas && result.parcelas.length > 1) {
+        tx.installments_info = {
+          current: 1,
+          total: result.parcelas.length,
+        };
+      }
+
+      // 5. Salva na persistência
+      await ClaraStorageService.saveTransaction(tx, config);
+
+      try {
+        await supabase
+          .from('clara_transactions')
+          .update({
+            invoice_cnpj_tomador: tx.invoice_cnpj_tomador,
+            cnpj_match_status: tx.cnpj_match_status,
+            cnpj_divergence_reason: tx.cnpj_divergence_reason,
+            invoice_issue_date: tx.invoice_issue_date,
+            registration_date: tx.registration_date,
+            updated_at: new Date().toISOString(),
+          })
+          .or(`id.eq.${tx.id},clara_uuid.eq.${tx.clara_uuid}`);
+      } catch {
+        // Ignora se tabela relacional ainda não existir
+      }
+
+      return { success: true, result };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  /**
+   * Processa auditoria em lote com concorrência controlada para alta performance e escala.
+   */
+  public static async processBatchOcr(
+    transactions: ClaraTransactionRecord[],
+    config: ClaraConfig,
+    expectedCompanyCnpj?: string | null,
+    expectedCompanyName?: string | null,
+    concurrency = 3
+  ): Promise<{
+    total: number;
+    processed: number;
+    matches: number;
+    divergent: number;
+    notFound: number;
+    errors: number;
+    updatedTransactions: ClaraTransactionRecord[];
+  }> {
+    const claraClient = new ClaraClient(config);
+    const updatedTransactions: ClaraTransactionRecord[] = [];
+    let matches = 0;
+    let divergent = 0;
+    let notFound = 0;
+    let errors = 0;
+
+    // Processa em chunks paralelos de tamanho 'concurrency'
+    for (let i = 0; i < transactions.length; i += concurrency) {
+      const chunk = transactions.slice(i, i + concurrency);
+      await Promise.all(
+        chunk.map(async (tx) => {
+          const outcome = await this.auditTransaction(
+            tx,
+            claraClient,
+            config,
+            expectedCompanyCnpj,
+            expectedCompanyName
+          );
+
+          if (outcome.success && outcome.result) {
+            if (outcome.result.cnpj_match_status === 'MATCH') matches++;
+            else if (outcome.result.cnpj_match_status === 'DIVERGENT') divergent++;
+            else notFound++;
+            updatedTransactions.push(tx);
+          } else {
+            errors++;
+          }
+        })
+      );
+    }
+
+    return {
+      total: transactions.length,
+      processed: updatedTransactions.length,
+      matches,
+      divergent,
+      notFound,
+      errors,
+      updatedTransactions,
     };
   }
 }

@@ -108,6 +108,9 @@ qoGpIkoVP5eXQlsFHt45ow+pv1H7bbxZlL7uW3srbcaJjrLdERBEk9ZljA==
   default_omie_department: null,
   block_if_unmapped: true,
   overlap_days: 3,
+  card_closing_day: 23,
+  card_due_day: 30,
+  auto_ocr_on_sync: true,
 };
 
 // Cache em memória para fallback resiliente
