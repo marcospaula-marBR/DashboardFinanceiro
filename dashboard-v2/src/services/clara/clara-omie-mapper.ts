@@ -101,6 +101,20 @@ export class ClaraOmieMapper {
   }
 
   /**
+   * Gera identificador único para Contas a Pagar (prefixo CP).
+   * Suporta salt (ex: timestamp) para permitir reenvio mesmo se o título anterior foi excluído/cancelado no Omie.
+   * O Omie aceita até 20 caracteres: 'CP' (2) + 18 chars de hash = 20 chars.
+   */
+  public static generateOmieContaPagarIntegrationId(claraUuid: string, salt?: string | number): string {
+    if (!claraUuid) {
+      throw new Error('UUID da Clara é obrigatório para gerar cCodIntLanc.');
+    }
+    const raw = salt ? `${claraUuid}_${salt}` : claraUuid;
+    const hash = crypto.createHash('sha256').update(raw.trim().toLowerCase()).digest('hex');
+    return `CP${hash.substring(0, 18).toUpperCase()}`;
+  }
+
+  /**
    * Centraliza a convenção de valores e sinais monetários para o Omie.
    * Para lançamentos tipo Cartão de Crédito (cTipo: 'CRT') no Omie:
    * - PURCHASE: valor positivo (R$ > 0).
@@ -265,7 +279,9 @@ export class ClaraOmieMapper {
 
     const dData = this.formatDateToOmie(tx.operation_date);
     const valor = this.getOmieTransactionAmount(tx);
-    const cCodInt = `CP${this.generateOmieIntegrationId(tx.clara_uuid).substring(2)}`; // mesmo hash, prefix CP
+    const cCodInt = (tx.omie_integration_id && tx.omie_integration_id.startsWith('CP'))
+      ? tx.omie_integration_id
+      : this.generateOmieContaPagarIntegrationId(tx.clara_uuid);
     const obs = this.buildOmieObservation(tx);
 
     const payload: OmieContaPagarPayload = {

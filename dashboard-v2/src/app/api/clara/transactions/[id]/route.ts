@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ClaraSyncService } from '@/services/clara/clara-sync.service';
 import { ClaraStorageService } from '@/services/clara/clara-storage.service';
+import { ClaraOmieMapper } from '@/services/clara/clara-omie-mapper';
 import { DEFAULT_CLARA_CONFIG } from '@/services/clara/clara-config.service';
 import { supabase } from '@/lib/supabase';
 
@@ -42,13 +43,15 @@ export async function POST(
       // 1. Limpa memoryState e Supabase JSON
       await ClaraStorageService.resetTransactionForResync(id, DEFAULT_CLARA_CONFIG);
 
-      // 2. Limpa também na tabela clara_transactions (se existir)
+      // 2. Limpa também na tabela clara_transactions (se existir) com novo ID único de integração
       try {
+        const freshIntegrationId = ClaraOmieMapper.generateOmieContaPagarIntegrationId(id, Date.now());
         await supabase
           .from('clara_transactions')
           .update({
             omie_launch_id: null,
             omie_account_id: null,
+            omie_integration_id: freshIntegrationId,
             attachments_synced: false,
             sync_status: 'READY',
             last_sync_error: null,

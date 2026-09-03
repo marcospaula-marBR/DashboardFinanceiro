@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { ClaraOmieMapper } from './clara-omie-mapper';
 import { 
   ClaraTransactionRecord, 
   ClaraConfig, 
@@ -148,10 +149,15 @@ export class ClaraStorageService {
     // Encontra a transação no estado em memória
     const key = Object.keys(state.transactions).find(k => k === idOrUuid || state.transactions[k].id === idOrUuid);
     if (key) {
+      const freshIntegrationId = ClaraOmieMapper.generateOmieContaPagarIntegrationId(
+        state.transactions[key].clara_uuid,
+        Date.now()
+      );
       state.transactions[key] = {
         ...state.transactions[key],
         omie_launch_id: null as unknown as number,
         omie_account_id: null as unknown as number,
+        omie_integration_id: freshIntegrationId,
         attachments_synced: false,
         sync_status: 'READY',
         last_sync_error: null,
