@@ -120,6 +120,10 @@ export interface ClaraDocument {
   mimeType?: string;
   url?: string;
   downloadUrl?: string;
+  download?: {
+    url?: string;
+    urlExpiration?: string;
+  };
   size?: number;
   createdAt?: string;
 }

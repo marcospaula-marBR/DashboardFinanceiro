@@ -489,7 +489,7 @@ export class ClaraSyncService {
 
             if (docs.length > 0) {
               for (const doc of docs) {
-                const docUrl = doc.download?.url || doc.url || doc.downloadUrl;
+                const docUrl = (doc as any).download?.url || doc.url || doc.downloadUrl;
                 if (!docUrl) continue;
 
                 // Baixa o binário do comprovante em base64 com mTLS
@@ -841,7 +841,7 @@ export class ClaraSyncService {
 
         if (docs.length > 0) {
           for (const doc of docs) {
-            const docUrl = doc.download?.url || doc.url || doc.downloadUrl;
+            const docUrl = (doc as any).download?.url || doc.url || doc.downloadUrl;
             if (!docUrl) continue;
             const { base64, fileName } = await claraClient.downloadDocumentAsBase64(docUrl);
             if (base64) {
