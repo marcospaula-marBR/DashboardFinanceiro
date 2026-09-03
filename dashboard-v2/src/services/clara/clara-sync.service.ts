@@ -360,12 +360,12 @@ export class ClaraSyncService {
       run.transactions_updated = updated;
       run.transactions_ignored = ignored;
 
-      // 5. Processamento dos elegíveis (READY) para envio ao Omie
+      // 5. Processamento dos elegíveis (READY) para envio ao Omie (IncluirContaPagar)
       const omieCreds = ClaraConfigService.getOmieCredentials(config.company_name);
-      const nCodCC = config.omie_n_cod_cc;
+      const supplierCode = config.omie_supplier_code ?? 12323918318; // Clara Cartoes Corporativos
 
-      if (!isSafeMode && (!nCodCC || !omieCreds.appKey || !omieCreds.appSecret)) {
-        throw new Error('Conta Omie da Clara (nCodCC) ou credenciais Omie não configuradas.');
+      if (!isSafeMode && (!supplierCode || !omieCreds.appKey || !omieCreds.appSecret)) {
+        throw new Error('Código do fornecedor Clara ou credenciais Omie não configuradas. Configure em Configurações → Clara.');
       }
 
       for (const tx of toSyncReady) {
@@ -382,30 +382,29 @@ export class ClaraSyncService {
             continue;
           }
 
-          // PRODUÇÃO: dispara IncluirLancCC no Omie
+          // PRODUÇÃO: dispara IncluirContaPagar no Omie
           try {
-            const omiePayload = ClaraOmieMapper.buildOmieLancamentoPayload(
+            const contaPagarPayload = ClaraOmieMapper.buildOmieContaPagarPayload(
               tx,
-              nCodCC!,
-              tx.omie_category_code || config.default_omie_category || '1.01.01',
+              supplierCode,
+              tx.omie_category_code || config.default_omie_category || '2.01.01',
               tx.omie_department_code,
               tx.omie_project_code || config.default_omie_project
             );
 
-            const res = await axios.post('https://app.omie.com.br/api/v1/financas/contacorrentelancamentos/', {
-              call: 'IncluirLancCC',
+            const res = await axios.post('https://app.omie.com.br/api/v1/financas/contapagar/', {
+              call: 'IncluirContaPagar',
               app_key: omieCreds.appKey,
               app_secret: omieCreds.appSecret,
-              param: [omiePayload],
+              param: [contaPagarPayload],
             }, { timeout: 20000 });
 
-            nCodLanc = Number(res.data?.nCodLanc);
+            nCodLanc = Number(res.data?.codigo_lancamento_omie);
             if (!nCodLanc) {
-              throw new Error(res.data?.faultstring || res.data?.cDescStatus || 'Omie não retornou nCodLanc.');
+              throw new Error(res.data?.faultstring || res.data?.descricao_status || 'Omie não retornou codigo_lancamento_omie.');
             }
 
             tx.omie_launch_id = nCodLanc;
-            tx.omie_account_id = nCodCC;
             tx.sync_status = 'SYNCED';
             tx.synced_at = new Date().toISOString();
             tx.last_sync_error = null;
@@ -414,7 +413,7 @@ export class ClaraSyncService {
             errors++;
             const msg = err.response?.data?.faultstring || err.message;
             tx.sync_status = 'ERROR';
-            tx.last_sync_error = `Omie IncluirLancCC: ${msg}`;
+            tx.last_sync_error = `Omie IncluirContaPagar: ${msg}`;
             tx.sync_attempts = (tx.sync_attempts || 0) + 1;
             await this.saveLocalTransaction(tx);
             continue;
@@ -442,7 +441,8 @@ export class ClaraSyncService {
                   const anexoPayload = ClaraOmieMapper.buildOmieAnexoPayload(
                     nCodLanc,
                     doc.name || fileName || `comprovante_${tx.authorization_number || tx.clara_uuid}.pdf`,
-                    base64
+                    base64,
+                    'conta-pagar'
                   );
 
                   await axios.post('https://app.omie.com.br/api/v1/geral/anexo/', {
@@ -728,32 +728,43 @@ export class ClaraSyncService {
 
     const config = await ClaraConfigService.getConfig();
     const omieCreds = ClaraConfigService.getOmieCredentials(config.company_name);
-    const nCodCC = config.omie_n_cod_cc;
 
-    if (!config.safe_mode && !nCodCC) {
-      throw new Error('Conta Omie da Clara (nCodCC) não selecionada na configuração.');
+    // Código do fornecedor 'Clara Cartões' no Omie (criado automaticamente se ausente)
+    const supplierCode = config.omie_supplier_code ?? 12323918318; // fallback ao código criado no setup
+
+    if (!config.safe_mode && !supplierCode) {
+      throw new Error('Código do fornecedor Clara no Omie não configurado. Acesse Configurações → Clara → Conta Omie.');
     }
 
     let nCodLanc = tx.omie_launch_id;
 
     if (!nCodLanc && !config.safe_mode) {
-      const omiePayload = ClaraOmieMapper.buildOmieLancamentoPayload(
+      const contaPagarPayload = ClaraOmieMapper.buildOmieContaPagarPayload(
         tx,
-        nCodCC!,
-        tx.omie_category_code || config.default_omie_category || '1.01.01',
+        supplierCode,
+        tx.omie_category_code || config.default_omie_category || '2.01.01',
         tx.omie_department_code,
         tx.omie_project_code || config.default_omie_project
       );
 
-      const res = await axios.post('https://app.omie.com.br/api/v1/financas/contacorrentelancamentos/', {
-        call: 'IncluirLancCC',
-        app_key: omieCreds.appKey,
-        app_secret: omieCreds.appSecret,
-        param: [omiePayload],
-      }, { timeout: 20000 });
+      let res;
+      try {
+        res = await axios.post('https://app.omie.com.br/api/v1/financas/contapagar/', {
+          call: 'IncluirContaPagar',
+          app_key: omieCreds.appKey,
+          app_secret: omieCreds.appSecret,
+          param: [contaPagarPayload],
+        }, { timeout: 20000 });
+      } catch (axiosErr: any) {
+        const omieError = axiosErr.response?.data?.faultstring || axiosErr.message;
+        throw new Error(`Omie IncluirContaPagar: ${omieError}`);
+      }
 
-      nCodLanc = Number(res.data?.nCodLanc);
-      if (!nCodLanc) throw new Error(res.data?.faultstring || 'Omie não retornou nCodLanc.');
+      nCodLanc = Number(res.data?.codigo_lancamento_omie);
+      if (!nCodLanc) {
+        const errMsg = res.data?.faultstring || res.data?.descricao_status || 'Omie não retornou codigo_lancamento_omie.';
+        throw new Error(`Omie IncluirContaPagar falhou: ${errMsg}`);
+      }
 
       tx.omie_launch_id = nCodLanc;
       tx.sync_status = 'SYNCED';
@@ -774,7 +785,7 @@ export class ClaraSyncService {
             if (!docUrl) continue;
             const { base64, fileName } = await claraClient.downloadDocumentAsBase64(docUrl);
             if (base64) {
-              const anexoPayload = ClaraOmieMapper.buildOmieAnexoPayload(nCodLanc, fileName, base64);
+              const anexoPayload = ClaraOmieMapper.buildOmieAnexoPayload(nCodLanc, fileName, base64, 'conta-pagar');
               await axios.post('https://app.omie.com.br/api/v1/geral/anexo/', {
                 call: 'IncluirAnexo',
                 app_key: omieCreds.appKey,

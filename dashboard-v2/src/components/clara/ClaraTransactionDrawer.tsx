@@ -262,8 +262,8 @@ export function ClaraTransactionDrawer({
 
               <div className="col-span-2 pt-1 border-t border-emerald-200/40 flex items-center justify-between text-[11px]">
                 <span className="text-slate-500">Módulo Omie:</span>
-                <span className="font-bold text-emerald-900 bg-emerald-100/70 px-2 py-0.5 rounded">
-                  Finanças → Contas Correntes (Clara - Prestadores)
+                <span className="font-bold text-indigo-900 bg-indigo-100/70 px-2 py-0.5 rounded">
+                  Finanças → Contas a Pagar (Clara Cartões)
                 </span>
               </div>
             </div>

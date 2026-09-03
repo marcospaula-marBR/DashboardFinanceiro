@@ -411,7 +411,7 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
                   </optgroup>
                 </select>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Os lançamentos de compras com cartão da Clara serão inseridos nesta conta via IncluirLancCC.
+                  As despesas de cartão da Clara são enviadas ao Omie como <strong>Contas a Pagar</strong> (fornecedor: Clara Cartões Corporativos). O campo de Conta Corrente abaixo não é mais utilizado para o envio.
                 </p>
               </div>
 

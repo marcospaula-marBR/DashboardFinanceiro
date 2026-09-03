@@ -5,6 +5,7 @@ import {
   ClaraRawTransaction, 
   OmieLancCCPayload, 
   OmieAnexoPayload,
+  OmieContaPagarPayload,
   ClaraConfig 
 } from '@/types/clara.types';
 
@@ -221,7 +222,8 @@ export class ClaraOmieMapper {
   public static buildOmieAnexoPayload(
     nCodLanc: number,
     fileName: string,
-    fileBufferOrBase64: Buffer | string
+    fileBufferOrBase64: Buffer | string,
+    cTabela: 'conta-corrente-lancamento' | 'conta-pagar' = 'conta-pagar'
   ): OmieAnexoPayload {
     const rawBuffer = Buffer.isBuffer(fileBufferOrBase64)
       ? fileBufferOrBase64
@@ -233,11 +235,58 @@ export class ClaraOmieMapper {
     const cMd5 = crypto.createHash('md5').update(zipBase64).digest('hex');
 
     return {
-      cTabela: 'conta-corrente-lancamento',
+      cTabela,
       nId: nCodLanc,
       cNomeArquivo: cleanName,
       cArquivo: zipBase64,
       cMd5,
     };
+  }
+
+  /**
+   * Constrói o payload para a call IncluirContaPagar no Omie.
+   * Registra cada compra do cartão Clara como um título a pagar a fornecedor,
+   * visível no módulo Finanças → Contas a Pagar do Omie.
+   */
+  public static buildOmieContaPagarPayload(
+    tx: ClaraTransactionRecord,
+    supplierCode: number,
+    categoryCode: string,
+    departmentCode?: string | null,
+    projectCode?: string | null
+  ): OmieContaPagarPayload {
+    if (!supplierCode) {
+      throw new Error('Código do fornecedor Clara (omie_supplier_code) não definido na configuração.');
+    }
+    if (!categoryCode) {
+      throw new Error(`Categoria Omie não definida para a transação ${tx.clara_uuid}.`);
+    }
+
+    const dData = this.formatDateToOmie(tx.operation_date);
+    const valor = this.getOmieTransactionAmount(tx);
+    const cCodInt = `CP${this.generateOmieIntegrationId(tx.clara_uuid).substring(2)}`; // mesmo hash, prefix CP
+    const obs = this.buildOmieObservation(tx);
+
+    const payload: OmieContaPagarPayload = {
+      codigo_lancamento_integracao: cCodInt,
+      codigo_cliente_fornecedor: supplierCode,
+      data_vencimento: dData,
+      data_emissao: dData,
+      valor_documento: valor,
+      codigo_categoria: categoryCode,
+      numero_documento: tx.authorization_number || tx.clara_uuid.substring(0, 20),
+      observacao: obs.substring(0, 500),
+    };
+
+    if (departmentCode?.trim()) {
+      payload.codigo_departamento = departmentCode.trim();
+    }
+
+    const proj = projectCode || tx.omie_project_code;
+    if (proj && !isNaN(Number(proj))) {
+      payload.codigo_projeto = Number(proj);
+    }
+
+    return payload;
   }
 }

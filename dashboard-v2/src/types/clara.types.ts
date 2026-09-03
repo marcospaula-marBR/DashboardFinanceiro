@@ -24,6 +24,7 @@ export interface ClaraConfig {
   private_key_pem?: string;
   base_url: string;
   omie_n_cod_cc?: number | null;
+  omie_supplier_code?: number | null; // codigo_cliente_omie do fornecedor 'Clara Cartões'
   omie_cc_descricao?: string | null;
   company_name: string;
   auto_sync_enabled: boolean;
@@ -249,13 +250,27 @@ export interface OmieLancCCPayload {
   }>;
 }
 
-// Payload para Omie IncluirAnexo
+// Payload para Omie IncluirAnexo (suporta CC-lancamento e conta-pagar)
 export interface OmieAnexoPayload {
-  cTabela: 'conta-corrente-lancamento';
-  nId: number; // nCodLanc
+  cTabela: 'conta-corrente-lancamento' | 'conta-pagar';
+  nId: number; // nCodLanc ou codigo_lancamento_omie
   cNomeArquivo: string;
-  cArquivo: string; // Base64
-  cMd5: string; // MD5 do conteúdo Base64
+  cArquivo: string; // Base64 de ZIP
+  cMd5: string; // MD5 do conteúdo Base64 do ZIP
+}
+
+// Payload oficial para Omie IncluirContaPagar
+export interface OmieContaPagarPayload {
+  codigo_lancamento_integracao: string; // ID determinístico idempotente
+  codigo_cliente_fornecedor: number;    // codigo_cliente_omie do fornecedor Clara
+  data_vencimento: string;              // DD/MM/AAAA
+  data_emissao: string;                 // DD/MM/AAAA
+  valor_documento: number;
+  codigo_categoria: string;
+  numero_documento?: string | null;
+  observacao?: string | null;
+  codigo_departamento?: string | null;
+  codigo_projeto?: number | null;
 }
 
 // Opções de Recursos Omie
