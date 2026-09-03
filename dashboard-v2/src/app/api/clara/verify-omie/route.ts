@@ -11,13 +11,13 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const omieId = Number(body.omieId);
+    const company = body.company || body.companyId || 'Mar Brasil';
 
     if (!omieId) {
       return NextResponse.json({ status: 'error', message: 'omieId não informado.' }, { status: 400 });
     }
 
-    const config = await ClaraConfigService.getConfig();
-    const omieCreds = ClaraConfigService.getOmieCredentials(config.company_name);
+    const omieCreds = ClaraConfigService.getOmieCredentials(company);
 
     if (!omieCreds.appKey || !omieCreds.appSecret) {
       return NextResponse.json({ status: 'error', message: 'Credenciais Omie não configuradas.' }, { status: 400 });

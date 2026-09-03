@@ -191,11 +191,12 @@ export function ClaraTransactionDrawer({
 
     try {
       setSyncStep('📤 Enviando para Omie — Contas a Pagar...');
+      const compId = transaction.company_id || activeCompanyId || (activeCompanyName?.toLowerCase().includes('dzm') ? 'dzm' : 'marbrasil');
 
       const res = await fetch(`/api/clara/transactions/${transaction.clara_uuid}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'retry' }),
+        body: JSON.stringify({ action: 'retry', companyId: compId }),
       });
 
       const data = await res.json().catch(() => ({ status: 'error', message: 'Resposta inválida do servidor.' }));
@@ -220,7 +221,7 @@ export function ClaraTransactionDrawer({
           const verRes = await fetch('/api/clara/verify-omie', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ omieId: updated.omie_launch_id }),
+            body: JSON.stringify({ omieId: updated.omie_launch_id, company: compId }),
           });
           const verData = await verRes.json().catch(() => null);
           const verified = verRes.ok && verData?.status === 'success';
@@ -288,11 +289,12 @@ export function ClaraTransactionDrawer({
 
     try {
       setSyncStep('📤 Reenviando para Omie — Contas a Pagar...');
+      const compId = transaction.company_id || activeCompanyId || (activeCompanyName?.toLowerCase().includes('dzm') ? 'dzm' : 'marbrasil');
 
       const res = await fetch(`/api/clara/transactions/${transaction.clara_uuid}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'force_resync' }),
+        body: JSON.stringify({ action: 'force_resync', companyId: compId }),
       });
 
       const data = await res.json().catch(() => ({ status: 'error', message: 'Resposta inválida do servidor.' }));
@@ -316,7 +318,7 @@ export function ClaraTransactionDrawer({
           const verRes = await fetch('/api/clara/verify-omie', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ omieId: updated.omie_launch_id }),
+            body: JSON.stringify({ omieId: updated.omie_launch_id, company: compId }),
           });
           const verData = await verRes.json().catch(() => null);
           const verified = verRes.ok && verData?.status === 'success';
@@ -473,6 +475,39 @@ export function ClaraTransactionDrawer({
                 </span>
               </div>
             </div>
+
+            {/* Banner de Feedback Imediato no Card Omie */}
+            {syncStep && !syncResult && (
+              <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 font-medium animate-pulse">
+                <Loader2 size={14} className="animate-spin text-blue-600 shrink-0" />
+                <span>{syncStep}</span>
+              </div>
+            )}
+            {syncResult && (
+              <div className={`p-3 rounded-lg border text-xs space-y-1 ${
+                syncResult.type === 'success'
+                  ? 'bg-emerald-100 border-emerald-300 text-emerald-950 shadow-xs'
+                  : syncResult.type === 'error'
+                  ? 'bg-red-50 border-red-200 text-red-900 shadow-xs'
+                  : 'bg-amber-50 border-amber-200 text-amber-900 shadow-xs'
+              }`}>
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  {syncResult.type === 'success' && <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />}
+                  {syncResult.type === 'error' && <XCircle size={16} className="text-red-600 shrink-0" />}
+                  {syncResult.type === 'warning' && <AlertCircle size={16} className="text-amber-600 shrink-0" />}
+                  <span>{syncResult.title}</span>
+                </div>
+                <p className="text-[11px] leading-relaxed opacity-95">{syncResult.message}</p>
+                {syncResult.omieId && (
+                  <div className="flex items-center gap-2 pt-1 font-bold">
+                    <span className="bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded text-[10px]">
+                      {syncResult.omieValidated ? '✓ Confirmado no Omie' : 'ID Gerado'}
+                    </span>
+                    <span className="font-mono text-[11px]">#{syncResult.omieId}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Edição / Vinculação Omie */}
             <div className="pt-2 border-t border-emerald-200/60 space-y-2.5">

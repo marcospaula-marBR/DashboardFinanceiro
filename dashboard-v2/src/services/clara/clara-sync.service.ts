@@ -828,7 +828,7 @@ export class ClaraSyncService {
   /**
    * Reprocessa manualmente uma transação específica
    */
-  public static async retryTransaction(idOrUuid: string): Promise<ClaraTransactionRecord> {
+  public static async retryTransaction(idOrUuid: string, forceSend = true): Promise<ClaraTransactionRecord> {
     let tx: ClaraTransactionRecord | null = await ClaraStorageService.getTransaction(idOrUuid, DEFAULT_CLARA_CONFIG);
 
     if (!tx) {
@@ -872,27 +872,27 @@ export class ClaraSyncService {
       return tx;
     }
 
-    const config = await ClaraConfigService.getConfig();
-    const omieCreds = ClaraConfigService.getOmieCredentials(config.company_name);
+    // Multi-tenant: carrega configuração com base na empresa da transação
+    const companyId = tx.company_id || (tx.company_name?.toLowerCase().includes('dzm') ? 'dzm' : 'marbrasil');
+    const isDZM = companyId.toLowerCase().includes('dzm');
+    const config = await ClaraConfigService.getConfig(companyId);
+    const omieCreds = ClaraConfigService.getOmieCredentials(isDZM ? 'DZM' : (config.company_name || 'Mar Brasil'));
 
-    // Código do fornecedor 'Clara Cartões' no Omie (criado automaticamente se ausente)
-    const supplierCode = config.omie_supplier_code ?? 12323918318; // fallback ao código criado no setup
-
-    if (!config.safe_mode && !supplierCode) {
-      throw new Error('Código do fornecedor Clara no Omie não configurado. Acesse Configurações → Clara → Conta Omie.');
-    }
+    // Código do fornecedor no Omie (específico por empresa)
+    const supplierCode = config.omie_supplier_code || (isDZM ? 11727935348 : 12323918318);
 
     let nCodLanc = tx.omie_launch_id;
+    const shouldSend = forceSend || !config.safe_mode;
 
-    if (!nCodLanc && !config.safe_mode) {
+    if (!nCodLanc && shouldSend) {
       const merchantSupplierCode = await this.ensureSupplier(tx.merchant_name, omieCreds, supplierCode);
       const contaPagarPayload = ClaraOmieMapper.buildOmieContaPagarPayload(
         tx,
         merchantSupplierCode,
-        tx.omie_category_code || config.default_omie_category || '2.01.01',
+        tx.omie_category_code || config.default_omie_category || (isDZM ? '2.08.99' : '2.01.01'),
         tx.omie_department_code,
         tx.omie_project_code || config.default_omie_project,
-        config.omie_n_cod_cc || 12291364271
+        config.omie_n_cod_cc || (isDZM ? 11704272090 : 12291364271)
       );
 
       let res;
@@ -905,12 +905,18 @@ export class ClaraSyncService {
         }, { timeout: 20000 });
       } catch (axiosErr: any) {
         const omieError = axiosErr.response?.data?.faultstring || axiosErr.message;
+        tx.last_sync_error = `Omie IncluirContaPagar: ${omieError}`;
+        tx.sync_status = 'ERROR';
+        await this.saveLocalTransaction(tx);
         throw new Error(`Omie IncluirContaPagar: ${omieError}`);
       }
 
       nCodLanc = Number(res.data?.codigo_lancamento_omie);
       if (!nCodLanc) {
         const errMsg = res.data?.faultstring || res.data?.descricao_status || 'Omie não retornou codigo_lancamento_omie.';
+        tx.last_sync_error = `Omie IncluirContaPagar: ${errMsg}`;
+        tx.sync_status = 'ERROR';
+        await this.saveLocalTransaction(tx);
         throw new Error(`Omie IncluirContaPagar falhou: ${errMsg}`);
       }
 
