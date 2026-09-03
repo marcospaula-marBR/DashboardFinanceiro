@@ -259,6 +259,13 @@ export function ClaraTransactionDrawer({
                   {transaction.omie_integration_id || '-'}
                 </span>
               </div>
+
+              <div className="col-span-2 pt-1 border-t border-emerald-200/40 flex items-center justify-between text-[11px]">
+                <span className="text-slate-500">Módulo Omie:</span>
+                <span className="font-bold text-emerald-900 bg-emerald-100/70 px-2 py-0.5 rounded">
+                  Finanças → Contas Correntes (Clara - Prestadores)
+                </span>
+              </div>
             </div>
 
             {/* Edição / Vinculação Omie */}
@@ -269,78 +276,64 @@ export function ClaraTransactionDrawer({
 
               <div>
                 <label className="text-[11px] font-semibold text-slate-700 block mb-1">Categoria Omie:</label>
-                {transaction.sync_status === 'SYNCED' ? (
-                  <span className="font-bold text-slate-900 text-xs">{transaction.omie_category_code}</span>
-                ) : (
-                  <select
-                    value={selectedCat}
-                    onChange={e => setSelectedCat(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
-                  >
-                    <option value="">Selecione a categoria Omie...</option>
-                    {categories.map(c => (
-                      <option key={c.codigo} value={c.codigo}>
-                        {c.codigo} - {c.descricao}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  value={selectedCat}
+                  onChange={e => setSelectedCat(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                >
+                  <option value="">Selecione a categoria Omie...</option>
+                  {categories.map(c => (
+                    <option key={c.codigo} value={c.codigo}>
+                      {c.codigo} - {c.descricao}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="text-[11px] font-semibold text-slate-700 block mb-1">Centro de Custo (Depto):</label>
-                  {transaction.sync_status === 'SYNCED' ? (
-                    <span className="text-slate-900 text-xs">{transaction.omie_department_code || '-'}</span>
-                  ) : (
-                    <select
-                      value={selectedDepto}
-                      onChange={e => setSelectedDepto(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
-                    >
-                      <option value="">Sem departamento</option>
-                      {departments.map(d => (
-                        <option key={d.codigo} value={d.codigo}>
-                          {d.descricao}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                  <select
+                    value={selectedDepto}
+                    onChange={e => setSelectedDepto(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  >
+                    <option value="">Sem departamento</option>
+                    {departments.map(d => (
+                      <option key={d.codigo} value={d.codigo}>
+                        {d.descricao}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className="text-[11px] font-semibold text-slate-700 block mb-1">Projeto Omie:</label>
-                  {transaction.sync_status === 'SYNCED' ? (
-                    <span className="text-slate-900 text-xs">{transaction.omie_project_code || '-'}</span>
-                  ) : (
-                    <select
-                      value={selectedProj}
-                      onChange={e => setSelectedProj(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
-                    >
-                      <option value="">Sem projeto</option>
-                      {projects.map(p => (
-                        <option key={p.codigo} value={p.codigo}>
-                          {p.descricao}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                  <select
+                    value={selectedProj}
+                    onChange={e => setSelectedProj(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                  >
+                    <option value="">Sem projeto</option>
+                    {projects.map(p => (
+                      <option key={p.codigo} value={p.codigo}>
+                        {p.descricao}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {transaction.sync_status !== 'SYNCED' && (
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={handleSaveFields}
-                    disabled={savingFields}
-                    className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold rounded-lg shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {savingFields ? 'Salvando...' : 'Salvar Classificação'}
-                  </button>
-                </div>
-              )}
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveFields}
+                  disabled={savingFields}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold rounded-lg shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {savingFields ? 'Salvando...' : 'Salvar Classificação'}
+                </button>
+              </div>
             </div>
 
             {transaction.sync_status === 'MAPPING_REQUIRED' && (

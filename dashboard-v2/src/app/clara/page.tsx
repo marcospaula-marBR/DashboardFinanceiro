@@ -564,11 +564,11 @@ export default function ClaraIntegrationPage() {
           ) : (
             <>
               {/* VISÃO DESKTOP: Tabela Completa */}
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="hidden lg:block overflow-x-auto w-full">
+                <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
                   <thead>
                     <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="py-3 px-3 text-center w-10">
+                      <th className="py-3 px-2 text-center w-8">
                         <input
                           type="checkbox"
                           checked={transactions.length > 0 && selectedUuids.length === transactions.length}
@@ -577,17 +577,17 @@ export default function ClaraIntegrationPage() {
                           title="Selecionar todas as transações desta página"
                         />
                       </th>
-                      <th className="py-3 px-3">Data</th>
-                      <th className="py-3 px-3">Portador & Cartão</th>
-                      <th className="py-3 px-3">Estabelecimento</th>
-                      <th className="py-3 px-3 text-right">Valor</th>
-                      <th className="py-3 px-3 text-center">Status Clara</th>
-                      <th className="py-3 px-3">Categoria Omie</th>
-                      <th className="py-3 px-3">Centro de Custo</th>
-                      <th className="py-3 px-3">Projeto</th>
-                      <th className="py-3 px-3 text-center">Status Omie</th>
-                      <th className="py-3 px-3 text-center">Anexos</th>
-                      <th className="py-3 px-3 text-center">Ações</th>
+                      <th className="py-3 px-2.5 w-24">Data</th>
+                      <th className="py-3 px-2.5 w-44">Portador & Cartão</th>
+                      <th className="py-3 px-2.5">Estabelecimento</th>
+                      <th className="py-3 px-2.5 text-right w-28">Valor</th>
+                      <th className="py-3 px-2 text-center w-24">Status Clara</th>
+                      <th className="py-3 px-2.5 w-32">Categoria Omie</th>
+                      <th className="py-3 px-2 w-28">Centro de Custo</th>
+                      <th className="py-3 px-2 w-28">Projeto</th>
+                      <th className="py-3 px-2 text-center w-28">Status Omie</th>
+                      <th className="py-3 px-2 text-center w-16">Anexos</th>
+                      <th className="py-3 px-2 text-center w-14">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
