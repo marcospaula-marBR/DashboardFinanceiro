@@ -1002,11 +1002,13 @@ export default function ClaraIntegrationPage() {
       <ClaraCategoryMappingModal
         isOpen={categoryMapOpen}
         onClose={() => setCategoryMapOpen(false)}
+        activeCompanyName={activeCompany.name}
       />
 
       <ClaraDepartmentMappingModal
         isOpen={departmentMapOpen}
         onClose={() => setDepartmentMapOpen(false)}
+        activeCompanyName={activeCompany.name}
       />
 
       <ClaraSyncHistoryModal

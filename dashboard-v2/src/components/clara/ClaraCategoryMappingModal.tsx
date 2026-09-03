@@ -7,9 +7,10 @@ import { ClaraCategoryMapping, OmieCategoryOption } from "@/types/clara.types";
 interface ClaraCategoryMappingModalProps {
   isOpen: boolean;
   onClose: () => void;
+  activeCompanyName?: string;
 }
 
-export function ClaraCategoryMappingModal({ isOpen, onClose }: ClaraCategoryMappingModalProps) {
+export function ClaraCategoryMappingModal({ isOpen, onClose, activeCompanyName = 'Mar Brasil' }: ClaraCategoryMappingModalProps) {
   const [mappings, setMappings] = useState<ClaraCategoryMapping[]>([]);
   const [categories, setCategories] = useState<OmieCategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,14 +26,14 @@ export function ClaraCategoryMappingModal({ isOpen, onClose }: ClaraCategoryMapp
     if (isOpen) {
       loadData();
     }
-  }, [isOpen]);
+  }, [isOpen, activeCompanyName]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       const [mapRes, omieRes] = await Promise.all([
         fetch('/api/clara/mappings/categories').then(r => r.json()),
-        fetch('/api/clara/omie-resources').then(r => r.json()),
+        fetch(`/api/clara/omie-resources?company=${encodeURIComponent(activeCompanyName)}`).then(r => r.json()),
       ]);
 
       if (mapRes.data) setMappings(mapRes.data);

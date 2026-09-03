@@ -7,9 +7,10 @@ import { ClaraDepartmentMapping, OmieDepartmentOption } from "@/types/clara.type
 interface ClaraDepartmentMappingModalProps {
   isOpen: boolean;
   onClose: () => void;
+  activeCompanyName?: string;
 }
 
-export function ClaraDepartmentMappingModal({ isOpen, onClose }: ClaraDepartmentMappingModalProps) {
+export function ClaraDepartmentMappingModal({ isOpen, onClose, activeCompanyName = 'Mar Brasil' }: ClaraDepartmentMappingModalProps) {
   const [mappings, setMappings] = useState<ClaraDepartmentMapping[]>([]);
   const [departments, setDepartments] = useState<OmieDepartmentOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,14 +26,14 @@ export function ClaraDepartmentMappingModal({ isOpen, onClose }: ClaraDepartment
     if (isOpen) {
       loadData();
     }
-  }, [isOpen]);
+  }, [isOpen, activeCompanyName]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       const [mapRes, omieRes] = await Promise.all([
         fetch('/api/clara/mappings/departments').then(r => r.json()),
-        fetch('/api/clara/omie-resources').then(r => r.json()),
+        fetch(`/api/clara/omie-resources?company=${encodeURIComponent(activeCompanyName)}`).then(r => r.json()),
       ]);
 
       if (mapRes.data) setMappings(mapRes.data);

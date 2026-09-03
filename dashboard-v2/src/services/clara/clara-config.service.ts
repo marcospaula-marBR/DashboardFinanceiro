@@ -238,20 +238,13 @@ export class ClaraConfigService {
    * Obtém as credenciais ativas do Omie do ambiente
    */
   public static getOmieCredentials(company = 'Mar Brasil'): { appKey: string; appSecret: string } {
-    const isDZM = company.toLowerCase().includes('dzm');
+    const isDZM = (company || '').toLowerCase().includes('dzm');
     const appKey = isDZM 
-      ? (process.env.OMIE_APP_KEY_DZM || '') 
-      : (process.env.OMIE_APP_KEY_MARBRASIL || '');
+      ? (process.env.OMIE_APP_KEY_DZM || '6107206892787') 
+      : (process.env.OMIE_APP_KEY_MARBRASIL || '6107191559469');
     const appSecret = isDZM 
-      ? (process.env.OMIE_APP_SECRET_DZM || '') 
-      : (process.env.OMIE_APP_SECRET_MARBRASIL || '');
-
-    if (!appKey || !appSecret) {
-      // Tenta o outro se um estiver vazio
-      const fallbackKey = process.env.OMIE_APP_KEY_MARBRASIL || process.env.OMIE_APP_KEY_DZM || '';
-      const fallbackSecret = process.env.OMIE_APP_SECRET_MARBRASIL || process.env.OMIE_APP_SECRET_DZM || '';
-      return { appKey: fallbackKey, appSecret: fallbackSecret };
-    }
+      ? (process.env.OMIE_APP_SECRET_DZM || '61eca559c01338bc28eb92e5a6957fdc') 
+      : (process.env.OMIE_APP_SECRET_MARBRASIL || '4bc8f241278fa35c48bb60c7366c55f9');
 
     return { appKey, appSecret };
   }
