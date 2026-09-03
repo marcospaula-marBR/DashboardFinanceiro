@@ -127,8 +127,8 @@ export class ClaraOmieMapper {
     if (departmentCode && departmentCode.trim()) {
       payload.departamentos = [
         {
-          cCodDepto: departmentCode.trim(),
-          nPerc: 100,
+          cCodDep: departmentCode.trim(),
+          nPerDep: 100,
         },
       ];
     }

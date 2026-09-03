@@ -47,9 +47,12 @@ export async function POST(
         : 'Transação processada com status: ' + updated.sync_status,
     });
   } catch (error: any) {
+    const omieFault = error.response?.data?.faultstring;
+    const axiosMsg = error.response?.data?.message || error.response?.data?.error;
+    const finalMsg = omieFault || axiosMsg || error.message || 'Erro ao processar transação.';
     return NextResponse.json({
       status: 'error',
-      message: error.message || 'Erro ao processar transação.',
+      message: finalMsg,
     }, { status: 500 });
   }
 }

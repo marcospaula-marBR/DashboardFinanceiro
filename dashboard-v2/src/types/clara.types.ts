@@ -244,8 +244,8 @@ export interface OmieLancCCPayload {
     nCodProjeto?: number | null;
   };
   departamentos?: Array<{
-    cCodDepto: string;
-    nPerc: number;
+    cCodDep: string;
+    nPerDep: number;
   }>;
 }
 
