@@ -444,15 +444,27 @@ export class ClaraConfigService {
     if (!appKey || !appSecret) return [];
 
     try {
-      const response = await axios.post('https://app.omie.com.br/api/v1/geral/categorias/', {
-        call: 'ListarCategorias',
-        app_key: appKey,
-        app_secret: appSecret,
-        param: [{ pagina: 1, registros_por_pagina: 100 }],
-      }, { timeout: 15000 });
+      const allList: any[] = [];
+      let page = 1;
+      let totalPages = 1;
 
-      const list = response.data?.categoria_cadastro || [];
-      return list
+      do {
+        const response = await axios.post('https://app.omie.com.br/api/v1/geral/categorias/', {
+          call: 'ListarCategorias',
+          app_key: appKey,
+          app_secret: appSecret,
+          param: [{ pagina: page, registros_por_pagina: 100 }],
+        }, { timeout: 15000 });
+
+        const data = response.data;
+        const pageItems = data?.categoria_cadastro || [];
+        allList.push(...pageItems);
+
+        totalPages = data?.total_de_paginas || 1;
+        page++;
+      } while (page <= totalPages && page <= 10);
+
+      return allList
         .map((c: any) => ({
           codigo: String(c.codigo),
           descricao: decodeHtml(c.descricao || String(c.codigo)),
@@ -516,15 +528,27 @@ export class ClaraConfigService {
     if (!appKey || !appSecret) return [];
 
     try {
-      const response = await axios.post('https://app.omie.com.br/api/v1/geral/projetos/', {
-        call: 'ListarProjetos',
-        app_key: appKey,
-        app_secret: appSecret,
-        param: [{ pagina: 1, registros_por_pagina: 200, apenas_importado_api: 'N' }],
-      }, { timeout: 15000 });
+      const allProjects: any[] = [];
+      let page = 1;
+      let totalPages = 1;
 
-      const list = response.data?.cadastro || response.data?.projetos || response.data?.projeto_cadastro || [];
-      return list
+      do {
+        const response = await axios.post('https://app.omie.com.br/api/v1/geral/projetos/', {
+          call: 'ListarProjetos',
+          app_key: appKey,
+          app_secret: appSecret,
+          param: [{ pagina: page, registros_por_pagina: 100, apenas_importado_api: 'N' }],
+        }, { timeout: 15000 });
+
+        const data = response.data;
+        const list = data?.cadastro || data?.projetos || data?.projeto_cadastro || [];
+        allProjects.push(...list);
+
+        totalPages = data?.total_de_paginas || 1;
+        page++;
+      } while (page <= totalPages && page <= 10);
+
+      return allProjects
         .map((p: any) => ({
           codigo: String(p.codigo || p.nCodProjeto || p.codigo_projeto),
           descricao: String(p.nome || p.descricao || p.descricao_projeto || p.codigo).trim(),
