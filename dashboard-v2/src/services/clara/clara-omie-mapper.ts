@@ -284,7 +284,12 @@ export class ClaraOmieMapper {
     }
 
     if (departmentCode?.trim()) {
-      payload.codigo_departamento = departmentCode.trim();
+      payload.distribuicao = [
+        {
+          cCodDep: departmentCode.trim(),
+          nPerDep: 100,
+        },
+      ];
     }
 
     const proj = projectCode || tx.omie_project_code;
