@@ -25,6 +25,8 @@ export interface SyncOptions {
   trigger?: 'MANUAL' | 'SCHEDULED';
   forceSafeMode?: boolean;
   forceFullSync?: boolean;
+  companyId?: string;
+  companyName?: string;
 }
 
 export interface SyncResultSummary {
@@ -242,6 +244,8 @@ export class ClaraSyncService {
       omie_department_code: null,
       registration_date: initialRegDate,
       due_date: computedDueDate,
+      company_id: config?.active_company_id || 'marbrasil',
+      company_name: config?.active_company_name || config?.company_name || 'Mar Brasil',
       has_attachments: hasAttachments,
       attachments_count: docs.length,
       attachments_synced: false,
@@ -284,7 +288,8 @@ export class ClaraSyncService {
     }
 
     const run = await this.createSyncRun(trigger);
-    const config = await ClaraConfigService.getConfig();
+    const targetCompany = options.companyId || options.companyName || 'marbrasil';
+    const config = await ClaraConfigService.getConfig(targetCompany);
     const isSafeMode = options.forceSafeMode !== undefined ? options.forceSafeMode : config.safe_mode;
 
     let received = 0;
@@ -646,6 +651,7 @@ export class ClaraSyncService {
     transactionType?: string;
     startDate?: string;
     endDate?: string;
+    companyId?: string;
   } = {}): Promise<{ transactions: ClaraTransactionRecord[]; total: number }> {
     const page = params.page || 1;
     const pageSize = params.pageSize || 25;
@@ -655,6 +661,9 @@ export class ClaraSyncService {
     try {
       let query = supabase.from('clara_transactions').select('*', { count: 'exact' });
 
+      if (params.companyId && params.companyId !== 'all') {
+        query = query.ilike('company_id', `%${params.companyId}%`);
+      }
       if (params.syncStatus && params.syncStatus !== 'ALL') {
         query = query.eq('sync_status', params.syncStatus);
       }
@@ -686,7 +695,7 @@ export class ClaraSyncService {
     }
 
     // Busca itens do storage compartilhado e memória
-    const storedItems = await ClaraStorageService.getAllTransactions(DEFAULT_CLARA_CONFIG);
+    const storedItems = await ClaraStorageService.getAllTransactions(DEFAULT_CLARA_CONFIG, params.companyId);
     for (const item of storedItems) {
       if (!memoryTransactions.has(item.clara_uuid)) {
         memoryTransactions.set(item.clara_uuid, item);
@@ -694,6 +703,15 @@ export class ClaraSyncService {
     }
 
     let items = Array.from(memoryTransactions.values());
+    if (params.companyId && params.companyId !== 'all') {
+      const cId = params.companyId.toLowerCase();
+      items = items.filter(t => {
+        if (t.company_id) {
+          return t.company_id.toLowerCase().includes(cId) || cId.includes(t.company_id.toLowerCase());
+        }
+        return cId.includes('mar');
+      });
+    }
     if (params.syncStatus && params.syncStatus !== 'ALL') {
       items = items.filter(t => t.sync_status === params.syncStatus);
     }
@@ -723,7 +741,7 @@ export class ClaraSyncService {
   /**
    * Retorna métricas de KPIs para o painel de topo
    */
-  public static async getMetrics(): Promise<{
+  public static async getMetrics(companyId?: string): Promise<{
     totalTransactions: number;
     syncedCount: number;
     pendingCount: number;
@@ -734,26 +752,40 @@ export class ClaraSyncService {
     lastSyncDate: string | null;
     safeMode: boolean;
   }> {
-    const config = await ClaraConfigService.getConfig();
+    const config = await ClaraConfigService.getConfig(companyId || 'marbrasil');
     let rows: ClaraTransactionRecord[] = [];
 
     try {
-      const { data } = await supabase
+      let q = supabase
         .from('clara_transactions')
-        .select('sync_status, amount, omie_launch_id, updated_at');
+        .select('sync_status, amount, omie_launch_id, updated_at, company_id');
+      if (companyId && companyId !== 'all') {
+        q = q.ilike('company_id', `%${companyId}%`);
+      }
+      const { data } = await q;
       if (data && data.length > 0) rows = data as any;
     } catch {
       // Fallback
     }
 
     if (rows.length === 0) {
-      const storedItems = await ClaraStorageService.getAllTransactions(DEFAULT_CLARA_CONFIG);
+      const storedItems = await ClaraStorageService.getAllTransactions(DEFAULT_CLARA_CONFIG, companyId);
       for (const item of storedItems) {
         if (!memoryTransactions.has(item.clara_uuid)) {
           memoryTransactions.set(item.clara_uuid, item);
         }
       }
       rows = Array.from(memoryTransactions.values());
+    }
+
+    if (companyId && companyId !== 'all') {
+      const cId = companyId.toLowerCase();
+      rows = rows.filter(t => {
+        if (t.company_id) {
+          return t.company_id.toLowerCase().includes(cId) || cId.includes(t.company_id.toLowerCase());
+        }
+        return cId.includes('mar');
+      });
     }
 
     let syncedCount = 0;

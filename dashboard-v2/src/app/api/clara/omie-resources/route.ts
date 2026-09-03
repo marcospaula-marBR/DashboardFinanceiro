@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import { ClaraConfigService } from '@/services/clara/clara-config.service';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const company = searchParams.get('company') || 'Mar Brasil';
+
     const [accounts, departments, categories, projects] = await Promise.all([
-      ClaraConfigService.getOmieAccounts(false), // busca todas as contas para permitir filtrar tipo CR
-      ClaraConfigService.getOmieDepartments(),
+      ClaraConfigService.getOmieAccounts(false, company), // busca todas as contas da empresa
+      ClaraConfigService.getOmieDepartments(company),
       ClaraConfigService.getOmieCategories(),
-      ClaraConfigService.getOmieProjects(),
+      ClaraConfigService.getOmieProjects(company),
     ]);
 
     // Separa contas tipo CR (Cartão de Crédito) com prioridade

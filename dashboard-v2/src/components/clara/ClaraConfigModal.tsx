@@ -20,9 +20,11 @@ interface ClaraConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: () => void;
+  activeCompanyId?: string;
+  activeCompanyName?: string;
 }
 
-export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalProps) {
+export function ClaraConfigModal({ isOpen, onClose, onSaved, activeCompanyId, activeCompanyName }: ClaraConfigModalProps) {
   const [config, setConfig] = useState<Partial<ClaraConfig>>({});
   const [accounts, setAccounts] = useState<OmieAccountOption[]>([]);
   const [categories, setCategories] = useState<OmieCategoryOption[]>([]);
@@ -38,15 +40,17 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
     if (isOpen) {
       loadData();
     }
-  }, [isOpen]);
+  }, [isOpen, activeCompanyId]);
 
   const loadData = async () => {
     setLoading(true);
     setTestResult(null);
     try {
+      const compId = activeCompanyId || 'marbrasil';
+      const compName = activeCompanyName || 'Mar Brasil';
       const [cfgRes, resRes] = await Promise.all([
-        fetch('/api/clara/config').then(r => r.json()),
-        fetch('/api/clara/omie-resources').then(r => r.json()),
+        fetch(`/api/clara/config?companyId=${compId}`).then(r => r.json()),
+        fetch(`/api/clara/omie-resources?company=${encodeURIComponent(compName)}`).then(r => r.json()),
       ]);
 
       if (cfgRes.data) setConfig(cfgRes.data);
@@ -70,17 +74,21 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
       const res = await fetch('/api/clara/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify({
+          ...config,
+          active_company_id: activeCompanyId || 'marbrasil',
+          active_company_name: activeCompanyName || 'Mar Brasil',
+        }),
       });
       const data = await res.json();
       setTestResult({
         success: data.status === 'success',
-        message: data.message || (data.status === 'success' ? 'Conexão estabelecida com sucesso!' : 'Falha na conexão.'),
+        message: data.message || (data.status === 'success' ? 'Conexão realizada com sucesso!' : 'Falha na conexão.'),
       });
     } catch (e: any) {
       setTestResult({
         success: false,
-        message: e.message || 'Erro de rede ao testar conexão.',
+        message: `Falha na requisição: ${e.message}`,
       });
     } finally {
       setTesting(false);
@@ -94,7 +102,11 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
       const res = await fetch('/api/clara/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify({
+          ...config,
+          active_company_id: activeCompanyId || 'marbrasil',
+          active_company_name: activeCompanyName || 'Mar Brasil',
+        }),
       });
       const data = await res.json();
       if (data.status === 'success') {
@@ -125,8 +137,12 @@ export function ClaraConfigModal({ isOpen, onClose, onSaved }: ClaraConfigModalP
               <Key size={20} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Configurações da Integração Clara</h2>
-              <p className="text-xs text-slate-500">Parâmetros de conexão mTLS e vínculo de Conta Corrente no Omie</p>
+              <h2 className="text-base font-bold text-slate-800">
+                Configurações da Integração Clara — {activeCompanyName || 'Mar Brasil'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                Credenciais mTLS, parâmetros de sincronização e contas Omie para {activeCompanyName || 'Mar Brasil'}.
+              </p>
             </div>
           </div>
           <button

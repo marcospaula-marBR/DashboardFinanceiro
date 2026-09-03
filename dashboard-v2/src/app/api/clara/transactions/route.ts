@@ -12,6 +12,7 @@ export async function GET(req: Request) {
     const transactionType = searchParams.get('transactionType') || 'ALL';
     const startDate = searchParams.get('startDate') || undefined;
     const endDate = searchParams.get('endDate') || undefined;
+    const companyId = searchParams.get('companyId') || undefined;
 
     const [txResult, metrics] = await Promise.all([
       ClaraSyncService.getTransactions({
@@ -23,8 +24,9 @@ export async function GET(req: Request) {
         transactionType,
         startDate,
         endDate,
+        companyId,
       }),
-      ClaraSyncService.getMetrics(),
+      ClaraSyncService.getMetrics(companyId),
     ]);
 
     return NextResponse.json({

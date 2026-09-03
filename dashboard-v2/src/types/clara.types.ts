@@ -198,6 +198,8 @@ export interface ClaraTransactionRecord {
   invoice_issue_date?: string | null; // Data de emissão da NF
   registration_date?: string | null;  // Data de registro (Competência Omie - data_entrada)
   due_date?: string | null;           // Data de vencimento da fatura/parcela
+  company_id?: string | null;         // 'marbrasil' | 'dzm' | 'g2'
+  company_name?: string | null;       // Razão social ou nome da empresa
   
   // Parcelamento
   installments_info?: {

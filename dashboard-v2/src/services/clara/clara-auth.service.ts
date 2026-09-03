@@ -7,10 +7,10 @@ interface CachedToken {
   expiresAt: number; // Timestamp em milissegundos
 }
 
-let tokenCache: CachedToken | null = null;
+// Cache isolado por Client ID (multi-empresa / multi-tenant)
+const tokenCacheMap: Map<string, CachedToken> = new Map();
 
 export class ClaraAuthService {
-  /**
   /**
    * Normaliza strings PEM removendo barras invertidas literais e aspas
    */
@@ -23,9 +23,13 @@ export class ClaraAuthService {
     }
     // Remove aspas nas pontas
     cleaned = cleaned.replace(/^["']|["']$/g, '');
-    // Tratamento para digitação acidental em quebra de linha
+    // Tratamento para digitação acidental em quebra de linha (Mar Brasil)
     if (cleaned.includes('nnRB/QbS7')) {
       cleaned = cleaned.replace('nnRB/QbS7', 'nRB/QbS7');
+    }
+    // Tratamento de segurança para omissão do caractere 'p' na chave da DZM
+    if (cleaned.includes('gkmHhbRB6fG6Ik8RRfWHD6DxEcLf4EhzL2w')) {
+      cleaned = cleaned.replace('gkmHhbRB6fG6Ik8RRfWHD6DxEcLf4EhzL2w', 'gpkmHhbRB6fG6Ik8RRfWHD6DxEcLf4EhzL2w');
     }
     return cleaned;
   }
@@ -60,16 +64,17 @@ export class ClaraAuthService {
     const now = Date.now();
     const FIVE_MINUTES = 5 * 60 * 1000;
 
-    // Reutiliza o token em cache se for válido por pelo menos mais 5 minutos
-    if (!forceRefresh && tokenCache && tokenCache.expiresAt - now > FIVE_MINUTES) {
-      return tokenCache.accessToken;
-    }
-
-    const clientId = config.client_id?.trim();
+    const clientId = config.client_id?.trim() || 'default';
     const clientSecret = config.client_secret?.trim();
     const baseUrl = config.base_url?.replace(/\/+$/, '') || 'https://public-api.br.clara.com';
 
-    if (!clientId || !clientSecret) {
+    const cached = tokenCacheMap.get(clientId);
+    // Reutiliza o token em cache se for válido por pelo menos mais 5 minutos
+    if (!forceRefresh && cached && cached.expiresAt - now > FIVE_MINUTES) {
+      return cached.accessToken;
+    }
+
+    if (!clientId || !clientSecret || clientId === 'default') {
       throw new Error('Credenciais da Clara incompletas: client_id e client_secret são obrigatórios.');
     }
 
@@ -104,14 +109,14 @@ export class ClaraAuthService {
         throw new Error('Resposta da Clara não continha um access_token válido.');
       }
 
-      tokenCache = {
+      tokenCacheMap.set(clientId, {
         accessToken: token,
         expiresAt: now + expiresIn * 1000,
-      };
+      });
 
       return token;
     } catch (error: any) {
-      tokenCache = null;
+      tokenCacheMap.delete(clientId);
       const status = error.response?.status;
       const data = error.response?.data;
       const errMsg = data?.error_description || data?.message || error.message;
@@ -122,7 +127,11 @@ export class ClaraAuthService {
   /**
    * Invalida o token em cache manualmente (ex: após 401)
    */
-  public static invalidateToken(): void {
-    tokenCache = null;
+  public static invalidateToken(clientId?: string): void {
+    if (clientId) {
+      tokenCacheMap.delete(clientId);
+    } else {
+      tokenCacheMap.clear();
+    }
   }
 }

@@ -133,6 +133,7 @@ export default function ClaraIntegrationPage() {
       if (claraStatus !== 'ALL') params.set('claraStatus', claraStatus);
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
+      if (selectedCompanyId) params.set('companyId', selectedCompanyId);
 
       const res = await fetch(`/api/clara/transactions?${params.toString()}`);
       const json = await res.json();
@@ -146,7 +147,7 @@ export default function ClaraIntegrationPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, syncStatus, claraStatus, startDate, endDate]);
+  }, [page, search, syncStatus, claraStatus, startDate, endDate, selectedCompanyId]);
 
   useEffect(() => {
     fetchTransactions();
@@ -159,7 +160,11 @@ export default function ClaraIntegrationPage() {
       const res = await fetch('/api/clara/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trigger: 'MANUAL' }),
+        body: JSON.stringify({ 
+          trigger: 'MANUAL',
+          companyId: selectedCompanyId,
+          companyName: activeCompany.name,
+        }),
       });
       const data = await res.json();
       if (data.status === 'success') {
@@ -990,6 +995,8 @@ export default function ClaraIntegrationPage() {
         isOpen={configOpen}
         onClose={() => setConfigOpen(false)}
         onSaved={fetchTransactions}
+        activeCompanyId={selectedCompanyId}
+        activeCompanyName={activeCompany.name}
       />
 
       <ClaraCategoryMappingModal

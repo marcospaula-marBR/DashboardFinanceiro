@@ -7,11 +7,15 @@ export async function POST(req: Request) {
     const trigger = body.trigger || 'MANUAL';
     const forceSafeMode = body.forceSafeMode !== undefined ? Boolean(body.forceSafeMode) : undefined;
     const forceFullSync = Boolean(body.forceFullSync);
+    const companyId = body.companyId || body.company || 'marbrasil';
+    const companyName = body.companyName;
 
     const summary = await ClaraSyncService.syncClaraTransactions({
       trigger,
       forceSafeMode,
       forceFullSync,
+      companyId,
+      companyName,
     });
 
     return NextResponse.json({

@@ -48,7 +48,7 @@ export class ClaraClient {
     } catch (error: any) {
       if (error.response?.status === 401) {
         // Invalida e tenta novamente uma única vez com novo token
-        ClaraAuthService.invalidateToken();
+        ClaraAuthService.invalidateToken(this.config.client_id);
         const retryResponse = await execute(true);
         return retryResponse.data;
       }

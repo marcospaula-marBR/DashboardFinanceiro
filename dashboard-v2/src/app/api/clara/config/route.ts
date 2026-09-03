@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { ClaraConfigService } from '@/services/clara/clara-config.service';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const config = await ClaraConfigService.getConfig();
+    const { searchParams } = new URL(req.url);
+    const companyId = searchParams.get('companyId') || 'marbrasil';
+    const config = await ClaraConfigService.getConfig(companyId);
     // Sanitiza dados sensíveis antes de enviar ao frontend
     const sanitized = {
       ...config,
@@ -22,7 +24,8 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const current = await ClaraConfigService.getConfig();
+    const companyId = body.active_company_id || body.companyId || 'marbrasil';
+    const current = await ClaraConfigService.getConfig(companyId);
 
     // Se o client enviou máscara ou campo vazio onde já havia secret, preserva o valor atual
     const toSave = {
@@ -32,7 +35,7 @@ export async function POST(req: Request) {
       private_key_pem: (!body.private_key_pem || body.private_key_pem.includes('••')) ? current.private_key_pem : body.private_key_pem,
     };
 
-    const saved = await ClaraConfigService.saveConfig(toSave);
+    const saved = await ClaraConfigService.saveConfig(toSave, companyId);
     return NextResponse.json({ 
       status: 'success', 
       message: 'Configuração salva com sucesso!',

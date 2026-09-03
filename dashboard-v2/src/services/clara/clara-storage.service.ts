@@ -12,6 +12,7 @@ const GLOBAL_CONFIG_NAME = '__SYSTEM_GLOBAL_CONFIG__';
 
 interface ClaraStoreState {
   config: ClaraConfig;
+  company_configs?: Record<string, ClaraConfig>;
   category_mappings: ClaraCategoryMapping[];
   department_mappings: ClaraDepartmentMapping[];
   transactions: Record<string, ClaraTransactionRecord>;
@@ -135,9 +136,20 @@ export class ClaraStorageService {
     return found || null;
   }
 
-  public static async getAllTransactions(defaultConfig: ClaraConfig): Promise<ClaraTransactionRecord[]> {
+  public static async getAllTransactions(defaultConfig: ClaraConfig, companyId?: string): Promise<ClaraTransactionRecord[]> {
     const state = await this.getState(defaultConfig);
-    return Object.values(state.transactions);
+    const all = Object.values(state.transactions);
+    if (!companyId || companyId === 'all') {
+      return all;
+    }
+    const cId = companyId.toLowerCase();
+    return all.filter(t => {
+      if (t.company_id) {
+        return t.company_id.toLowerCase().includes(cId) || cId.includes(t.company_id.toLowerCase());
+      }
+      // Se não tiver company_id explícito (lançamentos anteriores), assume Mar Brasil
+      return cId.includes('mar');
+    });
   }
 
   /**
@@ -170,20 +182,31 @@ export class ClaraStorageService {
 
   // --- MÉTODOS DE CONFIGURAÇÃO ---
 
-  public static async getConfig(defaultConfig: ClaraConfig): Promise<ClaraConfig> {
+  public static async getConfig(defaultConfig: ClaraConfig, companyId?: string): Promise<ClaraConfig> {
     const state = await this.getState(defaultConfig);
+    const cId = (companyId || state.config?.active_company_id || 'marbrasil').toLowerCase();
+    if (state.company_configs && state.company_configs[cId]) {
+      return { ...defaultConfig, ...state.company_configs[cId] };
+    }
     return state.config;
   }
 
-  public static async saveConfig(partial: Partial<ClaraConfig>, defaultConfig: ClaraConfig): Promise<ClaraConfig> {
+  public static async saveConfig(partial: Partial<ClaraConfig>, defaultConfig: ClaraConfig, companyId?: string): Promise<ClaraConfig> {
     const state = await this.getState(defaultConfig);
-    state.config = {
-      ...state.config,
+    const cId = (companyId || partial.active_company_id || state.config?.active_company_id || 'marbrasil').toLowerCase();
+    if (!state.company_configs) {
+      state.company_configs = {};
+    }
+    const current = state.company_configs[cId] || { ...defaultConfig };
+    const updated = {
+      ...current,
       ...partial,
       updated_at: new Date().toISOString(),
     };
+    state.company_configs[cId] = updated;
+    state.config = updated;
     await this.persistRemoteState(state);
-    return state.config;
+    return updated;
   }
 
   // --- MAPEAMENTOS ---

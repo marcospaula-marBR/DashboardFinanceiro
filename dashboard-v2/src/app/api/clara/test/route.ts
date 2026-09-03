@@ -5,7 +5,8 @@ import { ClaraClient } from '@/services/clara/clara-client';
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const current = await ClaraConfigService.getConfig();
+    const companyId = body.active_company_id || body.companyId || 'marbrasil';
+    const current = await ClaraConfigService.getConfig(companyId);
 
     const configToTest = {
       ...current,
@@ -25,12 +26,12 @@ export async function POST(req: Request) {
     const client = new ClaraClient(configToTest);
     const result = await client.testConnection();
 
-    // Atualiza status do último teste na configuração
+    // Atualiza status do último teste na configuração da empresa
     await ClaraConfigService.saveConfig({
       last_connection_test: new Date().toISOString(),
       last_connection_status: result.success ? 'SUCCESS' : 'ERROR',
       last_connection_message: result.message,
-    });
+    }, companyId);
 
     return NextResponse.json({
       status: result.success ? 'success' : 'error',
