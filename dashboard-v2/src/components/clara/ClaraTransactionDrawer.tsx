@@ -17,7 +17,10 @@ import {
   Building2, 
   Tag, 
   FileText,
-  Clock
+  Clock,
+  Send,
+  ShieldCheck,
+  XCircle
 } from "lucide-react";
 import { ClaraTransactionRecord, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption } from "@/types/clara.types";
 
@@ -45,6 +48,16 @@ export function ClaraTransactionDrawer({
   const [copied, setCopied] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
 
+  // Feedback de envio ao Omie
+  const [syncResult, setSyncResult] = useState<{
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+    omieId?: number;
+    omieValidated?: boolean;
+  } | null>(null);
+  const [syncStep, setSyncStep] = useState<string | null>(null); // passo atual
+
   // Estados locais dos campos editáveis
   const [selectedCat, setSelectedCat] = useState(transaction?.omie_category_code || '');
   const [selectedDepto, setSelectedDepto] = useState(transaction?.omie_department_code || '');
@@ -60,6 +73,8 @@ export function ClaraTransactionDrawer({
       setSelectedDepto(transaction.omie_department_code || '');
       setSelectedProj(transaction.omie_project_code || '');
       setFetchedDocs(null);
+      setSyncResult(null);
+      setSyncStep(null);
 
       // Se a transação tem anexos sinalizados ou se a lista local estiver vazia, busca sob demanda na API Clara
       const existingDocs = transaction.raw_payload?.documents || transaction.raw_payload?.receipts || [];
@@ -116,23 +131,81 @@ export function ClaraTransactionDrawer({
   };
 
   const handleRetry = async () => {
+    setSyncResult(null);
     setRetrying(true);
+    setSyncStep('⏳ Preparando payload do lançamento...');
+
     try {
+      setSyncStep('📤 Enviando para Omie — Contas a Pagar...');
+
       const res = await fetch(`/api/clara/transactions/${transaction.clara_uuid}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'retry' }),
       });
-      const data = await res.json();
-      if (data.status === 'success' && data.data) {
-        onTransactionUpdated(data.data);
+
+      const data = await res.json().catch(() => ({ status: 'error', message: 'Resposta inválida do servidor.' }));
+
+      if (!res.ok || data.status === 'error') {
+        setSyncResult({
+          type: 'error',
+          title: 'Falha no envio ao Omie',
+          message: data.message || `Erro HTTP ${res.status}`,
+        });
+        setSyncStep(null);
+        return;
+      }
+
+      const updated = data.data as (typeof transaction);
+      onTransactionUpdated(updated);
+
+      if (updated?.omie_launch_id) {
+        // ✅ PASSO 2: Verificação reversa — busca o lançamento no Omie
+        setSyncStep('🔍 Verificando lançamento no Omie (consulta reversa)...');
+        try {
+          const verRes = await fetch('/api/clara/verify-omie', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ omieId: updated.omie_launch_id }),
+          });
+          const verData = await verRes.json().catch(() => null);
+          const verified = verRes.ok && verData?.status === 'success';
+          const descStatus = verData?.data?.descricao_status || verData?.data?.status_titulo || '';
+
+          setSyncResult({
+            type: 'success',
+            title: `✅ Lançamento ${verified ? 'confirmado' : 'enviado'} no Omie`,
+            message: verified
+              ? `Contas a Pagar #${updated.omie_launch_id}${descStatus ? ' — ' + descStatus : ''} (verificado na base Omie)`
+              : `ID Omie #${updated.omie_launch_id} retornado pelo servidor. Confirme em Finanças → Contas a Pagar.`,
+            omieId: updated.omie_launch_id,
+            omieValidated: verified,
+          });
+        } catch {
+          setSyncResult({
+            type: 'success',
+            title: '✅ Enviado ao Omie com sucesso',
+            message: `ID Omie #${updated.omie_launch_id} — verificação reversa não disponível.`,
+            omieId: updated.omie_launch_id,
+            omieValidated: false,
+          });
+        }
       } else {
-        alert(`Erro: ${data.message}`);
+        setSyncResult({
+          type: 'warning',
+          title: 'Processado sem ID Omie',
+          message: data.message || 'O servidor processou mas não retornou um ID Omie. Verifique o modo Teste (Safe Mode).',
+        });
       }
     } catch (e: any) {
-      alert(`Erro: ${e.message}`);
+      setSyncResult({
+        type: 'error',
+        title: 'Erro de conexão',
+        message: e.message || 'Falha ao comunicar com o servidor.',
+      });
     } finally {
       setRetrying(false);
+      setSyncStep(null);
     }
   };
 
@@ -486,6 +559,54 @@ export function ClaraTransactionDrawer({
           </div>
 
         </div>
+
+        {/* Banner de Progresso e Resultado do Envio ao Omie */}
+        {(syncStep || syncResult) && (
+          <div className="px-6 pb-2 shrink-0">
+            {syncStep && !syncResult && (
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 font-medium">
+                <Loader2 size={13} className="animate-spin text-blue-600 shrink-0" />
+                <span>{syncStep}</span>
+              </div>
+            )}
+            {syncResult && (
+              <div className={`px-3 py-2.5 rounded-xl border text-xs space-y-1 ${
+                syncResult.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : syncResult.type === 'error'
+                  ? 'bg-red-50 border-red-200 text-red-900'
+                  : 'bg-amber-50 border-amber-200 text-amber-900'
+              }`}>
+                <div className="flex items-center gap-2 font-bold">
+                  {syncResult.type === 'success' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
+                  {syncResult.type === 'error' && <XCircle size={14} className="text-red-600 shrink-0" />}
+                  {syncResult.type === 'warning' && <AlertCircle size={14} className="text-amber-600 shrink-0" />}
+                  <span>{syncResult.title}</span>
+                </div>
+                <p className="pl-5 text-[11px] leading-relaxed opacity-90">{syncResult.message}</p>
+                {syncResult.omieId && (
+                  <div className="pl-5 flex items-center gap-2 mt-1">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      syncResult.omieValidated
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-slate-100 text-slate-700 border border-slate-300'
+                    }`}>
+                      {syncResult.omieValidated ? <ShieldCheck size={10} /> : <Clock size={10} />}
+                      {syncResult.omieValidated ? 'Verificado na base Omie' : 'Pendente verificação'}
+                    </span>
+                    <span className="font-mono text-[10px] opacity-70">ID #{syncResult.omieId}</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => setSyncResult(null)}
+                  className="pl-5 text-[10px] underline opacity-60 hover:opacity-100 mt-0.5 block"
+                >
+                  Fechar aviso
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer Actions */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0 pb-6">

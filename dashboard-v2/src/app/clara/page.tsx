@@ -534,7 +534,7 @@ export default function ClaraIntegrationPage() {
         )}
 
         {/* Tabela de Transações (Desktop + Mobile First) */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
           
           {loading ? (
             <div className="py-20 flex flex-col items-center justify-center gap-3">
@@ -564,7 +564,7 @@ export default function ClaraIntegrationPage() {
           ) : (
             <>
               {/* VISÃO DESKTOP: Tabela Completa */}
-              <div className="hidden lg:block overflow-x-auto w-full">
+              <div className="hidden lg:block overflow-x-auto w-full rounded-2xl">
                 <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
                   <thead>
                     <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
