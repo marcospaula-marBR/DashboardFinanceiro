@@ -103,9 +103,9 @@ export default function ClaraIntegrationPage() {
   const [batchOcrLoading, setBatchOcrLoading] = useState(false);
   const [autoOcrNotice, setAutoOcrNotice] = useState<string | null>(null);
 
-  const loadOmieResources = useCallback(async () => {
+  const loadOmieResources = useCallback(async (companyName = 'Mar Brasil') => {
     try {
-      const res = await fetch('/api/clara/omie-resources');
+      const res = await fetch(`/api/clara/omie-resources?company=${encodeURIComponent(companyName)}`);
       const json = await res.json();
       if (json.status === 'success' && json.data) {
         setCategories(json.data.categories || []);
@@ -118,8 +118,8 @@ export default function ClaraIntegrationPage() {
   }, []);
 
   useEffect(() => {
-    loadOmieResources();
-  }, [loadOmieResources]);
+    loadOmieResources(activeCompany.name);
+  }, [loadOmieResources, activeCompany.name]);
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
@@ -1021,6 +1021,7 @@ export default function ClaraIntegrationPage() {
         categories={categories}
         departments={departments}
         projects={projects}
+        activeCompanyId={selectedCompanyId}
         activeCompanyCnpj={activeCompany.cnpj}
         activeCompanyName={activeCompany.name}
         onTransactionUpdated={updated => {

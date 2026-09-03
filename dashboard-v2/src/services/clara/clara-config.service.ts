@@ -210,8 +210,8 @@ q8NQMRetES1pcBSBuQMwrfDSbpNLG3hkT31oSM/F0rT9bNeX4tZA2/OJwKIaCkCk
 kaSeJ9v8Xfiy3NByFSX08wa6UTC+B5KG+sxlyn/oCUDmoZ6cv3HONpNaqQE=
 -----END RSA PRIVATE KEY-----`,
   base_url: process.env.CLARA_BASE_URL || 'https://public-api.br.clara.com',
-  omie_n_cod_cc: null,
-  omie_cc_descricao: null,
+  omie_n_cod_cc: 11704272090,
+  omie_cc_descricao: 'Clara - Prestadores',
   company_name: 'D.Z.M LTDA',
   auto_sync_enabled: false,
   sync_interval_minutes: 30,
@@ -393,9 +393,10 @@ export class ClaraConfigService {
   }
 
   /**
-   * Busca as categorias reais do Omie (primeiro tenta a tabela omie_dim_categorias do Supabase)
+   * Busca as categorias reais do Omie (com suporte multi-empresa)
    */
-  public static async getOmieCategories(): Promise<OmieCategoryOption[]> {
+  public static async getOmieCategories(company = 'Mar Brasil'): Promise<OmieCategoryOption[]> {
+    const isDZM = company.toLowerCase().includes('dzm');
     const decodeHtml = (str: string) => (str || '')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
@@ -419,32 +420,34 @@ export class ClaraConfigService {
       );
     };
 
-    try {
-      const { data, error } = await supabase
-        .from('omie_dim_categorias')
-        .select('codigo_categoria, descricao_categoria')
-        .order('descricao_categoria', { ascending: true });
+    // Para Mar Brasil, tenta primeiro a tabela de dimensões do Supabase
+    if (!isDZM) {
+      try {
+        const { data, error } = await supabase
+          .from('omie_dim_categorias')
+          .select('codigo_categoria, descricao_categoria')
+          .order('descricao_categoria', { ascending: true });
 
-      if (!error && data && data.length > 0) {
-        // Remove duplicados de categorias e placeholders
-        const map = new Map<string, string>();
-        data.forEach(c => {
-          if (!c.codigo_categoria) return;
-          const cleanDesc = decodeHtml(c.descricao_categoria || '');
-          if (!isIgnored(cleanDesc) && !map.has(c.codigo_categoria)) {
-            map.set(c.codigo_categoria, cleanDesc);
-          }
-        });
-        return Array.from(map.entries())
-          .map(([codigo, descricao]) => ({ codigo, descricao }))
-          .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+        if (!error && data && data.length > 0) {
+          const map = new Map<string, string>();
+          data.forEach(c => {
+            if (!c.codigo_categoria) return;
+            const cleanDesc = decodeHtml(c.descricao_categoria || '');
+            if (!isIgnored(cleanDesc) && !map.has(c.codigo_categoria)) {
+              map.set(c.codigo_categoria, cleanDesc);
+            }
+          });
+          return Array.from(map.entries())
+            .map(([codigo, descricao]) => ({ codigo, descricao }))
+            .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+        }
+      } catch (e: any) {
+        console.warn('[ClaraConfigService] Erro ao consultar omie_dim_categorias:', e.message);
       }
-    } catch (e: any) {
-      console.warn('[ClaraConfigService] Erro ao consultar omie_dim_categorias:', e.message);
     }
 
-    // Fallback: consulta direta à API Omie
-    const { appKey, appSecret } = this.getOmieCredentials();
+    // Consulta direta à API Omie com as credenciais da empresa específica (obrigatório para DZM)
+    const { appKey, appSecret } = this.getOmieCredentials(company);
     if (!appKey || !appSecret) return [];
 
     try {
@@ -469,50 +472,53 @@ export class ClaraConfigService {
   }
 
   /**
-   * Busca os projetos reais do Omie (Supabase omie_dim_projetos / projetos ou API direta)
+   * Busca os projetos reais do Omie (Supabase para Mar Brasil ou API direta por tenant)
    */
   public static async getOmieProjects(company = 'Mar Brasil'): Promise<OmieProjectOption[]> {
+    const isDZM = company.toLowerCase().includes('dzm');
     const map = new Map<string, string>();
 
-    try {
-      // 1. Tenta omie_dim_projetos
-      const { data: dimProjs } = await supabase
-        .from('omie_dim_projetos')
-        .select('codigo_projeto, descricao_projeto')
-        .order('descricao_projeto', { ascending: true });
+    if (!isDZM) {
+      try {
+        // 1. Tenta omie_dim_projetos
+        const { data: dimProjs } = await supabase
+          .from('omie_dim_projetos')
+          .select('codigo_projeto, descricao_projeto')
+          .order('descricao_projeto', { ascending: true });
 
-      if (dimProjs && dimProjs.length > 0) {
-        dimProjs.forEach(p => {
-          if (p.codigo_projeto && !map.has(p.codigo_projeto)) {
-            map.set(String(p.codigo_projeto).trim(), (p.descricao_projeto || String(p.codigo_projeto)).trim());
-          }
-        });
+        if (dimProjs && dimProjs.length > 0) {
+          dimProjs.forEach(p => {
+            if (p.codigo_projeto && !map.has(p.codigo_projeto)) {
+              map.set(String(p.codigo_projeto).trim(), (p.descricao_projeto || String(p.codigo_projeto)).trim());
+            }
+          });
+        }
+
+        // 2. Tenta tabela projetos (ativos)
+        const { data: projs } = await supabase
+          .from('projetos')
+          .select('omie_id, nome')
+          .order('nome', { ascending: true });
+
+        if (projs && projs.length > 0) {
+          projs.forEach(p => {
+            if (p.omie_id && !map.has(String(p.omie_id))) {
+              map.set(String(p.omie_id).trim(), (p.nome || String(p.omie_id)).trim());
+            }
+          });
+        }
+
+        if (map.size > 0) {
+          return Array.from(map.entries())
+            .map(([codigo, descricao]) => ({ codigo, descricao }))
+            .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+        }
+      } catch (e: any) {
+        console.warn('[ClaraConfigService] Erro ao consultar projetos no Supabase:', e.message);
       }
-
-      // 2. Tenta tabela projetos (ativos)
-      const { data: projs } = await supabase
-        .from('projetos')
-        .select('omie_id, nome')
-        .order('nome', { ascending: true });
-
-      if (projs && projs.length > 0) {
-        projs.forEach(p => {
-          if (p.omie_id && !map.has(String(p.omie_id))) {
-            map.set(String(p.omie_id).trim(), (p.nome || String(p.omie_id)).trim());
-          }
-        });
-      }
-
-      if (map.size > 0) {
-        return Array.from(map.entries())
-          .map(([codigo, descricao]) => ({ codigo, descricao }))
-          .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
-      }
-    } catch (e: any) {
-      console.warn('[ClaraConfigService] Erro ao consultar projetos no Supabase:', e.message);
     }
 
-    // Fallback: consulta direta à API Omie
+    // Consulta direta à API Omie para o tenant selecionado
     const { appKey, appSecret } = this.getOmieCredentials(company);
     if (!appKey || !appSecret) return [];
 

@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     const [accounts, departments, categories, projects] = await Promise.all([
       ClaraConfigService.getOmieAccounts(false, company), // busca todas as contas da empresa
       ClaraConfigService.getOmieDepartments(company),
-      ClaraConfigService.getOmieCategories(),
+      ClaraConfigService.getOmieCategories(company),
       ClaraConfigService.getOmieProjects(company),
     ]);
 

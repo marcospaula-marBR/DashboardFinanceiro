@@ -8,7 +8,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const config = await ClaraConfigService.getConfig();
+    const { searchParams } = new URL(req.url);
+    const companyId = searchParams.get('companyId') || searchParams.get('company') || 'marbrasil';
+    const config = await ClaraConfigService.getConfig(companyId);
     const claraClient = new ClaraClient(config);
 
     const docs = await claraClient.getTransactionDocuments(id);

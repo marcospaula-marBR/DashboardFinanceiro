@@ -36,6 +36,7 @@ interface ClaraTransactionDrawerProps {
   categories?: OmieCategoryOption[];
   departments?: OmieDepartmentOption[];
   projects?: OmieProjectOption[];
+  activeCompanyId?: string;
   activeCompanyCnpj?: string;
   activeCompanyName?: string;
 }
@@ -48,6 +49,7 @@ export function ClaraTransactionDrawer({
   categories = [],
   departments = [],
   projects = [],
+  activeCompanyId = 'mar-brasil',
   activeCompanyCnpj = '02.233.923/0001-19',
   activeCompanyName = 'Mar Brasil',
 }: ClaraTransactionDrawerProps) {
@@ -101,7 +103,8 @@ export function ClaraTransactionDrawer({
         setFetchedDocs(existingDocs);
       } else if (transaction.has_attachments || (transaction.attachments_count && transaction.attachments_count > 0) || transaction.raw_payload?.hasAttachments?.value) {
         setLoadingDocs(true);
-        fetch(`/api/clara/transactions/${transaction.clara_uuid}/attachments`)
+        const compId = transaction.company_id || activeCompanyId || (activeCompanyName?.toLowerCase().includes('dzm') ? 'dzm' : 'marbrasil');
+        fetch(`/api/clara/transactions/${transaction.clara_uuid}/attachments?companyId=${encodeURIComponent(compId)}`)
           .then(res => res.json())
           .then(data => {
             if (data.status === 'success' && Array.isArray(data.data) && data.data.length > 0) {
@@ -112,7 +115,7 @@ export function ClaraTransactionDrawer({
           .finally(() => setLoadingDocs(false));
       }
     }
-  }, [transaction]);
+  }, [transaction, activeCompanyId, activeCompanyName]);
 
   if (!isOpen || !transaction) return null;
 
