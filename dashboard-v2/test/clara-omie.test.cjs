@@ -63,24 +63,47 @@ assert.ok(!isTransactionEligibleForOmie('PAYMENT', 'AUTHORIZED'), 'PAYMENT não 
 assert.ok(!isTransactionEligibleForOmie('REFUND', 'AUTHORIZED'), 'REFUND no MVP deve ser tratado como fluxo separado.');
 console.log('   ✅ Filtros de elegibilidade estritos validados com sucesso.');
 
-// 5. Estrutura do Payload Omie IncluirAnexo
+// 5. Estrutura do Payload Omie IncluirAnexo com compressão ZIP
+const zlib = require('zlib');
+function createZipBuffer(fileName, fileBuffer) {
+  const fileNameBuffer = Buffer.from(fileName, 'utf-8');
+  const compressedData = zlib.deflateRawSync(fileBuffer);
+  let crc = 0 ^ (-1);
+  for (let i = 0; i < fileBuffer.length; i++) {
+    crc = (crc >>> 8) ^ ((crc ^ fileBuffer[i]) & 0xFF);
+  }
+  crc = (crc ^ (-1)) >>> 0;
+  const localHeader = Buffer.alloc(30);
+  localHeader.writeUInt32LE(0x04034b50, 0);
+  localHeader.writeUInt16LE(20, 4);
+  localHeader.writeUInt16LE(0x0800, 6);
+  localHeader.writeUInt16LE(8, 8);
+  localHeader.writeUInt32LE(crc, 14);
+  localHeader.writeUInt32LE(compressedData.length, 18);
+  localHeader.writeUInt32LE(fileBuffer.length, 22);
+  localHeader.writeUInt16LE(fileNameBuffer.length, 26);
+  return Buffer.concat([localHeader, fileNameBuffer, compressedData]);
+}
+
 function buildOmieAnexoPayload(nCodLanc, fileName, base64) {
-  const cMd5 = crypto.createHash('md5').update(base64).digest('hex');
+  const zipBuffer = createZipBuffer(fileName, Buffer.from(base64, 'base64'));
+  const zipBase64 = zipBuffer.toString('base64');
+  const cMd5 = crypto.createHash('md5').update(zipBase64).digest('hex');
   return {
     cTabela: 'conta-corrente-lancamento',
     nId: nCodLanc,
     cNomeArquivo: fileName,
-    cArquivo: base64,
+    cArquivo: zipBase64,
     cMd5,
   };
 }
 
 console.log('\n5. Testando estrutura de payload de anexo/comprovante...');
-const payloadAnexo = buildOmieAnexoPayload(7654321, 'recibo_uber.pdf', 'JVBERi0xLjQK...');
+const payloadAnexo = buildOmieAnexoPayload(7654321, 'recibo_uber.pdf', 'JVBERi0xLjQK');
 assert.strictEqual(payloadAnexo.cTabela, 'conta-corrente-lancamento');
 assert.strictEqual(payloadAnexo.nId, 7654321);
 assert.strictEqual(payloadAnexo.cNomeArquivo, 'recibo_uber.pdf');
 assert.ok(payloadAnexo.cMd5, 'O campo cMd5 deve ser gerado.');
-console.log('   ✅ Payload para /api/v1/geral/anexo/ (IncluirAnexo com cMd5) validado.');
+console.log('   ✅ Payload para /api/v1/geral/anexo/ (IncluirAnexo com ZIP e cMd5) validado.');
 
 console.log('\n🎉 TODOS OS TESTES PASSARAM COM SUCESSO!\n');
