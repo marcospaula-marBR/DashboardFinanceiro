@@ -31,6 +31,13 @@ export class ClaraAuthService {
     if (cleaned.includes('gkmHhbRB6fG6Ik8RRfWHD6DxEcLf4EhzL2w')) {
       cleaned = cleaned.replace('gkmHhbRB6fG6Ik8RRfWHD6DxEcLf4EhzL2w', 'gpkmHhbRB6fG6Ik8RRfWHD6DxEcLf4EhzL2w');
     }
+    // Tratamento para n espúrio gerado em cópias da chave DZM
+    if (cleaned.includes('nqU1CGobg2VZLtF')) {
+      cleaned = cleaned.replace('nqU1CGobg2VZLtF', 'qU1CGobg2VZLtF');
+    }
+    if (cleaned.includes('nq8NQMRetES1pcB')) {
+      cleaned = cleaned.replace('nq8NQMRetES1pcB', 'q8NQMRetES1pcB');
+    }
     return cleaned;
   }
 

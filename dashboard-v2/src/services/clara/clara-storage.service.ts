@@ -184,16 +184,18 @@ export class ClaraStorageService {
 
   public static async getConfig(defaultConfig: ClaraConfig, companyId?: string): Promise<ClaraConfig> {
     const state = await this.getState(defaultConfig);
-    const cId = (companyId || state.config?.active_company_id || 'marbrasil').toLowerCase();
+    const rawId = companyId || defaultConfig.active_company_id || state.config?.active_company_id || 'marbrasil';
+    const cId = rawId.toLowerCase().includes('dzm') ? 'dzm' : 'marbrasil';
     if (state.company_configs && state.company_configs[cId]) {
       return { ...defaultConfig, ...state.company_configs[cId] };
     }
-    return state.config;
+    return defaultConfig;
   }
 
   public static async saveConfig(partial: Partial<ClaraConfig>, defaultConfig: ClaraConfig, companyId?: string): Promise<ClaraConfig> {
     const state = await this.getState(defaultConfig);
-    const cId = (companyId || partial.active_company_id || state.config?.active_company_id || 'marbrasil').toLowerCase();
+    const rawId = companyId || partial.active_company_id || state.config?.active_company_id || 'marbrasil';
+    const cId = rawId.toLowerCase().includes('dzm') ? 'dzm' : 'marbrasil';
     if (!state.company_configs) {
       state.company_configs = {};
     }
