@@ -564,11 +564,11 @@ export default function ClaraIntegrationPage() {
           ) : (
             <>
               {/* VISÃO DESKTOP: Tabela Completa */}
-              <div className="hidden lg:block overflow-x-auto w-full rounded-2xl">
-                <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
+              <div className="hidden lg:block overflow-x-auto w-full rounded-2xl scrollbar-thin scrollbar-thumb-slate-200">
+                <table className="w-full text-left text-xs border-collapse min-w-[960px]">
                   <thead>
-                    <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="py-3 px-2 text-center w-8">
+                    <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="py-2.5 px-2 text-center w-8">
                         <input
                           type="checkbox"
                           checked={transactions.length > 0 && selectedUuids.length === transactions.length}
@@ -577,17 +577,19 @@ export default function ClaraIntegrationPage() {
                           title="Selecionar todas as transações desta página"
                         />
                       </th>
-                      <th className="py-3 px-2.5 w-24">Data</th>
-                      <th className="py-3 px-2.5 w-44">Portador & Cartão</th>
-                      <th className="py-3 px-2.5">Estabelecimento</th>
-                      <th className="py-3 px-2.5 text-right w-28">Valor</th>
-                      <th className="py-3 px-2 text-center w-24">Status Clara</th>
-                      <th className="py-3 px-2.5 w-32">Categoria Omie</th>
-                      <th className="py-3 px-2 w-28">Centro de Custo</th>
-                      <th className="py-3 px-2 w-28">Projeto</th>
-                      <th className="py-3 px-2 text-center w-28">Status Omie</th>
-                      <th className="py-3 px-2 text-center w-16">Anexos</th>
-                      <th className="py-3 px-2 text-center w-14">Ações</th>
+                      <th className="py-2.5 px-2 w-20">Data</th>
+                      <th className="py-2.5 px-2 w-36">Portador & Cartão</th>
+                      <th className="py-2.5 px-2">Estabelecimento</th>
+                      <th className="py-2.5 px-2 text-right w-24">Valor</th>
+                      <th className="py-2.5 px-2 text-center w-24">Status Clara</th>
+                      <th className="py-2.5 px-2 w-28">Categoria Omie</th>
+                      <th className="py-2.5 px-2 w-24">Centro Custo</th>
+                      <th className="py-2.5 px-2 w-24">Projeto</th>
+                      <th className="py-2.5 px-2 text-center w-28">Status Omie</th>
+                      <th className="py-2.5 px-2 text-center w-14">Anexos</th>
+                      <th className="py-2.5 px-2 text-center w-14 sticky right-0 bg-slate-50/95 backdrop-blur-xs z-10 shadow-[-4px_0_6px_rgba(0,0,0,0.04)]">
+                        Ações
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -604,7 +606,7 @@ export default function ClaraIntegrationPage() {
                             isSelected ? 'bg-emerald-50/40' : ''
                           }`}
                         >
-                          <td className="py-3 px-3 text-center" onClick={e => e.stopPropagation()}>
+                          <td className="py-2.5 px-2 text-center" onClick={e => e.stopPropagation()}>
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -613,12 +615,12 @@ export default function ClaraIntegrationPage() {
                             />
                           </td>
 
-                          <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-900">
+                          <td className="py-2.5 px-2 whitespace-nowrap font-medium text-slate-900">
                             {formatDate(tx.operation_date)}
                           </td>
 
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <span className="font-bold text-slate-900 block truncate max-w-[150px]">
+                          <td className="py-2.5 px-2 whitespace-nowrap">
+                            <span className="font-bold text-slate-900 block truncate max-w-[130px]">
                               {tx.user_name || 'N/A'}
                             </span>
                             <span className="font-mono text-[10px] text-slate-400 block">
@@ -626,22 +628,22 @@ export default function ClaraIntegrationPage() {
                             </span>
                           </td>
 
-                          <td className="py-3 px-3">
-                            <span className="font-semibold text-slate-800 block truncate max-w-[180px]" title={tx.merchant_name || ''}>
+                          <td className="py-2.5 px-2">
+                            <span className="font-semibold text-slate-800 block truncate max-w-[160px]" title={tx.merchant_name || ''}>
                               {tx.merchant_name || 'Estabelecimento Desconhecido'}
                             </span>
                             {tx.merchant_category && (
-                              <span className="text-[10px] text-slate-400 block truncate max-w-[180px]">
+                              <span className="text-[10px] text-slate-400 block truncate max-w-[160px]">
                                 {tx.merchant_category}
                               </span>
                             )}
                           </td>
 
-                          <td className="py-3 px-3 text-right font-black text-slate-900 tabular-nums whitespace-nowrap">
+                          <td className="py-2.5 px-2 text-right font-black text-slate-900 tabular-nums whitespace-nowrap">
                             {formatCurrency(tx.amount)}
                           </td>
 
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-2.5 px-2 text-center">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               tx.transaction_status === 'AUTHORIZED'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -651,9 +653,9 @@ export default function ClaraIntegrationPage() {
                             </span>
                           </td>
 
-                          <td className="py-3 px-3">
+                          <td className="py-2.5 px-2">
                             {tx.omie_category_code ? (
-                              <span className="font-medium text-slate-800 text-[11px] block truncate max-w-[140px]" title={tx.omie_category_code}>
+                              <span className="font-medium text-slate-800 text-[11px] block truncate max-w-[130px]" title={tx.omie_category_code}>
                                 {tx.omie_category_code}
                               </span>
                             ) : (
@@ -663,19 +665,19 @@ export default function ClaraIntegrationPage() {
                             )}
                           </td>
 
-                          <td className="py-3 px-3">
-                            <span className="text-slate-600 text-[11px] block truncate max-w-[120px]" title={tx.omie_department_code || ''}>
+                          <td className="py-2.5 px-2">
+                            <span className="text-slate-600 text-[11px] block truncate max-w-[100px]" title={tx.omie_department_code || ''}>
                               {tx.omie_department_code || '-'}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3">
-                            <span className="text-slate-600 text-[11px] block truncate max-w-[120px]" title={tx.omie_project_code || ''}>
+                          <td className="py-2.5 px-2">
+                            <span className="text-slate-600 text-[11px] block truncate max-w-[100px]" title={tx.omie_project_code || ''}>
                               {tx.omie_project_code || '-'}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-2 text-center whitespace-nowrap">
                             <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border inline-flex items-center gap-1 ${
                               isSynced
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -693,7 +695,7 @@ export default function ClaraIntegrationPage() {
                             </span>
                           </td>
 
-                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-2 text-center whitespace-nowrap">
                             {attachCount > 0 ? (
                               <span 
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -711,10 +713,10 @@ export default function ClaraIntegrationPage() {
                             )}
                           </td>
 
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-2.5 px-2 text-center sticky right-0 bg-white/95 backdrop-blur-xs z-10 shadow-[-4px_0_6px_rgba(0,0,0,0.04)]">
                             <button
                               onClick={e => { e.stopPropagation(); setSelectedTx(tx); }}
-                              className="text-xs text-slate-500 hover:text-slate-900 font-semibold p-1 hover:bg-slate-100 rounded cursor-pointer"
+                              className="text-xs text-emerald-700 hover:text-emerald-950 font-bold px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
                             >
                               Ver
                             </button>

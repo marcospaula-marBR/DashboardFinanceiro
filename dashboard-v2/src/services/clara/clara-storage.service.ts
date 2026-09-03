@@ -139,6 +139,29 @@ export class ClaraStorageService {
     return Object.values(state.transactions);
   }
 
+  /**
+   * Limpa o omie_launch_id e attachments_synced de uma transação para forçar reenvio.
+   * Atualiza tanto o memoryState quanto o Supabase remoto.
+   */
+  public static async resetTransactionForResync(idOrUuid: string, defaultConfig: ClaraConfig): Promise<void> {
+    const state = await this.getState(defaultConfig);
+    // Encontra a transação no estado em memória
+    const key = Object.keys(state.transactions).find(k => k === idOrUuid || state.transactions[k].id === idOrUuid);
+    if (key) {
+      state.transactions[key] = {
+        ...state.transactions[key],
+        omie_launch_id: null as unknown as number,
+        omie_account_id: null as unknown as number,
+        attachments_synced: false,
+        sync_status: 'READY',
+        last_sync_error: null,
+      };
+    }
+    // Invalida o cache para forçar releitura do Supabase na próxima chamada
+    this.memoryState = null;
+    await this.persistRemoteState(state);
+  }
+
   // --- MÉTODOS DE CONFIGURAÇÃO ---
 
   public static async getConfig(defaultConfig: ClaraConfig): Promise<ClaraConfig> {

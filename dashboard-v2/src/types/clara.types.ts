@@ -271,6 +271,7 @@ export interface OmieContaPagarPayload {
   observacao?: string | null;
   codigo_departamento?: string | null;
   codigo_projeto?: number | null;
+  id_conta_corrente?: number;
 }
 
 // Opções de Recursos Omie

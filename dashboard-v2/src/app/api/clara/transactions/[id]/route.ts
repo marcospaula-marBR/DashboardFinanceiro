@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ClaraSyncService } from '@/services/clara/clara-sync.service';
+import { ClaraStorageService } from '@/services/clara/clara-storage.service';
+import { DEFAULT_CLARA_CONFIG } from '@/services/clara/clara-config.service';
 import { supabase } from '@/lib/supabase';
 
 export async function POST(
@@ -33,6 +35,38 @@ export async function POST(
         status: 'success',
         data: updated,
         message: 'Campos atualizados com sucesso!',
+      });
+    }
+
+    if (action === 'force_resync') {
+      // 1. Limpa memoryState e Supabase JSON
+      await ClaraStorageService.resetTransactionForResync(id, DEFAULT_CLARA_CONFIG);
+
+      // 2. Limpa também na tabela clara_transactions (se existir)
+      try {
+        await supabase
+          .from('clara_transactions')
+          .update({
+            omie_launch_id: null,
+            omie_account_id: null,
+            attachments_synced: false,
+            sync_status: 'READY',
+            last_sync_error: null,
+            updated_at: new Date().toISOString(),
+          })
+          .or(`id.eq.${id},clara_uuid.eq.${id}`);
+      } catch (e: any) {
+        console.warn('[API Clara force_resync] Aviso Supabase clara_transactions:', e.message);
+      }
+
+      // 3. Executa o retry (irá encontrar omie_launch_id=null e criar no ContaPagar)
+      const resynced = await ClaraSyncService.retryTransaction(id);
+      return NextResponse.json({
+        status: 'success',
+        data: resynced,
+        message: resynced.omie_launch_id
+          ? `Migrado com sucesso para Contas a Pagar! ID Omie: #${resynced.omie_launch_id}`
+          : 'Processado — verifique o status.',
       });
     }
 

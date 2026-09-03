@@ -226,6 +226,85 @@ export function ClaraTransactionDrawer({
     }
   };
 
+  const handleForceResync = async () => {
+    if (!confirm('Isso irá apagar o ID Omie antigo (Conta Corrente) e reenviar esta transação ao módulo Contas a Pagar. Continuar?')) return;
+    setSyncResult(null);
+    setRetrying(true);
+    setSyncStep('🔄 Limpando lançamento antigo (Conta Corrente)...');
+
+    try {
+      setSyncStep('📤 Reenviando para Omie — Contas a Pagar...');
+
+      const res = await fetch(`/api/clara/transactions/${transaction.clara_uuid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'force_resync' }),
+      });
+
+      const data = await res.json().catch(() => ({ status: 'error', message: 'Resposta inválida do servidor.' }));
+
+      if (!res.ok || data.status === 'error') {
+        setSyncResult({
+          type: 'error',
+          title: 'Falha na migração para Contas a Pagar',
+          message: data.message || `Erro HTTP ${res.status}`,
+        });
+        setSyncStep(null);
+        return;
+      }
+
+      const updated = data.data as (typeof transaction);
+      onTransactionUpdated(updated);
+
+      if (updated?.omie_launch_id) {
+        setSyncStep('🔍 Verificando no Omie (Contas a Pagar)...');
+        try {
+          const verRes = await fetch('/api/clara/verify-omie', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ omieId: updated.omie_launch_id }),
+          });
+          const verData = await verRes.json().catch(() => null);
+          const verified = verRes.ok && verData?.status === 'success';
+          const descStatus = verData?.data?.descricao_status || '';
+
+          setSyncResult({
+            type: 'success',
+            title: `✅ Migrado para Contas a Pagar${verified ? ' e verificado' : ''}`,
+            message: verified
+              ? `Contas a Pagar #${updated.omie_launch_id}${descStatus ? ' — ' + descStatus : ''} (confirmado na base Omie)`
+              : `ID Omie #${updated.omie_launch_id}. Confirme em Finanças → Contas a Pagar.`,
+            omieId: updated.omie_launch_id,
+            omieValidated: verified,
+          });
+        } catch {
+          setSyncResult({
+            type: 'success',
+            title: '✅ Migrado para Contas a Pagar',
+            message: `ID Omie #${updated.omie_launch_id} registrado com sucesso.`,
+            omieId: updated.omie_launch_id,
+            omieValidated: false,
+          });
+        }
+      } else {
+        setSyncResult({
+          type: 'warning',
+          title: 'Processado sem ID Omie',
+          message: data.message || 'Verifique o modo Teste (Safe Mode).',
+        });
+      }
+    } catch (e: any) {
+      setSyncResult({
+        type: 'error',
+        title: 'Erro de conexão',
+        message: e.message || 'Falha ao comunicar com o servidor.',
+      });
+    } finally {
+      setRetrying(false);
+      setSyncStep(null);
+    }
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
@@ -620,6 +699,19 @@ export function ClaraTransactionDrawer({
           </button>
 
           <div className="flex items-center gap-2">
+            {transaction.sync_status === 'SYNCED' && (
+              <button
+                type="button"
+                onClick={handleForceResync}
+                disabled={retrying}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                title="Limpa o ID anterior e recria o título no módulo Contas a Pagar"
+              >
+                <RefreshCw size={13} className={retrying ? 'animate-spin' : ''} />
+                <span>Forçar Reenvio (Contas a Pagar)</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleRetry}

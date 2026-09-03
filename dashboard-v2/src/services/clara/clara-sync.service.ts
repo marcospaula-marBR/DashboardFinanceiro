@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import { supabase } from '@/lib/supabase';
 import { 
   ClaraConfig, 
@@ -42,6 +43,61 @@ export interface SyncResultSummary {
 }
 
 export class ClaraSyncService {
+  /**
+   * Garante que o estabelecimento comercial exista como Fornecedor no Omie.
+   * Se já existir, retorna o código. Se não existir, cadastra automaticamente.
+   * Caso falhe ou não haja nome, usa o fornecedor corporativo padrão (Clara Cartões).
+   */
+  public static async ensureSupplier(
+    merchantName: string | undefined | null,
+    omieCreds: { appKey: string; appSecret: string },
+    fallbackSupplierCode: number = 12323918318
+  ): Promise<number> {
+    if (!merchantName || !merchantName.trim()) return fallbackSupplierCode;
+    const cleanName = merchantName.trim().substring(0, 60);
+    const hash = crypto.createHash('md5').update(cleanName.toLowerCase()).digest('hex').substring(0, 15);
+    const codInt = `CL-M-${hash}`;
+
+    // 1. Tenta consultar pelo código de integração determinístico
+    try {
+      const res = await axios.post('https://app.omie.com.br/api/v1/geral/clientes/', {
+        call: 'ConsultarCliente',
+        app_key: omieCreds.appKey,
+        app_secret: omieCreds.appSecret,
+        param: [{ codigo_cliente_integracao: codInt }],
+      }, { timeout: 10000 });
+
+      if (res.data?.codigo_cliente_omie) {
+        return Number(res.data.codigo_cliente_omie);
+      }
+    } catch {
+      // Prossegue para criação
+    }
+
+    // 2. Tenta incluir o fornecedor
+    try {
+      const incRes = await axios.post('https://app.omie.com.br/api/v1/geral/clientes/', {
+        call: 'IncluirCliente',
+        app_key: omieCreds.appKey,
+        app_secret: omieCreds.appSecret,
+        param: [{
+          codigo_cliente_integracao: codInt,
+          razao_social: cleanName,
+          nome_fantasia: cleanName,
+          inativo: 'N',
+        }],
+      }, { timeout: 10000 });
+
+      if (incRes.data?.codigo_cliente_omie) {
+        return Number(incRes.data.codigo_cliente_omie);
+      }
+    } catch (e: any) {
+      console.warn(`[ensureSupplier] Aviso ao cadastrar fornecedor "${cleanName}":`, e.response?.data?.faultstring || e.message);
+    }
+
+    return fallbackSupplierCode;
+  }
+
   /**
    * Adquire lock de sincronização para evitar execuções simultâneas
    */
@@ -384,12 +440,14 @@ export class ClaraSyncService {
 
           // PRODUÇÃO: dispara IncluirContaPagar no Omie
           try {
+            const merchantSupplierCode = await this.ensureSupplier(tx.merchant_name, omieCreds, supplierCode);
             const contaPagarPayload = ClaraOmieMapper.buildOmieContaPagarPayload(
               tx,
-              supplierCode,
+              merchantSupplierCode,
               tx.omie_category_code || config.default_omie_category || '2.01.01',
               tx.omie_department_code,
-              tx.omie_project_code || config.default_omie_project
+              tx.omie_project_code || config.default_omie_project,
+              config.omie_n_cod_cc || 12291364271
             );
 
             const res = await axios.post('https://app.omie.com.br/api/v1/financas/contapagar/', {
@@ -739,12 +797,14 @@ export class ClaraSyncService {
     let nCodLanc = tx.omie_launch_id;
 
     if (!nCodLanc && !config.safe_mode) {
+      const merchantSupplierCode = await this.ensureSupplier(tx.merchant_name, omieCreds, supplierCode);
       const contaPagarPayload = ClaraOmieMapper.buildOmieContaPagarPayload(
         tx,
-        supplierCode,
+        merchantSupplierCode,
         tx.omie_category_code || config.default_omie_category || '2.01.01',
         tx.omie_department_code,
-        tx.omie_project_code || config.default_omie_project
+        tx.omie_project_code || config.default_omie_project,
+        config.omie_n_cod_cc || 12291364271
       );
 
       let res;

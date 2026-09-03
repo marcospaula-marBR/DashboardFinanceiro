@@ -253,7 +253,8 @@ export class ClaraOmieMapper {
     supplierCode: number,
     categoryCode: string,
     departmentCode?: string | null,
-    projectCode?: string | null
+    projectCode?: string | null,
+    idContaCorrente?: number | null
   ): OmieContaPagarPayload {
     if (!supplierCode) {
       throw new Error('Código do fornecedor Clara (omie_supplier_code) não definido na configuração.');
@@ -277,6 +278,10 @@ export class ClaraOmieMapper {
       numero_documento: tx.authorization_number || tx.clara_uuid.substring(0, 20),
       observacao: obs.substring(0, 500),
     };
+
+    if (idContaCorrente && !isNaN(Number(idContaCorrente))) {
+      payload.id_conta_corrente = Number(idContaCorrente);
+    }
 
     if (departmentCode?.trim()) {
       payload.codigo_departamento = departmentCode.trim();
