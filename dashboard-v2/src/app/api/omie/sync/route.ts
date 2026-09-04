@@ -5,7 +5,9 @@ export async function POST() {
   try {
     const keys = [
       { name: 'Mar Brasil', key: process.env.OMIE_APP_KEY_MARBRASIL, secret: process.env.OMIE_APP_SECRET_MARBRASIL },
-      { name: 'DZM', key: process.env.OMIE_APP_KEY_DZM, secret: process.env.OMIE_APP_SECRET_DZM }
+      { name: 'DZM', key: process.env.OMIE_APP_KEY_DZM, secret: process.env.OMIE_APP_SECRET_DZM },
+      { name: 'G2', key: process.env.OMIE_APP_KEY_G2, secret: process.env.OMIE_APP_SECRET_G2 },
+      { name: 'Conectius', key: process.env.OMIE_APP_KEY_CONECTIUS, secret: process.env.OMIE_APP_SECRET_CONECTIUS }
     ].filter(k => k.key && k.secret);
 
     if (keys.length === 0) {

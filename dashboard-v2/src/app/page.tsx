@@ -13,7 +13,8 @@ import {
   BadgeDollarSign,
   Users,
   Landmark,
-  HandCoins
+  HandCoins,
+  WalletCards
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -25,7 +26,7 @@ const SATELLITES = [
   { href: "/recebiveis", icon: BadgeDollarSign, title: "Recebíveis & Comissões", sub: "Unificado (Omie & Manual)" },
   { href: "/gestao-integrada.html", icon: Receipt, title: "Gestão Integrada", sub: "Faturamento & Impostos" },
   { href: "/dre", icon: TrendingUp, title: "DRE Gerencial", sub: "Visão Financeira" },
-  { href: "/analise-setorial.html", icon: PieChart, title: "Análise Setorial", sub: "Custos por Área" },
+  { href: "/dre-caixa", icon: WalletCards, title: "DRE-Caixa", sub: "Regime de Pagamentos" },
   { href: "/parcelamentos.html", icon: CreditCard, title: "Parcelamentos", sub: "Controle de Dívidas" },
   { href: "/people", icon: Users, title: "People", sub: "Gestão Cockpit RH" },
   { href: "/seguros", icon: ShieldCheck, title: "Seguros", sub: "Gestão de Apólices" },
