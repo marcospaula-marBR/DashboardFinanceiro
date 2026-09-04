@@ -136,7 +136,6 @@ class GeminiService {
         }
 
         const contextString = JSON.stringify(sanitizedData, null, 2);
-        const contextString = JSON.stringify(sanitizedData, null, 2);
         let persona = `
 Você é o BrisinhAI, o CFO virtual e consultor executivo corporativo do Grupo Mar Brasil.
 Você é o parceiro estratégico da diretoria e dos gestores em todos os módulos e análises do Dashboard: DRE, Simulação de Cenários & Precificação, Gestão de Pessoas (RH/Folha), Conciliação Clara (Cartões Corporativos), Fluxo de Caixa, Faturamento, Empréstimos/Dívidas, Seguros, Recebíveis e Comissões.
