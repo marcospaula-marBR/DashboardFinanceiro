@@ -111,6 +111,7 @@ export class DreCaixaService {
           .from('omie_financas_unificado')
           .select('*')
           .not('data_pagamento', 'is', null)
+          .gte('data_pagamento', '2025-06-01') // Trava mandatória: Omie utilizado apenas a partir de Junho/2025
           .neq('status', 'CANCELADO')
           .neq('categoria_codigo', '0.01') // Ignorar transferências internas
           .order('data_pagamento', { ascending: false })
@@ -130,8 +131,10 @@ export class DreCaixaService {
         }
       }
 
-      // Mapeamento e normalização
-      const lancamentos: DreCaixaLancamento[] = allRecords.map(item => {
+      // Mapeamento e normalização (com blindagem adicional >= 2025-06-01)
+      const lancamentos: DreCaixaLancamento[] = allRecords
+        .filter(item => item.data_pagamento && item.data_pagamento >= '2025-06-01')
+        .map(item => {
         const raw = item.raw_data || {};
         const rawDet = raw.detalhes || {};
 

@@ -18,7 +18,8 @@ from sync_omie_unified_v4 import (
 )
 
 def run_sync():
-    start_date = "01/01/2024"
+    # TRAVA MANDATÓRIA: Omie utilizado somente a partir de Junho/2025
+    start_date = "01/06/2025"
     apps = [
         {"key": os.getenv("OMIE_APP_KEY_G2"), "sec": os.getenv("OMIE_APP_SECRET_G2"), "name": "G2"},
         {"key": os.getenv("OMIE_APP_KEY_CONECTIUS"), "sec": os.getenv("OMIE_APP_SECRET_CONECTIUS"), "name": "Conectius"}
@@ -55,7 +56,12 @@ def run_sync():
         log(f"  MOV processados: {len(rows_mov)} linhas")
 
         all_rows = rows_cp + rows_cr + rows_mov
-        log(f"Enviando {len(all_rows)} registros para omie_financas_unificado no Supabase...")
+        # Trava estrita de corte: impedir qualquer lançamento com data anterior a 2025-06-01
+        all_rows = [
+            r for r in all_rows 
+            if (r.get("data_pagamento") or r.get("data_registro") or "9999-12-31") >= "2025-06-01"
+        ]
+        log(f"Enviando {len(all_rows)} registros validados (>= 2025-06-01) para omie_financas_unificado no Supabase...")
         push_to_supabase(all_rows)
         log(f"[SUCESSO] {app['name']} sincronizada com sucesso!")
 

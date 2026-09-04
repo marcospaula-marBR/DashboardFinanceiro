@@ -301,7 +301,8 @@ def push_to_supabase(rows):
                 log(f"Erro ao inserir novos registros: {post_resp.text}")
 
 def main():
-    start_date = "01/05/2025"
+    # TRAVA MANDATÓRIA: Omie utilizado somente a partir de Junho/2025
+    start_date = "01/06/2025"
     apps = [
         {"key": os.getenv("OMIE_APP_KEY_MARBRASIL"), "sec": os.getenv("OMIE_APP_SECRET_MARBRASIL"), "name": "Mar Brasil"},
         {"key": os.getenv("OMIE_APP_KEY_DZM"), "sec": os.getenv("OMIE_APP_SECRET_DZM"), "name": "DZM"},
@@ -330,8 +331,12 @@ def main():
         recs_mov = sync.fetch_movimentos(start_date)
         rows_mov = sync.process_movimentos(recs_mov)
         
-        # Push
+        # Push (com trava estrita >= 2025-06-01)
         all_rows = rows_cp + rows_cr + rows_mov
+        all_rows = [
+            r for r in all_rows 
+            if (r.get("data_pagamento") or r.get("data_registro") or "9999-12-31") >= "2025-06-01"
+        ]
         push_to_supabase(all_rows)
 
     log("\nSincronização Finalizada!")
