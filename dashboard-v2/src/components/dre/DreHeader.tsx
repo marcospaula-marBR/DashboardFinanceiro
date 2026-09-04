@@ -116,7 +116,7 @@ export function DreHeader({
 
         {/* Link para o Simulador DRE */}
         <Link 
-          href="/dre-custom"
+          href="/dre-simulador"
           target="_blank"
           rel="noopener noreferrer"
           className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200/80 transition-all duration-200 shadow-sm active:scale-95"

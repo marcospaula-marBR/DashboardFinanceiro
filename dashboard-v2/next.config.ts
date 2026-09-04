@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async redirects() {
+    return [
+      {
+        source: '/dre-custom',
+        destination: '/dre-simulador',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

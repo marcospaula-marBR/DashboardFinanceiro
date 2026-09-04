@@ -1107,7 +1107,7 @@ export default function DrePage() {
               isPrivacyMode={isPrivacyMode}
               onToggleRevenuePrivacy={() => { setIsRevenuePrivacyMode(!isRevenuePrivacyMode); if(!isRevenuePrivacyMode) setIsPrivacyMode(false); }}
               isRevenuePrivacyMode={isRevenuePrivacyMode}
-              onToggleSimulator={() => { window.location.href = '/dre-custom'; }}
+              onToggleSimulator={() => { window.location.href = '/dre-simulador'; }}
               onOpenEquipmentsManager={() => setIsEquipmentsModalOpen(true)}
               hasData={rawData.length > 0 && !(fileName ?? '').includes('Banco de Dados Nuvem')}
               isPublishing={isPublishing}

@@ -410,7 +410,7 @@ function initBrisinhAI() {
         const path = (window.location.pathname || '').toLowerCase();
         let detectedPage = 'DASHBOARD_GERAL';
 
-        if (path.includes('/dre-custom')) detectedPage = 'SIMULADOR_DRE';
+        if (path.includes('/dre-simulador') || path.includes('/dre-custom')) detectedPage = 'SIMULADOR_DRE';
         else if (path.includes('/dre')) detectedPage = 'DRE';
         else if (path.includes('/clara')) detectedPage = 'CONCILIACAO_CLARA';
         else if (path.includes('/people')) detectedPage = 'PEOPLE_RH';
