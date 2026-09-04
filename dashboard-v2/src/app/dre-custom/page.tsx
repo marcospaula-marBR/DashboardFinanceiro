@@ -23,7 +23,13 @@ import {
   CheckCircle2,
   DollarSign,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Filter,
+  ChevronDown,
+  CheckSquare,
+  Square,
+  HelpCircle,
+  Clock
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -49,6 +55,7 @@ import { PricingSimulatorGammaModal } from '@/components/dre/pricing/PricingSimu
 import { PricingSimulatorEngine, BaseContractData } from '@/services/pricing-simulator.engine';
 
 type SimulatorTab = 'precificacao' | 'perda' | 'rapida' | 'rubricas' | 'graficos';
+type PeriodoHorizonte = '1m' | '3m' | '6m' | '12m' | 'all' | 'custom';
 
 const fmt = (v?: number) =>
   v == null || isNaN(v)
@@ -69,6 +76,15 @@ export default function DreSimulatorCustomPage() {
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>('Todas');
+
+  // Filtros de Horizonte de Tempo (Curto, Médio, Longo Prazo)
+  const [periodoHorizonte, setPeriodoHorizonte] = useState<PeriodoHorizonte>('6m'); // padrão: 6 meses (médio prazo)
+  const [customPeriodos, setCustomPeriodos] = useState<string[]>([]);
+  const [showPeriodFilterModal, setShowPeriodFilterModal] = useState<boolean>(false);
+
+  // Seleção de Contratos que Absorvem Rateio
+  const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
+  const [showContractSelectionDrawer, setShowContractSelectionDrawer] = useState<boolean>(false);
 
   // Aba ativa
   const [activeTab, setActiveTab] = useState<SimulatorTab>('precificacao');
@@ -96,35 +112,78 @@ export default function DreSimulatorCustomPage() {
     })();
   }, []);
 
-  // ─── Extração e Filtragem de Dados ────────────────────────
+  // ─── Colunas de Período Disponíveis e Selecionadas ────────
+  const todasColunasMeses = useMemo(() => {
+    if (!rawData.length) return [];
+    return Object.keys(rawData[0] || {}).filter(k => k.includes('/'));
+  }, [rawData]);
+
+  // Determinar quais meses compõem o cálculo conforme o horizonte
+  const colunasFiltradas = useMemo(() => {
+    if (!todasColunasMeses.length) return [];
+    const total = todasColunasMeses.length;
+    switch (periodoHorizonte) {
+      case '1m':
+        return [todasColunasMeses[total - 1]];
+      case '3m':
+        return todasColunasMeses.slice(Math.max(0, total - 3));
+      case '6m':
+        return todasColunasMeses.slice(Math.max(0, total - 6));
+      case '12m':
+        return todasColunasMeses.slice(Math.max(0, total - 12));
+      case 'all':
+        return todasColunasMeses;
+      case 'custom':
+        return customPeriodos.length > 0
+          ? todasColunasMeses.filter(c => customPeriodos.includes(c))
+          : todasColunasMeses.slice(Math.max(0, total - 6));
+      default:
+        return todasColunasMeses.slice(Math.max(0, total - 6));
+    }
+  }, [todasColunasMeses, periodoHorizonte, customPeriodos]);
+
+  // Descrição do período ativo
+  const descricaoPeriodoAtivo = useMemo(() => {
+    if (!colunasFiltradas.length) return 'Carregando...';
+    if (colunasFiltradas.length === 1) return `Último Mês Fechado (${colunasFiltradas[0]})`;
+    return `${colunasFiltradas.length} meses (${colunasFiltradas[0]} até ${colunasFiltradas[colunasFiltradas.length - 1]})`;
+  }, [colunasFiltradas]);
+
+  // ─── Extração e Filtragem dos Lançamentos ──────────────────
   const {
     faturamentoTotalMensal,
+    faturamentoTotalPeriodo,
+    despesasRateadasTotalPeriodo,
     despesasRateadasTotalMensal,
     custosTotalMensal,
+    impostosTotalMensal,
+    aliquotaImpostosMediaPct,
+    razaoCustoDiretoMediaPct,
     ebitdaTotalMensal,
-    contratosAtivos,
-    valoresContasBase,
-    colunasValidas
+    todosContratosDRE,
+    valoresContasBase
   } = useMemo(() => {
-    if (!rawData.length) {
+    if (!rawData.length || !colunasFiltradas.length) {
       return {
         faturamentoTotalMensal: 1000000,
+        faturamentoTotalPeriodo: 6000000,
+        despesasRateadasTotalPeriodo: 480000,
         despesasRateadasTotalMensal: 80000,
         custosTotalMensal: 600000,
-        ebitdaTotalMensal: 320000,
-        contratosAtivos: [
-          { id: 'c1', nome: 'Contrato Alpha - Marinha', faturamentoMensal: 400000, custoDiretoMensal: 250000 },
+        impostosTotalMensal: 85000,
+        aliquotaImpostosMediaPct: 8.5,
+        razaoCustoDiretoMediaPct: 60.0,
+        ebitdaTotalMensal: 235000,
+        todosContratosDRE: [
+          { id: 'c1', nome: 'Contrato Alpha - Marinha', faturamentoMensal: 400000, custoDiretoMensal: 240000 },
           { id: 'c2', nome: 'Contrato Beta - Portuário', faturamentoMensal: 350000, custoDiretoMensal: 210000 },
-          { id: 'c3', nome: 'Contrato Gamma - Logística', faturamentoMensal: 250000, custoDiretoMensal: 140000 }
+          { id: 'c3', nome: 'Contrato Gamma - Logística', faturamentoMensal: 250000, custoDiretoMensal: 150000 }
         ] as BaseContractData[],
-        valoresContasBase: {} as Record<string, number>,
-        colunasValidas: [] as string[]
+        valoresContasBase: {} as Record<string, number>
       };
     }
 
-    // Identificar colunas de meses válidas
-    const cols = Object.keys(rawData[0] || {}).filter(k => k.includes('/'));
-    const mesesCount = Math.max(1, cols.length || 1);
+    const mesesCount = Math.max(1, colunasFiltradas.length);
 
     // Filtrar por empresa selecionada
     const rowsFiltradas = selectedEmpresa === 'Todas'
@@ -134,38 +193,43 @@ export default function DreSimulatorCustomPage() {
     let somaFaturamento = 0;
     let somaCustos = 0;
     let somaDespesasRateadas = 0;
+    let somaImpostos = 0;
 
     const contratosMap = new Map<string, { faturamento: number; custoDireto: number }>();
     const contasBaseMap: Record<string, number> = {};
 
     rowsFiltradas.forEach(r => {
-      // Somar valores de todas as colunas
       let somaLinha = 0;
-      cols.forEach(c => {
+      colunasFiltradas.forEach(c => {
         const val = parseFloat(r[c]?.toString().replace(',', '.') || '0');
         if (!isNaN(val)) somaLinha += val;
       });
 
       const valorMensalMedio = somaLinha / mesesCount;
 
-      // Conta DRE
       if (r.ContaDRE) {
         contasBaseMap[r.ContaDRE] = (contasBaseMap[r.ContaDRE] || 0) + valorMensalMedio;
       }
 
-      // Agrupamento
       const contaNorm = (r.ContaDRE || '').toLowerCase();
       const catNorm = (r.Categoria || '').toLowerCase();
 
-      if (contaNorm.includes('receita') || catNorm.includes('receita')) {
-        somaFaturamento += valorMensalMedio;
-      } else if (contaNorm.includes('custo') || catNorm.includes('custo') || catNorm.includes('operacional')) {
-        somaCustos += valorMensalMedio;
-      } else {
-        somaDespesasRateadas += valorMensalMedio;
+      // Impostos
+      if (contaNorm.includes('imposto') || catNorm.includes('imposto') || catNorm.includes('irpj')) {
+        somaImpostos += somaLinha;
       }
 
-      // Contratos / Projetos
+      // Receita
+      if (contaNorm.includes('receita') || catNorm.includes('receita')) {
+        somaFaturamento += somaLinha;
+      } else if (contaNorm.includes('custo') || catNorm.includes('custo') || catNorm.includes('operacional')) {
+        somaCustos += somaLinha;
+      } else {
+        // Despesas Rateadas Administrativas
+        somaDespesasRateadas += somaLinha;
+      }
+
+      // Contratos
       const projeto = r.Projeto;
       if (projeto && !['–', '-', 'Geral', 'Sem Projeto', 'Administrativo'].includes(projeto)) {
         if (!contratosMap.has(projeto)) {
@@ -173,44 +237,102 @@ export default function DreSimulatorCustomPage() {
         }
         const item = contratosMap.get(projeto)!;
         if (contaNorm.includes('receita')) {
-          item.faturamento += valorMensalMedio;
+          item.faturamento += somaLinha;
         } else if (contaNorm.includes('custo')) {
-          item.custoDireto += valorMensalMedio;
+          item.custoDireto += somaLinha;
         }
       }
     });
 
     const listaContratos: BaseContractData[] = Array.from(contratosMap.entries())
       .filter(([_, v]) => v.faturamento > 0)
-      .map(([nome, v], idx) => ({
-        id: `c_${idx}`,
-        nome,
-        faturamentoMensal: v.faturamento,
-        custoDiretoMensal: v.custoDireto > 0 ? v.custoDireto : v.faturamento * 0.6
-      }))
+      .map(([nome, v], idx) => {
+        const fatMensal = v.faturamento / mesesCount;
+        const cstMensal = v.custoDireto > 0 ? v.custoDireto / mesesCount : fatMensal * 0.6;
+        return {
+          id: `c_${idx}`,
+          nome,
+          faturamentoMensal: fatMensal,
+          custoDiretoMensal: cstMensal
+        };
+      })
       .sort((a, b) => b.faturamentoMensal - a.faturamentoMensal);
 
-    const faturamentoFinal = somaFaturamento > 0 ? somaFaturamento : 1000000;
-    const despesasFinal = somaDespesasRateadas > 0 ? somaDespesasRateadas : 80000;
-    const custosFinal = somaCustos > 0 ? somaCustos : 600000;
-    const ebitdaFinal = faturamentoFinal - custosFinal - despesasFinal;
+    // Totais e Médias Mensais
+    const fatMensal = (somaFaturamento > 0 ? somaFaturamento : 1000000 * mesesCount) / mesesCount;
+    const despRateadaMensal = (somaDespesasRateadas > 0 ? somaDespesasRateadas : 80000 * mesesCount) / mesesCount;
+    const cstMensal = (somaCustos > 0 ? somaCustos : 600000 * mesesCount) / mesesCount;
+    const impMensal = somaImpostos / mesesCount;
+
+    // Alíquota média de impostos real
+    const aliqImp = somaFaturamento > 0 ? (somaImpostos / somaFaturamento) * 100 : 8.5;
+
+    // Razão de Custo Direto ponderada dos contratos
+    let somaFatContratos = 0;
+    let somaCstContratos = 0;
+    listaContratos.forEach(c => {
+      somaFatContratos += c.faturamentoMensal;
+      somaCstContratos += c.custoDiretoMensal;
+    });
+    const razaoCst = somaFatContratos > 0 ? (somaCstContratos / somaFatContratos) * 100 : 60.0;
+
+    const ebitdaMensal = fatMensal - cstMensal - despRateadaMensal;
 
     return {
-      faturamentoTotalMensal: faturamentoFinal,
-      despesasRateadasTotalMensal: despesasFinal,
-      custosTotalMensal: custosFinal,
-      ebitdaTotalMensal: ebitdaFinal,
-      contratosAtivos: listaContratos.length > 0 ? listaContratos : [
-        { id: 'c1', nome: 'Contrato Principal - Marinha', faturamentoMensal: 450000, custoDiretoMensal: 280000 },
-        { id: 'c2', nome: 'Contrato Base Operacional', faturamentoMensal: 350000, custoDiretoMensal: 220000 },
-        { id: 'c3', nome: 'Contrato Apoio Marítimo', faturamentoMensal: 200000, custoDiretoMensal: 110000 }
-      ],
-      valoresContasBase: contasBaseMap,
-      colunasValidas: cols
+      faturamentoTotalMensal: fatMensal,
+      faturamentoTotalPeriodo: somaFaturamento,
+      despesasRateadasTotalPeriodo: somaDespesasRateadas,
+      despesasRateadasTotalMensal: despRateadaMensal,
+      custosTotalMensal: cstMensal,
+      impostosTotalMensal: impMensal,
+      aliquotaImpostosMediaPct: aliqImp > 0 ? aliqImp : 8.5,
+      razaoCustoDiretoMediaPct: razaoCst > 0 ? razaoCst : 60.0,
+      ebitdaTotalMensal: ebitdaMensal,
+      todosContratosDRE: listaContratos,
+      valoresContasBase: contasBaseMap
     };
-  }, [rawData, selectedEmpresa]);
+  }, [rawData, colunasFiltradas, selectedEmpresa]);
 
-  // Síntese Determinística Instantânea (Baseado nas regras de GEMINI.md)
+  // Inicializar seleção de contratos (todos selecionados por padrão)
+  useEffect(() => {
+    if (todosContratosDRE.length > 0 && selectedContractIds.length === 0) {
+      setSelectedContractIds(todosContratosDRE.map(c => c.id));
+    }
+  }, [todosContratosDRE, selectedContractIds]);
+
+  // Contratos efetivamente ativos na simulação (que geram/absorvem rateio)
+  const contratosAtivosSimulacao = useMemo(() => {
+    if (selectedContractIds.length === 0) return todosContratosDRE;
+    return todosContratosDRE.filter(c => selectedContractIds.includes(c.id));
+  }, [todosContratosDRE, selectedContractIds]);
+
+  // Faturamento base ajustado apenas pelos contratos selecionados
+  const faturamentoBaseSimulacao = useMemo(() => {
+    if (contratosAtivosSimulacao.length === 0) return faturamentoTotalMensal;
+    const soma = contratosAtivosSimulacao.reduce((acc, c) => acc + c.faturamentoMensal, 0);
+    return soma > 0 ? soma : faturamentoTotalMensal;
+  }, [contratosAtivosSimulacao, faturamentoTotalMensal]);
+
+  // Toggle de seleção de contrato individual
+  const toggleContrato = (id: string) => {
+    if (selectedContractIds.includes(id)) {
+      setSelectedContractIds(selectedContractIds.filter(cId => cId !== id));
+    } else {
+      setSelectedContractIds([...selectedContractIds, id]);
+    }
+  };
+
+  const selecionarTodosContratos = () => {
+    setSelectedContractIds(todosContratosDRE.map(c => c.id));
+  };
+
+  const limparSelecaoContratos = () => {
+    if (todosContratosDRE.length > 0) {
+      setSelectedContractIds([todosContratosDRE[0].id]);
+    }
+  };
+
+  // Síntese Determinística Instantânea
   const deterministicInsight = useMemo(() => {
     if (activeTab === 'precificacao') {
       return PricingSimulatorEngine.generateDeterministicInsight('precificacao', {
@@ -223,10 +345,10 @@ export default function DreSimulatorCustomPage() {
       });
     }
     if (activeTab === 'perda') {
-      const primeiroContrato = contratosAtivos[0] || { nome: 'Contrato Principal', faturamentoMensal: 200000 };
+      const primeiroContrato = contratosAtivosSimulacao[0] || { nome: 'Contrato Selecionado', faturamentoMensal: 200000 };
       return PricingSimulatorEngine.generateDeterministicInsight('perda', {
         contratoNome: primeiroContrato.nome,
-        partOriginalPct: (primeiroContrato.faturamentoMensal / faturamentoTotalMensal) * 100,
+        partOriginalPct: faturamentoBaseSimulacao > 0 ? (primeiroContrato.faturamentoMensal / faturamentoBaseSimulacao) * 100 : 20,
         rateioMedioAdicionalPct: 25,
         corteNecessarioDR: despesasRateadasTotalMensal * 0.2,
         lucroCessanteExcedente: 54000,
@@ -236,14 +358,14 @@ export default function DreSimulatorCustomPage() {
       });
     }
     return PricingSimulatorEngine.generateDeterministicInsight('rapida', {
-      receitaSimulada: faturamentoTotalMensal - 100000,
+      receitaSimulada: faturamentoBaseSimulacao - 100000,
       ebitdaSimulado: ebitdaTotalMensal - 100000,
-      ebitdaSimuladoPct: ((ebitdaTotalMensal - 100000) / (faturamentoTotalMensal - 100000)) * 100,
+      ebitdaSimuladoPct: ((ebitdaTotalMensal - 100000) / (faturamentoBaseSimulacao - 100000)) * 100,
       variacaoResultadoAbsoluta: -100000,
       breakEvenOriginal: 350000,
       breakEvenSimulado: 420000
     });
-  }, [activeTab, despesasRateadasTotalMensal, contratosAtivos, faturamentoTotalMensal, ebitdaTotalMensal]);
+  }, [activeTab, despesasRateadasTotalMensal, contratosAtivosSimulacao, faturamentoBaseSimulacao, ebitdaTotalMensal]);
 
   // Invocar Análise Completa do BrisinhAI via API
   const handleConsultarBrisinhAI = async () => {
@@ -255,9 +377,9 @@ export default function DreSimulatorCustomPage() {
         body: JSON.stringify({
           empresa: selectedEmpresa,
           scenarioName: `Simulação de ${activeTab.toUpperCase()}`,
-          assumptionsSummary: `Faturamento Base: R$ ${faturamentoTotalMensal.toLocaleString('pt-BR')} - Despesas Rateadas: R$ ${despesasRateadasTotalMensal.toLocaleString('pt-BR')}`,
+          assumptionsSummary: `Base DRE: R$ ${faturamentoBaseSimulacao.toLocaleString('pt-BR')}/mês (${descricaoPeriodoAtivo}) - Despesas Rateadas Totais: R$ ${despesasRateadasTotalPeriodo.toLocaleString('pt-BR')} (Média: R$ ${despesasRateadasTotalMensal.toLocaleString('pt-BR')}/mês)`,
           metrics: {
-            faturamentoBase: faturamentoTotalMensal,
+            faturamentoBase: faturamentoBaseSimulacao,
             despesasRateadas: despesasRateadasTotalMensal,
             ebitdaBase: ebitdaTotalMensal
           }
@@ -283,14 +405,16 @@ export default function DreSimulatorCustomPage() {
 
 **Grupo Mar Brasil • Controladoria & CFO**
 *Data da Simulação:* ${new Date().toLocaleDateString('pt-BR')}
+*Período Base:* ${descricaoPeriodoAtivo}
 
 ---
 
 ## 1. Dados Base do DRE
-- **Faturamento Médio Mensal:** ${fmt(faturamentoTotalMensal)}
-- **Despesas Rateadas Estruturais (DR_p):** ${fmt(despesasRateadasTotalMensal)}
-- **EBITDA Médio Mensal:** ${fmt(ebitdaTotalMensal)}
-- **Contratos Ativos Monitorados:** ${contratosAtivos.length} contratos
+- **Faturamento Médio Mensal:** ${fmt(faturamentoBaseSimulacao)}
+- **Total de Despesas Rateadas no Período (DR_p):** ${fmt(despesasRateadasTotalPeriodo)} (Média: ${fmt(despesasRateadasTotalMensal)}/mês)
+- **Alíquota Média de Impostos s/ Receita:** ${aliquotaImpostosMediaPct.toFixed(1)}%
+- **Proporção Média de Custos Diretos:** ${razaoCustoDiretoMediaPct.toFixed(1)}%
+- **Contratos Incluídos no Rateio:** ${contratosAtivosSimulacao.length} de ${todosContratosDRE.length}
 
 ---
 
@@ -302,14 +426,27 @@ ${aiAnalysis || deterministicInsight}
 ## 3. Matriz de Contratos & Impactos
 | Contrato | Faturamento Mensal | Custo Direto Estimado | Participação |
 | :--- | :---: | :---: | :---: |
-${contratosAtivos.slice(0, 5).map(c => `| ${c.nome} | ${fmt(c.faturamentoMensal)} | ${fmt(c.custoDiretoMensal)} | ${fmtPct((c.faturamentoMensal / faturamentoTotalMensal) * 100)} |`).join('\n')}
+${contratosAtivosSimulacao.slice(0, 8).map(c => `| ${c.nome} | ${fmt(c.faturamentoMensal)} | ${fmt(c.custoDiretoMensal)} | ${fmtPct((c.faturamentoMensal / faturamentoBaseSimulacao) * 100)} |`).join('\n')}
 
 ---
 
 ## 4. Parecer Executivo do BrisinhAI
 ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação da base real e cálculo determinístico de rateio.'}
 `;
-  }, [selectedEmpresa, activeTab, faturamentoTotalMensal, despesasRateadasTotalMensal, ebitdaTotalMensal, contratosAtivos, aiAnalysis, deterministicInsight]);
+  }, [
+    selectedEmpresa,
+    activeTab,
+    descricaoPeriodoAtivo,
+    faturamentoBaseSimulacao,
+    despesasRateadasTotalPeriodo,
+    despesasRateadasTotalMensal,
+    aliquotaImpostosMediaPct,
+    razaoCustoDiretoMediaPct,
+    contratosAtivosSimulacao,
+    todosContratosDRE,
+    aiAnalysis,
+    deterministicInsight
+  ]);
 
   return (
     <div className="min-h-screen bg-slate-50/60 text-slate-800 pb-16 font-sans">
@@ -345,7 +482,6 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
 
           {/* Seletor de Empresa e Ações Globais */}
           <div className="flex items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
-            {/* Seletor de Empresa */}
             <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-xl border border-slate-200 text-xs">
               <Building2 size={15} className="text-slate-500 ml-1" />
               <select
@@ -360,7 +496,6 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
               </select>
             </div>
 
-            {/* Botão Gamma */}
             <button
               onClick={() => setIsGammaModalOpen(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-all active:scale-95"
@@ -373,6 +508,141 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
         </div>
       </header>
 
+      {/* ── Barra de Filtros de Horizonte de Tempo & Seleção de Contratos ── */}
+      <section className="bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 shadow-xs">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Seletor de Horizontes (Curto, Médio, Longo Prazo) */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center gap-1">
+              <Clock size={13} />
+              <span>Base DRE:</span>
+            </span>
+
+            <button
+              onClick={() => setPeriodoHorizonte('1m')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                periodoHorizonte === '1m'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Último Mês
+            </button>
+
+            <button
+              onClick={() => setPeriodoHorizonte('3m')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                periodoHorizonte === '3m'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Curto Prazo (3m)
+            </button>
+
+            <button
+              onClick={() => setPeriodoHorizonte('6m')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                periodoHorizonte === '6m'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Médio Prazo (6m)
+            </button>
+
+            <button
+              onClick={() => setPeriodoHorizonte('12m')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                periodoHorizonte === '12m'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Longo Prazo (12m)
+            </button>
+
+            <button
+              onClick={() => setPeriodoHorizonte('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                periodoHorizonte === 'all'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Todo o Histórico
+            </button>
+          </div>
+
+          {/* Botão para Filtrar Contratos que Geram Rateio */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowContractSelectionDrawer(!showContractSelectionDrawer)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-250 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-all active:scale-95"
+            >
+              <Filter size={13} className="text-slate-500" />
+              <span>Contratos no Rateio ({contratosAtivosSimulacao.length} de {todosContratosDRE.length})</span>
+              <ChevronDown size={13} className={`transition-transform ${showContractSelectionDrawer ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Gaveta Expansível de Seleção de Contratos */}
+        {showContractSelectionDrawer && (
+          <div className="max-w-7xl mx-auto mt-3 pt-3 border-t border-slate-100 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-700">
+                Selecione os contratos que compõem a base de faturamento e absorção de despesas rateadas:
+              </span>
+              <div className="flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={selecionarTodosContratos}
+                  className="font-semibold text-emerald-700 hover:underline"
+                >
+                  Marcar Todos
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={limparSelecaoContratos}
+                  className="font-semibold text-slate-500 hover:underline"
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1 scrollbar-thin">
+              {todosContratosDRE.map(c => {
+                const isSelected = selectedContractIds.includes(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                      isSelected
+                        ? 'border-emerald-300 bg-emerald-50/50 text-slate-800'
+                        : 'border-slate-200 bg-slate-50/50 text-slate-400 opacity-60'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleContrato(c.id)}
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/20 w-3.5 h-3.5"
+                    />
+                    <div className="truncate flex-1">
+                      <span className="font-bold truncate block">{c.nome}</span>
+                      <span className="text-[10px] text-slate-500">{fmt(c.faturamentoMensal)}/mês</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* ── Conteúdo Principal ────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
         {/* Banner de Carregamento */}
@@ -382,6 +652,63 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
             <span>Sincronizando faturamento, centros de custo e despesas rateadas do DRE real...</span>
           </div>
         )}
+
+        {/* ── CARD DE DESTAQUE EXECUTIVO DAS DESPESAS RATEADAS (DR_p) ──────── */}
+        <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-indigo-500/20 relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-500/30 text-indigo-300 px-2.5 py-1 rounded-full border border-indigo-400/30">
+                  Despesas Rateadas Estruturais (DR_p)
+                </span>
+                <span className="text-xs text-slate-400 font-medium">
+                  • {descricaoPeriodoAtivo}
+                </span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+                {fmt(despesasRateadasTotalPeriodo)}
+              </h2>
+              <p className="text-xs text-indigo-200/80 mt-1 max-w-xl leading-relaxed">
+                Total acumulado das despesas administrativas e estruturais que são rateadas entre os contratos ativos proporcionalmente à receita.
+              </p>
+            </div>
+
+            {/* Métricas Auxiliares em Cards Escuros */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3.5 border border-white/10">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200 block">
+                  Média Mensal (DR_p)
+                </span>
+                <span className="text-lg font-black text-white block mt-0.5">
+                  {fmt(despesasRateadasTotalMensal)}
+                </span>
+                <span className="text-[10px] text-slate-300">por mês</span>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3.5 border border-white/10">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200 block">
+                  % s/ Faturamento
+                </span>
+                <span className="text-lg font-black text-emerald-400 block mt-0.5">
+                  {faturamentoBaseSimulacao > 0 ? fmtPct((despesasRateadasTotalMensal / faturamentoBaseSimulacao) * 100) : '0%'}
+                </span>
+                <span className="text-[10px] text-slate-300">peso estrutural</span>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3.5 border border-white/10 col-span-2 sm:col-span-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200 block">
+                  Base Faturamento
+                </span>
+                <span className="text-lg font-black text-white block mt-0.5">
+                  {fmt(faturamentoBaseSimulacao)}
+                </span>
+                <span className="text-[10px] text-slate-300">{contratosAtivosSimulacao.length} contratos</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* ── Navegação por Abas Modernas (Clean & Touch-friendly) ──────────── */}
         <div className="flex items-center gap-1.5 p-1.5 bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-x-auto scrollbar-none">
@@ -458,7 +785,7 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
                   Parecer Executivo — BrisinhAI
                 </span>
                 <p className="text-[11px] text-slate-400">
-                  Diagnóstico fundamentado estritamente nas regras e dados calculados da tela
+                  Diagnóstico fundamentado estritamente nas regras e dados calculados da tela ({descricaoPeriodoAtivo})
                 </p>
               </div>
             </div>
@@ -481,23 +808,26 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
         {/* ── Renderização da Seção da Aba Ativa ────────────────────────────── */}
         {activeTab === 'precificacao' && (
           <PricingProposalSection
-            ftOriginal={faturamentoTotalMensal}
+            ftOriginal={faturamentoBaseSimulacao}
             drOriginal={despesasRateadasTotalMensal}
-            contratosAtivos={contratosAtivos}
+            contratosAtivos={contratosAtivosSimulacao}
+            razaoCustoDiretoMediaPct={razaoCustoDiretoMediaPct}
+            aliquotaImpostosMediaPct={aliquotaImpostosMediaPct}
+            basePeriodoDescricao={descricaoPeriodoAtivo}
           />
         )}
 
         {activeTab === 'perda' && (
           <ContractLossSection
-            ftOriginal={faturamentoTotalMensal}
+            ftOriginal={faturamentoBaseSimulacao}
             drOriginal={despesasRateadasTotalMensal}
-            contratosAtivos={contratosAtivos}
+            contratosAtivos={contratosAtivosSimulacao}
           />
         )}
 
         {activeTab === 'rapida' && (
           <QuickSimulationsSection
-            receitaBase={faturamentoTotalMensal}
+            receitaBase={faturamentoBaseSimulacao}
             custosBase={custosTotalMensal}
             despesasBase={despesasRateadasTotalMensal}
           />
@@ -507,7 +837,7 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
           <RubricSimulationSection
             contasDisponiveis={metadata.contasDre}
             valoresContasBase={valoresContasBase}
-            receitaBase={faturamentoTotalMensal}
+            receitaBase={faturamentoBaseSimulacao}
             ebitdaBase={ebitdaTotalMensal}
           />
         )}
@@ -516,12 +846,12 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 md:p-6">
               <h3 className="text-sm font-black text-slate-800 tracking-tight mb-4">
-                Visão Comparativa: Faturamento vs. Custos Diretos dos Contratos Ativos
+                Visão Comparativa: Faturamento vs. Custos Diretos dos Contratos Ativos ({descricaoPeriodoAtivo})
               </h3>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={contratosAtivos.slice(0, 6).map(c => ({
+                    data={contratosAtivosSimulacao.slice(0, 8).map(c => ({
                       nome: c.nome.length > 15 ? c.nome.slice(0, 15) + '...' : c.nome,
                       Faturamento: c.faturamentoMensal,
                       CustoDireto: c.custoDiretoMensal,
@@ -551,20 +881,24 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
             {/* DRE Sintética Resumida */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 md:p-6">
               <h3 className="text-sm font-black text-slate-800 tracking-tight mb-3">
-                Estrutura Sintética de Fechamento Médio Mensal
+                Estrutura Sintética de Fechamento Médio Mensal ({descricaoPeriodoAtivo})
               </h3>
               <div className="divide-y divide-slate-100 text-xs">
                 <div className="py-2.5 flex items-center justify-between font-bold text-slate-800">
                   <span>(+) Receita Operacional Bruta</span>
-                  <span className="text-emerald-700">{fmt(faturamentoTotalMensal)}</span>
+                  <span className="text-emerald-700">{fmt(faturamentoBaseSimulacao)}</span>
                 </div>
                 <div className="py-2.5 flex items-center justify-between text-slate-600">
-                  <span>(-) Custos Operacionais Diretos</span>
+                  <span>(-) Impostos s/ Faturamento (Média: {aliquotaImpostosMediaPct.toFixed(1)}%)</span>
+                  <span className="text-rose-700">-{fmt(impostosTotalMensal)}</span>
+                </div>
+                <div className="py-2.5 flex items-center justify-between text-slate-600">
+                  <span>(-) Custos Operacionais Diretos (Média: {razaoCustoDiretoMediaPct.toFixed(1)}%)</span>
                   <span className="text-amber-700">-{fmt(custosTotalMensal)}</span>
                 </div>
                 <div className="py-2.5 flex items-center justify-between font-bold text-slate-900 bg-slate-50/60 px-2 rounded-lg">
                   <span>(=) Margem de Contribuição Global</span>
-                  <span className="text-slate-900">{fmt(faturamentoTotalMensal - custosTotalMensal)} ({fmtPct(((faturamentoTotalMensal - custosTotalMensal) / faturamentoTotalMensal) * 100)})</span>
+                  <span className="text-slate-900">{fmt(faturamentoBaseSimulacao - custosTotalMensal)} ({fmtPct(((faturamentoBaseSimulacao - custosTotalMensal) / faturamentoBaseSimulacao) * 100)})</span>
                 </div>
                 <div className="py-2.5 flex items-center justify-between text-slate-600">
                   <span>(-) Despesas Administrativas & Rateadas (DR_p)</span>
@@ -572,7 +906,7 @@ ${aiAnalysis || 'Cenário executivo validado matematicamente com preservação d
                 </div>
                 <div className="py-2.5 flex items-center justify-between font-black text-slate-900 bg-emerald-50/60 px-2 rounded-lg">
                   <span>(=) EBITDA Operacional Médio</span>
-                  <span className="text-emerald-800">{fmt(ebitdaTotalMensal)} ({fmtPct((ebitdaTotalMensal / faturamentoTotalMensal) * 100)})</span>
+                  <span className="text-emerald-800">{fmt(ebitdaTotalMensal)} ({fmtPct((ebitdaTotalMensal / faturamentoBaseSimulacao) * 100)})</span>
                 </div>
               </div>
             </div>

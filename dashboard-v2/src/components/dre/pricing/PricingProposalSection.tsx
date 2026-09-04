@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Calculator,
   Percent,
@@ -12,7 +12,10 @@ import {
   ShieldCheck,
   CheckCircle2,
   ChevronDown,
-  Layers
+  Layers,
+  Sparkles,
+  HelpCircle,
+  RotateCcw
 } from 'lucide-react';
 import {
   ProposalPricingParams,
@@ -24,6 +27,9 @@ interface PricingProposalSectionProps {
   ftOriginal: number;
   drOriginal: number;
   contratosAtivos: BaseContractData[];
+  razaoCustoDiretoMediaPct?: number;
+  aliquotaImpostosMediaPct?: number;
+  basePeriodoDescricao?: string;
   onApplyProposalToDRE?: (result: ProposalPricingResult) => void;
 }
 
@@ -39,16 +45,33 @@ export function PricingProposalSection({
   ftOriginal,
   drOriginal,
   contratosAtivos,
+  razaoCustoDiretoMediaPct = 60,
+  aliquotaImpostosMediaPct = 8.5,
+  basePeriodoDescricao = 'Média do Período Selecionado',
   onApplyProposalToDRE
 }: PricingProposalSectionProps) {
   // Entradas
   const [faturamentoNovo, setFaturamentoNovo] = useState<number>(150000);
-  const [custoDiretoNovo, setCustoDiretoNovo] = useState<number>(90000);
+  const [custoDiretoNovo, setCustoDiretoNovo] = useState<number>(() => Math.round(150000 * (razaoCustoDiretoMediaPct / 100)));
   const [margemDesejadaPct, setMargemDesejadaPct] = useState<number>(15);
-  const [aliquotaImpostosPct, setAliquotaImpostosPct] = useState<number>(0);
+  const [aliquotaImpostosPct, setAliquotaImpostosPct] = useState<number>(aliquotaImpostosMediaPct);
   const [nomeProposta, setNomeProposta] = useState<string>('Nova Oportunidade / Licitação');
   const [alertaCapacidadePct, setAlertaCapacidadePct] = useState<number>(20);
   const [showDilutionDetails, setShowDilutionDetails] = useState<boolean>(false);
+  const [showGatilhoHelp, setShowGatilhoHelp] = useState<boolean>(false);
+
+  // Sincronizar impostos padrão quando mudar filtro do DRE
+  useEffect(() => {
+    if (aliquotaImpostosMediaPct > 0) {
+      setAliquotaImpostosPct(Number(aliquotaImpostosMediaPct.toFixed(1)));
+    }
+  }, [aliquotaImpostosMediaPct]);
+
+  // Função para recalcular Custo Direto pela Média dos Contratos
+  const aplicarMediaCustoDireto = () => {
+    const sugerido = Math.round(faturamentoNovo * (razaoCustoDiretoMediaPct / 100));
+    setCustoDiretoNovo(sugerido);
+  };
 
   // Execução do cálculo marginal
   const result: ProposalPricingResult = useMemo(() => {
@@ -95,9 +118,12 @@ export function PricingProposalSection({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+          <div className="flex flex-col sm:items-end gap-0.5">
+            <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-full">
               Base DRE: {fmt(ftOriginal)}/mês
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium">
+              {basePeriodoDescricao}
             </span>
           </div>
         </div>
@@ -129,17 +155,30 @@ export function PricingProposalSection({
                 min="0"
                 step="5000"
                 value={faturamentoNovo || ''}
-                onChange={e => setFaturamentoNovo(Number(e.target.value))}
+                onChange={e => {
+                  const val = Number(e.target.value);
+                  setFaturamentoNovo(val);
+                }}
                 className="w-full text-xs font-bold pl-9 pr-3 py-2.5 rounded-xl border border-slate-250 bg-slate-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
               />
             </div>
           </div>
 
+          {/* Custo Direto com Projeção pela Média dos Contratos */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center justify-between">
-              <span>Custo Direto Estimado (CD)</span>
-              <span className="text-amber-600 font-bold">{fmt(custoDiretoNovo)}</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Custo Direto Estimado (CD)
+              </label>
+              <button
+                type="button"
+                onClick={aplicarMediaCustoDireto}
+                className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded transition-colors"
+                title={`Aplicar proporção média real dos contratos (${razaoCustoDiretoMediaPct.toFixed(1)}%)`}
+              >
+                Média DRE: {razaoCustoDiretoMediaPct.toFixed(0)}%
+              </button>
+            </div>
             <div className="relative">
               <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">R$</span>
               <input
@@ -151,6 +190,9 @@ export function PricingProposalSection({
                 className="w-full text-xs font-bold pl-9 pr-3 py-2.5 rounded-xl border border-slate-250 bg-slate-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
               />
             </div>
+            <span className="text-[10px] text-slate-400 block mt-1">
+              Equivale a {faturamentoNovo > 0 ? fmtPct((custoDiretoNovo / faturamentoNovo) * 100) : '0%'} do faturamento da proposta
+            </span>
           </div>
 
           <div>
@@ -175,34 +217,71 @@ export function PricingProposalSection({
           </div>
         </div>
 
-        {/* Linha Opcional de Tributos e Capacidade */}
-        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-4 text-xs text-slate-600">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-slate-500">Impostos s/ Receita (ISS/PIS/COFINS):</span>
-            <input
-              type="number"
-              min="0"
-              max="30"
-              step="0.5"
-              value={aliquotaImpostosPct}
-              onChange={e => setAliquotaImpostosPct(Number(e.target.value))}
-              className="w-16 text-center text-xs font-bold py-1 px-1.5 rounded-lg border border-slate-250 bg-white"
-            />
-            <span className="font-bold">%</span>
+        {/* Linha de Impostos (Herdado do DRE) e Gatilho de Alerta de Estrutura */}
+        <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          {/* Alíquota de Impostos s/ Receita */}
+          <div className="flex items-center justify-between p-3 bg-slate-50/70 rounded-xl border border-slate-200/60">
+            <div>
+              <span className="font-bold text-slate-700 block">Impostos s/ Receita Bruta (ISS/PIS/COFINS)</span>
+              <span className="text-[11px] text-slate-400">
+                Alíquota média apurada no DRE: <strong>{aliquotaImpostosMediaPct.toFixed(1)}%</strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                max="35"
+                step="0.5"
+                value={aliquotaImpostosPct}
+                onChange={e => setAliquotaImpostosPct(Number(e.target.value))}
+                className="w-16 text-center text-xs font-bold py-1 px-1.5 rounded-lg border border-slate-250 bg-white"
+              />
+              <span className="font-bold text-slate-600">%</span>
+              <button
+                type="button"
+                onClick={() => setAliquotaImpostosPct(Number(aliquotaImpostosMediaPct.toFixed(1)))}
+                className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold underline ml-1"
+                title="Restaurar média do DRE"
+              >
+                Reset
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-slate-500">Gatilho Alerta de Estrutura:</span>
-            <input
-              type="number"
-              min="5"
-              max="60"
-              step="5"
-              value={alertaCapacidadePct}
-              onChange={e => setAlertaCapacidadePct(Number(e.target.value))}
-              className="w-16 text-center text-xs font-bold py-1 px-1.5 rounded-lg border border-slate-250 bg-white"
-            />
-            <span className="font-bold">% do faturamento</span>
+          {/* Gatilho de Alerta de Expansão de Estrutura com Explicação Clara */}
+          <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-200/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-700">Alerta de Estrutura Adicional</span>
+                <button
+                  type="button"
+                  onClick={() => setShowGatilhoHelp(!showGatilhoHelp)}
+                  className="text-slate-400 hover:text-slate-600"
+                  title="O que é este gatilho?"
+                >
+                  <HelpCircle size={14} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="5"
+                  max="60"
+                  step="5"
+                  value={alertaCapacidadePct}
+                  onChange={e => setAlertaCapacidadePct(Number(e.target.value))}
+                  className="w-16 text-center text-xs font-bold py-1 px-1.5 rounded-lg border border-slate-250 bg-white"
+                />
+                <span className="font-bold text-slate-600">% da receita</span>
+              </div>
+            </div>
+
+            {showGatilhoHelp && (
+              <p className="text-[11px] text-slate-500 mt-2 bg-white p-2 rounded-lg border border-slate-200 leading-relaxed">
+                <strong>Premissa de CFO:</strong> As despesas rateadas (DR_p) são tratadas como fixas no curto prazo. Contudo, se a nova proposta representar mais de <strong>{alertaCapacidadePct}%</strong> do faturamento total da empresa, a estrutura atual não suportará a carga operacional e exigirá novas contratações administrativas/TI/espaço. O sistema alerta para lançar esses custos extras diretamente como <strong>Custo Direto</strong>.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -213,7 +292,7 @@ export function PricingProposalSection({
           {result.mensagensAlerta.map((msg, idx) => (
             <div
               key={idx}
-              className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs"
+              className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs shadow-xs"
             >
               <AlertTriangle className="text-amber-600 flex-shrink-0 mt-0.5" size={16} />
               <div className="flex-1 leading-relaxed font-medium">{msg}</div>
@@ -286,8 +365,8 @@ export function PricingProposalSection({
             <span className="text-2xl font-black text-indigo-700">{fmt(result.precoMinMargemSobrePreco)}</span>
           </div>
           <div className="mt-3 pt-3 border-t border-indigo-100/80 flex items-center justify-between text-xs text-indigo-800">
-            <span>Diferença s/ Markup:</span>
-            <span className="font-bold">+{fmtPct(result.diferencaPrecoPct)}</span>
+            <span>Impostos: {aliquotaImpostosPct}%</span>
+            <span className="font-bold">+{fmtPct(result.diferencaPrecoPct)} s/ Markup</span>
           </div>
         </div>
       </div>
