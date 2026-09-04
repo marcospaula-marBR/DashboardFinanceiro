@@ -218,7 +218,7 @@ export default function DreSimulatorCustomPage() {
         custosTotalMensal: 600000,
         impostosTotalMensal: 85000,
         aliquotaImpostosMediaPct: 8.5,
-        razaoCustoDiretoMediaPct: 60.0,
+        razaoCustoDiretoMediaPct: 30.7,
         ebitdaTotalMensal: 235000,
         todosContratosDRE: [
           { id: 'c1', nome: 'Contrato Alpha - Marinha', faturamentoMensal: 400000, custoDiretoMensal: 240000 },
@@ -286,11 +286,16 @@ export default function DreSimulatorCustomPage() {
       }
     });
 
+    // Custos Diretos = Custos Operacionais apurados diretamente no DRE
+    const razaoCst = faturamentoPeriodo > 0 
+      ? (custosPeriodo / faturamentoPeriodo) * 100 
+      : 30.7;
+
     const listaContratos: BaseContractData[] = Array.from(contratosMap.entries())
       .filter(([_, v]) => v.faturamento > 0)
       .map(([nome, v]) => {
         const fatMensalContrato = v.faturamento / mesesCount;
-        const cstMensalContrato = v.custoDireto > 0 ? v.custoDireto / mesesCount : fatMensalContrato * 0.6;
+        const cstMensalContrato = v.custoDireto > 0 ? v.custoDireto / mesesCount : fatMensalContrato * (razaoCst / 100);
         return {
           id: nome.trim(),
           nome: nome.trim(),
@@ -300,17 +305,6 @@ export default function DreSimulatorCustomPage() {
       })
       .sort((a, b) => b.faturamentoMensal - a.faturamentoMensal);
 
-    // Razão de Custo Direto ponderada dos contratos
-    let somaFatContratos = 0;
-    let somaCstContratos = 0;
-    listaContratos.forEach(c => {
-      somaFatContratos += c.faturamentoMensal;
-      somaCstContratos += c.custoDiretoMensal;
-    });
-    const razaoCst = somaFatContratos > 0 
-      ? (somaCstContratos / somaFatContratos) * 100 
-      : (faturamentoPeriodo > 0 ? (custosPeriodo / faturamentoPeriodo) * 100 : 60.0);
-
     return {
       faturamentoTotalMensal: fatMensal,
       faturamentoTotalPeriodo: faturamentoPeriodo,
@@ -319,7 +313,7 @@ export default function DreSimulatorCustomPage() {
       custosTotalMensal: cstMensal,
       impostosTotalMensal: impMensal,
       aliquotaImpostosMediaPct: aliqImp > 0 ? aliqImp : 8.5,
-      razaoCustoDiretoMediaPct: razaoCst > 0 ? razaoCst : 60.0,
+      razaoCustoDiretoMediaPct: razaoCst > 0 ? razaoCst : 30.7,
       ebitdaTotalMensal: ebitdaMensal,
       todosContratosDRE: listaContratos,
       valoresContasBase: contasBaseMap
