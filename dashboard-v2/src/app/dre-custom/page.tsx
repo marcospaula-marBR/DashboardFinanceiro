@@ -53,6 +53,7 @@ import { QuickSimulationsSection } from '@/components/dre/pricing/QuickSimulatio
 import { RubricSimulationSection } from '@/components/dre/pricing/RubricSimulationSection';
 import { PricingSimulatorGammaModal } from '@/components/dre/pricing/PricingSimulatorGammaModal';
 import { PricingSimulatorEngine, BaseContractData } from '@/services/pricing-simulator.engine';
+import { sortColList } from '@/lib/date-utils';
 
 type SimulatorTab = 'precificacao' | 'perda' | 'rapida' | 'rubricas' | 'graficos';
 type PeriodoHorizonte = '1m' | '3m' | '6m' | '12m' | 'all' | 'custom';
@@ -94,11 +95,29 @@ export default function DreSimulatorCustomPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
-  // ─── Carregar Dados do DRE Real ───────────────────────────
+  // ─── Carregar Dados do DRE Real (LocalStorage + Banco) ───────────────────
   useEffect(() => {
     (async () => {
       setIsLoading(true);
       try {
+        // 1. Tentar carregar dados em cache sincronizados pelo DRE no navegador
+        if (typeof window !== 'undefined') {
+          const cached = localStorage.getItem('dre_raw_data');
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setRawData(parsed);
+                setMetadata(DreLancamentosService.generateMetadataFromRows(parsed));
+                setIsLoading(false);
+              }
+            } catch (e) {
+              console.warn('[Simulador Custom] Erro ao analisar dre_raw_data:', e);
+            }
+          }
+        }
+
+        // 2. Carregar / validar com o banco de dados oficial
         const { rows } = await DreLancamentosService.fetchAllForDashboard();
         if (rows?.length) {
           setRawData(rows);
@@ -112,10 +131,16 @@ export default function DreSimulatorCustomPage() {
     })();
   }, []);
 
-  // ─── Colunas de Período Disponíveis e Selecionadas ────────
+  // ─── Colunas de Período Disponíveis e Selecionadas (Ordem Cronológica) ────
   const todasColunasMeses = useMemo(() => {
     if (!rawData.length) return [];
-    return Object.keys(rawData[0] || {}).filter(k => k.includes('/'));
+    const setCols = new Set<string>();
+    rawData.forEach(r => {
+      Object.keys(r).forEach(k => {
+        if (k.includes('/')) setCols.add(k);
+      });
+    });
+    return sortColList(Array.from(setCols));
   }, [rawData]);
 
   // Determinar quais meses compõem o cálculo conforme o horizonte
@@ -135,7 +160,7 @@ export default function DreSimulatorCustomPage() {
         return todasColunasMeses;
       case 'custom':
         return customPeriodos.length > 0
-          ? todasColunasMeses.filter(c => customPeriodos.includes(c))
+          ? todasColunasMeses.filter((c: string) => customPeriodos.includes(c))
           : todasColunasMeses.slice(Math.max(0, total - 6));
       default:
         return todasColunasMeses.slice(Math.max(0, total - 6));
@@ -200,7 +225,7 @@ export default function DreSimulatorCustomPage() {
 
     rowsFiltradas.forEach(r => {
       let somaLinha = 0;
-      colunasFiltradas.forEach(c => {
+      colunasFiltradas.forEach((c: string) => {
         const val = parseFloat(r[c]?.toString().replace(',', '.') || '0');
         if (!isNaN(val)) somaLinha += val;
       });
@@ -231,7 +256,7 @@ export default function DreSimulatorCustomPage() {
 
       // Contratos
       const projeto = r.Projeto;
-      if (projeto && !['–', '-', 'Geral', 'Sem Projeto', 'Administrativo'].includes(projeto)) {
+      if (projeto && !['–', '-', 'Geral', 'Sem Projeto', 'Administrativo', 'N/d', 'N/D', 'Sem Projeto', 'Sem projeto', 'n/d'].includes(projeto.trim())) {
         if (!contratosMap.has(projeto)) {
           contratosMap.set(projeto, { faturamento: 0, custoDireto: 0 });
         }
@@ -246,12 +271,12 @@ export default function DreSimulatorCustomPage() {
 
     const listaContratos: BaseContractData[] = Array.from(contratosMap.entries())
       .filter(([_, v]) => v.faturamento > 0)
-      .map(([nome, v], idx) => {
+      .map(([nome, v]) => {
         const fatMensal = v.faturamento / mesesCount;
         const cstMensal = v.custoDireto > 0 ? v.custoDireto / mesesCount : fatMensal * 0.6;
         return {
-          id: `c_${idx}`,
-          nome,
+          id: nome.trim(),
+          nome: nome.trim(),
           faturamentoMensal: fatMensal,
           custoDiretoMensal: cstMensal
         };
@@ -295,10 +320,15 @@ export default function DreSimulatorCustomPage() {
 
   // Inicializar seleção de contratos (todos selecionados por padrão)
   useEffect(() => {
-    if (todosContratosDRE.length > 0 && selectedContractIds.length === 0) {
-      setSelectedContractIds(todosContratosDRE.map(c => c.id));
+    if (todosContratosDRE.length > 0) {
+      const todosIds = todosContratosDRE.map(c => c.id);
+      setSelectedContractIds(prev => {
+        if (prev.length === 0) return todosIds;
+        const temValidos = prev.some(id => todosIds.includes(id));
+        return temValidos ? prev : todosIds;
+      });
     }
-  }, [todosContratosDRE, selectedContractIds]);
+  }, [todosContratosDRE]);
 
   // Contratos efetivamente ativos na simulação (que geram/absorvem rateio)
   const contratosAtivosSimulacao = useMemo(() => {
