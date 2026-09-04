@@ -42,7 +42,7 @@ import {
   Legend,
   Cell
 } from 'recharts';
-import { DreRow, DreMetadata } from '@/types/dre';
+import { DreRow, DreMetadata, DreFilters } from '@/types/dre';
 import { DreLancamentosService } from '@/services/dre-lancamentos.service';
 import { APP_VERSION } from '@/version';
 
@@ -53,6 +53,7 @@ import { QuickSimulationsSection } from '@/components/dre/pricing/QuickSimulatio
 import { RubricSimulationSection } from '@/components/dre/pricing/RubricSimulationSection';
 import { PricingSimulatorGammaModal } from '@/components/dre/pricing/PricingSimulatorGammaModal';
 import { PricingSimulatorEngine, BaseContractData } from '@/services/pricing-simulator.engine';
+import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
 import { sortColList } from '@/lib/date-utils';
 
 type SimulatorTab = 'precificacao' | 'perda' | 'rapida' | 'rubricas' | 'graficos';
@@ -61,7 +62,7 @@ type PeriodoHorizonte = '1m' | '3m' | '6m' | '12m' | 'all' | 'custom';
 const fmt = (v?: number) =>
   v == null || isNaN(v)
     ? 'R$ 0,00'
-    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 
 const fmtPct = (v?: number) => {
   if (v == null || isNaN(v)) return '0,0%';
@@ -174,7 +175,27 @@ export default function DreSimulatorCustomPage() {
     return `${colunasFiltradas.length} meses (${colunasFiltradas[0]} até ${colunasFiltradas[colunasFiltradas.length - 1]})`;
   }, [colunasFiltradas]);
 
-  // ─── Extração e Filtragem dos Lançamentos ──────────────────
+  // ─── Extração e Filtragem dos Lançamentos com DreService Oficial ──────────────────
+  const dreCalculado = useMemo(() => {
+    if (!rawData.length || !colunasFiltradas.length) return null;
+    const meta = (metadata && Object.keys(metadata.mapaMeses || {}).length > 0)
+      ? metadata
+      : DreLancamentosService.generateMetadataFromRows(rawData);
+
+    const currentFilters: DreFilters = {
+      empresas: selectedEmpresa === 'Todas' ? [] : [selectedEmpresa],
+      periodos: colunasFiltradas,
+      departamentos: [],
+      contasDre: [],
+      projetos: [],
+      categorias: [],
+      fornecedores: [],
+      contasCorrentes: [],
+      excludeSharedExpenses: false
+    };
+    return DreService.calculate(rawData, meta, DEFAULT_DRE_ESTRUTURA, currentFilters);
+  }, [rawData, metadata, colunasFiltradas, selectedEmpresa]);
+
   const {
     faturamentoTotalMensal,
     faturamentoTotalPeriodo,
@@ -210,15 +231,26 @@ export default function DreSimulatorCustomPage() {
 
     const mesesCount = Math.max(1, colunasFiltradas.length);
 
-    // Filtrar por empresa selecionada
+    // Totais Oficiais extraídos do DreService (garante 100% de paridade com o DRE)
+    const faturamentoPeriodo = dreCalculado?.totais['Total Entradas Operacionais'] ?? 0;
+    const despesasRateadasPeriodo = dreCalculado?.totais['Total Despesas Rateadas'] ?? 0;
+    const custosPeriodo = dreCalculado?.totais['Total Custos Operacionais'] ?? 0;
+    const impostosPeriodo = dreCalculado?.totais['Total de Impostos'] ?? 0;
+    const ebitdaPeriodo = dreCalculado?.totais['Lucro antes do FCL'] ?? (faturamentoPeriodo - custosPeriodo - despesasRateadasPeriodo);
+
+    const fatMensal = faturamentoPeriodo / mesesCount;
+    const despRateadaMensal = despesasRateadasPeriodo / mesesCount;
+    const cstMensal = custosPeriodo / mesesCount;
+    const impMensal = impostosPeriodo / mesesCount;
+    const ebitdaMensal = ebitdaPeriodo / mesesCount;
+
+    // Alíquota média de impostos oficial
+    const aliqImp = faturamentoPeriodo > 0 ? (impostosPeriodo / faturamentoPeriodo) * 100 : 8.5;
+
+    // Extração dos Contratos e Rubricas com base nas linhas da empresa
     const rowsFiltradas = selectedEmpresa === 'Todas'
       ? rawData
       : rawData.filter(r => r.Empresa === selectedEmpresa);
-
-    let somaFaturamento = 0;
-    let somaCustos = 0;
-    let somaDespesasRateadas = 0;
-    let somaImpostos = 0;
 
     const contratosMap = new Map<string, { faturamento: number; custoDireto: number }>();
     const contasBaseMap: Record<string, number> = {};
@@ -239,31 +271,16 @@ export default function DreSimulatorCustomPage() {
       const contaNorm = (r.ContaDRE || '').toLowerCase();
       const catNorm = (r.Categoria || '').toLowerCase();
 
-      // Impostos
-      if (contaNorm.includes('imposto') || catNorm.includes('imposto') || catNorm.includes('irpj')) {
-        somaImpostos += somaLinha;
-      }
-
-      // Receita
-      if (contaNorm.includes('receita') || catNorm.includes('receita')) {
-        somaFaturamento += somaLinha;
-      } else if (contaNorm.includes('custo') || catNorm.includes('custo') || catNorm.includes('operacional')) {
-        somaCustos += somaLinha;
-      } else {
-        // Despesas Rateadas Administrativas
-        somaDespesasRateadas += somaLinha;
-      }
-
-      // Contratos
+      // Identificação dos Contratos operacionais
       const projeto = r.Projeto;
-      if (projeto && !['–', '-', 'Geral', 'Sem Projeto', 'Administrativo', 'N/d', 'N/D', 'Sem Projeto', 'Sem projeto', 'n/d'].includes(projeto.trim())) {
+      if (projeto && !['–', '-', 'Geral', 'Sem Projeto', 'Administrativo', 'N/d', 'N/D', 'Sem projeto', 'n/d'].includes(projeto.trim())) {
         if (!contratosMap.has(projeto)) {
           contratosMap.set(projeto, { faturamento: 0, custoDireto: 0 });
         }
         const item = contratosMap.get(projeto)!;
-        if (contaNorm.includes('receita')) {
+        if (contaNorm.includes('receita') || catNorm.includes('receita') || catNorm.includes('venda')) {
           item.faturamento += somaLinha;
-        } else if (contaNorm.includes('custo')) {
+        } else if (contaNorm.includes('custo') || catNorm.includes('custo') || catNorm.includes('credenciado operacional') || catNorm.includes('mão de obra') || catNorm.includes('preventiva') || catNorm.includes('corretiva')) {
           item.custoDireto += somaLinha;
         }
       }
@@ -272,25 +289,16 @@ export default function DreSimulatorCustomPage() {
     const listaContratos: BaseContractData[] = Array.from(contratosMap.entries())
       .filter(([_, v]) => v.faturamento > 0)
       .map(([nome, v]) => {
-        const fatMensal = v.faturamento / mesesCount;
-        const cstMensal = v.custoDireto > 0 ? v.custoDireto / mesesCount : fatMensal * 0.6;
+        const fatMensalContrato = v.faturamento / mesesCount;
+        const cstMensalContrato = v.custoDireto > 0 ? v.custoDireto / mesesCount : fatMensalContrato * 0.6;
         return {
           id: nome.trim(),
           nome: nome.trim(),
-          faturamentoMensal: fatMensal,
-          custoDiretoMensal: cstMensal
+          faturamentoMensal: fatMensalContrato,
+          custoDiretoMensal: cstMensalContrato
         };
       })
       .sort((a, b) => b.faturamentoMensal - a.faturamentoMensal);
-
-    // Totais e Médias Mensais
-    const fatMensal = (somaFaturamento > 0 ? somaFaturamento : 1000000 * mesesCount) / mesesCount;
-    const despRateadaMensal = (somaDespesasRateadas > 0 ? somaDespesasRateadas : 80000 * mesesCount) / mesesCount;
-    const cstMensal = (somaCustos > 0 ? somaCustos : 600000 * mesesCount) / mesesCount;
-    const impMensal = somaImpostos / mesesCount;
-
-    // Alíquota média de impostos real
-    const aliqImp = somaFaturamento > 0 ? (somaImpostos / somaFaturamento) * 100 : 8.5;
 
     // Razão de Custo Direto ponderada dos contratos
     let somaFatContratos = 0;
@@ -299,14 +307,14 @@ export default function DreSimulatorCustomPage() {
       somaFatContratos += c.faturamentoMensal;
       somaCstContratos += c.custoDiretoMensal;
     });
-    const razaoCst = somaFatContratos > 0 ? (somaCstContratos / somaFatContratos) * 100 : 60.0;
-
-    const ebitdaMensal = fatMensal - cstMensal - despRateadaMensal;
+    const razaoCst = somaFatContratos > 0 
+      ? (somaCstContratos / somaFatContratos) * 100 
+      : (faturamentoPeriodo > 0 ? (custosPeriodo / faturamentoPeriodo) * 100 : 60.0);
 
     return {
       faturamentoTotalMensal: fatMensal,
-      faturamentoTotalPeriodo: somaFaturamento,
-      despesasRateadasTotalPeriodo: somaDespesasRateadas,
+      faturamentoTotalPeriodo: faturamentoPeriodo,
+      despesasRateadasTotalPeriodo: despesasRateadasPeriodo,
       despesasRateadasTotalMensal: despRateadaMensal,
       custosTotalMensal: cstMensal,
       impostosTotalMensal: impMensal,
@@ -316,7 +324,7 @@ export default function DreSimulatorCustomPage() {
       todosContratosDRE: listaContratos,
       valoresContasBase: contasBaseMap
     };
-  }, [rawData, colunasFiltradas, selectedEmpresa]);
+  }, [rawData, colunasFiltradas, selectedEmpresa, dreCalculado]);
 
   // Inicializar seleção de contratos (todos selecionados por padrão)
   useEffect(() => {
