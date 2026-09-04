@@ -399,6 +399,119 @@ export default function DreSimulatorCustomPage() {
     });
   }, [activeTab, despesasRateadasTotalMensal, contratosAtivosSimulacao, faturamentoBaseSimulacao, ebitdaTotalMensal]);
 
+  // ─── Integração Global com BrisinhAI (Widget Flutuante) ──────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    (window as any).getPageContext = () => {
+      const margemEbitdaBase = faturamentoBaseSimulacao > 0 ? (ebitdaTotalMensal / faturamentoBaseSimulacao) * 100 : 0;
+
+      const indicadores = [
+        {
+          indicador: 'Empresa',
+          valor: selectedEmpresa,
+          detalhe: 'Unidade de Negócio Selecionada'
+        },
+        {
+          indicador: 'Período Base DRE',
+          valor: descricaoPeriodoAtivo,
+          detalhe: `Horizonte: ${periodoHorizonte.toUpperCase()} (${colunasFiltradas.length} meses apurados)`
+        },
+        {
+          indicador: 'Faturamento Base',
+          valor: fmt(faturamentoBaseSimulacao),
+          detalhe: 'Receita Operacional média mensal real'
+        },
+        {
+          indicador: 'Despesas Rateadas Totais (DR_p)',
+          valor: fmt(despesasRateadasTotalPeriodo),
+          detalhe: `Média mensal a ratear: ${fmt(despesasRateadasTotalMensal)}/mês`
+        },
+        {
+          indicador: 'Custos Operacionais Diretos',
+          valor: fmt(custosTotalMensal),
+          detalhe: `${razaoCustoDiretoMediaPct.toFixed(1)}% da receita apurada`
+        },
+        {
+          indicador: 'Alíquota Média de Impostos',
+          valor: `${aliquotaImpostosMediaPct.toFixed(1)}%`,
+          detalhe: 'Tributos sobre faturamento (ISS/PIS/COFINS)'
+        },
+        {
+          indicador: 'EBITDA Base',
+          valor: fmt(ebitdaTotalMensal),
+          detalhe: `Margem EBITDA histórica: ${margemEbitdaBase.toFixed(1)}%`
+        },
+        {
+          indicador: 'Aba Ativa da Simulação',
+          valor: activeTab.toUpperCase(),
+          detalhe: 'Módulo em execução no painel'
+        },
+        {
+          indicador: 'Contratos Selecionados p/ Rateio',
+          valor: `${contratosAtivosSimulacao.length} de ${todosContratosDRE.length}`,
+          detalhe: 'Contratos que suportam a estrutura de despesas'
+        }
+      ];
+
+      return {
+        pageType: 'SIMULADOR_DRE',
+        empresa: selectedEmpresa,
+        periodo: descricaoPeriodoAtivo,
+        filtros: {
+          empresa: selectedEmpresa,
+          periodo: descricaoPeriodoAtivo,
+          horizonte: periodoHorizonte,
+          abaAtiva: activeTab
+        },
+        indicadores,
+        resumo: {
+          empresa: selectedEmpresa,
+          faturamentoBaseMensal: fmt(faturamentoBaseSimulacao),
+          despesasRateadasTotaisPeriodo: fmt(despesasRateadasTotalPeriodo),
+          despesasRateadasMediaMensal: fmt(despesasRateadasTotalMensal),
+          custosOperacionaisMediaMensal: fmt(custosTotalMensal),
+          razaoCustoDiretoPct: `${razaoCustoDiretoMediaPct.toFixed(1)}%`,
+          aliquotaImpostosPct: `${aliquotaImpostosMediaPct.toFixed(1)}%`,
+          ebitdaBaseMensal: fmt(ebitdaTotalMensal),
+          margemEbitdaBase: `${margemEbitdaBase.toFixed(1)}%`,
+          contratosAtivosCount: contratosAtivosSimulacao.length,
+          contratosTotaisCount: todosContratosDRE.length,
+          moduloAtivo: activeTab,
+          diagnosticoPremissa: aiAnalysis || deterministicInsight
+        },
+        contratosAtivos: contratosAtivosSimulacao.slice(0, 15).map(c => ({
+          contrato: c.nome,
+          faturamentoMensal: fmt(c.faturamentoMensal),
+          custoDiretoMensal: fmt(c.custoDiretoMensal),
+          participacaoReceita: `${faturamentoBaseSimulacao > 0 ? ((c.faturamentoMensal / faturamentoBaseSimulacao) * 100).toFixed(1) : 0}%`
+        })),
+        dataSummary: `Simulador DRE Mar Brasil: Empresa ${selectedEmpresa} | Período: ${descricaoPeriodoAtivo} | Faturamento Base: ${fmt(faturamentoBaseSimulacao)}/mês | Despesas Rateadas: ${fmt(despesasRateadasTotalMensal)}/mês | EBITDA: ${fmt(ebitdaTotalMensal)} (${margemEbitdaBase.toFixed(1)}%). Módulo ativo: ${activeTab}.`
+      };
+    };
+
+    return () => {
+      delete (window as any).getPageContext;
+    };
+  }, [
+    selectedEmpresa,
+    descricaoPeriodoAtivo,
+    periodoHorizonte,
+    colunasFiltradas,
+    faturamentoBaseSimulacao,
+    despesasRateadasTotalPeriodo,
+    despesasRateadasTotalMensal,
+    custosTotalMensal,
+    razaoCustoDiretoMediaPct,
+    aliquotaImpostosMediaPct,
+    ebitdaTotalMensal,
+    activeTab,
+    contratosAtivosSimulacao,
+    todosContratosDRE,
+    aiAnalysis,
+    deterministicInsight
+  ]);
+
   // Invocar Análise Completa do BrisinhAI via API
   const handleConsultarBrisinhAI = async () => {
     setIsAiLoading(true);

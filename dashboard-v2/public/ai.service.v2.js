@@ -191,6 +191,16 @@ FOCO DA ANÁLISE (COLABORADORES & RECURSOS HUMANOS - RH):
 4. Forneça recomendações sobre alocação de pessoal e eficiência da folha de pagamento.
 `;
                 break;
+            case 'SIMULADOR_DRE':
+            case 'SIMULADOR_PRECIFICACAO':
+                focusArea = `
+FOCO DA ANÁLISE (SIMULADOR DE CENÁRIOS & PRECIFICAÇÃO DRE):
+1. Avalie o cenário simulado em relação à base real do DRE (Faturamento Médio, Despesas Rateadas DR_p, Custos Diretos e EBITDA).
+2. Analise os impactos percentuais e nominais no EBITDA causados pelas variações em receita, custos ou rubricas de despesas.
+3. Avalie a margem de contribuição dos contratos e se a estrutura de despesas rateadas está coberta.
+4. Forneça parecer executivo pragmático sobre viabilidade, riscos e recomendações de recomposição de margem ou corte de custos.
+`;
+                break;
             default:
                 focusArea = `
 FOCO DA ANÁLISE (GERAL):

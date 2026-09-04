@@ -15,8 +15,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Extrair dados do corpo da requisição
-    const { markdownReport } = body;
+    // Extrair dados do corpo da requisição (suporta markdownReport ou markdown)
+    const markdownReport = body.markdownReport || body.markdown || body.text || '';
 
     const promptText = `
 Aja como um conversor estrito de documentos em apresentações visuais executivas (C-level).

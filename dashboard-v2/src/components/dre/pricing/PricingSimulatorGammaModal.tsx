@@ -30,6 +30,7 @@ export function PricingSimulatorGammaModal({
   const [editedMarkdown, setEditedMarkdown] = useState<string>(markdownContent);
   const [includeAi, setIncludeAi] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [statusText, setStatusText] = useState<string | null>(null);
   const [gammaUrl, setGammaUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -39,6 +40,7 @@ export function PricingSimulatorGammaModal({
     setEditedMarkdown(markdownContent);
     setGammaUrl(null);
     setErrorMsg(null);
+    setStatusText(null);
   }, [markdownContent, isOpen]);
 
   if (!isOpen) return null;
@@ -52,28 +54,96 @@ export function PricingSimulatorGammaModal({
   const handleGenerateGamma = async () => {
     setIsLoading(true);
     setErrorMsg(null);
+    setStatusText('Iniciando geração no Gamma...');
     try {
+      // 1. Iniciar geração assíncrona
       const res = await fetch('/api/gamma/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          markdownReport: editedMarkdown,
           markdown: editedMarkdown,
           includeAi
         })
       });
 
       const data = await res.json();
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || 'Não foi possível gerar a apresentação no Gamma.');
+      if (!res.ok) {
+        throw new Error(data.error || 'Não foi possível iniciar a geração no Gamma.');
       }
 
-      setGammaUrl(data.url);
-      window.open(data.url, '_blank');
+      // Se já vier a URL direto (modo síncrono raro)
+      if (data.url || data.gammaUrl) {
+        const directUrl = data.url || data.gammaUrl;
+        setGammaUrl(directUrl);
+        window.open(directUrl, '_blank');
+        return;
+      }
+
+      const generationId = data.generationId || data.id;
+      if (!generationId) {
+        throw new Error('Identificador de geração não retornado pela API do Gamma.');
+      }
+
+      // 2. Polling para aguardar renderização completa dos slides
+      let isComplete = false;
+      let attempts = 0;
+      const MAX_ATTEMPTS = 35; // 35 * 3s = 105s
+
+      while (!isComplete && attempts < MAX_ATTEMPTS) {
+        attempts++;
+        setStatusText(`Montando apresentação executiva no Gamma (${attempts * 3}s)...`);
+        await new Promise(r => setTimeout(r, 3000));
+
+        const resStatus = await fetch(`/api/gamma/status/${generationId}`);
+        if (resStatus.ok) {
+          const statusData = await resStatus.json();
+          const statusStr = (statusData.status || statusData.state || '').toLowerCase();
+          const finalUrl =
+            statusData.gammaUrl ||
+            statusData.url ||
+            statusData.exportUrl ||
+            statusData.link ||
+            statusData.webUrl ||
+            statusData.viewUrl ||
+            statusData.result?.url ||
+            statusData.output?.url;
+
+          if (
+            statusStr === 'completed' ||
+            statusStr === 'complete' ||
+            statusStr === 'done' ||
+            (finalUrl && statusStr !== 'pending' && statusStr !== 'generating')
+          ) {
+            isComplete = true;
+            if (finalUrl) {
+              setGammaUrl(finalUrl);
+              try {
+                const opened = window.open(finalUrl, '_blank');
+                if (!opened) {
+                  console.warn('Popup bloqueado pelo navegador, link disponível no modal.');
+                }
+              } catch (e) {
+                console.warn('window.open bloqueado:', e);
+              }
+            } else {
+              throw new Error('Apresentação gerada, mas o link de acesso não foi retornado.');
+            }
+          } else if (statusStr === 'failed' || statusStr === 'error') {
+            throw new Error('A geração falhou no servidor do Gamma: ' + (statusData.error || 'Erro interno'));
+          }
+        }
+      }
+
+      if (!isComplete) {
+        throw new Error('Tempo limite excedido ao aguardar a geração no Gamma. Tente novamente.');
+      }
     } catch (e: any) {
       console.error('[Gamma Modal]', e);
       setErrorMsg(e.message || 'Erro ao conectar à API do Gamma.');
     } finally {
       setIsLoading(false);
+      setStatusText(null);
     }
   };
 
@@ -185,7 +255,7 @@ export function PricingSimulatorGammaModal({
               {isLoading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  <span>Gerando Apresentação...</span>
+                  <span>{statusText || 'Gerando Apresentação...'}</span>
                 </>
               ) : (
                 <>

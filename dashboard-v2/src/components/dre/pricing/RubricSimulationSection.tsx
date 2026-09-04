@@ -182,14 +182,14 @@ export function RubricSimulationSection({
                 <button
                   type="button"
                   onClick={() => setNovoTipo('percent')}
-                  className={`px-1.5 py-0.5 rounded ${novoTipo === 'percent' ? 'bg-white shadow-xs text-slate-800' : 'text-slate-500'}`}
+                  className={`px-1.5 py-0.5 rounded transition-colors ${novoTipo === 'percent' ? 'bg-white shadow-xs text-indigo-700' : 'text-slate-500 hover:text-slate-800'}`}
                 >
                   %
                 </button>
                 <button
                   type="button"
                   onClick={() => setNovoTipo('absolute')}
-                  className={`px-1.5 py-0.5 rounded ${novoTipo === 'absolute' ? 'bg-white shadow-xs text-slate-800' : 'text-slate-500'}`}
+                  className={`px-1.5 py-0.5 rounded transition-colors ${novoTipo === 'absolute' ? 'bg-white shadow-xs text-indigo-700' : 'text-slate-500 hover:text-slate-800'}`}
                 >
                   R$
                 </button>
@@ -203,6 +203,28 @@ export function RubricSimulationSection({
               placeholder="Ex: +10 ou -15"
               className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-250 bg-slate-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
+            {/* Preview dinâmico do impacto % calculado */}
+            {selectedConta && (
+              <div className="mt-1 text-[10px] text-slate-500 font-medium">
+                {novoTipo === 'absolute' ? (
+                  <span>
+                    Equivale a{' '}
+                    <strong className="text-indigo-600">
+                      {fmtPct((novoValor / (Math.abs(valoresContasBase[selectedConta] || 45000) || 1)) * 100)}
+                    </strong>{' '}
+                    sobre a base de {fmt(Math.abs(valoresContasBase[selectedConta] || 45000))}
+                  </span>
+                ) : (
+                  <span>
+                    Equivale a{' '}
+                    <strong className="text-indigo-600">
+                      {fmt((Math.abs(valoresContasBase[selectedConta] || 45000) * novoValor) / 100)}
+                    </strong>{' '}
+                    sobre a base da rubrica
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Botão Adicionar */}
@@ -223,7 +245,7 @@ export function RubricSimulationSection({
             value={novaObservacao}
             onChange={e => setNovaObservacao(e.target.value)}
             placeholder="Observação da premissa (opcional, ex: Renovação de contrato de aluguel)"
-            className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 bg-slate-50/30 text-slate-600 placeholder:text-slate-400"
+            className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
         </div>
       </div>
@@ -254,6 +276,11 @@ export function RubricSimulationSection({
           </div>
           <p className="text-xs text-slate-500 mt-2">
             {totalDeltaDespesas > 0 ? 'Aumento nos custos/despesas' : 'Economia em custos/despesas'}
+            {ebitdaBase !== 0 && (
+              <span className="font-semibold text-slate-600">
+                {' '}(impacto de {totalDeltaDespesas > 0 ? '-' : '+'}{((Math.abs(totalDeltaDespesas) / Math.abs(ebitdaBase)) * 100).toFixed(1)}% no EBITDA)
+              </span>
+            )}
           </p>
         </div>
 
@@ -265,19 +292,37 @@ export function RubricSimulationSection({
             <span className={`text-2xl font-black ${novoEbitda >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {fmt(novoEbitda)}
             </span>
-            <span className="text-xs text-slate-500">
-              ({totalDeltaDespesas > 0 ? '-' : '+'}{fmt(Math.abs(totalDeltaDespesas))})
+            <span className="text-xs text-slate-500 font-semibold">
+              ({totalDeltaDespesas > 0 ? '-' : '+'}{fmt(Math.abs(totalDeltaDespesas))} | {totalDeltaDespesas > 0 ? '-' : '+'}{((Math.abs(totalDeltaDespesas) / (Math.abs(ebitdaBase) || 1)) * 100).toFixed(1)}%)
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-2">EBITDA Real: {fmt(ebitdaBase)}</p>
+          <p className="text-xs text-slate-500 mt-2">
+            EBITDA Real: {fmt(ebitdaBase)}
+            {receitaBase > 0 && (
+              <span className="text-slate-400"> • Margem: {((ebitdaBase / receitaBase) * 100).toFixed(1)}% → {((novoEbitda / receitaBase) * 100).toFixed(1)}%</span>
+            )}
+          </p>
         </div>
       </div>
 
       {/* ── Tabela de Rubricas Simuladas ──────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 md:p-6">
-        <h3 className="text-sm font-black text-slate-800 tracking-tight mb-4">
-          Tabela de Rubricas Customizadas
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 className="text-sm font-black text-slate-800 tracking-tight">
+              Tabela de Rubricas Customizadas
+            </h3>
+            <p className="text-xs text-slate-500">
+              Visualização detalhada com conversão automática de valores nominais e impactos percentuais
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+              <Sparkles size={12} className="text-indigo-600" />
+              Impactos calculados sobre a base e o EBITDA
+            </span>
+          </div>
+        </div>
 
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
@@ -289,51 +334,86 @@ export function RubricSimulationSection({
                   <th className="p-3 text-center">Variação Aplicada</th>
                   <th className="p-3 text-right">Valor Base</th>
                   <th className="p-3 text-right">Valor Simulado</th>
-                  <th className="p-3 text-right">Impacto Mensal</th>
+                  <th className="p-3 text-right">Impacto Mensal / EBITDA</th>
                   <th className="p-3 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {itensCalculados.map(item => (
-                  <tr key={item.id} className={`hover:bg-slate-50/80 transition-colors ${!item.ativo ? 'opacity-50' : ''}`}>
-                    <td className="p-3">
-                      <button
-                        onClick={() => alternarAtivo(item.id)}
-                        className="text-slate-400 hover:text-slate-700"
-                        title={item.ativo ? 'Desativar premissa' : 'Ativar premissa'}
-                      >
-                        {item.ativo ? (
-                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">Ativa</span>
-                        ) : (
-                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-200 text-slate-600">Inativa</span>
+                {itensCalculados.map(item => {
+                  const pctSobreBase = item.valorBase > 0 ? (item.impactoMensal / item.valorBase) * 100 : 0;
+                  const pctSobreEbitda = ebitdaBase !== 0 ? (Math.abs(item.impactoMensal) / Math.abs(ebitdaBase)) * 100 : 0;
+
+                  return (
+                    <tr key={item.id} className={`hover:bg-slate-50/80 transition-colors ${!item.ativo ? 'opacity-50' : ''}`}>
+                      <td className="p-3">
+                        <button
+                          onClick={() => alternarAtivo(item.id)}
+                          className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                          title={item.ativo ? 'Desativar premissa' : 'Ativar premissa'}
+                        >
+                          {item.ativo ? (
+                            <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">Ativa</span>
+                          ) : (
+                            <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-200 text-slate-600">Inativa</span>
+                          )}
+                        </button>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-semibold text-slate-800">{item.contaDRE}</div>
+                        {item.observacao && (
+                          <div className="text-[11px] text-slate-400">{item.observacao}</div>
                         )}
-                      </button>
-                    </td>
-                    <td className="p-3">
-                      <div className="font-semibold text-slate-800">{item.contaDRE}</div>
-                      {item.observacao && (
-                        <div className="text-[11px] text-slate-400">{item.observacao}</div>
-                      )}
-                    </td>
-                    <td className="p-3 text-center font-bold">
-                      {item.valor > 0 ? '+' : ''}{item.valor}{item.tipo === 'percent' ? '%' : ' R$'}
-                    </td>
-                    <td className="p-3 text-right text-slate-500">{fmt(item.valorBase)}</td>
-                    <td className="p-3 text-right font-semibold text-slate-800">{fmt(item.valorSimulado)}</td>
-                    <td className={`p-3 text-right font-bold ${item.impactoMensal > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {item.impactoMensal > 0 ? '+' : ''}{fmt(item.impactoMensal)}
-                    </td>
-                    <td className="p-3 text-center">
-                      <button
-                        onClick={() => removerAjuste(item.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
-                        title="Remover rubrica"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-3 text-center">
+                        {item.tipo === 'percent' ? (
+                          <div>
+                            <div className="font-black text-indigo-900">
+                              {item.valor > 0 ? '+' : ''}{item.valor}%
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-medium">
+                              ({item.impactoMensal > 0 ? '+' : ''}{fmt(item.impactoMensal)})
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="font-black text-slate-800">
+                              {item.valor > 0 ? '+' : ''}{fmt(item.valor)}
+                            </div>
+                            <span className="inline-flex items-center mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              {pctSobreBase > 0 ? '+' : ''}{pctSobreBase.toFixed(1)}% na rubrica
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-3 text-right text-slate-500 font-medium">{fmt(item.valorBase)}</td>
+                      <td className="p-3 text-right font-bold text-slate-800">{fmt(item.valorSimulado)}</td>
+                      <td className="p-3 text-right">
+                        <div className={`font-black text-sm ${item.impactoMensal > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {item.impactoMensal > 0 ? '+' : ''}{fmt(item.impactoMensal)}
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                          <span className={`text-[10px] font-bold ${item.impactoMensal > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {item.impactoMensal > 0 ? `-${pctSobreEbitda.toFixed(1)}% no EBITDA` : `+${pctSobreEbitda.toFixed(1)}% no EBITDA`}
+                          </span>
+                          {item.tipo === 'absolute' && (
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              ({pctSobreBase > 0 ? '+' : ''}{pctSobreBase.toFixed(1)}% s/ rubrica)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => removerAjuste(item.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Remover rubrica"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {itensCalculados.length === 0 && (
                   <tr>
                     <td colSpan={7} className="p-6 text-center text-slate-400">
