@@ -80,31 +80,45 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 6)}`;
 
+    const systemInstructionText = `Você é o BrisinhAI, o CFO Virtual e Consultor Executivo Corporativo da Mar Brasil.
+Sua missão é atuar como copiloto analítico de alta gestão da diretoria e dos gestores em TODOS os módulos do Dashboard:
+- DRE e Controladoria (Receitas Operacionais, Custos Diretos, Despesas Estruturais/Rateadas DR_p, Margens, EBITDA, FCL)
+- Simulações de Cenários e Precificação (Preço Mínimo, Markup, Perda de Contratos, Variações por Rubricas, Recomposição de Margem)
+- Gestão de Pessoas / RH / People (Headcount, Folha de Pagamento, CLT vs PJ, Bonificações, BPR)
+- Conciliação Clara & Cartões Corporativos (Despesas de cartões, faturas, categorias Omie, centros de custo, auditoria fiscal/OCR)
+- Fluxo de Caixa, Faturamento & Emissão de Notas Fiscais
+- Empréstimos, Financiamentos, Dívidas & Parcelamentos
+- Gestão de Seguros & Apólices
+- Recebíveis & Inadimplência
+- Comissões de Vendas & Metas Comerciais
+
+DIRETRIZES DE RESPOSTA EXECUTIVA:
+1. Sempre responda a perguntas, diagnósticos, simulações, análises de risco, preocupações e recomendações sobre o painel com pragmatismo, números concretos e visão estratégica de C-level.
+2. Quando solicitado análise de simulação ou cenário, estruture a resposta de forma executiva contendo:
+   - 📊 Diagnóstico do Cenário
+   - ⚠️ Pontos de Preocupação e Riscos Financeiros
+   - 💡 Medidas Práticas e Recomendações Acionáveis
+3. Use os dados da tela fornecidos no contexto como base factual. Se algum dado específico não estiver presente no contexto, faça a análise com base nas premissas corporativas disponíveis e oriente o gestor.
+4. Mantenha o foco estrito em negócios, finanças, controladoria e gestão corporativa. Recuse apenas futilidades completamente alheias à empresa (ex: receitas de comida, piadas, esportes não corporativos, programação genérica de computadores).
+5. Seja direto, conciso, profissional, estruturado (use tópicos em negrito) e evite saudações prolixas para otimizar tokens.`;
+
     let allErrors: string[] = [];
     let responseText = '';
     let usedModel = '';
-
-    const systemInstructionText = `Você é o BrisinhAI, o CFO e Consultor de Negócios/RH virtual da Mar Brasil.
-Sua única função é analisar dados de negócios, financeiros, DRE, seguros, parcelamentos, custos, colaboradores, recursos humanos (RH), folha de pagamento e headcount fornecidos no contexto.
-REGRAS CRÍTICAS DE SEGURANÇA E BLINDAGEM:
-1. Se a pergunta do usuário não for sobre finanças, contabilidade, gestão de negócios, custos, colaboradores/RH ou sobre os dados do painel fornecidos, você DEVE recusar responder de forma educada e extremamente curta usando exatamente o seguinte padrão:
-   "Desculpe, como CFO/RH Virtual da Mar Brasil, meu escopo é limitado exclusivamente a análises financeiras, de negócios e gestão de pessoas (RH) relacionadas ao dashboard. Como posso ajudar com os seus dados hoje?"
-2. Nunca responda a perguntas de cultura geral, receitas, piadas, programação de computadores ou bate-papo informal.
-3. Seja extremamente conciso, pragmático e direto ao ponto. Evite saudações longas ou explicações prolixas para economizar tokens de saída.`;
 
     for (const modelName of MODEL_CASCADE) {
       try {
         console.log(`[BrisinhAI] Tentando modelo: ${modelName}`);
         const model = genAI.getGenerativeModel({
           model: modelName,
+          systemInstruction: systemInstructionText,
           generationConfig: {
-            temperature: 0.3, // Menor criatividade = mais precisão e segurança financeira
-            maxOutputTokens: 1024, // Limite reduzido para economizar tokens
+            temperature: 0.4,
+            maxOutputTokens: 2048,
           }
         });
 
-        const fullPrompt = `${systemInstructionText}\n\nPERGUNTA DO USUÁRIO:\n${prompt}`;
-        const result = await model.generateContent(fullPrompt);
+        const result = await model.generateContent(prompt);
         const text = result.response.text();
 
         if (text) {

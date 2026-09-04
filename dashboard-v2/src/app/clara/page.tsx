@@ -163,6 +163,52 @@ export default function ClaraIntegrationPage() {
     fetchTransactions();
   }, [fetchTransactions]);
 
+  // Integração com BrisinhAI (Widget Flutuante)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    (window as any).getPageContext = () => ({
+      pageType: 'CONCILIACAO_CLARA',
+      empresa: activeCompany.name,
+      filtros: {
+        empresa: activeCompany.name,
+        aba: viewTab,
+        syncStatus,
+        claraStatus,
+        busca: search
+      },
+      indicadores: [
+        { indicador: 'Empresa Ativa', valor: activeCompany.name, detalhe: activeCompany.cnpj },
+        { indicador: 'Total de Transações', valor: String(metrics?.totalTransactions || total), detalhe: `Aba ativa: ${viewTab}` },
+        { indicador: 'Lançadas no Omie', valor: String(metrics?.syncedCount || 0), detalhe: 'Conciliadas no ERP' },
+        { indicador: 'Pendentes de Envio', valor: String(metrics?.pendingCount || 0), detalhe: 'Fila de conciliação' },
+        { indicador: 'Mapeamento Pendente', valor: String(metrics?.mappingRequiredCount || 0), detalhe: 'Sem categoria/depto' },
+        { indicador: 'Falhas de Envio', valor: String(metrics?.errorCount || 0), detalhe: 'Necessitam reprocessamento' }
+      ],
+      resumo: {
+        empresa: activeCompany.name,
+        transacoesListadas: transactions.length,
+        totalBanco: total,
+        itensSelecionados: selectedUuids.length,
+        categoriasMapeadas: categories.length,
+        departamentosMapeados: departments.length,
+        projetosMapeados: projects.length,
+        amostraTransacoes: transactions.slice(0, 8).map(t => ({
+          estabelecimento: t.merchant_name || 'Sem Estabelecimento',
+          portador: t.user_name || '-',
+          valor: `R$ ${(t.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          data: t.operation_date,
+          status: t.sync_status
+        }))
+      },
+      dataSummary: `Módulo Clara (Cartões Corporativos): Empresa ${activeCompany.name}. Total: ${metrics?.totalTransactions || total} transações. Pendentes: ${metrics?.pendingCount || 0}. Lançadas Omie: ${metrics?.syncedCount || 0}.`
+    });
+
+    return () => {
+      delete (window as any).getPageContext;
+    };
+  }, [activeCompany, metrics, total, viewTab, syncStatus, claraStatus, search, transactions, selectedUuids, categories, departments, projects]);
+
   const handleSyncNow = async () => {
     setSyncing(true);
     setSyncResult(null);

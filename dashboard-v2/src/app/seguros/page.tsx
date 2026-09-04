@@ -108,6 +108,41 @@ export default function SegurosPage() {
     [kpis]
   );
 
+  // ─── Integração com BrisinhAI (Widget Flutuante) ──────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    (window as any).getPageContext = () => ({
+      pageType: 'SEGUROS',
+      filtros: filters,
+      indicadores: [
+        { indicador: 'Apólices Ativas', valor: String(kpis.apólicesAtivas || 0), detalhe: `De um total de ${allPolicies.length} cadastradas` },
+        { indicador: 'Prêmio Total Anual', valor: `R$ ${(kpis.premioAnualTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, detalhe: 'Custo de prêmios vigentes' },
+        { indicador: 'Prêmio Mensal Total', valor: `R$ ${(kpis.premioMensalTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, detalhe: 'Impacto médio no DRE' },
+        { indicador: 'Vencendo em 7 Dias', valor: String(urgentes.length), detalhe: 'Risco crítico de renovação' },
+        { indicador: 'Vencendo em 30 Dias', valor: String(atencao.length), detalhe: 'Alerta de renovação em curso' }
+      ],
+      resumo: {
+        totalApolices: allPolicies.length,
+        apolicesFiltradas: filteredPolicies.length,
+        apolicesCriticas: urgentes.map(u => `${u.contratante} - ${u.seguradora} (vence em ${u.diasParaVencer} dias)`),
+        amostraApolices: filteredPolicies.slice(0, 10).map(p => ({
+          contratante: p.contratante,
+          seguradora: p.seguradora,
+          ramo: p.tipo,
+          premio: `R$ ${(p.premio || 0).toLocaleString('pt-BR')}`,
+          vencimento: p.vencimento,
+          diasRestantes: p.diasParaVencer
+        }))
+      },
+      dataSummary: `Módulo Seguros Mar Brasil: ${kpis.apólicesAtivas || 0} apólices ativas. Prêmio anual: R$ ${(kpis.premioAnualTotal || 0).toLocaleString('pt-BR')}. Urgentes: ${urgentes.length}.`
+    });
+
+    return () => {
+      delete (window as any).getPageContext;
+    };
+  }, [kpis, allPolicies, filteredPolicies, urgentes, atencao, filters]);
+
   // ──────────────────────────────────────────────────────────
   // CRUD HANDLERS
   // ──────────────────────────────────────────────────────────

@@ -405,82 +405,122 @@ function initBrisinhAI() {
     });
 
     // Helper: Gather Context
+    // Helper: Gather Context Universal (Todas as páginas do Dashboard)
     function getDashboardContext() {
+        const path = (window.location.pathname || '').toLowerCase();
+        let detectedPage = 'DASHBOARD_GERAL';
+
+        if (path.includes('/dre-custom')) detectedPage = 'SIMULADOR_DRE';
+        else if (path.includes('/dre')) detectedPage = 'DRE';
+        else if (path.includes('/clara')) detectedPage = 'CONCILIACAO_CLARA';
+        else if (path.includes('/people')) detectedPage = 'PEOPLE_RH';
+        else if (path.includes('/seguros')) detectedPage = 'SEGUROS';
+        else if (path.includes('/emprestimos') || path.includes('/loans') || path.includes('/parcelamentos')) detectedPage = 'EMPRESTIMOS_PARCELAMENTOS';
+        else if (path.includes('/fluxo-caixa')) detectedPage = 'FLUXO_CAIXA';
+        else if (path.includes('/faturamento')) detectedPage = 'FATURAMENTO';
+        else if (path.includes('/recebiveis')) detectedPage = 'RECEBIVEIS';
+        else if (path.includes('/comissoes')) detectedPage = 'COMISSOES';
+        else if (path.includes('/institucional')) detectedPage = 'INSTITUCIONAL';
+
         const context = {
             url: window.location.pathname,
-            pageType: 'unknown',
+            pageType: detectedPage,
             filtros: {},
             indicadores: [],
             resumo: {}
         };
 
-        // CORREÇÃO: Prioriza o contexto específico da página (ex: PeopleBoard)
+        // 1. Prioriza o hook getPageContext() nativo da tela se disponível
         if (typeof window.getPageContext === 'function') {
-            const pageCtx = window.getPageContext();
-            Object.assign(context, pageCtx);
-            return context;
+            try {
+                const pageCtx = window.getPageContext() || {};
+                Object.assign(context, pageCtx);
+            } catch (e) {
+                console.warn('[BrisinhAI] Erro ao chamar getPageContext():', e);
+            }
         }
 
-        // 1. Detect Page Type
-        if (document.getElementById('dreTable')) context.pageType = 'DRE';
-        else if (document.getElementById('indicatorsContainer')) context.pageType = 'INDICADORES';
-        else if (document.getElementById('segurosGrid')) context.pageType = 'SEGUROS';
-        else if (document.getElementById('parcelasTable')) context.pageType = 'PARCELAMENTOS';
-        else if (document.getElementById('dataTable') && document.querySelector('h1')?.innerText.includes('Setorial')) context.pageType = 'SETORIAL';
+        if (!context.pageType || context.pageType === 'unknown') {
+            context.pageType = detectedPage;
+        }
 
-        // 2. Get Filters (Common to all)
-        context.filtros.periodo = getSelectedValues('filterPeriodo');
-        context.filtros.empresa = getSelectedValues('filterEmpresa');
+        // 2. Se indicadores estiver vazio, realiza varredura universal no DOM
+        if (!context.indicadores || context.indicadores.length === 0) {
+            context.indicadores = [];
 
-        // Other filters based on page
-        if (document.getElementById('filterCategoria')) context.filtros.categoria = getSelectedValues('filterCategoria');
-        if (document.getElementById('filterProjeto')) context.filtros.projeto = getSelectedValues('filterProjeto');
+            // Varrer cards modernos (Tailwind/Next.js) ou legados
+            const cards = document.querySelectorAll(
+                '.indicator-card, .metric-card, #kpiRow .card, .kpi-card, [class*="rounded-2xl"], [class*="rounded-xl"]'
+            );
 
-        // 3. Gather Page-Specific Data
-        gatherPageSpecificData(context);
+            cards.forEach(card => {
+                const text = (card.innerText || '').trim();
+                // Identifica se é um card de KPI/métrica
+                if (text.includes('R$') || text.includes('%') || /\b\d+([.,]\d+)?\b/.test(text)) {
+                    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+                    if (lines.length >= 2 && lines.length <= 6) {
+                        const titleCandidate = lines[0];
+                        const valCandidate = lines[1];
+                        const subCandidate = lines.slice(2).join(' • ');
 
-        // 4. Get Cards Data (Generic Fallback + Specifics)
-        document.querySelectorAll('.indicator-card, .metric-card, #kpiRow .card, .kpi-card').forEach(card => {
-            let title, value, subtitle;
+                        if (titleCandidate.length < 50 && valCandidate.length < 35) {
+                            if (!context.indicadores.some(i => i.indicador === titleCandidate && i.valor === valCandidate)) {
+                                context.indicadores.push({
+                                    indicador: titleCandidate,
+                                    valor: valCandidate,
+                                    detalhe: subCandidate
+                                });
+                            }
+                        }
+                    }
+                }
+            });
 
-            if (card.classList.contains('indicator-card')) {
-                title = card.querySelector('.card-title')?.innerText;
-                value = card.querySelector('.display-5')?.innerText;
-                subtitle = card.querySelector('.text-muted:not(.card-title)')?.innerText;
-            } else {
-                title = card.querySelector('.title')?.innerText;
-                value = card.querySelector('.value')?.innerText;
-                subtitle = card.querySelector('.small.text-muted, .sub')?.innerText;
+            if (context.indicadores.length > 15) {
+                context.indicadores = context.indicadores.slice(0, 15);
+            }
+        }
 
-                // Extra info in breakdown items
-                const breakdownItems = card.querySelectorAll('.breakdown-item');
-                if (breakdownItems.length > 0) {
-                    const details = [];
-                    breakdownItems.forEach(item => {
-                        const l = item.querySelector('.breakdown-label')?.innerText;
-                        const v = item.querySelector('.breakdown-value')?.innerText;
-                        if (l && v) details.push(`${l}: ${v}`);
+        // 3. Capturar resumo de títulos e tabelas visíveis se o resumo for vazio
+        if (!context.resumo || Object.keys(context.resumo).length === 0) {
+            context.resumo = {};
+            const pageHeading = document.querySelector('h1, h2')?.innerText?.trim();
+            if (pageHeading) {
+                context.resumo.tituloPagina = pageHeading;
+            }
+
+            const tables = document.querySelectorAll('table');
+            if (tables.length > 0) {
+                const tableSummaries = [];
+                tables.forEach((tbl, idx) => {
+                    if (idx > 1) return;
+                    const headers = Array.from(tbl.querySelectorAll('th')).map(th => th.innerText.trim()).filter(Boolean);
+                    const rows = Array.from(tbl.querySelectorAll('tbody tr')).slice(0, 5).map(tr => {
+                        return Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim()).join(' | ');
                     });
-                    if (details.length > 0) subtitle = (subtitle ? subtitle + ". " : "") + details.join(", ");
+                    if (headers.length > 0 && rows.length > 0) {
+                        tableSummaries.push({
+                            cabecalhos: headers.join(' | '),
+                            primeirasLinhas: rows
+                        });
+                    }
+                });
+                if (tableSummaries.length > 0) {
+                    context.resumo.tabelas = tableSummaries;
                 }
             }
+        }
 
-            if (title || value) {
-                context.indicadores.push({
-                    indicador: title?.trim() || "Sem Título",
-                    valor: value?.trim() || "-",
-                    detalhe: subtitle?.trim() || ""
-                });
-            }
-        });
+        // 4. Capturar filtros comuns se ainda não preenchidos
+        if (!context.filtros || Object.keys(context.filtros).length === 0) {
+            context.filtros = {
+                periodo: getSelectedValues('filterPeriodo'),
+                empresa: getSelectedValues('filterEmpresa')
+            };
+        }
 
-        // 5. Get Last Update
-        const update = document.getElementById('lastUpdate')?.innerText;
-        if (update) context.update = update;
-
-        // 6. Optimized payload based on Page Type
+        // 5. Otimização de dados brutos DRE
         if (context.pageType === 'DRE' && typeof window.DRE_RESULTS !== 'undefined' && window.DRE_RESULTS) {
-            // Prune huge sourceRows to ensure low payload size
             const prunedResults = {
                 totais: window.DRE_RESULTS.totais,
                 mensal: window.DRE_RESULTS.mensal,
@@ -490,20 +530,7 @@ function initBrisinhAI() {
             };
             context.dreSummary = prunedResults;
             context.dataSummary = "Dados consolidados do DRE carregados com sucesso.";
-            context.csvData = null; // Omit huge raw data
-        } else if (typeof window.FULL_CSV_DATA !== 'undefined' && window.FULL_CSV_DATA.length > 0) {
-            // Avoid huge CSV payload limit on other screens
-            if (window.FULL_CSV_DATA.length > 1000) {
-                context.dataSummary = `Total de registros carregados: ${window.FULL_CSV_DATA.length}. (Dados de transações omitidos do prompt por limite de tamanho)`;
-            } else {
-                context.csvData = window.FULL_CSV_DATA;
-                context.dataSummary = `Total de registros carregados: ${window.FULL_CSV_DATA.length}.`;
-            }
-        }
-
-        // 7. CSV Data Summary (Legacy/Fallback)
-        if (typeof state !== 'undefined' && state && state.filteredData) {
-            context.dataSummary = `Total de registros filtrados: ${state.filteredData.length}.`;
+            context.csvData = null;
         }
 
         return context;

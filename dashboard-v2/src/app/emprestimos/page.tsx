@@ -279,6 +279,42 @@ export default function EmprestimosPage() {
 
   const filteredStats = computeStats(filteredEmployees, stats);
   
+  // ─── Integração com BrisinhAI (Widget Flutuante) ──────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    (window as any).getPageContext = () => ({
+      pageType: 'EMPRESTIMOS_PARCELAMENTOS',
+      filtros: activeFilters,
+      indicadores: [
+        { indicador: 'Saldo Devedor Total', valor: formatCurrency(filteredStats?.saldoDevedor || 0), detalhe: 'Valores em aberto a receber' },
+        { indicador: 'Total Já Recebido/Amortizado', valor: formatCurrency(filteredStats?.totalRecebido || 0), detalhe: 'Amortizações realizadas' },
+        { indicador: 'Recebível Previsto no Mês', valor: formatCurrency(filteredStats?.recebivelMes || 0), detalhe: 'Desconto em folha previsto' },
+        { indicador: 'Contratos Ativos', valor: String(filteredStats?.contratosAtivos || 0), detalhe: 'Empréstimos vigentes' },
+        { indicador: 'Contratos Liquidados/Quitados', valor: String(filteredStats?.contratosLiquidados || 0), detalhe: '100% amortizados' },
+        { indicador: 'Contratos Vencendo em Breve', valor: String(expiringEmployees.length), detalhe: '<= 10 dias de vigência' }
+      ],
+      resumo: {
+        totalColaboradoresComEmprestimo: filteredEmployees.length,
+        totalEmprestadoConcedido: formatCurrency(filteredStats?.totalEmprestado || 0),
+        saldoDevedor: formatCurrency(filteredStats?.saldoDevedor || 0),
+        recebivelMes: formatCurrency(filteredStats?.recebivelMes || 0),
+        amostraContratos: filteredEmployees.slice(0, 8).map(e => ({
+          colaborador: e.name,
+          empresa: e.company,
+          saldo: formatCurrency(e.balance),
+          parcela: formatCurrency(e.monthInstallment),
+          status: e.loanStatus
+        }))
+      },
+      dataSummary: `Módulo Empréstimos & Parcelamentos Mar Brasil: Saldo devedor total: ${formatCurrency(filteredStats?.saldoDevedor || 0)}. Recebível no mês: ${formatCurrency(filteredStats?.recebivelMes || 0)}. Contratos ativos: ${filteredStats?.contratosAtivos || 0}.`
+    });
+
+    return () => {
+      delete (window as any).getPageContext;
+    };
+  }, [filteredStats, filteredEmployees, activeFilters, expiringEmployees]);
+
   // Loading states
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
