@@ -52,7 +52,10 @@ class GeminiService {
                             }],
                             generationConfig: {
                                 temperature: 0.7,
-                                maxOutputTokens: 2048
+                                maxOutputTokens: 8192,
+                                thinkingConfig: {
+                                    thinkingBudget: 0
+                                }
                             }
                         }),
                         signal: signal

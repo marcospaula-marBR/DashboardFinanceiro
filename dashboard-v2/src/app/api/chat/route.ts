@@ -100,7 +100,8 @@ DIRETRIZES DE RESPOSTA EXECUTIVA:
    - 💡 Medidas Práticas e Recomendações Acionáveis
 3. Use os dados da tela fornecidos no contexto como base factual. Se algum dado específico não estiver presente no contexto, faça a análise com base nas premissas corporativas disponíveis e oriente o gestor.
 4. Mantenha o foco estrito em negócios, finanças, controladoria e gestão corporativa. Recuse apenas futilidades completamente alheias à empresa (ex: receitas de comida, piadas, esportes não corporativos, programação genérica de computadores).
-5. Seja direto, conciso, profissional, estruturado (use tópicos em negrito) e evite saudações prolixas para otimizar tokens.`;
+5. Seja direto, conciso, profissional, estruturado (use tópicos em negrito) e evite saudações prolixas para otimizar tokens.
+6. NUNCA deixe sua resposta incompleta ou truncada pela metade; conclua todos os tópicos e raciocínios até o final.`;
 
     let allErrors: string[] = [];
     let responseText = '';
@@ -109,13 +110,22 @@ DIRETRIZES DE RESPOSTA EXECUTIVA:
     for (const modelName of MODEL_CASCADE) {
       try {
         console.log(`[BrisinhAI] Tentando modelo: ${modelName}`);
+        const generationConfig: any = {
+          temperature: 0.4,
+          maxOutputTokens: 8192,
+        };
+
+        // Em modelos 2.5, desativa o thinking budget para resposta de chat rápida e sem truncamento
+        if (modelName.includes('2.5')) {
+          generationConfig.thinkingConfig = {
+            thinkingBudget: 0,
+          };
+        }
+
         const model = genAI.getGenerativeModel({
           model: modelName,
           systemInstruction: systemInstructionText,
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 2048,
-          }
+          generationConfig,
         });
 
         const result = await model.generateContent(prompt);
