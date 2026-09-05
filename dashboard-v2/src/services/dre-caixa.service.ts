@@ -173,6 +173,50 @@ export class DreCaixaService {
 
         if (isTransferencia) return;
 
+        // 2. REGRA MANDATÓRIA: EXCLUIR LANÇAMENTOS NÃO OPERACIONAIS / NÃO CAIXA
+        // provisões, dividendos, mútuos, terceirização, intermediação, rendimentos de aplicações,
+        // renda fixa, recarga de cartão, integralização de capital, estornos, devoluções,
+        // créditos mar Brasil, antecipações DZM, aporte de capital e a classificar
+        const isExcluidoCaixa =
+          catNomeLower.includes('provis') ||
+          obs.includes('provis') ||
+          catNomeLower.includes('dividendo') ||
+          obs.includes('dividendo') ||
+          catNomeLower.includes('mutuo') ||
+          catNomeLower.includes('mútuo') ||
+          obs.includes('mutuo') ||
+          obs.includes('mútuo') ||
+          catNomeLower.includes('terceiri') ||
+          obs.includes('terceiri') ||
+          catNomeLower.includes('intermedia') ||
+          obs.includes('intermedia') ||
+          catNomeLower.includes('rendimento') ||
+          obs.includes('rendimento') ||
+          catNomeLower.includes('renda fixa') ||
+          obs.includes('renda fixa') ||
+          catNomeLower.includes('recarga') ||
+          obs.includes('recarga') ||
+          catNomeLower.includes('integraliza') ||
+          obs.includes('integraliza') ||
+          catNomeLower.includes('estorno') ||
+          obs.includes('estorno') ||
+          catNomeLower.includes('devolu') ||
+          obs.includes('devolu') ||
+          catNomeLower.includes('créditos mar brasil') ||
+          catNomeLower.includes('creditos mar brasil') ||
+          catNomeLower.includes('crédito mar brasil') ||
+          catNomeLower.includes('credito mar brasil') ||
+          obs.includes('créditos mar brasil') ||
+          obs.includes('creditos mar brasil') ||
+          catNomeLower.includes('antecipa') ||
+          obs.includes('antecipa') ||
+          catNomeLower.includes('aporte') ||
+          obs.includes('aporte') ||
+          catNomeLower.includes('classificar') ||
+          obs.includes('classificar');
+
+        if (isExcluidoCaixa) return;
+
         // 2. REGRA DE DEDUPLICAÇÃO:
         // Se for MOVIMENTO bancário referente a um título (nCodTitulo) que já existe como PAGAR/RECEBER, ignorar o movimento duplicado
         const nCodTitulo = rawDet.nCodTitulo ? String(rawDet.nCodTitulo) : null;

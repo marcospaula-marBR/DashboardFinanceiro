@@ -46,6 +46,43 @@ def format_date_iso_to_iso(date_str):
     except:
         return None
 
+EXCLUSION_KEYWORDS = [
+    'provis',         # provisões (rescisões, férias, 13o, tributos, clientes)
+    'dividendo',       # distribuição de dividendos, dividendos recebidos
+    'mutuo',          # mútuo entradas/saídas
+    'mútuo',
+    'terceiri',       # terceirização de mão de obra
+    'intermedia',     # intermediação de negócios
+    'rendimento',     # rendimentos de aplicações
+    'renda fixa',     # renda fixa
+    'recarga',        # recarga de cartão corporativo
+    'integraliza',    # integralização de capital
+    'estorno',        # estornos bancários, estornos de pagamento
+    'devolu',         # devoluções de compras/serviços
+    'créditos mar brasil',
+    'creditos mar brasil',
+    'crédito mar brasil',
+    'credito mar brasil',
+    'antecipa',       # antecipações DZM, antecipações eventuais
+    'aporte',         # aporte de capital
+    'classificar'     # a classificar
+]
+
+def is_excluded_caixa(c_categ, cat_nome, obs=""):
+    code = str(c_categ or "").strip()
+    if code.startswith("0.") or code == "0.01":
+        return True
+    
+    text = f"{str(cat_nome or '').lower()} {str(obs or '').lower()}"
+    if "transferência" in text or "transferencia" in text:
+        return True
+        
+    for kw in EXCLUSION_KEYWORDS:
+        if kw in text:
+            return True
+            
+    return False
+
 class OmieSync:
     def __init__(self, app_key, app_secret, empresa_nome):
         self.app_key = app_key
@@ -149,6 +186,13 @@ class OmieSync:
             omie_id = r.get("codigo_lancamento_omie")
             status = r.get("status_titulo")
             
+            # Filtro de Exclusão de Categorias Não Operacionais
+            cat_codigo = r.get("codigo_categoria")
+            cat_nome = self.cat_map.get(str(cat_codigo), {}).get("descricao") or r.get("descricao_categoria")
+            obs = str(r.get("observacao") or "").lower()
+            if is_excluded_caixa(cat_codigo, cat_nome, obs):
+                continue
+            
             # Data de Pagamento: Baixa > Liquidação > Previsão (se PAGO)
             dt_baixa = format_date_iso_to_iso(r.get("data_baixa") or r.get("data_liquidacao"))
             dt_previsao = format_date_iso_to_iso(r.get("data_previsao"))
@@ -191,8 +235,8 @@ class OmieSync:
                     "data_vencimento": format_date_iso_to_iso(r.get("data_vencimento")),
                     "data_previsao": dt_previsao,
                     "data_pagamento": data_pagamento,
-                    "categoria_codigo": r.get("codigo_categoria"),
-                    "categoria_nome": self.cat_map.get(str(r.get("codigo_categoria")), {}).get("descricao") or r.get("descricao_categoria"),
+                    "categoria_codigo": cat_codigo,
+                    "categoria_nome": cat_nome,
                     "projeto_nome": self.proj_map.get(str(r.get("codigo_projeto")), r.get("nome_projeto") or "Sem Projeto"),
                     "departamento_nome": d.get("cDesDep"),
                     "cliente_fornecedor": cliente_forn,
@@ -238,11 +282,12 @@ class OmieSync:
 
             obs = (det.get("observacao") or "").lower()
 
-            # REGRA: DESCONSIDERAR TRANSFERÊNCIAS ENTRE CONTAS
+            # REGRA: DESCONSIDERAR TRANSFERÊNCIAS ENTRE CONTAS OU ITENS EXCLUÍDOS DO CAIXA
             if (c_categ.startswith("0.") or c_categ == "0.01" or 
                 "TRANSF" in c_grp or "TRANSF" in c_orig or c_orig in ["TRAR", "TRAP", "TRF"] or
                 "transferência" in cat_nome.lower() or "transferencia" in cat_nome.lower() or
-                "transferência" in obs or "transferencia" in obs):
+                "transferência" in obs or "transferencia" in obs or
+                is_excluded_caixa(c_categ, cat_nome, obs)):
                 continue
 
             # REGRA: IDENTIFICAÇÃO CORRETA DE ENTRADA (CRÉDITO/RECEITA) VS SAÍDA (DÉBITO/DESPESA)
