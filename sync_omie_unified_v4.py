@@ -226,31 +226,52 @@ class OmieSync:
             det = r.get("detalhes", {})
             res = r.get("resumo", {})
             
-            # Extração robusta do valor do movimento: nValorMovCC -> nValPago -> nValLiquido
-            valor = float(det.get("nValorMovCC") or res.get("nValPago") or res.get("nValLiquido") or 0)
-            sign = 1 if det.get("cTipo") == "E" else -1
-            
-            # Extração robusta de datas
-            dt_registro_mov = format_date_iso_to_iso(det.get("dDtRegistro"))
-            dt_pagto_mov = format_date_iso_to_iso(det.get("dDtPagto") or det.get("dDtPagamento") or det.get("dDataPagamento"))
-            dt_venc_mov = format_date_iso_to_iso(det.get("dDtVenc"))
-            dt_inc_mov = format_date_iso_to_iso(det.get("dDtInc") or r.get("info", {}).get("dInc"))
-            
-            # Cadeia unificada para extratos bancários (MOVIMENTO)
-            data_registro = dt_registro_mov or dt_pagto_mov or dt_venc_mov or dt_inc_mov
-            
-            cat_key = str(det.get("cCodCateg") or "")
-            cat_info = self.cat_map.get(cat_key)
+            c_nat = (det.get("cNatureza") or "").upper()
+            c_grp = (det.get("cGrupo") or "").upper()
+            c_orig = (det.get("cOrigem") or "").upper()
+            c_categ = str(det.get("cCodCateg") or "").strip()
+            cat_info = self.cat_map.get(c_categ)
             if isinstance(cat_info, dict):
                 cat_nome = cat_info.get("descricao") or "Sem Categoria"
             else:
                 cat_nome = cat_info or "Sem Categoria"
+
+            obs = (det.get("observacao") or "").lower()
+
+            # REGRA: DESCONSIDERAR TRANSFERÊNCIAS ENTRE CONTAS
+            if (c_categ.startswith("0.") or c_categ == "0.01" or 
+                "TRANSF" in c_grp or "TRANSF" in c_orig or c_orig in ["TRAR", "TRAP", "TRF"] or
+                "transferência" in cat_nome.lower() or "transferencia" in cat_nome.lower() or
+                "transferência" in obs or "transferencia" in obs):
+                continue
+
+            # REGRA: IDENTIFICAÇÃO CORRETA DE ENTRADA (CRÉDITO/RECEITA) VS SAÍDA (DÉBITO/DESPESA)
+            is_entrada = (c_nat == "R") or ("REC" in c_grp) or c_categ.startswith("1.") or (det.get("cTipo") == "E")
+            sign = 1 if is_entrada else -1
+            tipo_registro = "RECEBER" if is_entrada else "PAGAR"
+
+            # Extração do valor do movimento: nValorMovCC -> nValPago -> nValLiquido -> nValorTitulo
+            valor = float(det.get("nValorMovCC") or res.get("nValPago") or res.get("nValLiquido") or det.get("nValorTitulo") or 0)
+            
+            # REGRA: DATA CORRETA DE DÉBITO OU CRÉDITO (Data efetiva de pagamento/movimentação)
+            dt_pagto_mov = format_date_iso_to_iso(
+                det.get("dDtPagamento") or 
+                det.get("dDtPagto") or 
+                det.get("dDtCredito") or 
+                det.get("dDtDebito") or 
+                det.get("dDataPagamento") or
+                det.get("dDtRegistro")
+            )
+            dt_registro_mov = format_date_iso_to_iso(det.get("dDtRegistro"))
+            dt_venc_mov = format_date_iso_to_iso(det.get("dDtVenc"))
+            dt_inc_mov = format_date_iso_to_iso(det.get("dDtInc") or r.get("info", {}).get("dInc"))
+            data_registro = dt_registro_mov or dt_pagto_mov or dt_venc_mov or dt_inc_mov
             
             rows.append({
                 "empresa_nome": self.empresa_nome,
-                "omie_id": det.get("nCodMovCC"),
-                "tipo_registro": "MOVIMENTO",
-                "status": "PAGO",
+                "omie_id": det.get("nCodMovCC") or det.get("nCodTitulo"),
+                "tipo_registro": tipo_registro,
+                "status": "PAGO" if not is_entrada else "RECEBIDO",
                 "valor_total": valor * sign,
                 "valor_alocado": valor * sign,
                 "data_emissao": format_date_iso_to_iso(det.get("dDtEmissao")),
@@ -263,7 +284,7 @@ class OmieSync:
                 "projeto_nome": self.proj_map.get(str(det.get("nCodProjeto")), "Sem Projeto"),
                 "departamento_nome": "Principal",
                 "cliente_fornecedor": det.get("cNomeCliente") or "N/D",
-                "numero_documento": det.get("cNumDocFiscal"),
+                "numero_documento": det.get("cNumDocFiscal") or det.get("cNumTitulo"),
                 "raw_data": r
             })
         return rows

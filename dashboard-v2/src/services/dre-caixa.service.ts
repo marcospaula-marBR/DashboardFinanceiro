@@ -113,7 +113,6 @@ export class DreCaixaService {
           .not('data_pagamento', 'is', null)
           .gte('data_pagamento', '2025-06-01') // Trava mandatória: Omie utilizado apenas a partir de Junho/2025
           .neq('status', 'CANCELADO')
-          .neq('categoria_codigo', '0.01') // Ignorar transferências internas
           .order('data_pagamento', { ascending: false })
           .range(from, from + limit - 1);
 
@@ -131,12 +130,58 @@ export class DreCaixaService {
         }
       }
 
+      // Filtro de Transferências e Deduplicação Inteligente
+      // 1. Identificar títulos CP/CR já contemplados para não duplicar com MOVIMENTO
+      const knownTitleIds = new Set<string>();
+      allRecords.forEach(item => {
+        if ((item.tipo_registro === 'PAGAR' || item.tipo_registro === 'RECEBER') && item.omie_id) {
+          knownTitleIds.add(`${String(item.empresa_nome || '').trim()}-${item.omie_id}`);
+        }
+      });
+
       // Mapeamento e normalização (com blindagem adicional >= 2025-06-01)
-      const lancamentos: DreCaixaLancamento[] = allRecords
-        .filter(item => item.data_pagamento && item.data_pagamento >= '2025-06-01')
-        .map(item => {
+      const lancamentos: DreCaixaLancamento[] = [];
+
+      allRecords.forEach(item => {
+        if (!item.data_pagamento || item.data_pagamento < '2025-06-01') return;
+
         const raw = item.raw_data || {};
         const rawDet = raw.detalhes || {};
+        const catCodigo = String(item.categoria_codigo || rawDet.cCodCateg || '').trim();
+        const catNome = String(item.categoria_nome || '').trim();
+        const catNomeLower = catNome.toLowerCase();
+        const cOrigem = String(rawDet.cOrigem || '').toUpperCase();
+        const cGrupo = String(rawDet.cGrupo || '').toUpperCase();
+        const obs = String(rawDet.observacao || '').toLowerCase();
+
+        // 1. REGRA: DESCONSIDERAR TRANSFERÊNCIAS
+        // Filtra qualquer categoria iniciada por '0.' (ex: 0.01, 0.01.01), origens de transferência ou descrições
+        const isTransferencia = 
+          catCodigo.startsWith('0.') ||
+          catCodigo === '0.01' ||
+          catNomeLower.includes('transferência') ||
+          catNomeLower.includes('transferencia') ||
+          cOrigem.includes('TRF') ||
+          cOrigem.includes('TRANSF') ||
+          cOrigem === 'TRAR' ||
+          cOrigem === 'TRAP' ||
+          cGrupo.includes('TRANSF') ||
+          obs.includes('transferência pix') ||
+          obs.includes('transferencia pix') ||
+          obs.includes('transferência entre contas') ||
+          obs.includes('transferencia entre contas');
+
+        if (isTransferencia) return;
+
+        // 2. REGRA DE DEDUPLICAÇÃO:
+        // Se for MOVIMENTO bancário referente a um título (nCodTitulo) que já existe como PAGAR/RECEBER, ignorar o movimento duplicado
+        const nCodTitulo = rawDet.nCodTitulo ? String(rawDet.nCodTitulo) : null;
+        if (item.tipo_registro === 'MOVIMENTO' && nCodTitulo && nCodTitulo !== '0') {
+          const titleKey = `${String(item.empresa_nome || '').trim()}-${nCodTitulo}`;
+          if (knownTitleIds.has(titleKey)) {
+            return; // Já computado via Conta a Pagar / Receber com detalhes completos
+          }
+        }
 
         // Resolução da Conta Corrente
         const idCC = String(raw.id_conta_corrente || rawDet.nCodCC || rawDet.cContaCorrente || '');
@@ -155,15 +200,22 @@ export class DreCaixaService {
 
         const { periodo, periodoNum } = parsePeriodoFromDate(item.data_pagamento);
 
-        // Classificação e sinal
-        const valTotal = Math.abs(Number(item.valor_alocado || item.valor_total || 0));
+        // 3. REGRA: IDENTIFICAÇÃO CORRETA DE ENTRADA (RECEITA) VS SAÍDA (PAGAMENTO)
+        // Garante que receitas NUNCA entrem como despesas
+        const cNat = String(rawDet.cNatureza || '').toUpperCase();
         let isEntrada = false;
+
         if (item.tipo_registro === 'RECEBER') {
           isEntrada = true;
-        } else if (item.tipo_registro === 'MOVIMENTO') {
-          isEntrada = (Number(item.valor_total) > 0 || rawDet.cTipo === 'E');
+        } else if (cNat === 'R' || cGrupo.includes('REC') || cGrupo === 'CONTA_A_RECEBER' || cGrupo === 'CONTA_CORRENTE_REC') {
+          isEntrada = true;
+        } else if (catCodigo.startsWith('1.') || catNomeLower.includes('receita') || catNomeLower.includes('serviços prestados') || catNomeLower.includes('faturamento') || catNomeLower.includes('venda de')) {
+          isEntrada = true;
+        } else if (item.tipo_registro === 'MOVIMENTO' && Number(item.valor_total) > 0) {
+          isEntrada = true;
         }
 
+        const valTotal = Math.abs(Number(item.valor_alocado || item.valor_total || 0));
         const tipoFinal = isEntrada ? 'RECEBER' : 'PAGAR';
         const sinal = isEntrada ? 1 : -1;
 
@@ -178,7 +230,7 @@ export class DreCaixaService {
         // Categoria
         const categoria = (item.categoria_nome || 'Despesas Gerais').trim();
 
-        return {
+        lancamentos.push({
           id: item.id,
           empresa: normalizeEmpresa(item.empresa_nome),
           omie_id: item.omie_id ? Number(item.omie_id) : null,
@@ -195,7 +247,7 @@ export class DreCaixaService {
           fornecedor_cliente: fornFinal,
           conta_corrente: contaCorrente,
           numero_documento: item.numero_documento || null
-        };
+        });
       });
 
       return { lancamentos, error: null };
@@ -450,10 +502,12 @@ export class DreCaixaService {
       const mes = l.periodo;
       if (!mes || entradasValores[mes] === undefined) return;
 
-      if (l.tipo === 'RECEBER') {
+      const catLower = l.categoria.toLowerCase();
+      const isReceita = l.tipo === 'RECEBER' || catLower.includes('receita') || catLower.includes('faturamento') || catLower.includes('venda de');
+
+      if (isReceita) {
         entradasValores[mes] += l.valor;
       } else {
-        const catLower = l.categoria.toLowerCase();
         const isCusto = catLower.includes('custo') || catLower.includes('insumo') || catLower.includes('prestador') || catLower.includes('serviço prestado') || catLower.includes('combustível') || catLower.includes('preventiva') || catLower.includes('corretiva');
 
         if (isCusto) {
