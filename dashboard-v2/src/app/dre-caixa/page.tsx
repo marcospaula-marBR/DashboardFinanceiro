@@ -15,6 +15,7 @@ import { DreCaixaKpis } from '@/components/dre-caixa/DreCaixaKpis';
 import { DreCaixaCharts } from '@/components/dre-caixa/DreCaixaCharts';
 import { DreCaixaTable } from '@/components/dre-caixa/DreCaixaTable';
 import { DreCaixaDrilldownModal } from '@/components/dre-caixa/DreCaixaDrilldownModal';
+import { DreCaixaPrivacyModal } from '@/components/dre-caixa/DreCaixaPrivacyModal';
 import {
   BarChart3,
   Table as TableIcon,
@@ -33,6 +34,9 @@ export default function DreCaixaPage() {
   // Modo Reunião (Ocultar dados sensíveis como receitas e faturamento)
   const [isMeetingMode, setIsMeetingMode] = useState(false);
 
+  // Modal de Privacidade / Ocultar Dados Sensíveis
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+
   // Tab ativa: 'graficos' | 'tabela' | 'ambos'
   const [activeTab, setActiveTab] = useState<'ambos' | 'graficos' | 'tabela'>('ambos');
 
@@ -44,7 +48,10 @@ export default function DreCaixaPage() {
     categorias: [],
     fornecedores: [],
     contasCorrentes: [],
-    search: ''
+    search: '',
+    ocultarCategorias: [],
+    ocultarProjetos: [],
+    ocultarFornecedores: []
   });
 
   // Modal de Drilldown
@@ -111,7 +118,10 @@ export default function DreCaixaPage() {
       categorias: [],
       fornecedores: [],
       contasCorrentes: [],
-      search: ''
+      search: '',
+      ocultarCategorias: filters.ocultarCategorias,
+      ocultarProjetos: filters.ocultarProjetos,
+      ocultarFornecedores: filters.ocultarFornecedores
     });
   };
 
@@ -153,6 +163,11 @@ export default function DreCaixaPage() {
     ? 'Acumulado (Jun/25 a Set/26)'
     : filters.periodos.join(', ');
 
+  const totalOcultos =
+    (filters.ocultarCategorias?.length || 0) +
+    (filters.ocultarProjetos?.length || 0) +
+    (filters.ocultarFornecedores?.length || 0);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       
@@ -162,6 +177,8 @@ export default function DreCaixaPage() {
         isLoading={isLoading}
         isMeetingMode={isMeetingMode}
         onToggleMeetingMode={() => setIsMeetingMode(!isMeetingMode)}
+        onOpenPrivacyModal={() => setIsPrivacyModalOpen(true)}
+        hiddenCount={totalOcultos}
         onRefresh={loadData}
         onExportCsv={handleExportCsv}
       />
@@ -189,6 +206,7 @@ export default function DreCaixaPage() {
           filters={filters}
           onChangeFilters={setFilters}
           onClearFilters={handleClearFilters}
+          onOpenPrivacyModal={() => setIsPrivacyModalOpen(true)}
         />
 
         {/* Loading Overlay Clean */}
@@ -294,6 +312,15 @@ export default function DreCaixaPage() {
         availableMonths={chartData.meses.length > 0 ? chartData.meses : availableOptions.periodos.slice(0, 12)}
         empresaLabel={empresaLabel}
         lancamentos={filteredLancamentos}
+      />
+
+      {/* Modal de Ocultação de Dados Sensíveis (Categorias, Projetos, Fornecedores) */}
+      <DreCaixaPrivacyModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
+        availableOptions={availableOptions}
+        filters={filters}
+        onChangeFilters={setFilters}
       />
 
     </div>

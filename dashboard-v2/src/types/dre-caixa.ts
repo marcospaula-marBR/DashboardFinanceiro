@@ -25,6 +25,9 @@ export interface DreCaixaFilters {
   fornecedores: string[];
   contasCorrentes: string[];
   search: string;
+  ocultarCategorias?: string[];
+  ocultarProjetos?: string[];
+  ocultarFornecedores?: string[];
 }
 
 export interface DreCaixaKpiSummary {

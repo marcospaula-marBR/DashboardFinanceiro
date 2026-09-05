@@ -489,7 +489,16 @@ export class DreCaixaService {
     const filterContas = filters.contasCorrentes || [];
     const searchQuery = (filters.search || '').trim().toLowerCase();
 
+    const ocultarCats = (filters.ocultarCategorias || []).map(c => c.trim().toLowerCase());
+    const ocultarProjs = (filters.ocultarProjetos || []).map(p => p.trim().toLowerCase());
+    const ocultarForns = (filters.ocultarFornecedores || []).map(f => f.trim().toLowerCase());
+
     return lancamentos.filter(l => {
+      // 0. REGRA DE DADOS SENSÍVEIS (OCULTAÇÃO EXECUTIVA)
+      if (ocultarCats.length > 0 && ocultarCats.includes((l.categoria || '').trim().toLowerCase())) return false;
+      if (ocultarProjs.length > 0 && ocultarProjs.includes((l.projeto || '').trim().toLowerCase())) return false;
+      if (ocultarForns.length > 0 && ocultarForns.includes((l.fornecedor_cliente || '').trim().toLowerCase())) return false;
+
       // 1. Filtro de Empresa com normalização insensível a maiúsculas/minúsculas
       if (lowerEmpresas.length > 0) {
         const itemEmp = (l.empresa || '').trim().toLowerCase();

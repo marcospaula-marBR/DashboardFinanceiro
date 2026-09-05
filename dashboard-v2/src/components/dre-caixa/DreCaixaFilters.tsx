@@ -13,7 +13,10 @@ import {
   UserCheck,
   CreditCard,
   RotateCcw,
-  Check
+  Check,
+  EyeOff,
+  ShieldAlert,
+  Shield
 } from 'lucide-react';
 import { DreCaixaFilters } from '@/types/dre-caixa';
 
@@ -24,6 +27,8 @@ interface MultiSelectProps {
   selected: string[];
   onChange: (selected: string[]) => void;
   placeholder?: string;
+  hiddenOptions?: string[];
+  onToggleHide?: (option: string) => void;
 }
 
 function SearchableMultiSelect({
@@ -32,7 +37,9 @@ function SearchableMultiSelect({
   options,
   selected,
   onChange,
-  placeholder = "Pesquisar..."
+  placeholder = "Pesquisar...",
+  hiddenOptions = [],
+  onToggleHide
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -69,29 +76,40 @@ function SearchableMultiSelect({
     ? selected[0]
     : `${selected.length} selecionados`;
 
+  const hiddenCount = hiddenOptions.length;
+
   return (
     <div className="relative w-full" ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between gap-2 bg-white border rounded-xl px-3 py-2 text-xs font-medium transition-all shadow-sm h-10 ${
-          selected.length > 0
+        className={`w-full flex items-center justify-between gap-2 bg-white border rounded-xl px-3 py-2 text-xs font-medium transition-all shadow-sm h-10 cursor-pointer ${
+          hiddenCount > 0
+            ? 'border-amber-400 ring-1 ring-amber-400/30 text-amber-950 bg-amber-50/20'
+            : selected.length > 0
             ? 'border-emerald-500 ring-1 ring-emerald-500/20 text-slate-900 bg-emerald-50/20'
             : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
         }`}
       >
         <div className="flex items-center gap-2 truncate">
-          <span className={selected.length > 0 ? "text-emerald-600" : "text-slate-400"}>{icon}</span>
+          <span className={hiddenCount > 0 ? "text-amber-600" : selected.length > 0 ? "text-emerald-600" : "text-slate-400"}>
+            {hiddenCount > 0 ? <EyeOff size={13} /> : icon}
+          </span>
           <span className="text-slate-500 font-bold">{label}:</span>
-          <span className={`truncate font-bold ${selected.length > 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
+          <span className={`truncate font-bold ${hiddenCount > 0 ? 'text-amber-900' : selected.length > 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
             {summaryText}
           </span>
+          {hiddenCount > 0 && (
+            <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full border border-amber-300 shrink-0">
+              {hiddenCount} oculto{hiddenCount > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
         <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180 text-emerald-600' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1.5 w-full min-w-[250px] max-w-sm bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-2.5">
+        <div className="absolute left-0 top-full mt-1.5 w-full min-w-[280px] max-w-sm bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-2.5">
           {/* Campo de Busca Rápida */}
           <div className="relative mb-2">
             <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
@@ -109,44 +127,72 @@ function SearchableMultiSelect({
             <button
               type="button"
               onClick={selectAll}
-              className="text-emerald-600 hover:text-emerald-700 font-bold"
+              className="text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer"
             >
               Marcar Todos
             </button>
             <button
               type="button"
               onClick={clearAll}
-              className="text-slate-400 hover:text-slate-600 font-medium"
+              className="text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
             >
               Limpar
             </button>
           </div>
 
-          {/* Lista de Opções */}
-          <div className="max-h-52 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
+          {/* Lista de Opções com suporte a Ocultar */}
+          <div className="max-h-56 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
             {filteredOptions.length === 0 ? (
               <div className="text-slate-400 text-center py-3 text-xs">Nenhum item encontrado</div>
             ) : (
               filteredOptions.map(opt => {
                 const isSelected = selected.includes(opt);
+                const isHidden = hiddenOptions.includes(opt);
                 return (
-                  <label
+                  <div
                     key={opt}
-                    className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
-                      isSelected ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-slate-700 hover:bg-slate-50'
+                    className={`flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors ${
+                      isHidden
+                        ? 'bg-amber-50/90 text-amber-950 border border-amber-200'
+                        : isSelected
+                        ? 'bg-emerald-50 text-emerald-900 font-bold'
+                        : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center gap-2 truncate">
+                    <label className="flex items-center gap-2 truncate flex-1 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleOption(opt)}
                         className="rounded border-slate-300 text-emerald-600 focus:ring-0 w-3.5 h-3.5"
                       />
-                      <span className="truncate">{opt}</span>
+                      <span className={`truncate ${isHidden ? 'line-through text-amber-900' : ''}`}>
+                        {opt}
+                      </span>
+                    </label>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isSelected && !isHidden && <Check size={13} className="text-emerald-600 shrink-0" />}
+                      {onToggleHide && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onToggleHide(opt);
+                          }}
+                          title={isHidden ? "Item oculto. Clique para tornar visível." : "Ocultar este item (proteger dados sensíveis)"}
+                          className={`p-1 rounded-md transition-colors cursor-pointer ${
+                            isHidden
+                              ? 'bg-amber-200 text-amber-900 hover:bg-amber-300'
+                              : 'text-slate-300 hover:text-amber-700 hover:bg-amber-50'
+                          }`}
+                        >
+                          <EyeOff size={13} />
+                        </button>
+                      )}
                     </div>
-                    {isSelected && <Check size={13} className="text-emerald-600 shrink-0" />}
-                  </label>
+                  </div>
                 );
               })
             )}
@@ -169,18 +215,55 @@ interface DreCaixaFiltersProps {
   filters: DreCaixaFilters;
   onChangeFilters: (newFilters: DreCaixaFilters) => void;
   onClearFilters: () => void;
+  onOpenPrivacyModal?: () => void;
 }
 
 export function DreCaixaFiltersBar({
   availableOptions,
   filters,
   onChangeFilters,
-  onClearFilters
+  onClearFilters,
+  onOpenPrivacyModal
 }: DreCaixaFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   // Lista de empresas prioritárias no ecossistema
   const quickEmpresas = ['Mar Brasil', 'DZM', 'G2', 'Conectius'];
+
+  const ocultarCats = filters.ocultarCategorias || [];
+  const ocultarProjs = filters.ocultarProjetos || [];
+  const ocultarForns = filters.ocultarFornecedores || [];
+  const totalOcultos = ocultarCats.length + ocultarProjs.length + ocultarForns.length;
+
+  const toggleHideCategoria = (cat: string) => {
+    const next = ocultarCats.includes(cat)
+      ? ocultarCats.filter(c => c !== cat)
+      : [...ocultarCats, cat];
+    onChangeFilters({ ...filters, ocultarCategorias: next });
+  };
+
+  const toggleHideProjeto = (proj: string) => {
+    const next = ocultarProjs.includes(proj)
+      ? ocultarProjs.filter(p => p !== proj)
+      : [...ocultarProjs, proj];
+    onChangeFilters({ ...filters, ocultarProjetos: next });
+  };
+
+  const toggleHideFornecedor = (forn: string) => {
+    const next = ocultarForns.includes(forn)
+      ? ocultarForns.filter(f => f !== forn)
+      : [...ocultarForns, forn];
+    onChangeFilters({ ...filters, ocultarFornecedores: next });
+  };
+
+  const clearAllHidden = () => {
+    onChangeFilters({
+      ...filters,
+      ocultarCategorias: [],
+      ocultarProjetos: [],
+      ocultarFornecedores: []
+    });
+  };
 
   const activeFiltersCount =
     filters.empresas.length +
@@ -363,6 +446,8 @@ export function DreCaixaFiltersBar({
               selected={filters.projetos}
               onChange={selected => onChangeFilters({ ...filters, projetos: selected })}
               placeholder="Setor / Projeto..."
+              hiddenOptions={filters.ocultarProjetos}
+              onToggleHide={toggleHideProjeto}
             />
 
             {/* 4. Categoria */}
@@ -373,6 +458,8 @@ export function DreCaixaFiltersBar({
               selected={filters.categorias}
               onChange={selected => onChangeFilters({ ...filters, categorias: selected })}
               placeholder="Buscar categoria..."
+              hiddenOptions={filters.ocultarCategorias}
+              onToggleHide={toggleHideCategoria}
             />
 
             {/* 5. Fornecedor / Cliente */}
@@ -383,6 +470,8 @@ export function DreCaixaFiltersBar({
               selected={filters.fornecedores}
               onChange={selected => onChangeFilters({ ...filters, fornecedores: selected })}
               placeholder="Buscar parceiro..."
+              hiddenOptions={filters.ocultarFornecedores}
+              onToggleHide={toggleHideFornecedor}
             />
 
             {/* 6. Conta Corrente */}
@@ -409,12 +498,63 @@ export function DreCaixaFiltersBar({
             {filters.search && (
               <button
                 onClick={() => onChangeFilters({ ...filters, search: '' })}
-                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X size={14} />
               </button>
             )}
           </div>
+
+          {/* Banner de Dados Sensíveis Ocultos */}
+          {totalOcultos > 0 && (
+            <div className="pt-2.5 mt-2 border-t border-amber-200/60 flex flex-wrap items-center justify-between gap-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1 shrink-0">
+                  <ShieldAlert size={14} className="text-amber-600" />
+                  Dados Sensíveis Ocultos ({totalOcultos}):
+                </span>
+                {ocultarCats.map(c => (
+                  <span key={c} className="inline-flex items-center gap-1 text-[10px] font-medium bg-white border border-amber-200 text-amber-950 px-2 py-0.5 rounded-md shadow-2xs">
+                    <span className="font-bold text-amber-600 uppercase text-[9px]">Cat:</span>
+                    <span className="max-w-[120px] truncate">{c}</span>
+                    <button onClick={() => toggleHideCategoria(c)} className="text-slate-400 hover:text-amber-800 ml-0.5 cursor-pointer"><X size={10} /></button>
+                  </span>
+                ))}
+                {ocultarProjs.map(p => (
+                  <span key={p} className="inline-flex items-center gap-1 text-[10px] font-medium bg-white border border-amber-200 text-amber-950 px-2 py-0.5 rounded-md shadow-2xs">
+                    <span className="font-bold text-amber-600 uppercase text-[9px]">Proj:</span>
+                    <span className="max-w-[120px] truncate">{p}</span>
+                    <button onClick={() => toggleHideProjeto(p)} className="text-slate-400 hover:text-amber-800 ml-0.5 cursor-pointer"><X size={10} /></button>
+                  </span>
+                ))}
+                {ocultarForns.map(f => (
+                  <span key={f} className="inline-flex items-center gap-1 text-[10px] font-medium bg-white border border-amber-200 text-amber-950 px-2 py-0.5 rounded-md shadow-2xs">
+                    <span className="font-bold text-amber-600 uppercase text-[9px]">Forn:</span>
+                    <span className="max-w-[120px] truncate">{f}</span>
+                    <button onClick={() => toggleHideFornecedor(f)} className="text-slate-400 hover:text-amber-800 ml-0.5 cursor-pointer"><X size={10} /></button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {onOpenPrivacyModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenPrivacyModal}
+                    className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                  >
+                    Gerenciar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={clearAllHidden}
+                  className="text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:underline cursor-pointer"
+                >
+                  Limpar Ocultações
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>

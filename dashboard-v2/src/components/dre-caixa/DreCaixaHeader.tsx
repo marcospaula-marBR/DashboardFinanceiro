@@ -9,7 +9,9 @@ import {
   EyeOff,
   Download,
   WalletCards,
-  Clock
+  Clock,
+  ShieldAlert,
+  Shield
 } from 'lucide-react';
 import { APP_VERSION } from '@/version';
 
@@ -18,6 +20,8 @@ interface DreCaixaHeaderProps {
   isLoading: boolean;
   isMeetingMode: boolean;
   onToggleMeetingMode: () => void;
+  onOpenPrivacyModal?: () => void;
+  hiddenCount?: number;
   onRefresh: () => void;
   onExportCsv: () => void;
 }
@@ -27,6 +31,8 @@ export function DreCaixaHeader({
   isLoading,
   isMeetingMode,
   onToggleMeetingMode,
+  onOpenPrivacyModal,
+  hiddenCount = 0,
   onRefresh,
   onExportCsv
 }: DreCaixaHeaderProps) {
@@ -73,7 +79,7 @@ export function DreCaixaHeader({
           {/* Botão Modo Reunião / Ocultar Receitas */}
           <button
             onClick={onToggleMeetingMode}
-            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all border shadow-sm ${
+            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all border shadow-sm cursor-pointer ${
               isMeetingMode
                 ? 'bg-amber-50 text-amber-800 border-amber-300 ring-2 ring-amber-100'
                 : 'bg-white text-slate-700 hover:text-slate-900 border-slate-200 hover:bg-slate-50'
@@ -92,6 +98,27 @@ export function DreCaixaHeader({
               </>
             )}
           </button>
+
+          {/* Botão Ocultar Dados Sensíveis (Categorias, Projetos, Fornecedores) */}
+          {onOpenPrivacyModal && (
+            <button
+              onClick={onOpenPrivacyModal}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all border shadow-sm cursor-pointer ${
+                hiddenCount > 0
+                  ? 'bg-amber-50 text-amber-900 border-amber-300 ring-2 ring-amber-100 font-black'
+                  : 'bg-white text-slate-700 hover:text-slate-900 border-slate-200 hover:bg-slate-50'
+              }`}
+              title="Ocultar categorias, projetos ou fornecedores da apuração para proteger dados sensíveis"
+            >
+              <ShieldAlert size={15} className={hiddenCount > 0 ? "text-amber-600" : "text-slate-500"} />
+              <span>Ocultar Dados</span>
+              {hiddenCount > 0 && (
+                <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] flex items-center justify-center font-bold">
+                  {hiddenCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Sincronizar / Atualizar */}
           <button
