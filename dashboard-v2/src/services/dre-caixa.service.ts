@@ -109,7 +109,7 @@ export class DreCaixaService {
       while (hasMore) {
         const { data, error } = await supabase
           .from('omie_financas_unificado')
-          .select('*')
+          .select('id, empresa_nome, omie_id, tipo_registro, status, valor_total, valor_alocado, data_pagamento, projeto_nome, departamento_nome, categoria_codigo, categoria_nome, cliente_fornecedor, numero_documento, raw_data')
           .not('data_pagamento', 'is', null)
           .gte('data_pagamento', '2025-06-01') // Trava mandatória: Omie utilizado apenas a partir de Junho/2025
           .neq('status', 'CANCELADO')
@@ -292,27 +292,52 @@ export class DreCaixaService {
   }
 
   /**
-   * Filtra lançamentos com base nos filtros selecionados
+   * Filtra lançamentos com base nos filtros selecionados (com normalização estrita de strings)
    */
   static applyFilters(
     lancamentos: DreCaixaLancamento[],
     filters: DreCaixaFilters
   ): DreCaixaLancamento[] {
+    const lowerEmpresas = (filters.empresas || []).map(e => e.trim().toLowerCase());
+    const filterPeriodos = filters.periodos || [];
+    const filterProjetos = filters.projetos || [];
+    const filterCategorias = filters.categorias || [];
+    const filterFornecedores = filters.fornecedores || [];
+    const filterContas = filters.contasCorrentes || [];
+    const searchQuery = (filters.search || '').trim().toLowerCase();
+
     return lancamentos.filter(l => {
-      if (filters.empresas.length > 0 && !filters.empresas.includes(l.empresa)) return false;
-      if (filters.periodos.length > 0 && !filters.periodos.includes(l.periodo)) return false;
-      if (filters.projetos.length > 0 && !filters.projetos.includes(l.projeto)) return false;
-      if (filters.categorias.length > 0 && !filters.categorias.includes(l.categoria)) return false;
-      if (filters.fornecedores.length > 0 && !filters.fornecedores.includes(l.fornecedor_cliente)) return false;
-      if (filters.contasCorrentes.length > 0 && !filters.contasCorrentes.includes(l.conta_corrente)) return false;
-      if (filters.search) {
-        const query = filters.search.toLowerCase();
-        const matchForn = l.fornecedor_cliente.toLowerCase().includes(query);
-        const matchCat = l.categoria.toLowerCase().includes(query);
-        const matchProj = l.projeto.toLowerCase().includes(query);
-        const matchConta = l.conta_corrente.toLowerCase().includes(query);
-        if (!matchForn && !matchCat && !matchProj && !matchConta) return false;
+      // 1. Filtro de Empresa com normalização insensível a maiúsculas/minúsculas
+      if (lowerEmpresas.length > 0) {
+        const itemEmp = (l.empresa || '').trim().toLowerCase();
+        if (!lowerEmpresas.includes(itemEmp)) return false;
       }
+
+      // 2. Filtro de Período
+      if (filterPeriodos.length > 0 && !filterPeriodos.includes(l.periodo)) return false;
+
+      // 3. Filtro de Projeto / Setor
+      if (filterProjetos.length > 0 && !filterProjetos.includes(l.projeto)) return false;
+
+      // 4. Filtro de Categoria
+      if (filterCategorias.length > 0 && !filterCategorias.includes(l.categoria)) return false;
+
+      // 5. Filtro de Fornecedor / Cliente
+      if (filterFornecedores.length > 0 && !filterFornecedores.includes(l.fornecedor_cliente)) return false;
+
+      // 6. Filtro de Conta Corrente
+      if (filterContas.length > 0 && !filterContas.includes(l.conta_corrente)) return false;
+
+      // 7. Busca Textual Livre
+      if (searchQuery) {
+        const matchForn = l.fornecedor_cliente.toLowerCase().includes(searchQuery);
+        const matchCat = l.categoria.toLowerCase().includes(searchQuery);
+        const matchProj = l.projeto.toLowerCase().includes(searchQuery);
+        const matchConta = l.conta_corrente.toLowerCase().includes(searchQuery);
+        const matchDoc = l.numero_documento ? l.numero_documento.toLowerCase().includes(searchQuery) : false;
+        if (!matchForn && !matchCat && !matchProj && !matchConta && !matchDoc) return false;
+      }
+
       return true;
     });
   }

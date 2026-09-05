@@ -12,7 +12,8 @@ import {
   Tag,
   UserCheck,
   CreditCard,
-  RotateCcw
+  RotateCcw,
+  Check
 } from 'lucide-react';
 import { DreCaixaFilters } from '@/types/dre-caixa';
 
@@ -73,45 +74,49 @@ function SearchableMultiSelect({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between gap-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium transition-all shadow-sm h-10"
+        className={`w-full flex items-center justify-between gap-2 bg-white border rounded-xl px-3 py-2 text-xs font-medium transition-all shadow-sm h-10 ${
+          selected.length > 0
+            ? 'border-emerald-500 ring-1 ring-emerald-500/20 text-slate-900 bg-emerald-50/20'
+            : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
+        }`}
       >
         <div className="flex items-center gap-2 truncate">
-          <span className="text-slate-400">{icon}</span>
-          <span className="text-slate-400 font-semibold">{label}:</span>
-          <span className={`truncate font-semibold ${selected.length > 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
+          <span className={selected.length > 0 ? "text-emerald-600" : "text-slate-400"}>{icon}</span>
+          <span className="text-slate-500 font-bold">{label}:</span>
+          <span className={`truncate font-bold ${selected.length > 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
             {summaryText}
           </span>
         </div>
-        <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180 text-emerald-600' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1.5 w-full min-w-[240px] max-w-sm bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 p-2.5 backdrop-blur-md">
+        <div className="absolute left-0 top-full mt-1.5 w-full min-w-[250px] max-w-sm bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-2.5">
           {/* Campo de Busca Rápida */}
           <div className="relative mb-2">
-            <Search size={13} className="absolute left-2.5 top-2.5 text-slate-500" />
+            <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder={placeholder}
-              className="w-full bg-slate-800/90 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
             />
           </div>
 
           {/* Ações Rápidas */}
-          <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-slate-800 text-[11px]">
+          <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-slate-100 text-[11px]">
             <button
               type="button"
               onClick={selectAll}
-              className="text-emerald-400 hover:text-emerald-300 font-semibold"
+              className="text-emerald-600 hover:text-emerald-700 font-bold"
             >
               Marcar Todos
             </button>
             <button
               type="button"
               onClick={clearAll}
-              className="text-slate-400 hover:text-slate-300"
+              className="text-slate-400 hover:text-slate-600 font-medium"
             >
               Limpar
             </button>
@@ -120,24 +125,27 @@ function SearchableMultiSelect({
           {/* Lista de Opções */}
           <div className="max-h-52 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
             {filteredOptions.length === 0 ? (
-              <div className="text-slate-500 text-center py-3 text-xs">Nenhum item encontrado</div>
+              <div className="text-slate-400 text-center py-3 text-xs">Nenhum item encontrado</div>
             ) : (
               filteredOptions.map(opt => {
                 const isSelected = selected.includes(opt);
                 return (
                   <label
                     key={opt}
-                    className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
-                      isSelected ? 'bg-emerald-500/15 text-emerald-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                    className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
+                      isSelected ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleOption(opt)}
-                      className="rounded border-slate-700 bg-slate-800 text-emerald-600 focus:ring-0 w-3.5 h-3.5"
-                    />
-                    <span className="truncate">{opt}</span>
+                    <div className="flex items-center gap-2 truncate">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleOption(opt)}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 w-3.5 h-3.5"
+                      />
+                      <span className="truncate">{opt}</span>
+                    </div>
+                    {isSelected && <Check size={13} className="text-emerald-600 shrink-0" />}
                   </label>
                 );
               })
@@ -171,6 +179,9 @@ export function DreCaixaFiltersBar({
 }: DreCaixaFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
+  // Lista de empresas prioritárias no ecossistema
+  const quickEmpresas = ['Mar Brasil', 'DZM', 'G2', 'Conectius'];
+
   const activeFiltersCount =
     filters.empresas.length +
     filters.periodos.length +
@@ -180,47 +191,149 @@ export function DreCaixaFiltersBar({
     filters.contasCorrentes.length +
     (filters.search ? 1 : 0);
 
+  // Seleção rápida de Empresa (Pill Selector de 1 clique)
+  const handleQuickEmpresa = (emp: string | null) => {
+    if (!emp) {
+      onChangeFilters({ ...filters, empresas: [] });
+    } else {
+      onChangeFilters({ ...filters, empresas: [emp] });
+    }
+  };
+
+  // Seleção rápida de Período (Pill Selector de 1 clique)
+  const handleQuickPeriodo = (per: string | null) => {
+    if (!per) {
+      onChangeFilters({ ...filters, periodos: [] });
+    } else {
+      onChangeFilters({ ...filters, periodos: [per] });
+    }
+  };
+
+  const isAllEmpresas = filters.empresas.length === 0;
+  const isAllPeriodos = filters.periodos.length === 0;
+
   return (
-    <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3.5 sm:p-4 mb-6 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300">
+    <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 mb-6 shadow-sm">
+      
+      {/* ── BARRA SUPERIOR DE CONTROLE & TOGGLE ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shadow-sm">
             <Filter size={15} />
           </div>
-          <h2 className="text-xs sm:text-sm font-bold text-white tracking-wide uppercase">
-            Filtros Multidimensionais de Caixa
-          </h2>
+          <div>
+            <h2 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight uppercase">
+              Filtros Multidimensionais
+            </h2>
+            <p className="text-[11px] text-slate-500">Selecione a empresa e período para apuração do caixa</p>
+          </div>
           {activeFiltersCount > 0 && (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
               {activeFiltersCount} ativo{activeFiltersCount > 1 ? 's' : ''}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           {activeFiltersCount > 0 && (
             <button
               onClick={onClearFilters}
-              className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 font-bold px-2.5 py-1.5 rounded-xl hover:bg-rose-50 border border-rose-100 transition-colors"
             >
               <RotateCcw size={13} />
-              <span className="hidden sm:inline">Limpar Todos</span>
+              <span>Limpar Filtros</span>
             </button>
           )}
 
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1"
+            className="text-xs text-slate-600 hover:text-slate-900 font-bold px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm"
           >
             <span>{isExpanded ? 'Recolher' : 'Expandir'}</span>
-            <ChevronDown size={14} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+            <ChevronDown size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
           </button>
         </div>
       </div>
 
+      {/* ── SELETORES RÁPIDOS DE 1 CLIQUE (EMPRESA & PERÍODO) ── */}
+      <div className="pt-3 pb-1 space-y-3">
+        
+        {/* 1. SELETOR RÁPIDO DE EMPRESA (TABS EXECUTIVAS) */}
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+            <Building2 size={13} className="text-slate-400" /> Empresa:
+          </span>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            <button
+              onClick={() => handleQuickEmpresa(null)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+                isAllEmpresas
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              🏢 Todas as Empresas
+            </button>
+            {quickEmpresas.map(emp => {
+              const isActive = filters.empresas.length === 1 && filters.empresas[0].toLowerCase() === emp.toLowerCase();
+              return (
+                <button
+                  key={emp}
+                  onClick={() => handleQuickEmpresa(emp)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+                    isActive
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  {emp}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 2. SELETOR RÁPIDO DE PERÍODO (MESES RECENTES) */}
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+            <Calendar size={13} className="text-slate-400" /> Período:
+          </span>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            <button
+              onClick={() => handleQuickPeriodo(null)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+                isAllPeriodos
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+              title="Exibe a soma acumulada de todos os meses desde Junho/2025"
+            >
+              🗓️ Acumulado (Todos os Meses)
+            </button>
+            {availableOptions.periodos.slice(0, 8).map(per => {
+              const isActive = filters.periodos.length === 1 && filters.periodos[0] === per;
+              return (
+                <button
+                  key={per}
+                  onClick={() => handleQuickPeriodo(per)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+                    isActive
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  {per}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── DROPDOWNS MULTIDIMENSIONAIS AVANÇADOS ── */}
       {isExpanded && (
-        <div className="space-y-3 pt-1">
-          {/* Grid de Dropdowns Principais */}
+        <div className="space-y-3 pt-4 border-t border-slate-100 mt-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
             {/* 1. Empresa */}
             <SearchableMultiSelect
@@ -239,7 +352,7 @@ export function DreCaixaFiltersBar({
               options={availableOptions.periodos}
               selected={filters.periodos}
               onChange={selected => onChangeFilters({ ...filters, periodos: selected })}
-              placeholder="Ex: Jan/25..."
+              placeholder="Ex: Ago/26..."
             />
 
             {/* 3. Projeto / Setor */}
@@ -285,18 +398,18 @@ export function DreCaixaFiltersBar({
 
           {/* Busca Textual Livre */}
           <div className="relative">
-            <Search size={14} className="absolute left-3.5 top-3 text-slate-500" />
+            <Search size={14} className="absolute left-3.5 top-3 text-slate-400" />
             <input
               type="text"
               value={filters.search}
               onChange={e => onChangeFilters({ ...filters, search: e.target.value })}
               placeholder="Pesquisar por fornecedor, categoria, documento ou palavra-chave..."
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all shadow-inner"
             />
             {filters.search && (
               <button
                 onClick={() => onChangeFilters({ ...filters, search: '' })}
-                className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
               >
                 <X size={14} />
               </button>

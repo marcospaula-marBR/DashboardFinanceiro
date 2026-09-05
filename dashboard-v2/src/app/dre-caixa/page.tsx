@@ -21,7 +21,7 @@ import {
   Layers,
   AlertCircle,
   Loader2,
-  RefreshCw
+  Info
 } from 'lucide-react';
 
 export default function DreCaixaPage() {
@@ -146,10 +146,15 @@ export default function DreCaixaPage() {
     setIsDrilldownOpen(true);
   };
 
+  const empresaLabel = filters.empresas.length === 0 ? 'Todas as Empresas' : filters.empresas.join(', ');
+  const periodoLabel = filters.periodos.length === 0
+    ? 'Acumulado (Jun/25 a Set/26)'
+    : filters.periodos.join(', ');
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       
-      {/* Header Superior Padrão */}
+      {/* Header Superior Padrão Clean */}
       <DreCaixaHeader
         lastUpdate={lastUpdate}
         isLoading={isLoading}
@@ -164,19 +169,19 @@ export default function DreCaixaPage() {
         
         {/* Banner de Erro caso ocorra */}
         {errorMsg && (
-          <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-center gap-3 text-sm">
-            <AlertCircle size={20} className="flex-shrink-0 text-rose-400" />
-            <div className="flex-1">{errorMsg}</div>
+          <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-3 text-sm shadow-sm">
+            <AlertCircle size={20} className="flex-shrink-0 text-rose-600" />
+            <div className="flex-1 font-medium">{errorMsg}</div>
             <button
               onClick={loadData}
-              className="px-3 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-semibold text-xs transition-colors"
+              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors shadow-sm"
             >
               Tentar Novamente
             </button>
           </div>
         )}
 
-        {/* Barra de Filtros Multidimensionais */}
+        {/* Barra de Filtros Multidimensionais com Seletor Rápido de Empresa e Período */}
         <DreCaixaFiltersBar
           availableOptions={availableOptions}
           filters={filters}
@@ -184,55 +189,75 @@ export default function DreCaixaPage() {
           onClearFilters={handleClearFilters}
         />
 
-        {/* Loading Overlay */}
+        {/* Loading Overlay Clean */}
         {isLoading && allLancamentos.length === 0 ? (
-          <div className="py-24 text-center">
-            <Loader2 size={36} className="animate-spin text-emerald-400 mx-auto mb-3" />
-            <p className="text-sm text-slate-300 font-medium">Buscando lançamentos liquidados do Omie...</p>
+          <div className="py-24 text-center bg-white border border-slate-200 rounded-2xl shadow-sm my-6">
+            <Loader2 size={36} className="animate-spin text-emerald-600 mx-auto mb-3" />
+            <p className="text-sm text-slate-800 font-bold">Buscando lançamentos liquidados do Omie...</p>
             <p className="text-xs text-slate-500 mt-1">Carregando Contas a Pagar, Receber e Movimentos Bancários</p>
           </div>
         ) : (
           <>
-            {/* Cards de KPI Executivos */}
+            {/* Aviso Amigável quando Período estiver Acumulado */}
+            {filters.periodos.length === 0 && (
+              <div className="mb-4 px-4 py-2.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 flex items-center justify-between text-xs shadow-sm">
+                <div className="flex items-center gap-2">
+                  <Info size={16} className="text-sky-600 shrink-0" />
+                  <span>
+                    <strong>Visão Acumulada:</strong> Os totais abaixo somam todos os 15 meses de operação desde Junho/2025. Para analisar um único mês (ex: <strong>Ago/26</strong>), clique no botão do mês nos filtros acima.
+                  </span>
+                </div>
+                <button
+                  onClick={() => setFilters(prev => ({ ...prev, periodos: ['Ago/26'] }))}
+                  className="shrink-0 px-2.5 py-1 bg-white hover:bg-sky-100 text-sky-800 border border-sky-300 rounded-lg font-bold text-[11px] shadow-sm ml-2 transition-all"
+                >
+                  Ver apenas Ago/26
+                </button>
+              </div>
+            )}
+
+            {/* Cards de KPI Executivos Clean */}
             <DreCaixaKpis
               summary={summary}
               isMeetingMode={isMeetingMode}
+              periodoLabel={periodoLabel}
+              empresaLabel={empresaLabel}
             />
 
             {/* Seletor de Visão / Abas Executivas */}
-            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-1.5 bg-slate-200/80 p-1 rounded-xl shadow-inner">
                 <button
                   onClick={() => setActiveTab('ambos')}
-                  className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
-                    activeTab === 'ambos' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    activeTab === 'ambos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <Layers size={14} />
+                  <Layers size={14} className={activeTab === 'ambos' ? 'text-emerald-600' : ''} />
                   <span>Visão Completa</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('graficos')}
-                  className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
-                    activeTab === 'graficos' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    activeTab === 'graficos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <BarChart3 size={14} />
+                  <BarChart3 size={14} className={activeTab === 'graficos' ? 'text-emerald-600' : ''} />
                   <span>Painel de Gráficos</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('tabela')}
-                  className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
-                    activeTab === 'tabela' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    activeTab === 'tabela' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <TableIcon size={14} />
+                  <TableIcon size={14} className={activeTab === 'tabela' ? 'text-emerald-600' : ''} />
                   <span>DRE Sintética</span>
                 </button>
               </div>
 
-              <div className="text-xs text-slate-400 hidden sm:block">
-                Mostrando <strong className="text-white">{filteredLancamentos.length.toLocaleString('pt-BR')}</strong> lançamentos
+              <div className="text-xs text-slate-500 font-medium hidden sm:block">
+                Mostrando <strong className="text-slate-900">{filteredLancamentos.length.toLocaleString('pt-BR')}</strong> lançamentos
               </div>
             </div>
 
