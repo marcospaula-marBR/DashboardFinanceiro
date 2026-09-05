@@ -159,14 +159,28 @@ export class DreCaixaService {
 
       // Filtro de Transferências e Deduplicação Inteligente
       // 1. Identificar títulos CP/CR já contemplados para não duplicar com MOVIMENTO
-      const knownTitleIds = new Set<string>();
+      const knownCrTitles = new Set<string>();
+      const knownCpTitles = new Set<string>();
+
       allRecords.forEach(item => {
-        if ((item.tipo_registro === 'PAGAR' || item.tipo_registro === 'RECEBER') && item.omie_id) {
-          knownTitleIds.add(`${String(item.empresa_nome || '').trim()}-${item.omie_id}`);
+        const emp = String(item.empresa_nome || '').trim();
+        const omie_id = item.omie_id;
+        const raw = item.raw_data || {};
+        const det = raw.detalhes || {};
+        const nCod = String(det.nCodTitulo || omie_id || '').trim();
+
+        if (item.tipo_registro === 'RECEBER' && (omie_id || nCod)) {
+          if (omie_id) knownCrTitles.add(`${emp}-${omie_id}`);
+          if (nCod && nCod !== '0') knownCrTitles.add(`${emp}-${nCod}`);
+        } else if (item.tipo_registro === 'PAGAR' && (omie_id || nCod)) {
+          if (omie_id) knownCpTitles.add(`${emp}-${omie_id}`);
+          if (nCod && nCod !== '0') knownCpTitles.add(`${emp}-${nCod}`);
         }
       });
 
-      // Mapeamento e normalização (com blindagem adicional >= 2025-06-01)
+      // Mapeamento, deduplicação de sync e normalização (com blindagem adicional >= 2025-06-01)
+      const processedSignatures = new Set<string>();
+      const processedMovTitles = new Set<string>();
       const lancamentos: DreCaixaLancamento[] = [];
 
       allRecords.forEach(item => {
@@ -180,6 +194,7 @@ export class DreCaixaService {
         const cOrigem = String(rawDet.cOrigem || '').toUpperCase();
         const cGrupo = String(rawDet.cGrupo || '').toUpperCase();
         const obs = String(rawDet.observacao || '').toLowerCase();
+        const emp = String(item.empresa_nome || '').trim();
 
         // 1. REGRA: DESCONSIDERAR TRANSFERÊNCIAS
         // Filtra qualquer categoria iniciada por '0.' (ex: 0.01, 0.01.01), origens de transferência ou descrições
@@ -244,14 +259,32 @@ export class DreCaixaService {
 
         if (isExcluidoCaixa) return;
 
-        // 2. REGRA DE DEDUPLICAÇÃO:
-        // Se for MOVIMENTO bancário referente a um título (nCodTitulo) que já existe como PAGAR/RECEBER, ignorar o movimento duplicado
-        const nCodTitulo = rawDet.nCodTitulo ? String(rawDet.nCodTitulo) : null;
-        if (item.tipo_registro === 'MOVIMENTO' && nCodTitulo && nCodTitulo !== '0') {
-          const titleKey = `${String(item.empresa_nome || '').trim()}-${nCodTitulo}`;
-          if (knownTitleIds.has(titleKey)) {
+        // 3. REGRA: DESCONSIDERAR 'VENR' EM MOVIMENTO (Venda a Prazo - faturamento por competência, não liquidação financeira de caixa)
+        if (item.tipo_registro === 'MOVIMENTO' && cOrigem === 'VENR') return;
+
+        // 4. REGRA DE DEDUPLICAÇÃO DE ASSINATURA (Evita duplicatas de múltiplos syncs com IDs randômicos)
+        const valRound = Math.round(Math.abs(Number(item.valor_alocado || item.valor_total || 0)) * 100) / 100;
+        const omieId = item.omie_id ? String(item.omie_id) : '';
+        const nCodTit = String(rawDet.nCodTitulo || '').trim();
+
+        const sig = omieId
+          ? `${emp}-${item.tipo_registro}-${omieId}-${item.data_pagamento}-${valRound}-${catCodigo}`
+          : `${emp}-${item.tipo_registro}-${nCodTit || item.id}-${item.data_pagamento}-${valRound}-${catCodigo}`;
+
+        if (processedSignatures.has(sig)) return;
+        processedSignatures.add(sig);
+
+        // 5. REGRA DE DEDUPLICAÇÃO ENTRE MOVIMENTO E TÍTULOS (CR/CP)
+        // Se for MOVIMENTO bancário referente a um título que já existe em RECEBER ou PAGAR, ignorar o movimento duplicado
+        if (item.tipo_registro === 'MOVIMENTO' && nCodTit && nCodTit !== '0') {
+          const titleKey = `${emp}-${nCodTit}`;
+          if (knownCrTitles.has(titleKey) || knownCpTitles.has(titleKey)) {
             return; // Já computado via Conta a Pagar / Receber com detalhes completos
           }
+          if (processedMovTitles.has(titleKey)) {
+            return; // Já computado via outro movimento do mesmo título
+          }
+          processedMovTitles.add(titleKey);
         }
 
         // Resolução da Conta Corrente
