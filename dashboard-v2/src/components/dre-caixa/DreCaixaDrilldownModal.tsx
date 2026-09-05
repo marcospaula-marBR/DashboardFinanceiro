@@ -60,9 +60,6 @@ export function DreCaixaDrilldownModal({
     setSelectedMonth(initialMonth || 'todos');
   }, [initialMonth]);
 
-  // Se o modal estiver fechado, não renderizar
-  if (!isOpen) return null;
-
   // 1. Identificar se o filtro é uma sub-rubrica específica ou um macro-grupo
   const categoryLower = (categoryName || '').toLowerCase().trim();
   const isMacroCustos = categoryLower.includes('custos operacionais');
@@ -212,6 +209,13 @@ export function DreCaixaDrilldownModal({
     document.body.removeChild(link);
   };
 
+  const isEntrada = isMacroEntradas || baseCategoryItems.some(l => l.tipo === 'RECEBER');
+  const entityLabel = isEntrada ? 'Cliente / Pagador' : 'Favorecido / Fornecedor';
+  const entityPlural = isEntrada ? 'Clientes' : 'Favorecidos';
+  const actionLabel = isEntrada ? 'Total Recebido' : 'Total Desembolsado';
+
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-slate-800">
@@ -222,7 +226,7 @@ export function DreCaixaDrilldownModal({
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                 <Users size={12} />
-                Detalhamento por Favorecido
+                Detalhamento por {entityPlural}
               </span>
               {empresaLabel && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200">
@@ -293,14 +297,14 @@ export function DreCaixaDrilldownModal({
         {/* KPI Cards de Resumo Executivo */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 sm:p-4 bg-slate-50/50 border-b border-slate-200">
           <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Desembolsado</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">{actionLabel}</span>
             <strong className="text-sm sm:text-base font-black text-slate-900 mt-0.5 block">
               {formatCurrencyBRL(totalFiltered)}
             </strong>
           </div>
 
           <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Favorecidos Únicos</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">{entityPlural} Únicos</span>
             <strong className="text-sm sm:text-base font-black text-emerald-700 mt-0.5 block flex items-center gap-1">
               <Users size={15} />
               {favorecidosRanking.length}
@@ -308,14 +312,14 @@ export function DreCaixaDrilldownModal({
           </div>
 
           <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Média por Favorecido</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Média por {isEntrada ? 'Cliente' : 'Favorecido'}</span>
             <strong className="text-sm sm:text-base font-black text-slate-700 mt-0.5 block">
               {formatCurrencyBRL(mediaPorFavorecido)}
             </strong>
           </div>
 
           <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm col-span-2 sm:col-span-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Maior Favorecido</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Maior {isEntrada ? 'Cliente' : 'Favorecido'}</span>
             <strong className="text-xs sm:text-xs font-black text-slate-900 mt-0.5 truncate block" title={topFavorecido?.nome}>
               {topFavorecido ? topFavorecido.nome : '-'}
             </strong>
@@ -339,7 +343,7 @@ export function DreCaixaDrilldownModal({
               }`}
             >
               <Award size={14} className={activeTab === 'ranking' ? 'text-emerald-600' : ''} />
-              <span>Ranking dos Favorecidos ({favorecidosRanking.length})</span>
+              <span>Ranking dos {entityPlural} ({favorecidosRanking.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('extrato')}
@@ -359,7 +363,7 @@ export function DreCaixaDrilldownModal({
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar por colaborador, fornecedor, documento ou projeto..."
+              placeholder={`Buscar por ${isEntrada ? 'cliente, pagador' : 'colaborador, fornecedor'}, documento ou projeto...`}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
             />
           </div>
@@ -462,7 +466,7 @@ export function DreCaixaDrilldownModal({
                       <div className="border-t border-slate-100 bg-slate-50/50 p-3 animate-in slide-in-from-top-1 duration-150">
                         <div className="text-[11px] font-bold text-slate-700 mb-2 flex items-center gap-1.5">
                           <Receipt size={13} className="text-slate-400" />
-                          <span>Lançamentos liquidados para {fav.nome}:</span>
+                          <span>Lançamentos {isEntrada ? 'recebidos de' : 'liquidados para'} {fav.nome}:</span>
                         </div>
                         <div className="overflow-x-auto">
                           <table className="w-full text-left text-xs border-collapse">
@@ -564,7 +568,7 @@ export function DreCaixaDrilldownModal({
         {/* Rodapé do Modal */}
         <div className="p-3 sm:p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
           <div>
-            Exibindo <strong>{favorecidosRanking.length}</strong> favorecidos ({searchFilteredItems.length} lançamentos)
+            Exibindo <strong>{favorecidosRanking.length}</strong> {entityPlural.toLowerCase()} ({searchFilteredItems.length} lançamentos)
           </div>
           <button
             onClick={onClose}

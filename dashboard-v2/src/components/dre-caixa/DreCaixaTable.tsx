@@ -26,6 +26,7 @@ export function DreCaixaTable({
   onOpenDrilldown
 }: DreCaixaTableProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    '(+) Entradas Efetivamente Recebidas': true,
     '(-) Custos Operacionais Pagos': true,
     '(-) Despesas Administrativas & Pessoal Pagas': true
   });
@@ -111,16 +112,21 @@ export function DreCaixaTable({
                       ) : (
                         <span className="w-5" />
                       )}
-                      <span className={`${section.tipo === 'resultado' ? 'text-sky-900 text-sm font-black' : ''}`}>
+                      <span
+                        onClick={() => section.tipo !== 'resultado' && onOpenDrilldown && onOpenDrilldown(section.grupo)}
+                        className={`${section.tipo === 'resultado' ? 'text-sky-900 text-sm font-black' : 'cursor-pointer hover:underline'}`}
+                        title={section.tipo !== 'resultado' ? `Ver detalhamento de ${section.grupo}` : undefined}
+                      >
                         {section.grupo}
                       </span>
                       {section.tipo !== 'resultado' && onOpenDrilldown && (
                         <button
                           onClick={() => onOpenDrilldown(section.grupo)}
-                          className="text-[10px] text-slate-400 hover:text-emerald-700 ml-1.5 p-1 hover:bg-slate-200/60 rounded-md transition-colors"
+                          className="text-[10px] text-slate-500 hover:text-emerald-700 ml-1.5 p-1 hover:bg-slate-200/80 rounded-md transition-colors flex items-center gap-1"
                           title={`Ver todos os favorecidos de ${section.grupo}`}
                         >
                           <Users size={12} />
+                          <span className="hidden sm:inline font-bold">Ver {section.tipo === 'entrada' ? 'Clientes' : 'Favorecidos'}</span>
                         </button>
                       )}
                     </td>
@@ -130,13 +136,21 @@ export function DreCaixaTable({
                       return (
                         <td
                           key={mes}
+                          onClick={() => {
+                            if (section.tipo !== 'resultado' && onOpenDrilldown) {
+                              onOpenDrilldown(section.grupo, mes);
+                            }
+                          }}
                           className={`py-3 px-3 text-right font-mono text-[11px] ${
+                            section.tipo !== 'resultado' ? 'cursor-pointer hover:font-black hover:bg-slate-200/50' : ''
+                          } ${
                             section.tipo === 'resultado'
                               ? val >= 0 ? 'text-sky-700 font-black' : 'text-rose-600 font-black'
                               : section.tipo === 'entrada'
                               ? 'text-emerald-700 font-bold'
                               : 'text-slate-700 font-bold'
                           }`}
+                          title={section.tipo !== 'resultado' ? `Ver detalhamento de ${section.grupo} em ${mes}` : undefined}
                         >
                           {isMasked ? (
                             <span className="text-amber-600 tracking-widest text-[10px]">••••••</span>
@@ -148,13 +162,21 @@ export function DreCaixaTable({
                     })}
 
                     <td
+                      onClick={() => {
+                        if (section.tipo !== 'resultado' && onOpenDrilldown) {
+                          onOpenDrilldown(section.grupo);
+                        }
+                      }}
                       className={`py-3 px-4 text-right font-mono font-black ${
+                        section.tipo !== 'resultado' ? 'cursor-pointer hover:opacity-85' : ''
+                      } ${
                         section.tipo === 'resultado'
                           ? section.totalPeriodo >= 0 ? 'text-sky-800 text-sm bg-sky-100/60' : 'text-rose-600 text-sm bg-rose-50'
                           : section.tipo === 'entrada'
                           ? 'text-emerald-800 bg-emerald-100/50'
                           : 'text-slate-900 bg-slate-100'
                       }`}
+                      title={section.tipo !== 'resultado' ? `Ver detalhamento total de ${section.grupo}` : undefined}
                     >
                       {isMasked ? (
                         <span className="text-amber-700 tracking-widest text-[11px]">R$ ••••••••</span>

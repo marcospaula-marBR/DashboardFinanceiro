@@ -596,6 +596,7 @@ export class DreCaixaService {
     });
 
     // Subdivisões por macro categorias ou setores
+    const subEntradasMap: Record<string, Record<string, number>> = {};
     const subCustosMap: Record<string, Record<string, number>> = {};
     const subDespesasMap: Record<string, Record<string, number>> = {};
 
@@ -608,6 +609,12 @@ export class DreCaixaService {
 
       if (isReceita) {
         entradasValores[mes] += l.valor;
+        const catNome = l.categoria || 'Receita de Serviços / Operacional';
+        if (!subEntradasMap[catNome]) {
+          subEntradasMap[catNome] = {};
+          mesesColunas.forEach(m => { subEntradasMap[catNome][m] = 0; });
+        }
+        subEntradasMap[catNome][mes] += l.valor;
       } else {
         const isCusto = catLower.includes('custo') || catLower.includes('insumo') || catLower.includes('prestador') || catLower.includes('serviço prestado') || catLower.includes('combustível') || catLower.includes('preventiva') || catLower.includes('corretiva');
 
@@ -640,7 +647,14 @@ export class DreCaixaService {
         grupo: '(+) Entradas Efetivamente Recebidas',
         tipo: 'entrada',
         valoresPorMes: entradasValores,
-        totalPeriodo: sumValues(entradasValores)
+        totalPeriodo: sumValues(entradasValores),
+        subItens: Object.entries(subEntradasMap)
+          .map(([desc, vals]) => ({
+            descricao: desc,
+            valoresPorMes: vals,
+            totalPeriodo: sumValues(vals)
+          }))
+          .sort((a, b) => b.totalPeriodo - a.totalPeriodo)
       },
       {
         grupo: '(-) Custos Operacionais Pagos',
