@@ -94,17 +94,44 @@ export class DreCaixaService {
       const limit = 1000;
       let hasMore = true;
 
-      // Buscar fornecedores para resolução adicional se necessário
-      const { data: fornData } = await supabase
-        .from('omie_dim_fornecedores')
-        .select('codigo_cliente_omie,nome_fantasia,razao_social,empresa_nome');
-
+      // Buscar todos os fornecedores/favorecidos paginados para resolução precisa
       const fornMap = new Map<string, string>();
-      (fornData || []).forEach(f => {
-        const key = `${String(f.empresa_nome || '').trim()}-${String(f.codigo_cliente_omie)}`;
-        const nome = f.nome_fantasia || f.razao_social;
-        if (nome) fornMap.set(key, nome);
-      });
+      const fornMapByCode = new Map<string, string>();
+      const fornMapByCpf = new Map<string, string>();
+      
+      let fornFrom = 0;
+      const fornLimit = 1000;
+      let hasMoreForn = true;
+
+      while (hasMoreForn) {
+        const { data: fornData, error: fornError } = await supabase
+          .from('omie_dim_fornecedores')
+          .select('codigo_cliente_omie,nome_fantasia,razao_social,empresa_nome,cnpj_cpf')
+          .range(fornFrom, fornFrom + fornLimit - 1);
+
+        if (fornError || !fornData || fornData.length === 0) {
+          hasMoreForn = false;
+        } else {
+          fornData.forEach(f => {
+            const nome = (f.nome_fantasia || f.razao_social || '').trim();
+            const cod = String(f.codigo_cliente_omie || '').trim();
+            const cpfClean = String(f.cnpj_cpf || '').replace(/\D/g, '');
+            const empKey = `${String(f.empresa_nome || '').trim()}-${cod}`;
+
+            if (nome) {
+              if (cod) {
+                fornMap.set(empKey, nome);
+                fornMapByCode.set(cod, nome);
+              }
+              if (cpfClean) {
+                fornMapByCpf.set(cpfClean, nome);
+              }
+            }
+          });
+          fornFrom += fornLimit;
+          if (fornData.length < fornLimit) hasMoreForn = false;
+        }
+      }
 
       while (hasMore) {
         const { data, error } = await supabase
@@ -234,13 +261,18 @@ export class DreCaixaService {
           contaCorrente = item.tipo_registro === 'MOVIMENTO' ? 'Extrato Bancário' : 'Conta Operacional';
         }
 
-        // Resolução do Fornecedor / Cliente
-        const codigoCF = String(raw.codigo_cliente_fornecedor || rawDet.nCodCliente || '');
+        // Resolução do Fornecedor / Cliente / Favorecido (ex: Funcionários e Fornecedores)
+        const codigoCF = String(raw.codigo_cliente_fornecedor || rawDet.nCodCliente || '').trim();
+        const cpfRaw = String(rawDet.cCPFCNPJCliente || raw.cnpj_cpf || '').trim();
+        const cleanCpf = cpfRaw.replace(/\D/g, '');
         const fornKey = `${String(item.empresa_nome || '').trim()}-${codigoCF}`;
-        const fornFromDim = fornMap.get(fornKey);
+
+        const fornFromDim = (codigoCF ? fornMap.get(fornKey) || fornMapByCode.get(codigoCF) : null) ||
+                            (cleanCpf ? fornMapByCpf.get(cleanCpf) : null);
+
         const fornFinal = (item.cliente_fornecedor && item.cliente_fornecedor !== 'N/D' && item.cliente_fornecedor !== 'Sem Fornecedor')
           ? item.cliente_fornecedor
-          : fornFromDim || raw.nm_cliente || raw.nome_cliente || rawDet.cNomeCliente || 'Outros / Operacional';
+          : fornFromDim || rawDet.cNomeCliente || raw.nm_cliente || raw.nome_cliente || 'Outros / Operacional';
 
         const { periodo, periodoNum } = parsePeriodoFromDate(item.data_pagamento);
 

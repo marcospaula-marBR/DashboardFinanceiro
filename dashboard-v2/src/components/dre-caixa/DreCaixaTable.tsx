@@ -6,7 +6,8 @@ import {
   ChevronDown,
   ChevronRight,
   Lock,
-  ListFilter
+  ListFilter,
+  Users
 } from 'lucide-react';
 import { DreCaixaTableSection } from '@/types/dre-caixa';
 import { formatCurrencyBRL } from '@/services/dre-caixa.service';
@@ -15,7 +16,7 @@ interface DreCaixaTableProps {
   sections: DreCaixaTableSection[];
   meses: string[];
   isMeetingMode: boolean;
-  onOpenDrilldown?: (categoryName: string) => void;
+  onOpenDrilldown?: (categoryName: string, mes?: string) => void;
 }
 
 export function DreCaixaTable({
@@ -113,6 +114,15 @@ export function DreCaixaTable({
                       <span className={`${section.tipo === 'resultado' ? 'text-sky-900 text-sm font-black' : ''}`}>
                         {section.grupo}
                       </span>
+                      {section.tipo !== 'resultado' && onOpenDrilldown && (
+                        <button
+                          onClick={() => onOpenDrilldown(section.grupo)}
+                          className="text-[10px] text-slate-400 hover:text-emerald-700 ml-1.5 p-1 hover:bg-slate-200/60 rounded-md transition-colors"
+                          title={`Ver todos os favorecidos de ${section.grupo}`}
+                        >
+                          <Users size={12} />
+                        </button>
+                      )}
                     </td>
 
                     {meses.map(mes => {
@@ -158,32 +168,40 @@ export function DreCaixaTable({
                   {isExpanded && section.subItens && section.subItens.map(sub => (
                     <tr
                       key={sub.descricao}
-                      className="bg-white hover:bg-slate-50/90 text-slate-700 text-[11px] transition-colors border-b border-slate-100"
+                      onClick={() => onOpenDrilldown && onOpenDrilldown(sub.descricao)}
+                      className="bg-white hover:bg-emerald-50/70 text-slate-700 text-[11px] transition-colors border-b border-slate-100 cursor-pointer group"
+                      title={`Clique para detalhar os favorecidos de "${sub.descricao}"`}
                     >
                       <td className="py-2.5 px-4 pl-11 truncate max-w-[280px]">
                         <div className="flex items-center justify-between">
-                          <span className="truncate font-medium text-slate-800" title={sub.descricao}>
+                          <span className="truncate font-medium text-slate-800 group-hover:text-emerald-900 group-hover:font-semibold transition-colors" title={sub.descricao}>
                             {sub.descricao}
                           </span>
-                          {onOpenDrilldown && (
-                            <button
-                              onClick={() => onOpenDrilldown(sub.descricao)}
-                              className="text-[10px] text-slate-400 hover:text-emerald-600 ml-2 p-1 hover:bg-slate-100 rounded transition-colors"
-                              title="Ver Lançamentos Detalhados"
-                            >
-                              <ListFilter size={13} />
-                            </button>
-                          )}
+                          <span className="opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100/80 border border-emerald-200 px-2 py-0.5 rounded-full ml-2 shrink-0">
+                            <Users size={11} />
+                            Ver Favorecidos
+                          </span>
                         </div>
                       </td>
 
                       {meses.map(mes => (
-                        <td key={mes} className="py-2.5 px-3 text-right font-mono text-slate-600 text-[11px]">
+                        <td
+                          key={mes}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onOpenDrilldown) onOpenDrilldown(sub.descricao, mes);
+                          }}
+                          className="py-2.5 px-3 text-right font-mono text-slate-600 group-hover:text-slate-900 hover:!text-emerald-700 hover:!font-black hover:!bg-emerald-100/60 rounded transition-all text-[11px]"
+                          title={`Clique para filtrar favorecidos de "${sub.descricao}" em ${mes}`}
+                        >
                           {formatCurrencyBRL(sub.valoresPorMes[mes] || 0)}
                         </td>
                       ))}
 
-                      <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 bg-slate-50">
+                      <td
+                        className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 bg-slate-50 group-hover:bg-emerald-100/40 group-hover:text-emerald-950 transition-colors"
+                        title={`Clique para detalhar todos os favorecidos de "${sub.descricao}" no período acumulado`}
+                      >
                         {formatCurrencyBRL(sub.totalPeriodo)}
                       </td>
                     </tr>

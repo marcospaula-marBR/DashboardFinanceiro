@@ -49,6 +49,7 @@ export default function DreCaixaPage() {
 
   // Modal de Drilldown
   const [drilldownCategory, setDrilldownCategory] = useState<string>('');
+  const [drilldownMonth, setDrilldownMonth] = useState<string | undefined>(undefined);
   const [isDrilldownOpen, setIsDrilldownOpen] = useState(false);
 
   // 1. Carregamento dos dados
@@ -141,8 +142,9 @@ export default function DreCaixaPage() {
     document.body.removeChild(link);
   };
 
-  const handleOpenDrilldown = (category: string) => {
+  const handleOpenDrilldown = (category: string, mes?: string) => {
     setDrilldownCategory(category);
+    setDrilldownMonth(mes);
     setIsDrilldownOpen(true);
   };
 
@@ -283,11 +285,14 @@ export default function DreCaixaPage() {
 
       </main>
 
-      {/* Modal de Detalhamento Analítico de Lançamentos */}
+      {/* Modal de Detalhamento Analítico por Favorecido */}
       <DreCaixaDrilldownModal
         isOpen={isDrilldownOpen}
         onClose={() => setIsDrilldownOpen(false)}
         categoryName={drilldownCategory}
+        initialMonth={drilldownMonth}
+        availableMonths={chartData.meses.length > 0 ? chartData.meses : availableOptions.periodos.slice(0, 12)}
+        empresaLabel={empresaLabel}
         lancamentos={filteredLancamentos}
       />
 
