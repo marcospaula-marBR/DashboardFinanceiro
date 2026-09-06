@@ -1039,7 +1039,7 @@ export class DreCaixaService {
       }
 
       // 6. Selected Conta Detalhamento (para raio-x de qualquer conta/cartão em foco)
-      if (selectedConta && cc.toLowerCase() === selectedConta.toLowerCase()) {
+      if (selectedConta && cc.trim().toLowerCase() === selectedConta.trim().toLowerCase()) {
         selContaTotal += val;
         selContaCount += 1;
         const proj = item.projeto || 'Operacional / Geral';

@@ -206,7 +206,7 @@ export default function DreCaixaPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      
+
       {/* Header Superior Padrão Clean */}
       <DreCaixaHeader
         lastUpdate={lastUpdate}
@@ -223,7 +223,7 @@ export default function DreCaixaPage() {
 
       {/* Conteúdo Principal */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3.5 sm:p-6">
-        
+
         {/* Banner de Erro caso ocorra */}
         {errorMsg && (
           <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-3 text-sm shadow-sm">
@@ -289,27 +289,24 @@ export default function DreCaixaPage() {
               <div className="flex items-center gap-1.5 bg-slate-200/80 p-1 rounded-xl shadow-inner">
                 <button
                   onClick={() => setActiveTab('ambos')}
-                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    activeTab === 'ambos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${activeTab === 'ambos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
                 >
                   <Layers size={14} className={activeTab === 'ambos' ? 'text-emerald-600' : ''} />
                   <span>Visão Completa</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('graficos')}
-                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    activeTab === 'graficos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${activeTab === 'graficos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
                 >
                   <BarChart3 size={14} className={activeTab === 'graficos' ? 'text-emerald-600' : ''} />
                   <span>Painel de Gráficos</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('tabela')}
-                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    activeTab === 'tabela' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${activeTab === 'tabela' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
                 >
                   <TableIcon size={14} className={activeTab === 'tabela' ? 'text-emerald-600' : ''} />
                   <span>DRE Sintética</span>

@@ -21,10 +21,12 @@ import {
   AlertCircle,
   HelpCircle,
   Briefcase,
-  UserCheck
+  ChevronDown,
+  Tag,
+  Check
 } from 'lucide-react';
 import { DreCaixaLancamento, PurchasesAuditSummary } from '@/types/dre-caixa';
-import { DreCaixaService, formatCurrencyBRL } from '@/services/dre-caixa.service';
+import { DreCaixaService, formatCurrencyBRL, isDespesaRecorrente } from '@/services/dre-caixa.service';
 
 interface DreCaixaPurchasesModalProps {
   isOpen: boolean;
@@ -32,7 +34,7 @@ interface DreCaixaPurchasesModalProps {
   lancamentos: DreCaixaLancamento[];
   periodoLabel?: string;
   empresaLabel?: string;
-  onOpenGamma: () => void;
+  onOpenGamma: (filteredItems?: DreCaixaLancamento[], activeConta?: string) => void;
 }
 
 export function DreCaixaPurchasesModal({
@@ -43,41 +45,166 @@ export function DreCaixaPurchasesModal({
   empresaLabel = 'Consolidado',
   onOpenGamma
 }: DreCaixaPurchasesModalProps) {
-  // Hooks sempre no topo incondicionalmente
+  // 1. Estados sempre no topo incondicionalmente
   const [activeTab, setActiveTab] = useState<'sumario' | 'cartoes' | 'parcelas' | 'fornecedores'>('sumario');
   const [onlyCompras, setOnlyCompras] = useState(true);
   const [selectedConta, setSelectedConta] = useState<string>('');
+  const [cardSubTab, setCardSubTab] = useState<'projetos' | 'categorias' | 'fornecedores'>('projetos');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Filtro de Categorias dentro do Modal
+  const [excludedCategories, setExcludedCategories] = useState<Set<string>>(new Set());
+  const [isCategoryFilterOpen, setIsCategoryFilterOpen] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
+
+  // Extração de todas as categorias disponíveis nos pagamentos
+  const categoryOptions = useMemo(() => {
+    if (!isOpen || !lancamentos) return [];
+    const map = new Map<string, { total: number; count: number }>();
+    lancamentos
+      .filter(l => l.sinal_valor < 0 || l.tipo === 'PAGAR')
+      .forEach(l => {
+        const cat = (l.categoria || 'Geral').trim();
+        const curr = map.get(cat) || { total: 0, count: 0 };
+        map.set(cat, {
+          total: curr.total + Math.abs(l.valor),
+          count: curr.count + 1
+        });
+      });
+
+    return Array.from(map.entries())
+      .map(([nome, data]) => ({
+        nome,
+        total: data.total,
+        count: data.count,
+        isRecorrente: isDespesaRecorrente(nome)
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [isOpen, lancamentos]);
+
+  // Lançamentos filtrados pelas categorias ativas
+  const activeLancamentos = useMemo(() => {
+    if (excludedCategories.size === 0) return lancamentos;
+    return lancamentos.filter(l => !excludedCategories.has((l.categoria || 'Geral').trim()));
+  }, [lancamentos, excludedCategories]);
+
+  // Lançamentos efetivos considerando categorias ativas e toggle de despesas recorrentes
+  const effectiveLancamentos = useMemo(() => {
+    let items = activeLancamentos;
+    if (onlyCompras) {
+      items = items.filter(l => !isDespesaRecorrente(l.categoria, l.conta_dre, l.fornecedor_cliente));
+    }
+    return items;
+  }, [activeLancamentos, onlyCompras]);
+
+  // Lançamentos de todos os cartões corporativos e Flash combinados
+  const cardLancamentos = useMemo(() => {
+    return effectiveLancamentos.filter(l => {
+      if (l.sinal_valor >= 0 && l.tipo !== 'PAGAR') return false;
+      const cc = (l.conta_corrente || '').toLowerCase();
+      return cc.includes('cartão') || cc.includes('cartao') || cc.includes('flash') || cc.includes('clara') || cc.includes('elo') || cc.includes('sicredi') || cc.includes('visa');
+    });
+  }, [effectiveLancamentos]);
 
   // Computação determinística da Auditoria de Compras
   const audit: PurchasesAuditSummary = useMemo(() => {
-    if (!isOpen || !lancamentos || lancamentos.length === 0) {
-      return DreCaixaService.computePurchasesAudit([], selectedConta, onlyCompras);
+    if (!isOpen || !activeLancamentos || activeLancamentos.length === 0) {
+      return DreCaixaService.computePurchasesAudit([], selectedConta || undefined, onlyCompras);
     }
-    return DreCaixaService.computePurchasesAudit(lancamentos, selectedConta || undefined, onlyCompras);
-  }, [isOpen, lancamentos, selectedConta, onlyCompras]);
+    return DreCaixaService.computePurchasesAudit(activeLancamentos, selectedConta || undefined, onlyCompras);
+  }, [isOpen, activeLancamentos, selectedConta, onlyCompras]);
 
-  // Lista de cartões filtráveis
+  // Lista de cartões filtráveis ordenados
   const cartoesList = useMemo(() => {
     return audit.porCartao.filter(c => c.isCartao || c.isFlash);
   }, [audit.porCartao]);
 
-  // Outras contas bancárias
-  const outrasContasList = useMemo(() => {
-    return audit.porCartao.filter(c => !c.isCartao && !c.isFlash);
-  }, [audit.porCartao]);
+  // Totais consolidados de todos os cartões corporativos
+  const totalCartoesGeral = useMemo(() => {
+    return cartoesList.reduce((acc, c) => acc + c.total, 0);
+  }, [cartoesList]);
 
-  // Filtragem de fornecedores
+  const totalCartoesCount = useMemo(() => {
+    return cartoesList.reduce((acc, c) => acc + c.count, 0);
+  }, [cartoesList]);
+
+  // Detalhe reativo: Cartão Selecionado OU Consolidado Geral de Todos os Cartões
+  const activeCardDetail = useMemo(() => {
+    const isFiltered = !!selectedConta;
+    const items = isFiltered
+      ? effectiveLancamentos.filter(
+          l => (l.conta_corrente || '').trim().toLowerCase() === selectedConta.trim().toLowerCase() &&
+            (l.sinal_valor < 0 || l.tipo === 'PAGAR')
+        )
+      : cardLancamentos;
+
+    const total = items.reduce((acc, l) => acc + Math.abs(l.valor), 0);
+    const projMap = new Map<string, number>();
+    const catMap = new Map<string, number>();
+    const fornMap = new Map<string, { total: number; count: number }>();
+
+    items.forEach(l => {
+      const v = Math.abs(l.valor);
+      const p = l.projeto || 'Operacional / Geral';
+      const c = l.categoria || 'Geral';
+      const f = l.fornecedor_cliente || 'Outros / Não Informado';
+      projMap.set(p, (projMap.get(p) || 0) + v);
+      catMap.set(c, (catMap.get(c) || 0) + v);
+      const currF = fornMap.get(f) || { total: 0, count: 0 };
+      fornMap.set(f, { total: currF.total + v, count: currF.count + 1 });
+    });
+
+    return {
+      isConsolidado: !isFiltered,
+      conta: isFiltered ? selectedConta : 'Todos os Cartões & Flash (Consolidado)',
+      total,
+      count: items.length,
+      projetos: Array.from(projMap.entries()).map(([projeto, val]) => ({
+        projeto,
+        total: val,
+        count: 1,
+        percentual: total > 0 ? (val / total) * 100 : 0
+      })).sort((a, b) => b.total - a.total),
+      categorias: Array.from(catMap.entries()).map(([categoria, val]) => ({
+        categoria,
+        total: val,
+        count: 1,
+        percentual: total > 0 ? (val / total) * 100 : 0
+      })).sort((a, b) => b.total - a.total),
+      fornecedores: Array.from(fornMap.entries()).map(([fornecedor, d]) => ({
+        fornecedor,
+        total: d.total,
+        count: d.count,
+        percentual: total > 0 ? (d.total / total) * 100 : 0
+      })).sort((a, b) => b.total - a.total)
+    };
+  }, [selectedConta, effectiveLancamentos, cardLancamentos]);
+
+  // Filtragem de fornecedores na busca
   const filteredFornecedores = useMemo(() => {
     if (!searchQuery.trim()) return audit.topFornecedoresCompras;
     const q = searchQuery.toLowerCase();
     return audit.topFornecedoresCompras.filter(f => f.fornecedor.toLowerCase().includes(q));
   }, [audit.topFornecedoresCompras, searchQuery]);
 
+  // Categorias presentes nas compras parceladas (base completa para permitir ligar/desligar sem sumir o botão)
+  const parcelasCategories = useMemo(() => {
+    const map = new Map<string, number>();
+    lancamentos
+      .filter(l => (l.sinal_valor < 0 || l.tipo === 'PAGAR') && (l.total_parcelas || 1) > 1)
+      .forEach(l => {
+        const c = (l.categoria || 'Geral').trim();
+        map.set(c, (map.get(c) || 0) + Math.abs(l.valor));
+      });
+    return Array.from(map.entries())
+      .map(([nome, total]) => ({ nome, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [lancamentos]);
+
   // Handler de exportação CSV
   const handleExportCsv = () => {
     const headers = ['Empresa', 'Data', 'Favorecido', 'Categoria', 'Setor/Projeto', 'Conta/Cartão', 'Parcela', 'Modalidade', 'Tipo Econômico', 'Valor (R$)'];
-    const rows = lancamentos
+    const rows = effectiveLancamentos
       .filter(l => l.sinal_valor < 0 || l.tipo === 'PAGAR')
       .map(item => {
         const pAtual = item.parcela_atual || 1;
@@ -116,7 +243,7 @@ export function DreCaixaPurchasesModal({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
       <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-5xl my-auto overflow-hidden flex flex-col max-h-[92vh]">
-        
+
         {/* HEADER MODAL */}
         <div className="p-4 sm:p-6 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -144,8 +271,8 @@ export function DreCaixaPurchasesModal({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={onOpenGamma}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95"
+              onClick={() => onOpenGamma(effectiveLancamentos, selectedConta || undefined)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
               title="Gerar apresentação executiva pronta no Gamma"
             >
               <Sparkles size={15} />
@@ -154,7 +281,7 @@ export function DreCaixaPurchasesModal({
 
             <button
               onClick={handleExportCsv}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded-xl transition-all"
+              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
               title="Exportar dados para CSV"
             >
               <Download size={18} />
@@ -162,7 +289,7 @@ export function DreCaixaPurchasesModal({
 
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-all"
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
               title="Fechar"
             >
               <X size={20} />
@@ -170,71 +297,208 @@ export function DreCaixaPurchasesModal({
           </div>
         </div>
 
-        {/* SUBHEADER: TOGGLE DE DESPESAS RECORRENTES & TABS */}
+        {/* SUBHEADER: TOGGLE DE DESPESAS RECORRENTES, FILTRO DE CATEGORIAS & TABS */}
         <div className="px-4 sm:px-6 py-3 bg-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
           {/* Navegação por Abas */}
           <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl">
             <button
               onClick={() => setActiveTab('sumario')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'sumario'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'sumario'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
-              }`}
+                }`}
             >
               📊 Sumário Executivo
             </button>
             <button
               onClick={() => setActiveTab('cartoes')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'cartoes'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'cartoes'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
-              }`}
+                }`}
             >
               💳 Cartões & Flash
             </button>
             <button
               onClick={() => setActiveTab('parcelas')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'parcelas'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'parcelas'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
-              }`}
+                }`}
             >
               ⏳ Estrutura de Parcelas
             </button>
             <button
               onClick={() => setActiveTab('fornecedores')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'fornecedores'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'fornecedores'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
-              }`}
+                }`}
             >
               🏢 Top Fornecedores & Itens
             </button>
           </div>
 
-          {/* Toggle Excluir Despesas Recorrentes */}
-          <div className="flex items-center gap-2">
+          {/* Filtros em Linha: Toggle Recorrentes e Dropdown de Categorias */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 1. Toggle Excluir Despesas Recorrentes */}
             <button
               onClick={() => setOnlyCompras(!onlyCompras)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-                onlyCompras
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${onlyCompras
                   ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-sm'
                   : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-              }`}
+                }`}
+              title="Exclui automaticamente folha de pagamento, pró-labore, aluguéis, contabilidade e tributos"
             >
-              {onlyCompras ? <CheckSquare size={16} className="text-amber-600" /> : <Square size={16} className="text-slate-400" />}
-              <span>Excluir Despesas Recorrentes (Focar em Compras)</span>
+              {onlyCompras ? <CheckSquare size={15} className="text-amber-600" /> : <Square size={15} className="text-slate-400" />}
+              <span>Excluir Recorrentes (Focar Compras)</span>
             </button>
+
+            {/* 2. Filtro Interativo por Categorias (com Popover) */}
+            <div className="relative">
+              <button
+                onClick={() => setIsCategoryFilterOpen(!isCategoryFilterOpen)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${excludedCategories.size > 0
+                    ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-sm'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                title="Filtrar categorias específicas para eliminar despesas recorrentes parceladas"
+              >
+                <Filter size={13} className={excludedCategories.size > 0 ? 'text-indigo-600' : 'text-slate-500'} />
+                <span>
+                  {excludedCategories.size === 0
+                    ? `Filtrar Categorias (${categoryOptions.length})`
+                    : `${categoryOptions.length - excludedCategories.size} de ${categoryOptions.length} Categorias`}
+                </span>
+                {excludedCategories.size > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] flex items-center justify-center font-bold ml-0.5">
+                    {excludedCategories.size}
+                  </span>
+                )}
+                <ChevronDown size={13} className="text-slate-400 ml-0.5" />
+              </button>
+
+              {/* Popover Dropdown de Categorias */}
+              {isCategoryFilterOpen && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-3.5 space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-xs">
+                    <div>
+                      <span className="font-extrabold text-slate-900 block">Filtro de Categorias</span>
+                      <span className="text-[10px] text-slate-500">Desmarque rubricas recorrentes</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setExcludedCategories(new Set())}
+                        className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                      >
+                        Todas
+                      </button>
+                      <span className="text-slate-300">•</span>
+                      <button
+                        onClick={() => {
+                          const recSet = new Set(categoryOptions.filter(c => c.isRecorrente).map(c => c.nome));
+                          setExcludedCategories(recSet);
+                        }}
+                        className="text-[11px] font-bold text-amber-700 hover:underline cursor-pointer"
+                        title="Desmarca automaticamente todas as categorias recorrentes/overhead"
+                      >
+                        ⚡ Desmarcar Recorrentes
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Campo de Busca no Dropdown */}
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar categoria..."
+                      value={categorySearchQuery}
+                      onChange={e => setCategorySearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+
+                  {/* Lista de Categorias com Checkbox */}
+                  <div className="max-h-60 overflow-y-auto space-y-1 pr-1 text-xs">
+                    {categoryOptions
+                      .filter(c => !categorySearchQuery || c.nome.toLowerCase().includes(categorySearchQuery.toLowerCase()))
+                      .map(cat => {
+                        const isIncluded = !excludedCategories.has(cat.nome);
+                        return (
+                          <div
+                            key={cat.nome}
+                            onClick={() => {
+                              const next = new Set(excludedCategories);
+                              if (isIncluded) next.add(cat.nome);
+                              else next.delete(cat.nome);
+                              setExcludedCategories(next);
+                            }}
+                            className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${isIncluded ? 'hover:bg-slate-50' : 'bg-slate-50/70 opacity-60'
+                              }`}
+                          >
+                            <div className="flex items-center gap-2 truncate pr-2">
+                              {isIncluded ? (
+                                <CheckSquare size={16} className="text-indigo-600 shrink-0" />
+                              ) : (
+                                <Square size={16} className="text-slate-400 shrink-0" />
+                              )}
+                              <span className={`truncate ${isIncluded ? 'font-semibold text-slate-800' : 'text-slate-400 line-through'}`}>
+                                {cat.nome}
+                              </span>
+                              {cat.isRecorrente && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 shrink-0">
+                                  Recorrente
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-700 whitespace-nowrap">
+                              {formatCurrencyBRL(cat.total)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {/* Rodapé do Dropdown */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">
+                      {categoryOptions.length - excludedCategories.size} de {categoryOptions.length} ativas
+                    </span>
+                    <button
+                      onClick={() => setIsCategoryFilterOpen(false)}
+                      className="px-3.5 py-1 bg-slate-900 text-white rounded-lg font-bold text-xs hover:bg-slate-800 cursor-pointer"
+                    >
+                      Concluir
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* CORPO DO MODAL (SCROLL) */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50">
-          
+
+          {/* AVISO QUANDO HOUVER CATEGORIAS EXCLUÍDAS */}
+          {excludedCategories.size > 0 && (
+            <div className="px-3.5 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <Tag size={14} className="text-indigo-600 shrink-0" />
+                <span>
+                  <strong>Filtro de Categorias Ativo:</strong> {excludedCategories.size} categoria(s) desmarcada(s). Os valores e parcelas abaixo refletem apenas as rubricas selecionadas.
+                </span>
+              </div>
+              <button
+                onClick={() => setExcludedCategories(new Set())}
+                className="font-bold text-indigo-700 underline text-[11px] shrink-0 ml-2 cursor-pointer"
+              >
+                Restaurar Todas
+              </button>
+            </div>
+          )}
+
           {/* KPI CARDS DE TOP EXECUÇÃO */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {/* 1. Total de Compras Efetivas */}
@@ -400,39 +664,78 @@ export function DreCaixaPurchasesModal({
           {/* ABA 2: MEIOS DE PAGAMENTO & CARTÕES */}
           {activeTab === 'cartoes' && (
             <div className="space-y-6 animate-fadeIn">
-              
+
               {/* Resumo dos Cartões Corporativos */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div>
                     <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                       <CreditCard size={17} className="text-indigo-600" />
                       Total Comprado por Cartão Corporativo & Flash
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Clique em qualquer cartão abaixo para abrir o Raio-X por Projeto, Categoria e Fornecedor
+                      {selectedConta
+                        ? `Filtrado por: ${selectedConta}. Clique em 'Ver Consolidado' para ver a soma de todos.`
+                        : 'Exibindo visão consolidada de todos os cartões. Clique em um cartão para isolar seus gastos.'}
                     </p>
                   </div>
                   {selectedConta && (
                     <button
                       onClick={() => setSelectedConta('')}
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
+                      className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                      title="Voltar para a visão consolidada de todos os cartões"
                     >
-                      Limpar foco da conta
+                      <Layers size={14} />
+                      <span>Ver Consolidado (Total)</span>
                     </button>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {/* Card 1: Consolidado (Todos os Cartões) */}
+                  <button
+                    onClick={() => setSelectedConta('')}
+                    className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
+                      !selectedConta
+                        ? 'bg-purple-50 border-purple-400 shadow-sm ring-2 ring-purple-300'
+                        : 'bg-white border-slate-200 hover:border-purple-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-extrabold text-slate-800 truncate">
+                        Todos os Cartões & Flash
+                      </span>
+                      <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-purple-100 text-purple-800 shrink-0">
+                        Consolidado
+                      </span>
+                    </div>
+                    <div className="text-base font-black text-purple-950">
+                      {formatCurrencyBRL(totalCartoesGeral)}
+                    </div>
+                    <div className="text-[11px] mt-1 flex items-center justify-between">
+                      <span className="text-slate-400">{totalCartoesCount} transações</span>
+                      {!selectedConta ? (
+                        <span className="text-purple-700 font-extrabold flex items-center gap-1">
+                          <Check size={12} /> Em foco (Total)
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 hover:text-purple-600 font-bold">
+                          Ver consolidado →
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Cards Individuais de cada Cartão */}
                   {cartoesList.map(cartao => {
                     const isSelected = selectedConta.toLowerCase() === cartao.conta.toLowerCase();
                     return (
                       <button
                         key={cartao.conta}
                         onClick={() => setSelectedConta(isSelected ? '' : cartao.conta)}
-                        className={`text-left p-3.5 rounded-xl border transition-all ${
+                        className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-indigo-50/80 border-indigo-400 shadow-sm ring-2 ring-indigo-200'
+                            ? 'bg-indigo-50 border-indigo-400 shadow-sm ring-2 ring-indigo-300'
                             : 'bg-white border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
                         }`}
                       >
@@ -441,11 +744,11 @@ export function DreCaixaPurchasesModal({
                             {cartao.conta}
                           </span>
                           {cartao.isFlash ? (
-                            <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-amber-100 text-amber-800">
+                            <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-amber-100 text-amber-800 shrink-0">
                               Flash
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-slate-100 text-slate-600">
+                            <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-slate-100 text-slate-600 shrink-0">
                               Cartão
                             </span>
                           )}
@@ -453,11 +756,17 @@ export function DreCaixaPurchasesModal({
                         <div className="text-base font-black text-slate-900">
                           {formatCurrencyBRL(cartao.total)}
                         </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center justify-between">
-                          <span>{cartao.count} transações</span>
-                          <span className="text-indigo-600 font-bold flex items-center gap-0.5">
-                            {isSelected ? 'Em foco' : 'Ver raio-x'} →
-                          </span>
+                        <div className="text-[11px] mt-1 flex items-center justify-between">
+                          <span className="text-slate-400">{cartao.count} transações</span>
+                          {isSelected ? (
+                            <span className="text-indigo-700 font-extrabold flex items-center gap-1">
+                              <Check size={12} /> Em foco
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 hover:text-indigo-600 font-bold">
+                              Ver raio-x →
+                            </span>
+                          )}
                         </div>
                       </button>
                     );
@@ -465,111 +774,159 @@ export function DreCaixaPurchasesModal({
                 </div>
               </div>
 
-              {/* DETALHAMENTO DO CARTÃO FLASH POR PROJETO */}
-              <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm bg-gradient-to-b from-amber-50/20 to-white">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-amber-950 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                      Utilização do Cartão Flash por Projeto (Contratos Omie)
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Mapeamento das despesas pagas via Flash por Setor/Projeto de aplicação
-                    </p>
-                  </div>
-                  <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-lg">
-                    {audit.flashPorProjeto.length} Projetos Ativos
-                  </span>
-                </div>
-
-                {audit.flashPorProjeto.length === 0 ? (
-                  <div className="text-xs text-slate-400 text-center py-6">
-                    Nenhuma despesa do cartão Flash encontrada no período filtrado.
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {audit.flashPorProjeto.map(item => (
-                      <div key={item.projeto} className="bg-white border border-slate-100 rounded-xl p-3">
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className="font-bold text-slate-800 truncate" title={item.projeto}>
-                            {item.projeto}
-                          </span>
-                          <span className="font-black text-slate-900">
-                            {formatCurrencyBRL(item.total)} ({item.percentual.toFixed(1)}%)
+              {/* SEÇÃO REATIVA UNIFICADA: RAIO-X DO CARTÃO CLICADO OU TOTAL CONSOLIDADO */}
+              {activeCardDetail && (
+                <div className={`bg-white border rounded-2xl p-5 shadow-md bg-gradient-to-b from-slate-50/40 to-white animate-fadeIn ${
+                  activeCardDetail.isConsolidado ? 'border-purple-200' : 'border-indigo-200'
+                }`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm ${
+                        activeCardDetail.isConsolidado
+                          ? 'bg-purple-100 text-purple-800'
+                          : activeCardDetail.conta.toLowerCase().includes('flash')
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-indigo-100 text-indigo-800'
+                      }`}>
+                        {activeCardDetail.isConsolidado ? <Layers size={20} /> : <CreditCard size={20} />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-black text-slate-900">
+                            {activeCardDetail.isConsolidado ? 'Visão Consolidada:' : 'Raio-X de Utilização:'}{' '}
+                            <span className={activeCardDetail.isConsolidado ? 'text-purple-700' : 'text-indigo-700'}>
+                              {activeCardDetail.conta}
+                            </span>
+                          </h3>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                            activeCardDetail.isConsolidado ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800'
+                          }`}>
+                            {formatCurrencyBRL(activeCardDetail.total)}
                           </span>
                         </div>
-                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                          <div
-                            className="bg-amber-500 h-full rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, item.percentual)}%` }}
-                          />
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {activeCardDetail.count} transações {activeCardDetail.isConsolidado ? 'em todos os cartões' : 'neste cartão'} no período selecionado
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Sub-Tabs do Cartão Selecionado ou Consolidado */}
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                      <button
+                        onClick={() => setCardSubTab('projetos')}
+                        className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          cardSubTab === 'projetos'
+                            ? 'bg-white text-indigo-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        📁 Por Projeto ({activeCardDetail.projetos.length})
+                      </button>
+                      <button
+                        onClick={() => setCardSubTab('categorias')}
+                        className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          cardSubTab === 'categorias'
+                            ? 'bg-white text-indigo-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        🏷️ Por Categoria ({activeCardDetail.categorias.length})
+                      </button>
+                      <button
+                        onClick={() => setCardSubTab('fornecedores')}
+                        className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          cardSubTab === 'fornecedores'
+                            ? 'bg-white text-indigo-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        🏢 Por Estabelecimento ({activeCardDetail.fornecedores.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 1. VISÃO POR PROJETO DO CARTÃO SELECIONADO (COM BARRAS VISUAIS) */}
+                  {cardSubTab === 'projetos' && (
+                    <div className="space-y-3 animate-fadeIn">
+                      {activeCardDetail.projetos.length === 0 ? (
+                        <div className="text-xs text-slate-400 text-center py-6">
+                          Nenhum projeto associado a este cartão no período filtrado.
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* RAIO-X TRIDIMENSIONAL DA CONTA SELECIONADA */}
-              {audit.detalheContaSelecionada && (
-                <div className="bg-white border border-indigo-200 rounded-2xl p-5 shadow-md animate-fadeIn">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-sm font-extrabold text-indigo-950 flex items-center gap-2">
-                        🔍 Raio-X Detalhado: {audit.detalheContaSelecionada.conta}
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Total movimentado: {formatCurrencyBRL(audit.detalheContaSelecionada.total)} em {audit.detalheContaSelecionada.count} lançamentos
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Projetos da Conta */}
-                    <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80">
-                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-2">
-                        Por Projeto / Setor
-                      </h4>
-                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                        {audit.detalheContaSelecionada.projetos.map(p => (
-                          <div key={p.projeto} className="flex items-center justify-between text-xs py-1 border-b border-slate-200/50">
-                            <span className="truncate text-slate-700 pr-2" title={p.projeto}>{p.projeto}</span>
-                            <span className="font-bold text-slate-900 whitespace-nowrap">{formatCurrencyBRL(p.total)}</span>
+                      ) : (
+                        activeCardDetail.projetos.map(p => (
+                          <div key={p.projeto} className="bg-white border border-slate-200/80 rounded-xl p-3 shadow-2xs hover:border-indigo-200 transition-all">
+                            <div className="flex items-center justify-between text-xs mb-1.5">
+                              <span className="font-extrabold text-slate-800 truncate" title={p.projeto}>
+                                {p.projeto}
+                              </span>
+                              <span className="font-black text-slate-900">
+                                {formatCurrencyBRL(p.total)} ({p.percentual.toFixed(1)}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  activeCardDetail.isConsolidado
+                                    ? 'bg-purple-600'
+                                    : activeCardDetail.conta.toLowerCase().includes('flash')
+                                      ? 'bg-amber-500'
+                                      : 'bg-indigo-600'
+                                }`}
+                                style={{ width: `${Math.min(100, p.percentual)}%` }}
+                              />
+                            </div>
                           </div>
-                        ))}
-                      </div>
+                        ))
+                      )}
                     </div>
+                  )}
 
-                    {/* Categorias da Conta */}
-                    <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80">
-                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-2">
-                        Por Categoria
-                      </h4>
-                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                        {audit.detalheContaSelecionada.categorias.map(c => (
-                          <div key={c.categoria} className="flex items-center justify-between text-xs py-1 border-b border-slate-200/50">
-                            <span className="truncate text-slate-700 pr-2" title={c.categoria}>{c.categoria}</span>
-                            <span className="font-bold text-slate-900 whitespace-nowrap">{formatCurrencyBRL(c.total)}</span>
+                  {/* 2. VISÃO POR CATEGORIA DO CARTÃO SELECIONADO */}
+                  {cardSubTab === 'categorias' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 animate-fadeIn">
+                      {activeCardDetail.categorias.map(c => (
+                        <div key={c.categoria} className="bg-white border border-slate-200/80 rounded-xl p-3 shadow-2xs">
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="font-bold text-slate-700 truncate" title={c.categoria}>
+                              {c.categoria}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400">
+                              {c.percentual.toFixed(1)}%
+                            </span>
                           </div>
-                        ))}
-                      </div>
+                          <div className="text-sm font-black text-slate-900">
+                            {formatCurrencyBRL(c.total)}
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  )}
 
-                    {/* Fornecedores da Conta */}
-                    <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80">
-                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-2">
-                        Por Fornecedor / Estabelecimento
-                      </h4>
-                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                        {audit.detalheContaSelecionada.fornecedores.map(f => (
-                          <div key={f.fornecedor} className="flex items-center justify-between text-xs py-1 border-b border-slate-200/50">
-                            <span className="truncate text-slate-700 pr-2" title={f.fornecedor}>{f.fornecedor}</span>
-                            <span className="font-bold text-slate-900 whitespace-nowrap">{formatCurrencyBRL(f.total)}</span>
-                          </div>
-                        ))}
-                      </div>
+                  {/* 3. VISÃO POR FORNECEDOR DO CARTÃO SELECIONADO */}
+                  {cardSubTab === 'fornecedores' && (
+                    <div className="overflow-x-auto max-h-80 overflow-y-auto animate-fadeIn">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
+                            <th className="pb-2">Fornecedor / Estabelecimento</th>
+                            <th className="pb-2 text-center">Transações</th>
+                            <th className="pb-2 text-right">Total Pago</th>
+                            <th className="pb-2 text-right">% no Cartão</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {activeCardDetail.fornecedores.map(f => (
+                            <tr key={f.fornecedor} className="hover:bg-slate-50">
+                              <td className="py-2 font-bold text-slate-800">{f.fornecedor}</td>
+                              <td className="py-2 text-center text-slate-400">{f.count}</td>
+                              <td className="py-2 text-right font-black text-slate-900">{formatCurrencyBRL(f.total)}</td>
+                              <td className="py-2 text-right font-semibold text-indigo-700">{f.percentual.toFixed(1)}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -578,7 +935,46 @@ export function DreCaixaPurchasesModal({
           {/* ABA 3: ESTRUTURA DE PARCELAS */}
           {activeTab === 'parcelas' && (
             <div className="space-y-6 animate-fadeIn">
-              
+
+              {/* BARRA DE ATALHOS RÁPIDOS DE CATEGORIAS NAS PARCELAS */}
+              {parcelasCategories.length > 0 && (
+                <div className="p-3.5 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
+                      <Tag size={13} className="text-indigo-600" />
+                      Categorias com Parcelamento Detectado:
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Clique em uma categoria para desmarcá-la caso seja despesa recorrente
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {parcelasCategories.slice(0, 8).map(c => {
+                      const isExcluded = excludedCategories.has(c.nome);
+                      return (
+                        <button
+                          key={c.nome}
+                          onClick={() => {
+                            const next = new Set(excludedCategories);
+                            if (isExcluded) next.delete(c.nome);
+                            else next.add(c.nome);
+                            setExcludedCategories(next);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${isExcluded
+                              ? 'bg-slate-100 border-slate-300 text-slate-400 line-through'
+                              : 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100'
+                            }`}
+                          title={isExcluded ? `Clique para reativar ${c.nome}` : `Clique para excluir ${c.nome} das compras`}
+                        >
+                          <span>{c.nome}</span>
+                          <span className="text-[10px] font-normal opacity-80">({formatCurrencyBRL(c.total)})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Amortização de Compras Passadas (> 1/N) */}
               <div className="bg-white border border-purple-200 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -605,7 +1001,7 @@ export function DreCaixaPurchasesModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {lancamentos
+                      {activeLancamentos
                         .filter(l => (l.sinal_valor < 0 || l.tipo === 'PAGAR') && (l.parcela_atual || 1) > 1)
                         .slice(0, 30)
                         .map((item, idx) => (
@@ -654,7 +1050,7 @@ export function DreCaixaPurchasesModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {lancamentos
+                      {activeLancamentos
                         .filter(l => (l.sinal_valor < 0 || l.tipo === 'PAGAR') && ((l.parcela_atual || 1) === 1 && (l.total_parcelas || 1) === 1))
                         .slice(0, 30)
                         .map((item, idx) => (
@@ -678,7 +1074,7 @@ export function DreCaixaPurchasesModal({
           {/* ABA 4: TOP FORNECEDORES & CATEGORIAS */}
           {activeTab === 'fornecedores' && (
             <div className="space-y-6 animate-fadeIn">
-              
+
               {/* Categorias de Compras */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-sm font-extrabold text-slate-900 mb-3">
@@ -775,15 +1171,15 @@ export function DreCaixaPurchasesModal({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={onOpenGamma}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95"
+              onClick={() => onOpenGamma(effectiveLancamentos, selectedConta || undefined)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <Sparkles size={16} />
               <span>Gerar Apresentação no Gamma (Diretoria)</span>
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-all"
+              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
             >
               Fechar
             </button>
