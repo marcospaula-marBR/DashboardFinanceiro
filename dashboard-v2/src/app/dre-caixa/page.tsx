@@ -66,6 +66,9 @@ export default function DreCaixaPage() {
 
   // Modal Modular de Geração de Apresentação Executiva no Gamma
   const [isGammaModalOpen, setIsGammaModalOpen] = useState(false);
+  const [gammaCustomLancamentos, setGammaCustomLancamentos] = useState<DreCaixaLancamento[] | undefined>(undefined);
+  const [gammaCustomConta, setGammaCustomConta] = useState<string | undefined>(undefined);
+  const [gammaOnlyCompras, setGammaOnlyCompras] = useState<boolean>(false);
 
   // 1. Carregamento dos dados
   const loadData = useCallback(async () => {
@@ -217,7 +220,12 @@ export default function DreCaixaPage() {
         hiddenCount={totalOcultos}
         onRefresh={loadData}
         onExportCsv={handleExportCsv}
-        onOpenGamma={() => setIsGammaModalOpen(true)}
+        onOpenGamma={() => {
+          setGammaCustomLancamentos(undefined);
+          setGammaCustomConta(filters.contasCorrentes.length === 1 ? filters.contasCorrentes[0] : undefined);
+          setGammaOnlyCompras(false);
+          setIsGammaModalOpen(true);
+        }}
         onOpenPurchasesAudit={() => setIsPurchasesModalOpen(true)}
       />
 
@@ -367,8 +375,11 @@ export default function DreCaixaPage() {
         lancamentos={filteredLancamentos}
         periodoLabel={periodoLabel}
         empresaLabel={empresaLabel}
-        onOpenGamma={() => {
+        onOpenGamma={(filteredItems, activeConta, onlyCompras) => {
           setIsPurchasesModalOpen(false);
+          setGammaCustomLancamentos(filteredItems);
+          setGammaCustomConta(activeConta);
+          setGammaOnlyCompras(Boolean(onlyCompras));
           setIsGammaModalOpen(true);
         }}
       />
@@ -376,11 +387,18 @@ export default function DreCaixaPage() {
       {/* Modal Modular de Geração de Apresentação Executiva no Gamma */}
       <DreCaixaGammaModal
         isOpen={isGammaModalOpen}
-        onClose={() => setIsGammaModalOpen(false)}
-        lancamentos={filteredLancamentos}
+        onClose={() => {
+          setIsGammaModalOpen(false);
+          setGammaCustomLancamentos(undefined);
+          setGammaCustomConta(undefined);
+          setGammaOnlyCompras(false);
+        }}
+        lancamentos={gammaCustomLancamentos || filteredLancamentos}
         periodoLabel={periodoLabel}
         empresaLabel={empresaLabel}
-        selectedConta={filters.contasCorrentes.length === 1 ? filters.contasCorrentes[0] : undefined}
+        selectedConta={gammaCustomConta || (filters.contasCorrentes.length === 1 ? filters.contasCorrentes[0] : undefined)}
+        filters={filters}
+        onlyCompras={gammaOnlyCompras}
       />
 
     </div>

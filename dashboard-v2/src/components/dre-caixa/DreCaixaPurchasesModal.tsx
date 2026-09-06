@@ -34,7 +34,7 @@ interface DreCaixaPurchasesModalProps {
   lancamentos: DreCaixaLancamento[];
   periodoLabel?: string;
   empresaLabel?: string;
-  onOpenGamma: (filteredItems?: DreCaixaLancamento[], activeConta?: string) => void;
+  onOpenGamma: (filteredItems?: DreCaixaLancamento[], activeConta?: string, onlyCompras?: boolean) => void;
 }
 
 export function DreCaixaPurchasesModal({
@@ -271,7 +271,7 @@ export function DreCaixaPurchasesModal({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onOpenGamma(effectiveLancamentos, selectedConta || undefined)}
+              onClick={() => onOpenGamma(effectiveLancamentos, selectedConta || undefined, onlyCompras)}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
               title="Gerar apresentação executiva pronta no Gamma"
             >
@@ -1171,7 +1171,7 @@ export function DreCaixaPurchasesModal({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onOpenGamma(effectiveLancamentos, selectedConta || undefined)}
+              onClick={() => onOpenGamma(effectiveLancamentos, selectedConta || undefined, onlyCompras)}
               className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <Sparkles size={16} />

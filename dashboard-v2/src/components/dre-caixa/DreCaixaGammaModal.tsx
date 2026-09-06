@@ -17,10 +17,11 @@ import {
   PieChart,
   Eye,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  Filter
 } from 'lucide-react';
-import { DreCaixaLancamento, PurchasesAuditSummary } from '@/types/dre-caixa';
-import { DreCaixaService, formatCurrencyBRL } from '@/services/dre-caixa.service';
+import { DreCaixaLancamento, PurchasesAuditSummary, DreCaixaFilters } from '@/types/dre-caixa';
+import { DreCaixaService, formatCurrencyBRL, isDespesaRecorrente } from '@/services/dre-caixa.service';
 
 interface DreCaixaGammaModalProps {
   isOpen: boolean;
@@ -29,6 +30,8 @@ interface DreCaixaGammaModalProps {
   periodoLabel?: string;
   empresaLabel?: string;
   selectedConta?: string;
+  filters?: DreCaixaFilters;
+  onlyCompras?: boolean;
 }
 
 export function DreCaixaGammaModal({
@@ -37,7 +40,9 @@ export function DreCaixaGammaModal({
   lancamentos,
   periodoLabel = 'Período Atual',
   empresaLabel = 'Consolidado',
-  selectedConta
+  selectedConta,
+  filters,
+  onlyCompras = false
 }: DreCaixaGammaModalProps) {
   // 1. Hooks no topo incondicionalmente
   const [activeTab, setActiveTab] = useState<'builder' | 'preview'>('builder');
@@ -60,30 +65,132 @@ export function DreCaixaGammaModal({
   const [statusMessage, setStatusMessage] = useState('');
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
-  // Computação determinística da Auditoria de Compras
+  // Computação determinística da Auditoria de Compras respeitando onlyCompras e selectedConta
   const audit: PurchasesAuditSummary = useMemo(() => {
     if (!isOpen || !lancamentos || lancamentos.length === 0) {
-      return DreCaixaService.computePurchasesAudit([], selectedConta, false);
+      return DreCaixaService.computePurchasesAudit([], selectedConta, Boolean(onlyCompras));
     }
-    return DreCaixaService.computePurchasesAudit(lancamentos, selectedConta || undefined, false);
-  }, [isOpen, lancamentos, selectedConta]);
+    return DreCaixaService.computePurchasesAudit(lancamentos, selectedConta || undefined, Boolean(onlyCompras));
+  }, [isOpen, lancamentos, selectedConta, onlyCompras]);
 
-  // Título padrão inteligente
+  // Detalhe robusto do cartão selecionado (com fallback via filtro direto)
+  const activeCardDetail = useMemo(() => {
+    if (!selectedConta) return null;
+    if (audit.detalheContaSelecionada && audit.detalheContaSelecionada.count > 0) {
+      return audit.detalheContaSelecionada;
+    }
+
+    const items = lancamentos.filter(
+      l => (l.conta_corrente || '').trim().toLowerCase() === selectedConta.trim().toLowerCase() &&
+           (l.sinal_valor < 0 || l.tipo === 'PAGAR')
+    );
+    const total = items.reduce((acc, l) => acc + Math.abs(l.valor), 0);
+    const projMap = new Map<string, number>();
+    const catMap = new Map<string, number>();
+    const fornMap = new Map<string, { total: number; count: number }>();
+
+    items.forEach(l => {
+      const v = Math.abs(l.valor);
+      const p = l.projeto || 'Operacional / Geral';
+      const c = l.categoria || 'Geral';
+      const f = l.fornecedor_cliente || 'Outros / Não Informado';
+      projMap.set(p, (projMap.get(p) || 0) + v);
+      catMap.set(c, (catMap.get(c) || 0) + v);
+      const currF = fornMap.get(f) || { total: 0, count: 0 };
+      fornMap.set(f, { total: currF.total + v, count: currF.count + 1 });
+    });
+
+    return {
+      conta: selectedConta,
+      total,
+      count: items.length,
+      projetos: Array.from(projMap.entries()).map(([projeto, val]) => ({
+        projeto,
+        total: val,
+        count: 1,
+        percentual: total > 0 ? (val / total) * 100 : 0
+      })).sort((a, b) => b.total - a.total),
+      categorias: Array.from(catMap.entries()).map(([categoria, val]) => ({
+        categoria,
+        total: val,
+        count: 1,
+        percentual: total > 0 ? (val / total) * 100 : 0
+      })).sort((a, b) => b.total - a.total),
+      fornecedores: Array.from(fornMap.entries()).map(([fornecedor, d]) => ({
+        fornecedor,
+        total: d.total,
+        count: d.count,
+        percentual: total > 0 ? (d.total / total) * 100 : 0
+      })).sort((a, b) => b.total - a.total)
+    };
+  }, [selectedConta, audit.detalheContaSelecionada, lancamentos]);
+
+  // Atualizar seleção de conta reativamente quando selectedConta mudar
+  useEffect(() => {
+    if (selectedConta) {
+      setIncludeSelectedAccount(true);
+    }
+  }, [selectedConta]);
+
+  // Título padrão inteligente considerando os filtros ativos
   const defaultTitle = useMemo(() => {
+    if (selectedConta) {
+      return `Raio-X de Compras: ${selectedConta} — ${empresaLabel} (${periodoLabel})`;
+    }
+    if (filters?.projetos && filters.projetos.length === 1) {
+      return `Auditoria de Desembolsos: ${filters.projetos[0]} — ${empresaLabel} (${periodoLabel})`;
+    }
+    if (onlyCompras) {
+      return `Auditoria Executiva de Compras & Aquisições — ${empresaLabel} (${periodoLabel})`;
+    }
     return `Relatório Executivo de Compras & Desembolsos — ${empresaLabel} (${periodoLabel})`;
-  }, [empresaLabel, periodoLabel]);
+  }, [empresaLabel, periodoLabel, selectedConta, filters?.projetos, onlyCompras]);
 
   useEffect(() => {
-    if (defaultTitle && !customTitle) {
+    if (!isEditingManually) {
       setCustomTitle(defaultTitle);
     }
-  }, [defaultTitle, customTitle]);
+  }, [defaultTitle, isEditingManually]);
 
   // Compilador dinâmico do Markdown para a apresentação no Gamma
   const compiledMarkdown = useMemo(() => {
     if (!isOpen || !lancamentos || lancamentos.length === 0) return '';
 
     let md = '';
+
+    // Metadados dos Filtros em Vigor para transparência executiva
+    const filterBullets: string[] = [];
+    filterBullets.push(`- **Data da Apuração:** ${new Date().toLocaleDateString('pt-BR')}`);
+    filterBullets.push(`- **Base Operacional:** Regime de Caixa Real (Dados liquidados no Omie ERP)`);
+    filterBullets.push(`- **Empresa(s):** ${filters?.empresas && filters.empresas.length > 0 ? filters.empresas.join(', ') : empresaLabel}`);
+    filterBullets.push(`- **Período de Referência:** ${filters?.periodos && filters.periodos.length > 0 ? filters.periodos.join(', ') : periodoLabel}`);
+
+    if (filters?.projetos && filters.projetos.length > 0) {
+      filterBullets.push(`- **Projeto(s) / Contrato(s) Filtrado(s):** ${filters.projetos.join(', ')}`);
+    }
+    if (filters?.categorias && filters.categorias.length > 0) {
+      filterBullets.push(`- **Categoria(s) Filtrada(s):** ${filters.categorias.join(', ')}`);
+    }
+    if (filters?.fornecedores && filters.fornecedores.length > 0) {
+      filterBullets.push(`- **Fornecedor(es) Filtrado(s):** ${filters.fornecedores.join(', ')}`);
+    }
+    if (selectedConta) {
+      filterBullets.push(`- **Cartão / Conta em Foco:** ${selectedConta}`);
+    } else if (filters?.contasCorrentes && filters.contasCorrentes.length > 0) {
+      filterBullets.push(`- **Contas Correntes Filtradas:** ${filters.contasCorrentes.join(', ')}`);
+    }
+    if (filters?.tipoPagamento && filters.tipoPagamento !== 'TODOS') {
+      filterBullets.push(`- **Modalidade de Pagamento:** ${filters.tipoPagamento === 'A_VISTA' ? 'Somente Compras À Vista (1/1)' : 'Somente Compras Parceladas (1/N e amortizações)'}`);
+    }
+    if (onlyCompras) {
+      filterBullets.push(`- **Escopo do Relatório:** Somente Compras & Aquisições (Despesas estruturais fixas, folha e tributos excluídos)`);
+    } else {
+      filterBullets.push(`- **Escopo do Relatório:** Consolidado Geral de Saídas (Compras + Despesas Estruturais)`);
+    }
+    const totalOcultos = (filters?.ocultarCategorias?.length || 0) + (filters?.ocultarProjetos?.length || 0) + (filters?.ocultarFornecedores?.length || 0);
+    if (totalOcultos > 0) {
+      filterBullets.push(`- **Privacidade & Compliance:** Ocultação de dados sensíveis ativada (${totalOcultos} itens restritos)`);
+    }
 
     // 1. CAPA EXECUTIVA & LOGOS
     if (includeCover) {
@@ -114,17 +221,25 @@ export function DreCaixaGammaModal({
       md += logosHtml;
       md += `# ${customTitle || defaultTitle}\n\n`;
       md += `**Apresentação Executiva para Reunião de Diretoria & Conselho**\n\n`;
-      md += `- **Data da Apuração:** ${new Date().toLocaleDateString('pt-BR')}\n`;
-      md += `- **Base Operacional:** Regime de Caixa Real (Dados liquidados no Omie ERP)\n`;
-      md += `- **Empresa(s):** ${empresaLabel}\n`;
-      md += `- **Período de Referência:** ${periodoLabel}\n\n`;
+      md += `${filterBullets.join('\n')}\n\n`;
       md += `---\n\n`;
     }
 
     // 2. SUMÁRIO C-LEVEL: COMPRAS DO MÊS VS. DESPESAS RECORRENTES
     if (includeSummary) {
       md += `## 1. Sumário Executivo: Compras vs. Despesas Recorrentes\n\n`;
-      md += `Visão consolidada segregando o que foi efetivamente **comprado** (insumos, materiais, softwares, equipamentos e cartões) das **despesas estruturais fixas recorrentes** (folha de pagamento, encargos, pró-labore, aluguéis e tributos contínuos):\n\n`;
+      if (onlyCompras) {
+        md += `> 🛒 **Escopo Aplicado: Somente Compras & Aquisições**\n> Esta apuração isola estritamente insumos, materiais, softwares, equipamentos e despesas operacionais contratadas, desconsiderando folha de pagamento, pró-labore, aluguéis e tributos contínuos.\n\n`;
+      } else {
+        md += `Visão consolidada segregando o que foi efetivamente **comprado** (insumos, materiais, softwares, equipamentos e cartões) das **despesas estruturais fixas recorrentes** (folha de pagamento, encargos, pró-labore, aluguéis e tributos contínuos):\n\n`;
+      }
+
+      if (filters?.projetos && filters.projetos.length > 0) {
+        md += `> 📌 **Projeto(s) em Análise:** ${filters.projetos.join(', ')}\n\n`;
+      }
+      if (selectedConta) {
+        md += `> 💳 **Conta/Cartão em Análise:** ${selectedConta}\n\n`;
+      }
 
       md += `| Dimensão Financeira | Valor Liquidado (R$) | % do Desembolso Total |\n`;
       md += `|---|---|---|\n`;
@@ -162,17 +277,25 @@ export function DreCaixaGammaModal({
     // 5. AMORTIZAÇÃO DE COMPRAS ANTERIORES (> 1/N)
     if (includePastInstallments) {
       md += `## 4. Quitação de Compras Anteriores (Parcelas > 1/N Pagas no Mês)\n\n`;
-      md += `Desembolsos de caixa efetuados neste mês que **não representam compras novas**, mas sim quitação de compromissos parcelados assumidos em períodos anteriores:\n\n`;
+      const escopoAmort = selectedConta
+        ? `através da conta/cartão **${selectedConta}**`
+        : `no período filtrado`;
+      md += `Desembolsos de caixa efetuados ${escopoAmort} que **não representam compras novas**, mas sim quitação de compromissos parcelados assumidos em períodos anteriores:\n\n`;
       md += `> **Total Pago no Mês em Parcelas Passadas:** **${formatCurrencyBRL(audit.totalAmortizacaoAnterior)}**\n\n`;
 
       md += `| Fornecedor / Credor | Empresa | Categoria | Parcela | Valor Pago (R$) |\n`;
       md += `|---|---|---|---|---|\n`;
       const passadas = lancamentos
-        .filter(l => (l.sinal_valor < 0 || l.tipo === 'PAGAR') && (l.parcela_atual || 1) > 1)
+        .filter(l => {
+          if (l.sinal_valor >= 0 && l.tipo !== 'PAGAR') return false;
+          if (selectedConta && (l.conta_corrente || '').trim().toLowerCase() !== selectedConta.trim().toLowerCase()) return false;
+          if (onlyCompras && isDespesaRecorrente(l.categoria, l.conta_dre, l.fornecedor_cliente)) return false;
+          return (l.parcela_atual || 1) > 1;
+        })
         .slice(0, 15);
 
       if (passadas.length === 0) {
-        md += `| Nenhuma amortização de compras passadas registrada no período | - | - | - | - |\n`;
+        md += `| Nenhuma amortização de compras passadas registrada no escopo selecionado | - | - | - | - |\n`;
       } else {
         passadas.forEach(p => {
           md += `| ${p.fornecedor_cliente} | ${p.empresa} | ${p.categoria} | ${p.numero_parcela || `${p.parcela_atual}/${p.total_parcelas}`} | ${formatCurrencyBRL(p.valor)} |\n`;
@@ -181,73 +304,107 @@ export function DreCaixaGammaModal({
       md += `\n`;
     }
 
-    // 6. MEIOS DE PAGAMENTO & CARTÃO FLASH POR PROJETO
-    if (includeCardsAndFlash) {
-      md += `## 5. Meios de Pagamento, Cartões Corporativos & Cartão Flash\n\n`;
-      md += `### Total Comprado por Cartão Corporativo:\n\n`;
+    // 6. MEIOS DE PAGAMENTO, CARTÕES CORPORATIVOS & RAIO-X
+    if (includeCardsAndFlash || includeSelectedAccount) {
+      if (selectedConta && activeCardDetail) {
+        md += `## 5. Raio-X do Cartão / Conta em Foco: ${activeCardDetail.conta}\n\n`;
+        md += `Detalhamento exclusivo dos desembolsos liquidados através de **${activeCardDetail.conta}** (Total: **${formatCurrencyBRL(activeCardDetail.total)}** em ${activeCardDetail.count} transações):\n\n`;
 
-      md += `| Cartão / Conta | Total Liquidado (R$) | Quantidade de Transações |\n`;
-      md += `|---|---|---|\n`;
-      const cartoes = audit.porCartao.filter(c => c.isCartao || c.isFlash);
-      cartoes.forEach(c => {
-        md += `| **${c.conta}** | ${formatCurrencyBRL(c.total)} | ${c.count} |\n`;
-      });
-      md += `\n`;
+        if (activeCardDetail.projetos.length > 0) {
+          md += `### Aplicação por Projeto / Contrato (Omie):\n\n`;
+          md += `| Projeto / Contrato | Valor Liquidado (R$) | Participação (%) |\n`;
+          md += `|---|---|---|\n`;
+          activeCardDetail.projetos.slice(0, 10).forEach(p => {
+            md += `| **${p.projeto}** | ${formatCurrencyBRL(p.total)} | ${p.percentual.toFixed(1)}% |\n`;
+          });
+          md += `\n`;
+        }
 
-      md += `### Utilização do Cartão Flash por Projeto / Contrato (Omie):\n\n`;
-      md += `| Projeto / Contrato | Valor Pago via Flash (R$) | Participação (%) |\n`;
-      md += `|---|---|---|\n`;
-      audit.flashPorProjeto.forEach(p => {
-        md += `| ${p.projeto} | ${formatCurrencyBRL(p.total)} | ${p.percentual.toFixed(1)}% |\n`;
-      });
-      md += `\n`;
+        if (activeCardDetail.categorias.length > 0) {
+          md += `### Desembolsos por Categoria no Cartão:\n\n`;
+          md += `| Categoria | Valor Liquidado (R$) | Participação (%) |\n`;
+          md += `|---|---|---|\n`;
+          activeCardDetail.categorias.slice(0, 10).forEach(c => {
+            md += `| **${c.categoria}** | ${formatCurrencyBRL(c.total)} | ${c.percentual.toFixed(1)}% |\n`;
+          });
+          md += `\n`;
+        }
+      } else {
+        md += `## 5. Meios de Pagamento, Cartões Corporativos & Cartão Flash\n\n`;
+        md += `### Total Comprado por Cartão Corporativo:\n\n`;
+
+        md += `| Cartão / Conta | Total Liquidado (R$) | Quantidade de Transações |\n`;
+        md += `|---|---|---|\n`;
+        const cartoes = audit.porCartao.filter(c => c.isCartao || c.isFlash);
+        if (cartoes.length === 0) {
+          md += `| Nenhuma transação em cartão identificada no período | - | - |\n`;
+        } else {
+          cartoes.forEach(c => {
+            md += `| **${c.conta}** | ${formatCurrencyBRL(c.total)} | ${c.count} |\n`;
+          });
+        }
+        md += `\n`;
+
+        md += `### Utilização do Cartão Flash por Projeto / Contrato (Omie):\n\n`;
+        md += `| Projeto / Contrato | Valor Pago via Flash (R$) | Participação (%) |\n`;
+        md += `|---|---|---|\n`;
+        if (audit.flashPorProjeto.length === 0) {
+          md += `| Nenhuma despesa Flash vinculada a projetos no período | - | - |\n`;
+        } else {
+          audit.flashPorProjeto.forEach(p => {
+            md += `| ${p.projeto} | ${formatCurrencyBRL(p.total)} | ${p.percentual.toFixed(1)}% |\n`;
+          });
+        }
+        md += `\n`;
+      }
     }
 
-    // 7. RAIO-X DA CONTA SELECIONADA
-    if (includeSelectedAccount && audit.detalheContaSelecionada) {
-      md += `## 6. Raio-X Específico: ${audit.detalheContaSelecionada.conta}\n\n`;
-      md += `Detalhamento cruzado dos desembolsos realizados especificamente através desta conta/cartão (Total: **${formatCurrencyBRL(audit.detalheContaSelecionada.total)}**):\n\n`;
-
-      md += `### Por Projeto / Setor:\n`;
-      audit.detalheContaSelecionada.projetos.slice(0, 8).forEach(p => {
-        md += `- **${p.projeto}:** ${formatCurrencyBRL(p.total)} (${p.percentual.toFixed(1)}%)\n`;
-      });
-      md += `\n### Por Categoria:\n`;
-      audit.detalheContaSelecionada.categorias.slice(0, 8).forEach(c => {
-        md += `- **${c.categoria}:** ${formatCurrencyBRL(c.total)} (${c.percentual.toFixed(1)}%)\n`;
-      });
-      md += `\n### Principais Fornecedores / Estabelecimentos:\n`;
-      audit.detalheContaSelecionada.fornecedores.slice(0, 8).forEach(f => {
-        md += `- **${f.fornecedor}:** ${formatCurrencyBRL(f.total)} (${f.percentual.toFixed(1)}%)\n`;
-      });
-      md += `\n`;
-    }
-
-    // 8. TOP FORNECEDORES & CATEGORIAS DE COMPRAS
+    // 7. TOP FORNECEDORES & CATEGORIAS DE COMPRAS
     if (includeTopSuppliers) {
-      md += `## 7. Principais Fornecedores & Categorias de Compras\n\n`;
-      md += `### Maiores Fornecedores do Período:\n\n`;
+      const fornTitle = selectedConta
+        ? `Principais Estabelecimentos & Fornecedores: ${selectedConta}`
+        : `Principais Fornecedores & Categorias de Compras`;
+      md += `## 6. ${fornTitle}\n\n`;
 
-      md += `| Fornecedor | Total (R$) | Modalidade | Parcelas | % das Compras |\n`;
-      md += `|---|---|---|---|---|\n`;
-      audit.topFornecedoresCompras.slice(0, 10).forEach(f => {
-        md += `| **${f.fornecedor}** | ${formatCurrencyBRL(f.total)} | ${f.modalidade} | ${f.parcelasExemplo} | ${f.percentual.toFixed(1)}% |\n`;
-      });
-      md += `\n`;
+      if (selectedConta && activeCardDetail && activeCardDetail.fornecedores.length > 0) {
+        md += `### Maiores Estabelecimentos / Favorecidos no Cartão:\n\n`;
+        md += `| Estabelecimento / Favorecido | Total Pago (R$) | Transações | % do Cartão |\n`;
+        md += `|---|---|---|---|\n`;
+        activeCardDetail.fornecedores.slice(0, 10).forEach(f => {
+          md += `| **${f.fornecedor}** | ${formatCurrencyBRL(f.total)} | ${f.count} | ${f.percentual.toFixed(1)}% |\n`;
+        });
+        md += `\n`;
+      } else {
+        md += `### Maiores Fornecedores do Período:\n\n`;
+        md += `| Fornecedor | Total (R$) | Modalidade | Parcelas | % do Desembolso |\n`;
+        md += `|---|---|---|---|---|\n`;
+        audit.topFornecedoresCompras.slice(0, 10).forEach(f => {
+          md += `| **${f.fornecedor}** | ${formatCurrencyBRL(f.total)} | ${f.modalidade} | ${f.parcelasExemplo} | ${f.percentual.toFixed(1)}% |\n`;
+        });
+        md += `\n`;
 
-      md += `### Maiores Categorias de Compras:\n\n`;
-      audit.porCategoriaCompras.slice(0, 8).forEach(c => {
-        md += `- **${c.categoria}:** ${formatCurrencyBRL(c.total)} (${c.percentual.toFixed(1)}%)\n`;
-      });
-      md += `\n`;
+        md += `### Maiores Categorias de Compras:\n\n`;
+        audit.porCategoriaCompras.slice(0, 8).forEach(c => {
+          md += `- **${c.categoria}:** ${formatCurrencyBRL(c.total)} (${c.percentual.toFixed(1)}%)\n`;
+        });
+        md += `\n`;
+      }
     }
 
-    // 9. PARECER EXECUTIVO DE CFO
+    // 8. PARECER EXECUTIVO DE CFO
     if (includeCfoInsights) {
-      md += `## 8. Parecer Executivo de CFO & Recomendações Estratégicas\n\n`;
-      md += `1. **Equilíbrio de Caixa:** As compras do mês mantiveram uma proporção de ${(audit.totalCompras / (audit.totalGeralPago || 1) * 100).toFixed(1)}% sobre as saídas totais, indicando que a maior parte da estrutura operacional de desembolsos é composta por custos fixos e folha.\n`;
-      md += `2. **Gestão de Prazos:** A relação de pagamentos à vista vs. parcelados mostra prudência de liquidez, contudo recomenda-se atenção ao fluxo de amortização de compras anteriores (${formatCurrencyBRL(audit.totalAmortizacaoAnterior)}) para garantir folga no capital de giro.\n`;
-      md += `3. **Governança de Cartões e Flash:** Os gastos em cartões corporativos e no benefício Flash encontram-se 100% atrelados aos contratos operacionais (projetos), garantindo rastreabilidade e segurança fiscal.\n\n`;
+      md += `## 7. Parecer Executivo de CFO & Recomendações Estratégicas\n\n`;
+      if (onlyCompras) {
+        md += `1. **Auditoria de Compras:** Compras e aquisições representam **${formatCurrencyBRL(audit.totalCompras)}** no escopo analisado. O acompanhamento contínuo dos gastos operacionais e aquisições assegura contenção de custos e alta rastreabilidade.\n`;
+      } else {
+        md += `1. **Equilíbrio de Caixa:** As compras do mês mantiveram uma proporção de ${(audit.totalCompras / (audit.totalGeralPago || 1) * 100).toFixed(1)}% sobre as saídas totais, indicando que a maior parte da estrutura operacional de desembolsos é composta por custos fixos e folha.\n`;
+      }
+      md += `2. **Gestão de Prazos e Alavancagem:** A relação entre compras à vista (${formatCurrencyBRL(audit.totalAVista)}) e parceladas preserva liquidez imediata. A amortização de períodos anteriores (${formatCurrencyBRL(audit.totalAmortizacaoAnterior)}) deve ser acompanhada para evitar pressão de capital de giro.\n`;
+      if (selectedConta) {
+        md += `3. **Governança do Cartão/Conta (${selectedConta}):** As movimentações em **${selectedConta}** foram devidamente segregadas por contratos e centros de custo no Omie ERP, garantindo transparência fiscal perante a diretoria.\n\n`;
+      } else {
+        md += `3. **Governança de Cartões e Flash:** Os gastos em cartões corporativos e no benefício Flash encontram-se atrelados aos contratos operacionais (projetos), garantindo rastreabilidade e segurança fiscal.\n\n`;
+      }
     }
 
     return md;
@@ -258,6 +415,10 @@ export function DreCaixaGammaModal({
     defaultTitle,
     empresaLabel,
     periodoLabel,
+    selectedConta,
+    filters,
+    onlyCompras,
+    activeCardDetail,
     includeCover,
     includeSummary,
     includeCompanyBreakdown,
@@ -411,6 +572,51 @@ export function DreCaixaGammaModal({
           
           {activeTab === 'builder' && (
             <div className="space-y-5 animate-fadeIn">
+
+              {/* Filtros em Vigor Aplicados na Apresentação */}
+              <div className="p-3.5 bg-slate-100/80 border border-slate-200 rounded-2xl flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-extrabold text-slate-700 flex items-center gap-1.5 mr-1">
+                  <Filter size={14} className="text-emerald-600" />
+                  Filtros Ativos nos Slides:
+                </span>
+                <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 font-semibold shadow-2xs">
+                  🏢 {filters?.empresas && filters.empresas.length > 0 ? filters.empresas.join(', ') : empresaLabel}
+                </span>
+                <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 font-semibold shadow-2xs">
+                  📅 {filters?.periodos && filters.periodos.length > 0 ? filters.periodos.join(', ') : periodoLabel}
+                </span>
+                {filters?.projetos && filters.projetos.length > 0 && (
+                  <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 font-bold shadow-2xs">
+                    📌 Projetos: {filters.projetos.join(', ')}
+                  </span>
+                )}
+                {filters?.categorias && filters.categorias.length > 0 && (
+                  <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 font-bold shadow-2xs">
+                    🏷️ Categorias: {filters.categorias.join(', ')}
+                  </span>
+                )}
+                {filters?.fornecedores && filters.fornecedores.length > 0 && (
+                  <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 font-bold shadow-2xs">
+                    🤝 Fornecedores: {filters.fornecedores.join(', ')}
+                  </span>
+                )}
+                {selectedConta && (
+                  <span className="px-2.5 py-1 bg-teal-50 border border-teal-200 rounded-lg text-teal-800 font-bold shadow-2xs">
+                    💳 Cartão/Conta: {selectedConta}
+                  </span>
+                )}
+                {onlyCompras && (
+                  <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 font-bold shadow-2xs">
+                    🛒 Somente Compras (Sem Recorrentes)
+                  </span>
+                )}
+                {filters?.tipoPagamento && filters.tipoPagamento !== 'TODOS' && (
+                  <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-800 font-bold shadow-2xs">
+                    ⚡ {filters.tipoPagamento === 'A_VISTA' ? 'À Vista (1/1)' : 'Parcelado'}
+                  </span>
+                )}
+              </div>
+
               {/* Título da Apresentação */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -533,9 +739,12 @@ export function DreCaixaGammaModal({
                     </div>
                   </div>
 
-                  {/* 6. Cartões Corporativos & Flash por Projeto */}
+                  {/* 6. Cartões Corporativos & Flash por Projeto OU Raio-X em Foco */}
                   <div
-                    onClick={() => setIncludeCardsAndFlash(!includeCardsAndFlash)}
+                    onClick={() => {
+                      setIncludeCardsAndFlash(!includeCardsAndFlash);
+                      if (selectedConta) setIncludeSelectedAccount(!includeCardsAndFlash);
+                    }}
                     className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
                       includeCardsAndFlash ? 'bg-emerald-50/70 border-emerald-300 shadow-xs' : 'bg-white border-slate-200 hover:bg-slate-50'
                     }`}
@@ -545,37 +754,17 @@ export function DreCaixaGammaModal({
                     </div>
                     <div>
                       <span className="font-extrabold text-xs text-slate-900 block">
-                        6. Cartões Corporativos & Flash por Projeto
+                        {selectedConta ? `6. Raio-X em Foco: ${selectedConta}` : '6. Cartões Corporativos & Flash por Projeto'}
                       </span>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Gastos por cartão e detalhamento do Cartão Flash por Contrato/Projeto (Santos, SmartSampa, etc.).
+                        {selectedConta
+                          ? 'Detalhamento por Projeto, Categoria e Fornecedores específico deste cartão/conta filtrado.'
+                          : 'Gastos por cartão e detalhamento do Cartão Flash por Contrato/Projeto (Santos, SmartSampa, etc.).'}
                       </p>
                     </div>
                   </div>
 
-                  {/* 7. Raio-X da Conta Selecionada */}
-                  {selectedConta && (
-                    <div
-                      onClick={() => setIncludeSelectedAccount(!includeSelectedAccount)}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
-                        includeSelectedAccount ? 'bg-emerald-50/70 border-emerald-300 shadow-xs' : 'bg-white border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="mt-0.5 text-emerald-600">
-                        {includeSelectedAccount ? <CheckSquare size={18} /> : <Square size={18} className="text-slate-400" />}
-                      </div>
-                      <div>
-                        <span className="font-extrabold text-xs text-slate-900 block">
-                          7. Raio-X: {selectedConta}
-                        </span>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Amostra cruzada de Projetos, Categorias e Fornecedores desta conta/cartão em foco.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 8. Top Fornecedores e Categorias */}
+                  {/* 7. Top Fornecedores e Categorias */}
                   <div
                     onClick={() => setIncludeTopSuppliers(!includeTopSuppliers)}
                     className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
@@ -587,15 +776,17 @@ export function DreCaixaGammaModal({
                     </div>
                     <div>
                       <span className="font-extrabold text-xs text-slate-900 block">
-                        {selectedConta ? '8.' : '7.'} Principais Fornecedores & Categorias
+                        {selectedConta ? `7. Maiores Estabelecimentos: ${selectedConta}` : '7. Principais Fornecedores & Categorias'}
                       </span>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Ranking dos maiores credores com modalidade e principais tipos de compras.
+                        {selectedConta
+                          ? `Ranking dos maiores estabelecimentos e credores da conta/cartão ${selectedConta}.`
+                          : 'Ranking dos maiores credores com modalidade e principais tipos de compras.'}
                       </p>
                     </div>
                   </div>
 
-                  {/* 9. Parecer CFO */}
+                  {/* 8. Parecer CFO */}
                   <div
                     onClick={() => setIncludeCfoInsights(!includeCfoInsights)}
                     className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
@@ -607,7 +798,7 @@ export function DreCaixaGammaModal({
                     </div>
                     <div>
                       <span className="font-extrabold text-xs text-slate-900 block">
-                        {selectedConta ? '9.' : '8.'} Parecer Executivo de CFO
+                        8. Parecer Executivo de CFO
                       </span>
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         Recomendações estratégicas de liquidez, governança e prazos médios de pagamento.
