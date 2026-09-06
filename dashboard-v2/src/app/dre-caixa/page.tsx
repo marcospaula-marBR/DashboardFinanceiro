@@ -83,10 +83,35 @@ export default function DreCaixaPage() {
     loadData();
   }, [loadData]);
 
-  // 2. Opções disponíveis de filtros
+  // 2. Opções disponíveis de filtros (Filtro Inteligente: reativo à empresa selecionada)
   const availableOptions = useMemo(() => {
-    return DreCaixaService.extractFilterOptions(allLancamentos);
-  }, [allLancamentos]);
+    return DreCaixaService.extractFilterOptions(allLancamentos, filters.empresas);
+  }, [allLancamentos, filters.empresas]);
+
+  // Sanitização de seleções órfãs ao alternar empresa (evita filtros inválidos e tela zerada)
+  useEffect(() => {
+    if (filters.empresas.length === 0) return;
+
+    const validProjetos = new Set(availableOptions.projetos);
+    const validCategorias = new Set(availableOptions.categorias);
+    const validFornecedores = new Set(availableOptions.fornecedores);
+    const validContas = new Set(availableOptions.contasCorrentes);
+
+    const hasInvalidProjeto = filters.projetos.some(p => !validProjetos.has(p));
+    const hasInvalidCategoria = filters.categorias.some(c => !validCategorias.has(c));
+    const hasInvalidFornecedor = filters.fornecedores.some(f => !validFornecedores.has(f));
+    const hasInvalidConta = filters.contasCorrentes.some(c => !validContas.has(c));
+
+    if (hasInvalidProjeto || hasInvalidCategoria || hasInvalidFornecedor || hasInvalidConta) {
+      setFilters(prev => ({
+        ...prev,
+        projetos: prev.projetos.filter(p => validProjetos.has(p)),
+        categorias: prev.categorias.filter(c => validCategorias.has(c)),
+        fornecedores: prev.fornecedores.filter(f => validFornecedores.has(f)),
+        contasCorrentes: prev.contasCorrentes.filter(c => validContas.has(c))
+      }));
+    }
+  }, [availableOptions, filters.empresas, filters.projetos, filters.categorias, filters.fornecedores, filters.contasCorrentes]);
 
   // 3. Aplicação dos filtros
   const filteredLancamentos = useMemo(() => {

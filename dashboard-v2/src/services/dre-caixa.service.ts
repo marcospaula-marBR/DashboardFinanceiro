@@ -441,36 +441,56 @@ export class DreCaixaService {
   }
 
   /**
-   * Extrai opções de filtros dinamicamente
+   * Extrai opções de filtros dinamicamente com suporte a filtro inteligente por empresa
    */
-  static extractFilterOptions(lancamentos: DreCaixaLancamento[]) {
+  static extractFilterOptions(
+    lancamentos: DreCaixaLancamento[],
+    selectedEmpresas: string[] = []
+  ) {
     const empresasSet = new Set<string>();
+    const allPeriodosMap = new Map<string, number>();
     const periodosMap = new Map<string, number>();
     const projetosSet = new Set<string>();
     const categoriasSet = new Set<string>();
     const fornecedoresSet = new Set<string>();
     const contasCorrentesSet = new Set<string>();
 
+    const lowerEmpresas = (selectedEmpresas || []).map(e => e.trim().toLowerCase());
+    const hasEmpresaFilter = lowerEmpresas.length > 0;
+
     lancamentos.forEach(l => {
+      // 1. Empresas e períodos globais sempre são extraídos de todos os lançamentos
       if (l.empresa) empresasSet.add(l.empresa);
-      if (l.periodo && l.periodo !== 'N/A') periodosMap.set(l.periodo, l.periodoNum);
-      if (l.projeto) projetosSet.add(l.projeto);
-      if (l.categoria) categoriasSet.add(l.categoria);
-      if (l.fornecedor_cliente) fornecedoresSet.add(l.fornecedor_cliente);
-      if (l.conta_corrente) contasCorrentesSet.add(l.conta_corrente);
+      if (l.periodo && l.periodo !== 'N/A') allPeriodosMap.set(l.periodo, l.periodoNum);
+
+      // 2. Filtro inteligente: opções de Projetos, Categorias, Favorecidos e Contas
+      // pertencem estritamente à(s) empresa(s) filtrada(s)
+      const itemEmp = (l.empresa || '').trim().toLowerCase();
+      const matchesEmpresa = !hasEmpresaFilter || lowerEmpresas.includes(itemEmp);
+
+      if (matchesEmpresa) {
+        if (l.periodo && l.periodo !== 'N/A') periodosMap.set(l.periodo, l.periodoNum);
+        if (l.projeto) projetosSet.add(l.projeto);
+        if (l.categoria) categoriasSet.add(l.categoria);
+        if (l.fornecedor_cliente) fornecedoresSet.add(l.fornecedor_cliente);
+        if (l.conta_corrente) contasCorrentesSet.add(l.conta_corrente);
+      }
     });
 
-    const periodosSorted = Array.from(periodosMap.entries())
-      .sort((a, b) => b[1] - a[1]) // mais recentes primeiro por padrão
+    // Se houver períodos na empresa filtrada, usa eles ordenados (mais recentes primeiro)
+    const activePeriodosMap = periodosMap.size > 0 ? periodosMap : allPeriodosMap;
+    const periodosSorted = Array.from(activePeriodosMap.entries())
+      .sort((a, b) => b[1] - a[1]) // mais recentes primeiro
       .map(entry => entry[0]);
 
     return {
-      empresas: Array.from(empresasSet).sort(),
+      empresas: Array.from(empresasSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
       periodos: periodosSorted,
-      projetos: Array.from(projetosSet).sort(),
-      categorias: Array.from(categoriasSet).sort(),
-      fornecedores: Array.from(fornecedoresSet).sort(),
-      contasCorrentes: Array.from(contasCorrentesSet).sort()
+      allPeriodos: Array.from(allPeriodosMap.entries()).sort((a, b) => b[1] - a[1]).map(entry => entry[0]),
+      projetos: Array.from(projetosSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      categorias: Array.from(categoriasSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      fornecedores: Array.from(fornecedoresSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      contasCorrentes: Array.from(contasCorrentesSet).sort((a, b) => a.localeCompare(b, 'pt-BR'))
     };
   }
 

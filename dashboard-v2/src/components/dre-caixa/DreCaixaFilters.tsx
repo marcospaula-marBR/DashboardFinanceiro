@@ -124,20 +124,26 @@ function SearchableMultiSelect({
 
           {/* Ações Rápidas */}
           <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-slate-100 text-[11px]">
-            <button
-              type="button"
-              onClick={selectAll}
-              className="text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer"
-            >
-              Marcar Todos
-            </button>
-            <button
-              type="button"
-              onClick={clearAll}
-              className="text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
-            >
-              Limpar
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={selectAll}
+                className="text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer"
+              >
+                Marcar Todos
+              </button>
+              <span className="text-slate-300">|</span>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
+              >
+                Limpar
+              </button>
+            </div>
+            <span className="text-[10px] text-slate-400 font-bold">
+              {filteredOptions.length} de {options.length}
+            </span>
           </div>
 
           {/* Lista de Opções com suporte a Ocultar */}
@@ -305,10 +311,21 @@ export function DreCaixaFiltersBar({
             <Filter size={15} />
           </div>
           <div>
-            <h2 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight uppercase">
-              Filtros Multidimensionais
-            </h2>
-            <p className="text-[11px] text-slate-500">Selecione a empresa e período para apuração do caixa</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight uppercase">
+                Filtros Multidimensionais
+              </h2>
+              {filters.empresas.length > 0 && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                  ⚡ Filtro Inteligente: {filters.empresas.join(', ')}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500">
+              {filters.empresas.length > 0
+                ? `Opções de setores, categorias e favorecidos calibradas para ${filters.empresas.join(', ')}`
+                : 'Selecione a empresa e período para apuração do caixa'}
+            </p>
           </div>
           {activeFiltersCount > 0 && (
             <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
