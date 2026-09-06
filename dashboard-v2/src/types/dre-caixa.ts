@@ -15,6 +15,10 @@ export interface DreCaixaLancamento {
   fornecedor_cliente: string;
   conta_corrente: string;
   numero_documento?: string | null;
+  numero_parcela?: string | null; // ex: "1/6", "001/006"
+  parcela_atual?: number;
+  total_parcelas?: number;
+  tipo_pagamento: 'A_VISTA' | 'PARCELADO';
 }
 
 export interface DreCaixaFilters {
@@ -25,6 +29,7 @@ export interface DreCaixaFilters {
   fornecedores: string[];
   contasCorrentes: string[];
   search: string;
+  tipoPagamento?: 'TODOS' | 'A_VISTA' | 'PARCELADO';
   ocultarCategorias?: string[];
   ocultarProjetos?: string[];
   ocultarFornecedores?: string[];

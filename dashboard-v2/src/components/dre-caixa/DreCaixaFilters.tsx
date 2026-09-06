@@ -217,6 +217,11 @@ interface DreCaixaFiltersProps {
     categorias: string[];
     fornecedores: string[];
     contasCorrentes: string[];
+    counts?: {
+      aVista: number;
+      parcelado: number;
+      total: number;
+    };
   };
   filters: DreCaixaFilters;
   onChangeFilters: (newFilters: DreCaixaFilters) => void;
@@ -278,7 +283,8 @@ export function DreCaixaFiltersBar({
     filters.categorias.length +
     filters.fornecedores.length +
     filters.contasCorrentes.length +
-    (filters.search ? 1 : 0);
+    (filters.search ? 1 : 0) +
+    (filters.tipoPagamento && filters.tipoPagamento !== 'TODOS' ? 1 : 0);
 
   // Seleção rápida de Empresa (Pill Selector de 1 clique)
   const handleQuickEmpresa = (emp: string | null) => {
@@ -298,8 +304,14 @@ export function DreCaixaFiltersBar({
     }
   };
 
+  // Seleção rápida de Modalidade (À Vista vs Parcelado)
+  const handleQuickTipoPagamento = (tipo: 'TODOS' | 'A_VISTA' | 'PARCELADO') => {
+    onChangeFilters({ ...filters, tipoPagamento: tipo });
+  };
+
   const isAllEmpresas = filters.empresas.length === 0;
   const isAllPeriodos = filters.periodos.length === 0;
+  const currentTipoPagamento = filters.tipoPagamento || 'TODOS';
 
   return (
     <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 mb-6 shadow-sm">
@@ -426,6 +438,48 @@ export function DreCaixaFiltersBar({
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        {/* 3. SELETOR RÁPIDO DE MODALIDADE (À VISTA OU PARCELADO) */}
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+            <CreditCard size={13} className="text-slate-400" /> Modalidade:
+          </span>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            <button
+              type="button"
+              onClick={() => handleQuickTipoPagamento('TODOS')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+                currentTipoPagamento === 'TODOS'
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              🔄 Todos os Pagamentos {availableOptions.counts?.total !== undefined ? `(${availableOptions.counts.total})` : ''}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickTipoPagamento('A_VISTA')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+                currentTipoPagamento === 'A_VISTA'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              ⚡ À Vista (Único) {availableOptions.counts?.aVista !== undefined ? `(${availableOptions.counts.aVista})` : ''}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickTipoPagamento('PARCELADO')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+                currentTipoPagamento === 'PARCELADO'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              💳 Compras Parceladas {availableOptions.counts?.parcelado !== undefined ? `(${availableOptions.counts.parcelado})` : ''}
+            </button>
           </div>
         </div>
 

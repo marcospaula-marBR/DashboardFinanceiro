@@ -227,6 +227,7 @@ export class DreCaixaService {
 
         const raw = item.raw_data || {};
         const rawDet = raw.detalhes || {};
+        const rawCab = raw.cabecalho || {};
         const catCodigo = String(item.categoria_codigo || rawDet.cCodCateg || '').trim();
         const catNome = String(item.categoria_nome || '').trim();
         const catNomeLower = catNome.toLowerCase();
@@ -413,6 +414,57 @@ export class DreCaixaService {
         // Categoria
         const categoria = (item.categoria_nome || 'Despesas Gerais').trim();
 
+        // Resolução de Parcelas e Modalidade (À Vista vs Parcelado)
+        const rawParcelStr = String(
+          raw.numero_parcela ||
+          rawDet.cNumParcela ||
+          rawCab.cNumParcela ||
+          rawDet.numero_parcela ||
+          rawCab.numero_parcela ||
+          ''
+        ).trim();
+
+        let parcelaAtual = 1;
+        let totalParcelas = 1;
+        let tipoPagamento: 'A_VISTA' | 'PARCELADO' = 'A_VISTA';
+        let numeroParcela: string | null = null;
+
+        if (rawParcelStr) {
+          const match = rawParcelStr.match(/(\d+)\s*[\/\-de]\s*(\d+)/i);
+          if (match) {
+            parcelaAtual = parseInt(match[1], 10) || 1;
+            totalParcelas = parseInt(match[2], 10) || 1;
+          } else {
+            const single = parseInt(rawParcelStr, 10);
+            if (!isNaN(single)) parcelaAtual = single;
+          }
+
+          if (totalParcelas > 1) {
+            tipoPagamento = 'PARCELADO';
+            numeroParcela = `${parcelaAtual}/${totalParcelas}`;
+          } else {
+            tipoPagamento = 'A_VISTA';
+            numeroParcela = '1/1';
+          }
+        } else {
+          // Checar se no documento ou observação há menção explícita de parcela (ex: "Parc 2/3")
+          const docStr = String(item.numero_documento || rawDet.cNumDocFiscal || '').trim();
+          const obsStr = String(rawDet.cObservacao || raw.observacao || '').trim();
+          const docMatch = (docStr + ' ' + obsStr).match(/parc(?:ela)?\.?\s*(\d+)\s*[\/\-]\s*(\d+)/i);
+          if (docMatch) {
+            parcelaAtual = parseInt(docMatch[1], 10) || 1;
+            totalParcelas = parseInt(docMatch[2], 10) || 1;
+            if (totalParcelas > 1) {
+              tipoPagamento = 'PARCELADO';
+              numeroParcela = `${parcelaAtual}/${totalParcelas}`;
+            }
+          }
+        }
+
+        if (!numeroParcela) {
+          numeroParcela = tipoPagamento === 'PARCELADO' ? `${parcelaAtual}/${totalParcelas}` : 'À vista';
+        }
+
         lancamentos.push({
           id: item.id,
           empresa: normalizeEmpresa(item.empresa_nome),
@@ -429,7 +481,11 @@ export class DreCaixaService {
           conta_dre: item.dre_conta_nome || undefined,
           fornecedor_cliente: fornFinal,
           conta_corrente: contaCorrente,
-          numero_documento: item.numero_documento || null
+          numero_documento: item.numero_documento || null,
+          numero_parcela: numeroParcela,
+          parcela_atual: parcelaAtual,
+          total_parcelas: totalParcelas,
+          tipo_pagamento: tipoPagamento
         });
       });
 
@@ -458,6 +514,9 @@ export class DreCaixaService {
     const lowerEmpresas = (selectedEmpresas || []).map(e => e.trim().toLowerCase());
     const hasEmpresaFilter = lowerEmpresas.length > 0;
 
+    let countAVista = 0;
+    let countParcelado = 0;
+
     lancamentos.forEach(l => {
       // 1. Empresas e períodos globais sempre são extraídos de todos os lançamentos
       if (l.empresa) empresasSet.add(l.empresa);
@@ -469,6 +528,11 @@ export class DreCaixaService {
       const matchesEmpresa = !hasEmpresaFilter || lowerEmpresas.includes(itemEmp);
 
       if (matchesEmpresa) {
+        if (l.tipo_pagamento === 'PARCELADO') {
+          countParcelado++;
+        } else {
+          countAVista++;
+        }
         if (l.periodo && l.periodo !== 'N/A') periodosMap.set(l.periodo, l.periodoNum);
         if (l.projeto) projetosSet.add(l.projeto);
         if (l.categoria) categoriasSet.add(l.categoria);
@@ -490,7 +554,12 @@ export class DreCaixaService {
       projetos: Array.from(projetosSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
       categorias: Array.from(categoriasSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
       fornecedores: Array.from(fornecedoresSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
-      contasCorrentes: Array.from(contasCorrentesSet).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      contasCorrentes: Array.from(contasCorrentesSet).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      counts: {
+        aVista: countAVista,
+        parcelado: countParcelado,
+        total: countAVista + countParcelado
+      }
     };
   }
 
@@ -525,29 +594,35 @@ export class DreCaixaService {
         if (!lowerEmpresas.includes(itemEmp)) return false;
       }
 
-      // 2. Filtro de Período
+      // 2. Filtro de Modalidade (À Vista vs Parcelado)
+      if (filters.tipoPagamento && filters.tipoPagamento !== 'TODOS') {
+        if (l.tipo_pagamento !== filters.tipoPagamento) return false;
+      }
+
+      // 3. Filtro de Período
       if (filterPeriodos.length > 0 && !filterPeriodos.includes(l.periodo)) return false;
 
-      // 3. Filtro de Projeto / Setor
+      // 4. Filtro de Projeto / Setor
       if (filterProjetos.length > 0 && !filterProjetos.includes(l.projeto)) return false;
 
-      // 4. Filtro de Categoria
+      // 5. Filtro de Categoria
       if (filterCategorias.length > 0 && !filterCategorias.includes(l.categoria)) return false;
 
-      // 5. Filtro de Fornecedor / Cliente
+      // 6. Filtro de Fornecedor / Cliente
       if (filterFornecedores.length > 0 && !filterFornecedores.includes(l.fornecedor_cliente)) return false;
 
-      // 6. Filtro de Conta Corrente
+      // 7. Filtro de Conta Corrente
       if (filterContas.length > 0 && !filterContas.includes(l.conta_corrente)) return false;
 
-      // 7. Busca Textual Livre
+      // 8. Busca Textual Livre
       if (searchQuery) {
         const matchForn = l.fornecedor_cliente.toLowerCase().includes(searchQuery);
         const matchCat = l.categoria.toLowerCase().includes(searchQuery);
         const matchProj = l.projeto.toLowerCase().includes(searchQuery);
         const matchConta = l.conta_corrente.toLowerCase().includes(searchQuery);
         const matchDoc = l.numero_documento ? l.numero_documento.toLowerCase().includes(searchQuery) : false;
-        if (!matchForn && !matchCat && !matchProj && !matchConta && !matchDoc) return false;
+        const matchParc = l.numero_parcela ? l.numero_parcela.toLowerCase().includes(searchQuery) : false;
+        if (!matchForn && !matchCat && !matchProj && !matchConta && !matchDoc && !matchParc) return false;
       }
 
       return true;

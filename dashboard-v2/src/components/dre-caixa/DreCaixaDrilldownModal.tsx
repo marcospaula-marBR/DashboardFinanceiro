@@ -16,7 +16,8 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownRight,
-  Award
+  Award,
+  CreditCard
 } from 'lucide-react';
 import { DreCaixaLancamento } from '@/types/dre-caixa';
 import { formatCurrencyBRL } from '@/services/dre-caixa.service';
@@ -52,13 +53,15 @@ export function DreCaixaDrilldownModal({
 }: DreCaixaDrilldownModalProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth || 'todos');
+  const [selectedModalidade, setSelectedModalidade] = useState<'TODOS' | 'A_VISTA' | 'PARCELADO'>('TODOS');
   const [activeTab, setActiveTab] = useState<'ranking' | 'extrato'>('ranking');
   const [expandedFavorecidos, setExpandedFavorecidos] = useState<Record<string, boolean>>({});
 
-  // Reset month when initialMonth changes
+  // Reset month and modalidade when initialMonth or categoryName changes
   React.useEffect(() => {
     setSelectedMonth(initialMonth || 'todos');
-  }, [initialMonth]);
+    setSelectedModalidade('TODOS');
+  }, [initialMonth, categoryName]);
 
   // 1. Identificar se o filtro é uma sub-rubrica específica ou um macro-grupo
   const categoryLower = (categoryName || '').toLowerCase().trim();
@@ -79,27 +82,29 @@ export function DreCaixaDrilldownModal({
     return l.categoria.toLowerCase().trim() === categoryLower;
   });
 
-  // 3. Filtrar por mês (se selecionado)
-  const monthFilteredItems = baseCategoryItems.filter(item => {
-    if (!selectedMonth || selectedMonth === 'todos') return true;
-    return item.periodo === selectedMonth;
+  // 3. Filtrar por mês e por modalidade (À Vista vs Parcelado)
+  const scopedFilteredItems = baseCategoryItems.filter(item => {
+    if (selectedMonth && selectedMonth !== 'todos' && item.periodo !== selectedMonth) return false;
+    if (selectedModalidade !== 'TODOS' && item.tipo_pagamento !== selectedModalidade) return false;
+    return true;
   });
 
   // 4. Filtrar por termo de busca
   const term = searchTerm.toLowerCase().trim();
-  const searchFilteredItems = monthFilteredItems.filter(item => {
+  const searchFilteredItems = scopedFilteredItems.filter(item => {
     if (!term) return true;
     return (
       (item.fornecedor_cliente && item.fornecedor_cliente.toLowerCase().includes(term)) ||
       (item.projeto && item.projeto.toLowerCase().includes(term)) ||
       (item.conta_corrente && item.conta_corrente.toLowerCase().includes(term)) ||
       (item.categoria && item.categoria.toLowerCase().includes(term)) ||
-      (item.numero_documento && item.numero_documento.toLowerCase().includes(term))
+      (item.numero_documento && item.numero_documento.toLowerCase().includes(term)) ||
+      (item.numero_parcela && item.numero_parcela.toLowerCase().includes(term))
     );
   });
 
   // 5. Agrupamento e Ranking dos Favorecidos
-  const totalGeralRubrica = monthFilteredItems.reduce((acc, curr) => acc + curr.valor, 0);
+  const totalGeralRubrica = scopedFilteredItems.reduce((acc, curr) => acc + curr.valor, 0);
 
   const favorecidosRanking: FavorecidoGroup[] = useMemo(() => {
     const map = new Map<string, {
@@ -185,7 +190,7 @@ export function DreCaixaDrilldownModal({
   };
 
   const handleExportExtrato = () => {
-    const headers = ['Data Pagamento', 'Empresa', 'Setor (Projeto)', 'Categoria', 'Favorecido / Fornecedor', 'Conta Corrente', 'Documento', 'Tipo', 'Valor (R$)'];
+    const headers = ['Data Pagamento', 'Empresa', 'Setor (Projeto)', 'Categoria', 'Favorecido / Fornecedor', 'Conta Corrente', 'Documento', 'Parcela', 'Modalidade', 'Tipo', 'Valor (R$)'];
     const rows = searchFilteredItems.map(item => [
       item.data_pagamento,
       item.empresa,
@@ -194,6 +199,8 @@ export function DreCaixaDrilldownModal({
       `"${item.fornecedor_cliente}"`,
       `"${item.conta_corrente}"`,
       item.numero_documento || '',
+      item.numero_parcela || (item.tipo_pagamento === 'PARCELADO' ? `${item.parcela_atual}/${item.total_parcelas}` : '1/1'),
+      item.tipo_pagamento === 'PARCELADO' ? 'Parcelado' : 'À Vista',
       item.tipo,
       item.valor.toFixed(2)
     ]);
@@ -261,38 +268,77 @@ export function DreCaixaDrilldownModal({
           </div>
         </div>
 
-        {/* Filtros Rápidos de Mês (Pills dentro do Modal) */}
-        {availableMonths.length > 0 && (
-          <div className="px-4 py-2.5 bg-slate-100/70 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
-            <span className="text-[10px] uppercase font-bold text-slate-500 shrink-0 mr-1 flex items-center gap-1">
-              <Calendar size={12} />
-              Mês:
-            </span>
-            <button
-              onClick={() => setSelectedMonth('todos')}
-              className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 ${
-                selectedMonth === 'todos'
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
-              }`}
-            >
-              Acumulado (Todos)
-            </button>
-            {availableMonths.map(mes => (
+        {/* Filtros Rápidos de Mês & Modalidade (Pills dentro do Modal) */}
+        <div className="px-4 py-2.5 bg-slate-100/70 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto custom-scrollbar flex-wrap sm:flex-nowrap">
+          {availableMonths.length > 0 && (
+            <>
+              <span className="text-[10px] uppercase font-bold text-slate-500 shrink-0 mr-1 flex items-center gap-1">
+                <Calendar size={12} />
+                Mês:
+              </span>
               <button
-                key={mes}
-                onClick={() => setSelectedMonth(mes)}
+                onClick={() => setSelectedMonth('todos')}
                 className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 ${
-                  selectedMonth === mes
-                    ? 'bg-emerald-600 text-white shadow-sm'
+                  selectedMonth === 'todos'
+                    ? 'bg-slate-900 text-white shadow-sm'
                     : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
                 }`}
               >
-                {mes}
+                Acumulado (Todos)
               </button>
-            ))}
-          </div>
-        )}
+              {availableMonths.map(mes => (
+                <button
+                  key={mes}
+                  onClick={() => setSelectedMonth(mes)}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 ${
+                    selectedMonth === mes
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
+                  }`}
+                >
+                  {mes}
+                </button>
+              ))}
+            </>
+          )}
+
+          <span className="text-slate-300 mx-1 hidden sm:inline">|</span>
+
+          <span className="text-[10px] uppercase font-bold text-slate-500 shrink-0 mr-1 flex items-center gap-1">
+            <CreditCard size={12} />
+            Modalidade:
+          </span>
+          <button
+            onClick={() => setSelectedModalidade('TODOS')}
+            className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer ${
+              selectedModalidade === 'TODOS'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setSelectedModalidade('A_VISTA')}
+            className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer ${
+              selectedModalidade === 'A_VISTA'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
+            }`}
+          >
+            ⚡ À Vista
+          </button>
+          <button
+            onClick={() => setSelectedModalidade('PARCELADO')}
+            className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer ${
+              selectedModalidade === 'PARCELADO'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
+            }`}
+          >
+            💳 Parcelado
+          </button>
+        </div>
 
         {/* KPI Cards de Resumo Executivo */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 sm:p-4 bg-slate-50/50 border-b border-slate-200">
@@ -477,6 +523,7 @@ export function DreCaixaDrilldownModal({
                                 <th className="py-1.5 px-2">Setor (Projeto)</th>
                                 <th className="py-1.5 px-2">Conta Bancária</th>
                                 <th className="py-1.5 px-2">Documento</th>
+                                <th className="py-1.5 px-2 text-center">Parcela</th>
                                 <th className="py-1.5 px-2 text-right">Valor Líquido</th>
                               </tr>
                             </thead>
@@ -499,6 +546,17 @@ export function DreCaixaDrilldownModal({
                                   </td>
                                   <td className="py-1.5 px-2 font-mono text-[10px] text-slate-400">
                                     {subItem.numero_documento || '-'}
+                                  </td>
+                                  <td className="py-1.5 px-2 text-center whitespace-nowrap">
+                                    {subItem.tipo_pagamento === 'PARCELADO' ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono font-bold text-[9px]">
+                                        💳 {subItem.numero_parcela || `${subItem.parcela_atual}/${subItem.total_parcelas}`}
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-mono text-[9px]">
+                                        À vista
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="py-1.5 px-2 text-right font-mono font-bold text-[11px] text-slate-900 whitespace-nowrap">
                                     {formatCurrencyBRL(subItem.valor)}
@@ -526,6 +584,7 @@ export function DreCaixaDrilldownModal({
                     <th className="py-2.5 px-3">Favorecido / Fornecedor</th>
                     <th className="py-2.5 px-3">Conta Bancária</th>
                     <th className="py-2.5 px-3">Documento</th>
+                    <th className="py-2.5 px-3 text-center">Parcela</th>
                     <th className="py-2.5 px-3 text-right">Valor Líquido</th>
                   </tr>
                 </thead>
@@ -551,6 +610,17 @@ export function DreCaixaDrilldownModal({
                       </td>
                       <td className="py-2 px-3 font-mono text-[10px] text-slate-500">
                         {item.numero_documento || '-'}
+                      </td>
+                      <td className="py-2 px-3 text-center whitespace-nowrap">
+                        {item.tipo_pagamento === 'PARCELADO' ? (
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono font-bold text-[10px]">
+                            💳 {item.numero_parcela || `${item.parcela_atual}/${item.total_parcelas}`}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-mono text-[10px]">
+                            À vista
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 px-3 text-right font-mono font-bold whitespace-nowrap">
                         <span className={item.tipo === 'RECEBER' ? 'text-emerald-700' : 'text-slate-900'}>

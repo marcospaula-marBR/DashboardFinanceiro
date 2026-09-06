@@ -19,13 +19,15 @@ interface DreCaixaKpisProps {
   isMeetingMode: boolean;
   periodoLabel?: string;
   empresaLabel?: string;
+  tipoPagamentoLabel?: string;
 }
 
 export function DreCaixaKpis({
   summary,
   isMeetingMode,
   periodoLabel = 'Acumulado',
-  empresaLabel = 'Todas as Empresas'
+  empresaLabel = 'Todas as Empresas',
+  tipoPagamentoLabel
 }: DreCaixaKpisProps) {
   const isPositive = summary.resultadoLiquido >= 0;
 
@@ -34,7 +36,7 @@ export function DreCaixaKpis({
       
       {/* Mini Banner de Contexto dos Números */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-500 font-medium">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="font-bold text-slate-700">Base de Cálculo:</span>
           <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-bold">
             {empresaLabel}
@@ -44,6 +46,14 @@ export function DreCaixaKpis({
             <Calendar size={12} className="text-emerald-600" />
             {periodoLabel}
           </span>
+          {tipoPagamentoLabel && (
+            <>
+              <span className="text-slate-300">•</span>
+              <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 font-bold">
+                💳 {tipoPagamentoLabel}
+              </span>
+            </>
+          )}
         </div>
         <div className="text-[11px] text-slate-400">
           Regime de Caixa Efetivo (Valores Liquidados no Período)

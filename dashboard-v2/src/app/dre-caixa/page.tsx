@@ -144,6 +144,7 @@ export default function DreCaixaPage() {
       fornecedores: [],
       contasCorrentes: [],
       search: '',
+      tipoPagamento: 'TODOS',
       ocultarCategorias: filters.ocultarCategorias,
       ocultarProjetos: filters.ocultarProjetos,
       ocultarFornecedores: filters.ocultarFornecedores
@@ -153,7 +154,7 @@ export default function DreCaixaPage() {
   // Exportação em CSV
   const handleExportCsv = () => {
     if (filteredLancamentos.length === 0) return;
-    const headers = ['Data Pagamento', 'Empresa', 'Setor (Projeto)', 'Categoria', 'Fornecedor/Cliente', 'Conta Corrente', 'Documento', 'Tipo', 'Valor'];
+    const headers = ['Data Pagamento', 'Empresa', 'Setor (Projeto)', 'Categoria', 'Fornecedor/Cliente', 'Conta Corrente', 'Documento', 'Parcela', 'Modalidade', 'Tipo', 'Valor'];
     const rows = filteredLancamentos.map(item => [
       item.data_pagamento,
       item.empresa,
@@ -162,6 +163,8 @@ export default function DreCaixaPage() {
       `"${item.fornecedor_cliente}"`,
       `"${item.conta_corrente}"`,
       item.numero_documento || '',
+      item.numero_parcela || (item.tipo_pagamento === 'PARCELADO' ? `${item.parcela_atual}/${item.total_parcelas}` : '1/1'),
+      item.tipo_pagamento === 'PARCELADO' ? 'Parcelado' : 'À Vista',
       item.tipo,
       item.valor.toFixed(2)
     ]);
@@ -267,6 +270,7 @@ export default function DreCaixaPage() {
               isMeetingMode={isMeetingMode}
               periodoLabel={periodoLabel}
               empresaLabel={empresaLabel}
+              tipoPagamentoLabel={filters.tipoPagamento === 'A_VISTA' ? 'À Vista (Único)' : filters.tipoPagamento === 'PARCELADO' ? 'Parcelado' : undefined}
             />
 
             {/* Seletor de Visão / Abas Executivas */}
