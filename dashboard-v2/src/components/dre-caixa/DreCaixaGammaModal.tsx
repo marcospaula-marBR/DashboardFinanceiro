@@ -21,7 +21,7 @@ import {
   Filter
 } from 'lucide-react';
 import { DreCaixaLancamento, PurchasesAuditSummary, DreCaixaFilters } from '@/types/dre-caixa';
-import { DreCaixaService, formatCurrencyBRL, isDespesaRecorrente } from '@/services/dre-caixa.service';
+import { DreCaixaService, formatCurrencyBRL, isDespesaRecorrente, decodeHtmlEntities } from '@/services/dre-caixa.service';
 
 interface DreCaixaGammaModalProps {
   isOpen: boolean;
@@ -91,9 +91,9 @@ export function DreCaixaGammaModal({
 
     items.forEach(l => {
       const v = Math.abs(l.valor);
-      const p = l.projeto || 'Operacional / Geral';
-      const c = l.categoria || 'Geral';
-      const f = l.fornecedor_cliente || 'Outros / Não Informado';
+      const p = decodeHtmlEntities(l.projeto || 'Operacional / Geral');
+      const c = decodeHtmlEntities(l.categoria || 'Geral');
+      const f = decodeHtmlEntities(l.fornecedor_cliente || 'Outros / Não Informado');
       projMap.set(p, (projMap.get(p) || 0) + v);
       catMap.set(c, (catMap.get(c) || 0) + v);
       const currF = fornMap.get(f) || { total: 0, count: 0 };
@@ -101,7 +101,7 @@ export function DreCaixaGammaModal({
     });
 
     return {
-      conta: selectedConta,
+      conta: decodeHtmlEntities(selectedConta),
       total,
       count: items.length,
       projetos: Array.from(projMap.entries()).map(([projeto, val]) => ({
@@ -298,7 +298,7 @@ export function DreCaixaGammaModal({
         md += `| Nenhuma amortização de compras passadas registrada no escopo selecionado | - | - | - | - |\n`;
       } else {
         passadas.forEach(p => {
-          md += `| ${p.fornecedor_cliente} | ${p.empresa} | ${p.categoria} | ${p.numero_parcela || `${p.parcela_atual}/${p.total_parcelas}`} | ${formatCurrencyBRL(p.valor)} |\n`;
+          md += `| ${decodeHtmlEntities(p.fornecedor_cliente)} | ${decodeHtmlEntities(p.empresa)} | ${decodeHtmlEntities(p.categoria)} | ${p.numero_parcela || `${p.parcela_atual}/${p.total_parcelas}`} | ${formatCurrencyBRL(p.valor)} |\n`;
         });
       }
       md += `\n`;
@@ -315,7 +315,7 @@ export function DreCaixaGammaModal({
           md += `| Projeto / Contrato | Valor Liquidado (R$) | Participação (%) |\n`;
           md += `|---|---|---|\n`;
           activeCardDetail.projetos.slice(0, 10).forEach(p => {
-            md += `| **${p.projeto}** | ${formatCurrencyBRL(p.total)} | ${p.percentual.toFixed(1)}% |\n`;
+            md += `| **${decodeHtmlEntities(p.projeto)}** | ${formatCurrencyBRL(p.total)} | ${p.percentual.toFixed(1)}% |\n`;
           });
           md += `\n`;
         }
@@ -325,7 +325,7 @@ export function DreCaixaGammaModal({
           md += `| Categoria | Valor Liquidado (R$) | Participação (%) |\n`;
           md += `|---|---|---|\n`;
           activeCardDetail.categorias.slice(0, 10).forEach(c => {
-            md += `| **${c.categoria}** | ${formatCurrencyBRL(c.total)} | ${c.percentual.toFixed(1)}% |\n`;
+            md += `| **${decodeHtmlEntities(c.categoria)}** | ${formatCurrencyBRL(c.total)} | ${c.percentual.toFixed(1)}% |\n`;
           });
           md += `\n`;
         }
@@ -340,7 +340,7 @@ export function DreCaixaGammaModal({
           md += `| Nenhuma transação em cartão identificada no período | - | - |\n`;
         } else {
           cartoes.forEach(c => {
-            md += `| **${c.conta}** | ${formatCurrencyBRL(c.total)} | ${c.count} |\n`;
+            md += `| **${decodeHtmlEntities(c.conta)}** | ${formatCurrencyBRL(c.total)} | ${c.count} |\n`;
           });
         }
         md += `\n`;
@@ -352,7 +352,7 @@ export function DreCaixaGammaModal({
           md += `| Nenhuma despesa Flash vinculada a projetos no período | - | - |\n`;
         } else {
           audit.flashPorProjeto.forEach(p => {
-            md += `| ${p.projeto} | ${formatCurrencyBRL(p.total)} | ${p.percentual.toFixed(1)}% |\n`;
+            md += `| ${decodeHtmlEntities(p.projeto)} | ${formatCurrencyBRL(p.total)} | ${p.percentual.toFixed(1)}% |\n`;
           });
         }
         md += `\n`;
@@ -371,7 +371,7 @@ export function DreCaixaGammaModal({
         md += `| Estabelecimento / Favorecido | Total Pago (R$) | Transações | % do Cartão |\n`;
         md += `|---|---|---|---|\n`;
         activeCardDetail.fornecedores.slice(0, 10).forEach(f => {
-          md += `| **${f.fornecedor}** | ${formatCurrencyBRL(f.total)} | ${f.count} | ${f.percentual.toFixed(1)}% |\n`;
+          md += `| **${decodeHtmlEntities(f.fornecedor)}** | ${formatCurrencyBRL(f.total)} | ${f.count} | ${f.percentual.toFixed(1)}% |\n`;
         });
         md += `\n`;
       } else {
@@ -379,13 +379,13 @@ export function DreCaixaGammaModal({
         md += `| Fornecedor | Total (R$) | Modalidade | Parcelas | % do Desembolso |\n`;
         md += `|---|---|---|---|---|\n`;
         audit.topFornecedoresCompras.slice(0, 10).forEach(f => {
-          md += `| **${f.fornecedor}** | ${formatCurrencyBRL(f.total)} | ${f.modalidade} | ${f.parcelasExemplo} | ${f.percentual.toFixed(1)}% |\n`;
+          md += `| **${decodeHtmlEntities(f.fornecedor)}** | ${formatCurrencyBRL(f.total)} | ${f.modalidade} | ${f.parcelasExemplo} | ${f.percentual.toFixed(1)}% |\n`;
         });
         md += `\n`;
 
         md += `### Maiores Categorias de Compras:\n\n`;
         audit.porCategoriaCompras.slice(0, 8).forEach(c => {
-          md += `- **${c.categoria}:** ${formatCurrencyBRL(c.total)} (${c.percentual.toFixed(1)}%)\n`;
+          md += `- **${decodeHtmlEntities(c.categoria)}:** ${formatCurrencyBRL(c.total)} (${c.percentual.toFixed(1)}%)\n`;
         });
         md += `\n`;
       }

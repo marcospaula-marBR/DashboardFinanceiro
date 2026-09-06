@@ -63,6 +63,50 @@ export function normalizeEmpresa(emp: string): string {
   return emp.trim();
 }
 
+/**
+ * Decodifica entidades HTML e caracteres especiais vindos do ERP (ex: &amp; -> &, &quot; -> ", etc.)
+ */
+export function decodeHtmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&atilde;/gi, 'ã')
+    .replace(/&otilde;/gi, 'õ')
+    .replace(/&aacute;/gi, 'á')
+    .replace(/&eacute;/gi, 'é')
+    .replace(/&iacute;/gi, 'í')
+    .replace(/&oacute;/gi, 'ó')
+    .replace(/&uacute;/gi, 'ú')
+    .replace(/&agrave;/gi, 'à')
+    .replace(/&ccedil;/gi, 'ç')
+    .replace(/&acirc;/gi, 'â')
+    .replace(/&ecirc;/gi, 'ê')
+    .replace(/&ocirc;/gi, 'ô')
+    .replace(/&uuml;/gi, 'ü')
+    .replace(/&#(\d+);/g, (_, dec) => {
+      try {
+        return String.fromCharCode(parseInt(dec, 10));
+      } catch {
+        return _;
+      }
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      try {
+        return String.fromCharCode(parseInt(hex, 16));
+      } catch {
+        return _;
+      }
+    })
+    .replace(/&amp;/g, '&')
+    .trim();
+}
+
 function parsePeriodoFromDate(dateStr: string): { periodo: string; periodoNum: number } {
   if (!dateStr) return { periodo: 'N/A', periodoNum: 0 };
   const parts = dateStr.slice(0, 10).split('-');
@@ -114,7 +158,7 @@ export class DreCaixaService {
           hasMoreForn = false;
         } else {
           fornData.forEach(f => {
-            const nome = (f.nome_fantasia || f.razao_social || '').trim();
+            const nome = decodeHtmlEntities(f.nome_fantasia || f.razao_social || '');
             const cod = String(f.codigo_cliente_omie || '').trim();
             const cpfClean = String(f.cnpj_cpf || '').replace(/\D/g, '');
             const empKey = `${String(f.empresa_nome || '').trim()}-${cod}`;
@@ -144,7 +188,7 @@ export class DreCaixaService {
         if (projData) {
           projData.forEach((p: any) => {
             const cod = String(p.codigo_projeto || '').trim();
-            const desc = String(p.descricao_projeto || '').trim();
+            const desc = decodeHtmlEntities(p.descricao_projeto || '');
             const emp = String(p.empresa_nome || '').trim();
             if (cod && desc) {
               projMap.set(cod, desc);
@@ -160,7 +204,7 @@ export class DreCaixaService {
         if (pData) {
           pData.forEach((p: any) => {
             const cod = String(p.omie_id || '').trim();
-            const nome = String(p.nome || '').trim();
+            const nome = decodeHtmlEntities(p.nome || '');
             if (cod && nome && !projMap.has(cod)) {
               projMap.set(cod, nome);
             }
@@ -366,6 +410,7 @@ export class DreCaixaService {
         if (!idCC || idCC === 'null' || idCC === 'undefined') {
           contaCorrente = item.tipo_registro === 'MOVIMENTO' ? 'Extrato Bancário' : 'Conta Operacional';
         }
+        contaCorrente = decodeHtmlEntities(contaCorrente);
 
         // Resolução do Fornecedor / Cliente / Favorecido (ex: Funcionários e Fornecedores)
         const codigoCF = String(raw.codigo_cliente_fornecedor || rawDet.nCodCliente || '').trim();
@@ -376,9 +421,10 @@ export class DreCaixaService {
         const fornFromDim = (codigoCF ? fornMap.get(fornKey) || fornMapByCode.get(codigoCF) : null) ||
                             (cleanCpf ? fornMapByCpf.get(cleanCpf) : null);
 
-        const fornFinal = (item.cliente_fornecedor && item.cliente_fornecedor !== 'N/D' && item.cliente_fornecedor !== 'Sem Fornecedor')
+        const rawFornStr = (item.cliente_fornecedor && item.cliente_fornecedor !== 'N/D' && item.cliente_fornecedor !== 'Sem Fornecedor')
           ? item.cliente_fornecedor
           : fornFromDim || rawDet.cNomeCliente || raw.nm_cliente || raw.nome_cliente || 'Outros / Operacional';
+        const fornFinal = decodeHtmlEntities(rawFornStr);
 
         const { periodo, periodoNum } = parsePeriodoFromDate(item.data_pagamento);
 
@@ -411,9 +457,10 @@ export class DreCaixaService {
         if (!projeto) {
           projeto = 'Operacional / Geral';
         }
+        projeto = decodeHtmlEntities(projeto);
 
         // Categoria
-        const categoria = (item.categoria_nome || 'Despesas Gerais').trim();
+        const categoria = decodeHtmlEntities((item.categoria_nome || 'Despesas Gerais').trim());
 
         // Resolução de Parcelas e Modalidade (À Vista vs Parcelado)
         const rawParcelStr = String(
@@ -947,6 +994,23 @@ export class DreCaixaService {
       const val = Math.abs(item.valor);
       const isRec = isDespesaRecorrente(item.categoria, item.conta_dre, item.fornecedor_cliente);
 
+      // 1. Cartões e Meios de Pagamento: sempre apura todos os cartões para manter a visão comparativa e o seletor completo
+      const cc = decodeHtmlEntities(item.conta_corrente || 'Conta Operacional');
+      const ccLower = cc.toLowerCase();
+      const isFlash = ccLower.includes('flash');
+      const isCartao = isFlash || ccLower.includes('cartão') || ccLower.includes('cartao') || ccLower.includes('clara') || ccLower.includes('elo') || ccLower.includes('sicredi') || ccLower.includes('visa');
+
+      if (!cartaoMap.has(cc)) {
+        cartaoMap.set(cc, { total: 0, count: 0, isCartao, isFlash });
+      }
+      const ccEntry = cartaoMap.get(cc)!;
+      ccEntry.total += val;
+      ccEntry.count += 1;
+
+      // 2. Se o usuário selecionou uma conta/cartão específico, isolamos toda a apuração (KPIs, parcelas, categorias e fornecedores) para essa conta
+      const matchesConta = !selectedConta || (cc.trim().toLowerCase() === selectedConta.trim().toLowerCase());
+      if (!matchesConta) return;
+
       totalGeralPago += val;
       if (isRec) {
         totalRecorrente += val;
@@ -972,7 +1036,7 @@ export class DreCaixaService {
         totalAmortizacaoAnterior += val;
       }
 
-      // 1. Distribuição por Empresa
+      // 3. Distribuição por Empresa
       const emp = normalizeEmpresa(item.empresa);
       if (!empMap.has(emp)) {
         empMap.set(emp, { totalGeral: 0, totalCompras: 0, totalRecorrente: 0, aVista: 0, parcelado: 0, amortizacaoPassada: 0, count: 0 });
@@ -986,21 +1050,8 @@ export class DreCaixaService {
       else if (isNovaParcelada) empEntry.parcelado += val;
       else empEntry.amortizacaoPassada += val;
 
-      // 2. Cartões e Meios de Pagamento
-      const cc = item.conta_corrente || 'Conta Operacional';
-      const ccLower = cc.toLowerCase();
-      const isFlash = ccLower.includes('flash');
-      const isCartao = isFlash || ccLower.includes('cartão') || ccLower.includes('cartao') || ccLower.includes('clara') || ccLower.includes('elo') || ccLower.includes('visa');
-
-      if (!cartaoMap.has(cc)) {
-        cartaoMap.set(cc, { total: 0, count: 0, isCartao, isFlash });
-      }
-      const ccEntry = cartaoMap.get(cc)!;
-      ccEntry.total += val;
-      ccEntry.count += 1;
-
-      // 3. Categoria de Compras
-      const cat = item.categoria || 'Geral';
+      // 4. Categoria de Compras
+      const cat = decodeHtmlEntities(item.categoria || 'Geral');
       if (!catMap.has(cat)) {
         catMap.set(cat, { total: 0, count: 0 });
       }
@@ -1008,8 +1059,8 @@ export class DreCaixaService {
       catEntry.total += val;
       catEntry.count += 1;
 
-      // 4. Fornecedor
-      const forn = item.fornecedor_cliente || 'Outros / Não Informado';
+      // 5. Fornecedor
+      const forn = decodeHtmlEntities(item.fornecedor_cliente || 'Outros / Não Informado');
       if (!fornMap.has(forn)) {
         fornMap.set(forn, { total: 0, count: 0, aVista: 0, parcelado: 0, amortizacao: 0, parcelas: new Set() });
       }
@@ -1021,9 +1072,9 @@ export class DreCaixaService {
       else fornEntry.amortizacao += val;
       if (item.numero_parcela) fornEntry.parcelas.add(item.numero_parcela);
 
-      // 5. Flash Detalhamento (por Projeto, Categoria e Favorecido)
+      // 6. Flash Detalhamento (por Projeto, Categoria e Favorecido)
       if (isFlash) {
-        const proj = item.projeto || 'Operacional / Geral';
+        const proj = decodeHtmlEntities(item.projeto || 'Operacional / Geral');
         flashProjMap.set(proj, {
           total: (flashProjMap.get(proj)?.total || 0) + val,
           count: (flashProjMap.get(proj)?.count || 0) + 1
@@ -1038,11 +1089,11 @@ export class DreCaixaService {
         });
       }
 
-      // 6. Selected Conta Detalhamento (para raio-x de qualquer conta/cartão em foco)
-      if (selectedConta && cc.trim().toLowerCase() === selectedConta.trim().toLowerCase()) {
+      // 7. Selected Conta Detalhamento (para raio-x de qualquer conta/cartão em foco)
+      if (selectedConta) {
         selContaTotal += val;
         selContaCount += 1;
-        const proj = item.projeto || 'Operacional / Geral';
+        const proj = decodeHtmlEntities(item.projeto || 'Operacional / Geral');
         selProjMap.set(proj, {
           total: (selProjMap.get(proj)?.total || 0) + val,
           count: (selProjMap.get(proj)?.count || 0) + 1

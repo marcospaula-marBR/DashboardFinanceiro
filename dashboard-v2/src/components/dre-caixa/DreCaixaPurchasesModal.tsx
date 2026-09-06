@@ -26,7 +26,7 @@ import {
   Check
 } from 'lucide-react';
 import { DreCaixaLancamento, PurchasesAuditSummary } from '@/types/dre-caixa';
-import { DreCaixaService, formatCurrencyBRL, isDespesaRecorrente } from '@/services/dre-caixa.service';
+import { DreCaixaService, formatCurrencyBRL, isDespesaRecorrente, decodeHtmlEntities } from '@/services/dre-caixa.service';
 
 interface DreCaixaPurchasesModalProps {
   isOpen: boolean;
@@ -145,9 +145,9 @@ export function DreCaixaPurchasesModal({
 
     items.forEach(l => {
       const v = Math.abs(l.valor);
-      const p = l.projeto || 'Operacional / Geral';
-      const c = l.categoria || 'Geral';
-      const f = l.fornecedor_cliente || 'Outros / Não Informado';
+      const p = decodeHtmlEntities(l.projeto || 'Operacional / Geral');
+      const c = decodeHtmlEntities(l.categoria || 'Geral');
+      const f = decodeHtmlEntities(l.fornecedor_cliente || 'Outros / Não Informado');
       projMap.set(p, (projMap.get(p) || 0) + v);
       catMap.set(c, (catMap.get(c) || 0) + v);
       const currF = fornMap.get(f) || { total: 0, count: 0 };
@@ -156,7 +156,7 @@ export function DreCaixaPurchasesModal({
 
     return {
       isConsolidado: !isFiltered,
-      conta: isFiltered ? selectedConta : 'Todos os Cartões & Flash (Consolidado)',
+      conta: isFiltered ? decodeHtmlEntities(selectedConta) : 'Todos os Cartões & Flash (Consolidado)',
       total,
       count: items.length,
       projetos: Array.from(projMap.entries()).map(([projeto, val]) => ({
@@ -179,6 +179,24 @@ export function DreCaixaPurchasesModal({
       })).sort((a, b) => b.total - a.total)
     };
   }, [selectedConta, effectiveLancamentos, cardLancamentos]);
+
+  // Lançamentos filtrados para a aba de parcelas (respeitando seletor de cartão, categorias e toggle de compras)
+  const parcelasLancamentos = useMemo(() => {
+    let items = effectiveLancamentos.filter(l => l.sinal_valor < 0 || l.tipo === 'PAGAR');
+    if (selectedConta) {
+      const sc = selectedConta.trim().toLowerCase();
+      items = items.filter(l => (l.conta_corrente || '').trim().toLowerCase() === sc);
+    }
+    return items;
+  }, [effectiveLancamentos, selectedConta]);
+
+  const amortizacoesPassadasItems = useMemo(() => {
+    return parcelasLancamentos.filter(l => (l.parcela_atual || 1) > 1);
+  }, [parcelasLancamentos]);
+
+  const comprasAVistaItems = useMemo(() => {
+    return parcelasLancamentos.filter(l => (l.parcela_atual || 1) === 1 && (l.total_parcelas || 1) === 1);
+  }, [parcelasLancamentos]);
 
   // Filtragem de fornecedores na busca
   const filteredFornecedores = useMemo(() => {
@@ -475,11 +493,60 @@ export function DreCaixaPurchasesModal({
                 </div>
               )}
             </div>
+
+            {/* 3. Seletor Rápido de Cartão / Conta */}
+            <div className="relative">
+              <select
+                value={selectedConta}
+                onChange={e => setSelectedConta(e.target.value)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer outline-none ${
+                  selectedConta
+                    ? 'bg-indigo-50 border-indigo-300 text-indigo-900 ring-2 ring-indigo-200'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+                title="Filtrar métricas, parcelas e fornecedores por um cartão específico"
+              >
+                <option value="">💳 Todos os Cartões (Consolidado)</option>
+                {cartoesList.map(c => (
+                  <option key={c.conta} value={c.conta}>
+                    {c.isFlash ? '⚡' : '💳'} {decodeHtmlEntities(c.conta)} ({formatCurrencyBRL(c.total)})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
         {/* CORPO DO MODAL (SCROLL) */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50">
+
+          {/* BANNER REATIVO QUANDO HOUVER CARTÃO SELECIONADO */}
+          {selectedConta && (
+            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-200 text-indigo-950 text-xs flex flex-wrap items-center justify-between gap-2 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <CreditCard size={15} />
+                </div>
+                <div>
+                  <span className="font-extrabold text-indigo-900 block sm:inline">
+                    Cartão Filtrado: {decodeHtmlEntities(selectedConta)}
+                  </span>
+                  <span className="text-slate-500 sm:ml-1 text-[11px]">
+                    ({formatCurrencyBRL(activeCardDetail.total)} • {activeCardDetail.count} transações).
+                    Indicadores de compras, parcelas e fornecedores vinculados exclusivamente a este cartão.
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedConta('')}
+                className="font-bold text-indigo-700 hover:text-indigo-900 bg-white border border-indigo-200 hover:bg-indigo-50 px-2.5 py-1 rounded-xl text-[11px] shrink-0 cursor-pointer shadow-2xs transition-all flex items-center gap-1.5"
+                title="Restaurar visão consolidada de todos os cartões"
+              >
+                <Layers size={13} />
+                <span>Ver Consolidado / Todos</span>
+              </button>
+            </div>
+          )}
 
           {/* AVISO QUANDO HOUVER CATEGORIAS EXCLUÍDAS */}
           {excludedCategories.size > 0 && (
@@ -977,16 +1044,33 @@ export function DreCaixaPurchasesModal({
 
               {/* Amortização de Compras Passadas (> 1/N) */}
               <div className="bg-white border border-purple-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                   <div>
                     <h3 className="text-sm font-extrabold text-purple-950 flex items-center gap-2">
                       <Clock size={16} className="text-purple-600" />
                       Total Pago de Parcelas Compradas Anteriormente ({'>'} 1/N)
+                      {selectedConta && (
+                        <span className="text-[11px] font-extrabold text-purple-700 bg-purple-100/70 border border-purple-200 px-2 py-0.5 rounded-full">
+                          {decodeHtmlEntities(selectedConta)}
+                        </span>
+                      )}
                     </h3>
-                    <p className="text-xs text-slate-500">
-                      Compras realizadas no passado cujas parcelas venceram e foram quitadas neste mês ({formatCurrencyBRL(audit.totalAmortizacaoAnterior)})
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {selectedConta
+                        ? `Compras no passado vinculadas ao cartão ${decodeHtmlEntities(selectedConta)} quitadas neste mês (${formatCurrencyBRL(audit.totalAmortizacaoAnterior)})`
+                        : `Compras realizadas no passado cujas parcelas venceram e foram quitadas neste mês (${formatCurrencyBRL(audit.totalAmortizacaoAnterior)})`}
                     </p>
                   </div>
+                  {selectedConta && (
+                    <button
+                      onClick={() => setSelectedConta('')}
+                      className="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-xl border border-purple-200 transition-all cursor-pointer flex items-center gap-1"
+                      title="Ver todas as parcelas consolidadas"
+                    >
+                      <Layers size={12} />
+                      <span>Ver Consolidado</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="overflow-x-auto max-h-80 overflow-y-auto">
@@ -1001,24 +1085,31 @@ export function DreCaixaPurchasesModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {activeLancamentos
-                        .filter(l => (l.sinal_valor < 0 || l.tipo === 'PAGAR') && (l.parcela_atual || 1) > 1)
-                        .slice(0, 30)
-                        .map((item, idx) => (
-                          <tr key={`${item.id}-${idx}`} className="hover:bg-slate-50">
-                            <td className="py-2 font-bold text-slate-800">{item.fornecedor_cliente}</td>
-                            <td className="py-2 text-slate-500">{item.empresa}</td>
-                            <td className="py-2 text-slate-600">{item.categoria}</td>
-                            <td className="py-2 text-center">
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
-                                💳 {item.numero_parcela || `${item.parcela_atual}/${item.total_parcelas}`}
-                              </span>
-                            </td>
-                            <td className="py-2 text-right font-black text-slate-900">
-                              {formatCurrencyBRL(item.valor)}
-                            </td>
-                          </tr>
-                        ))}
+                      {amortizacoesPassadasItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                            Nenhuma amortização de compras passadas {selectedConta ? `vinculada ao cartão ${decodeHtmlEntities(selectedConta)}` : ''} encontrada no período.
+                          </td>
+                        </tr>
+                      ) : (
+                        amortizacoesPassadasItems
+                          .slice(0, 50)
+                          .map((item, idx) => (
+                            <tr key={`${item.id}-${idx}`} className="hover:bg-slate-50">
+                              <td className="py-2 font-bold text-slate-800">{decodeHtmlEntities(item.fornecedor_cliente)}</td>
+                              <td className="py-2 text-slate-500">{decodeHtmlEntities(item.empresa)}</td>
+                              <td className="py-2 text-slate-600">{decodeHtmlEntities(item.categoria)}</td>
+                              <td className="py-2 text-center">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                                  💳 {item.numero_parcela || `${item.parcela_atual}/${item.total_parcelas}`}
+                                </span>
+                              </td>
+                              <td className="py-2 text-right font-black text-slate-900">
+                                {formatCurrencyBRL(item.valor)}
+                              </td>
+                            </tr>
+                          ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1026,16 +1117,33 @@ export function DreCaixaPurchasesModal({
 
               {/* Compras à Vista (1/1) */}
               <div className="bg-white border border-emerald-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                   <div>
                     <h3 className="text-sm font-extrabold text-emerald-950 flex items-center gap-2">
                       <CheckCircle2 size={16} className="text-emerald-600" />
                       Fornecedores com Pagamento À Vista (Parcela 1/1)
+                      {selectedConta && (
+                        <span className="text-[11px] font-extrabold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          {decodeHtmlEntities(selectedConta)}
+                        </span>
+                      )}
                     </h3>
-                    <p className="text-xs text-slate-500">
-                      Compras à vista efetuadas e liquidadas no mês corrente ({formatCurrencyBRL(audit.totalAVista)})
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {selectedConta
+                        ? `Compras à vista efetuadas através de ${decodeHtmlEntities(selectedConta)} (${formatCurrencyBRL(audit.totalAVista)})`
+                        : `Compras à vista efetuadas e liquidadas no mês corrente (${formatCurrencyBRL(audit.totalAVista)})`}
                     </p>
                   </div>
+                  {selectedConta && (
+                    <button
+                      onClick={() => setSelectedConta('')}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-xl border border-emerald-200 transition-all cursor-pointer flex items-center gap-1"
+                      title="Ver todos os pagamentos à vista consolidados"
+                    >
+                      <Layers size={12} />
+                      <span>Ver Consolidado</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="overflow-x-auto max-h-80 overflow-y-auto">
@@ -1050,20 +1158,27 @@ export function DreCaixaPurchasesModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {activeLancamentos
-                        .filter(l => (l.sinal_valor < 0 || l.tipo === 'PAGAR') && ((l.parcela_atual || 1) === 1 && (l.total_parcelas || 1) === 1))
-                        .slice(0, 30)
-                        .map((item, idx) => (
-                          <tr key={`${item.id}-${idx}`} className="hover:bg-slate-50">
-                            <td className="py-2 font-bold text-slate-800">{item.fornecedor_cliente}</td>
-                            <td className="py-2 text-slate-500">{item.empresa}</td>
-                            <td className="py-2 text-slate-600">{item.categoria}</td>
-                            <td className="py-2 text-slate-500">{item.projeto}</td>
-                            <td className="py-2 text-right font-black text-emerald-700">
-                              {formatCurrencyBRL(item.valor)}
-                            </td>
-                          </tr>
-                        ))}
+                      {comprasAVistaItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                            Nenhuma compra à vista {selectedConta ? `vinculada ao cartão ${decodeHtmlEntities(selectedConta)}` : ''} encontrada no período.
+                          </td>
+                        </tr>
+                      ) : (
+                        comprasAVistaItems
+                          .slice(0, 50)
+                          .map((item, idx) => (
+                            <tr key={`${item.id}-${idx}`} className="hover:bg-slate-50">
+                              <td className="py-2 font-bold text-slate-800">{decodeHtmlEntities(item.fornecedor_cliente)}</td>
+                              <td className="py-2 text-slate-500">{decodeHtmlEntities(item.empresa)}</td>
+                              <td className="py-2 text-slate-600">{decodeHtmlEntities(item.categoria)}</td>
+                              <td className="py-2 text-slate-500">{decodeHtmlEntities(item.projeto)}</td>
+                              <td className="py-2 text-right font-black text-emerald-700">
+                                {formatCurrencyBRL(item.valor)}
+                              </td>
+                            </tr>
+                          ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1077,15 +1192,39 @@ export function DreCaixaPurchasesModal({
 
               {/* Categorias de Compras */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <h3 className="text-sm font-extrabold text-slate-900 mb-3">
-                  Total Comprado por Categoria
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                      Total Comprado por Categoria
+                      {selectedConta && (
+                        <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-100/70 border border-indigo-200 px-2 py-0.5 rounded-full">
+                          {decodeHtmlEntities(selectedConta)}
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {selectedConta
+                        ? `Distribuição de compras vinculadas exclusivamente a ${decodeHtmlEntities(selectedConta)}`
+                        : 'Distribuição geral das compras por rubrica contábil'}
+                    </p>
+                  </div>
+                  {selectedConta && (
+                    <button
+                      onClick={() => setSelectedConta('')}
+                      className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-xl border border-indigo-200 transition-all cursor-pointer flex items-center gap-1"
+                      title="Ver categorias consolidadas"
+                    >
+                      <Layers size={12} />
+                      <span>Ver Consolidado</span>
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {audit.porCategoriaCompras.slice(0, 15).map(cat => (
                     <div key={cat.categoria} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                       <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="font-bold text-slate-700 truncate" title={cat.categoria}>
-                          {cat.categoria}
+                        <span className="font-bold text-slate-700 truncate" title={decodeHtmlEntities(cat.categoria)}>
+                          {decodeHtmlEntities(cat.categoria)}
                         </span>
                         <span className="text-[10px] font-bold text-slate-400">
                           {cat.percentual.toFixed(1)}%
@@ -1101,13 +1240,20 @@ export function DreCaixaPurchasesModal({
 
               {/* Principais Fornecedores */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-900">
+                    <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                       Principais Fornecedores do Período
+                      {selectedConta && (
+                        <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-100/70 border border-indigo-200 px-2 py-0.5 rounded-full">
+                          {decodeHtmlEntities(selectedConta)}
+                        </span>
+                      )}
                     </h3>
-                    <p className="text-xs text-slate-500">
-                      Ranking dos maiores credores com modalidade e parcelas
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {selectedConta
+                        ? `Ranking dos maiores credores com compras vinculadas a ${decodeHtmlEntities(selectedConta)}`
+                        : 'Ranking dos maiores credores com modalidade e parcelas'}
                     </p>
                   </div>
 
@@ -1135,25 +1281,33 @@ export function DreCaixaPurchasesModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredFornecedores.map(f => (
-                        <tr key={f.fornecedor} className="hover:bg-slate-50">
-                          <td className="py-2.5 font-bold text-slate-800">{f.fornecedor}</td>
-                          <td className="py-2.5 text-center">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                              {f.modalidade}
-                            </span>
-                          </td>
-                          <td className="py-2.5 text-center text-slate-500 font-mono text-[11px]">
-                            {f.parcelasExemplo}
-                          </td>
-                          <td className="py-2.5 text-right font-black text-slate-900">
-                            {formatCurrencyBRL(f.total)}
-                          </td>
-                          <td className="py-2.5 text-right font-semibold text-indigo-700">
-                            {f.percentual.toFixed(1)}%
+                      {filteredFornecedores.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                            Nenhum fornecedor {selectedConta ? `vinculado a ${decodeHtmlEntities(selectedConta)}` : ''} encontrado com os filtros ativos.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        filteredFornecedores.map(f => (
+                          <tr key={f.fornecedor} className="hover:bg-slate-50">
+                            <td className="py-2.5 font-bold text-slate-800">{decodeHtmlEntities(f.fornecedor)}</td>
+                            <td className="py-2.5 text-center">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                                {f.modalidade}
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-center text-slate-500 font-mono text-[11px]">
+                              {f.parcelasExemplo}
+                            </td>
+                            <td className="py-2.5 text-right font-black text-slate-900">
+                              {formatCurrencyBRL(f.total)}
+                            </td>
+                            <td className="py-2.5 text-right font-semibold text-indigo-700">
+                              {f.percentual.toFixed(1)}%
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
