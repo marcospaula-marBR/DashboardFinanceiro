@@ -20,6 +20,7 @@ interface DreCaixaKpisProps {
   periodoLabel?: string;
   empresaLabel?: string;
   tipoPagamentoLabel?: string;
+  onOpenPurchasesAudit?: () => void;
 }
 
 export function DreCaixaKpis({
@@ -27,7 +28,8 @@ export function DreCaixaKpis({
   isMeetingMode,
   periodoLabel = 'Acumulado',
   empresaLabel = 'Todas as Empresas',
-  tipoPagamentoLabel
+  tipoPagamentoLabel,
+  onOpenPurchasesAudit
 }: DreCaixaKpisProps) {
   const isPositive = summary.resultadoLiquido >= 0;
 
@@ -63,22 +65,39 @@ export function DreCaixaKpis({
       {/* Grid de Cards de KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
         
-        {/* 1. Total Pago (Saídas Realizadas) */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
+        {/* 1. Total Pago (Saídas Realizadas) - Clicável para Auditoria de Compras */}
+        <div
+          onClick={onOpenPurchasesAudit}
+          role={onOpenPurchasesAudit ? "button" : undefined}
+          tabIndex={onOpenPurchasesAudit ? 0 : undefined}
+          className={`bg-white border border-slate-200 rounded-2xl p-4 shadow-sm relative overflow-hidden transition-all ${
+            onOpenPurchasesAudit
+              ? 'cursor-pointer hover:border-indigo-300 hover:shadow-md hover:bg-slate-50/50 group active:scale-[0.98]'
+              : ''
+          }`}
+          title={onOpenPurchasesAudit ? "Clique para abrir o Raio-X Executivo de Compras & Desembolsos" : undefined}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-500">
+            <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-500 group-hover:text-indigo-700 transition-colors">
               Total Pago (Saídas)
             </span>
-            <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-sm group-hover:bg-indigo-50 group-hover:border-indigo-200 group-hover:text-indigo-600 transition-colors">
               <TrendingDown size={16} />
             </div>
           </div>
           <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
             {formatCurrencyBRL(summary.totalPago)}
           </div>
-          <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-            <span className="text-rose-600 font-bold">Desembolso Real</span> no caixa
-          </p>
+          <div className="mt-1 flex items-center justify-between text-[11px]">
+            <p className="text-slate-500 flex items-center gap-1">
+              <span className="text-rose-600 font-bold">Desembolso Real</span>
+            </p>
+            {onOpenPurchasesAudit && (
+              <span className="text-[10px] font-extrabold text-indigo-600 group-hover:underline flex items-center gap-0.5">
+                Raio-X Compras →
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 2. Total Recebido (Entradas Realizadas - Protegido por Modo Reunião) */}

@@ -66,3 +66,72 @@ export interface DreCaixaTableSection {
     totalPeriodo: number;
   }[];
 }
+
+export interface PurchasesAuditSummary {
+  totalGeralPago: number;
+  totalCompras: number;
+  totalRecorrente: number;
+  percentualCompras: number;
+  totalAVista: number; // 1/1
+  totalNovasParceladas: number; // 1/N (pago no mês corrente)
+  totalAmortizacaoAnterior: number; // > 1/N (parcelas pagas no mês de compras passadas)
+  totalComprometimentoFuturo: number;
+  porEmpresa: {
+    empresa: string;
+    totalGeral: number;
+    totalCompras: number;
+    totalRecorrente: number;
+    aVista: number;
+    parcelado: number;
+    amortizacaoPassada: number;
+    count: number;
+  }[];
+  porCartao: {
+    conta: string;
+    total: number;
+    count: number;
+    isCartao: boolean;
+    isFlash: boolean;
+  }[];
+  porCategoriaCompras: {
+    categoria: string;
+    total: number;
+    count: number;
+    percentual: number;
+  }[];
+  topFornecedoresCompras: {
+    fornecedor: string;
+    total: number;
+    count: number;
+    modalidade: string;
+    parcelasExemplo: string;
+    percentual: number;
+  }[];
+  flashPorProjeto: {
+    projeto: string;
+    total: number;
+    count: number;
+    percentual: number;
+  }[];
+  flashPorCategoria: {
+    categoria: string;
+    total: number;
+    count: number;
+    percentual: number;
+  }[];
+  flashPorFavorecido: {
+    favorecido: string;
+    total: number;
+    count: number;
+    percentual: number;
+  }[];
+  detalheContaSelecionada?: {
+    conta: string;
+    total: number;
+    count: number;
+    projetos: { projeto: string; total: number; count: number; percentual: number }[];
+    categorias: { categoria: string; total: number; count: number; percentual: number }[];
+    fornecedores: { fornecedor: string; total: number; count: number; percentual: number }[];
+  };
+}
+

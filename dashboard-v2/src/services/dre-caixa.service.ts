@@ -4,7 +4,8 @@ import {
   DreCaixaFilters,
   DreCaixaKpiSummary,
   DreCaixaChartData,
-  DreCaixaTableSection
+  DreCaixaTableSection,
+  PurchasesAuditSummary
 } from '@/types/dre-caixa';
 
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -903,4 +904,344 @@ export class DreCaixaService {
 
     return sections;
   }
+
+  /**
+   * Auditoria Executiva de Compras & Desembolsos para Reunião de Diretoria (C-Level)
+   * Segrega compras operacionais de despesas recorrentes estruturais,
+   * decompõe parcelas em à vista (1/1), novas compras (1/N) e quitação de compras passadas (>1/N),
+   * e detalha os gastos de cartões corporativos e Flash por Projeto, Categoria e Favorecido.
+   */
+  static computePurchasesAudit(
+    lancamentos: DreCaixaLancamento[],
+    selectedConta?: string,
+    onlyCompras: boolean = false
+  ): PurchasesAuditSummary {
+    const pagamentos = lancamentos.filter(l => l.sinal_valor < 0 || l.tipo === 'PAGAR');
+
+    let totalGeralPago = 0;
+    let totalCompras = 0;
+    let totalRecorrente = 0;
+    let totalAVista = 0;
+    let totalNovasParceladas = 0;
+    let totalAmortizacaoAnterior = 0;
+    let totalComprometimentoFuturo = 0;
+
+    const empMap = new Map<string, { totalGeral: number; totalCompras: number; totalRecorrente: number; aVista: number; parcelado: number; amortizacaoPassada: number; count: number }>();
+    const cartaoMap = new Map<string, { total: number; count: number; isCartao: boolean; isFlash: boolean }>();
+    const catMap = new Map<string, { total: number; count: number }>();
+    const fornMap = new Map<string, { total: number; count: number; aVista: number; parcelado: number; amortizacao: number; parcelas: Set<string> }>();
+
+    // Flash sub-analytics
+    const flashProjMap = new Map<string, { total: number; count: number }>();
+    const flashCatMap = new Map<string, { total: number; count: number }>();
+    const flashFornMap = new Map<string, { total: number; count: number }>();
+
+    // Selected Conta sub-analytics
+    const selProjMap = new Map<string, { total: number; count: number }>();
+    const selCatMap = new Map<string, { total: number; count: number }>();
+    const selFornMap = new Map<string, { total: number; count: number }>();
+    let selContaTotal = 0;
+    let selContaCount = 0;
+
+    pagamentos.forEach(item => {
+      const val = Math.abs(item.valor);
+      const isRec = isDespesaRecorrente(item.categoria, item.conta_dre, item.fornecedor_cliente);
+
+      totalGeralPago += val;
+      if (isRec) {
+        totalRecorrente += val;
+      } else {
+        totalCompras += val;
+      }
+
+      // Se o usuário optou por auditar estritamente compras, ignora recorrentes
+      if (onlyCompras && isRec) return;
+
+      const pAtual = item.parcela_atual || 1;
+      const pTotal = item.total_parcelas || 1;
+      const isAVista = (pAtual === 1 && pTotal === 1) || item.tipo_pagamento === 'A_VISTA';
+      const isNovaParcelada = pAtual === 1 && pTotal > 1;
+      const isAmortizacaoPassada = pAtual > 1;
+
+      if (isAVista) {
+        totalAVista += val;
+      } else if (isNovaParcelada) {
+        totalNovasParceladas += val;
+        totalComprometimentoFuturo += val * (pTotal - 1);
+      } else if (isAmortizacaoPassada) {
+        totalAmortizacaoAnterior += val;
+      }
+
+      // 1. Distribuição por Empresa
+      const emp = normalizeEmpresa(item.empresa);
+      if (!empMap.has(emp)) {
+        empMap.set(emp, { totalGeral: 0, totalCompras: 0, totalRecorrente: 0, aVista: 0, parcelado: 0, amortizacaoPassada: 0, count: 0 });
+      }
+      const empEntry = empMap.get(emp)!;
+      empEntry.totalGeral += val;
+      if (isRec) empEntry.totalRecorrente += val;
+      else empEntry.totalCompras += val;
+      empEntry.count += 1;
+      if (isAVista) empEntry.aVista += val;
+      else if (isNovaParcelada) empEntry.parcelado += val;
+      else empEntry.amortizacaoPassada += val;
+
+      // 2. Cartões e Meios de Pagamento
+      const cc = item.conta_corrente || 'Conta Operacional';
+      const ccLower = cc.toLowerCase();
+      const isFlash = ccLower.includes('flash');
+      const isCartao = isFlash || ccLower.includes('cartão') || ccLower.includes('cartao') || ccLower.includes('clara') || ccLower.includes('elo') || ccLower.includes('visa');
+
+      if (!cartaoMap.has(cc)) {
+        cartaoMap.set(cc, { total: 0, count: 0, isCartao, isFlash });
+      }
+      const ccEntry = cartaoMap.get(cc)!;
+      ccEntry.total += val;
+      ccEntry.count += 1;
+
+      // 3. Categoria de Compras
+      const cat = item.categoria || 'Geral';
+      if (!catMap.has(cat)) {
+        catMap.set(cat, { total: 0, count: 0 });
+      }
+      const catEntry = catMap.get(cat)!;
+      catEntry.total += val;
+      catEntry.count += 1;
+
+      // 4. Fornecedor
+      const forn = item.fornecedor_cliente || 'Outros / Não Informado';
+      if (!fornMap.has(forn)) {
+        fornMap.set(forn, { total: 0, count: 0, aVista: 0, parcelado: 0, amortizacao: 0, parcelas: new Set() });
+      }
+      const fornEntry = fornMap.get(forn)!;
+      fornEntry.total += val;
+      fornEntry.count += 1;
+      if (isAVista) fornEntry.aVista += val;
+      else if (isNovaParcelada) fornEntry.parcelado += val;
+      else fornEntry.amortizacao += val;
+      if (item.numero_parcela) fornEntry.parcelas.add(item.numero_parcela);
+
+      // 5. Flash Detalhamento (por Projeto, Categoria e Favorecido)
+      if (isFlash) {
+        const proj = item.projeto || 'Operacional / Geral';
+        flashProjMap.set(proj, {
+          total: (flashProjMap.get(proj)?.total || 0) + val,
+          count: (flashProjMap.get(proj)?.count || 0) + 1
+        });
+        flashCatMap.set(cat, {
+          total: (flashCatMap.get(cat)?.total || 0) + val,
+          count: (flashCatMap.get(cat)?.count || 0) + 1
+        });
+        flashFornMap.set(forn, {
+          total: (flashFornMap.get(forn)?.total || 0) + val,
+          count: (flashFornMap.get(forn)?.count || 0) + 1
+        });
+      }
+
+      // 6. Selected Conta Detalhamento (para raio-x de qualquer conta/cartão em foco)
+      if (selectedConta && cc.toLowerCase() === selectedConta.toLowerCase()) {
+        selContaTotal += val;
+        selContaCount += 1;
+        const proj = item.projeto || 'Operacional / Geral';
+        selProjMap.set(proj, {
+          total: (selProjMap.get(proj)?.total || 0) + val,
+          count: (selProjMap.get(proj)?.count || 0) + 1
+        });
+        selCatMap.set(cat, {
+          total: (selCatMap.get(cat)?.total || 0) + val,
+          count: (selCatMap.get(cat)?.count || 0) + 1
+        });
+        selFornMap.set(forn, {
+          total: (selFornMap.get(forn)?.total || 0) + val,
+          count: (selFornMap.get(forn)?.count || 0) + 1
+        });
+      }
+    });
+
+    const baseComprasTotal = onlyCompras ? totalCompras : totalGeralPago;
+    const percentualCompras = totalGeralPago > 0 ? (totalCompras / totalGeralPago) * 100 : 0;
+
+    const porEmpresa = Array.from(empMap.entries())
+      .map(([empresa, data]) => ({ empresa, ...data }))
+      .sort((a, b) => b.totalCompras - a.totalCompras);
+
+    const porCartao = Array.from(cartaoMap.entries())
+      .map(([conta, data]) => ({ conta, ...data }))
+      .sort((a, b) => b.total - a.total);
+
+    const porCategoriaCompras = Array.from(catMap.entries())
+      .map(([categoria, data]) => ({
+        categoria,
+        total: data.total,
+        count: data.count,
+        percentual: baseComprasTotal > 0 ? (data.total / baseComprasTotal) * 100 : 0
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const topFornecedoresCompras = Array.from(fornMap.entries())
+      .map(([fornecedor, data]) => {
+        let modalidade = 'À vista';
+        if (data.parcelado > 0 && data.aVista > 0) modalidade = 'Misto (À vista / Parc)';
+        else if (data.parcelado > 0) modalidade = 'Parcelado';
+        else if (data.amortizacao > 0) modalidade = 'Amortização Anterior';
+
+        const parcelasExemplo = Array.from(data.parcelas).slice(0, 3).join(', ') || (data.aVista > 0 ? '1/1' : '-');
+
+        return {
+          fornecedor,
+          total: data.total,
+          count: data.count,
+          modalidade,
+          parcelasExemplo,
+          percentual: baseComprasTotal > 0 ? (data.total / baseComprasTotal) * 100 : 0
+        };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 20);
+
+    const totalFlash = Array.from(flashProjMap.values()).reduce((acc, p) => acc + p.total, 0);
+
+    const flashPorProjeto = Array.from(flashProjMap.entries())
+      .map(([projeto, data]) => ({
+        projeto,
+        total: data.total,
+        count: data.count,
+        percentual: totalFlash > 0 ? (data.total / totalFlash) * 100 : 0
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const flashPorCategoria = Array.from(flashCatMap.entries())
+      .map(([categoria, data]) => ({
+        categoria,
+        total: data.total,
+        count: data.count,
+        percentual: totalFlash > 0 ? (data.total / totalFlash) * 100 : 0
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const flashPorFavorecido = Array.from(flashFornMap.entries())
+      .map(([favorecido, data]) => ({
+        favorecido,
+        total: data.total,
+        count: data.count,
+        percentual: totalFlash > 0 ? (data.total / totalFlash) * 100 : 0
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    let detalheContaSelecionada: PurchasesAuditSummary['detalheContaSelecionada'] = undefined;
+    if (selectedConta) {
+      detalheContaSelecionada = {
+        conta: selectedConta,
+        total: selContaTotal,
+        count: selContaCount,
+        projetos: Array.from(selProjMap.entries()).map(([projeto, data]) => ({
+          projeto,
+          total: data.total,
+          count: data.count,
+          percentual: selContaTotal > 0 ? (data.total / selContaTotal) * 100 : 0
+        })).sort((a, b) => b.total - a.total),
+        categorias: Array.from(selCatMap.entries()).map(([categoria, data]) => ({
+          categoria,
+          total: data.total,
+          count: data.count,
+          percentual: selContaTotal > 0 ? (data.total / selContaTotal) * 100 : 0
+        })).sort((a, b) => b.total - a.total),
+        fornecedores: Array.from(selFornMap.entries()).map(([fornecedor, data]) => ({
+          fornecedor,
+          total: data.total,
+          count: data.count,
+          percentual: selContaTotal > 0 ? (data.total / selContaTotal) * 100 : 0
+        })).sort((a, b) => b.total - a.total),
+      };
+    }
+
+    return {
+      totalGeralPago,
+      totalCompras,
+      totalRecorrente,
+      percentualCompras,
+      totalAVista,
+      totalNovasParceladas,
+      totalAmortizacaoAnterior,
+      totalComprometimentoFuturo,
+      porEmpresa,
+      porCartao,
+      porCategoriaCompras,
+      topFornecedoresCompras,
+      flashPorProjeto,
+      flashPorCategoria,
+      flashPorFavorecido,
+      detalheContaSelecionada
+    };
+  }
 }
+
+/**
+ * Função de Classificação Econômica:
+ * Segrega Despesas Operacionais Recorrentes / Estruturais (Overhead / Folha / Aluguel / Tributos)
+ * de Compras & Aquisições Efetivas (Procurement / Materiais / Insumos / Serviços pontuais / Cartões / Flash).
+ */
+export function isDespesaRecorrente(categoria: string, contaDre?: string, fornecedor?: string): boolean {
+  const cat = (categoria || '').toLowerCase();
+  const dre = (contaDre || '').toLowerCase();
+  const forn = (fornecedor || '').toLowerCase();
+  const str = `${cat} ${dre} ${forn}`;
+
+  // 1. Folha de Pagamento, Pró-Labore e Encargos
+  if (
+    str.includes('salário') || str.includes('salario') ||
+    str.includes('ordenado') ||
+    str.includes('pró-labore') || str.includes('pro-labore') || str.includes('prolabore') ||
+    str.includes('rescis') ||
+    str.includes('férias') || str.includes('ferias') ||
+    str.includes('13º') || str.includes('décimo terceiro') || str.includes('decimo terceiro') ||
+    str.includes('fgts') ||
+    str.includes('inss') ||
+    str.includes('gps') ||
+    str.includes('vale transporte') ||
+    str.includes('vale refeição') || str.includes('vale refeicao') ||
+    str.includes('vale alimentação') || str.includes('vale alimentacao') ||
+    str.includes('plano de saúde') || str.includes('plano de saude') ||
+    str.includes('unimed') || str.includes('bradesco saúde') ||
+    str.includes('previdência') || str.includes('previdencia')
+  ) {
+    return true;
+  }
+
+  // 2. Ocupação, Concessionárias e Infraestrutura Física Contínua
+  if (
+    str.includes('aluguel') || str.includes('locação de imóvel') || str.includes('locacao de imovel') ||
+    str.includes('condomínio') || str.includes('condominio') ||
+    str.includes('energia elétrica') || str.includes('energia eletrica') || str.includes('enel') || str.includes('cpfl') ||
+    str.includes('água e esgoto') || str.includes('agua e esgoto') || str.includes('sabesp') || str.includes('sanepar') ||
+    str.includes('iptu') ||
+    str.includes('telefonia fixa') || str.includes('internet fixa')
+  ) {
+    return true;
+  }
+
+  // 3. Honorários Estruturais Contínuos
+  if (
+    str.includes('honorários contábeis') || str.includes('honorarios contabeis') || str.includes('assessoria contábil') || str.includes('contabilidade') ||
+    str.includes('honorários advocatícios') || str.includes('honorarios advocaticios')
+  ) {
+    return true;
+  }
+
+  // 4. Tributos, Taxas e Encargos Financeiros Contínuos
+  if (
+    str.includes('simples nacional') || str.includes('das ') ||
+    str.includes('iss ') || str.includes('issqn') ||
+    str.includes('pis ') || str.includes('cofins') ||
+    str.includes('irpj') || str.includes('csll') ||
+    str.includes('tarifa bancária') || str.includes('tarifa bancaria') ||
+    str.includes('tarifas bancárias') || str.includes('tarifas bancarias') ||
+    str.includes('taxa de administração') || str.includes('taxa de administracao') ||
+    str.includes('juros e encargos') || str.includes('iof')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+

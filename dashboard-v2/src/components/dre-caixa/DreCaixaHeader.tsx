@@ -11,7 +11,9 @@ import {
   WalletCards,
   Clock,
   ShieldAlert,
-  Shield
+  Shield,
+  Sparkles,
+  ShoppingBag
 } from 'lucide-react';
 import { APP_VERSION } from '@/version';
 
@@ -24,6 +26,8 @@ interface DreCaixaHeaderProps {
   hiddenCount?: number;
   onRefresh: () => void;
   onExportCsv: () => void;
+  onOpenGamma?: () => void;
+  onOpenPurchasesAudit?: () => void;
 }
 
 export function DreCaixaHeader({
@@ -34,7 +38,9 @@ export function DreCaixaHeader({
   onOpenPrivacyModal,
   hiddenCount = 0,
   onRefresh,
-  onExportCsv
+  onExportCsv,
+  onOpenGamma,
+  onOpenPurchasesAudit
 }: DreCaixaHeaderProps) {
   return (
     <header className="bg-white border-b border-slate-200 text-slate-800 sticky top-0 z-40 shadow-sm px-4 py-3 sm:px-6">
@@ -117,6 +123,30 @@ export function DreCaixaHeader({
                   {hiddenCount}
                 </span>
               )}
+            </button>
+          )}
+
+          {/* Botão Raio-X de Compras */}
+          {onOpenPurchasesAudit && (
+            <button
+              onClick={onOpenPurchasesAudit}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 shadow-sm transition-all active:scale-95 cursor-pointer"
+              title="Auditoria Executiva de Compras & Desembolsos"
+            >
+              <ShoppingBag size={15} className="text-indigo-600" />
+              <span className="hidden sm:inline">Raio-X Compras</span>
+            </button>
+          )}
+
+          {/* Botão Gerar Apresentação no Gamma (Diretoria) */}
+          {onOpenGamma && (
+            <button
+              onClick={onOpenGamma}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm transition-all active:scale-95 cursor-pointer"
+              title="Gerar slides executivos para reunião com a diretoria no Gamma"
+            >
+              <Sparkles size={15} className="text-emerald-100" />
+              <span>Gerar no Gamma</span>
             </button>
           )}
 

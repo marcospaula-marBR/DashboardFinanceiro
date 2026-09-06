@@ -16,6 +16,8 @@ import { DreCaixaCharts } from '@/components/dre-caixa/DreCaixaCharts';
 import { DreCaixaTable } from '@/components/dre-caixa/DreCaixaTable';
 import { DreCaixaDrilldownModal } from '@/components/dre-caixa/DreCaixaDrilldownModal';
 import { DreCaixaPrivacyModal } from '@/components/dre-caixa/DreCaixaPrivacyModal';
+import { DreCaixaPurchasesModal } from '@/components/dre-caixa/DreCaixaPurchasesModal';
+import { DreCaixaGammaModal } from '@/components/dre-caixa/DreCaixaGammaModal';
 import {
   BarChart3,
   Table as TableIcon,
@@ -58,6 +60,12 @@ export default function DreCaixaPage() {
   const [drilldownCategory, setDrilldownCategory] = useState<string>('');
   const [drilldownMonth, setDrilldownMonth] = useState<string | undefined>(undefined);
   const [isDrilldownOpen, setIsDrilldownOpen] = useState(false);
+
+  // Modal de Auditoria de Compras & Desembolsos (C-Level Board)
+  const [isPurchasesModalOpen, setIsPurchasesModalOpen] = useState(false);
+
+  // Modal Modular de Geração de Apresentação Executiva no Gamma
+  const [isGammaModalOpen, setIsGammaModalOpen] = useState(false);
 
   // 1. Carregamento dos dados
   const loadData = useCallback(async () => {
@@ -209,6 +217,8 @@ export default function DreCaixaPage() {
         hiddenCount={totalOcultos}
         onRefresh={loadData}
         onExportCsv={handleExportCsv}
+        onOpenGamma={() => setIsGammaModalOpen(true)}
+        onOpenPurchasesAudit={() => setIsPurchasesModalOpen(true)}
       />
 
       {/* Conteúdo Principal */}
@@ -271,6 +281,7 @@ export default function DreCaixaPage() {
               periodoLabel={periodoLabel}
               empresaLabel={empresaLabel}
               tipoPagamentoLabel={filters.tipoPagamento === 'A_VISTA' ? 'À Vista (Único)' : filters.tipoPagamento === 'PARCELADO' ? 'Parcelado' : undefined}
+              onOpenPurchasesAudit={() => setIsPurchasesModalOpen(true)}
             />
 
             {/* Seletor de Visão / Abas Executivas */}
@@ -350,6 +361,29 @@ export default function DreCaixaPage() {
         availableOptions={availableOptions}
         filters={filters}
         onChangeFilters={setFilters}
+      />
+
+      {/* Modal de Auditoria Executiva de Compras & Desembolsos (C-Level Board) */}
+      <DreCaixaPurchasesModal
+        isOpen={isPurchasesModalOpen}
+        onClose={() => setIsPurchasesModalOpen(false)}
+        lancamentos={filteredLancamentos}
+        periodoLabel={periodoLabel}
+        empresaLabel={empresaLabel}
+        onOpenGamma={() => {
+          setIsPurchasesModalOpen(false);
+          setIsGammaModalOpen(true);
+        }}
+      />
+
+      {/* Modal Modular de Geração de Apresentação Executiva no Gamma */}
+      <DreCaixaGammaModal
+        isOpen={isGammaModalOpen}
+        onClose={() => setIsGammaModalOpen(false)}
+        lancamentos={filteredLancamentos}
+        periodoLabel={periodoLabel}
+        empresaLabel={empresaLabel}
+        selectedConta={filters.contasCorrentes.length === 1 ? filters.contasCorrentes[0] : undefined}
       />
 
     </div>
