@@ -238,24 +238,34 @@ export class DreCaixaService {
         }
       }
 
-      // Filtro de Transferências e Deduplicação Inteligente
-      // 1. Identificar títulos CP/CR já contemplados para não duplicar com MOVIMENTO
+      // Filtro de Transferências e Deduplicação Inteligente Multi-Camadas
+      // 1. Mapear antecipadamente todos os títulos legítimos de Contas a Pagar (CP) e Receber (CR)
       const knownCrTitles = new Set<string>();
       const knownCpTitles = new Set<string>();
+      const knownCrOmieIds = new Set<string>();
+      const knownCpOmieIds = new Set<string>();
+      const titlesWithSpecificDepto = new Set<string>();
 
       allRecords.forEach(item => {
-        const emp = String(item.empresa_nome || '').trim();
-        const omie_id = item.omie_id;
+        const emp = normalizeEmpresa(item.empresa_nome);
+        const omieId = item.omie_id ? String(item.omie_id).trim() : '';
         const raw = item.raw_data || {};
         const det = raw.detalhes || {};
-        const nCod = String(det.nCodTitulo || omie_id || '').trim();
+        const nCod = String(det.nCodTitulo || '').trim();
+        const depto = String(item.departamento_nome || '').trim().toLowerCase();
 
-        if (item.tipo_registro === 'RECEBER' && (omie_id || nCod)) {
-          if (omie_id) knownCrTitles.add(`${emp}-${omie_id}`);
+        const isCpCadastro = item.tipo_registro === 'PAGAR' && (raw.codigo_lancamento_omie || raw.distribuicao || !raw.detalhes || raw.status_titulo);
+        const isCrCadastro = item.tipo_registro === 'RECEBER' && (raw.codigo_lancamento_omie || raw.distribuicao || !raw.detalhes || raw.status_titulo);
+
+        if (isCrCadastro) {
+          if (omieId) knownCrOmieIds.add(`${emp}-${omieId}`);
           if (nCod && nCod !== '0') knownCrTitles.add(`${emp}-${nCod}`);
-        } else if (item.tipo_registro === 'PAGAR' && (omie_id || nCod)) {
-          if (omie_id) knownCpTitles.add(`${emp}-${omie_id}`);
+        } else if (isCpCadastro) {
+          if (omieId) knownCpOmieIds.add(`${emp}-${omieId}`);
           if (nCod && nCod !== '0') knownCpTitles.add(`${emp}-${nCod}`);
+          if (depto && depto !== 'principal' && depto !== 'sem departamento' && depto !== 'não informado') {
+            if (omieId) titlesWithSpecificDepto.add(`${emp}-${omieId}`);
+          }
         }
       });
 
@@ -265,6 +275,7 @@ export class DreCaixaService {
       const processedRevenueTitles = new Set<string>();
       const processedRevenueDocs = new Set<string>();
       const processedRevenueSignatures = new Set<string>();
+      const seenExactLines = new Set<string>();
       const lancamentos: DreCaixaLancamento[] = [];
 
       allRecords.forEach(item => {
@@ -279,7 +290,7 @@ export class DreCaixaService {
         const cOrigem = String(rawDet.cOrigem || raw.id_origem || '').toUpperCase();
         const cGrupo = String(rawDet.cGrupo || '').toUpperCase();
         const obs = String(rawDet.observacao || raw.observacao || '').toLowerCase();
-        const emp = String(item.empresa_nome || '').trim();
+        const emp = normalizeEmpresa(item.empresa_nome);
 
         // 1. REGRA: DESCONSIDERAR TRANSFERÊNCIAS
         // Filtra qualquer categoria iniciada por '0.' (ex: 0.01, 0.01.01), origens de transferência ou descrições
@@ -364,11 +375,46 @@ export class DreCaixaService {
         const valRound = Math.round(Math.abs(Number(item.valor_alocado || item.valor_total || 0)) * 100) / 100;
         if (valRound <= 0) return;
 
-        // 5. REGRA MANDATÓRIA: DEDUPLICAÇÃO DE RECEITAS
-        // Elimina duplicação massiva entre Título em Contas a Receber e Baixa em Conta Corrente (ambos gerados no Omie)
+        const omieId = item.omie_id ? String(item.omie_id).trim() : '';
+        const nCodTit = String(rawDet.nCodTitulo || '').trim();
+        const depto = String(item.departamento_nome || '').trim();
+        const deptoLower = depto.toLowerCase();
+        const isMovimento = item.tipo_registro === 'MOVIMENTO' || !!rawDet.cOrigem || !!rawDet.nCodMovCC || (raw.resumo && !raw.codigo_lancamento_omie);
+
+        // 5. REGRA MANDATÓRIA: DESCARTE DE MOVIMENTO BANCÁRIO ESPELHO
+        // Se um pagamento ou recebimento já existe como Título (CP/CR), o extrato bancário correspondente é descartado
+        if (isMovimento) {
+          if (nCodTit && nCodTit !== '0') {
+            const titleKey = `${emp}-${nCodTit}`;
+            if (knownCpTitles.has(titleKey) || knownCpOmieIds.has(titleKey) || knownCrTitles.has(titleKey) || knownCrOmieIds.has(titleKey)) {
+              return;
+            }
+          }
+          if (omieId) {
+            const omieKey = `${emp}-${omieId}`;
+            if (knownCpOmieIds.has(omieKey) || knownCrOmieIds.has(omieKey)) {
+              return;
+            }
+          }
+        }
+
+        // 6. REGRA: PRIORIDADE DE RATEIO DEPARTAMENTAL ESPECÍFICO
+        // Se um título possui linhas detalhadas de rateio por centro de custo, descarta linha genérica residual 'Principal'
+        if (omieId && titlesWithSpecificDepto.has(`${emp}-${omieId}`)) {
+          if (deptoLower === 'principal' || deptoLower === 'sem departamento' || deptoLower === 'não informado') {
+            return;
+          }
+        }
+
+        // 7. DEDUPLICAÇÃO DE LINHA IDÊNTICA DE SINCRONIZAÇÃO
+        const lineKey = `${emp}__${omieId}__${depto}__${item.data_pagamento}__${valRound}__${isEntrada ? 'R' : 'P'}`;
+        if (seenExactLines.has(lineKey)) {
+          return;
+        }
+        seenExactLines.add(lineKey);
+
+        // 8. DEDUPLICAÇÃO DE RECEITAS
         if (isEntrada) {
-          const nCodTit = String(rawDet.nCodTitulo || '').trim();
-          const omieId = item.omie_id ? String(item.omie_id) : '';
           const titleId = (nCodTit && nCodTit !== '0') ? nCodTit : omieId;
 
           if (titleId) {
@@ -389,17 +435,13 @@ export class DreCaixaService {
           processedRevenueSignatures.add(revSig);
         } else {
           // Para Saídas / Despesas (PAGAR):
-          const omieId = item.omie_id ? String(item.omie_id) : '';
-          const nCodTit = String(rawDet.nCodTitulo || '').trim();
-          const deptoKey = String(item.departamento_nome || '').trim();
-
-          const sig = `${emp}-${item.tipo_registro}-${omieId || nCodTit || item.id}-${item.data_pagamento}-${valRound}-${catCodigo}-${deptoKey}`;
+          const sig = `${emp}-${omieId || nCodTit || item.id}-${item.data_pagamento}-${valRound}-${catCodigo}-${depto}`;
           if (processedSignatures.has(sig)) return;
           processedSignatures.add(sig);
 
-          if (item.tipo_registro === 'MOVIMENTO' && nCodTit && nCodTit !== '0') {
+          if (isMovimento && nCodTit && nCodTit !== '0') {
             const titleKey = `${emp}-${nCodTit}`;
-            if (knownCpTitles.has(titleKey) || processedMovTitles.has(titleKey)) return;
+            if (processedMovTitles.has(titleKey)) return;
             processedMovTitles.add(titleKey);
           }
         }

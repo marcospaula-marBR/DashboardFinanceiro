@@ -264,11 +264,21 @@ class OmieSync:
             log(f"  Movimentos: Lendo página {pagina-1}...")
         return records
 
-    def process_movimentos(self, records):
+    def process_movimentos(self, records, known_titles=None):
+        if known_titles is None:
+            known_titles = set()
         rows = []
         for r in records:
             det = r.get("detalhes", {})
             res = r.get("resumo", {})
+            
+            # REGRA: EVITAR DUPLICAÇÃO DE MOVIMENTO QUE JÁ CONSTA EM CONTAS A PAGAR OU RECEBER
+            n_cod_tit = str(det.get("nCodTitulo") or "").strip()
+            n_cod_mov = str(det.get("nCodMovCC") or "").strip()
+            if n_cod_tit and n_cod_tit != "0" and n_cod_tit in known_titles:
+                continue
+            if n_cod_mov and n_cod_mov in known_titles:
+                continue
             
             c_nat = (det.get("cNatureza") or "").upper()
             c_grp = (det.get("cGrupo") or "").upper()
@@ -293,7 +303,7 @@ class OmieSync:
             # REGRA: IDENTIFICAÇÃO CORRETA DE ENTRADA (CRÉDITO/RECEITA) VS SAÍDA (DÉBITO/DESPESA)
             is_entrada = (c_nat == "R") or ("REC" in c_grp) or c_categ.startswith("1.") or (det.get("cTipo") == "E")
             sign = 1 if is_entrada else -1
-            tipo_registro = "RECEBER" if is_entrada else "PAGAR"
+            tipo_registro = "MOVIMENTO"
 
             # Extração do valor do movimento: nValorMovCC -> nValPago -> nValLiquido -> nValorTitulo
             valor = float(det.get("nValorMovCC") or res.get("nValPago") or res.get("nValLiquido") or det.get("nValorTitulo") or 0)
@@ -353,9 +363,9 @@ def push_to_supabase(rows):
             ids = [r["omie_id"] for r in chunk if r.get("omie_id") not in [None, "None", ""]]
             
             if ids:
-                # 1. Deletar os antigos correspondentes
+                # 1. Deletar os antigos correspondentes de qualquer tipo com aquele omie_id na mesma empresa
                 ids_str = ",".join(map(str, ids))
-                del_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?empresa_nome=eq.{empresa}&tipo_registro=eq.{tipo}&omie_id=in.({ids_str})"
+                del_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?empresa_nome=eq.{empresa}&omie_id=in.({ids_str})"
                 
                 del_resp = requests.delete(del_url, headers=HEADERS_SB)
                 if del_resp.status_code not in [200, 204]:
@@ -392,10 +402,13 @@ def main():
         recs_cr = sync.fetch_records(URL_CR, "ListarContasReceber", "conta_receber_cadastro", start_date)
         rows_cr = sync.process_cp_cr(recs_cr, "RECEBER")
         
-        # Movimentos
+        # Mapear IDs de títulos de CP e CR para evitar duplicatas em movimentos
+        known_titles = set(str(r["omie_id"]) for r in rows_cp + rows_cr if r.get("omie_id"))
+        
+        # Movimentos (filtrando espelhos de CP/CR)
         log("Processando Movimentos Bancários...")
         recs_mov = sync.fetch_movimentos(start_date)
-        rows_mov = sync.process_movimentos(recs_mov)
+        rows_mov = sync.process_movimentos(recs_mov, known_titles=known_titles)
         
         # Push (com trava estrita >= 2025-06-01)
         all_rows = rows_cp + rows_cr + rows_mov

@@ -49,10 +49,13 @@ def run_sync():
         rows_cr = sync.process_cp_cr(recs_cr, "RECEBER")
         log(f"  CR processados: {len(rows_cr)} linhas de alocação")
 
+        # Mapear IDs de títulos de CP e CR para evitar duplicatas em movimentos
+        known_titles = set(str(r["omie_id"]) for r in rows_cp + rows_cr if r.get("omie_id"))
+
         # Movimentos Bancários / Extratos
         log("Processando Movimentos Bancários...")
         recs_mov = sync.fetch_movimentos(start_date)
-        rows_mov = sync.process_movimentos(recs_mov)
+        rows_mov = sync.process_movimentos(recs_mov, known_titles=known_titles)
         log(f"  MOV processados: {len(rows_mov)} linhas")
 
         all_rows = rows_cp + rows_cr + rows_mov

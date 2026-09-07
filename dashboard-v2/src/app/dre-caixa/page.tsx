@@ -140,10 +140,13 @@ export default function DreCaixaPage() {
   }, [filteredLancamentos, availableOptions.periodos]);
 
   // 6. Estrutura da Tabela DRE-Caixa
+  const periodosVisiveis = useMemo(() => {
+    return chartData.meses.length > 0 ? chartData.meses : availableOptions.periodos.slice(0, 12);
+  }, [chartData.meses, availableOptions.periodos]);
+
   const tableSections: DreCaixaTableSection[] = useMemo(() => {
-    const periodosVisiveis = chartData.meses.length > 0 ? chartData.meses : availableOptions.periodos.slice(0, 12);
     return DreCaixaService.buildDreTableSections(filteredLancamentos, periodosVisiveis);
-  }, [filteredLancamentos, chartData.meses, availableOptions.periodos]);
+  }, [filteredLancamentos, periodosVisiveis]);
 
   // Limpeza de filtros
   const handleClearFilters = () => {
@@ -197,10 +200,17 @@ export default function DreCaixaPage() {
     setIsDrilldownOpen(true);
   };
 
-  const empresaLabel = filters.empresas.length === 0 ? 'Todas as Empresas' : filters.empresas.join(', ');
+  const empresaLabel = filters.empresas.length === 0
+    ? 'Todas as Empresas'
+    : filters.empresas.length === 1
+    ? filters.empresas[0]
+    : `${filters.empresas.join(' + ')} (${filters.empresas.length} empresas)`;
+
   const periodoLabel = filters.periodos.length === 0
-    ? 'Acumulado (Jun/25 a Set/26)'
-    : filters.periodos.join(', ');
+    ? 'Acumulado (Todos os Meses)'
+    : filters.periodos.length === 1
+    ? filters.periodos[0]
+    : `${filters.periodos.join(', ')} (${filters.periodos.length} meses)`;
 
   const totalOcultos =
     (filters.ocultarCategorias?.length || 0) +
@@ -338,7 +348,7 @@ export default function DreCaixaPage() {
             {(activeTab === 'ambos' || activeTab === 'tabela') && (
               <DreCaixaTable
                 sections={tableSections}
-                meses={chartData.meses.length > 0 ? chartData.meses : availableOptions.periodos.slice(0, 12)}
+                meses={periodosVisiveis}
                 isMeetingMode={isMeetingMode}
                 onOpenDrilldown={handleOpenDrilldown}
               />

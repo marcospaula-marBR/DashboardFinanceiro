@@ -238,8 +238,12 @@ export function DreCaixaFiltersBar({
 }: DreCaixaFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Lista de empresas prioritárias no ecossistema
-  const quickEmpresas = ['Mar Brasil', 'DZM', 'G2', 'Conectius'];
+  // Lista de empresas padrão garantindo a ordem prioritária do ecossistema
+  const defaultEmpresas = ['Mar Brasil', 'DZM', 'G2', 'Conectius'];
+  // Combina com quaisquer outras empresas presentes nos dados
+  const displayedEmpresas = Array.from(
+    new Set([...defaultEmpresas, ...(availableOptions.empresas || [])])
+  ).filter(Boolean);
 
   const ocultarCats = filters.ocultarCategorias || [];
   const ocultarProjs = filters.ocultarProjetos || [];
@@ -286,22 +290,43 @@ export function DreCaixaFiltersBar({
     (filters.search ? 1 : 0) +
     (filters.tipoPagamento && filters.tipoPagamento !== 'TODOS' ? 1 : 0);
 
-  // Seleção rápida de Empresa (Pill Selector de 1 clique)
-  const handleQuickEmpresa = (emp: string | null) => {
+  // Alternância (Toggle) de Empresa com suporte a Múltipla Seleção
+  const handleToggleEmpresa = (emp: string | null) => {
     if (!emp) {
+      // Clicou em 'Todas as Empresas': limpa o filtro
       onChangeFilters({ ...filters, empresas: [] });
     } else {
-      onChangeFilters({ ...filters, empresas: [emp] });
+      const isSelected = filters.empresas.some(e => e.toLowerCase() === emp.toLowerCase());
+      const next = isSelected
+        ? filters.empresas.filter(e => e.toLowerCase() !== emp.toLowerCase())
+        : [...filters.empresas, emp];
+      onChangeFilters({ ...filters, empresas: next });
     }
   };
 
-  // Seleção rápida de Período (Pill Selector de 1 clique)
-  const handleQuickPeriodo = (per: string | null) => {
+  // Alternância (Toggle) de Período com suporte a Múltipla Seleção
+  const handleTogglePeriodo = (per: string | null) => {
     if (!per) {
+      // Clicou em 'Acumulado (Todos)': limpa o filtro de períodos
       onChangeFilters({ ...filters, periodos: [] });
     } else {
-      onChangeFilters({ ...filters, periodos: [per] });
+      const isSelected = filters.periodos.includes(per);
+      const next = isSelected
+        ? filters.periodos.filter(p => p !== per)
+        : [...filters.periodos, per];
+      onChangeFilters({ ...filters, periodos: next });
     }
+  };
+
+  // Atalhos rápidos de períodos
+  const handleSelectUltimos3Meses = () => {
+    const ultimos = availableOptions.periodos.slice(0, 3);
+    onChangeFilters({ ...filters, periodos: ultimos });
+  };
+
+  const handleSelectAno2026 = () => {
+    const meses2026 = availableOptions.periodos.filter(p => p.includes('/26'));
+    onChangeFilters({ ...filters, periodos: meses2026 });
   };
 
   // Seleção rápida de Modalidade (À Vista vs Parcelado)
@@ -329,14 +354,19 @@ export function DreCaixaFiltersBar({
               </h2>
               {filters.empresas.length > 0 && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-                  ⚡ Filtro Inteligente: {filters.empresas.join(', ')}
+                  ⚡ {filters.empresas.length === 1 ? `Empresa: ${filters.empresas[0]}` : `${filters.empresas.length} Empresas: ${filters.empresas.join(' + ')}`}
+                </span>
+              )}
+              {filters.periodos.length > 0 && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">
+                  🗓️ {filters.periodos.length === 1 ? `Mês: ${filters.periodos[0]}` : `${filters.periodos.length} Meses: ${filters.periodos.join(', ')}`}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-slate-500">
               {filters.empresas.length > 0
                 ? `Opções de setores, categorias e favorecidos calibradas para ${filters.empresas.join(', ')}`
-                : 'Selecione a empresa e período para apuração do caixa'}
+                : 'Selecione uma ou mais empresas e meses para apuração do caixa'}
             </p>
           </div>
           {activeFiltersCount > 0 && (
@@ -350,7 +380,7 @@ export function DreCaixaFiltersBar({
           {activeFiltersCount > 0 && (
             <button
               onClick={onClearFilters}
-              className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 font-bold px-2.5 py-1.5 rounded-xl hover:bg-rose-50 border border-rose-100 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 font-bold px-2.5 py-1.5 rounded-xl hover:bg-rose-50 border border-rose-100 transition-colors cursor-pointer"
             >
               <RotateCcw size={13} />
               <span>Limpar Filtros</span>
@@ -359,7 +389,7 @@ export function DreCaixaFiltersBar({
 
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs text-slate-600 hover:text-slate-900 font-bold px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm"
+            className="text-xs text-slate-600 hover:text-slate-900 font-bold px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
           >
             <span>{isExpanded ? 'Recolher' : 'Expandir'}</span>
             <ChevronDown size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
@@ -367,18 +397,27 @@ export function DreCaixaFiltersBar({
         </div>
       </div>
 
-      {/* ── SELETORES RÁPIDOS DE 1 CLIQUE (EMPRESA & PERÍODO) ── */}
+      {/* ── SELETORES RÁPIDOS MULTI-SELEÇÃO (EMPRESAS & MESES) ── */}
       <div className="pt-3 pb-1 space-y-3">
         
-        {/* 1. SELETOR RÁPIDO DE EMPRESA (TABS EXECUTIVAS) */}
+        {/* 1. SELETOR MULTI-SELEÇÃO DE EMPRESAS (Pills com Toggle) */}
         <div className="flex flex-col md:flex-row md:items-center gap-2">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
-            <Building2 size={13} className="text-slate-400" /> Empresa:
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Building2 size={13} className="text-slate-400" /> Empresas:
+            </span>
+            {filters.empresas.length > 1 && (
+              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.2 rounded-full border border-emerald-300">
+                {filters.empresas.length} ativas
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
             <button
-              onClick={() => handleQuickEmpresa(null)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+              type="button"
+              onClick={() => handleToggleEmpresa(null)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
                 isAllEmpresas
                   ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
@@ -386,34 +425,46 @@ export function DreCaixaFiltersBar({
             >
               🏢 Todas as Empresas
             </button>
-            {quickEmpresas.map(emp => {
-              const isActive = filters.empresas.length === 1 && filters.empresas[0].toLowerCase() === emp.toLowerCase();
+            {displayedEmpresas.map(emp => {
+              const isActive = filters.empresas.some(e => e.toLowerCase() === emp.toLowerCase());
               return (
                 <button
+                  type="button"
                   key={emp}
-                  onClick={() => handleQuickEmpresa(emp)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+                  onClick={() => handleToggleEmpresa(emp)}
+                  title={isActive ? `Remover ${emp} da seleção` : `Adicionar ${emp} à seleção`}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
                     isActive
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                       : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
-                  {emp}
+                  {isActive && <Check size={12} className="stroke-[3]" />}
+                  <span>{emp}</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* 2. SELETOR RÁPIDO DE PERÍODO (MESES RECENTES) */}
+        {/* 2. SELETOR MULTI-SELEÇÃO DE PERÍODOS (Meses com Toggle) */}
         <div className="flex flex-col md:flex-row md:items-center gap-2">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
-            <Calendar size={13} className="text-slate-400" /> Período:
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Calendar size={13} className="text-slate-400" /> Meses:
+            </span>
+            {filters.periodos.length > 1 && (
+              <span className="text-[9px] bg-sky-100 text-sky-800 font-extrabold px-1.5 py-0.2 rounded-full border border-sky-300">
+                {filters.periodos.length} selecionados
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
             <button
-              onClick={() => handleQuickPeriodo(null)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+              type="button"
+              onClick={() => handleTogglePeriodo(null)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
                 isAllPeriodos
                   ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
@@ -422,22 +473,46 @@ export function DreCaixaFiltersBar({
             >
               🗓️ Acumulado (Todos os Meses)
             </button>
-            {availableOptions.periodos.slice(0, 8).map(per => {
-              const isActive = filters.periodos.length === 1 && filters.periodos[0] === per;
+
+            {availableOptions.periodos.slice(0, 10).map(per => {
+              const isActive = filters.periodos.includes(per);
               return (
                 <button
+                  type="button"
                   key={per}
-                  onClick={() => handleQuickPeriodo(per)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+                  onClick={() => handleTogglePeriodo(per)}
+                  title={isActive ? `Desmarcar ${per}` : `Selecionar ${per}`}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
                     isActive
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                       : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
-                  {per}
+                  {isActive && <Check size={12} className="stroke-[3]" />}
+                  <span>{per}</span>
                 </button>
               );
             })}
+
+            {/* Atalhos rápidos de meses */}
+            <div className="flex items-center gap-1 pl-1 border-l border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={handleSelectUltimos3Meses}
+                className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-emerald-700 bg-slate-50 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors shrink-0 cursor-pointer"
+                title="Seleciona os 3 meses mais recentes"
+              >
+                Últimos 3m
+              </button>
+              <button
+                type="button"
+                onClick={handleSelectAno2026}
+                className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-emerald-700 bg-slate-50 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors shrink-0 cursor-pointer"
+                title="Seleciona todos os meses de 2026"
+              >
+                Ano 2026
+              </button>
+            </div>
           </div>
         </div>
 

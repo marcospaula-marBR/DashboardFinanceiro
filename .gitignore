@@ -40,3 +40,4 @@ backup/
 .tmp.driveupload/
 .tmp.*/
 tmp/
+scratch/
