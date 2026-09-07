@@ -225,7 +225,28 @@ export class GeocodingService {
   }
 
   /**
-   * Geocodifica com precisão calibrada
+   * Extrai apenas o número predial limpo (ex: "432, casa 01" -> "432")
+   */
+  public static extractCleanNumber(rawNumber?: string): string {
+    if (!rawNumber) return '';
+    const firstPart = rawNumber.split(/[,/]/)[0] || '';
+    const match = firstPart.match(/\d+/);
+    return match ? match[0] : '';
+  }
+
+  /**
+   * Extrai o nome limpo do logradouro removendo complementos
+   */
+  public static extractCleanStreet(rawStreet?: string): string {
+    if (!rawStreet) return '';
+    return rawStreet
+      .replace(/\b(apto|apartamento|casa|bloco|cj|conjunto|sala|fundos|sobrado|nº|numero)\b.*$/i, '')
+      .replace(/,\s*\d+.*$/, '')
+      .trim();
+  }
+
+  /**
+   * Geocodifica com precisão calibrada por Rua, Número, CEP ou Bairro
    */
   public static async geocodeAddress(params: {
     zip_code?: string;
@@ -234,73 +255,92 @@ export class GeocodingService {
     neighborhood?: string;
     city?: string;
     state?: string;
+    lat?: number;
+    lng?: number;
   }): Promise<LatLng | null> {
+    // 1. Se já possui coordenadas calibradas explícitas
+    if (typeof params.lat === 'number' && typeof params.lng === 'number' && !isNaN(params.lat) && !isNaN(params.lng)) {
+      if (params.lat !== 0 && params.lng !== 0) {
+        return { lat: params.lat, lng: params.lng };
+      }
+    }
+
     this.initCache();
 
     const { zip_code, street, number, neighborhood, city, state } = params;
 
     const cleanZip = zip_code?.replace(/\D/g, '') || '';
     const cleanCity = city?.trim() || '';
+    const cleanState = state?.trim() || 'SP';
     const cleanNeighborhood = neighborhood?.trim() || '';
-    const cleanStreet = street?.trim() || '';
+    const cleanStreet = this.extractCleanStreet(street);
+    const cleanNum = this.extractCleanNumber(number);
+
+    // Se não há nenhuma informação geográfica, não inventar coordenadas
+    if (!cleanZip && !cleanStreet && !cleanNeighborhood && !cleanCity) {
+      return null;
+    }
 
     const queryKey = this.normalizeKey(
-      cleanZip
-        ? `cep_${cleanZip}`
-        : `${cleanStreet} ${cleanNeighborhood} ${cleanCity}`
+      `${cleanStreet}_${cleanNum}_${cleanZip}_${cleanNeighborhood}_${cleanCity}`
     );
 
-    // 1. Checar memória/cache
+    // 2. Checar memória/cache local
     if (this.memoryCache.has(queryKey)) {
       return this.memoryCache.get(queryKey)!;
     }
 
-    // 2. Consulta no Dicionário Calibrado de Bairros
-    if (cleanNeighborhood && cleanCity) {
-      const neighKey = this.normalizeKey(`${cleanNeighborhood}, ${cleanCity}`);
-      if (CALIBRATED_NEIGHBORHOOD_COORDS[neighKey]) {
-        const exact = CALIBRATED_NEIGHBORHOOD_COORDS[neighKey];
-        // Jitter suave e microscópico apenas se tiver número para espalhar na mesma rua
-        const finalCoords = number ? this.addMicroJitter(exact) : exact;
-        this.memoryCache.set(queryKey, finalCoords);
-        this.saveCache();
-        return finalCoords;
+    // 3. Geocodificação de Alta Precisão por Rua + Número + Cidade (Nominatim OpenStreetMap)
+    if (cleanStreet && cleanCity) {
+      // 3.1 Tentativa com número exato
+      if (cleanNum) {
+        try {
+          const q = `${cleanStreet}, ${cleanNum}, ${cleanCity}, ${cleanState}, Brasil`;
+          const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
+          const res = await fetch(url, {
+            headers: { 'User-Agent': 'DashboardFinanceiro/2.0' },
+            signal: AbortSignal.timeout(3500)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data[0] && data[0].lat && data[0].lon) {
+              const exactCoords: LatLng = {
+                lat: parseFloat(data[0].lat),
+                lng: parseFloat(data[0].lon)
+              };
+              this.memoryCache.set(queryKey, exactCoords);
+              this.saveCache();
+              return exactCoords;
+            }
+          }
+        } catch {}
       }
-    }
 
-    // 3. Consulta via BrasilAPI v2 (retorna coordenadas oficiais de CEP)
-    if (cleanZip && cleanZip.length === 8) {
+      // 3.2 Tentativa por segmento da rua (sem número)
       try {
-        const bRes = await fetch(`https://brasilapi.com.br/api/cep/v2/${cleanZip}`, {
+        const url = `https://nominatim.openstreetmap.org/search?street=${encodeURIComponent(cleanStreet)}&city=${encodeURIComponent(cleanCity)}&state=${encodeURIComponent(cleanState)}&country=Brazil&format=json&limit=1`;
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'DashboardFinanceiro/2.0' },
           signal: AbortSignal.timeout(3500)
         });
-        if (bRes.ok) {
-          const bData = await bRes.json();
-          if (bData.location?.coordinates?.latitude && bData.location?.coordinates?.longitude) {
-            const bCoords: LatLng = {
-              lat: parseFloat(bData.location.coordinates.latitude),
-              lng: parseFloat(bData.location.coordinates.longitude)
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data[0] && data[0].lat && data[0].lon) {
+            const baseStreetCoords: LatLng = {
+              lat: parseFloat(data[0].lat),
+              lng: parseFloat(data[0].lon)
             };
-            const finalCoords = number ? this.addMicroJitter(bCoords) : bCoords;
+            const finalCoords = cleanNum ? this.addMicroJitter(baseStreetCoords) : baseStreetCoords;
             this.memoryCache.set(queryKey, finalCoords);
             this.saveCache();
             return finalCoords;
           }
-          
-          if (bData.neighborhood && bData.city) {
-            const bKey = this.normalizeKey(`${bData.neighborhood}, ${bData.city}`);
-            if (CALIBRATED_NEIGHBORHOOD_COORDS[bKey]) {
-              const exact = CALIBRATED_NEIGHBORHOOD_COORDS[bKey];
-              const finalCoords = this.addMicroJitter(exact);
-              this.memoryCache.set(queryKey, finalCoords);
-              this.saveCache();
-              return finalCoords;
-            }
-          }
         }
       } catch {}
+    }
 
-      // Fallback ViaCEP
+    // 4. Consulta por CEP via ViaCEP (Normalização de Logradouro Oficial)
+    if (cleanZip && cleanZip.length === 8) {
       try {
         const res = await fetch(`https://viacep.com.br/ws/${cleanZip}/json/`, {
           signal: AbortSignal.timeout(3000)
@@ -308,22 +348,64 @@ export class GeocodingService {
         if (res.ok) {
           const vData = await res.json();
           if (!vData.erro) {
+            const vLogradouro = this.extractCleanStreet(vData.logradouro);
             const vBairro = vData.bairro || cleanNeighborhood;
             const vCidade = vData.localidade || cleanCity;
-            const vKey = this.normalizeKey(`${vBairro}, ${vCidade}`);
-            if (CALIBRATED_NEIGHBORHOOD_COORDS[vKey]) {
-              const exact = CALIBRATED_NEIGHBORHOOD_COORDS[vKey];
-              const finalCoords = this.addMicroJitter(exact);
-              this.memoryCache.set(queryKey, finalCoords);
-              this.saveCache();
-              return finalCoords;
+
+            // Tentar geocodificar com o logradouro oficial retornado pelo Correios/ViaCEP
+            if (vLogradouro && vCidade) {
+              try {
+                const qVia = cleanNum 
+                  ? `${vLogradouro}, ${cleanNum}, ${vCidade}, ${cleanState}, Brasil`
+                  : `${vLogradouro}, ${vCidade}, ${cleanState}, Brasil`;
+                const qRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(qVia)}&format=json&limit=1`, {
+                  headers: { 'User-Agent': 'DashboardFinanceiro/2.0' },
+                  signal: AbortSignal.timeout(3500)
+                });
+                if (qRes.ok) {
+                  const qData = await qRes.json();
+                  if (qData && qData[0] && qData[0].lat && qData[0].lon) {
+                    const exactViaCoords: LatLng = {
+                      lat: parseFloat(qData[0].lat),
+                      lng: parseFloat(qData[0].lon)
+                    };
+                    this.memoryCache.set(queryKey, exactViaCoords);
+                    this.saveCache();
+                    return exactViaCoords;
+                  }
+                }
+              } catch {}
+            }
+
+            // Fallback de bairro retornado pelo ViaCEP
+            if (vBairro && vCidade) {
+              const vKey = this.normalizeKey(`${vBairro}, ${vCidade}`);
+              if (CALIBRATED_NEIGHBORHOOD_COORDS[vKey]) {
+                const exact = CALIBRATED_NEIGHBORHOOD_COORDS[vKey];
+                const finalCoords = cleanNum ? this.addMicroJitter(exact) : exact;
+                this.memoryCache.set(queryKey, finalCoords);
+                this.saveCache();
+                return finalCoords;
+              }
             }
           }
         }
       } catch {}
     }
 
-    // 4. Consulta no Dicionário Calibrado de Cidades
+    // 5. Fallback no Dicionário Calibrado de Bairros (apenas se a rua não foi localizada)
+    if (cleanNeighborhood && cleanCity) {
+      const neighKey = this.normalizeKey(`${cleanNeighborhood}, ${cleanCity}`);
+      if (CALIBRATED_NEIGHBORHOOD_COORDS[neighKey]) {
+        const exact = CALIBRATED_NEIGHBORHOOD_COORDS[neighKey];
+        const finalCoords = cleanNum ? this.addMicroJitter(exact) : exact;
+        this.memoryCache.set(queryKey, finalCoords);
+        this.saveCache();
+        return finalCoords;
+      }
+    }
+
+    // 6. Fallback no Dicionário Calibrado de Cidades
     if (cleanCity) {
       const cityKey = this.normalizeKey(cleanCity);
       if (CALIBRATED_CITY_COORDS[cityKey]) {
@@ -335,9 +417,7 @@ export class GeocodingService {
       }
     }
 
-    // Fallback padrão Santos
-    const defaultCoords = { lat: -23.9618, lng: -46.3322 };
-    return defaultCoords;
+    return null;
   }
 
   private static addMicroJitter(base: LatLng): LatLng {

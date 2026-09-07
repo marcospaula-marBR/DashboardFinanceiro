@@ -24,15 +24,15 @@ interface PeopleGeoLocationMapProps {
   showValues: boolean;
 }
 
-type DisplayMode = 'map' | 'workstations_only' | 'matrix';
+type DisplayMode = 'map' | 'workstations_only' | 'employees_calibration' | 'matrix';
 type MapTileStyle = 'voyager' | 'streets' | 'satellite';
 
 const MAP_TILE_PROVIDERS: Record<MapTileStyle, { url: string; attribution: string; name: string; icon: string }> = {
   voyager: {
     name: 'Executivo',
     icon: '🏙️',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CARTO &copy; OpenStreetMap'
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ, USGS'
   },
   streets: {
     name: 'Ruas & Trânsito',
@@ -60,13 +60,21 @@ export function PeopleGeoLocationMap({
   const [isLoadingGeo, setIsLoadingGeo] = useState(true);
   const [geoItems, setGeoItems] = useState<EmployeeGeoItem[]>([]);
 
-  // Modo de Exibição: Mapa Completo vs. Apenas Postos (Calibração) vs. Matriz
+  // Modo de Exibição: Mapa Completo vs. Apenas Postos (Calibração) vs. Calibração Colaboradores vs. Matriz
   const [displayMode, setDisplayMode] = useState<DisplayMode>('map');
   const [mapStyle, setMapStyle] = useState<MapTileStyle>('voyager');
 
   // Estado de Calibração / Drag & Drop de Postos
   const [pendingWsDrag, setPendingWsDrag] = useState<{ wsId: string; wsName: string; lat: number; lng: number } | null>(null);
   const [isSavingDrag, setIsSavingDrag] = useState(false);
+
+  // Estado de Calibração / Drag & Drop de Residência de Colaborador
+  const [pendingEmployeeCoordDrag, setPendingEmployeeCoordDrag] = useState<{
+    empItem: EmployeeGeoItem;
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [isSavingCoordDrag, setIsSavingCoordDrag] = useState(false);
 
   // Estado para Remanejamento por Drag & Drop de Colaboradores para Postos / Unidades
   const [pendingEmployeeRemap, setPendingEmployeeRemap] = useState<{
@@ -88,6 +96,53 @@ export function PeopleGeoLocationMap({
   } | null>(null);
   const [isSavingRemap, setIsSavingRemap] = useState(false);
   const [remapSuccessMessage, setRemapSuccessMessage] = useState<string | null>(null);
+
+  const handleConfirmCoordDrag = async () => {
+    if (!pendingEmployeeCoordDrag) return;
+    setIsSavingCoordDrag(true);
+    try {
+      const { empItem, lat, lng } = pendingEmployeeCoordDrag;
+      const emp = employees.find(e => e.id === empItem.employee_id);
+      const existingMeta = emp?.metadata || {};
+
+      const { error } = await supabase
+        .from('employees')
+        .update({
+          metadata: {
+            ...existingMeta,
+            lat: Number(lat.toFixed(6)),
+            lng: Number(lng.toFixed(6)),
+            manual_calibrated: true,
+            calibrated_at: new Date().toISOString()
+          }
+        })
+        .eq('id', empItem.employee_id);
+
+      if (error) throw error;
+
+      setGeoItems(prev => prev.map(item => {
+        if (item.employee_id === empItem.employee_id) {
+          return {
+            ...item,
+            lat: Number(lat.toFixed(6)),
+            lng: Number(lng.toFixed(6)),
+            has_valid_coords: true
+          };
+        }
+        return item;
+      }));
+
+      const nameStr = empItem.corporate_name || empItem.name;
+      setRemapSuccessMessage(`Coordenadas de ${nameStr} calibradas com sucesso no mapa!`);
+      setPendingEmployeeCoordDrag(null);
+      setTimeout(() => setRemapSuccessMessage(null), 4500);
+    } catch (err: any) {
+      console.error('Erro ao calibrar coordenadas de colaborador:', err);
+      alert(`Falha ao salvar calibração: ${err.message || 'Erro de conexão'}`);
+    } finally {
+      setIsSavingCoordDrag(false);
+    }
+  };
 
   const handleConfirmRemap = async () => {
     if (!pendingEmployeeRemap) return;
@@ -194,8 +249,14 @@ export function PeopleGeoLocationMap({
         const cleanZip = zipCode.replace(/\D/g, '');
         const hasAddrInfo = Boolean(cleanZip || street || neighborhood || city);
 
+        // 1. Checar se já possui coordenadas calibradas no metadata (prioridade absoluta)
+        const savedLat = emp.metadata?.lat;
+        const savedLng = emp.metadata?.lng;
+
         let coords: LatLng | null = null;
-        if (hasAddrInfo) {
+        if (typeof savedLat === 'number' && typeof savedLng === 'number' && !isNaN(savedLat) && !isNaN(savedLng) && savedLat !== 0 && savedLng !== 0) {
+          coords = { lat: savedLat, lng: savedLng };
+        } else if (hasAddrInfo) {
           coords = await GeocodingService.geocodeAddress({
             zip_code: cleanZip,
             street,
@@ -206,14 +267,8 @@ export function PeopleGeoLocationMap({
           });
         }
 
-        if (!coords) {
-          coords = await GeocodingService.geocodeAddress({
-            city: city || 'Santos',
-            state: state || 'SP'
-          });
-        }
-
-        const validCoords = coords || { lat: -23.9618, lng: -46.3322 };
+        const hasValidCoords = Boolean(coords && coords.lat !== 0 && coords.lng !== 0);
+        const validCoords = coords;
 
         // Identificar local atual: Posto tradicional OU Unidade de Centro de Custo
         const currentLoc = (emp.service_location || '').toLowerCase();
@@ -251,11 +306,11 @@ export function PeopleGeoLocationMap({
           }
         }
 
-        // Calcular distâncias para todos os postos
+        // Calcular distâncias para todos os postos apenas se possuir coordenadas válidas
         let nearestWs: { workstation: Workstation; distance_km: number } | null = null;
         let distanceToCurrent: number | null = null;
 
-        if (workstations.length > 0) {
+        if (validCoords && workstations.length > 0) {
           let minDistance = Infinity;
           let closestWs: Workstation | null = null;
 
@@ -279,13 +334,13 @@ export function PeopleGeoLocationMap({
         }
 
         // Se estiver alocado em uma unidade/escola, calcular a distância até a unidade
-        if (assignedUnit) {
+        if (validCoords && assignedUnit) {
           distanceToCurrent = GeocodingService.calculateDistanceKm(validCoords, { lat: assignedUnit.lat, lng: assignedUnit.lng });
         }
 
         // Oportunidade de remanejamento
         let potentialOpt: EmployeeGeoItem['potential_optimization'] = null;
-        if (assignedWs && nearestWs && nearestWs.workstation.id !== assignedWs.id) {
+        if (validCoords && assignedWs && nearestWs && nearestWs.workstation.id !== assignedWs.id) {
           const curDist = distanceToCurrent || GeocodingService.calculateDistanceKm(validCoords, { lat: assignedWs.lat, lng: assignedWs.lng });
           const diff = curDist - nearestWs.distance_km;
           if (diff >= 3) {
@@ -313,9 +368,9 @@ export function PeopleGeoLocationMap({
           city: emp.city,
           state: emp.state,
           zip_code: emp.zip_code,
-          lat: validCoords.lat,
-          lng: validCoords.lng,
-          has_valid_coords: hasAddrInfo,
+          lat: validCoords ? validCoords.lat : 0,
+          lng: validCoords ? validCoords.lng : 0,
+          has_valid_coords: hasValidCoords,
           current_service_location: emp.service_location,
           assigned_workstation: assignedWs,
           assigned_unit: assignedUnit,
@@ -436,7 +491,7 @@ export function PeopleGeoLocationMap({
 
   // Forçar redimensionamento do Leaflet ao alternar entre os modos de mapa
   useEffect(() => {
-    if ((displayMode === 'map' || displayMode === 'workstations_only') && leafletMapRef.current) {
+    if ((displayMode === 'map' || displayMode === 'workstations_only' || displayMode === 'employees_calibration') && leafletMapRef.current) {
       setTimeout(() => {
         try {
           leafletMapRef.current.invalidateSize();
@@ -684,29 +739,35 @@ export function PeopleGeoLocationMap({
         return;
       }
 
-      // ── Colaboradores no Mapa (Iniciais no Pin / Foto no Tooltip e Drawer) ──
+      // ── Colaboradores no Mapa (Apenas com Coordenadas Válidas e Calibradas) ──
+      const isEmpCalibrationMode = displayMode === 'employees_calibration';
+
       filteredGeoItems.forEach(empItem => {
+        // NÃO plotar colaboradores sem coordenadas reais no mapa
+        if (!empItem.has_valid_coords || !empItem.lat || !empItem.lng) return;
+
         const isSelected = selectedEmployeeId === empItem.employee_id;
         const hasOpt = Boolean(empItem.potential_optimization);
         const borderColor = empItem.is_outsourced ? '#f59e0b' : empItem.linkType === 'CLT' ? '#3b82f6' : '#8b5cf6';
         const initials = empItem.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
-        const size = isSelected ? 38 : 30;
+        const size = isSelected ? 38 : isEmpCalibrationMode ? 34 : 30;
 
-        // Marcador Padrão: Ícone Circular com as Iniciais
+        // Marcador: Ícone Circular com as Iniciais (com destaque se em modo de calibração)
         const empIconHtml = `
           <div style="
             background: white;
             width: ${size}px;
             height: ${size}px;
             border-radius: 50%;
-            border: ${isSelected ? '3.5px solid #0f172a' : `2.5px solid ${borderColor}`};
+            border: ${isSelected ? '3.5px solid #0f172a' : isEmpCalibrationMode ? '3px solid #9333ea' : `2.5px solid ${borderColor}`};
             box-shadow: 0 3px 10px rgba(0,0,0,0.25);
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
+            cursor: ${isEmpCalibrationMode ? 'grab' : 'pointer'};
             position: relative;
             transition: all 0.2s;
+            ${isEmpCalibrationMode ? 'outline: 2.5px solid rgba(147, 51, 234, 0.45); outline-offset: 2px;' : ''}
             ${hasOpt ? 'box-shadow: 0 0 0 3.5px rgba(244, 63, 94, 0.45);' : ''}
           " title="${empItem.name}">
             <div style="
@@ -718,8 +779,8 @@ export function PeopleGeoLocationMap({
               justify-content: center;
               font-size: ${isSelected ? '12px' : '10px'};
               font-weight: 900;
-              color: ${borderColor};
-              background: ${borderColor}12;
+              color: ${isEmpCalibrationMode ? '#9333ea' : borderColor};
+              background: ${isEmpCalibrationMode ? '#9333ea15' : `${borderColor}12`};
             ">
               ${initials}
             </div>
@@ -734,7 +795,7 @@ export function PeopleGeoLocationMap({
           iconAnchor: [size / 2, size / 2]
         });
 
-        // Marcador arrastável no mapa para alocação em postos de trabalho ou unidades
+        // Marcador arrastável no mapa para alocação em postos de trabalho ou calibração GPS
         const marker = L.marker([empItem.lat, empItem.lng], {
           icon: customEmpIcon,
           draggable: true
@@ -747,6 +808,18 @@ export function PeopleGeoLocationMap({
 
         marker.on('dragend', (e: any) => {
           const dropPos = e.target.getLatLng();
+
+          // Se estiver no Modo de Calibração Residencial de Colaboradores
+          if (isEmpCalibrationMode) {
+            setPendingEmployeeCoordDrag({
+              empItem,
+              lat: dropPos.lat,
+              lng: dropPos.lng
+            });
+            // Reverte posição visual até salvar
+            marker.setLatLng([empItem.lat, empItem.lng]);
+            return;
+          }
 
           // Reseta a posição visual do marcador para o ponto residencial até confirmação
           marker.setLatLng([empItem.lat, empItem.lng]);
@@ -831,15 +904,21 @@ export function PeopleGeoLocationMap({
             </div>
             <div>
               <strong style="font-size:12px;color:#0f172a;display:block;line-height:1.2;">${displayName}</strong>
-              ${respName && respName !== displayName ? `<span style="color:#475569;font-size:10.5px;display:block;font-weight:600;">Resp: ${respName}</span>` : ''}
-              <span style="color:#64748b;font-size:10px;display:block;margin-top:1px;">
-                ${empItem.neighborhood || empItem.city || 'Residência'} · <strong style="color:${borderColor};">${empItem.linkType}</strong>
-              </span>
-              ${empItem.assigned_unit ? `
-                <span style="color:#059669;font-size:9.5px;display:block;font-weight:700;margin-top:1px;">
-                  🏫 ${empItem.assigned_unit.name} ${empItem.assigned_region ? `(${empItem.assigned_region.name})` : ''}
+              ${isEmpCalibrationMode ? `
+                <span style="color:#9333ea;font-size:10.5px;display:block;font-weight:700;margin-top:2px;">
+                  📍 Arraste para calibrar endereço no mapa
                 </span>
-              ` : ''}
+              ` : `
+                ${respName && respName !== displayName ? `<span style="color:#475569;font-size:10.5px;display:block;font-weight:600;">Resp: ${respName}</span>` : ''}
+                <span style="color:#64748b;font-size:10px;display:block;margin-top:1px;">
+                  ${empItem.neighborhood || empItem.city || 'Residência'} · <strong style="color:${borderColor};">${empItem.linkType}</strong>
+                </span>
+                ${empItem.assigned_unit ? `
+                  <span style="color:#059669;font-size:9.5px;display:block;font-weight:700;margin-top:1px;">
+                    🏫 ${empItem.assigned_unit.name} ${empItem.assigned_region ? `(${empItem.assigned_region.name})` : ''}
+                  </span>
+                ` : ''}
+              `}
             </div>
           </div>
         `, {
@@ -926,18 +1005,20 @@ export function PeopleGeoLocationMap({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total Mapeado</span>
-            <Users size={16} className="text-blue-600" />
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Localizados no Mapa</span>
+            <MapPin size={16} className="text-emerald-600" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900 dark:text-white">
-              {filteredGeoItems.length}
+              {metrics.totalEmployeesWithAddress}
             </span>
-            <span className="text-xs text-slate-400 font-bold">
-              de {geoItems.length} ({Math.round((filteredGeoItems.length / (geoItems.length || 1)) * 100)}%)
+            <span className="text-xs text-emerald-600 font-bold">
+              GPS Calibrado
             </span>
           </div>
-          <div className="text-[10px] text-slate-400 mt-1">{metrics.totalEmployeesWithAddress} com endereço completo</div>
+          <div className="text-[10px] text-slate-400 mt-1">
+            {metrics.totalWithoutCoordinates > 0 ? `⚠️ ${metrics.totalWithoutCoordinates} sem endereço cadastrado` : '100% com GPS'}
+          </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
@@ -987,13 +1068,14 @@ export function PeopleGeoLocationMap({
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 flex-wrap">
           
-          {/* Seletor de Modo (Mapa Completo vs. Apenas Postos vs. Matriz) */}
+          {/* Seletor de Modo (Mapa Completo vs. Apenas Postos vs. Calibração Colaboradores vs. Matriz) */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0 flex-wrap gap-1">
             <button
               type="button"
               onClick={() => {
                 setDisplayMode('map');
                 setPendingWsDrag(null);
+                setPendingEmployeeCoordDrag(null);
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 displayMode === 'map'
@@ -1009,6 +1091,7 @@ export function PeopleGeoLocationMap({
               onClick={() => {
                 setDisplayMode('workstations_only');
                 setSelectedEmployeeId(null);
+                setPendingEmployeeCoordDrag(null);
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 displayMode === 'workstations_only'
@@ -1017,13 +1100,31 @@ export function PeopleGeoLocationMap({
               }`}
             >
               <Building2 size={14} />
-              <span>🏢 Apenas Postos (Calibração GPS)</span>
+              <span>🏢 Calibrar Postos GPS</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDisplayMode('employees_calibration');
+                setPendingWsDrag(null);
+                setPendingEmployeeCoordDrag(null);
+                setSelectedWorkstationId(null);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                displayMode === 'employees_calibration'
+                  ? 'bg-purple-600 text-white shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <MapPin size={14} />
+              <span>📍 Calibrar Moradias GPS</span>
             </button>
             <button
               type="button"
               onClick={() => {
                 setDisplayMode('matrix');
                 setPendingWsDrag(null);
+                setPendingEmployeeCoordDrag(null);
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 displayMode === 'matrix'
@@ -1036,8 +1137,8 @@ export function PeopleGeoLocationMap({
             </button>
           </div>
 
-          {/* Seletor de Estilo do Mapa (apenas no modo mapa) */}
-          {displayMode === 'map' && (
+          {/* Seletor de Estilo do Mapa */}
+          {(displayMode === 'map' || displayMode === 'employees_calibration' || displayMode === 'workstations_only') && (
             <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
               <span className="text-[10px] font-black uppercase text-slate-400 mr-1">Estilo:</span>
               {(Object.keys(MAP_TILE_PROVIDERS) as MapTileStyle[]).map(st => (
@@ -1267,6 +1368,51 @@ export function PeopleGeoLocationMap({
                         setPendingWsDrag(null);
                         setWorkstations(WorkstationsService.getWorkstations());
                       }}
+                      className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-bold text-[11px] transition-all cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Banner de Calibração GPS de Colaboradores (Drag & Drop) */}
+          {displayMode === 'employees_calibration' && (
+            <div className="absolute top-4 right-4 z-20 bg-purple-600 text-white rounded-2xl p-3.5 shadow-xl border border-purple-500 text-xs max-w-xs space-y-2 pointer-events-auto animate-in slide-in-from-top">
+              <div className="flex items-center gap-2 font-black uppercase text-[11px] tracking-wider">
+                <MapPin size={16} />
+                <span>Calibração GPS de Colaboradores</span>
+              </div>
+              <p className="text-[11px] text-purple-100 leading-relaxed font-medium">
+                Arraste o marcador de qualquer colaborador no mapa para fixar a sua localização residencial com precisão milimétrica.
+              </p>
+              
+              {pendingEmployeeCoordDrag && (
+                <div className="bg-slate-900/95 text-white rounded-xl p-3 space-y-2 border border-slate-700 animate-in zoom-in-95 shadow-lg">
+                  <div className="font-bold text-[11px] text-purple-300 flex items-center gap-1.5">
+                    <CheckCircle2 size={14} />
+                    <span>Confirmar Nova Localização?</span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 font-mono bg-slate-800 p-1.5 rounded border border-slate-700">
+                    <strong className="text-white block">{pendingEmployeeCoordDrag.empItem.corporate_name || pendingEmployeeCoordDrag.empItem.name}</strong>
+                    Lat: {pendingEmployeeCoordDrag.lat.toFixed(6)} | Lng: {pendingEmployeeCoordDrag.lng.toFixed(6)}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={isSavingCoordDrag}
+                      onClick={handleConfirmCoordDrag}
+                      className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-black text-[11px] transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                    >
+                      {isSavingCoordDrag ? <RefreshCw size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                      <span>Salvar Coordenadas</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingCoordDrag}
+                      onClick={() => setPendingEmployeeCoordDrag(null)}
                       className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-bold text-[11px] transition-all cursor-pointer"
                     >
                       Cancelar
