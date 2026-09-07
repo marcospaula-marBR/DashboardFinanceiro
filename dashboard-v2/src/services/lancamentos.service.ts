@@ -113,7 +113,9 @@ export class LancamentosService {
     const dimProjetos = new Map<string, string>();
     (projData.data || []).forEach(p => {
       const key = `${String(p.empresa_nome || '').trim()}-${String(p.codigo_projeto)}`;
-      dimProjetos.set(key, p.descricao_projeto);
+      const raw = p.descricao_projeto || '';
+      const desc = /casa\s*tupi(\s*771)?/i.test(raw) ? 'Núcleo Jurídico' : raw;
+      dimProjetos.set(key, desc);
     });
 
     const dimDRE = new Map<string, string>();

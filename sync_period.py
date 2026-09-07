@@ -51,7 +51,10 @@ def load_project_map(name):
         if resp.status_code == 200:
             for item in resp.json():
                 pid = str(item["codigo_projeto"]).strip()
-                project_maps[name_clean][pid] = item["descricao_projeto"]
+                desc = item["descricao_projeto"] or ""
+                if "casa tupi" in desc.lower() or "tupi 771" in desc.lower():
+                    desc = "Núcleo Jurídico"
+                project_maps[name_clean][pid] = desc
             log(f"  [OK] {len(project_maps[name_clean])} projetos carregados.")
     except: pass
 

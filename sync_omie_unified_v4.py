@@ -138,7 +138,10 @@ class OmieSync:
             projs = res.get("cadastro", [])
             if not projs: break
             for p in projs:
-                self.proj_map[str(p["codigo"])] = p.get("nome")
+                p_nome = p.get("nome") or ""
+                if "casa tupi" in p_nome.lower() or "tupi 771" in p_nome.lower():
+                    p_nome = "Núcleo Jurídico"
+                self.proj_map[str(p["codigo"])] = p_nome
             if pagina >= res.get("total_de_paginas", 0): break
             pagina += 1
         log(f"  [OK] {len(self.proj_map)} projetos memorizados.")

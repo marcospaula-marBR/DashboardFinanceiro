@@ -64,6 +64,20 @@ export function normalizeEmpresa(emp: string): string {
 }
 
 /**
+ * Normaliza nomes de projetos e departamentos conhecidos ou renomeados no Omie ERP.
+ * Garante que variações legadas (ex: 'Casa Tupi 771', 'Casa Tupi 771 - Anexo') convirjam deterministicamente para 'Núcleo Jurídico'.
+ */
+export function normalizeProjectName(name: string): string {
+  if (!name) return name;
+  const trimmed = name.trim();
+  if (/casa\s*tupi(\s*771)?/i.test(trimmed)) {
+    return 'Núcleo Jurídico';
+  }
+  return trimmed;
+}
+
+
+/**
  * Decodifica entidades HTML e caracteres especiais vindos do ERP (ex: &amp; -> &, &quot; -> ", etc.)
  */
 export function decodeHtmlEntities(str: string): string {
@@ -188,7 +202,7 @@ export class DreCaixaService {
         if (projData) {
           projData.forEach((p: any) => {
             const cod = String(p.codigo_projeto || '').trim();
-            const desc = decodeHtmlEntities(p.descricao_projeto || '');
+            const desc = normalizeProjectName(decodeHtmlEntities(p.descricao_projeto || ''));
             const emp = String(p.empresa_nome || '').trim();
             if (cod && desc) {
               projMap.set(cod, desc);
@@ -204,7 +218,7 @@ export class DreCaixaService {
         if (pData) {
           pData.forEach((p: any) => {
             const cod = String(p.omie_id || '').trim();
-            const nome = decodeHtmlEntities(p.nome || '');
+            const nome = normalizeProjectName(decodeHtmlEntities(p.nome || ''));
             if (cod && nome && !projMap.has(cod)) {
               projMap.set(cod, nome);
             }
@@ -377,7 +391,7 @@ export class DreCaixaService {
 
         const omieId = item.omie_id ? String(item.omie_id).trim() : '';
         const nCodTit = String(rawDet.nCodTitulo || '').trim();
-        const depto = String(item.departamento_nome || '').trim();
+        const depto = normalizeProjectName(String(item.departamento_nome || '').trim());
         const deptoLower = depto.toLowerCase();
         const isMovimento = item.tipo_registro === 'MOVIMENTO' || !!rawDet.cOrigem || !!rawDet.nCodMovCC || (raw.resumo && !raw.codigo_lancamento_omie);
 
@@ -499,7 +513,7 @@ export class DreCaixaService {
         if (!projeto) {
           projeto = 'Operacional / Geral';
         }
-        projeto = decodeHtmlEntities(projeto);
+        projeto = normalizeProjectName(decodeHtmlEntities(projeto));
 
         // Categoria
         const categoria = decodeHtmlEntities((item.categoria_nome || 'Despesas Gerais').trim());

@@ -138,7 +138,9 @@ export async function POST(req: Request) {
 
     const dimProjetos = new Map<string, string>();
     (projData.data || []).forEach(p => {
-      dimProjetos.set(String(p.codigo_projeto).trim(), p.descricao_projeto);
+      const raw = p.descricao_projeto || '';
+      const desc = /casa\s*tupi(\s*771)?/i.test(raw) ? 'Núcleo Jurídico' : raw;
+      dimProjetos.set(String(p.codigo_projeto).trim(), desc);
     });
 
     let totalReturned = 0;

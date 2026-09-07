@@ -606,8 +606,10 @@ export class ClaraConfigService {
 
         if (dimProjs && dimProjs.length > 0) {
           dimProjs.forEach(p => {
-            if (p.codigo_projeto && !map.has(p.codigo_projeto)) {
-              map.set(String(p.codigo_projeto).trim(), (p.descricao_projeto || String(p.codigo_projeto)).trim());
+            const rawDesc = (p.descricao_projeto || String(p.codigo_projeto)).trim();
+            const desc = /casa\s*tupi(\s*771)?/i.test(rawDesc) ? 'Núcleo Jurídico' : rawDesc;
+            if (p.codigo_projeto) {
+              map.set(String(p.codigo_projeto).trim(), desc);
             }
           });
         }
@@ -620,8 +622,10 @@ export class ClaraConfigService {
 
         if (projs && projs.length > 0) {
           projs.forEach(p => {
+            const rawNome = (p.nome || String(p.omie_id)).trim();
+            const nome = /casa\s*tupi(\s*771)?/i.test(rawNome) ? 'Núcleo Jurídico' : rawNome;
             if (p.omie_id && !map.has(String(p.omie_id))) {
-              map.set(String(p.omie_id).trim(), (p.nome || String(p.omie_id)).trim());
+              map.set(String(p.omie_id).trim(), nome);
             }
           });
         }
