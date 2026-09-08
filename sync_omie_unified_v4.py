@@ -48,11 +48,8 @@ def format_date_iso_to_iso(date_str):
 
 EXCLUSION_KEYWORDS = [
     'provis',         # provisões (rescisões, férias, 13o, tributos, clientes)
-    'dividendo',       # distribuição de dividendos, dividendos recebidos
     'mutuo',          # mútuo entradas/saídas
     'mútuo',
-    'terceiri',       # terceirização de mão de obra
-    'intermedia',     # intermediação de negócios
     'rendimento',     # rendimentos de aplicações
     'renda fixa',     # renda fixa
     'recarga',        # recarga de cartão corporativo

@@ -326,22 +326,16 @@ export class DreCaixaService {
         if (isTransferencia) return;
 
         // 2. REGRA MANDATÓRIA: EXCLUIR LANÇAMENTOS NÃO OPERACIONAIS / NÃO CAIXA
-        // provisões, dividendos, mútuos, terceirização, intermediação, rendimentos de aplicações,
+        // provisões, mútuos, rendimentos de aplicações,
         // renda fixa, recarga de cartão, integralização de capital, estornos, devoluções,
         // créditos mar Brasil, antecipações DZM, aporte de capital e a classificar
         const isExcluidoCaixa =
           catNomeLower.includes('provis') ||
           obs.includes('provis') ||
-          catNomeLower.includes('dividendo') ||
-          obs.includes('dividendo') ||
           catNomeLower.includes('mutuo') ||
           catNomeLower.includes('mútuo') ||
           obs.includes('mutuo') ||
           obs.includes('mútuo') ||
-          catNomeLower.includes('terceiri') ||
-          obs.includes('terceiri') ||
-          catNomeLower.includes('intermedia') ||
-          obs.includes('intermedia') ||
           catNomeLower.includes('rendimento') ||
           obs.includes('rendimento') ||
           catNomeLower.includes('renda fixa') ||
