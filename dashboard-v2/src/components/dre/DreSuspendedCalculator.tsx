@@ -10,7 +10,9 @@ import {
   Check, 
   ChevronDown, 
   ChevronUp, 
-  Minus 
+  Minus,
+  ArrowUpToLine,
+  ArrowDownToLine
 } from 'lucide-react';
 
 interface DreSuspendedCalculatorProps {
@@ -32,6 +34,8 @@ export function DreSuspendedCalculator({
 }: DreSuspendedCalculatorProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Por padrão posiciona fixo no topo conforme solicitação ("ou coloque-a mais para cima, fixa")
+  const [dockPosition, setDockPosition] = useState<'top' | 'bottom'>('top');
 
   // Não exibe nada se não houver itens selecionados
   if (!selectedCalcItems || selectedCalcItems.length === 0) {
@@ -75,16 +79,21 @@ export function DreSuspendedCalculator({
   // Posicionamento dinâmico baseado no estado da sidebar:
   // Desktop: se a sidebar estiver expandida (w-80 = 320px), posiciona em left-[344px].
   // Se estiver recolhida, posiciona em left-6.
-  // Mobile (< 768px): ocupa a parte inferior esquerda com margem adaptada.
+  // Mobile (< 768px): ocupa a parte esquerda com margem adaptada.
   const leftPositionClass = isSidebarCollapsed
     ? 'left-3 sm:left-6'
     : 'left-3 md:left-[344px]';
+
+  // Posicionamento vertical: 'top' (mais para cima, fixa a ~top-24) ou 'bottom' (base a bottom-5)
+  const verticalPositionClass = dockPosition === 'top'
+    ? 'top-20 sm:top-24'
+    : 'bottom-5';
 
   // --- MODO MINIMIZADO (PÍLULA COMPACTA SUSPENSA) ---
   if (isMinimized) {
     return (
       <div 
-        className={`fixed ${leftPositionClass} bottom-5 z-40 animate-in fade-in slide-in-from-bottom-3 duration-200`}
+        className={`fixed ${leftPositionClass} ${verticalPositionClass} z-40 animate-in fade-in duration-200 transition-all`}
       >
         <button
           onClick={() => setIsMinimized(false)}
@@ -102,7 +111,11 @@ export function DreSuspendedCalculator({
               {formatCurrency(finalDisplayTotal)}
             </span>
           </div>
-          <ChevronUp size={14} className="text-slate-400 group-hover:text-amber-400 transition-colors ml-1" />
+          {dockPosition === 'top' ? (
+            <ChevronDown size={14} className="text-slate-400 group-hover:text-amber-400 transition-colors ml-1" />
+          ) : (
+            <ChevronUp size={14} className="text-slate-400 group-hover:text-amber-400 transition-colors ml-1" />
+          )}
         </button>
       </div>
     );
@@ -111,7 +124,7 @@ export function DreSuspendedCalculator({
   // --- MODO EXPANDIDO (PAINEL FLUTUANTE MODERNO) ---
   return (
     <aside 
-      className={`fixed ${leftPositionClass} bottom-5 z-40 w-[calc(100vw-24px)] sm:w-[350px] max-w-[360px] bg-slate-900/95 backdrop-blur-xl text-white rounded-2xl border border-amber-500/30 shadow-2xl shadow-black/50 ring-1 ring-amber-500/20 p-4 animate-in fade-in slide-in-from-bottom-4 duration-300 select-none`}
+      className={`fixed ${leftPositionClass} ${verticalPositionClass} z-40 w-[calc(100vw-24px)] sm:w-[350px] max-w-[360px] bg-slate-900/95 backdrop-blur-xl text-white rounded-2xl border border-amber-500/30 shadow-2xl shadow-black/50 ring-1 ring-amber-500/20 p-4 animate-in fade-in duration-300 select-none transition-all`}
       aria-label="Calculadora Express Suspensa"
     >
       {/* Cabeçalho do Card Suspenso */}
@@ -129,12 +142,20 @@ export function DreSuspendedCalculator({
               <h3 className="text-xs font-black tracking-wider text-amber-400 uppercase">Calculadora Express</h3>
             </div>
             <p className="text-[10px] text-slate-400 font-medium">
-              Painel Dinâmico Suspenso
+              Painel Dinâmico Suspenso {dockPosition === 'top' ? '(Fixo no Topo)' : '(Fixo na Base)'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-1">
+          {/* Botão Alternar Posição Topo / Base */}
+          <button
+            onClick={() => setDockPosition(prev => prev === 'top' ? 'bottom' : 'top')}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors"
+            title={dockPosition === 'top' ? "Mover para a base (rodapé)" : "Fixar mais para cima (topo)"}
+          >
+            {dockPosition === 'top' ? <ArrowDownToLine size={14} /> : <ArrowUpToLine size={14} />}
+          </button>
           {/* Botão Minimizar */}
           <button
             onClick={() => setIsMinimized(true)}

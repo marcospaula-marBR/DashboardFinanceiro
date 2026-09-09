@@ -63,10 +63,10 @@ export function DreTable({
               <th className="px-4 py-3.5 sticky top-0 left-0 bg-slate-100 z-30 border-r border-b border-slate-200 min-w-[260px] w-[260px] max-w-[260px]">
                 Descrição
               </th>
-              <th className="px-4 py-3.5 text-right sticky top-0 left-[260px] bg-slate-200 font-extrabold border-r border-b border-slate-300 z-30 min-w-[130px] w-[130px]">
+              <th className="px-4 py-3.5 text-right sticky top-0 left-[260px] bg-slate-200 font-extrabold border-r border-b border-slate-300 z-30 min-w-[145px] w-[145px]">
                 Total
               </th>
-              <th className="px-4 py-3.5 text-right sticky top-0 left-[390px] bg-slate-100 font-extrabold border-r border-b border-slate-200 z-30 min-w-[110px] w-[110px]">
+              <th className="px-4 py-3.5 text-right sticky top-0 left-[405px] bg-slate-100 font-extrabold border-r border-b border-slate-200 z-30 min-w-[110px] w-[110px]">
                 Média
               </th>
               {reversedColumns.map(col => (
@@ -117,33 +117,7 @@ export function DreTable({
                       : (isCard ? 'bg-slate-50 z-10' : 'bg-white z-10')
                   }`}>
                     <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-1.5 min-w-0 pr-1">
-                        {onToggleCalcItem && !isPercent && totalVal !== 0 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const isRev = item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada');
-                              onToggleCalcItem({
-                                id: `row-${item.titulo}`,
-                                title: item.titulo,
-                                value: totalVal,
-                                type: isRev ? 'entrada' : 'saida',
-                                source: 'tabela'
-                              });
-                            }}
-                            className={`p-1 rounded-md border transition-all duration-150 shrink-0 ${
-                              isSelectedForCalc
-                                ? 'bg-amber-500 border-amber-600 text-white shadow-sm ring-2 ring-amber-400/30'
-                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50/50 opacity-50 group-hover:opacity-100'
-                            }`}
-                            title={isSelectedForCalc ? "Remover da calculadora express" : "Somar na calculadora express"}
-                          >
-                            <Calculator size={11} />
-                          </button>
-                        )}
-                        <span className="truncate text-[14.5px]">{item.titulo}</span>
-                      </div>
+                      <span className="truncate text-[14.5px] font-medium">{item.titulo}</span>
                       {!isPercent && totalVal !== 0 && (
                         <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ml-2 shrink-0 ${
                           isCard 
@@ -156,13 +130,43 @@ export function DreTable({
                     </div>
                   </td>
                   
-                  <td className={`px-4 py-3 text-right font-mono font-bold text-[14px] sticky left-[260px] border-r border-b border-slate-300 transition-colors group-hover:bg-slate-100 ${
-                    isCard ? 'bg-slate-100 z-10' : 'bg-slate-50 z-10'
+                  <td className={`px-3 py-2.5 text-right font-mono font-bold text-[14px] sticky left-[260px] min-w-[145px] w-[145px] border-r border-b border-slate-300 transition-colors group-hover:bg-slate-100 ${
+                    isSelectedForCalc 
+                      ? 'bg-amber-100/90 text-amber-950 z-10' 
+                      : (isCard ? 'bg-slate-100 z-10' : 'bg-slate-50 z-10')
                   }`}>
-                    {displayValue(totalVal, isPercent, item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada'))}
+                    <div className="flex items-center justify-end gap-2">
+                      {onToggleCalcItem && !isPercent && totalVal !== 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const isRev = item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada');
+                            onToggleCalcItem({
+                              id: `row-${item.titulo}`,
+                              title: item.titulo,
+                              value: totalVal,
+                              type: isRev ? 'entrada' : 'saida',
+                              source: 'tabela'
+                            });
+                          }}
+                          className={`p-1 rounded-md border transition-all duration-150 shrink-0 ${
+                            isSelectedForCalc
+                              ? 'bg-amber-500 border-amber-600 text-white shadow-xs ring-2 ring-amber-400/40 scale-105'
+                              : 'bg-white border-slate-300 text-slate-400 hover:text-amber-600 hover:border-amber-400 hover:bg-amber-50/60 opacity-60 group-hover:opacity-100'
+                          }`}
+                          title={isSelectedForCalc ? "Remover da calculadora express" : "Somar na calculadora express"}
+                        >
+                          <Calculator size={11} />
+                        </button>
+                      )}
+                      <span>
+                        {displayValue(totalVal, isPercent, item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada'))}
+                      </span>
+                    </div>
                   </td>
 
-                  <td className={`px-4 py-3 text-right font-mono text-[14px] sticky left-[390px] border-r border-b border-slate-200 transition-colors group-hover:bg-slate-100 ${
+                  <td className={`px-4 py-3 text-right font-mono text-[14px] sticky left-[405px] min-w-[110px] w-[110px] border-r border-b border-slate-200 transition-colors group-hover:bg-slate-100 ${
                     isCard ? 'bg-slate-50 font-bold z-10' : 'bg-white z-10'
                   }`}>
                     {displayValue(avgVal, isPercent, item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada'))}
