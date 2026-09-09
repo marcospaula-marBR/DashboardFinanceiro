@@ -19,7 +19,7 @@ import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa } from '@/services/
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
 import { supabase } from '@/lib/supabase';
-import { DreFilters, DreMetadata, DreCalculatedResult, DreRow, DreSimulationParams, DreStructureItem, DreTemplateDefinition } from '@/types/dre';
+import { DreFilters, DreMetadata, DreCalculatedResult, DreRow, DreSimulationParams, DreStructureItem, DreTemplateDefinition, SelectedCalcItem } from '@/types/dre';
 import { Scenario, ScenarioAssumption } from '@/types/dre-simulator.types';
 import { DreSimulatorEngine } from '@/services/dre-simulator.engine';
 import { DreExportModal, ExportSelections } from '@/components/dre/DreExportModal';
@@ -121,6 +121,24 @@ export default function DrePage() {
   const [customCardCategories, setCustomCardCategories] = useState<string[]>([]);
   const [isCustomCardModalOpen, setIsCustomCardModalOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Calculadora Express Compartilhada (Cards e Rubricas da Tabela)
+  const [selectedCalcItems, setSelectedCalcItems] = useState<SelectedCalcItem[]>([]);
+
+  const handleToggleCalcItem = useCallback((item: SelectedCalcItem) => {
+    setSelectedCalcItems(prev => {
+      const exists = prev.some(i => i.id === item.id);
+      if (exists) {
+        return prev.filter(i => i.id !== item.id);
+      } else {
+        return [...prev, item];
+      }
+    });
+  }, []);
+
+  const handleClearCalcItems = useCallback(() => {
+    setSelectedCalcItems([]);
+  }, []);
 
   const [rawData, setRawData] = useState<DreRow[]>([]);
   const [metadata, setMetadata] = useState<DreMetadata | null>(null);
@@ -1098,44 +1116,42 @@ export default function DrePage() {
       <div className="flex-1 flex overflow-hidden">
 
         {/* Coluna Central: Dashboard */}
-        <div id="dre-dashboard-content" className={`flex-1 overflow-y-auto p-6 md:p-8 transition-all duration-305 ${isExportingPdf ? 'opacity-50' : ''}`}>
+        <div id="dre-dashboard-content" className={`flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 transition-all duration-305 ${isExportingPdf ? 'opacity-50' : ''}`}>
           <div className="w-full max-w-[1600px] mx-auto">
-            <DreHeader
-              lastUpdate={lastUpdate}
-              onExportPDF={handleOpenExportModal}
-              onTogglePrivacy={() => { setIsPrivacyMode(!isPrivacyMode); if(!isPrivacyMode) setIsRevenuePrivacyMode(false); }}
-              isPrivacyMode={isPrivacyMode}
-              onToggleRevenuePrivacy={() => { setIsRevenuePrivacyMode(!isRevenuePrivacyMode); if(!isRevenuePrivacyMode) setIsPrivacyMode(false); }}
-              isRevenuePrivacyMode={isRevenuePrivacyMode}
-              onToggleSimulator={() => { window.location.href = '/dre-simulador'; }}
-              onOpenEquipmentsManager={() => setIsEquipmentsModalOpen(true)}
-              hasData={rawData.length > 0 && !(fileName ?? '').includes('Banco de Dados Nuvem')}
-              isPublishing={isPublishing}
-              onPublish={handlePublishSnapshot}
-              isSidebarCollapsed={isSidebarCollapsed}
-              onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              onOpenIndicators={() => setIsIndicatorsOpen(true)}
-              onOpenReportBuilder={() => setIsReportBuilderOpen(true)}
-            />
+            {/* Bloco Fixo: Cabeçalho da página até os Cards Principais com a Calculadora Express Visível */}
+            <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md pb-4 pt-1 -mx-4 sm:-mx-6 md:-mx-8 px-4 sm:px-6 md:px-8 border-b border-slate-200/80 shadow-xs transition-all">
+              <DreHeader
+                lastUpdate={lastUpdate}
+                onExportPDF={handleOpenExportModal}
+                onTogglePrivacy={() => { setIsPrivacyMode(!isPrivacyMode); if(!isPrivacyMode) setIsRevenuePrivacyMode(false); }}
+                isPrivacyMode={isPrivacyMode}
+                onToggleRevenuePrivacy={() => { setIsRevenuePrivacyMode(!isRevenuePrivacyMode); if(!isRevenuePrivacyMode) setIsPrivacyMode(false); }}
+                isRevenuePrivacyMode={isRevenuePrivacyMode}
+                onToggleSimulator={() => { window.location.href = '/dre-simulador'; }}
+                onOpenEquipmentsManager={() => setIsEquipmentsModalOpen(true)}
+                hasData={rawData.length > 0 && !(fileName ?? '').includes('Banco de Dados Nuvem')}
+                isPublishing={isPublishing}
+                onPublish={handlePublishSnapshot}
+                isSidebarCollapsed={isSidebarCollapsed}
+                onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                onOpenIndicators={() => setIsIndicatorsOpen(true)}
+                onOpenReportBuilder={() => setIsReportBuilderOpen(true)}
+              />
 
-            {/* Botão de entrada manual — Conectius / Ybox / Histórico */}
-            <div className="flex justify-end mt-3 mb-1">
-              <button
-                id="btn-manual-entry-dre"
-                onClick={() => setIsManualEntryOpen(true)}
-                className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-amber-400 border border-slate-700 hover:border-amber-500/50 bg-slate-800/50 hover:bg-slate-800 px-3 py-2 rounded-lg transition-all duration-200"
-                title="Inserir dados manuais de Conectius, Ybox ou histórico fora do Omie"
-              >
-                <ClipboardEdit size={13} />
-                Dados Manuais
-              </button>
-            </div>
+              {/* Botão de entrada manual — Conectius / Ybox / Histórico */}
+              <div className="flex justify-end mt-2 mb-2">
+                <button
+                  id="btn-manual-entry-dre"
+                  onClick={() => setIsManualEntryOpen(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-amber-600 border border-slate-200 hover:border-amber-400 bg-white hover:bg-amber-50/40 px-2.5 py-1 rounded-lg transition-all duration-200 shadow-xs"
+                  title="Inserir dados manuais de Conectius, Ybox ou histórico fora do Omie"
+                >
+                  <ClipboardEdit size={12} />
+                  Dados Manuais
+                </button>
+              </div>
 
-            <div className="space-y-8 mt-8">
-              {/* Alertas Inteligentes */}
-              <SmartAlerts alerts={alerts} />
-
-              {/* Leitura Rápida */}
+              {/* Leitura Rápida e Calculadora Express */}
               <DreKpiCards
                 results={results}
                 isPrivacyMode={isPrivacyMode}
@@ -1145,7 +1161,15 @@ export default function DrePage() {
                 customCardTotal={customCardTotal}
                 customCardCategoriesCount={customCardCategories.length}
                 onCustomCardClick={() => setIsCustomCardModalOpen(true)}
+                selectedCalcItems={selectedCalcItems}
+                onToggleCalcItem={handleToggleCalcItem}
+                onClearCalcItems={handleClearCalcItems}
               />
+            </div>
+
+            <div className="space-y-8 mt-6">
+              {/* Alertas Inteligentes */}
+              <SmartAlerts alerts={alerts} />
 
               {/* Análise Visual (Gráficos) */}
               {results && (
@@ -1179,6 +1203,8 @@ export default function DrePage() {
                       isPrivacyMode={isPrivacyMode}
                       isRevenuePrivacyMode={isRevenuePrivacyMode}
                       onRowClick={handleOpenDetails}
+                      selectedCalcItems={selectedCalcItems}
+                      onToggleCalcItem={handleToggleCalcItem}
                     />
                   </div>
                 </div>

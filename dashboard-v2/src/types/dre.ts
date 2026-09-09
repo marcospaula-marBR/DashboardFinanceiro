@@ -1,3 +1,11 @@
+export interface SelectedCalcItem {
+  id: string;
+  title: string;
+  value: number;
+  type: 'entrada' | 'saida';
+  source: 'card' | 'tabela';
+}
+
 export interface DreFilters {
   empresas: string[];
   periodos: string[];

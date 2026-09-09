@@ -1,14 +1,24 @@
 import React from 'react';
-import { DreCalculatedResult } from '@/types/dre';
+import { DreCalculatedResult, SelectedCalcItem } from '@/types/dre';
+import { Calculator } from 'lucide-react';
 
 interface DreTableProps {
   results: DreCalculatedResult | null;
   isPrivacyMode: boolean;
   isRevenuePrivacyMode?: boolean;
   onRowClick?: (title: string) => void;
+  selectedCalcItems?: SelectedCalcItem[];
+  onToggleCalcItem?: (item: SelectedCalcItem) => void;
 }
 
-export function DreTable({ results, isPrivacyMode, isRevenuePrivacyMode, onRowClick }: DreTableProps) {
+export function DreTable({ 
+  results, 
+  isPrivacyMode, 
+  isRevenuePrivacyMode, 
+  onRowClick,
+  selectedCalcItems,
+  onToggleCalcItem
+}: DreTableProps) {
   if (!results) {
     return (
       <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-500 shadow-sm">
@@ -31,10 +41,19 @@ export function DreTable({ results, isPrivacyMode, isRevenuePrivacyMode, onRowCl
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
   };
 
+  const selectedRowsCount = selectedCalcItems?.filter(i => i.source === 'tabela').length || 0;
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
       <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-        <h3 className="font-bold text-slate-800 text-lg">Detalhamento Financeiro</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="font-bold text-slate-800 text-lg">Detalhamento Financeiro</h3>
+          {selectedRowsCount > 0 && (
+            <span className="text-xs bg-amber-100 text-amber-800 border border-amber-300/60 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+              <Calculator size={11} /> {selectedRowsCount} {selectedRowsCount === 1 ? 'rubrica na calculadora' : 'rubricas na calculadora'}
+            </span>
+          )}
+        </div>
       </div>
       
       <div className="overflow-auto max-h-[68vh] relative">
@@ -80,19 +99,51 @@ export function DreTable({ results, isPrivacyMode, isRevenuePrivacyMode, onRowCl
                 : (reversedColumns.length > 0 ? (totalVal / reversedColumns.length) : 0);
               const pct = totalReceita > 0 ? (totalVal / totalReceita) * 100 : 0;
 
+              const isSelectedForCalc = selectedCalcItems?.some(i => i.id === `row-${item.titulo}`);
+
               return (
                 <tr 
                   key={idx} 
                   onClick={() => onRowClick && onRowClick(item.titulo)}
                   className={`transition-colors group ${onRowClick ? 'cursor-pointer' : ''} ${
+                    isSelectedForCalc ? 'ring-2 ring-inset ring-amber-400/60 bg-amber-50/25' : ''
+                  } ${
                     isCard ? 'bg-slate-50/80 font-bold text-slate-900 text-[15px]' : 'text-slate-700 font-medium hover:bg-slate-50'
                   }`}
                 >
                   <td className={`px-4 py-3 sticky left-0 border-r border-b border-slate-200 min-w-[260px] w-[260px] max-w-[260px] transition-colors group-hover:bg-slate-100 ${
-                    isCard ? 'bg-slate-50 z-10' : 'bg-white z-10'
+                    isSelectedForCalc 
+                      ? 'bg-amber-50/70 z-10' 
+                      : (isCard ? 'bg-slate-50 z-10' : 'bg-white z-10')
                   }`}>
                     <div className="flex items-center justify-between w-full">
-                      <span className="truncate text-[14.5px]">{item.titulo}</span>
+                      <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                        {onToggleCalcItem && !isPercent && totalVal !== 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const isRev = item.titulo.toLowerCase().includes('receita') || item.titulo.toLowerCase().includes('entrada');
+                              onToggleCalcItem({
+                                id: `row-${item.titulo}`,
+                                title: item.titulo,
+                                value: totalVal,
+                                type: isRev ? 'entrada' : 'saida',
+                                source: 'tabela'
+                              });
+                            }}
+                            className={`p-1 rounded-md border transition-all duration-150 shrink-0 ${
+                              isSelectedForCalc
+                                ? 'bg-amber-500 border-amber-600 text-white shadow-sm ring-2 ring-amber-400/30'
+                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50/50 opacity-50 group-hover:opacity-100'
+                            }`}
+                            title={isSelectedForCalc ? "Remover da calculadora express" : "Somar na calculadora express"}
+                          >
+                            <Calculator size={11} />
+                          </button>
+                        )}
+                        <span className="truncate text-[14.5px]">{item.titulo}</span>
+                      </div>
                       {!isPercent && totalVal !== 0 && (
                         <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ml-2 shrink-0 ${
                           isCard 
