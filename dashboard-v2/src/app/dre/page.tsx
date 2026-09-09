@@ -25,6 +25,7 @@ import { DreSimulatorEngine } from '@/services/dre-simulator.engine';
 import { DreExportModal, ExportSelections } from '@/components/dre/DreExportModal';
 import { DrePrintCharts } from '@/components/dre/DrePrintCharts';
 import { DreCustomCardModal } from '@/components/dre/DreCustomCardModal';
+import { DreSuspendedCalculator } from '@/components/dre/DreSuspendedCalculator';
 import { TableIcon, ChevronDown, ChevronUp, Lock, ArrowRight, Loader2, Sparkles, Filter, ChevronLeft, ClipboardEdit } from 'lucide-react';
 
 function parseMonthValue(str: string): { original: string; val: number } {
@@ -1118,8 +1119,8 @@ export default function DrePage() {
         {/* Coluna Central: Dashboard */}
         <div id="dre-dashboard-content" className={`flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 transition-all duration-305 ${isExportingPdf ? 'opacity-50' : ''}`}>
           <div className="w-full max-w-[1600px] mx-auto">
-            {/* Bloco Fixo: Cabeçalho da página até os Cards Principais com a Calculadora Express Visível */}
-            <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md pb-4 pt-1 -mx-4 sm:-mx-6 md:-mx-8 px-4 sm:px-6 md:px-8 border-b border-slate-200/80 shadow-xs transition-all">
+            {/* Bloco Superior: Cabeçalho da página e Cards Principais */}
+            <div className="pb-4 pt-1 transition-all">
               <DreHeader
                 lastUpdate={lastUpdate}
                 onExportPDF={handleOpenExportModal}
@@ -1303,6 +1304,15 @@ export default function DrePage() {
         simulatedResult={results}
       />
 
+      {/* Calculadora Express Suspensa na Lateral Esquerda */}
+      <DreSuspendedCalculator
+        selectedCalcItems={selectedCalcItems}
+        onToggleCalcItem={handleToggleCalcItem}
+        onClearCalcItems={handleClearCalcItems}
+        isSidebarCollapsed={isSidebarCollapsed}
+        isPrivacyMode={isPrivacyMode}
+        isRevenuePrivacyMode={isRevenuePrivacyMode}
+      />
 
     </main>
   );
