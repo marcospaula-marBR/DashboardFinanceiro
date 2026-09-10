@@ -1301,6 +1301,88 @@ export class LoansService {
       };
     });
   }
+
+  /**
+   * Reatribui um contrato a outro colaborador mantendo sincronizadas todas as parcelas filhas
+   */
+  static async reassignContractEmployee(
+    contractId: string,
+    newEmployeeId: string,
+    isTestMode?: boolean
+  ): Promise<void> {
+    const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
+    const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
+
+    // 1. Atualiza o contrato mestre
+    const { error: loanErr } = await supabase
+      .from(table)
+      .update({ employee_id: newEmployeeId })
+      .eq('id', contractId);
+
+    if (loanErr) {
+      console.error('[LoansService] Erro ao reatribuir contrato:', loanErr);
+      throw new Error(`Falha ao reatribuir contrato: ${loanErr.message}`);
+    }
+
+    // 2. Atualiza sincronizadamente todas as parcelas filhas do contrato
+    const { error: payErr } = await supabase
+      .from(paymentsTable)
+      .update({ employee_id: newEmployeeId })
+      .eq('contract_id', contractId);
+
+    if (payErr) {
+      console.error('[LoansService] Erro ao sincronizar parcelas reatribuídas:', payErr);
+      throw new Error(`Falha ao sincronizar parcelas: ${payErr.message}`);
+    }
+  }
+
+  /**
+   * Varre e concilia a integridade de todas as parcelas contra os contratos mestres,
+   * reparando automaticamente qualquer divergência de employee_id entre as tabelas.
+   */
+  static async reconcileAllLoanPayments(isTestMode?: boolean): Promise<{ checked: number; reconciled: number }> {
+    const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
+    const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
+
+    const [loansRes, paymentsRes] = await Promise.all([
+      supabase.from(table).select('id, employee_id'),
+      supabase.from(paymentsTable).select('id, contract_id, employee_id')
+    ]);
+
+    if (loansRes.error || !loansRes.data) return { checked: 0, reconciled: 0 };
+    if (paymentsRes.error || !paymentsRes.data) return { checked: 0, reconciled: 0 };
+
+    const contractEmpMap = new Map<string, string>();
+    loansRes.data.forEach(l => {
+      contractEmpMap.set(l.id, l.employee_id);
+    });
+
+    const mismatchesByTargetEmp = new Map<string, string[]>();
+    let checked = 0;
+
+    paymentsRes.data.forEach(p => {
+      checked++;
+      const expectedEmpId = contractEmpMap.get(p.contract_id);
+      if (expectedEmpId && expectedEmpId !== p.employee_id) {
+        const arr = mismatchesByTargetEmp.get(expectedEmpId) || [];
+        arr.push(p.id);
+        mismatchesByTargetEmp.set(expectedEmpId, arr);
+      }
+    });
+
+    let reconciled = 0;
+    for (const [targetEmpId, paymentIds] of mismatchesByTargetEmp.entries()) {
+      const { error } = await supabase
+        .from(paymentsTable)
+        .update({ employee_id: targetEmpId })
+        .in('id', paymentIds);
+      if (!error) {
+        reconciled += paymentIds.length;
+      }
+    }
+
+    return { checked, reconciled };
+  }
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
