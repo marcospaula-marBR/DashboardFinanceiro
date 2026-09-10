@@ -9,6 +9,7 @@ import { DashboardCharts } from "@/components/loans/DashboardCharts";
 import { EmployeeTable } from "@/components/loans/EmployeeTable";
 import { SideDrawer } from "@/components/loans/SideDrawer";
 import { PaymentProcessingModal } from "@/components/loans/PaymentProcessingModal";
+import { SyncIntegrityModal } from "@/components/loans/SyncIntegrityModal";
 import { NewLoanModal } from "@/components/loans/NewLoanModal";
 import { AuditPanel } from "@/components/loans/AuditPanel";
 import { LoansService, formatCurrency } from "@/services/loans.service";
@@ -27,6 +28,7 @@ import {
   Loader2,
   AlertCircle,
   CreditCard,
+  ShieldCheck,
   X
 } from "lucide-react";
 
@@ -35,6 +37,7 @@ export default function EmprestimosPage() {
   const router = useRouter();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isNewLoanOpen, setIsNewLoanOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
@@ -255,6 +258,7 @@ export default function EmprestimosPage() {
     cargo: "",
     remuneracaoRange: "",
     temAditivo: "",
+    apenasMultiplosContratos: false,
     incluirQuitados: false,
     mostrarTodos: false,
   });
@@ -458,6 +462,10 @@ export default function EmprestimosPage() {
       });
     }
 
+    if (filters.apenasMultiplosContratos) {
+      result = result.filter(e => (e.contractsCount || 0) > 1);
+    }
+
     setFilteredEmployees(result);
   };
 
@@ -549,10 +557,19 @@ export default function EmprestimosPage() {
           </div>
         )}
 
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
+          <button
+            onClick={() => setIsSyncModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 hover:border-emerald-300 text-slate-700 font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+            title="Auditoria e Sincronização de Integridade das Parcelas"
+          >
+            <ShieldCheck size={16} className="text-emerald-600" />
+            <span>Integridade & Sincronização</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </button>
           <button
             onClick={() => setIsPaymentModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-md"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-md cursor-pointer"
           >
             <CreditCard size={18} />
             Processar Parcelas
@@ -733,6 +750,12 @@ export default function EmprestimosPage() {
       <PaymentProcessingModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
+      />
+
+      <SyncIntegrityModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        onReconciled={() => fetchData(activeFilters)}
       />
 
       <NewLoanModal 

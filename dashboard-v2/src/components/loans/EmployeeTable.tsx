@@ -135,13 +135,19 @@ function EmployeeRow({
               <p className="text-sm font-black text-slate-800 line-clamp-1 uppercase tracking-tight">
                 {employee.name}
               </p>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${
                   employee.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : 
                   'bg-slate-100 text-slate-500'
                 }`}>
                   {employee.status}
                 </span>
+                {employee.contractsCount > 1 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-tight flex items-center gap-1">
+                    <span>📚</span>
+                    <span>{employee.contractsCount} contratos</span>
+                  </span>
+                )}
                 {employee.job_role && (
                    <span className="text-[10px] font-bold text-slate-400 truncate max-w-[150px]">
                      {employee.job_role}

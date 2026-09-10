@@ -11,6 +11,7 @@ export interface FilterValues {
   cargo: string;            // Função/Cargo
   remuneracaoRange: string; // ate2k, 2k-3.5k, 3.5k-5k, acima5k
   temAditivo: string;       // sim, nao
+  apenasMultiplosContratos: boolean; // > 1 contrato ativo
   incluirQuitados: boolean;
   mostrarTodos: boolean;
 }
@@ -27,6 +28,7 @@ const DEFAULT_FILTERS: FilterValues = {
   cargo: "",
   remuneracaoRange: "",
   temAditivo: "",
+  apenasMultiplosContratos: false,
   incluirQuitados: false,
   mostrarTodos: false,
 };
@@ -57,6 +59,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
     active.cargo !== "" || 
     active.remuneracaoRange !== "" || 
     active.temAditivo !== "" || 
+    active.apenasMultiplosContratos || 
     active.incluirQuitados || 
     active.mostrarTodos;
 
@@ -231,6 +234,18 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
 
             <label className="flex items-center gap-2 cursor-pointer group">
               <div
+                className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${pending.apenasMultiplosContratos ? "bg-amber-600 border-amber-600" : "bg-slate-50 border-slate-300 group-hover:border-amber-500"}`}
+                onClick={() => set("apenasMultiplosContratos", !pending.apenasMultiplosContratos)}
+              >
+                {pending.apenasMultiplosContratos && <Check size={12} className="text-white" />}
+              </div>
+              <span className="text-xs font-semibold text-slate-600 select-none flex items-center gap-1">
+                <span>📚 Múltiplos Contratos (&gt;1)</span>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <div
                 className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${pending.mostrarTodos ? "bg-blue-600 border-blue-600" : "bg-slate-50 border-slate-300 group-hover:border-blue-500"}`}
                 onClick={() => set("mostrarTodos", !pending.mostrarTodos)}
               >
@@ -262,6 +277,11 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
           {active.remuneracaoRange && (
             <span className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-full border border-amber-200 uppercase">
               SALÁRIO: {active.remuneracaoRange}
+            </span>
+          )}
+          {active.apenasMultiplosContratos && (
+            <span className="flex items-center gap-1 px-2.5 py-1 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full border border-amber-300 uppercase">
+              📚 MÚLTIPLOS CONTRATOS (&gt;1)
             </span>
           )}
         </div>
