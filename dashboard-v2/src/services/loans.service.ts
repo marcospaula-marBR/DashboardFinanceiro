@@ -797,23 +797,32 @@ export class LoansService {
     const table = isTestMode ? 'employee_loans_test' : 'employee_loans';
     const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
     
-    const [loansRes, paymentsRes] = await Promise.all([
-      supabase.from(table)
-        .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,notes,request_date,paid_installments,postponed_months,contract_url,first_payment_date')
-        .eq('employee_id', employeeId)
-        .order('request_date', { ascending: false }),
-      supabase.from(paymentsTable)
-        .select('contract_id, status, amount, due_date, paid_date')
-        .eq('employee_id', employeeId)
-    ]);
+    const { data: loansData, error: loansErr } = await supabase
+      .from(table)
+      .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,notes,request_date,paid_installments,postponed_months,contract_url,first_payment_date')
+      .eq('employee_id', employeeId)
+      .order('request_date', { ascending: false });
 
-    if (loansRes.error) {
-      console.error('[LoansService] Erro ao buscar empréstimos:', loansRes.error);
+    if (loansErr) {
+      console.error('[LoansService] Erro ao buscar empréstimos:', loansErr);
       throw new Error('Falha ao carregar empréstimos');
     }
 
-    const loans = overrideLoans((loansRes.data || []) as RawLoan[]);
-    const payments = paymentsRes.data || [];
+    const loans = overrideLoans((loansData || []) as RawLoan[]);
+    const loanIds = loans.map(l => l.id);
+
+    let paymentsQuery = supabase
+      .from(paymentsTable)
+      .select('contract_id, status, amount, due_date, paid_date');
+
+    if (loanIds.length > 0) {
+      paymentsQuery = paymentsQuery.or(`employee_id.eq.${employeeId},contract_id.in.(${loanIds.join(',')})`);
+    } else {
+      paymentsQuery = paymentsQuery.eq('employee_id', employeeId);
+    }
+
+    const { data: paymentsData } = await paymentsQuery;
+    const payments = paymentsData || [];
     
     const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string, paid_date?: string }[]>();
     payments.forEach(p => {
@@ -861,16 +870,13 @@ export class LoansService {
     const loansTable = isTestMode ? 'employee_loans_test' : 'employee_loans';
     const paymentsTable = isTestMode ? 'loan_payments_test' : 'loan_payments';
     
-    const [empRes, loansRes, paymentsRes] = await Promise.all([
+    const [empRes, loansRes] = await Promise.all([
       supabase.from(empsTable)
         .select('id,full_name,company,employment_type,remuneration,status,start_date')
         .eq('id', employeeId)
         .single(),
       supabase.from(loansTable)
         .select('id,employee_id,amount,installments,start_cycle,amount_paid_extra,paid_installments,postponed_months,first_payment_date')
-        .eq('employee_id', employeeId),
-      supabase.from(paymentsTable)
-        .select('contract_id, status, amount, due_date, paid_date')
         .eq('employee_id', employeeId)
     ]);
 
@@ -881,7 +887,20 @@ export class LoansService {
 
     const emp = empRes.data as RawEmployee;
     const loans = overrideLoans((loansRes.data || []) as RawLoan[]);
-    const payments = paymentsRes.data || [];
+    const loanIds = loans.map(l => l.id);
+
+    let paymentsQuery = supabase
+      .from(paymentsTable)
+      .select('contract_id, status, amount, due_date, paid_date');
+
+    if (loanIds.length > 0) {
+      paymentsQuery = paymentsQuery.or(`employee_id.eq.${employeeId},contract_id.in.(${loanIds.join(',')})`);
+    } else {
+      paymentsQuery = paymentsQuery.eq('employee_id', employeeId);
+    }
+
+    const { data: paymentsData } = await paymentsQuery;
+    const payments = paymentsData || [];
     
     const paymentsByContract = new Map<string, { status: string, amount: number, due_date: string, paid_date?: string }[]>();
     payments.forEach(p => {

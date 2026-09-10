@@ -96,11 +96,25 @@ export class PaymentsService {
    */
   static async getPendingPayments(employeeId: string, monthCycle?: string, isTestMode?: boolean): Promise<LoanPayment[]> {
     const table = isTestMode ? 'loan_payments_test' : 'loan_payments';
+    const loansTable = isTestMode ? 'employee_loans_test' : 'employee_loans';
+
+    const { data: userLoans } = await supabase
+      .from(loansTable)
+      .select('id')
+      .eq('employee_id', employeeId);
+
+    const loanIds = (userLoans || []).map(l => l.id);
+
     let query = supabase
       .from(table)
       .select('*')
-      .eq('employee_id', employeeId)
       .eq('status', 'PENDENTE');
+
+    if (loanIds.length > 0) {
+      query = query.or(`employee_id.eq.${employeeId},contract_id.in.(${loanIds.join(',')})`);
+    } else {
+      query = query.eq('employee_id', employeeId);
+    }
 
     if (monthCycle) {
       query = query.eq('month_cycle', monthCycle);
@@ -242,7 +256,14 @@ export class PaymentsService {
           full_name
         )
       `),
-      supabase.from(loansTable).select('id, amount, amount_paid_extra')
+      supabase.from(loansTable).select(`
+        id,
+        amount,
+        amount_paid_extra,
+        employee: ${empsTable}!employee_id (
+          full_name
+        )
+      `)
     ]);
 
     if (paymentsRes.error) {
@@ -254,12 +275,14 @@ export class PaymentsService {
     const allLoans = loansRes.data || [];
 
     // Mapear empréstimos por id
-    const loanMap = new Map<string, { amount: number; extra: number; paid: number }>();
+    const loanMap = new Map<string, { amount: number; extra: number; paid: number; employeeName?: string }>();
     allLoans.forEach(l => {
       loanMap.set(l.id, {
         amount: parseFloat(String(l.amount)) || 0,
         extra: parseFloat(String(l.amount_paid_extra)) || 0,
-        paid: 0
+        paid: 0,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        employeeName: (l as any).employee?.full_name
       });
     });
 
@@ -289,16 +312,20 @@ export class PaymentsService {
       return true;
     });
 
-    // Tradução para o formato esperado pela UI do Modal
-    return filteredPayments.map(item => ({
-      ...item,
-      contracts: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        employee_name: (item as any).employee?.full_name || 'Desconhecido',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        operation_number: (item as any).contract_id?.slice(0, 8) || '---'
-      }
-    })) as LoanPayment[];
+    // Tradução para o formato esperado pela UI do Modal:
+    // Prioriza o nome do funcionário dono do contrato (employee_loans), com fallback para o da parcela
+    return filteredPayments.map(item => {
+      const loanInfo = loanMap.get(item.contract_id);
+      const employeeName = loanInfo?.employeeName || (item as any).employee?.full_name || 'Desconhecido';
+      return {
+        ...item,
+        contracts: {
+          employee_name: employeeName,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          operation_number: (item as any).contract_id?.slice(0, 8) || '---'
+        }
+      };
+    }) as LoanPayment[];
   }
 
   /**
