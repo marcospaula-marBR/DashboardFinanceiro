@@ -117,6 +117,7 @@ export function DreDetailsModal({
           { label: '(+) Mútuo - Entradas', key: 'Mútuo - Entradas' },
           { label: '(-) Total Saídas', key: 'Total Saídas' },
           { label: '(=) Fluxo de Caixa Livre (FCL)', key: 'Fluxo de Caixa Livre FCL' },
+          { label: '(+) Distribuição de Dividendos', key: 'Distribuição de Dividendos' },
           { label: '(+) Intermediação/Retiradas', key: 'Intermediação de Negócios' },
           { label: '(+) Mútuo - Saídas', key: 'Mútuo - Saídas' },
           { label: '(=) Total Retiradas dos Sócios', key: 'Total Retiradas dos Sócios' },
@@ -219,6 +220,7 @@ export function DreDetailsModal({
           { label: '(-) Total Saídas', key: 'Total Saídas', isSubtracted: true },
           { label: '(=) Fluxo de Caixa Livre (FCL)', key: 'Fluxo de Caixa Livre FCL', isResult: true },
           { label: 'HEADER_USO_FCL', key: 'HEADER_USO_FCL', isHeader: true, labelHeader: '--- RETIRADAS DE SÓCIOS E MÚTUOS ---' },
+          { label: '(+) Distribuição de Dividendos', key: 'Distribuição de Dividendos', isSubtracted: false },
           { label: '(+) Intermediação/Retiradas', key: 'Intermediação de Negócios', isSubtracted: false },
           { label: '(+) Mútuo - Saídas', key: 'Mútuo - Saídas', isSubtracted: false },
           { label: '(=) Total Retiradas dos Sócios', key: 'Total Retiradas dos Sócios', isResult: true },
@@ -410,6 +412,12 @@ export function DreDetailsModal({
           className: 'font-black text-amber-700 bg-amber-50'
         },
         { 
+          label: '(+) Distribuição de Dividendos', 
+          key: 'Distribuição de Dividendos', 
+          isSubtracted: false,
+          className: 'text-slate-600'
+        },
+        { 
           label: '(+) Intermediação/Retiradas', 
           key: 'Intermediação de Negócios', 
           isSubtracted: false,
@@ -444,7 +452,7 @@ export function DreDetailsModal({
             Fórmula de Cálculo: FCL = Resultado Operacional + Outras Entradas - Investimentos
           </p>
           <p className="mt-1 text-[11px] text-slate-500 italic">
-            As retiradas dos sócios (Intermediação/Retiradas e Mútuo - Saídas) são exibidas apenas como informativo abaixo e não sofrem dedução sobre o valor do FCL operacional, permitindo a apuração do Saldo final (FCL (-) Total Retiradas).
+            As retiradas dos sócios (Distribuição de Dividendos, Intermediação/Retiradas e Mútuo - Saídas) são exibidas apenas como informativo abaixo e não sofrem dedução sobre o valor do FCL operacional, permitindo a apuração do Saldo final (FCL (-) Total Retiradas).
           </p>
         </div>
       );
