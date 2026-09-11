@@ -377,14 +377,23 @@ def push_to_supabase(rows):
                 log(f"Erro ao inserir novos registros: {post_resp.text}")
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Sincronizador Unificado Omie -> Supabase")
+    parser.add_argument("--start-date", default="01/06/2025", help="Data de início (DD/MM/AAAA) [01/06/2025]")
+    parser.add_argument("--empresa", default="all", help="Empresa (Mar Brasil, DZM, G2, Conectius ou all)")
+    args = parser.parse_args()
+
     # TRAVA MANDATÓRIA: Omie utilizado somente a partir de Junho/2025
-    start_date = "01/06/2025"
+    start_date = args.start_date
     apps = [
         {"key": os.getenv("OMIE_APP_KEY_MARBRASIL"), "sec": os.getenv("OMIE_APP_SECRET_MARBRASIL"), "name": "Mar Brasil"},
         {"key": os.getenv("OMIE_APP_KEY_DZM"), "sec": os.getenv("OMIE_APP_SECRET_DZM"), "name": "DZM"},
         {"key": os.getenv("OMIE_APP_KEY_G2"), "sec": os.getenv("OMIE_APP_SECRET_G2"), "name": "G2"},
         {"key": os.getenv("OMIE_APP_KEY_CONECTIUS"), "sec": os.getenv("OMIE_APP_SECRET_CONECTIUS"), "name": "Conectius"}
     ]
+
+    if args.empresa and args.empresa.lower() != "all":
+        apps = [a for a in apps if a["name"].lower() == args.empresa.lower()]
     
     for app in apps:
         if not app["key"]: continue
