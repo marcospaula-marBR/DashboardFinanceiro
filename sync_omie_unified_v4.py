@@ -179,7 +179,46 @@ class OmieSync:
             log(f"  {list_key}: Lendo página {pagina-1}...")
         return records
 
-    def process_cp_cr(self, records, tipo):
+    def build_mov_map(self, records):
+        mov_map = {}
+        for m in records:
+            det = m.get("detalhes", {})
+            res = m.get("resumo", {})
+            tit = str(det.get("nCodTitulo") or "").strip()
+            if tit and tit != "0":
+                dt_mov = format_date_iso_to_iso(
+                    det.get("dDtPagamento") or 
+                    det.get("dDtCredito") or 
+                    det.get("dDtDebito") or
+                    det.get("dDtPagto")
+                )
+                val_mov = float(res.get("nValLiquido") or res.get("nValPago") or det.get("nValorMovCC") or det.get("nValorTitulo") or 0)
+                mov_cc = str(det.get("nCodMovCC") or "").strip()
+                c_orig = str(det.get("cOrigem") or "").upper()
+                if dt_mov:
+                    if tit not in mov_map:
+                        mov_map[tit] = {
+                            "data_pagamento": dt_mov,
+                            "valor_pago": val_mov,
+                            "nCodMovCC": mov_cc,
+                            "cOrigem": c_orig,
+                            "raw_mov": m
+                        }
+                    else:
+                        # ATENÇÃO: No Omie, a mesma liquidação gera múltiplos registros espelhos (ex: VENR e BAXR para CR, COMP e BAXP para CP).
+                        # NUNCA SOMAR! O valor do título já é o valor total liquidado.
+                        # Priorizar data mais recente e nCodMovCC da baixa bancária efetiva (BAXR/BAXP)
+                        if dt_mov > mov_map[tit]["data_pagamento"]:
+                            mov_map[tit]["data_pagamento"] = dt_mov
+                        if mov_cc:
+                            mov_map[tit]["nCodMovCC"] = mov_cc
+                        if val_mov > 0 and (mov_map[tit]["valor_pago"] == 0 or c_orig in ["BAXR", "BAXP"]):
+                            mov_map[tit]["valor_pago"] = val_mov
+        return mov_map
+
+    def process_cp_cr(self, records, tipo, mov_map=None):
+        if mov_map is None:
+            mov_map = {}
         rows = []
         sign = -1 if tipo == "PAGAR" else 1
         for r in records:
@@ -193,14 +232,30 @@ class OmieSync:
             if is_excluded_caixa(cat_codigo, cat_nome, obs):
                 continue
             
-            # Data de Pagamento: Baixa > Liquidação > Previsão (se PAGO)
-            dt_baixa = format_date_iso_to_iso(r.get("data_baixa") or r.get("data_liquidacao"))
+            omie_id_str = str(omie_id).strip() if omie_id else ""
+            doc_val = float(r.get("valor_documento") or 0)
+            
+            # REGRA MESTRA DE REGIME DE CAIXA:
+            # 1. Se o título possui registro de movimentação no extrato bancário (ListarMovimentos),
+            # a data de pagamento É OBRIGATORIAMENTE a data efetiva de liquidação bancária (dDtPagamento do movimento),
+            # e o valor é o valor líquido que efetivamente transitou pelas contas bancárias!
+            if omie_id_str and omie_id_str in mov_map:
+                m_info = mov_map[omie_id_str]
+                data_pagamento = m_info["data_pagamento"]
+                val_efetivo = m_info["valor_pago"]
+                ratio = (val_efetivo / doc_val) if (doc_val > 0 and val_efetivo > 0) else 1.0
+                valor_total = (val_efetivo if val_efetivo > 0 else doc_val) * sign
+                status = "PAGO" if tipo == "PAGAR" else "RECEBIDO"
+            else:
+                # Se não há movimentação bancária comprovada no extrato, verificar se há data de baixa explícita no título
+                dt_baixa = format_date_iso_to_iso(r.get("data_baixa") or r.get("data_liquidacao"))
+                data_pagamento = dt_baixa
+                # NUNCA USAR DATA_PREVISAO OU VENCIMENTO COMO DATA_PAGAMENTO!
+                # Se não transitou pelo extrato bancário e não tem baixa confirmada, NÃO é caixa liquidado:
+                valor_total = doc_val * sign
+                ratio = 1.0
+            
             dt_previsao = format_date_iso_to_iso(r.get("data_previsao"))
-            
-            data_pagamento = dt_baixa
-            if not data_pagamento and (status == "PAGO" or status == "RECEBIDO"):
-                data_pagamento = dt_previsao # Conforme regra do usuário: previsao vira pagamento na liquidação
-            
             raw_dist = r.get("distribuicao", [])
             if not raw_dist:
                 raw_dist = [{"cDesDep": "Sem Departamento", "nValDep": r.get("valor_documento")}]
@@ -228,8 +283,8 @@ class OmieSync:
                     "omie_id": omie_id,
                     "tipo_registro": tipo,
                     "status": status,
-                    "valor_total": float(r.get("valor_documento") or 0) * sign,
-                    "valor_alocado": float(d.get("nValDep") or 0) * sign,
+                    "valor_total": valor_total,
+                    "valor_alocado": float(d.get("nValDep") or 0) * ratio * sign,
                     "data_emissao": dt_emissao,
                     "data_registro": data_registro,
                     "data_vencimento": format_date_iso_to_iso(r.get("data_vencimento")),
@@ -240,7 +295,7 @@ class OmieSync:
                     "projeto_nome": self.proj_map.get(str(r.get("codigo_projeto")), r.get("nome_projeto") or "Sem Projeto"),
                     "departamento_nome": d.get("cDesDep"),
                     "cliente_fornecedor": cliente_forn,
-                    "numero_documento": r.get("numero_documento"),
+                    "numero_documento": r.get("numero_documento") or r.get("numero_documento_fiscal"),
                     "raw_data": r
                 })
         return rows
@@ -344,10 +399,13 @@ class OmieSync:
             })
         return rows
 
-def push_to_supabase(rows):
+def push_to_supabase(rows, extra_delete_ids=None):
     if not rows: return
     log(f"Enviando {len(rows)} registros para o Supabase...")
     
+    if extra_delete_ids is None:
+        extra_delete_ids = set()
+        
     # Agrupar por empresa_nome e tipo_registro para fazer delete e insert seguros em lote
     groups = {}
     for r in rows:
@@ -357,6 +415,16 @@ def push_to_supabase(rows):
         groups[key].append(r)
         
     for (empresa, tipo), group_rows in groups.items():
+        # Limpeza prévia de IDs de movimentos espelho que possam existir no Supabase para esta empresa
+        if extra_delete_ids:
+            extra_list = [str(x) for x in extra_delete_ids if x]
+            for j in range(0, len(extra_list), 100):
+                batch_extra = extra_list[j:j+100]
+                extra_str = ",".join(batch_extra)
+                del_extra_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?empresa_nome=eq.{empresa}&omie_id=in.({extra_str})"
+                requests.delete(del_extra_url, headers=HEADERS_SB)
+            extra_delete_ids = set() # já purgado para a empresa
+
         size = 100
         for i in range(0, len(group_rows), size):
             chunk = group_rows[i:i+size]
@@ -401,31 +469,42 @@ def main():
         sync = OmieSync(app["key"], app["sec"], app["name"])
         sync.sync_dimensions()
         
-        # Contas a Pagar
+        # 1. Movimentos Bancários / Extratos Reais PRIMEIRO (Fonte Única da Verdade para Regime de Caixa)
+        log("Processando Movimentos Bancários (Extratos Reais)...")
+        recs_mov = sync.fetch_movimentos(start_date)
+        mov_map = sync.build_mov_map(recs_mov)
+        log(f"  [OK] {len(mov_map)} títulos associados a movimentações no extrato bancário.")
+        
+        # 2. Contas a Pagar
         log("Processando Contas a Pagar...")
         recs_cp = sync.fetch_records(URL_CP, "ListarContasPagar", "conta_pagar_cadastro", start_date)
-        rows_cp = sync.process_cp_cr(recs_cp, "PAGAR")
+        rows_cp = sync.process_cp_cr(recs_cp, "PAGAR", mov_map=mov_map)
         
-        # Contas a Receber
+        # 3. Contas a Receber
         log("Processando Contas a Receber...")
         recs_cr = sync.fetch_records(URL_CR, "ListarContasReceber", "conta_receber_cadastro", start_date)
-        rows_cr = sync.process_cp_cr(recs_cr, "RECEBER")
+        rows_cr = sync.process_cp_cr(recs_cr, "RECEBER", mov_map=mov_map)
         
         # Mapear IDs de títulos de CP e CR para evitar duplicatas em movimentos
         known_titles = set(str(r["omie_id"]) for r in rows_cp + rows_cr if r.get("omie_id"))
         
-        # Movimentos (filtrando espelhos de CP/CR)
-        log("Processando Movimentos Bancários...")
-        recs_mov = sync.fetch_movimentos(start_date)
+        # 4. Movimentos Bancários não vinculados a títulos (ex: tarifas bancárias, despesas diretas de extrato)
         rows_mov = sync.process_movimentos(recs_mov, known_titles=known_titles)
         
-        # Push (com trava estrita >= 2025-06-01)
+        # 5. Push para o Supabase (com trava estrita >= 2025-06-01)
         all_rows = rows_cp + rows_cr + rows_mov
         all_rows = [
             r for r in all_rows 
             if (r.get("data_pagamento") or r.get("data_registro") or "9999-12-31") >= "2025-06-01"
         ]
-        push_to_supabase(all_rows)
+        
+        # Coletar IDs de nCodMovCC de movimentos vinculados a títulos para purgar duplicatas legadas
+        extra_delete_ids = set()
+        for tit_id, m_info in mov_map.items():
+            if m_info.get("nCodMovCC"):
+                extra_delete_ids.add(m_info["nCodMovCC"])
+                
+        push_to_supabase(all_rows, extra_delete_ids=extra_delete_ids)
 
     log("\nSincronização Finalizada!")
 

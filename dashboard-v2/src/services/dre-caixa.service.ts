@@ -363,9 +363,6 @@ export class DreCaixaService {
 
         if (isExcluidoCaixa) return;
 
-        // 3. REGRA: DESCONSIDERAR 'VENR' EM MOVIMENTO (Venda a Prazo - faturamento por competência, não liquidação financeira de caixa)
-        if (item.tipo_registro === 'MOVIMENTO' && cOrigem === 'VENR') return;
-
         // 4. REGRA DE CLASSIFICAÇÃO: ENTRADA (RECEITA) VS SAÍDA (PAGAMENTO)
         const cNat = String(rawDet.cNatureza || '').toUpperCase();
         let isEntrada = false;

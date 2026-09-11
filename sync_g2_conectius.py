@@ -37,24 +37,28 @@ def run_sync():
         sync = OmieSync(app["key"], app["sec"], app["name"])
         sync.sync_dimensions()
 
-        # Contas a Pagar
+        # 1. Movimentos Bancários / Extratos PRIMEIRO (Fonte Única da Verdade para Regime de Caixa)
+        log("Processando Movimentos Bancários (Extratos Reais)...")
+        recs_mov = sync.fetch_movimentos(start_date)
+        mov_map = sync.build_mov_map(recs_mov)
+        log(f"  [OK] {len(mov_map)} títulos associados a movimentações no extrato bancário.")
+
+        # 2. Contas a Pagar
         log("Processando Contas a Pagar...")
         recs_cp = sync.fetch_records(URL_CP, "ListarContasPagar", "conta_pagar_cadastro", start_date)
-        rows_cp = sync.process_cp_cr(recs_cp, "PAGAR")
+        rows_cp = sync.process_cp_cr(recs_cp, "PAGAR", mov_map=mov_map)
         log(f"  CP processados: {len(rows_cp)} linhas de alocação")
 
-        # Contas a Receber
+        # 3. Contas a Receber
         log("Processando Contas a Receber...")
         recs_cr = sync.fetch_records(URL_CR, "ListarContasReceber", "conta_receber_cadastro", start_date)
-        rows_cr = sync.process_cp_cr(recs_cr, "RECEBER")
+        rows_cr = sync.process_cp_cr(recs_cr, "RECEBER", mov_map=mov_map)
         log(f"  CR processados: {len(rows_cr)} linhas de alocação")
 
         # Mapear IDs de títulos de CP e CR para evitar duplicatas em movimentos
         known_titles = set(str(r["omie_id"]) for r in rows_cp + rows_cr if r.get("omie_id"))
 
-        # Movimentos Bancários / Extratos
-        log("Processando Movimentos Bancários...")
-        recs_mov = sync.fetch_movimentos(start_date)
+        # 4. Movimentos Bancários não vinculados a títulos
         rows_mov = sync.process_movimentos(recs_mov, known_titles=known_titles)
         log(f"  MOV processados: {len(rows_mov)} linhas")
 
@@ -64,8 +68,14 @@ def run_sync():
             r for r in all_rows 
             if (r.get("data_pagamento") or r.get("data_registro") or "9999-12-31") >= "2025-06-01"
         ]
+        
+        extra_delete_ids = set()
+        for tit_id, m_info in mov_map.items():
+            if m_info.get("nCodMovCC"):
+                extra_delete_ids.add(m_info["nCodMovCC"])
+                
         log(f"Enviando {len(all_rows)} registros validados (>= 2025-06-01) para omie_financas_unificado no Supabase...")
-        push_to_supabase(all_rows)
+        push_to_supabase(all_rows, extra_delete_ids=extra_delete_ids)
         log(f"[SUCESSO] {app['name']} sincronizada com sucesso!")
 
     log("\nTodas as empresas G2 e Conectius foram sincronizadas com o Supabase!")
