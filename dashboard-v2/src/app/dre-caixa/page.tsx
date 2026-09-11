@@ -170,6 +170,8 @@ export default function DreCaixaPage() {
       contasCorrentes: [],
       search: '',
       tipoPagamento: 'TODOS',
+      somenteRecorrentes: false,
+      somenteAtrasados: false,
       ocultarCategorias: filters.ocultarCategorias,
       ocultarProjetos: filters.ocultarProjetos,
       ocultarFornecedores: filters.ocultarFornecedores

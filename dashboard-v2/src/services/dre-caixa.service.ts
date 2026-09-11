@@ -706,6 +706,8 @@ export class DreCaixaService {
 
     let countAVista = 0;
     let countParcelado = 0;
+    let countRecorrentes = 0;
+    let countAtrasados = 0;
 
     lancamentos.forEach(l => {
       // 1. Empresas e períodos globais sempre são extraídos de todos os lançamentos
@@ -718,11 +720,15 @@ export class DreCaixaService {
       const matchesEmpresa = !hasEmpresaFilter || lowerEmpresas.includes(itemEmp);
 
       if (matchesEmpresa) {
-        if (l.tipo_pagamento === 'PARCELADO') {
-          countParcelado++;
-        } else {
-          countAVista++;
-        }
+        if (l.tipo_pagamento === 'A_VISTA') countAVista++;
+        else if (l.tipo_pagamento === 'PARCELADO') countParcelado++;
+
+        // Checar se é despesa recorrente de serviços/estrutural
+        const isRec = isDespesaRecorrente(l.categoria, l.conta_dre, l.fornecedor_cliente);
+        if (isRec && (l.tipo === 'PAGAR' || l.sinal_valor < 0)) countRecorrentes++;
+
+        // Checar se tem atraso (> 0 dias)
+        if ((l.dias_atraso || 0) > 0) countAtrasados++;
         if (l.periodo && l.periodo !== 'N/A') periodosMap.set(l.periodo, l.periodoNum);
         if (l.projeto) projetosSet.add(l.projeto);
         if (l.categoria) categoriasSet.add(l.categoria);
@@ -748,6 +754,8 @@ export class DreCaixaService {
       counts: {
         aVista: countAVista,
         parcelado: countParcelado,
+        recorrentes: countRecorrentes,
+        atrasados: countAtrasados,
         total: countAVista + countParcelado
       }
     };
@@ -787,6 +795,17 @@ export class DreCaixaService {
       // 2. Filtro de Modalidade (À Vista vs Parcelado)
       if (filters.tipoPagamento && filters.tipoPagamento !== 'TODOS') {
         if (l.tipo_pagamento !== filters.tipoPagamento) return false;
+      }
+
+      // 2.1 Filtro de Serviços Recorrentes (não compras parceladas)
+      if (filters.somenteRecorrentes) {
+        const isRec = isDespesaRecorrente(l.categoria, l.conta_dre, l.fornecedor_cliente);
+        if (!isRec || (l.tipo !== 'PAGAR' && l.sinal_valor >= 0)) return false;
+      }
+
+      // 2.2 Filtro de Lançamentos em Atraso (Recebimentos ou Pagamentos)
+      if (filters.somenteAtrasados) {
+        if ((l.dias_atraso || 0) <= 0) return false;
       }
 
       // 3. Filtro de Período

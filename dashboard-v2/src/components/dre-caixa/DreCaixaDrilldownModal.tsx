@@ -17,10 +17,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Award,
-  CreditCard
+  CreditCard,
+  Repeat,
+  AlertTriangle
 } from 'lucide-react';
 import { DreCaixaLancamento } from '@/types/dre-caixa';
-import { formatCurrencyBRL } from '@/services/dre-caixa.service';
+import { formatCurrencyBRL, isDespesaRecorrente } from '@/services/dre-caixa.service';
 
 interface DreCaixaDrilldownModalProps {
   isOpen: boolean;
@@ -56,6 +58,8 @@ export function DreCaixaDrilldownModal({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth || 'todos');
   const [selectedModalidade, setSelectedModalidade] = useState<'TODOS' | 'A_VISTA' | 'PARCELADO'>('TODOS');
+  const [filterSomenteRecorrentes, setFilterSomenteRecorrentes] = useState(false);
+  const [filterSomenteAtrasados, setFilterSomenteAtrasados] = useState(false);
   const [activeTab, setActiveTab] = useState<'ranking' | 'extrato'>('ranking');
   const [expandedFavorecidos, setExpandedFavorecidos] = useState<Record<string, boolean>>({});
 
@@ -63,6 +67,8 @@ export function DreCaixaDrilldownModal({
   React.useEffect(() => {
     setSelectedMonth(initialMonth || 'todos');
     setSelectedModalidade('TODOS');
+    setFilterSomenteRecorrentes(false);
+    setFilterSomenteAtrasados(false);
   }, [initialMonth, categoryName]);
 
   // 1. Identificar se o filtro é uma sub-rubrica específica ou um macro-grupo
@@ -84,10 +90,17 @@ export function DreCaixaDrilldownModal({
     return l.categoria.toLowerCase().trim() === categoryLower;
   });
 
-  // 3. Filtrar por mês e por modalidade (À Vista vs Parcelado)
+  // 3. Filtrar por mês, modalidade, serviços recorrentes e lançamentos em atraso
   const scopedFilteredItems = baseCategoryItems.filter(item => {
     if (selectedMonth && selectedMonth !== 'todos' && item.periodo !== selectedMonth) return false;
     if (selectedModalidade !== 'TODOS' && item.tipo_pagamento !== selectedModalidade) return false;
+    if (filterSomenteRecorrentes) {
+      const isRec = isDespesaRecorrente(item.categoria, item.conta_dre, item.fornecedor_cliente);
+      if (!isRec || (item.tipo !== 'PAGAR' && item.sinal_valor >= 0)) return false;
+    }
+    if (filterSomenteAtrasados) {
+      if ((item.dias_atraso || 0) <= 0) return false;
+    }
     return true;
   });
 
@@ -339,6 +352,36 @@ export function DreCaixaDrilldownModal({
             }`}
           >
             💳 Parcelado
+          </button>
+
+          <span className="text-slate-300">|</span>
+
+          {/* Botão Somente Serviços Recorrentes */}
+          <button
+            onClick={() => setFilterSomenteRecorrentes(!filterSomenteRecorrentes)}
+            className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
+              filterSomenteRecorrentes
+                ? 'bg-purple-700 text-white shadow-sm ring-1 ring-purple-400'
+                : 'bg-white text-slate-700 hover:bg-purple-50 hover:text-purple-800 border border-slate-200'
+            }`}
+            title="Filtrar somente serviços recorrentes / custos operacionais contínuos"
+          >
+            <Repeat size={12} className={filterSomenteRecorrentes ? 'text-purple-200' : 'text-purple-600'} />
+            <span>Recorrentes</span>
+          </button>
+
+          {/* Botão Somente Lançamentos com Atraso */}
+          <button
+            onClick={() => setFilterSomenteAtrasados(!filterSomenteAtrasados)}
+            className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
+              filterSomenteAtrasados
+                ? 'bg-rose-600 text-white shadow-sm ring-1 ring-rose-400'
+                : 'bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-800 border border-slate-200'
+            }`}
+            title="Filtrar exclusivamente lançamentos com atraso liquidado (> 0 dias)"
+          >
+            <AlertTriangle size={12} className={filterSomenteAtrasados ? 'text-rose-200' : 'text-rose-600'} />
+            <span>Com Atraso</span>
           </button>
         </div>
 

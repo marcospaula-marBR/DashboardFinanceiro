@@ -36,6 +36,18 @@ export function DreCaixaAiInsights({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Limpa a análise automaticamente quando os filtros (empresa, período ou volume de lançamentos) mudarem
+  React.useEffect(() => {
+    setAnalysisText(null);
+    setError(null);
+  }, [empresa, periodo, lancamentos.length]);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setAnalysisText(null); // Reseta para garantir que ao abrir gere nova análise calibrada com o estado atual
+    setError(null);
+  };
+
   const fetchAnalysis = async () => {
     setIsLoading(true);
     setError(null);
@@ -82,9 +94,8 @@ export function DreCaixaAiInsights({
 
   const handleOpen = () => {
     setIsOpen(true);
-    if (!analysisText && !isLoading) {
-      fetchAnalysis();
-    }
+    // Sempre gera nova análise fresca ao abrir
+    fetchAnalysis();
   };
 
   const handleCopy = () => {
@@ -153,7 +164,7 @@ export function DreCaixaAiInsights({
                   <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
                 </button>
                 <button
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleClose}
                   className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
                 >
                   <X size={18} />
@@ -214,7 +225,7 @@ export function DreCaixaAiInsights({
                 Alimentado deterministicamente pelos lançamentos auditados do Omie ERP
               </span>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={handleClose}
                 className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-sm"
               >
                 Concluir Leitura

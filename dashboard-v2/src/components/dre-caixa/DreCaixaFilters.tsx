@@ -16,7 +16,9 @@ import {
   Check,
   EyeOff,
   ShieldAlert,
-  Shield
+  Shield,
+  Repeat,
+  AlertTriangle
 } from 'lucide-react';
 import { DreCaixaFilters } from '@/types/dre-caixa';
 
@@ -220,6 +222,8 @@ interface DreCaixaFiltersProps {
     counts?: {
       aVista: number;
       parcelado: number;
+      recorrentes?: number;
+      atrasados?: number;
       total: number;
     };
   };
@@ -288,7 +292,9 @@ export function DreCaixaFiltersBar({
     filters.fornecedores.length +
     filters.contasCorrentes.length +
     (filters.search ? 1 : 0) +
-    (filters.tipoPagamento && filters.tipoPagamento !== 'TODOS' ? 1 : 0);
+    (filters.tipoPagamento && filters.tipoPagamento !== 'TODOS' ? 1 : 0) +
+    (filters.somenteRecorrentes ? 1 : 0) +
+    (filters.somenteAtrasados ? 1 : 0);
 
   // Alternância (Toggle) de Empresa com suporte a Múltipla Seleção
   const handleToggleEmpresa = (emp: string | null) => {
@@ -554,6 +560,58 @@ export function DreCaixaFiltersBar({
               }`}
             >
               💳 Compras Parceladas {availableOptions.counts?.parcelado !== undefined ? `(${availableOptions.counts.parcelado})` : ''}
+            </button>
+          </div>
+        </div>
+
+        {/* 4. FILTROS RÁPIDOS DE INTELIGÊNCIA: SERVIÇOS RECORRENTES & EM ATRASO */}
+        <div className="flex flex-col md:flex-row md:items-center gap-2 pt-1 border-t border-slate-100/80">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+            ⚡ Auditoria Rápida:
+          </span>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            {/* Botão Somente Recorrentes (Serviços e Estruturais contínuos, separando de parcelados) */}
+            <button
+              type="button"
+              onClick={() => onChangeFilters({ ...filters, somenteRecorrentes: !filters.somenteRecorrentes })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+                filters.somenteRecorrentes
+                  ? 'bg-purple-700 text-white border-purple-700 shadow-sm ring-2 ring-purple-400/30'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-purple-50 hover:text-purple-800 hover:border-purple-300'
+              }`}
+              title="Exibe somente despesas operacionais e serviços recorrentes (folha, aluguéis, contabilidade, tarifas e concessionárias), separando de compras e aquisições parceladas"
+            >
+              <Repeat size={13} className={filters.somenteRecorrentes ? 'text-purple-200' : 'text-purple-600'} />
+              <span>Somente Serviços Recorrentes</span>
+              {availableOptions.counts?.recorrentes !== undefined && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  filters.somenteRecorrentes ? 'bg-purple-900/60 text-purple-100' : 'bg-purple-100 text-purple-800'
+                }`}>
+                  {availableOptions.counts.recorrentes}
+                </span>
+              )}
+            </button>
+
+            {/* Botão Somente com Atrasos (Recebimentos e Pagamentos) */}
+            <button
+              type="button"
+              onClick={() => onChangeFilters({ ...filters, somenteAtrasados: !filters.somenteAtrasados })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+                filters.somenteAtrasados
+                  ? 'bg-rose-600 text-white border-rose-600 shadow-sm ring-2 ring-rose-400/30'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-800 hover:border-rose-300'
+              }`}
+              title="Exibe exclusivamente os lançamentos com atraso liquidado (> 0 dias), sejam recebimentos de clientes ou pagamentos a fornecedores"
+            >
+              <AlertTriangle size={13} className={filters.somenteAtrasados ? 'text-rose-200' : 'text-rose-600'} />
+              <span>Somente Lançamentos com Atraso</span>
+              {availableOptions.counts?.atrasados !== undefined && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  filters.somenteAtrasados ? 'bg-rose-900/60 text-rose-100' : 'bg-rose-100 text-rose-800'
+                }`}>
+                  {availableOptions.counts.atrasados}
+                </span>
+              )}
             </button>
           </div>
         </div>

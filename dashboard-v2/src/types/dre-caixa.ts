@@ -55,6 +55,8 @@ export interface DreCaixaFilters {
   contasCorrentes: string[];
   search: string;
   tipoPagamento?: 'TODOS' | 'A_VISTA' | 'PARCELADO';
+  somenteRecorrentes?: boolean;
+  somenteAtrasados?: boolean;
   ocultarCategorias?: string[];
   ocultarProjetos?: string[];
   ocultarFornecedores?: string[];
