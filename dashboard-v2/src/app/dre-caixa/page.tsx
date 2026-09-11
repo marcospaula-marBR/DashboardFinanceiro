@@ -18,6 +18,8 @@ import { DreCaixaDrilldownModal } from '@/components/dre-caixa/DreCaixaDrilldown
 import { DreCaixaPrivacyModal } from '@/components/dre-caixa/DreCaixaPrivacyModal';
 import { DreCaixaPurchasesModal } from '@/components/dre-caixa/DreCaixaPurchasesModal';
 import { DreCaixaGammaModal } from '@/components/dre-caixa/DreCaixaGammaModal';
+import { DreCaixaTransactionDrawer } from '@/components/dre-caixa/DreCaixaTransactionDrawer';
+import { DreCaixaAiInsights } from '@/components/dre-caixa/DreCaixaAiInsights';
 import {
   BarChart3,
   Table as TableIcon,
@@ -69,6 +71,15 @@ export default function DreCaixaPage() {
   const [gammaCustomLancamentos, setGammaCustomLancamentos] = useState<DreCaixaLancamento[] | undefined>(undefined);
   const [gammaCustomConta, setGammaCustomConta] = useState<string | undefined>(undefined);
   const [gammaOnlyCompras, setGammaOnlyCompras] = useState<boolean>(false);
+
+  // Gaveta 360° de Lançamento
+  const [selectedTransaction, setSelectedTransaction] = useState<DreCaixaLancamento | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  const handleSelectTransaction = (lancamento: DreCaixaLancamento) => {
+    setSelectedTransaction(lancamento);
+    setIsDrawerOpen(true);
+  };
 
   // 1. Carregamento dos dados
   const loadData = useCallback(async () => {
@@ -292,7 +303,18 @@ export default function DreCaixaPage() {
               </div>
             )}
 
-            {/* Cards de KPI Executivos Clean */}
+            {/* AI CFO Virtual & Detecção de Desvios */}
+            <div className="mb-4">
+              <DreCaixaAiInsights
+                summary={summary}
+                chartData={chartData}
+                empresa={empresaLabel}
+                periodo={periodoLabel}
+                lancamentos={filteredLancamentos}
+              />
+            </div>
+
+            {/* Cards de KPI Executivos Clean com Interatividade Total */}
             <DreCaixaKpis
               summary={summary}
               isMeetingMode={isMeetingMode}
@@ -300,6 +322,11 @@ export default function DreCaixaPage() {
               empresaLabel={empresaLabel}
               tipoPagamentoLabel={filters.tipoPagamento === 'A_VISTA' ? 'À Vista (Único)' : filters.tipoPagamento === 'PARCELADO' ? 'Parcelado' : undefined}
               onOpenPurchasesAudit={() => setIsPurchasesModalOpen(true)}
+              onOpenRevenuesAudit={() => handleOpenDrilldown('Receitas')}
+              onOpenLiquidBalanceAudit={() => handleOpenDrilldown('')}
+              onOpenMonthlyAverageAudit={() => setIsPurchasesModalOpen(true)}
+              onOpenLargestSectorAudit={() => handleOpenDrilldown(summary.maiorSetor.nome || '')}
+              onOpenTransactionsAudit={() => handleOpenDrilldown('')}
             />
 
             {/* Seletor de Visão / Abas Executivas */}
@@ -358,7 +385,7 @@ export default function DreCaixaPage() {
 
       </main>
 
-      {/* Modal de Detalhamento Analítico por Favorecido */}
+      {/* Modal de Detalhamento Analítico por Favorecido com Cascata 360° */}
       <DreCaixaDrilldownModal
         isOpen={isDrilldownOpen}
         onClose={() => setIsDrilldownOpen(false)}
@@ -367,6 +394,14 @@ export default function DreCaixaPage() {
         availableMonths={chartData.meses.length > 0 ? chartData.meses : availableOptions.periodos.slice(0, 12)}
         empresaLabel={empresaLabel}
         lancamentos={filteredLancamentos}
+        onSelectTransaction={handleSelectTransaction}
+      />
+
+      {/* Gaveta Slide-over 360° do Lançamento (Sem precisar abrir o Omie) */}
+      <DreCaixaTransactionDrawer
+        lancamento={selectedTransaction}
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
       />
 
       {/* Modal de Ocultação de Dados Sensíveis (Categorias, Projetos, Fornecedores) */}

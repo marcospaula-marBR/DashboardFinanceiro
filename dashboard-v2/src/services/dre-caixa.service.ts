@@ -231,7 +231,7 @@ export class DreCaixaService {
       while (hasMore) {
         const { data, error } = await supabase
           .from('omie_financas_unificado')
-          .select('id, empresa_nome, omie_id, tipo_registro, status, valor_total, valor_alocado, data_pagamento, projeto_nome, departamento_nome, categoria_codigo, categoria_nome, cliente_fornecedor, numero_documento, raw_data')
+          .select('id, empresa_nome, omie_id, tipo_registro, status, valor_total, valor_alocado, data_pagamento, data_vencimento, data_emissao, data_previsao, data_registro, projeto_nome, departamento_nome, categoria_codigo, categoria_nome, cliente_fornecedor, numero_documento, raw_data')
           .not('data_pagamento', 'is', null)
           .gte('data_pagamento', '2025-06-01') // Trava mandatória: Omie utilizado apenas a partir de Junho/2025
           .neq('status', 'CANCELADO')
@@ -567,6 +567,69 @@ export class DreCaixaService {
           numeroParcela = tipoPagamento === 'PARCELADO' ? `${parcelaAtual}/${totalParcelas}` : 'À vista';
         }
 
+        // Metadados Fiscais e Tributários
+        const ir = Number(raw.valor_ir || rawDet.nValorIR || 0);
+        const iss = Number(raw.valor_iss || rawDet.nValorISS || 0);
+        const pis = Number(raw.valor_pis || rawDet.nValorPIS || 0);
+        const cofins = Number(raw.valor_cofins || rawDet.nValorCOFINS || 0);
+        const csll = Number(raw.valor_csll || rawDet.nValorCSLL || 0);
+        const inss = Number(raw.valor_inss || rawDet.nValorINSS || 0);
+        const totalImpostos = ir + iss + pis + cofins + csll + inss;
+        const valBruto = Number(raw.valor_documento || rawDet.nValorTitulo || item.valor_total || valTotal);
+
+        // Datas de Auditoria
+        const dtVenc = item.data_vencimento || raw.data_vencimento || rawDet.dDtVenc || null;
+        const dtEmissao = item.data_emissao || raw.data_emissao || rawDet.dDtEmissao || null;
+
+        // Cálculo de Pontualidade / Dias de Atraso
+        let diasAtraso = 0;
+        let statusPontualidade: 'EM_DIA' | 'ATRASO_LEVE' | 'ATRASO_MEDIO' | 'ATRASO_CRITICO' = 'EM_DIA';
+
+        if (dtVenc && item.data_pagamento) {
+          try {
+            const vencClean = dtVenc.slice(0, 10);
+            const pagtoClean = item.data_pagamento.slice(0, 10);
+            const vencDate = new Date(vencClean + 'T00:00:00');
+            const pagtoDate = new Date(pagtoClean + 'T00:00:00');
+            const diffTime = pagtoDate.getTime() - vencDate.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays > 0) {
+              diasAtraso = diffDays;
+              if (diffDays <= 15) {
+                statusPontualidade = 'ATRASO_LEVE';
+              } else if (diffDays <= 30) {
+                statusPontualidade = 'ATRASO_MEDIO';
+              } else {
+                statusPontualidade = 'ATRASO_CRITICO';
+              }
+            } else {
+              diasAtraso = 0;
+              statusPontualidade = 'EM_DIA';
+            }
+          } catch {
+            diasAtraso = 0;
+            statusPontualidade = 'EM_DIA';
+          }
+        }
+
+        // Metadados Rastreáveis do ERP
+        const cnpjCpf = rawDet.cCPFCNPJCliente || raw.cnpj_cpf || null;
+        const contratoOmie = raw.cNumeroContrato || rawDet.cNumCtr || raw.numero_pedido || rawDet.cNumOS || null;
+        const chaveNfe = raw.chave_nfe || rawDet.cChaveNFe || null;
+        const observacoes = raw.observacao || rawDet.observacao || rawDet.cObservacao || null;
+        const uInc = raw.info?.uInc || rawDet.cUsInc || null;
+        const dInc = raw.info?.dInc || rawDet.dDtInc || null;
+
+        // Rateios por Departamento
+        const rawRateioList = raw.distribuicao || [];
+        const rateios = Array.isArray(rawRateioList) && rawRateioList.length > 0
+          ? rawRateioList.map((d: any) => ({
+              departamento: normalizeProjectName(d.cDesDep || d.departamento || 'Principal'),
+              valor: Math.abs(Number(d.nValDep || 0)),
+              percentual: Number(d.nPerDep || 0)
+            }))
+          : undefined;
+
         lancamentos.push({
           id: item.id,
           empresa: normalizeEmpresa(item.empresa_nome),
@@ -587,7 +650,32 @@ export class DreCaixaService {
           numero_parcela: numeroParcela,
           parcela_atual: parcelaAtual,
           total_parcelas: totalParcelas,
-          tipo_pagamento: tipoPagamento
+          tipo_pagamento: tipoPagamento,
+
+          // Metadados 360°
+          conciliado: true,
+          data_conciliacao: item.data_pagamento,
+          data_vencimento: dtVenc,
+          data_emissao: dtEmissao,
+          dias_atraso: diasAtraso,
+          status_pontualidade: statusPontualidade,
+          impostos_retidos: {
+            ir,
+            iss,
+            pis,
+            cofins,
+            csll,
+            inss,
+            total: totalImpostos
+          },
+          valor_bruto: valBruto,
+          cnpj_cpf: cnpjCpf,
+          contrato_omie: contratoOmie,
+          chave_nfe: chaveNfe,
+          observacoes: observacoes ? decodeHtmlEntities(observacoes) : null,
+          uInc,
+          dInc,
+          rateios
         });
       });
 
@@ -740,13 +828,33 @@ export class DreCaixaService {
     const setorMap: Record<string, number> = {};
     const mesesDistintos = new Set<string>();
 
+    let countRecebimentos = 0;
+    let countRecebimentosEmDia = 0;
+    let countPagamentos = 0;
+    let countPagamentosEmDia = 0;
+    let somaDiasAtraso = 0;
+    let countComAtraso = 0;
+    let countConciliados = 0;
+
     filtered.forEach(l => {
       if (l.periodo && l.periodo !== 'N/A') mesesDistintos.add(l.periodo);
+      if (l.conciliado) countConciliados++;
+
+      const atraso = l.dias_atraso || 0;
+      if (atraso > 0) {
+        somaDiasAtraso += atraso;
+        countComAtraso++;
+      }
+
       if (l.tipo === 'RECEBER') {
         totalRecebido += l.valor;
+        countRecebimentos++;
+        if (atraso === 0) countRecebimentosEmDia++;
       } else {
         totalPago += l.valor;
         setorMap[l.projeto] = (setorMap[l.projeto] || 0) + l.valor;
+        countPagamentos++;
+        if (atraso === 0) countPagamentosEmDia++;
       }
     });
 
@@ -763,13 +871,25 @@ export class DreCaixaService {
       }
     });
 
+    const taxaPontualidadeRecebimentos = countRecebimentos > 0 ? (countRecebimentosEmDia / countRecebimentos) * 100 : 100;
+    const taxaPontualidadePagamentos = countPagamentos > 0 ? (countPagamentosEmDia / countPagamentos) * 100 : 100;
+    const mediaDiasAtraso = countComAtraso > 0 ? Math.round((somaDiasAtraso / countComAtraso) * 10) / 10 : 0;
+    const percentualConciliado = filtered.length > 0 ? Math.round((countConciliados / filtered.length) * 100) : 100;
+
     return {
       totalPago,
       totalRecebido,
       resultadoLiquido,
       mediaMensalDespesas,
       maiorSetor: { nome: maiorSetorNome, valor: maiorSetorValor },
-      totalLancamentos: filtered.length
+      totalLancamentos: filtered.length,
+      taxaPontualidadeRecebimentos,
+      taxaPontualidadePagamentos,
+      mediaDiasAtraso,
+      totalConciliado: countConciliados,
+      percentualConciliado,
+      totalEmDia: filtered.length - countComAtraso,
+      totalAtrasado: countComAtraso
     };
   }
 

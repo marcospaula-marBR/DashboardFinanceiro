@@ -30,6 +30,7 @@ interface DreCaixaDrilldownModalProps {
   availableMonths?: string[];
   empresaLabel?: string;
   lancamentos: DreCaixaLancamento[];
+  onSelectTransaction?: (lancamento: DreCaixaLancamento) => void;
 }
 
 interface FavorecidoGroup {
@@ -49,7 +50,8 @@ export function DreCaixaDrilldownModal({
   initialMonth,
   availableMonths = [],
   empresaLabel,
-  lancamentos
+  lancamentos,
+  onSelectTransaction
 }: DreCaixaDrilldownModalProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth || 'todos');
@@ -524,14 +526,23 @@ export function DreCaixaDrilldownModal({
                                 <th className="py-1.5 px-2">Conta Bancária</th>
                                 <th className="py-1.5 px-2">Documento</th>
                                 <th className="py-1.5 px-2 text-center">Parcela</th>
+                                <th className="py-1.5 px-2 text-center">Pontualidade</th>
                                 <th className="py-1.5 px-2 text-right">Valor Líquido</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200/60 font-medium">
                               {fav.itens.map(subItem => (
-                                <tr key={subItem.id} className="hover:bg-white text-slate-700 transition-colors">
+                                <tr
+                                  key={subItem.id}
+                                  onClick={() => onSelectTransaction && onSelectTransaction(subItem)}
+                                  className={`hover:bg-blue-50/60 text-slate-700 transition-colors ${onSelectTransaction ? 'cursor-pointer group' : ''}`}
+                                  title={onSelectTransaction ? "Clique para abrir raio-X 360° deste lançamento" : undefined}
+                                >
                                   <td className="py-1.5 px-2 font-mono text-[10px] text-slate-500 whitespace-nowrap">
-                                    {subItem.data_pagamento}
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`w-1.5 h-1.5 rounded-full ${subItem.conciliado ? 'bg-emerald-500' : 'bg-amber-400'}`} title={subItem.conciliado ? 'Conciliado no extrato' : 'Pendente de conciliação'} />
+                                      <span>{subItem.data_pagamento}</span>
+                                    </div>
                                   </td>
                                   <td className="py-1.5 px-2 text-[11px]">
                                     <span className="px-1.5 py-0.5 rounded bg-slate-200/70 text-slate-700 font-bold text-[9px]">
@@ -558,8 +569,24 @@ export function DreCaixaDrilldownModal({
                                       </span>
                                     )}
                                   </td>
+                                  <td className="py-1.5 px-2 text-center whitespace-nowrap">
+                                    {(subItem.dias_atraso ?? 0) > 0 ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[9px]">
+                                        +{subItem.dias_atraso}d
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-medium text-[9px]">
+                                        0d Em dia
+                                      </span>
+                                    )}
+                                  </td>
                                   <td className="py-1.5 px-2 text-right font-mono font-bold text-[11px] text-slate-900 whitespace-nowrap">
-                                    {formatCurrencyBRL(subItem.valor)}
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <span>{formatCurrencyBRL(subItem.valor)}</span>
+                                      {onSelectTransaction && (
+                                        <ChevronRight size={13} className="text-slate-300 group-hover:text-blue-600 transition-colors" />
+                                      )}
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -585,14 +612,23 @@ export function DreCaixaDrilldownModal({
                     <th className="py-2.5 px-3">Conta Bancária</th>
                     <th className="py-2.5 px-3">Documento</th>
                     <th className="py-2.5 px-3 text-center">Parcela</th>
+                    <th className="py-2.5 px-3 text-center">Pontualidade</th>
                     <th className="py-2.5 px-3 text-right">Valor Líquido</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {searchFilteredItems.map(item => (
-                    <tr key={item.id} className="hover:bg-slate-50 text-slate-700 transition-colors">
+                    <tr
+                      key={item.id}
+                      onClick={() => onSelectTransaction && onSelectTransaction(item)}
+                      className={`hover:bg-blue-50/60 text-slate-700 transition-colors ${onSelectTransaction ? 'cursor-pointer group' : ''}`}
+                      title={onSelectTransaction ? "Clique para abrir raio-X 360° deste lançamento" : undefined}
+                    >
                       <td className="py-2 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                        {item.data_pagamento}
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${item.conciliado ? 'bg-emerald-500' : 'bg-amber-400'}`} title={item.conciliado ? 'Conciliado no extrato' : 'Pendente de conciliação'} />
+                          <span>{item.data_pagamento}</span>
+                        </div>
                       </td>
                       <td className="py-2 px-3 whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px]">
@@ -622,10 +658,26 @@ export function DreCaixaDrilldownModal({
                           </span>
                         )}
                       </td>
+                      <td className="py-2 px-3 text-center whitespace-nowrap">
+                        {(item.dias_atraso ?? 0) > 0 ? (
+                          <span className="px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[10px]">
+                            +{item.dias_atraso}d
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-medium text-[10px]">
+                            0d Em dia
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 px-3 text-right font-mono font-bold whitespace-nowrap">
-                        <span className={item.tipo === 'RECEBER' ? 'text-emerald-700' : 'text-slate-900'}>
-                          {item.tipo === 'RECEBER' ? '+' : ''} {formatCurrencyBRL(item.valor)}
-                        </span>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className={item.tipo === 'RECEBER' ? 'text-emerald-700' : 'text-slate-900'}>
+                            {item.tipo === 'RECEBER' ? '+' : ''} {formatCurrencyBRL(item.valor)}
+                          </span>
+                          {onSelectTransaction && (
+                            <ChevronRight size={14} className="text-slate-300 group-hover:text-blue-600 transition-colors" />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

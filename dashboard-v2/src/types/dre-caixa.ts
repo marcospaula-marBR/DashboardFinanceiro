@@ -19,6 +19,31 @@ export interface DreCaixaLancamento {
   parcela_atual?: number;
   total_parcelas?: number;
   tipo_pagamento: 'A_VISTA' | 'PARCELADO';
+
+  // Metadados executivos 360° e conciliação bancária
+  conciliado?: boolean;
+  data_conciliacao?: string | null;
+  data_vencimento?: string | null;
+  data_emissao?: string | null;
+  dias_atraso?: number;
+  status_pontualidade?: 'EM_DIA' | 'ATRASO_LEVE' | 'ATRASO_MEDIO' | 'ATRASO_CRITICO';
+  impostos_retidos?: {
+    ir: number;
+    iss: number;
+    pis: number;
+    cofins: number;
+    csll: number;
+    inss: number;
+    total: number;
+  };
+  valor_bruto?: number;
+  cnpj_cpf?: string | null;
+  contrato_omie?: string | null;
+  chave_nfe?: string | null;
+  observacoes?: string | null;
+  uInc?: string | null;
+  dInc?: string | null;
+  rateios?: Array<{ departamento: string; valor: number; percentual: number }>;
 }
 
 export interface DreCaixaFilters {
@@ -42,6 +67,15 @@ export interface DreCaixaKpiSummary {
   mediaMensalDespesas: number;
   maiorSetor: { nome: string; valor: number };
   totalLancamentos: number;
+
+  // KPIs Executivos de Conciliação e Pontualidade
+  taxaPontualidadeRecebimentos?: number; // % recebimentos em dia
+  taxaPontualidadePagamentos?: number; // % pagamentos em dia
+  mediaDiasAtraso?: number; // Média de dias de atraso
+  totalConciliado?: number; // Total de lançamentos conciliados com extrato
+  percentualConciliado?: number; // % conciliado
+  totalEmDia?: number; // Contagem de lançamentos em dia
+  totalAtrasado?: number; // Contagem de lançamentos atrasados
 }
 
 export interface DreCaixaChartData {
