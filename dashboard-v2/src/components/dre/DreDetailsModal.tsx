@@ -103,6 +103,7 @@ export function DreDetailsModal({
 
         const getValMensal = (key: string, col: string) => allResults.mensal[key]?.[col] || 0;
         const getValTotal = (key: string) => allResults.totais[key] || 0;
+        const isConsolidado = !filters?.empresas || filters.empresas.length === 0 || filters.empresas.length > 1;
 
         let auditRows: any[] = isLucroAntesFcl ? [
           { label: '(+) Receita (Entradas Operacionais)', key: 'Total Entradas Operacionais' },
@@ -117,7 +118,7 @@ export function DreDetailsModal({
           { label: '(+) Mútuo - Entradas', key: 'Mútuo - Entradas' },
           { label: '(-) Total Saídas', key: 'Total Saídas' },
           { label: '(=) Fluxo de Caixa Livre (FCL)', key: 'Fluxo de Caixa Livre FCL' },
-          { label: '(+) Distribuição de Dividendos', key: 'Distribuição de Dividendos' },
+          ...(isConsolidado ? [{ label: '(+) Distribuição de Dividendos', key: 'Distribuição de Dividendos' }] : []),
           { label: '(+) Intermediação/Retiradas', key: 'Intermediação de Negócios' },
           { label: '(+) Mútuo - Saídas', key: 'Mútuo - Saídas' },
           { label: '(=) Total Retiradas dos Sócios', key: 'Total Retiradas dos Sócios' },
@@ -212,6 +213,7 @@ export function DreDetailsModal({
           { label: '(=) Lucro antes do FCL', key: 'Lucro antes do FCL', isResult: true }
         ];
       } else {
+        const isConsolidado = !filters?.empresas || filters.empresas.length === 0 || filters.empresas.length > 1;
         auditRows = [
           { label: '(+) Total Entradas Operacionais', key: 'Total Entradas Operacionais', isSubtracted: false },
           { label: '(+) Outras Entradas', key: 'Outras Entradas', isSubtracted: false },
@@ -220,7 +222,7 @@ export function DreDetailsModal({
           { label: '(-) Total Saídas', key: 'Total Saídas', isSubtracted: true },
           { label: '(=) Fluxo de Caixa Livre (FCL)', key: 'Fluxo de Caixa Livre FCL', isResult: true },
           { label: 'HEADER_USO_FCL', key: 'HEADER_USO_FCL', isHeader: true, labelHeader: '--- RETIRADAS DE SÓCIOS E MÚTUOS ---' },
-          { label: '(+) Distribuição de Dividendos', key: 'Distribuição de Dividendos', isSubtracted: false },
+          ...(isConsolidado ? [{ label: '(+) Distribuição de Dividendos', key: 'Distribuição de Dividendos', isSubtracted: false }] : []),
           { label: '(+) Intermediação/Retiradas', key: 'Intermediação de Negócios', isSubtracted: false },
           { label: '(+) Mútuo - Saídas', key: 'Mútuo - Saídas', isSubtracted: false },
           { label: '(=) Total Retiradas dos Sócios', key: 'Total Retiradas dos Sócios', isResult: true },
@@ -411,12 +413,12 @@ export function DreDetailsModal({
           isHeader: true,
           className: 'font-black text-amber-700 bg-amber-50'
         },
-        { 
+        ...((!filters?.empresas || filters.empresas.length === 0 || filters.empresas.length > 1) ? [{ 
           label: '(+) Distribuição de Dividendos', 
           key: 'Distribuição de Dividendos', 
           isSubtracted: false,
           className: 'text-slate-600'
-        },
+        }] : []),
         { 
           label: '(+) Intermediação/Retiradas', 
           key: 'Intermediação de Negócios', 
@@ -442,6 +444,7 @@ export function DreDetailsModal({
           className: 'font-bold text-emerald-900 bg-emerald-100/60'
         }
       ];
+      const isConsolidado = !filters?.empresas || filters.empresas.length === 0 || filters.empresas.length > 1;
       infoBox = (
         <div className="mt-4 bg-emerald-50/60 border border-emerald-200/50 rounded-2xl p-4 text-slate-700 text-[12px] leading-relaxed">
           <p className="font-bold text-emerald-800 mb-1">Entendendo o Fluxo de Caixa Livre (FCL):</p>
@@ -452,7 +455,10 @@ export function DreDetailsModal({
             Fórmula de Cálculo: FCL = Resultado Operacional + Outras Entradas - Investimentos
           </p>
           <p className="mt-1 text-[11px] text-slate-500 italic">
-            As retiradas dos sócios (Distribuição de Dividendos, Intermediação/Retiradas e Mútuo - Saídas) são exibidas apenas como informativo abaixo e não sofrem dedução sobre o valor do FCL operacional, permitindo a apuração do Saldo final (FCL (-) Total Retiradas).
+            {isConsolidado 
+              ? 'As retiradas dos sócios (Distribuição de Dividendos, Intermediação/Retiradas e Mútuo - Saídas) são exibidas apenas como informativo abaixo e não sofrem dedução sobre o valor do FCL operacional, permitindo a apuração do Saldo final (FCL (-) Total Retiradas).'
+              : 'As retiradas dos sócios (Intermediação/Retiradas e Mútuo - Saídas) são exibidas apenas como informativo abaixo. A Distribuição de Dividendos é consolidada apenas quando todas as empresas estão selecionadas, preservando o regime de competência da empresa individual.'
+            }
           </p>
         </div>
       );

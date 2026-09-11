@@ -994,13 +994,17 @@ export class DreService {
     const receitaIndireta = getVal("Receitas Indiretas");
     const totalEntradas = receitaOperacional + receitaIndireta;
 
+    // Opção B: Distribuição de Dividendos entra nas retiradas de sócios exclusivamente no Consolidado (Todas as Empresas)
+    const isConsolidado = !filters.empresas || filters.empresas.length === 0 || filters.empresas.length > 1;
+
     // Categorias especiais FCL: mapear direto do catTotals para valoresTotal
     const totalIntermediReceitas = getCatTotal("Intermediação de Negócios - Receitas");
     const totalMutuoEntradas = getCatTotal("Mútuo - Entradas");
     const totalDividendos = getCatTotal("Distribuição de Dividendos") + getCatTotal("Dividendos");
+    const totalDividendosRetiradas = isConsolidado ? totalDividendos : 0;
     const totalIntermedioSaidas = getCatTotal("Intermediação de Negócios");
     const totalMutuoSaidas = getCatTotal("Mútuo - Saídas");
-    const totalRetiradas = totalDividendos + totalIntermedioSaidas + totalMutuoSaidas;
+    const totalRetiradas = totalDividendosRetiradas + totalIntermedioSaidas + totalMutuoSaidas;
 
     const outrasEntradas = getVal("Outras Receitas") + getVal("Receitas Financeiras") + getVal("Honorários") + getVal("Juros e Devoluções") + getVal("Recuperação de Despesas Variáveis") + totalIntermediReceitas + totalMutuoEntradas;
     const totalImpostos = getVal("Impostos") + getVal("Provisão IRPJ e CSSL Trimestral");
@@ -1155,9 +1159,10 @@ export class DreService {
 
       // Categorias especiais FCL - popular por coluna via catMonthly
       const dividendosCol = getCatMonthly("Distribuição de Dividendos", col) + getCatMonthly("Dividendos", col);
+      const dividendosRetiradasCol = isConsolidado ? dividendosCol : 0;
       const intermedioSaidasCol = getCatMonthly("Intermediação de Negócios", col);
       const mutuoSaidasCol = getCatMonthly("Mútuo - Saídas", col);
-      const retiradasCol = dividendosCol + intermedioSaidasCol + mutuoSaidasCol;
+      const retiradasCol = dividendosRetiradasCol + intermedioSaidasCol + mutuoSaidasCol;
       
       valoresMensal["Intermediação de Negócios - Receitas"][col] = intermReceitasCol;
       sourceRows["Intermediação de Negócios - Receitas"][col] = getCatSourceRowsSafe("Intermediação de Negócios - Receitas", col);
@@ -1171,7 +1176,7 @@ export class DreService {
       sourceRows["Mútuo - Saídas"][col] = getCatSourceRowsSafe("Mútuo - Saídas", col);
       valoresMensal["Total Retiradas dos Sócios"][col] = retiradasCol;
       sourceRows["Total Retiradas dos Sócios"][col] = [
-        ...sourceRows["Distribuição de Dividendos"][col],
+        ...(isConsolidado ? sourceRows["Distribuição de Dividendos"][col] : []),
         ...sourceRows["Intermediação de Negócios"][col],
         ...sourceRows["Mútuo - Saídas"][col]
       ];
