@@ -336,9 +336,9 @@ class OmieSync:
                 "data_pagamento": dt_pagto_mov,
                 "categoria_codigo": det.get("cCodCateg"),
                 "categoria_nome": cat_nome,
-                "projeto_nome": self.proj_map.get(str(det.get("nCodProjeto")), "Sem Projeto"),
+                "projeto_nome": self.proj_map.get(str(det.get("cCodProjeto") or det.get("nCodProjeto") or "")) or "Sem Projeto",
                 "departamento_nome": "Principal",
-                "cliente_fornecedor": det.get("cNomeCliente") or "N/D",
+                "cliente_fornecedor": (self.forn_map.get(str(det.get("nCodCliente") or det.get("codigo_cliente_fornecedor") or "")) or {}).get("nome_fantasia") or (self.forn_map.get(str(det.get("nCodCliente") or det.get("codigo_cliente_fornecedor") or "")) or {}).get("razao_social") or det.get("cNomeCliente") or "N/D",
                 "numero_documento": det.get("cNumDocFiscal") or det.get("cNumTitulo"),
                 "raw_data": r
             })

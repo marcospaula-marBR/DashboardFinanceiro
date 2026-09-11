@@ -438,9 +438,16 @@ export class DreCaixaService {
             processedRevenueDocs.add(docKey);
           }
 
-          const revSig = `${emp}-${item.data_pagamento}-${valRound}-${catCodigo}`;
-          if (processedRevenueSignatures.has(revSig)) return;
-          processedRevenueSignatures.add(revSig);
+          // Deduplicação de Receitas:
+          // Se já houver identificador de título ou número de documento fiscal, a unicidade e deduplicação
+          // entre títulos de CR e movimentos de extrato (BAXR/VENR) já está garantida por processedRevenueTitles e processedRevenueDocs.
+          // processedRevenueSignatures só é acionado como fallback caso NÃO exista nem título nem documento,
+          // evitando descartar recebimentos legítimos distintos com o mesmo valor na mesma data (ex: NFs 347 e 362, NFs 363 e 380 de B2G).
+          if (!titleId && (!docNum || docNum === 'None')) {
+            const revSig = `${emp}-${item.data_pagamento}-${valRound}-${catCodigo}`;
+            if (processedRevenueSignatures.has(revSig)) return;
+            processedRevenueSignatures.add(revSig);
+          }
         } else {
           // Para Saídas / Despesas (PAGAR):
           const sig = `${emp}-${omieId || nCodTit || item.id}-${item.data_pagamento}-${valRound}-${catCodigo}-${depto}`;
