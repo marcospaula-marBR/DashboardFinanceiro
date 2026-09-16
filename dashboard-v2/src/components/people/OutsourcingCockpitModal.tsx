@@ -197,6 +197,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [pdfUploading, setPdfUploading] = useState(false);
+  const skipNextLoadRef = useRef(false);
 
   // ── ResizeObserver: monitora scrollWidth real da tabela em tempo real ──
   useEffect(() => {
@@ -249,7 +250,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     if (isScrollingRef.current === 'top') return;
     isScrollingRef.current = 'table';
     if (topScrollRef.current && tableScrollRef.current) {
-      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+      topScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
     }
     requestAnimationFrame(() => { isScrollingRef.current = null; });
   };
@@ -264,6 +265,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   }, [isOpen, competencia, isTestMode]);
 
   const loadData = async (comp: string) => {
+    if (skipNextLoadRef.current) {
+      skipNextLoadRef.current = false;
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -465,48 +470,172 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     }
   };
 
-  // ── Importar Planilha (XLSX / CSV) ───────────
+  // ── Importar Planilha (XLSX / CSV) ou Extrato Mensal (PDF) ───────────
   const handleSpreadsheetUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setSpreadsheetImporting(true);
     setError(null);
     try {
-      const buffer = await file.arrayBuffer();
-      const result = parseOutsourcingFile(buffer);
+      const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
 
-      if (result.rows.length === 0) {
-        throw new Error('Nenhum colaborador ou verba foi identificado na planilha importada.');
-      }
+      if (isPdf) {
+        // Processamento inteligente do Extrato Mensal PDF via Robô / API
+        const formData = new FormData();
+        formData.append('file', file);
 
-      // Mapear IDs de colaboradores existentes pelo nome se possível
-      const mappedRows: OutsourcingRow[] = result.rows.map(r => {
-        const match = allEmployeesList.find(e =>
-          e.name.toLowerCase().trim() === r.name.toLowerCase().trim() ||
-          e.name.toLowerCase().includes(r.name.toLowerCase()) ||
-          r.name.toLowerCase().includes(e.name.toLowerCase())
+        const res = await fetch('/api/people/parse-outsourcing-pdf', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Falha ao processar o arquivo PDF.');
+        }
+
+        if (!data.employees || data.employees.length === 0) {
+          throw new Error('Nenhum colaborador ou verba foi identificado no Extrato Mensal PDF.');
+        }
+
+        const cleanCpf = (c: string) => (c || '').replace(/\D/g, '');
+        let matchedCount = 0;
+        let newCount = 0;
+
+        const mappedRows: OutsourcingRow[] = data.employees.map((pdfEmp: any, idx: number) => {
+          const targetCpf = cleanCpf(pdfEmp.cpf);
+
+          // 1. Busca prioritária por CPF
+          let match = targetCpf ? allEmployeesList.find(emp => {
+            const empCpf = cleanCpf(emp.document_id || (emp as any).cpf || '');
+            return empCpf === targetCpf;
+          }) : null;
+
+          // 2. Busca secundária por Nome normalizado
+          if (!match && pdfEmp.name) {
+            const normPdf = pdfEmp.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            match = allEmployeesList.find(emp => {
+              const normEmp = emp.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+              return normEmp === normPdf || normEmp.includes(normPdf) || normPdf.includes(normEmp);
+            });
+          }
+
+          const bruto = parseFloat(String(pdfEmp.valorBruto || 0));
+          const desc = parseFloat(String(pdfEmp.valorDesconto || 0));
+          const liq = parseFloat(String(pdfEmp.valorLiquido || (bruto - desc)));
+          const tipoVinculo: EmployeeType = pdfEmp.employeeType === 'Estagio' ? 'Estagio' :
+                                           pdfEmp.employeeType === 'PJ' ? 'PJ' : 'CLT';
+
+          if (match) {
+            matchedCount++;
+            return {
+              id: match.id,
+              employeeId: match.id,
+              name: match.name,
+              location: match.service_location || match.city || match.department || 'Matriz',
+              employeeType: tipoVinculo,
+              isManual: false,
+              valorBruto: bruto,
+              valorDesconto: desc,
+              valorLiquido: liq,
+              valorBonus: 0,
+              valorComissao: 0,
+              valorAjudaCusto: parseFloat(String(pdfEmp.valorAjudaCusto || 0)),
+              valorVR: 0,
+              valorVT: parseFloat(String(pdfEmp.valorVT || 0)),
+              valorSeguro: 0,
+              valorFGTS: parseFloat(String(pdfEmp.valorFGTS || 0)),
+              valorGPS: parseFloat(String(pdfEmp.valorGPS || 0)),
+              valorDecTerceiro: 0,
+              valorFerias: 0,
+              valorOutros: 0,
+              valorEmprestimo: parseFloat(String(pdfEmp.valorEmprestimo || 0)),
+              customValues: {}
+            };
+          } else {
+            newCount++;
+            return {
+              id: `pdf-manual-${Date.now()}-${idx}`,
+              name: pdfEmp.name,
+              location: 'Matriz',
+              employeeType: tipoVinculo,
+              isManual: true,
+              valorBruto: bruto,
+              valorDesconto: desc,
+              valorLiquido: liq,
+              valorBonus: 0,
+              valorComissao: 0,
+              valorAjudaCusto: parseFloat(String(pdfEmp.valorAjudaCusto || 0)),
+              valorVR: 0,
+              valorVT: parseFloat(String(pdfEmp.valorVT || 0)),
+              valorSeguro: 0,
+              valorFGTS: parseFloat(String(pdfEmp.valorFGTS || 0)),
+              valorGPS: parseFloat(String(pdfEmp.valorGPS || 0)),
+              valorDecTerceiro: 0,
+              valorFerias: 0,
+              valorOutros: 0,
+              valorEmprestimo: parseFloat(String(pdfEmp.valorEmprestimo || 0)),
+              customValues: {}
+            };
+          }
+        });
+
+        const targetComp = data.competencia || competencia;
+        // Salva imediatamente no LocalStorage da competência alvo
+        try {
+          localStorage.setItem(`outsourcing_rows_${targetComp}${isTestMode ? '_test' : ''}`, JSON.stringify(mappedRows));
+        } catch {}
+
+        if (targetComp !== competencia) {
+          skipNextLoadRef.current = true;
+          setCompetencia(targetComp);
+        }
+
+        setRows(mappedRows);
+        setSaveSuccessMessage(
+          `Robô PDF: Extrato Mensal (${targetComp}) importado com sucesso! ` +
+          `${data.totalParsed} colaboradores carregados (${matchedCount} vinculados ao People${newCount > 0 ? `, ${newCount} novo(s) pré-preenchido(s)` : ''}).`
         );
-        return {
-          ...r,
-          employeeId: match?.id || r.employeeId
-        };
-      });
+        setTimeout(() => setSaveSuccessMessage(null), 8000);
+      } else {
+        // Processamento de Planilha Excel / CSV
+        const buffer = await file.arrayBuffer();
+        const result = parseOutsourcingFile(buffer);
 
-      // Se a planilha continha taxa de ISS detectada, atualiza
-      if (result.detectedTaxRate !== undefined && result.detectedTaxRate > 0) {
-        setTaxInputMode('rate');
-        setTaxRate(result.detectedTaxRate);
+        if (result.rows.length === 0) {
+          throw new Error('Nenhum colaborador ou verba foi identificado na planilha importada.');
+        }
+
+        // Mapear IDs de colaboradores existentes pelo nome se possível
+        const mappedRows: OutsourcingRow[] = result.rows.map(r => {
+          const match = allEmployeesList.find(e =>
+            e.name.toLowerCase().trim() === r.name.toLowerCase().trim() ||
+            e.name.toLowerCase().includes(r.name.toLowerCase()) ||
+            r.name.toLowerCase().includes(e.name.toLowerCase())
+          );
+          return {
+            ...r,
+            employeeId: match?.id || r.employeeId
+          };
+        });
+
+        // Se a planilha continha taxa de ISS detectada, atualiza
+        if (result.detectedTaxRate !== undefined && result.detectedTaxRate > 0) {
+          setTaxInputMode('rate');
+          setTaxRate(result.detectedTaxRate);
+        }
+
+        setRows(mappedRows);
+        setSaveSuccessMessage(`Planilha "${file.name}" importada com sucesso: ${result.totalParsed} colaboradores carregados!`);
+        setTimeout(() => setSaveSuccessMessage(null), 6000);
       }
-
-      setRows(mappedRows);
-      setSaveSuccessMessage(`Planilha "${file.name}" importada com sucesso: ${result.totalParsed} colaboradores carregados!`);
-      setTimeout(() => setSaveSuccessMessage(null), 6000);
     } catch (err: any) {
-      console.error('Erro ao importar planilha:', err);
-      setError(`Erro na importação da planilha: ${err?.message || 'Arquivo inválido.'}`);
+      console.error('Erro ao importar arquivo:', err);
+      setError(`Erro na importação: ${err?.message || 'Arquivo inválido.'}`);
     } finally {
       setSpreadsheetImporting(false);
       if (spreadsheetInputRef.current) spreadsheetInputRef.current.value = '';
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
   };
 
@@ -724,17 +853,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const handleRepassLineChange = (id: string, field: keyof RepassLine, value: any) =>
     setRepassLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
 
-  // ── Upload PDF (placeholder) ────────────────
+  // ── Upload PDF (reaproveita pipeline inteligente do Robô) ───────
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPdfUploading(true);
-    try {
-      alert(`Arquivo PDF "${file.name}" recebido. Utilize o botão "Importar Planilha" (.xlsx/.csv) para carregar os valores estruturados.`);
-    } finally {
-      setPdfUploading(false);
-      if (pdfInputRef.current) pdfInputRef.current.value = '';
-    }
+    return handleSpreadsheetUpload(e);
   };
 
   // ── Cálculos financeiros ─────────────────────
@@ -930,11 +1051,11 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
               <RefreshCw size={14} className={loading ? 'animate-spin text-blue-500' : ''} />
             </button>
 
-            {/* Importar Planilha (XLSX / CSV) */}
+            {/* Importar Planilha (XLSX / CSV) ou Extrato Mensal (PDF) */}
             <input
               ref={spreadsheetInputRef}
               type="file"
-              accept=".xlsx, .xls, .csv"
+              accept=".xlsx, .xls, .csv, .pdf"
               className="hidden"
               onChange={handleSpreadsheetUpload}
             />
@@ -942,10 +1063,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
               onClick={() => spreadsheetInputRef.current?.click()}
               disabled={spreadsheetImporting}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm"
-              title="Importar dados de planilha Excel (.xlsx/.xls) ou CSV"
+              title="Importar dados de planilha Excel (.xlsx/.xls), CSV ou Extrato Mensal em PDF"
             >
-              <FileSpreadsheet size={13} className={spreadsheetImporting ? 'animate-spin' : ''} />
-              <span>{spreadsheetImporting ? 'Lendo...' : 'Importar Planilha'}</span>
+              <FileSpreadsheet size={13} className={spreadsheetImporting ? 'animate-spin text-emerald-600' : ''} />
+              <span>{spreadsheetImporting ? 'Lendo Arquivo...' : 'Importar Planilha / PDF'}</span>
             </button>
 
             {/* Baixar Modelo XLSX */}
