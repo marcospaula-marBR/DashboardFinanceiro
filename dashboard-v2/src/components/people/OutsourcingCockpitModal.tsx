@@ -480,7 +480,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
 
       if (isPdf) {
-        // Processamento inteligente do Extrato Mensal PDF via Robô / API
+        // Processamento inteligente de PDF (Extrato Mensal, VA ou VT) via Robô / API
         const formData = new FormData();
         formData.append('file', file);
 
@@ -495,108 +495,217 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         }
 
         if (!data.employees || data.employees.length === 0) {
-          throw new Error('Nenhum colaborador ou verba foi identificado no Extrato Mensal PDF.');
+          throw new Error('Nenhum colaborador ou verba foi identificado no PDF.');
         }
 
-        const cleanCpf = (c: string) => (c || '').replace(/\D/g, '');
-        let matchedCount = 0;
-        let newCount = 0;
-
-        const mappedRows: OutsourcingRow[] = data.employees.map((pdfEmp: any, idx: number) => {
-          const targetCpf = cleanCpf(pdfEmp.cpf);
-
-          // 1. Busca prioritária por CPF
-          let match = targetCpf ? allEmployeesList.find(emp => {
-            const empCpf = cleanCpf(emp.document_id || (emp as any).cpf || '');
-            return empCpf === targetCpf;
-          }) : null;
-
-          // 2. Busca secundária por Nome normalizado
-          if (!match && pdfEmp.name) {
-            const normPdf = pdfEmp.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-            match = allEmployeesList.find(emp => {
-              const normEmp = emp.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-              return normEmp === normPdf || normEmp.includes(normPdf) || normPdf.includes(normEmp);
-            });
-          }
-
-          const bruto = parseFloat(String(pdfEmp.valorBruto || 0));
-          const desc = parseFloat(String(pdfEmp.valorDesconto || 0));
-          const liq = parseFloat(String(pdfEmp.valorLiquido || (bruto - desc)));
-          const tipoVinculo: EmployeeType = pdfEmp.employeeType === 'Estagio' ? 'Estagio' :
-                                           pdfEmp.employeeType === 'PJ' ? 'PJ' : 'CLT';
-
-          if (match) {
-            matchedCount++;
-            return {
-              id: match.id,
-              employeeId: match.id,
-              name: match.name,
-              location: match.service_location || match.city || match.department || 'Matriz',
-              employeeType: tipoVinculo,
-              isManual: false,
-              valorBruto: bruto,
-              valorDesconto: desc,
-              valorLiquido: liq,
-              valorBonus: 0,
-              valorComissao: 0,
-              valorAjudaCusto: parseFloat(String(pdfEmp.valorAjudaCusto || 0)),
-              valorVR: 0,
-              valorVT: parseFloat(String(pdfEmp.valorVT || 0)),
-              valorSeguro: 0,
-              valorFGTS: parseFloat(String(pdfEmp.valorFGTS || 0)),
-              valorGPS: parseFloat(String(pdfEmp.valorGPS || 0)),
-              valorDecTerceiro: 0,
-              valorFerias: 0,
-              valorOutros: 0,
-              valorEmprestimo: parseFloat(String(pdfEmp.valorEmprestimo || 0)),
-              customValues: {}
-            };
-          } else {
-            newCount++;
-            return {
-              id: `pdf-manual-${Date.now()}-${idx}`,
-              name: pdfEmp.name,
-              location: 'Matriz',
-              employeeType: tipoVinculo,
-              isManual: true,
-              valorBruto: bruto,
-              valorDesconto: desc,
-              valorLiquido: liq,
-              valorBonus: 0,
-              valorComissao: 0,
-              valorAjudaCusto: parseFloat(String(pdfEmp.valorAjudaCusto || 0)),
-              valorVR: 0,
-              valorVT: parseFloat(String(pdfEmp.valorVT || 0)),
-              valorSeguro: 0,
-              valorFGTS: parseFloat(String(pdfEmp.valorFGTS || 0)),
-              valorGPS: parseFloat(String(pdfEmp.valorGPS || 0)),
-              valorDecTerceiro: 0,
-              valorFerias: 0,
-              valorOutros: 0,
-              valorEmprestimo: parseFloat(String(pdfEmp.valorEmprestimo || 0)),
-              customValues: {}
-            };
-          }
-        });
-
+        const docType: string = data.docType || 'extrato_mensal';
         const targetComp = data.competencia || competencia;
-        // Salva imediatamente no LocalStorage da competência alvo
-        try {
-          localStorage.setItem(`outsourcing_rows_${targetComp}${isTestMode ? '_test' : ''}`, JSON.stringify(mappedRows));
-        } catch {}
 
-        if (targetComp !== competencia) {
-          skipNextLoadRef.current = true;
-          setCompetencia(targetComp);
+        // ── VA (Vale Alimentação / Refeição / Cesta Básica) ───────────────────
+        // ── VT (Vale Transporte) ──────────────────────────────────────────────
+        if (docType === 'va' || docType === 'vt') {
+          const fieldKey = docType === 'va' ? 'valorVR' : 'valorVT';
+          const labelDoc = docType === 'va'
+            ? 'VA (Vale Alimentação/Refeição)'
+            : 'VT (Vale Transporte)';
+
+          // Normaliza nomes para matching fuzzy
+          const normName = (n: string) =>
+            n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+          let enrichedCount = 0;
+          let newCount = 0;
+
+          // Cria mapa nome → valor do PDF
+          const pdfMap = new Map<string, number>(
+            data.employees.map((e: any) => [normName(e.name), parseFloat(String(e[fieldKey] || 0))])
+          );
+
+          // Enriquecer linhas existentes
+          const updatedRows: OutsourcingRow[] = rows.map(row => {
+            const normRow = normName(row.name);
+            // Busca exata primeiro, depois parcial
+            let pdfVal = pdfMap.get(normRow);
+            if (pdfVal === undefined) {
+              for (const [pdfNorm, val] of pdfMap.entries()) {
+                if (normRow.includes(pdfNorm) || pdfNorm.includes(normRow)) {
+                  pdfVal = val;
+                  break;
+                }
+              }
+            }
+            if (pdfVal !== undefined && pdfVal > 0) {
+              enrichedCount++;
+              pdfMap.delete(normName(row.name)); // evitar double match
+              return { ...row, [fieldKey]: pdfVal };
+            }
+            return row;
+          });
+
+          // Colaboradores do PDF não encontrados nas linhas existentes → adicionar como novas linhas
+          const existingNorms = new Set(updatedRows.map(r => normName(r.name)));
+          const extraRows: OutsourcingRow[] = [];
+          for (const pdfEmp of data.employees as any[]) {
+            const normPdf = normName(pdfEmp.name);
+            const alreadyMapped = [...existingNorms].some(n => n.includes(normPdf) || normPdf.includes(n));
+            if (!alreadyMapped) {
+              newCount++;
+              // Tenta vincular ao People pelo nome
+              const peopleMatch = allEmployeesList.find(emp => {
+                const normEmp = normName(emp.name);
+                return normEmp === normPdf || normEmp.includes(normPdf) || normPdf.includes(normEmp);
+              });
+              extraRows.push({
+                id: peopleMatch?.id || `pdf-${docType}-${Date.now()}-${newCount}`,
+                employeeId: peopleMatch?.id,
+                name: peopleMatch?.name || pdfEmp.name,
+                location: peopleMatch?.service_location || peopleMatch?.city || 'Matriz',
+                employeeType: 'CLT',
+                isManual: !peopleMatch,
+                valorBruto: 0,
+                valorDesconto: 0,
+                valorLiquido: 0,
+                valorBonus: 0,
+                valorComissao: 0,
+                valorAjudaCusto: 0,
+                valorVR: docType === 'va' ? parseFloat(String(pdfEmp.valorVR || 0)) : 0,
+                valorVT: docType === 'vt' ? parseFloat(String(pdfEmp.valorVT || 0)) : 0,
+                valorSeguro: 0,
+                valorFGTS: 0,
+                valorGPS: 0,
+                valorDecTerceiro: 0,
+                valorFerias: 0,
+                valorOutros: 0,
+                valorEmprestimo: 0,
+                customValues: {}
+              });
+            }
+          }
+
+          const finalRows = [...updatedRows, ...extraRows];
+
+          try {
+            localStorage.setItem(`outsourcing_rows_${targetComp}${isTestMode ? '_test' : ''}`, JSON.stringify(finalRows));
+          } catch {}
+
+          if (targetComp !== competencia) {
+            skipNextLoadRef.current = true;
+            setCompetencia(targetComp);
+          }
+
+          setRows(finalRows);
+
+          const totalFormatted = data.totalGeral
+            ? ` — Total: R$ ${Number(data.totalGeral).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            : '';
+
+          setSaveSuccessMessage(
+            `Robô PDF: ${labelDoc} (${targetComp}) importado com sucesso!${totalFormatted} ` +
+            `${enrichedCount} colaborador(es) atualizados` +
+            (newCount > 0 ? `, ${newCount} novo(s) adicionado(s)` : '') + '.'
+          );
+          setTimeout(() => setSaveSuccessMessage(null), 9000);
+
+        // ── Extrato Mensal (holerites CLT — Domínio / Realcontabil) ──────────
+        } else {
+          const cleanCpf = (c: string) => (c || '').replace(/\D/g, '');
+          let matchedCount = 0;
+          let newCount = 0;
+
+          const mappedRows: OutsourcingRow[] = data.employees.map((pdfEmp: any, idx: number) => {
+            const targetCpf = cleanCpf(pdfEmp.cpf);
+
+            // 1. Busca prioritária por CPF
+            let match = targetCpf ? allEmployeesList.find(emp => {
+              const empCpf = cleanCpf(emp.document_id || (emp as any).cpf || '');
+              return empCpf === targetCpf;
+            }) : null;
+
+            // 2. Busca secundária por Nome normalizado
+            if (!match && pdfEmp.name) {
+              const normPdf = pdfEmp.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+              match = allEmployeesList.find(emp => {
+                const normEmp = emp.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                return normEmp === normPdf || normEmp.includes(normPdf) || normPdf.includes(normEmp);
+              });
+            }
+
+            const bruto = parseFloat(String(pdfEmp.valorBruto || 0));
+            const desc = parseFloat(String(pdfEmp.valorDesconto || 0));
+            const liq = parseFloat(String(pdfEmp.valorLiquido || (bruto - desc)));
+            const tipoVinculo: EmployeeType = pdfEmp.employeeType === 'Estagio' ? 'Estagio' :
+                                             pdfEmp.employeeType === 'PJ' ? 'PJ' : 'CLT';
+
+            if (match) {
+              matchedCount++;
+              return {
+                id: match.id,
+                employeeId: match.id,
+                name: match.name,
+                location: match.service_location || match.city || match.department || 'Matriz',
+                employeeType: tipoVinculo,
+                isManual: false,
+                valorBruto: bruto,
+                valorDesconto: desc,
+                valorLiquido: liq,
+                valorBonus: 0,
+                valorComissao: 0,
+                valorAjudaCusto: parseFloat(String(pdfEmp.valorAjudaCusto || 0)),
+                valorVR: 0,
+                valorVT: parseFloat(String(pdfEmp.valorVT || 0)),
+                valorSeguro: 0,
+                valorFGTS: parseFloat(String(pdfEmp.valorFGTS || 0)),
+                valorGPS: parseFloat(String(pdfEmp.valorGPS || 0)),
+                valorDecTerceiro: 0,
+                valorFerias: 0,
+                valorOutros: 0,
+                valorEmprestimo: parseFloat(String(pdfEmp.valorEmprestimo || 0)),
+                customValues: {}
+              };
+            } else {
+              newCount++;
+              return {
+                id: `pdf-manual-${Date.now()}-${idx}`,
+                name: pdfEmp.name,
+                location: 'Matriz',
+                employeeType: tipoVinculo,
+                isManual: true,
+                valorBruto: bruto,
+                valorDesconto: desc,
+                valorLiquido: liq,
+                valorBonus: 0,
+                valorComissao: 0,
+                valorAjudaCusto: parseFloat(String(pdfEmp.valorAjudaCusto || 0)),
+                valorVR: 0,
+                valorVT: parseFloat(String(pdfEmp.valorVT || 0)),
+                valorSeguro: 0,
+                valorFGTS: parseFloat(String(pdfEmp.valorFGTS || 0)),
+                valorGPS: parseFloat(String(pdfEmp.valorGPS || 0)),
+                valorDecTerceiro: 0,
+                valorFerias: 0,
+                valorOutros: 0,
+                valorEmprestimo: parseFloat(String(pdfEmp.valorEmprestimo || 0)),
+                customValues: {}
+              };
+            }
+          });
+
+          try {
+            localStorage.setItem(`outsourcing_rows_${targetComp}${isTestMode ? '_test' : ''}`, JSON.stringify(mappedRows));
+          } catch {}
+
+          if (targetComp !== competencia) {
+            skipNextLoadRef.current = true;
+            setCompetencia(targetComp);
+          }
+
+          setRows(mappedRows);
+          setSaveSuccessMessage(
+            `Robô PDF: Extrato Mensal (${targetComp}) importado com sucesso! ` +
+            `${data.totalParsed} colaboradores carregados (${matchedCount} vinculados ao People${newCount > 0 ? `, ${newCount} novo(s) pré-preenchido(s)` : ''}).`
+          );
+          setTimeout(() => setSaveSuccessMessage(null), 8000);
         }
-
-        setRows(mappedRows);
-        setSaveSuccessMessage(
-          `Robô PDF: Extrato Mensal (${targetComp}) importado com sucesso! ` +
-          `${data.totalParsed} colaboradores carregados (${matchedCount} vinculados ao People${newCount > 0 ? `, ${newCount} novo(s) pré-preenchido(s)` : ''}).`
-        );
-        setTimeout(() => setSaveSuccessMessage(null), 8000);
       } else {
         // Processamento de Planilha Excel / CSV
         const buffer = await file.arrayBuffer();
