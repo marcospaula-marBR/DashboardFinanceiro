@@ -112,6 +112,7 @@ export default function PeoplePage() {
   const [isOutsourcingModalOpen, setIsOutsourcingModalOpen] = useState(false);
   const [isBprModalOpen, setIsBprModalOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   // C-Level Executive Drawer States
   const [activeKpiMode, setActiveKpiMode] = useState<"headcount" | "headcount_clt" | "headcount_pj" | "payroll_clt" | "payroll_pj" | "loans" | "health" | "audit" | "strategic" | "nopbid" | null>(null);
@@ -753,25 +754,27 @@ export default function PeoplePage() {
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
       {/* ── LEFT SIDEBAR (Dark Navy) ── */}
-      <aside className="w-[280px] bg-slate-900 text-slate-100 flex flex-col border-r border-slate-800 shrink-0 hidden md:flex">
+      <aside className={`${isSidebarCollapsed ? 'w-[56px]' : 'w-[280px]'} bg-slate-900 text-slate-100 flex flex-col border-r border-slate-800 shrink-0 hidden md:flex transition-all duration-300 ease-in-out overflow-hidden`}>
         {/* Sidebar Header */}
-        <div className="p-6 border-b border-slate-800">
+        <div className={`${isSidebarCollapsed ? 'p-3' : 'p-6'} border-b border-slate-800 transition-all duration-300`}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md shrink-0">
               <Users size={18} />
             </div>
-            <div>
-              <h2 className="text-sm font-black tracking-wider leading-tight">PeopleBoard</h2>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[9px] font-bold text-slate-500 uppercase leading-none">Executive Cockpit</span>
-                <span className="text-[9px] font-mono text-slate-400 bg-slate-800/80 px-1 py-0.5 rounded-sm">{APP_VERSION}</span>
+            {!isSidebarCollapsed && (
+              <div>
+                <h2 className="text-sm font-black tracking-wider leading-tight">PeopleBoard</h2>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase leading-none">Executive Cockpit</span>
+                  <span className="text-[9px] font-mono text-slate-400 bg-slate-800/80 px-1 py-0.5 rounded-sm">{APP_VERSION}</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* Sidebar Filters */}
-        <div className="flex-1 p-6 space-y-5 overflow-y-auto">
+        <div className={`flex-1 ${isSidebarCollapsed ? 'hidden' : 'p-6 space-y-5'} overflow-y-auto transition-all duration-300`}>
           <div className="space-y-1.5">
             <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Busca Rápida</label>
             <div className="relative">
@@ -1019,10 +1022,12 @@ export default function PeoplePage() {
         </div>
 
         {/* Sidebar Footer with Branding */}
-        <div className="p-6 border-t border-slate-800 bg-slate-950/40 text-center">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Mar Brasil</p>
-          <p className="text-[8px] text-slate-600 font-semibold uppercase leading-none mt-1">HR Intelligence © 2026</p>
-        </div>
+        {!isSidebarCollapsed && (
+          <div className="p-6 border-t border-slate-800 bg-slate-950/40 text-center">
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Mar Brasil</p>
+            <p className="text-[8px] text-slate-600 font-semibold uppercase leading-none mt-1">HR Intelligence © 2026</p>
+          </div>
+        )}
       </aside>
 
       {/* ── MOBILE SIDEBAR OVERLAY ── */}
@@ -1227,23 +1232,27 @@ export default function PeoplePage() {
       <main className="flex-1 overflow-y-auto flex flex-col bg-slate-50">
         
         {/* Header bar */}
-        <header className="bg-white border-b border-slate-200 py-4 px-6 shrink-0 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
+        <header className="bg-white border-b border-slate-200 py-3 px-4 shrink-0 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            {/* Desktop Sidebar Toggle */}
+            <button
+              onClick={() => setIsSidebarCollapsed(v => !v)}
+              className="hidden md:flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all shadow-sm active:scale-95"
+              title={isSidebarCollapsed ? 'Expandir filtros' : 'Recolher filtros'}
+            >
+              <ChevronLeft size={15} className={`transition-transform duration-300 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
+            </button>
             <Link
               href="/"
-              className="flex items-center gap-1.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-amber-450 hover:bg-amber-50 text-slate-600 hover:text-amber-700 transition-all shadow-sm duration-200 active:scale-95 text-xs font-bold"
+              className="flex items-center gap-1.5 p-2 px-3 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50 text-slate-600 hover:text-amber-700 transition-all shadow-sm duration-200 active:scale-95 text-xs font-bold"
             >
-              <ChevronLeft size={16} />
-              <span>Voltar ao Início</span>
+              <ChevronLeft size={14} />
+              <span className="hidden sm:inline">Voltar ao Início</span>
             </Link>
             {/* Mobile Sidebar Toggle */}
             <button className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl" onClick={() => setIsMobileSidebarOpen(true)}>
               <Filter size={18} />
             </button>
-            <div>
-              <h1 className="text-base font-black text-slate-800 tracking-tight uppercase leading-none">Cockpit de Governança</h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mt-1">Ecosystem Map & Pessoas</p>
-            </div>
           </div>
 
           <div className="flex items-center gap-3">
