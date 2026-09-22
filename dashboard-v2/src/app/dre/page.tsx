@@ -14,7 +14,7 @@ import { DreEquipmentsModal } from '@/components/dre/DreEquipmentsModal';
 import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
 import { DreIndicatorsModal } from '@/components/dre/DreIndicatorsModal';
 import { DreReportBuilderModal } from '@/components/dre/DreReportBuilderModal';
-import { DreLancamentosService } from '@/services/dre-lancamentos.service';
+import { DreLancamentosService, EMPRESAS_MANUAL_ONLY } from '@/services/dre-lancamentos.service';
 import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
@@ -237,7 +237,7 @@ export default function DrePage() {
     // do simulador sejam aplicadas sobre novos dados, causando valores duplicados.
     setActiveScenario(null);
     try {
-      const { rows, error } = await DreLancamentosService.fetchAllForDashboard();
+      const { rows, error, manualRows } = await DreLancamentosService.fetchAllForDashboard();
 
       if (error) {
         throw new Error(error);
@@ -247,7 +247,7 @@ export default function DrePage() {
         let generatedMetadata = DreLancamentosService.generateMetadataFromRows(rows);
         let finalRows = rows;
 
-        // Se a tabela dre_lancamentos não tiver fornecedores/contas granulares populados, carrega o snapshot enriquecido
+        // Se a tabela dre_lancamentos não tiver fornecedores/contas granulares populados, enriquece com o snapshot do Omie
         const hasGranularData = rows.some(r => r.Fornecedor && r.Fornecedor !== 'Sem Fornecedor' && r.ContaCorrente && r.ContaCorrente !== 'Sem Conta Corrente');
         if (!hasGranularData || !generatedMetadata.fornecedores || generatedMetadata.fornecedores.length === 0 || !generatedMetadata.contasCorrentes || generatedMetadata.contasCorrentes.length === 0) {
           try {
@@ -256,13 +256,37 @@ export default function DrePage() {
               .select('*')
               .order('created_at', { ascending: false })
               .limit(1);
-            if (snapData && snapData.length > 0) {
+            if (snapData && snapData.length > 0 && snapData[0].raw_data) {
               const snap = snapData[0];
-              if (snap.raw_data && snap.raw_data.length > 0) {
-                finalRows = snap.raw_data;
+              const snapRows: DreRow[] = snap.raw_data;
+
+              // 1. Manter as linhas granulares do Omie vindas do snapshot (excluindo qualquer dado legado/incompleto de empresas manuais)
+              const filteredSnapRows = snapRows.filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+
+              // 2. Extrair as linhas autoritativas das empresas manuais (Conectius e Ybox) diretamente de dre_lancamentos (rows)
+              const manualOnlyRows = rows.filter(r => EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+
+              // 3. Mesclar as linhas do snapshot com as linhas autoritativas de dre_lancamentos
+              finalRows = [...filteredSnapRows, ...manualOnlyRows];
+
+              // 4. Se houver lançamentos manuais adicionais para outras empresas (ex: MarBR, DZM), mesclar garantindo precedência manual
+              if (manualRows && manualRows.length > 0) {
+                const otherManualRows = manualRows.filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+                if (otherManualRows.length > 0) {
+                  finalRows = DreService.mergeWithHistoricalRows(finalRows, otherManualRows);
+                }
               }
+
+              // 4. Regenerar metadados combinando os fornecedores e contas correntes enriquecidos do snapshot
+              const combinedMeta = DreLancamentosService.generateMetadataFromRows(finalRows);
               if (snap.metadata) {
-                generatedMetadata = snap.metadata;
+                generatedMetadata = {
+                  ...combinedMeta,
+                  fornecedores: (snap.metadata.fornecedores && snap.metadata.fornecedores.length > 0) ? snap.metadata.fornecedores : combinedMeta.fornecedores,
+                  contasCorrentes: (snap.metadata.contasCorrentes && snap.metadata.contasCorrentes.length > 0) ? snap.metadata.contasCorrentes : combinedMeta.contasCorrentes
+                };
+              } else {
+                generatedMetadata = combinedMeta;
               }
             }
           } catch (snapErr) {
@@ -400,12 +424,13 @@ export default function DrePage() {
         return;
       }
 
-      // Preservar períodos históricos (Jan/24 a Mai/25) caso o novo upload seja apenas do Omie recente
+      // Preservar períodos históricos (Jan/24 a Mai/25) e empresas de lançamento manual (Conectius, Ybox) caso o novo upload seja apenas do Omie recente
       let finalData = data;
       let finalMeta = newMetadata;
 
-      // Verifica se o estado atual ou a nuvem tem os períodos de 2024/início de 2025
+      // Verifica se o estado atual ou a nuvem tem os períodos de 2024/início de 2025 ou empresas manuais
       let historicalRows = rawData.filter(r => 
+        EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)) ||
         Object.keys(r).some(k => k.includes('/24') || k.toLowerCase().startsWith('jan/25') || k.toLowerCase().startsWith('fev/25') || k.toLowerCase().startsWith('mar/25') || k.toLowerCase().startsWith('abr/25') || k.toLowerCase().startsWith('mai/25'))
       );
 
@@ -419,6 +444,7 @@ export default function DrePage() {
             .limit(1);
           if (snapData && snapData.length > 0 && snapData[0].raw_data) {
             historicalRows = snapData[0].raw_data.filter((r: any) => 
+              EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)) ||
               Object.keys(r).some(k => k.includes('/24') || k.toLowerCase().startsWith('jan/25') || k.toLowerCase().startsWith('fev/25') || k.toLowerCase().startsWith('mar/25') || k.toLowerCase().startsWith('abr/25') || k.toLowerCase().startsWith('mai/25'))
             );
           }

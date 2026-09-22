@@ -109,6 +109,7 @@ export class DreLancamentosService {
   static async fetchAllForDashboard(): Promise<{
     rows: DreRow[];
     error: string | null;
+    manualRows?: DreRow[];
   }> {
     let allData: DreLancamento[] = [];
     let start = 0;
@@ -124,7 +125,7 @@ export class DreLancamentosService {
 
       if (error) {
         console.error('[DreLancamentosService] fetchAll error:', error);
-        return { rows: [], error: error.message };
+        return { rows: [], error: error.message, manualRows: [] };
       }
 
       if (!data || data.length === 0) {
@@ -139,7 +140,7 @@ export class DreLancamentosService {
     }
 
     if (allData.length === 0) {
-      return { rows: [], error: null };
+      return { rows: [], error: null, manualRows: [] };
     }
 
     // Pivotar: agrupar por chave dimensional, acumular valores por período
@@ -157,9 +158,28 @@ export class DreLancamentosService {
       }
     >();
 
+    const manualPivotMap = new Map<
+      string,
+      {
+        Empresa: string;
+        Departamento: string;
+        ContaDRE: string;
+        Projeto: string;
+        Categoria: string;
+        Fornecedor: string;
+        ContaCorrente: string;
+        valores: Record<string, number>;
+      }
+    >();
+
     for (const rec of allData) {
       const rawEmp       = rec.empresa ? rec.empresa.trim() : 'Geral';
       const emp          = normalizeEmpresa(rawEmp);
+      
+      // Para empresas de entrada manual (Conectius, Ybox), aceitar estritamente fonte='manual'
+      if (EMPRESAS_MANUAL_ONLY.includes(emp) && rec.fonte !== 'manual') {
+        continue;
+      }
       
       const rawDept      = rec.departamento ? rec.departamento.trim() : '';
       const mappedDept   = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
@@ -200,6 +220,24 @@ export class DreLancamentosService {
       // Normaliza período para o padrão do dashboard (primeira letra maiúscula)
       const periodo = rec.periodo.trim();
       item.valores[periodo] = (item.valores[periodo] || 0) + (rec.valor || 0);
+
+      // Se for lançamento de fonte manual, acumular também no manualPivotMap
+      if (rec.fonte === 'manual') {
+        if (!manualPivotMap.has(key)) {
+          manualPivotMap.set(key, {
+            Empresa:      emp,
+            Departamento: departamento,
+            ContaDRE:     conta_dre,
+            Projeto:      projeto,
+            Categoria:    categoria,
+            Fornecedor:   forn,
+            ContaCorrente: cCorr,
+            valores:      {},
+          });
+        }
+        const mItem = manualPivotMap.get(key)!;
+        mItem.valores[periodo] = (mItem.valores[periodo] || 0) + (rec.valor || 0);
+      }
     }
 
     // Converter para DreRow[]
@@ -220,7 +258,24 @@ export class DreLancamentosService {
       rows.push(row);
     }
 
-    return { rows, error: null };
+    const manualRows: DreRow[] = [];
+    for (const item of manualPivotMap.values()) {
+      const row: DreRow = {
+        Empresa:      item.Empresa,
+        Departamento: item.Departamento,
+        ContaDRE:     item.ContaDRE,
+        Projeto:      item.Projeto,
+        Categoria:    item.Categoria,
+        Fornecedor:   item.Fornecedor,
+        ContaCorrente: item.ContaCorrente,
+      };
+      for (const [periodo, valor] of Object.entries(item.valores)) {
+        row[periodo] = valor;
+      }
+      manualRows.push(row);
+    }
+
+    return { rows, error: null, manualRows };
   }
 
   /**
@@ -391,13 +446,16 @@ export class DreLancamentosService {
     const periodsToDelete = new Set<string>();
 
     for (const row of rows) {
-      const empresa      = (row.Empresa      as string) || '';
+      const rawEmp       = (row.Empresa      as string) || '';
+      const empresa      = normalizeEmpresa(rawEmp);
       const departamento = (row.Departamento as string) || '';
       const conta_dre    = (row.ContaDRE     as string) || '';
       const projeto      = (row.Projeto      as string) || 'N/D';
       const categoria    = (row.Categoria    as string) || '';
 
       if (!empresa || !categoria) continue;
+      // Empresas de entrada manual (Conectius, Ybox) nunca devem receber upsert da fonte 'omie'
+      if (EMPRESAS_MANUAL_ONLY.includes(empresa)) continue;
 
       for (const [key, valor] of Object.entries(row)) {
         if (!mesesPattern.test(key)) continue;
