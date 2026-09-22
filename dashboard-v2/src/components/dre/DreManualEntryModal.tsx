@@ -15,7 +15,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X, Plus, Trash2, Loader2, AlertCircle, CheckCircle2,
   Building2, CalendarDays, DollarSign, FileText, RefreshCw, Pencil,
-  Search, ChevronDown, Filter, SlidersHorizontal
+  Search, ChevronDown, Filter, SlidersHorizontal, Copy, Info
 } from 'lucide-react';
 import {
   DreLancamentosService,
@@ -41,7 +41,7 @@ interface DreManualEntryModalProps {
 }
 
 type FeedbackState = {
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
   message: string;
 } | null;
 
@@ -209,6 +209,7 @@ export function DreManualEntryModal({
   const [form, setForm] = useState<DreManualEntryForm>(EMPTY_FORM);
   const [records, setRecords] = useState<DreLancamento[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingOriginalPeriod, setEditingOriginalPeriod] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -301,6 +302,7 @@ export function DreManualEntryModal({
     if (isOpen) {
       setForm(EMPTY_FORM);
       setEditingId(null);
+      setEditingOriginalPeriod(null);
       setFeedback(null);
       loadRecords();
     }
@@ -406,6 +408,7 @@ export function DreManualEntryModal({
           });
           setForm(EMPTY_FORM);
           setEditingId(null);
+          setEditingOriginalPeriod(null);
           await loadRecords();
           onSaved?.();
         }
@@ -428,6 +431,87 @@ export function DreManualEntryModal({
     }
   };
 
+  /** Salva os dados do formulário como um novo lançamento, sem modificar o registro atualmente em edição */
+  const handleSaveAsNew = async () => {
+    setFeedback(null);
+
+    if (!form.empresa || !form.conta_dre || !form.categoria || !form.periodo) {
+      setFeedback({ type: 'error', message: 'Preencha todos os campos obrigatórios (incluindo o novo Período).' });
+      return;
+    }
+    if (form.valor <= 0) {
+      setFeedback({ type: 'error', message: 'Valor deve ser maior que zero.' });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { error } = await DreLancamentosService.insertManualRow(form);
+      if (error) {
+        setFeedback({ type: 'error', message: `Erro ao salvar como novo: ${error}` });
+      } else {
+        setFeedback({
+          type: 'success',
+          message: `Novo lançamento de ${form.empresa} para ${form.periodo} salvo com sucesso! ${editingOriginalPeriod ? `(O período anterior ${editingOriginalPeriod} foi mantido)` : ''}`,
+        });
+        setEditingId(null);
+        setEditingOriginalPeriod(null);
+        setForm(prev => ({ ...prev, valor: 0, periodo: '' }));
+        await loadRecords();
+        onSaved?.();
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /** Inicia a edição de um registro existente */
+  const handleStartEdit = (rec: DreLancamento) => {
+    if (!rec.id) return;
+    setEditingId(rec.id);
+    setEditingOriginalPeriod(rec.periodo);
+    setForm({
+      empresa: rec.empresa,
+      departamento: rec.departamento || '',
+      conta_dre: rec.conta_dre,
+      projeto: rec.projeto || 'N/D',
+      categoria: rec.categoria,
+      periodo: rec.periodo,
+      valor: rec.valor,
+    });
+    setFeedback({
+      type: 'info',
+      message: `Editando lançamento de ${rec.empresa} (${rec.periodo}). Se for criar uma nova competência a partir deste modelo, use "Salvar como Novo (Duplicar)".`,
+    });
+    const modalBody = document.querySelector('.overflow-y-auto');
+    if (modalBody) {
+      modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  /** Aproveita os dados de um lançamento existente como modelo para novo mês */
+  const handleDuplicate = (rec: DreLancamento) => {
+    setEditingId(null);
+    setEditingOriginalPeriod(null);
+    setForm({
+      empresa: rec.empresa,
+      departamento: rec.departamento || '',
+      conta_dre: rec.conta_dre,
+      projeto: rec.projeto || 'N/D',
+      categoria: rec.categoria,
+      periodo: '', // Vazio para o usuário indicar a nova competência
+      valor: rec.valor,
+    });
+    setFeedback({
+      type: 'info',
+      message: `Dados de ${rec.empresa} (${rec.categoria}) copiados para o formulário! Escolha o novo período e o valor para salvar.`,
+    });
+    const modalBody = document.querySelector('.overflow-y-auto');
+    if (modalBody) {
+      modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir este lançamento permanentemente?')) return;
     setIsDeleting(id);
@@ -436,6 +520,11 @@ export function DreManualEntryModal({
       if (error) {
         alert(`Erro ao excluir: ${error}`);
       } else {
+        if (editingId === id) {
+          setEditingId(null);
+          setEditingOriginalPeriod(null);
+          setForm(EMPTY_FORM);
+        }
         await loadRecords();
         onSaved?.();
       }
@@ -488,12 +577,30 @@ export function DreManualEntryModal({
           {/* Formulário de inserção / edição */}
           <form onSubmit={handleSave} className="p-6 border-b border-slate-700/50">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
-              <span>{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</span>
+              <span className="flex items-center gap-2 flex-wrap">
+                {editingId ? (
+                  <>
+                    <span className="text-amber-400 font-bold flex items-center gap-1">
+                      <Pencil size={13} /> Editando Lançamento
+                    </span>
+                    {editingOriginalPeriod && (
+                      <span className="bg-amber-500/20 text-amber-300 font-mono text-[10px] px-2 py-0.5 rounded-full border border-amber-500/30">
+                        Competência Original: {editingOriginalPeriod}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="flex items-center gap-1 text-slate-300">
+                    <Plus size={13} /> Novo Lançamento
+                  </span>
+                )}
+              </span>
               {editingId && (
                 <button
                   type="button"
                   onClick={() => {
                     setEditingId(null);
+                    setEditingOriginalPeriod(null);
                     setForm(EMPTY_FORM);
                   }}
                   className="text-[10px] text-amber-500 hover:underline hover:text-amber-400 font-semibold"
@@ -651,41 +758,77 @@ export function DreManualEntryModal({
               </div>
             </div>
 
+            {/* Aviso inteligente caso o período tenha sido alterado em modo de edição */}
+            {editingId && editingOriginalPeriod && form.periodo && form.periodo !== editingOriginalPeriod && (
+              <div className="mt-3 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3 text-xs text-sky-200 flex items-start gap-2.5">
+                <Info size={16} className="mt-0.5 flex-shrink-0 text-sky-400" />
+                <div className="flex-1">
+                  <p className="font-semibold text-sky-300">
+                    Você alterou a competência de <span className="font-mono underline font-bold">{editingOriginalPeriod}</span> para <span className="font-mono underline font-bold">{form.periodo}</span>.
+                  </p>
+                  <p className="text-slate-300 mt-1 leading-relaxed">
+                    • Para <strong>manter {editingOriginalPeriod}</strong> e criar um novo lançamento para <strong>{form.periodo}</strong>, clique em <strong className="text-sky-300 font-bold">"Salvar como Novo (Duplicar)"</strong>.<br />
+                    • Para <strong>mover/substituir</strong> o lançamento anterior de {editingOriginalPeriod} para {form.periodo}, clique em <strong className="text-amber-300 font-bold">"Atualizar Lançamento"</strong>.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Feedback */}
             {feedback && (
               <div className={`mt-4 flex items-start gap-2.5 rounded-lg px-4 py-3 text-sm font-medium
                 ${feedback.type === 'success'
                   ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                  : feedback.type === 'info'
+                  ? 'bg-sky-500/10 border border-sky-500/30 text-sky-300'
                   : 'bg-red-500/10 border border-red-500/30 text-red-300'
                 }`}
               >
                 {feedback.type === 'success'
                   ? <CheckCircle2 size={15} className="mt-0.5 flex-shrink-0" />
+                  : feedback.type === 'info'
+                  ? <Info size={15} className="mt-0.5 flex-shrink-0" />
                   : <AlertCircle   size={15} className="mt-0.5 flex-shrink-0" />
                 }
                 {feedback.message}
               </div>
             )}
 
-            {/* Botão salvar / atualizar */}
-            <div className="mt-4 flex justify-end gap-2">
+            {/* Botão salvar / atualizar / duplicar */}
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
               {editingId && (
                 <button
                   type="button"
                   onClick={() => {
                     setEditingId(null);
+                    setEditingOriginalPeriod(null);
                     setForm(EMPTY_FORM);
                   }}
                   disabled={isSaving}
-                  className="border border-slate-600 hover:border-slate-500 text-slate-300 font-bold text-sm px-5 py-2.5 rounded-lg transition-colors"
+                  className="border border-slate-600 hover:border-slate-500 text-slate-300 font-medium text-xs sm:text-sm px-4 py-2.5 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
               )}
+
+              {/* Botão permanente ao editar: Salvar como Novo (Duplicar) para proteger o mês original */}
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={handleSaveAsNew}
+                  disabled={isSaving}
+                  className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-lg transition-colors shadow-sm"
+                  title="Cria um novo lançamento com este período e valor, mantendo o original intacto"
+                >
+                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
+                  Salvar como Novo (Duplicar)
+                </button>
+              )}
+
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-bold text-sm px-5 py-2.5 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-lg transition-colors shadow-sm"
               >
                 {isSaving
                   ? <><Loader2 size={14} className="animate-spin" /> {editingId ? 'Atualizando...' : 'Salvando...'}</>
@@ -840,7 +983,7 @@ export function DreManualEntryModal({
                       <th className="text-left px-3 py-2.5 text-slate-400 font-semibold">Categoria</th>
                       <th className="text-left px-3 py-2.5 text-slate-400 font-semibold hidden sm:table-cell">Departamento</th>
                       <th className="text-right px-3 py-2.5 text-slate-400 font-semibold">Valor</th>
-                      <th className="px-3 py-2.5 text-slate-400 font-semibold text-center w-10"></th>
+                      <th className="px-3 py-2.5 text-slate-400 font-semibold text-center w-24">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/50">
@@ -882,39 +1025,30 @@ export function DreManualEntryModal({
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (rec.id) {
-                                    setEditingId(rec.id);
-                                    setForm({
-                                      empresa: rec.empresa,
-                                      departamento: rec.departamento || '',
-                                      conta_dre: rec.conta_dre,
-                                      projeto: rec.projeto || 'N/D',
-                                      categoria: rec.categoria,
-                                      periodo: rec.periodo,
-                                      valor: rec.valor,
-                                    });
-                                    const modalBody = document.querySelector('.overflow-y-auto');
-                                    if (modalBody) {
-                                      modalBody.scrollTo({ top: 0, behavior: 'smooth' });
-                                    }
-                                  }
-                                }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-amber-400 p-1 rounded"
+                                onClick={() => handleDuplicate(rec)}
+                                className="opacity-90 hover:opacity-100 text-slate-400 hover:text-sky-400 p-1.5 rounded hover:bg-slate-700/60 transition-all"
+                                title="Aproveitar dados (Criar novo mês a partir deste)"
+                              >
+                                <Copy size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleStartEdit(rec)}
+                                className="opacity-90 hover:opacity-100 text-slate-400 hover:text-amber-400 p-1.5 rounded hover:bg-slate-700/60 transition-all"
                                 title="Editar lançamento"
                               >
-                                <Pencil size={12} />
+                                <Pencil size={13} />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => rec.id && handleDelete(rec.id)}
                                 disabled={isDeleting === rec.id}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-red-400 p-1 rounded"
+                                className="opacity-90 hover:opacity-100 text-slate-400 hover:text-red-400 p-1.5 rounded hover:bg-slate-700/60 transition-all"
                                 title="Excluir lançamento"
                               >
                                 {isDeleting === rec.id
-                                  ? <Loader2 size={12} className="animate-spin" />
-                                  : <Trash2 size={12} />
+                                  ? <Loader2 size={13} className="animate-spin" />
+                                  : <Trash2 size={13} />
                                 }
                               </button>
                             </div>
