@@ -424,18 +424,13 @@ export default function DrePage() {
         return;
       }
 
-      // Preservar períodos históricos (Jan/24 a Mai/25) e empresas de lançamento manual (Conectius, Ybox) caso o novo upload seja apenas do Omie recente
+      // Preservar todas as demais empresas e períodos existentes, mesclando cirurgicamente
       let finalData = data;
       let finalMeta = newMetadata;
 
-      // Verifica se o estado atual ou a nuvem tem os períodos de 2024/início de 2025 ou empresas manuais
-      let historicalRows = rawData.filter(r => 
-        EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)) ||
-        Object.keys(r).some(k => k.includes('/24') || k.toLowerCase().startsWith('jan/25') || k.toLowerCase().startsWith('fev/25') || k.toLowerCase().startsWith('mar/25') || k.toLowerCase().startsWith('abr/25') || k.toLowerCase().startsWith('mai/25'))
-      );
-
-      // Se o estado local não tiver os históricos (ex: tela abriu agora), busca do snapshot mestre no banco
-      if (historicalRows.length === 0) {
+      // Base existente para merge: usar o rawData atual da tela ou buscar o snapshot mestre no banco
+      let existingBaseRows = rawData;
+      if (existingBaseRows.length === 0) {
         try {
           const { data: snapData } = await supabase
             .from('dre_snapshots')
@@ -443,18 +438,15 @@ export default function DrePage() {
             .order('created_at', { ascending: false })
             .limit(1);
           if (snapData && snapData.length > 0 && snapData[0].raw_data) {
-            historicalRows = snapData[0].raw_data.filter((r: any) => 
-              EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)) ||
-              Object.keys(r).some(k => k.includes('/24') || k.toLowerCase().startsWith('jan/25') || k.toLowerCase().startsWith('fev/25') || k.toLowerCase().startsWith('mar/25') || k.toLowerCase().startsWith('abr/25') || k.toLowerCase().startsWith('mai/25'))
-            );
+            existingBaseRows = snapData[0].raw_data;
           }
         } catch (e) {
           console.warn("Erro ao buscar histórico mestre para merge:", e);
         }
       }
 
-      if (historicalRows.length > 0) {
-        finalData = DreService.mergeWithHistoricalRows(historicalRows, data);
+      if (existingBaseRows.length > 0) {
+        finalData = DreService.mergeWithHistoricalRows(existingBaseRows, data);
         finalMeta = DreService.generateCombinedMetadata(finalData);
       }
 

@@ -589,16 +589,42 @@ export class DreService {
       return `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
     };
 
+    // Identificar quais empresas e quais períodos foram enviados no novo upload
+    const newCompanies = new Set<string>();
+    const newPeriods = new Set<string>();
+    newRows.forEach(r => {
+      if (r.Empresa) newCompanies.add(normalizeEmpresa(r.Empresa));
+      Object.keys(r).forEach(k => {
+        if (k.includes('/') && r[k] !== undefined && r[k] !== null && r[k] !== 0) {
+          newPeriods.add(k);
+        }
+      });
+    });
+
     // 1. Inserir dados históricos existentes
     existingRows.forEach(r => {
+      const emp = normalizeEmpresa(r.Empresa);
       const k = getGroupKey(r);
+      const cloned = { ...r };
+
+      // Se a linha pertence a uma das empresas enviadas no novo upload,
+      // limpa nela apenas os períodos que estão sendo substituídos pelo novo arquivo.
+      // Todas as outras empresas e todos os outros períodos permanecem 100% intactos.
+      if (newCompanies.has(emp)) {
+        newPeriods.forEach(p => {
+          if (cloned[p] !== undefined) {
+            delete cloned[p];
+          }
+        });
+      }
+
       if (!pivotMap.has(k)) {
-        pivotMap.set(k, { ...r });
+        pivotMap.set(k, cloned);
       } else {
         const item = pivotMap.get(k);
-        Object.keys(r).forEach(col => {
-          if (col.includes('/') && r[col] !== undefined && r[col] !== null) {
-            item[col] = r[col];
+        Object.keys(cloned).forEach(col => {
+          if (col.includes('/') && cloned[col] !== undefined && cloned[col] !== null) {
+            item[col] = cloned[col];
           }
         });
       }

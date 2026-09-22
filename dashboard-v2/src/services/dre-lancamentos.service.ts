@@ -489,14 +489,16 @@ export class DreLancamentosService {
       return { total: 0, errors: [] };
     }
 
-    // Limpa os dados antigos da fonte 'omie' apenas para os períodos contidos no novo upload.
-    // Isso evita duplicados decorrentes de reclassificações ou alterações de dados no Omie.
-    if (periodsToDelete.size > 0) {
+    // Limpa os dados antigos da fonte 'omie' apenas para as empresas e períodos contidos no novo upload.
+    // Isso garante que enviar dados apenas de uma empresa (ex: MarBR) nunca apague outras empresas (ex: DZM).
+    const companiesArray = Array.from(new Set(records.map(r => r.empresa)));
+    if (periodsToDelete.size > 0 && companiesArray.length > 0) {
       const periodsArray = Array.from(periodsToDelete);
       const { error: deleteError } = await supabase
         .from(TABLE)
         .delete()
         .eq('fonte', 'omie')
+        .in('empresa', companiesArray)
         .in('periodo', periodsArray);
 
       if (deleteError) {
