@@ -22,7 +22,7 @@ import {
   isColInPeriod,
   sortColList
 } from '@/lib/date-utils';
-import { normalizeForCompare } from './dre.service';
+import { normalizeForCompare, normalizeEmpresa } from './dre.service';
 
 const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -132,6 +132,11 @@ export class DreSimulatorEngine {
       'distribuicao de lucros': 'Distribuição de Dividendos',
       'distribuicao lucros': 'Distribuição de Dividendos',
       
+      'divisao de lucro': 'Divisão de Lucro',
+      'divisao de lucros': 'Divisão de Lucro',
+      'divisao lucro': 'Divisão de Lucro',
+      'divisao lucros': 'Divisão de Lucro',
+      
       'intermediacao de negocios': 'Intermediação de Negócios',
       'intermediacao de negocio': 'Intermediação de Negócios',
       
@@ -146,7 +151,7 @@ export class DreSimulatorEngine {
 
     const subCategoriasEspecificas = [
       'Terceirização de Mão de Obra', 'Credenciado Operacional', 'Adiantamento - Credenciado Operacional',
-      'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Preventiva - B2G', 'Manutenção Preventiva',
+      'Despesas com Pessoal', 'Custo dos Serviços Prestados', 'Divisão de Lucro', 'Preventiva - B2G', 'Manutenção Preventiva',
       'Corretiva - B2G', 'Manutenção Corretiva', 'Credenciado Administrativo', 'Adiantamento - Credenciado Administrativo',
       'Credenciado TI', 'Adiantamento - Credenciado TI', 'Distribuição de Dividendos', 'Dividendos',
       'Consórcios - a contemplar', 'Ativos', 'Mútuo - Entradas', 'Mútuo - Saídas',
@@ -183,17 +188,32 @@ export class DreSimulatorEngine {
 
     df.forEach(row => {
       let cat = row.ContaDRE;
+      const empNorm = normalizeEmpresa(row.Empresa || '');
       const catNorm = normalizeForCompare(row.Categoria?.toString() || '');
-      const canonicalTarget = canonicalSpecialMap[catNorm];
-      if (canonicalTarget) {
-        cat = canonicalTarget;
-        row.Categoria = canonicalTarget; // Atualiza a categoria na própria linha para auditoria correta no modal
+      const deptNorm = normalizeForCompare(row.Departamento?.toString() || '');
+      const projNorm = normalizeForCompare(row.Projeto?.toString() || '');
+      const fornNorm = normalizeForCompare(row.Fornecedor?.toString() || '');
+
+      // Caso especial DZM / Locação 647: 'Distribuição de Lucro' (ou 'Distribuição de Dividendos' para ALUMAX) é operacional (Divisão de Lucro / CSP)
+      if (
+        (empNorm === 'DZM' || empNorm === 'Dzm') &&
+        (catNorm === 'distribuicao de lucro' || catNorm === 'distribuicao de lucros' || catNorm === 'divisao de lucro' || catNorm === 'divisao de lucros' || (catNorm === 'distribuicao de dividendos' && (deptNorm.includes('647') || projNorm.includes('647') || fornNorm.includes('alumax'))))
+      ) {
+        row.Categoria = 'Divisão de Lucro';
+        row.ContaDRE = 'Custo dos Serviços Prestados';
+        cat = 'Custo dos Serviços Prestados';
       } else {
-        const matchedSpecial = row.Categoria
-          ? subCategoriasEspecificas.find(sub => normalizeForCompare(sub) === catNorm)
-          : undefined;
-        if (matchedSpecial) {
-          cat = matchedSpecial;
+        const canonicalTarget = canonicalSpecialMap[catNorm];
+        if (canonicalTarget) {
+          cat = canonicalTarget;
+          row.Categoria = canonicalTarget; // Atualiza a categoria na própria linha para auditoria correta no modal
+        } else {
+          const matchedSpecial = row.Categoria
+            ? subCategoriasEspecificas.find(sub => normalizeForCompare(sub) === catNorm)
+            : undefined;
+          if (matchedSpecial) {
+            cat = matchedSpecial;
+          }
         }
       }
       if (!cat) return;

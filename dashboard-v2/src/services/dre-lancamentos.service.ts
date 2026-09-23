@@ -81,7 +81,7 @@ export const CONTAS_DRE_MANUAL = [
 
 export const CATEGORIAS_MANUAL: Record<string, string[]> = {
   'Ativos':                             ['Ativos'],
-  'Custo dos Serviços Prestados':       ['Corretiva - B2B', 'Corretiva - B2G', 'Custo dos Serviços Prestados', 'Plano de Saúde', 'Preventiva - B2B', 'Preventiva - B2G'],
+  'Custo dos Serviços Prestados':       ['Corretiva - B2B', 'Corretiva - B2G', 'Custo dos Serviços Prestados', 'Divisão de Lucro', 'Plano de Saúde', 'Preventiva - B2B', 'Preventiva - B2G'],
   'Despesas Administrativas':           ['Despesas Administrativas'],
   'Despesas Financeiras':               ['Despesas Financeiras'],
   'Despesas Variáveis':                 ['Despesas Variáveis'],
