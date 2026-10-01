@@ -4,151 +4,18 @@ import { Employee } from "../types/loans";
 import { supabase } from "@/lib/supabase";
 
 export class PDFService {
-  static async promptWitness(isTestMode: boolean): Promise<[{ name: string | null, cpf: string | null }, { name: string | null, cpf: string | null }] | null> {
-    const wantWitness = window.confirm("Deseja inserir testemunhas neste termo?");
-    if (!wantWitness) return null;
-
-    try {
-      const table = isTestMode ? 'employees_test' : 'employees';
-      const { data: emps } = await supabase.from(table).select('full_name, responsible_name, responsible_cpf, document_id').order('full_name');
-      
-      const rawList: { name: string, cpf: string }[] = [];
-      (emps || []).forEach((e: any) => {
-        const name = (e.responsible_name || e.full_name || '').trim();
-        const cpf = (e.responsible_cpf || e.document_id || '').trim();
-        if (name) {
-          rawList.push({ name, cpf });
-        }
-      });
-
-      const list = Array.from(new Map(rawList.map(item => [item.name, item])).values()).sort((a, b) => a.name.localeCompare(b.name));
-
-      return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.id = 'witness-modal-overlay';
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100vw';
-        overlay.style.height = '100vh';
-        overlay.style.backgroundColor = 'rgba(15, 23, 42, 0.6)';
-        overlay.style.backdropFilter = 'blur(4px)';
-        overlay.style.zIndex = '999999';
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-
-        const modal = document.createElement('div');
-        modal.style.backgroundColor = '#ffffff';
-        modal.style.padding = '24px';
-        modal.style.borderRadius = '16px';
-        modal.style.width = '440px';
-        modal.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
-        modal.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-
-        modal.innerHTML = `
-          <h3 style="margin-top: 0; font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Inserir Testemunhas</h3>
-          <p style="font-size: 13px; color: #64748b; margin-bottom: 20px; line-height: 1.5;">Preencha manualmente ou selecione até duas testemunhas da lista.</p>
-          
-          <div style="margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;">
-            <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #1e293b;">Testemunha 1</h4>
-            <div style="margin-bottom: 10px;">
-              <input type="text" id="witness1-manual" placeholder="Digite o nome completo (T1)" style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; box-sizing: border-box;" />
-            </div>
-            <div style="margin-bottom: 10px;">
-              <input type="text" id="witness1-cpf" placeholder="Digite o CPF (T1)" style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; box-sizing: border-box;" />
-            </div>
-            <div>
-              <select id="witness1-select" style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; background: #ffffff; box-sizing: border-box;">
-                <option value="">-- Escolha da lista (T1) --</option>
-                ${list.map(item => `<option value="${item.name}" data-cpf="${item.cpf}">${item.name}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-
-          <div style="margin-bottom: 24px;">
-            <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #1e293b;">Testemunha 2</h4>
-            <div style="margin-bottom: 10px;">
-              <input type="text" id="witness2-manual" placeholder="Digite o nome completo (T2)" style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; box-sizing: border-box;" />
-            </div>
-            <div style="margin-bottom: 10px;">
-              <input type="text" id="witness2-cpf" placeholder="Digite o CPF (T2)" style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; box-sizing: border-box;" />
-            </div>
-            <div>
-              <select id="witness2-select" style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; background: #ffffff; box-sizing: border-box;">
-                <option value="">-- Escolha da lista (T2) --</option>
-                ${list.map(item => `<option value="${item.name}" data-cpf="${item.cpf}">${item.name}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 12px; justify-content: flex-end;">
-            <button id="witness-cancel-btn" style="padding: 10px 20px; font-size: 14px; font-weight: 600; color: #64748b; background: #f1f5f9; border: none; border-radius: 10px; cursor: pointer;">Cancelar</button>
-            <button id="witness-confirm-btn" style="padding: 10px 20px; font-size: 14px; font-weight: 600; color: #ffffff; background: #059669; border: none; border-radius: 10px; cursor: pointer;">Confirmar</button>
-          </div>
-        `;
-
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        const w1Manual = overlay.querySelector('#witness1-manual') as HTMLInputElement;
-        const w1Cpf = overlay.querySelector('#witness1-cpf') as HTMLInputElement;
-        const w1Select = overlay.querySelector('#witness1-select') as HTMLSelectElement;
-        const w2Manual = overlay.querySelector('#witness2-manual') as HTMLInputElement;
-        const w2Cpf = overlay.querySelector('#witness2-cpf') as HTMLInputElement;
-        const w2Select = overlay.querySelector('#witness2-select') as HTMLSelectElement;
-        
-        const cancelBtn = overlay.querySelector('#witness-cancel-btn') as HTMLButtonElement;
-        const confirmBtn = overlay.querySelector('#witness-confirm-btn') as HTMLButtonElement;
-
-        w1Manual.addEventListener('input', () => { if (w1Manual.value.trim()) w1Select.value = ''; });
-        w1Select.addEventListener('change', () => { if (w1Select.value) { w1Manual.value = ''; w1Cpf.value = ''; } });
-        w2Manual.addEventListener('input', () => { if (w2Manual.value.trim()) w2Select.value = ''; });
-        w2Select.addEventListener('change', () => { if (w2Select.value) { w2Manual.value = ''; w2Cpf.value = ''; } });
-
-        cancelBtn.addEventListener('click', () => {
-          document.body.removeChild(overlay);
-          resolve(null);
-        });
-
-        confirmBtn.addEventListener('click', () => {
-          let n1 = w1Manual.value.trim();
-          let c1 = w1Cpf.value.trim();
-          if (!n1 && w1Select.value) {
-            n1 = w1Select.value;
-            const opt = w1Select.options[w1Select.selectedIndex];
-            c1 = opt ? opt.getAttribute('data-cpf') || '' : '';
-          }
-
-          let n2 = w2Manual.value.trim();
-          let c2 = w2Cpf.value.trim();
-          if (!n2 && w2Select.value) {
-            n2 = w2Select.value;
-            const opt = w2Select.options[w2Select.selectedIndex];
-            c2 = opt ? opt.getAttribute('data-cpf') || '' : '';
-          }
-
-          document.body.removeChild(overlay);
-          resolve([{ name: n1 || null, cpf: c1 || null }, { name: n2 || null, cpf: c2 || null }]);
-        });
-      });
-    } catch (e) {
-      console.error("Erro ao processar testemunhas:", e);
-      return null;
-    }
+  static async promptWitness(_isTestMode: boolean): Promise<[{ name: string | null, cpf: string | null }, { name: string | null, cpf: string | null }] | null> {
+    // Testemunhas suprimidas por diretriz do projeto (não terá testemunhas)
+    return null;
   }
 
-  static async generateDebtTermPDF(loanData: any, emp: any, isTestMode: boolean = false) {
+  static async generateDebtTermPDF(loanData: any, emp: any, isTestMode: boolean = false, autoDownload: boolean = true): Promise<jsPDF | undefined> {
     const amount = loanData.amount || loanData.value || 0;
     
     if (!loanData || !amount) {
       alert("Este colaborador não possui empréstimo registrado para gerar o termo.");
       return;
     }
-
-    const witnessNames = await PDFService.promptWitness(isTestMode);
-    const witness1 = witnessNames ? witnessNames[0] : null;
-    const witness2 = witnessNames ? witnessNames[1] : null;
 
     let fullEmpDetails = { ...emp };
     try {
@@ -238,7 +105,9 @@ export class PDFService {
 
       console.log("[PDFService] Dados Recebidos:", { loanData, rawCycle });
 
-      if (rawCycle) {
+      if (loanData.first_payment_date || loanData.firstPaymentDate) {
+        firstPaymentFormatted = formatDate(loanData.first_payment_date || loanData.firstPaymentDate);
+      } else if (rawCycle) {
         try {
           const parts = rawCycle.split('T')[0].split('-');
           const y = parseInt(parts[0]);
@@ -256,6 +125,18 @@ export class PDFService {
         } catch (e) {
           console.error("Erro no parse da data do ciclo", e);
         }
+      }
+
+      if (rawCycle && refMonthName === "---") {
+        try {
+          const parts = rawCycle.split('T')[0].split('-');
+          const y = parseInt(parts[0]);
+          const m = parseInt(parts[1]);
+          if (!isNaN(y) && !isNaN(m)) {
+            refYear = y;
+            refMonthName = monthNames[m - 1] || "---";
+          }
+        } catch (e) {}
       }
 
       const reqDate = loanData.request_date || loanData.requestDate || loanData.created_at || today.toISOString();
@@ -308,55 +189,43 @@ CLÁUSULA QUINTA – DAS DISPOSIÇÕES GERAIS
 
       doc.text(`Praia Grande - SP, ${signatureDay} de ${signatureMonth} de ${signatureYear}.`, margin, cursorY);
 
-      cursorY += 25;
+      cursorY += 28;
+      if (cursorY > 255) {
+        doc.addPage();
+        addPageWithTimbrado();
+        cursorY = 55;
+      }
 
-      doc.line(margin, cursorY, margin + 75, cursorY);
-      doc.line(margin + 95, cursorY, margin + 170, cursorY);
+      // Assinatura exclusiva do devedor (empresa e testemunhas suprimidas por diretriz)
+      const sigLineWidth = 110;
+      const sigLineX = (pageWidth - sigLineWidth) / 2;
+      doc.line(sigLineX, cursorY, sigLineX + sigLineWidth, cursorY);
 
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("DEVEDOR(A)", pageWidth / 2, cursorY + 5, { align: "center" });
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.text("DEVEDOR(A)", margin, cursorY + 4);
       const debtorName = razaoSocialOuNome;
-      doc.text(debtorName, margin, cursorY + 8);
-      doc.text(`Rep: ${fullEmpDetails.responsible_name || fullEmpDetails.full_name || ''}`, margin, cursorY + 12);
-      doc.text(`CNPJ/CPF: ${fullEmpDetails.document_id || ''}`, margin, cursorY + 16);
-
-      doc.text("CREDORA", margin + 95, cursorY + 4);
-      doc.text("MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA", margin + 95, cursorY + 8);
-      doc.text("Rep: Priscilla Coelho Monteiro", margin + 95, cursorY + 12);
-      doc.text("CNPJ: 02.233.923/0001-19", margin + 95, cursorY + 16);
-
-      cursorY += 30;
-      doc.setFontSize(10);
-      doc.text("TESTEMUNHAS:", margin, cursorY);
-      cursorY += 15;
-
-      doc.line(margin, cursorY, margin + 75, cursorY);
-      doc.line(margin + 95, cursorY, margin + 170, cursorY);
-      doc.setFontSize(8);
-      doc.text("Nome:", margin, cursorY + 4);
-      if (witness1 && witness1.name) {
-        doc.text(witness1.name, margin + 10, cursorY + 4);
-      }
-      doc.text("CPF:", margin, cursorY + 8);
-      if (witness1 && witness1.cpf) {
-        doc.text(witness1.cpf, margin + 10, cursorY + 8);
-      }
-
-      doc.text("Nome:", margin + 95, cursorY + 4);
-      if (witness2 && witness2.name) {
-        doc.text(witness2.name, margin + 105, cursorY + 4);
-      }
-      doc.text("CPF:", margin + 95, cursorY + 8);
-      if (witness2 && witness2.cpf) {
-        doc.text(witness2.cpf, margin + 105, cursorY + 8);
+      doc.text(debtorName, pageWidth / 2, cursorY + 9, { align: "center" });
+      if (fullEmpDetails.responsible_name && fullEmpDetails.responsible_name !== debtorName) {
+        doc.text(`Rep. Legal: ${fullEmpDetails.responsible_name}`, pageWidth / 2, cursorY + 13, { align: "center" });
+        doc.text(`CPF/CNPJ: ${fullEmpDetails.responsible_cpf || fullEmpDetails.document_id || ''}`, pageWidth / 2, cursorY + 17, { align: "center" });
+      } else {
+        doc.text(`CPF/CNPJ: ${fullEmpDetails.document_id || ''}`, pageWidth / 2, cursorY + 13, { align: "center" });
       }
 
       const safeName = (fullEmpDetails.full_name || 'Desconhecido').replace(/\s+/g, '_');
-      doc.save(`Termo_Divida_${safeName}_${Date.now()}.pdf`);
+      if (autoDownload) {
+        doc.save(`Termo_Divida_${safeName}_${Date.now()}.pdf`);
+      }
+
+      return doc;
 
     } catch (e) {
       console.error("Erro ao gerar PDF:", e);
       alert("Erro ao gerar PDF interno.");
+      return undefined;
     }
   }
 }
