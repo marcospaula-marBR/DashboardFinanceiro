@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { TIMBRADO_B64 } from "../lib/timbrado_base64";
+import { getCompanyCreditorInfo } from "../lib/timbrado_base64";
 import { Employee } from "../types/loans";
 import { supabase } from "@/lib/supabase";
 
@@ -31,6 +31,9 @@ export class PDFService {
         console.warn("Aviso ao resgatar detalhes da pessoa", err);
     }
 
+    // Detecta a empresa credora vinculada ao colaborador (MarBR, DZM ou G2)
+    const companyCreditor = getCompanyCreditorInfo(loanData.company || fullEmpDetails.company || emp.company);
+
     const doc = new jsPDF('p', 'mm', 'a4');
     const today = new Date();
     
@@ -48,8 +51,8 @@ export class PDFService {
     };
 
     try {
-      const timbrado = TIMBRADO_B64;
-      if (!timbrado) throw new Error("Base64 do timbrado não carregado.");
+      const timbrado = companyCreditor.timbradoB64;
+      if (!timbrado) throw new Error("Base64 do timbrado não carregado para a empresa vinculada.");
 
       const addPageWithTimbrado = () => {
         doc.addImage(timbrado, 'JPEG', 0, 0, 210, 297);
@@ -103,7 +106,7 @@ export class PDFService {
       let refYear = today.getFullYear();
       let firstPaymentFormatted = "10/--/----";
 
-      console.log("[PDFService] Dados Recebidos:", { loanData, rawCycle });
+      console.log("[PDFService] Dados Recebidos:", { loanData, rawCycle, company: companyCreditor.code });
 
       if (loanData.first_payment_date || loanData.firstPaymentDate) {
         firstPaymentFormatted = formatDate(loanData.first_payment_date || loanData.firstPaymentDate);
@@ -147,15 +150,15 @@ export class PDFService {
 
       const corpoTexto = `DEVEDOR: ${razaoSocialOuNome}, ${tipoPessoa}, inscrito no ${fullEmpDetails.pj_type || 'CPF'} sob o n.º ${fullEmpDetails.document_id || ''}, estabelecido na ${fullAddress}, neste ato representada por ${fullEmpDetails.responsible_name || fullEmpDetails.full_name}, inscrito no CPF sob o n.º ${fullEmpDetails.responsible_cpf || fullEmpDetails.document_id || ''}.
 
-CREDOR: MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA., pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 02.233.923/0001-19, com sede em Rua Tupi, nº 782, Vila Tupi, Praia Grande - SP, neste ato representada por sua sócia administradora, a Sra. Priscilla Coelho Monteiro, brasileira, casada, empresária, inscrita no CPF sob n.º 320.421.118-56.
+CREDOR: ${companyCreditor.corporateName}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ${companyCreditor.cnpj}, com sede em ${companyCreditor.fullAddress}, neste ato representada por ${companyCreditor.representativeRole}, a Sra. ${companyCreditor.representativeName}, brasileira, empresária, inscrita no CPF sob n.º ${companyCreditor.representativeCpf}.
 
 As partes acima qualificadas, por este instrumento particular e na melhor forma de direito, confessam e assumem como líquida, certa e exigível a dívida a seguir descrita, sujeitando-se às cláusulas e condições que se seguem:
 
 CLÁUSULA PRIMEIRA – DO OBJETO DA DÍVIDA
-1.1. O(A) DEVEDOR(A) confessa e declara dever ao(à) CREDOR(A) a importância líquida, certa e exigível de ${fmt(reqAmount)}, referente ao empréstimo concedido pela MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA. ao(à) DEVEDOR(A) em ${formatDate(reqDate)}.
+1.1. O(A) DEVEDOR(A) confessa e declara dever ao(à) CREDOR(A) a importância líquida, certa e exigível de ${fmt(reqAmount)}, referente ao empréstimo concedido pela ${companyCreditor.corporateName} ao(à) DEVEDOR(A) em ${formatDate(reqDate)}.
 
 CLÁUSULA SEGUNDA – DA FORMA DE PAGAMENTO
-2.1. O valor confessado na Cláusula Primeira será quitado pelo(a) DEVEDOR(A) por meio de descontos nas futuras notas fiscais de prestação de serviços emitidas à MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA., em ${reqInstallments} parcelas mensais e sucessivas, no valor de ${fmt(installmentValue)} cada uma, no dia 10 de cada mês, a partir de ${firstPaymentFormatted}.
+2.1. O valor confessado na Cláusula Primeira será quitado pelo(a) DEVEDOR(A) por meio de descontos nas futuras notas fiscais de prestação de serviços emitidas à ${companyCreditor.corporateName}, em ${reqInstallments} parcelas mensais e sucessivas, no valor de ${fmt(installmentValue)} cada uma, no dia 10 de cada mês, a partir de ${firstPaymentFormatted}.
 
 2.2. O ciclo de referência desta confissão é ${refMonthName} de ${refYear}. Os descontos serão aplicados automaticamente pela CREDORA no momento do processamento das notas fiscais, e o valor líquido a ser pago ao(à) DEVEDOR(A) será o resultado da nota fiscal menos o valor da parcela do empréstimo.
 
@@ -171,7 +174,7 @@ CLÁUSULA QUARTA – DA QUITAÇÃO ANTECIPADA
 
 CLÁUSULA QUINTA – DAS DISPOSIÇÕES GERAIS
 5.1. As partes declaram ter lido e compreendido todas as cláusulas deste Termo.
-5.2. Fica eleito o foro da comarca de Praia Grande - SP para dirimir quaisquer dúvidas.`;
+5.2. Fica eleito o foro da comarca de ${companyCreditor.forumCity} para dirimir quaisquer dúvidas.`;
 
       addJustifiedText(corpoTexto);
 
@@ -187,7 +190,7 @@ CLÁUSULA QUINTA – DAS DISPOSIÇÕES GERAIS
       const signatureMonth = monthNames[signatureDate.getMonth()];
       const signatureYear = signatureDate.getFullYear();
 
-      doc.text(`Praia Grande - SP, ${signatureDay} de ${signatureMonth} de ${signatureYear}.`, margin, cursorY);
+      doc.text(`${companyCreditor.city} - ${companyCreditor.state}, ${signatureDay} de ${signatureMonth} de ${signatureYear}.`, margin, cursorY);
 
       cursorY += 28;
       if (cursorY > 255) {
@@ -216,8 +219,9 @@ CLÁUSULA QUINTA – DAS DISPOSIÇÕES GERAIS
       }
 
       const safeName = (fullEmpDetails.full_name || 'Desconhecido').replace(/\s+/g, '_');
+      const companyTag = companyCreditor.code;
       if (autoDownload) {
-        doc.save(`Termo_Divida_${safeName}_${Date.now()}.pdf`);
+        doc.save(`Termo_Divida_${companyTag}_${safeName}_${Date.now()}.pdf`);
       }
 
       return doc;

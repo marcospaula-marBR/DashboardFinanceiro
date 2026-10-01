@@ -19,6 +19,7 @@ import { LoansService, fetchEmployees, formatCurrency } from '@/services/loans.s
 import { isEligibleForNewLoan } from '@/types/loans';
 import { PDFService } from '@/services/pdf.service';
 import { supabase } from '@/lib/supabase';
+import { getCompanyCreditorInfo } from '@/lib/timbrado_base64';
 
 interface NewLoanModalProps {
   isOpen: boolean;
@@ -310,11 +311,16 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
         notes: formData.notes
       }, isTestMode);
       
-      setCreatedLoan(resp);
+      // Dados auxiliares da empresa credora
+      const empSource = fullEmployeeRow || employeeDetails || selectedEmpRaw || {};
+      const companyCreditor = getCompanyCreditorInfo(empSource.company);
       
-      // Auto-gera e baixa o termo oficial com assinatura do devedor
+      const loanWithCompany = { ...resp, company: companyCreditor.code };
+      setCreatedLoan(loanWithCompany);
+      
+      // Auto-gera e baixa o termo oficial com assinatura do devedor e timbrado correto
       try {
-        await PDFService.generateDebtTermPDF(resp, fullEmployeeRow || employeeDetails, isTestMode, true);
+        await PDFService.generateDebtTermPDF(loanWithCompany, fullEmployeeRow || employeeDetails, isTestMode, true);
       } catch (pdfErr) {
         console.warn('Aviso ao auto-gerar termo oficial:', pdfErr);
       }
@@ -330,6 +336,8 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
 
   const handleDownloadDraft = async () => {
     try {
+      const empSource = fullEmployeeRow || employeeDetails || selectedEmpRaw || {};
+      const companyCreditor = getCompanyCreditorInfo(empSource.company);
       const draftData = {
         amount: parseFloat(formData.amount.replace(',', '.')),
         installments: parseInt(formData.installments),
@@ -337,7 +345,8 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
         request_date: formData.request_date ? formData.request_date + 'T12:00:00.000Z' : new Date().toISOString(),
         first_payment_date: formData.first_payment_date,
         employee_id: formData.employee_id,
-        notes: formData.notes
+        notes: formData.notes,
+        company: companyCreditor.code
       };
       await PDFService.generateDebtTermPDF(draftData, fullEmployeeRow || employeeDetails, isTestMode, true);
     } catch (err) {
@@ -348,6 +357,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
 
   // Dados auxiliares para renderização do Termo
   const empSource = fullEmployeeRow || employeeDetails || selectedEmpRaw || {};
+  const companyCreditor = getCompanyCreditorInfo(empSource.company);
   const isPJ = empSource.employment_type === 'PJ' || empSource.linkType === 'PJ';
   const razaoSocialOuNome = isPJ ? (empSource.corporate_name || empSource.full_name || empSource.name || '') : (empSource.full_name || empSource.name || '');
   const tipoPessoa = isPJ ? 'pessoa jurídica de direito privado' : 'pessoa física';
@@ -448,6 +458,31 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
                     </h4>
                     {tenureError && <p className="text-xs font-semibold text-red-700 leading-tight mb-1">• {tenureError}</p>}
                     {marginError && <p className="text-xs font-semibold text-red-700 leading-tight">• {marginError}</p>}
+                  </div>
+                )}
+
+                {/* Vínculo Empregador / Empresa Credora Detectada */}
+                {formData.employee_id && (
+                  <div className="mt-2.5 p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100/70 border border-blue-200 text-blue-800 flex items-center justify-center flex-shrink-0 font-black text-xs">
+                        {companyCreditor.code}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block leading-tight">
+                          Empresa Credora Vinculada
+                        </span>
+                        <div className="font-bold text-slate-800 text-xs truncate">
+                          {companyCreditor.tradeName}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono truncate">
+                          CNPJ: {companyCreditor.cnpj}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-200/80 text-slate-700 border border-slate-300 flex-shrink-0">
+                      Timbrado {companyCreditor.code}
+                    </span>
                   </div>
                 )}
               </div>
@@ -555,10 +590,10 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
                 {/* Cabeçalho */}
                 <div className="text-center border-b border-slate-200 pb-3">
                   <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-wide uppercase">
-                    MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA.
+                    {companyCreditor.corporateName}
                   </h3>
                   <p className="text-[11px] text-slate-500 font-normal">
-                    CNPJ: 02.233.923/0001-19 • Sede: Rua Tupi, nº 782, Vila Tupi, Praia Grande - SP
+                    CNPJ: {companyCreditor.cnpj} • Sede: {companyCreditor.address}
                   </p>
                   <div className="mt-2.5 inline-block px-3.5 py-1 bg-white border border-slate-300 rounded text-xs font-bold uppercase tracking-wider text-slate-800 shadow-xs">
                     TERMO DE CONFISSÃO DE DÍVIDA
@@ -573,7 +608,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
                   </div>
                   <div>
                     <strong className="text-slate-900 font-bold uppercase">CREDOR(A):</strong>{' '}
-                    MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA., pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 02.233.923/0001-19, com sede em Rua Tupi, nº 782, Vila Tupi, Praia Grande - SP, neste ato representada por sua sócia administradora, a Sra. Priscilla Coelho Monteiro, brasileira, casada, empresária, inscrita no CPF sob n.º 320.421.118-56.
+                    {companyCreditor.corporateName}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº {companyCreditor.cnpj}, com sede em {companyCreditor.address}, neste ato representada por sua administradora, a Sra. {companyCreditor.representativeName}, inscrita no CPF sob n.º {companyCreditor.representativeCpf}.
                   </div>
                 </div>
 
@@ -586,14 +621,14 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
                   <div>
                     <h4 className="font-bold text-slate-900 uppercase text-[11px] mb-1">CLÁUSULA PRIMEIRA – DO OBJETO DA DÍVIDA</h4>
                     <p>
-                      1.1. O(A) DEVEDOR(A) confessa e declara dever ao(à) CREDOR(A) a importância líquida, certa e exigível de <strong className="text-emerald-700 font-bold">{formatCurrency(requestedAmount)}</strong>, referente ao empréstimo concedido pela MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA. ao(à) DEVEDOR(A) em {requestDateFormatted}.
+                      1.1. O(A) DEVEDOR(A) confessa e declara dever ao(à) CREDOR(A) a importância líquida, certa e exigível de <strong className="text-emerald-700 font-bold">{formatCurrency(requestedAmount)}</strong>, referente ao empréstimo concedido pela {companyCreditor.corporateName} ao(à) DEVEDOR(A) em {requestDateFormatted}.
                     </p>
                   </div>
 
                   <div>
                     <h4 className="font-bold text-slate-900 uppercase text-[11px] mb-1">CLÁUSULA SEGUNDA – DA FORMA DE PAGAMENTO</h4>
                     <p className="mb-1">
-                      2.1. O valor confessado na Cláusula Primeira será quitado pelo(a) DEVEDOR(A) por meio de descontos nas futuras notas fiscais de prestação de serviços emitidas à MAR BRASIL SERVIÇOS E LOCAÇÕES LTDA., em <strong className="text-slate-900 font-bold">{installmentsCount} parcelas mensais e sucessivas</strong>, no valor de <strong className="text-slate-900 font-bold">{formatCurrency(installmentValue)} cada uma</strong>, no dia 10 de cada mês, a partir de <strong className="text-slate-900 font-bold">{firstPaymentFormatted}</strong>.
+                      2.1. O valor confessado na Cláusula Primeira será quitado pelo(a) DEVEDOR(A) por meio de descontos nas futuras notas fiscais de prestação de serviços emitidas à {companyCreditor.corporateName}, em <strong className="text-slate-900 font-bold">{installmentsCount} parcelas mensais e sucessivas</strong>, no valor de <strong className="text-slate-900 font-bold">{formatCurrency(installmentValue)} cada uma</strong>, no dia 10 de cada mês, a partir de <strong className="text-slate-900 font-bold">{firstPaymentFormatted}</strong>.
                     </p>
                     <p>
                       2.2. O ciclo de referência desta confissão é <strong className="text-slate-900 font-bold">{refMonthName} de {refYear}</strong>. Os descontos serão aplicados automaticamente pela CREDORA no momento do processamento das notas fiscais, e o valor líquido a ser pago ao(à) DEVEDOR(A) será o resultado da nota fiscal menos o valor da parcela do empréstimo.
@@ -632,14 +667,14 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
                       5.1. As partes declaram ter lido e compreendido todas as cláusulas deste Termo.
                     </p>
                     <p>
-                      5.2. Fica eleito o foro da comarca de Praia Grande - SP para dirimir quaisquer dúvidas.
+                      5.2. Fica eleito o foro da comarca de {companyCreditor.forumCity} para dirimir quaisquer dúvidas.
                     </p>
                   </div>
                 </div>
 
                 {/* Local e Data */}
                 <div className="pt-2 text-xs text-slate-700">
-                  Praia Grande - SP, {sigDay} de {sigMonth} de {sigYear}.
+                  {companyCreditor.forumCity}, {sigDay} de {sigMonth} de {sigYear}.
                 </div>
 
                 {/* Bloco de Assinatura Exclusivo do Devedor */}
