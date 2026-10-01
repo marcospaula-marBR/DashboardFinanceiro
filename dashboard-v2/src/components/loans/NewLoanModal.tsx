@@ -608,7 +608,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
                   </div>
                   <div>
                     <strong className="text-slate-900 font-bold uppercase">CREDOR(A):</strong>{' '}
-                    {companyCreditor.corporateName}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº {companyCreditor.cnpj}, com sede em {companyCreditor.address}, neste ato representada por sua administradora, a Sra. {companyCreditor.representativeName}, inscrita no CPF sob n.º {companyCreditor.representativeCpf}.
+                    {companyCreditor.corporateName}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº {companyCreditor.cnpj}, com sede em {companyCreditor.address}, neste ato representada por {companyCreditor.representativeFullText || `${companyCreditor.representativeRole}, ${companyCreditor.representativeTitle || 'a Sra.'} ${companyCreditor.representativeName}, inscrita no CPF sob n.º ${companyCreditor.representativeCpf}`}.
                   </div>
                 </div>
 

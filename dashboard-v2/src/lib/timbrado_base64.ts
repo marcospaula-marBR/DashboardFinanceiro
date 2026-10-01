@@ -17,6 +17,8 @@ export interface CompanyCreditorInfo {
   fullAddress: string;
   representativeName: string;
   representativeRole: string;
+  representativeTitle: string;
+  representativeFullText: string;
   representativeCpf: string;
   timbradoB64: string;
   forumCity: string;
@@ -35,6 +37,8 @@ export const COMPANY_CREDITOR_CONFIG: Record<'MarBR' | 'DZM' | 'G2', CompanyCred
     fullAddress: 'Rua Tupi, nº 782, Vila Tupi, Praia Grande - SP',
     representativeName: 'Priscilla Coelho Monteiro',
     representativeRole: 'sua sócia administradora',
+    representativeTitle: 'a Sra.',
+    representativeFullText: 'sua sócia administradora, a Sra. Priscilla Coelho Monteiro, brasileira, empresária, inscrita no CPF sob n.º 320.421.118-56',
     representativeCpf: '320.421.118-56',
     timbradoB64: TIMBRADO_MARBR_B64,
     forumCity: 'Praia Grande - SP'
@@ -50,7 +54,9 @@ export const COMPANY_CREDITOR_CONFIG: Record<'MarBR' | 'DZM' | 'G2', CompanyCred
     state: 'SP',
     fullAddress: 'Avenida Paulista, 1636, Conj 04, pavimento 15, Bela Vista, São Paulo (SP)',
     representativeName: 'Dauren Zilleti Monteiro',
-    representativeRole: 'sua sócia administradora',
+    representativeRole: 'seu administrador',
+    representativeTitle: 'o Sr.',
+    representativeFullText: 'seu administrador, o Sr. Dauren Zilleti Monteiro, brasileiro, empresário, inscrito no CPF sob n.º 269.606.618-38',
     representativeCpf: '269.606.618-38',
     timbradoB64: TIMBRADO_DZM_B64,
     forumCity: 'São Paulo - SP'
@@ -67,6 +73,8 @@ export const COMPANY_CREDITOR_CONFIG: Record<'MarBR' | 'DZM' | 'G2', CompanyCred
     fullAddress: 'Rua Agostinho Ferreira, 643 - Ribeirópolis, Praia Grande (SP)',
     representativeName: 'Priscilla Coelho Monteiro',
     representativeRole: 'sua sócia administradora',
+    representativeTitle: 'a Sra.',
+    representativeFullText: 'sua sócia administradora, a Sra. Priscilla Coelho Monteiro, brasileira, empresária, inscrita no CPF sob n.º 320.421.118-56',
     representativeCpf: '320.421.118-56',
     timbradoB64: TIMBRADO_G2_B64,
     forumCity: 'Praia Grande - SP'

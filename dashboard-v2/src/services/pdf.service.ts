@@ -150,7 +150,7 @@ export class PDFService {
 
       const corpoTexto = `DEVEDOR: ${razaoSocialOuNome}, ${tipoPessoa}, inscrito no ${fullEmpDetails.pj_type || 'CPF'} sob o n.º ${fullEmpDetails.document_id || ''}, estabelecido na ${fullAddress}, neste ato representada por ${fullEmpDetails.responsible_name || fullEmpDetails.full_name}, inscrito no CPF sob o n.º ${fullEmpDetails.responsible_cpf || fullEmpDetails.document_id || ''}.
 
-CREDOR: ${companyCreditor.corporateName}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ${companyCreditor.cnpj}, com sede em ${companyCreditor.fullAddress}, neste ato representada por ${companyCreditor.representativeRole}, a Sra. ${companyCreditor.representativeName}, brasileira, empresária, inscrita no CPF sob n.º ${companyCreditor.representativeCpf}.
+CREDOR: ${companyCreditor.corporateName}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ${companyCreditor.cnpj}, com sede em ${companyCreditor.fullAddress}, neste ato representada por ${companyCreditor.representativeFullText || `${companyCreditor.representativeRole}, ${companyCreditor.representativeTitle || 'a Sra.'} ${companyCreditor.representativeName}, inscrita no CPF sob n.º ${companyCreditor.representativeCpf}`}.
 
 As partes acima qualificadas, por este instrumento particular e na melhor forma de direito, confessam e assumem como líquida, certa e exigível a dívida a seguir descrita, sujeitando-se às cláusulas e condições que se seguem:
 
