@@ -70,3 +70,15 @@ body {
 .card-premium:hover {
   @apply shadow-medium border-primary/20;
 }
+
+/* War Room TV Marquee Animation */
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  display: inline-flex;
+  animation: marquee 40s linear infinite;
+}
+
