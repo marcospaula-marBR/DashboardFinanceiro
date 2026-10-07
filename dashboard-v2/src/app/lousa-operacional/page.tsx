@@ -7,9 +7,9 @@ import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
 
 import { WhiteboardHeader } from '@/components/war-room/WhiteboardHeader';
-import { WhiteboardColumns } from '@/components/war-room/WhiteboardColumns';
+import { WhiteboardColumns, DemandLayoutMode } from '@/components/war-room/WhiteboardColumns';
 import { WhiteboardFollowTheMoney } from '@/components/war-room/WhiteboardFollowTheMoney';
-import { WhiteboardTimeline } from '@/components/war-room/WhiteboardTimeline';
+import { WhiteboardTimeline, TimelineLayoutMode } from '@/components/war-room/WhiteboardTimeline';
 import { WhiteboardNewsTicker } from '@/components/war-room/WhiteboardNewsTicker';
 import { WhiteboardModal } from '@/components/war-room/WhiteboardModal';
 import { WhiteboardInsuranceAlertBanner } from '@/components/war-room/WhiteboardInsuranceAlertBanner';
@@ -17,7 +17,7 @@ import { WhiteboardResponsibleBoard } from '@/components/war-room/WhiteboardResp
 import { WhiteboardEditDemandModal } from '@/components/war-room/WhiteboardEditDemandModal';
 import { WhiteboardArchivedModal } from '@/components/war-room/WhiteboardArchivedModal';
 import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDemandColumnModal';
-import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive } from 'lucide-react';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -26,6 +26,19 @@ export default function LousaOperacionalPage() {
   const [isCursorHidden, setIsCursorHidden] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalTab, setModalTab] = useState<'demanda' | 'cambio' | 'cronograma'>('demanda');
+
+  // Modos de visualização de TV Zero-Scroll (Fit-to-Screen)
+  const [demandLayoutMode, setDemandLayoutMode] = useState<DemandLayoutMode>('compact');
+  const [timelineLayoutMode, setTimelineLayoutMode] = useState<TimelineLayoutMode>('rows');
+  const [isZeroScrollMode, setIsZeroScrollMode] = useState<boolean>(true);
+
+  // Sincronização automática entre hover da Demanda e Projeção no Cronograma
+  const [hoveredDemand, setHoveredDemand] = useState<{
+    colId: string;
+    titulo: string;
+    corMarcador?: string;
+    itens: WhiteboardItem[];
+  } | null>(null);
 
   // Estados de visão e filtro por responsáveis
   const [isResponsibleBoardVisible, setIsResponsibleBoardVisible] = useState<boolean>(false);
@@ -39,6 +52,15 @@ export default function LousaOperacionalPage() {
   // Estados de edição completa de tarefa e histórico de arquivadas
   const [isArchivedModalOpen, setIsArchivedModalOpen] = useState<boolean>(false);
   const [editingDemand, setEditingDemand] = useState<{ colId: string; item: WhiteboardItem } | null>(null);
+
+  // Ao ativar o Modo TV, ajusta automaticamente as demandas em títulos e cronograma em linhas
+  useEffect(() => {
+    if (isTvMode) {
+      setIsZeroScrollMode(true);
+      setDemandLayoutMode('compact');
+      setTimelineLayoutMode('rows');
+    }
+  }, [isTvMode]);
 
   // Carregar dados salvos no localStorage (com detecção automática de virada de mês e hidratação)
   useEffect(() => {
@@ -383,15 +405,19 @@ export default function LousaOperacionalPage() {
         isResponsibleViewActive={isResponsibleBoardVisible}
         onToggleResponsibleView={() => setIsResponsibleBoardVisible(prev => !prev)}
         totalAtrasados={totalAtrasados}
+        isZeroScrollMode={isZeroScrollMode}
+        onToggleZeroScrollMode={() => setIsZeroScrollMode(prev => !prev)}
       />
 
-      {/* ── CORPO PRINCIPAL DA LOUSA ── */}
-      <main className="flex-1 w-full max-w-[1920px] mx-auto p-3 sm:p-5 space-y-4">
+      {/* ── CORPO PRINCIPAL DA LOUSA (COM SUPORTE A ZERO-SCROLL PARA TV) ── */}
+      <main className={`flex-1 w-full max-w-[1920px] mx-auto p-2 sm:p-3.5 space-y-2.5 sm:space-y-3 transition-all ${
+        isZeroScrollMode ? 'lg:max-h-[calc(100vh-105px)] lg:overflow-y-auto no-scrollbar' : ''
+      }`}>
         {/* RADAR DE SEGUROS CORPORATIVOS (SEMPRE EM DESTAQUE COM HORIZONTE PREVENTIVO) */}
         <WhiteboardInsuranceAlertBanner policies={insurancePolicies} />
 
         {/* ── BARRA EXECUTIVA DE FILTROS POR RESPONSÁVEL & ATRASOS ── */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 p-2 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm">
           <div className="flex items-center flex-wrap gap-1.5">
             <span className="text-[11px] font-black uppercase text-slate-400 font-mono flex items-center gap-1.5 mr-1">
               <Filter size={12} className="text-cyan-400" />
@@ -457,32 +483,47 @@ export default function LousaOperacionalPage() {
             })}
           </div>
 
-          {/* AÇÕES DA BARRA DE FILTROS: HISTÓRICO DE ARQUIVADAS E QUADRO DE RESPONSÁVEIS */}
+          {/* AÇÕES DA BARRA DE FILTROS: ZERO-SCROLL TV, HISTÓRICO E QUADRO DE RESPONSÁVEIS */}
           <div className="flex items-center gap-2">
+            {/* TOGGLE RÁPIDO DO ZERO SCROLL */}
+            <button
+              type="button"
+              onClick={() => setIsZeroScrollMode(prev => !prev)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all border ${
+                isZeroScrollMode
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm ring-1 ring-cyan-400/50'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+              }`}
+              title="Ajusta o layout para caber perfeitamente na TV sem rolagem"
+            >
+              <Tv size={12} className={isZeroScrollMode ? 'text-cyan-400 animate-pulse' : 'text-slate-400'} />
+              <span>{isZeroScrollMode ? '📺 TV Fit: ON' : '📺 TV Fit: OFF'}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsArchivedModalOpen(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono transition-all border ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all border ${
                 totalArchivedCount > 0
                   ? 'bg-emerald-950/50 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/60 hover:text-white shadow-sm'
                   : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
               }`}
               title="Consultar histórico de demandas finalizadas e arquivadas"
             >
-              <Archive size={13} className={totalArchivedCount > 0 ? 'text-emerald-400' : 'text-slate-400'} />
+              <Archive size={12} className={totalArchivedCount > 0 ? 'text-emerald-400' : 'text-slate-400'} />
               <span>🗄️ Histórico ({totalArchivedCount})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsResponsibleBoardVisible(prev => !prev)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
                 isResponsibleBoardVisible
                   ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
                   : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-cyan-500/40 hover:text-white'
               }`}
             >
-              <Users size={13} className="text-cyan-400" />
+              <Users size={12} className="text-cyan-400" />
               <span>{isResponsibleBoardVisible ? 'Ocultar Quadro' : 'Quadro por Responsáveis'}</span>
             </button>
           </div>
@@ -501,10 +542,19 @@ export default function LousaOperacionalPage() {
           />
         )}
 
-        {/* SEÇÃO 1: AS COLUNAS OPERACIONAIS DA LOUSA COM DRAG & DROP E GESTÃO DE DEMANDAS */}
+        {/* SEÇÃO 1: AS COLUNAS OPERACIONAIS DA LOUSA COM MODO SÓ TÍTULOS (HOVER) E LINHAS */}
         <WhiteboardColumns
           colunas={data.colunas}
           filterResponsible={selectedResponsible}
+          layoutMode={demandLayoutMode}
+          onLayoutModeChange={(mode) => setDemandLayoutMode(mode)}
+          onHoverDemand={(colId, colTitulo, corMarcador, itens) => {
+            if (!colId) {
+              setHoveredDemand(null);
+            } else {
+              setHoveredDemand({ colId, titulo: colTitulo || '', corMarcador, itens: itens || [] });
+            }
+          }}
           onToggleItem={handleToggleColumnItem}
           onAddItem={handleAddColumnItem}
           onEditItem={handleEditColumnItem}
@@ -522,21 +572,26 @@ export default function LousaOperacionalPage() {
           totalArchivedDemandsCount={totalArchivedDemandsCount}
         />
 
-        {/* SEÇÃO 2: FOLLOW THE MONEY (ESTEIRA CAMBIAL & COTAÇÃO) */}
+        {/* SEÇÃO 2: FOLLOW THE MONEY (ESTEIRA CAMBIAL & COTAÇÃO COM SUPORTE A FITA COMPACTA) */}
         <WhiteboardFollowTheMoney
           followTheMoney={data.followTheMoney}
+          isTvMode={isTvMode || isZeroScrollMode}
           onUpdateQuote={handleUpdateQuote}
           onAddRow={handleAddCambioRow}
           onUpdateRow={handleUpdateCambioRow}
           onDeleteRow={handleDeleteCambioRow}
         />
 
-        {/* SEÇÃO 3: CRONOGRAMA DE VENCIMENTOS COM DRAG & DROP, RESPONSÁVEIS E ALERTA DE ATRASOS */}
+        {/* SEÇÃO 3: CRONOGRAMA DE VENCIMENTOS DO MÊS EM LINHAS OU GRADE COM PROJEÇÃO SINCRONIZADA */}
         <WhiteboardTimeline
           cronograma={data.cronograma}
           mesReferencia={data.mesReferencia}
           filterResponsible={selectedResponsible}
           onlyOverdue={onlyOverdueFilter}
+          layoutMode={timelineLayoutMode}
+          onLayoutModeChange={(mode) => setTimelineLayoutMode(mode)}
+          hoveredDemand={hoveredDemand}
+          onToggleDemandItem={(colId, itemId) => handleToggleColumnItem(colId, itemId)}
           onToggleItem={handleToggleTimelineItem}
           onAddItem={handleAddTimelineItem}
           onEditItem={handleEditTimelineItem}

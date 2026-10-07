@@ -87,3 +87,27 @@ body {
   animation-play-state: paused;
 }
 
+/* Utilitários para Modo TV e Esteiras Horizontais */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes marquee-flow {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee-flow {
+  display: inline-flex;
+  animation: marquee-flow 50s linear infinite;
+}
+
+.animate-marquee-flow:hover,
+.ticker-hover-pause:hover .animate-marquee-flow {
+  animation-play-state: paused;
+}
+

@@ -2,10 +2,11 @@
 
 import React, { useState } from 'react';
 import { FollowTheMoneyState, FollowTheMoneyRow } from '@/types/war-room';
-import { Plus, Trash2, Edit3, ArrowRight, DollarSign, TrendingUp, Check, X } from 'lucide-react';
+import { Plus, Trash2, Edit3, ArrowRight, DollarSign, TrendingUp, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface WhiteboardFollowTheMoneyProps {
   followTheMoney: FollowTheMoneyState;
+  isTvMode?: boolean;
   onUpdateQuote: (novaCotacao: string) => void;
   onAddRow: (row: Omit<FollowTheMoneyRow, 'id'>) => void;
   onUpdateRow: (row: FollowTheMoneyRow) => void;
@@ -14,11 +15,13 @@ interface WhiteboardFollowTheMoneyProps {
 
 export function WhiteboardFollowTheMoney({
   followTheMoney,
+  isTvMode = false,
   onUpdateQuote,
   onAddRow,
   onUpdateRow,
   onDeleteRow,
 }: WhiteboardFollowTheMoneyProps) {
+  const [isCollapsed, setIsCollapsed] = useState(isTvMode);
   const [isEditingQuote, setIsEditingQuote] = useState(false);
   const [quoteInput, setQuoteInput] = useState(followTheMoney.cotacaoUsdGs);
   const [isAddingRow, setIsAddingRow] = useState(false);
@@ -153,9 +156,59 @@ export function WhiteboardFollowTheMoney({
             <Plus size={13} />
             <span>Adicionar Etapa</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(prev => !prev)}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-emerald-500/40 text-slate-300 hover:text-white text-xs font-bold transition-all"
+            title={isCollapsed ? 'Expandir tabela de câmbio' : 'Recolher tabela para modo compacto'}
+          >
+            {isCollapsed ? (
+              <>
+                <ChevronDown size={13} className="text-emerald-400" />
+                <span className="hidden sm:inline">Expandir</span>
+              </>
+            ) : (
+              <>
+                <ChevronUp size={13} className="text-slate-400" />
+                <span className="hidden sm:inline">Recolher</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
+      {/* ── FITA COMPACTA QUANDO RECOLHIDO (PARA MODO TV) ── */}
+      {isCollapsed && (
+        <div className="flex items-center justify-between gap-3 p-2 rounded-lg bg-[#070c18] border border-emerald-500/30 text-xs font-mono">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/40 flex-shrink-0">
+              COTAÇÃO: USD = G$ {followTheMoney.cotacaoUsdGs}
+            </span>
+            {followTheMoney.linhas.slice(0, 4).map(l => (
+              <span key={l.id} className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800 flex items-center gap-1 flex-shrink-0">
+                <span className="font-bold text-white">{l.de}</span>
+                <ArrowRight size={10} className="text-emerald-400" />
+                <span className="font-bold text-white">{l.para}</span>
+                <span className="text-emerald-300">({l.valor} {l.moeda})</span>
+                {l.percentual !== '—' && <span className="text-rose-400 font-bold">[{l.percentual}]</span>}
+              </span>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(false)}
+            className="text-xs text-emerald-400 hover:text-white font-bold flex items-center gap-1 flex-shrink-0"
+          >
+            <span>Ver Tabela Completa</span>
+            <ChevronDown size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* ── CONTEÚDO EXPANDIDO: FORMULÁRIO E TABELA ── */}
+      {!isCollapsed && (
+        <>
       {/* ── FORMULÁRIO DE ADIÇÃO RÁPIDA DE ETAPA ── */}
       {isAddingRow && (
         <form onSubmit={handleSaveRow} className="mb-4 p-3 bg-slate-900/90 border border-emerald-500/30 rounded-lg">
@@ -439,6 +492,8 @@ export function WhiteboardFollowTheMoney({
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </section>
   );
 }

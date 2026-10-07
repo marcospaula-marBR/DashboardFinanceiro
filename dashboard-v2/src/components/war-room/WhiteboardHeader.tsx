@@ -26,6 +26,8 @@ interface WhiteboardHeaderProps {
   isResponsibleViewActive?: boolean;
   onToggleResponsibleView?: () => void;
   totalAtrasados?: number;
+  isZeroScrollMode?: boolean;
+  onToggleZeroScrollMode?: () => void;
 }
 
 export function WhiteboardHeader({
@@ -38,6 +40,8 @@ export function WhiteboardHeader({
   isResponsibleViewActive = false,
   onToggleResponsibleView,
   totalAtrasados = 0,
+  isZeroScrollMode = false,
+  onToggleZeroScrollMode,
 }: WhiteboardHeaderProps) {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -204,6 +208,22 @@ export function WhiteboardHeader({
             <RotateCcw size={13} />
             <span className="hidden md:inline">Restaurar Lousa</span>
           </button>
+
+          {/* TOGGLE ZERO-SCROLL TV */}
+          {onToggleZeroScrollMode && (
+            <button
+              onClick={onToggleZeroScrollMode}
+              title="Ajustar lousa à tela sem necessidade de rolagem (Zero-Scroll para TV)"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                isZeroScrollMode
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 ring-1 ring-cyan-400 shadow-sm'
+                  : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-600'
+              }`}
+            >
+              <Tv size={14} className={isZeroScrollMode ? 'text-cyan-400 animate-pulse' : 'text-slate-400'} />
+              <span>{isZeroScrollMode ? 'Zero-Scroll: ON' : 'Zero-Scroll TV'}</span>
+            </button>
+          )}
 
           {/* TOGGLE MODO TV (FULLSCREEN) */}
           <button
