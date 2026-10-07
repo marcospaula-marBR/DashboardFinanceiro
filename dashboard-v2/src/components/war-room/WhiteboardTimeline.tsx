@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { WhiteboardTimelineBlock, WhiteboardTimelineItem, WhiteboardItem } from '@/types/war-room';
 import { extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
 import { 
@@ -16,7 +16,12 @@ import {
   User,
   Rows,
   LayoutGrid,
-  Zap
+  Zap,
+  Target,
+  ChevronUp,
+  ChevronDown,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 export type TimelineLayoutMode = 'rows' | 'grid';
@@ -89,6 +94,48 @@ export function WhiteboardTimeline({
   const [draggedItem, setDraggedItem] = useState<{ blockId: string; itemId: string; index: number } | null>(null);
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
   const [dragOverItemIndex, setDragOverItemIndex] = useState<{ blockId: string; index: number } | null>(null);
+
+  // Estados e controle de Rolagem Vertical (esconder superiores ao rolar na vertical)
+  const rowsContainerRef = useRef<HTMLDivElement>(null);
+  const [hasScrolledDown, setHasScrolledDown] = useState(false);
+  const [hasMoreBelow, setHasMoreBelow] = useState(true);
+  const [isHeightExpanded, setIsHeightExpanded] = useState(false);
+
+  const checkScrollState = () => {
+    const el = rowsContainerRef.current;
+    if (!el) return;
+    setHasScrolledDown(el.scrollTop > 20);
+    setHasMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 20);
+  };
+
+  useEffect(() => {
+    checkScrollState();
+  }, [cronograma, activeLayout, isHeightExpanded]);
+
+  const scrollToTop = () => {
+    if (rowsContainerRef.current) {
+      rowsContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (rowsContainerRef.current) {
+      rowsContainerRef.current.scrollTo({
+        top: rowsContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  const scrollToToday = () => {
+    if (rowsContainerRef.current) {
+      if (todayDay >= 16) {
+        scrollToBottom();
+      } else {
+        scrollToTop();
+      }
+    }
+  };
 
   const handleCreate = (block: WhiteboardTimelineBlock) => {
     if (!inputDesc.trim()) {
@@ -257,8 +304,56 @@ export function WhiteboardTimeline({
           </p>
         </div>
 
-        {/* CONTROLES: ALTERNAR MODO LINHAS/GRADE E RENOVAR CICLO */}
+        {/* CONTROLES: NAVEGAÇÃO VERTICAL, ALTERNAR MODO LINHAS/GRADE E RENOVAR CICLO */}
         <div className="flex items-center flex-wrap gap-2">
+          {/* ATALHOS DE NAVEGAÇÃO VERTICAL (OCULTAR SUPERIORES / FOCAR) */}
+          {activeLayout === 'rows' && !isHeightExpanded && (
+            <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono">
+              <button
+                type="button"
+                onClick={scrollToToday}
+                title="Rolar verticalmente diretamente para o período de hoje"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-cyan-300 hover:text-white hover:bg-cyan-950 font-bold transition-all"
+              >
+                <Target size={11} className="text-cyan-400" />
+                <span>Hoje</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={scrollToTop}
+                title="Rolar para a 1ª Quinzena (01 a 15) no topo"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 font-bold transition-all"
+              >
+                <ChevronUp size={11} />
+                <span>01-15</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                title="Rolar para a 2ª Quinzena (16 a 31), ocultando as superiores"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 font-bold transition-all"
+              >
+                <ChevronDown size={11} />
+                <span>16-31</span>
+              </button>
+            </div>
+          )}
+
+          {/* TOGGLE EXPANDIR / COMPACTAR ALTURA DA TIMELINE */}
+          {activeLayout === 'rows' && (
+            <button
+              type="button"
+              onClick={() => setIsHeightExpanded(prev => !prev)}
+              title={isHeightExpanded ? 'Compactar com rolagem vertical' : 'Expandir todos os 6 períodos'}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-mono transition-all"
+            >
+              {isHeightExpanded ? <Minimize2 size={11} className="text-amber-400" /> : <Maximize2 size={11} className="text-cyan-400" />}
+              <span>{isHeightExpanded ? 'Rolagem TV' : 'Expandir'}</span>
+            </button>
+          )}
+
           {/* SELETOR DE MODO: LINHAS (TV) / GRADE */}
           <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
             <button
@@ -312,8 +407,30 @@ export function WhiteboardTimeline({
       {/* CASO 1: VISÃO EM LINHAS HORIZONTAIS COM ESTEIRA (PADRÃO PARA TV)     */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       {activeLayout === 'rows' && (
-        <div className="space-y-2">
-          {cronograma.map((block) => {
+        <div className="relative group/timeline-scroll">
+          {/* SINALIZADOR SUPERIOR SE HOUVER LINHAS OCULTAS ACIMA */}
+          {hasScrolledDown && !isHeightExpanded && (
+            <button
+              type="button"
+              onClick={scrollToTop}
+              className="w-full mb-1.5 py-0.5 px-2 bg-gradient-to-r from-cyan-950/80 via-[#0b1426] to-cyan-950/80 border border-cyan-500/40 rounded-lg text-[10px] text-cyan-300 font-mono font-bold flex items-center justify-center gap-1.5 hover:bg-cyan-900/60 transition-all shadow-sm animate-pulse"
+              title="Clique para rolar de volta para as linhas do topo"
+            >
+              <ChevronUp size={11} />
+              <span>▲ Linhas superiores ocultas (01 a 15) • Clique ou role para cima</span>
+            </button>
+          )}
+
+          <div
+            ref={rowsContainerRef}
+            onScroll={checkScrollState}
+            className={`space-y-2 transition-all scroll-smooth ${
+              isHeightExpanded
+                ? ''
+                : 'max-h-[220px] sm:max-h-[260px] overflow-y-auto no-scrollbar pr-1'
+            }`}
+          >
+            {cronograma.map((block) => {
             const isCurrentBlock = todayDay >= block.diaInicio && todayDay <= block.diaFim;
             const isTargetBlock = dragOverBlockId === block.id;
 
@@ -659,6 +776,20 @@ export function WhiteboardTimeline({
               </div>
             );
           })}
+          </div>
+
+          {/* SINALIZADOR INFERIOR SE HOUVER MAIS PERÍODOS ABAIXO */}
+          {hasMoreBelow && !isHeightExpanded && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="w-full mt-1.5 py-0.5 px-2 bg-gradient-to-r from-slate-900 via-[#0b1426] to-slate-900 border border-slate-700/80 hover:border-cyan-500/50 rounded-lg text-[10px] text-slate-300 font-mono font-bold flex items-center justify-center gap-1.5 hover:text-white transition-all shadow-sm"
+              title="Clique para rolar para a 2ª Quinzena (16 a 31), ocultando as superiores"
+            >
+              <ChevronDown size={11} />
+              <span>▼ Mais períodos abaixo (16 a 31) • Role para baixo para ocultar as superiores</span>
+            </button>
+          )}
         </div>
       )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
+import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor, getTopTasksPerMember } from '@/services/war-room.service';
 import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
@@ -154,6 +154,11 @@ export default function LousaOperacionalPage() {
 
     return map;
   }, [data, todayDay]);
+
+  // ── TOP 5 ATIVIDADES ATIVAS POR MEMBRO (ORDEM CRONOLÓGICA DA ATRASADA A VENCER) ──
+  const topMemberTaskGroups = useMemo(() => {
+    return getTopTasksPerMember(data, 5);
+  }, [data]);
 
   // ── DEMANDAS ARQUIVADAS E HISTÓRICO ──
   const archivedDemandsList = useMemo(() => {
@@ -451,6 +456,24 @@ export default function LousaOperacionalPage() {
       <main className={`flex-1 w-full max-w-[1920px] mx-auto p-2 sm:p-3.5 space-y-2.5 sm:space-y-3 transition-all ${
         isZeroScrollMode ? 'lg:max-h-[calc(100vh-105px)] lg:overflow-y-auto no-scrollbar' : ''
       }`}>
+        {/* ── SUPER-RADAR SUPERIOR: CADA USUÁRIO E SUAS 5 ATIVIDADES (DA ATRASADA A VENCER) ── */}
+        <WhiteboardNewsTicker
+          memberTaskGroups={topMemberTaskGroups}
+          onToggleItem={(origem, origemId, itemId) => {
+            if (origem === 'cronograma') {
+              handleToggleTimelineItem(origemId, itemId);
+            } else {
+              handleToggleColumnItem(origemId, itemId);
+            }
+          }}
+          onSelectMember={(nome) => {
+            setOnlyOverdueFilter(false);
+            setSelectedResponsible(nome);
+          }}
+          selectedMember={selectedResponsible}
+          cotacaoUsdGs={data.followTheMoney.cotacaoUsdGs}
+        />
+
         {/* RADAR DE SEGUROS CORPORATIVOS (SEMPRE EM DESTAQUE COM HORIZONTE PREVENTIVO) */}
         <WhiteboardInsuranceAlertBanner policies={insurancePolicies} />
 
@@ -663,12 +686,6 @@ export default function LousaOperacionalPage() {
           onResetCycle={handleResetCycle}
         />
       </main>
-
-      {/* ── LETREIRO NOTICIOSO / TICKER CONTÍNUO NO RODAPÉ (COM PAUSA NO HOVER E SEGUROS D<30) ── */}
-      <WhiteboardNewsTicker
-        cotacaoUsdGs={data.followTheMoney.cotacaoUsdGs}
-        insuranceAlerts={insuranceAlerts}
-      />
 
       {/* ── MODAL DE GESTÃO RÁPIDA ── */}
       <WhiteboardModal

@@ -1724,3 +1724,165 @@ export class WarRoomService {
     return newState;
   }
 }
+
+export interface MemberActiveTask {
+  id: string;
+  itemId: string;
+  origem: 'cronograma' | 'coluna';
+  origemId: string;
+  origemNome: string;
+  texto: string;
+  dia?: number;
+  dataLimite?: string;
+  isOverdue: boolean;
+  diasAtraso?: number;
+  prazoTexto: string;
+  responsavel: string;
+  sortWeight: number;
+}
+
+export interface MemberActiveTaskGroup {
+  nome: string;
+  totalAtivas: number;
+  atrasadas: number;
+  tarefas: MemberActiveTask[];
+}
+
+/**
+ * Compila para cada usuário/responsável suas até 5 próximas atividades ativas por ordem de data
+ * (da mais atrasada até a vencer), substituindo por uma nova cada vez que uma for marcada como concluída
+ */
+export function getTopTasksPerMember(data: WhiteboardDataState, maxPerMember = 5): MemberActiveTaskGroup[] {
+  const today = new Date();
+  const todayDay = today.getDate();
+  const defaultTeam = ['MANUS', 'CLARA', 'MARCO', 'ALDO', 'DAUREN', 'PRISCILLA', 'ADRIANA', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
+
+  const memberTasksMap = new Map<string, MemberActiveTask[]>();
+
+  const registerTask = (resp: string, task: Omit<MemberActiveTask, 'responsavel'>) => {
+    const upper = resp.trim().toUpperCase();
+    if (!upper) return;
+    if (!memberTasksMap.has(upper)) {
+      memberTasksMap.set(upper, []);
+    }
+    memberTasksMap.get(upper)!.push({ ...task, responsavel: upper });
+  };
+
+  // 1. Tarefas do Cronograma de Vencimentos
+  data.cronograma.forEach(block => {
+    block.itens.forEach(item => {
+      if (item.concluido) return;
+      const isOverdue = item.dia < todayDay;
+      const diasAtraso = isOverdue ? todayDay - item.dia : 0;
+      const resps = extractResponsaveisList(item);
+
+      const prazoTexto = isOverdue
+        ? `Dia ${String(item.dia).padStart(2, '0')} (${diasAtraso}d atr)`
+        : item.dia === todayDay
+        ? `Dia ${String(item.dia).padStart(2, '0')} (HOJE)`
+        : `Dia ${String(item.dia).padStart(2, '0')}`;
+
+      // sortWeight negativo para atrasados (quanto menor, mais atrasado)
+      const sortWeight = item.dia - todayDay;
+
+      resps.forEach(resp => {
+        registerTask(resp, {
+          id: `cronograma-${item.id}-${resp}`,
+          itemId: item.id,
+          origem: 'cronograma',
+          origemId: block.id,
+          origemNome: `Bloco ${block.intervalo}`,
+          texto: item.descricao,
+          dia: item.dia,
+          isOverdue,
+          diasAtraso,
+          prazoTexto,
+          sortWeight,
+        });
+      });
+    });
+  });
+
+  // 2. Tarefas das Colunas / Demandas Operacionais
+  data.colunas.forEach(col => {
+    col.itens.forEach(item => {
+      if (item.concluido || item.arquivado) return;
+      const resps = extractResponsaveisList(item);
+
+      let isOverdue = false;
+      let diasAtraso = 0;
+      let prazoTexto = 'Sem data';
+      let sortWeight = 900;
+
+      if (item.dataLimite) {
+        const prazo = calculatePrazoInfo(item.dataLimite, false);
+        const diasRestantes = prazo.diasRestantes ?? 0;
+        if (prazo.status === 'atrasado') {
+          isOverdue = true;
+          diasAtraso = Math.abs(diasRestantes);
+          prazoTexto = `${item.dataLimite} (${diasAtraso}d atr)`;
+          sortWeight = diasRestantes;
+        } else if (prazo.status === 'hoje') {
+          isOverdue = false;
+          prazoTexto = `${item.dataLimite} (HOJE)`;
+          sortWeight = 0;
+        } else {
+          isOverdue = false;
+          prazoTexto = item.dataLimite;
+          sortWeight = diasRestantes;
+        }
+      }
+
+      resps.forEach(resp => {
+        registerTask(resp, {
+          id: `coluna-${item.id}-${resp}`,
+          itemId: item.id,
+          origem: 'coluna',
+          origemId: col.id,
+          origemNome: col.titulo.replace(':', ''),
+          texto: item.texto,
+          dataLimite: item.dataLimite,
+          isOverdue,
+          diasAtraso,
+          prazoTexto,
+          sortWeight,
+        });
+      });
+    });
+  });
+
+  // Agrupar e ordenar membros
+  const allNames = Array.from(new Set([...Array.from(memberTasksMap.keys()), ...defaultTeam]));
+
+  const groups: MemberActiveTaskGroup[] = [];
+
+  allNames.forEach(nome => {
+    const tasks = memberTasksMap.get(nome) || [];
+    if (tasks.length === 0) return;
+
+    // Ordenar da mais atrasada para a vencer no futuro
+    const sorted = [...tasks].sort((a, b) => {
+      if (a.sortWeight !== b.sortWeight) return a.sortWeight - b.sortWeight;
+      return a.texto.localeCompare(b.texto);
+    });
+
+    const atrasadas = sorted.filter(t => t.isOverdue).length;
+
+    groups.push({
+      nome,
+      totalAtivas: sorted.length,
+      atrasadas,
+      tarefas: sorted.slice(0, maxPerMember),
+    });
+  });
+
+  // Ordenar grupos: primeiro quem tem atrasadas (DESC), depois quem tem mais tarefas pendentes
+  groups.sort((a, b) => {
+    if (a.atrasadas > 0 && b.atrasadas === 0) return -1;
+    if (a.atrasadas === 0 && b.atrasadas > 0) return 1;
+    if (b.atrasadas !== a.atrasadas) return b.atrasadas - a.atrasadas;
+    return b.totalAtivas - a.totalAtivas;
+  });
+
+  return groups;
+}
