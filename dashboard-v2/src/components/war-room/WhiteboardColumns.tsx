@@ -1,0 +1,207 @@
+"use client";
+
+import React, { useState } from 'react';
+import { WhiteboardColumn } from '@/types/war-room';
+import { Check, Plus, Trash2, AlertOctagon, HelpCircle } from 'lucide-react';
+
+interface WhiteboardColumnsProps {
+  colunas: WhiteboardColumn[];
+  onToggleItem: (columnId: string, itemId: string) => void;
+  onAddItem: (columnId: string, text: string) => void;
+  onDeleteItem: (columnId: string, itemId: string) => void;
+}
+
+export function WhiteboardColumns({
+  colunas,
+  onToggleItem,
+  onAddItem,
+  onDeleteItem,
+}: WhiteboardColumnsProps) {
+  const [activeInputColId, setActiveInputColId] = useState<string | null>(null);
+  const [inputText, setInputText] = useState<string>('');
+
+  const handleCreate = (colId: string) => {
+    if (!inputText.trim()) {
+      setActiveInputColId(null);
+      return;
+    }
+    onAddItem(colId, inputText.trim());
+    setInputText('');
+    setActiveInputColId(null);
+  };
+
+  return (
+    <section className="w-full">
+      {/* ── TÍTULO DA SEÇÃO OPERACIONAL ── */}
+      <div className="flex items-center justify-between mb-2.5 px-1">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-sm bg-rose-500" />
+          <h2 className="text-xs sm:text-sm font-black tracking-wider text-slate-200 uppercase font-mono">
+            DEMANDAS & PROCESSOS ESTRATÉGICOS (PAINEL OPERACIONAL)
+          </h2>
+        </div>
+        <span className="text-[11px] text-slate-400 font-medium">
+          Clique no item para alternar o checkmark (✓)
+        </span>
+      </div>
+
+      {/* ── GRID DAS 5 COLUNAS DA LOUSA ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        {colunas.map((col, index) => {
+          const totalItens = col.itens.length;
+          const concluidos = col.itens.filter(i => i.concluido).length;
+          const isFinished = totalItens > 0 && concluidos === totalItens;
+
+          // Borda divisória superior em estilo marcador de lousa
+          const headerBorderColor =
+            col.id === 'col-5'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-rose-500 text-rose-400';
+
+          return (
+            <div
+              key={col.id}
+              className="flex flex-col bg-[#0b1120]/90 border border-slate-800/80 hover:border-slate-700/80 rounded-xl p-3.5 shadow-md transition-all relative group"
+            >
+              {/* LINHA SUPERIOR ESTILO MARCADOR */}
+              <div className={`h-1 w-full rounded-full mb-2.5 ${col.id === 'col-5' ? 'bg-blue-500' : 'bg-rose-500'}`} />
+
+              {/* CABEÇALHO DA COLUNA */}
+              <div className="flex items-start justify-between gap-1.5 pb-2 mb-2 border-b border-slate-800/80">
+                <div>
+                  <h3 className={`text-xs sm:text-sm font-black tracking-wide uppercase font-mono ${headerBorderColor}`}>
+                    {col.titulo}
+                  </h3>
+                  {col.subtitulo && (
+                    <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
+                      {col.subtitulo}
+                    </p>
+                  )}
+                </div>
+
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 flex-shrink-0">
+                  {concluidos}/{totalItens}
+                </span>
+              </div>
+
+              {/* ALERTA EM DESTAQUE (EX: * SUSPENSAS NOVAS CONTAS) */}
+              {col.alertaDestaque && (
+                <div className="mb-2.5 px-2.5 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/40 flex items-center gap-1.5 animate-pulse">
+                  <AlertOctagon size={13} className="text-rose-400 flex-shrink-0" />
+                  <span className="text-[11px] font-black uppercase tracking-wider text-rose-300 font-mono">
+                    {col.alertaDestaque}
+                  </span>
+                </div>
+              )}
+
+              {/* LISTA DE ITENS */}
+              <div className="flex-1 space-y-1.5 min-h-[140px]">
+                {col.itens.map(item => {
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => onToggleItem(col.id, item.id)}
+                      className={`group/item flex items-start justify-between gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
+                        item.concluido
+                          ? 'bg-slate-900/50 border-slate-800/60 opacity-60'
+                          : item.destaque
+                          ? 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50'
+                          : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2 min-w-0">
+                        {/* CHECKBOX / CHECKMARK (COMO O DA LOUSA) */}
+                        <div
+                          className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all ${
+                            item.concluido
+                              ? 'bg-rose-500 border-rose-500 text-white font-black shadow-sm shadow-rose-500/30'
+                              : 'border-slate-600 group-hover/item:border-slate-400 bg-slate-950'
+                          }`}
+                        >
+                          {item.concluido && <Check size={12} strokeWidth={3} className="text-white" />}
+                        </div>
+
+                        {/* TEXTO DO ITEM */}
+                        <span
+                          className={`text-xs font-semibold leading-relaxed tracking-tight ${
+                            item.concluido
+                              ? 'line-through text-slate-500'
+                              : item.destaque
+                              ? 'text-amber-200 font-bold'
+                              : 'text-slate-200'
+                          }`}
+                        >
+                          {item.texto}
+                        </span>
+                      </div>
+
+                      {/* BOTÃO EXCLUIR ITEM */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteItem(col.id, item.id);
+                        }}
+                        title="Excluir item"
+                        className="opacity-0 group-hover/item:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-opacity"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {col.itens.length === 0 && (
+                  <div className="text-center py-6 text-slate-500 text-xs">
+                    Nenhum item pendente
+                  </div>
+                )}
+              </div>
+
+              {/* INPUT RÁPIDO PARA ADICIONAR ITEM */}
+              <div className="mt-2.5 pt-2 border-t border-slate-800/60">
+                {activeInputColId === col.id ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleCreate(col.id);
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Novo item..."
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      onBlur={() => handleCreate(col.id)}
+                      className="w-full bg-slate-950 border border-cyan-500/50 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="px-2 py-1 rounded bg-cyan-600 text-white text-[10px] font-bold"
+                    >
+                      OK
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveInputColId(col.id);
+                      setInputText('');
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-1 rounded-md text-[11px] font-semibold text-slate-400 hover:text-cyan-300 hover:bg-slate-800/50 transition-all border border-dashed border-slate-800 hover:border-slate-700"
+                  >
+                    <Plus size={12} />
+                    <span>Adicionar item</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

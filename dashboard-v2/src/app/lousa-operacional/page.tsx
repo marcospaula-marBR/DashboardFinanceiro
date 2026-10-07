@@ -1,119 +1,56 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { WarRoomService } from '@/services/war-room.service';
-import { 
-  WarRoomObligation, 
-  StrategicPillar, 
-  FollowTheMoneyFlow, 
-  InsuranceExpiringAlert, 
-  WarRoomSummaryCounters 
-} from '@/types/war-room';
+import { WarRoomService, DEFAULT_WHITEBOARD_DATA } from '@/services/war-room.service';
+import { WhiteboardDataState, FollowTheMoneyRow } from '@/types/war-room';
 
-import { WarRoomHeader } from '@/components/war-room/WarRoomHeader';
-import { WarRoomTodayBillsCard } from '@/components/war-room/WarRoomTodayBillsCard';
-import { WarRoomTimeline } from '@/components/war-room/WarRoomTimeline';
-import { WarRoomStrategicPillars } from '@/components/war-room/WarRoomStrategicPillars';
-import { WarRoomFollowTheMoney } from '@/components/war-room/WarRoomFollowTheMoney';
-import { WarRoomInsuranceRadar } from '@/components/war-room/WarRoomInsuranceRadar';
-import { WarRoomNewsTicker } from '@/components/war-room/WarRoomNewsTicker';
-import { WarRoomBillsDetailModal } from '@/components/war-room/WarRoomBillsDetailModal';
-import { WarRoomManagementModal } from '@/components/war-room/WarRoomManagementModal';
+import { WhiteboardHeader } from '@/components/war-room/WhiteboardHeader';
+import { WhiteboardColumns } from '@/components/war-room/WhiteboardColumns';
+import { WhiteboardFollowTheMoney } from '@/components/war-room/WhiteboardFollowTheMoney';
+import { WhiteboardTimeline } from '@/components/war-room/WhiteboardTimeline';
+import { WhiteboardNewsTicker } from '@/components/war-room/WhiteboardNewsTicker';
+import { WhiteboardModal } from '@/components/war-room/WhiteboardModal';
 
 export default function LousaOperacionalPage() {
-  // ── ESTADOS PRINCIPAIS ──
-  const [obligations, setObligations] = useState<WarRoomObligation[]>([]);
-  const [pillars, setPillars] = useState<StrategicPillar[]>([]);
-  const [flow, setFlow] = useState<FollowTheMoneyFlow>(WarRoomService.getFlow());
-  const [insuranceAlerts, setInsuranceAlerts] = useState<InsuranceExpiringAlert[]>([]);
-  const [isLoadingInsurances, setIsLoadingInsurances] = useState<boolean>(true);
-  const [isRefreshingRate, setIsRefreshingRate] = useState<boolean>(false);
-
-  // ── CONTROLES DE INTERFACE ──
+  const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
   const [isCursorHidden, setIsCursorHidden] = useState<boolean>(false);
-  const [isBillsModalOpen, setIsBillsModalOpen] = useState<boolean>(false);
-  const [isManagementModalOpen, setIsManagementModalOpen] = useState<boolean>(false);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [modalTab, setModalTab] = useState<'demanda' | 'cambio' | 'cronograma'>('demanda');
 
-  // ── CARREGAMENTO INICIAL ──
-  const loadInitialData = useCallback(async () => {
-    // 1. Obrigações e Pilares
-    const loadedObligations = WarRoomService.getObligations();
-    setObligations(loadedObligations);
-
-    const loadedPillars = WarRoomService.getPillars();
-    setPillars(loadedPillars);
-
-    const loadedFlow = WarRoomService.getFlow();
-    setFlow(loadedFlow);
-
-    // 2. Seguros reais do Supabase
-    setIsLoadingInsurances(true);
-    const loadedInsurances = await WarRoomService.fetchExpiringInsurances();
-    setInsuranceAlerts(loadedInsurances);
-    setIsLoadingInsurances(false);
-
-    // 3. Cotação do Dólar
-    const rate = await WarRoomService.fetchLiveUSDRate();
-    setFlow(prev => ({
-      ...prev,
-      cotacaoUSD: rate.bid,
-      variacaoUSD: rate.pctChange,
-    }));
+  // Carregar dados salvos no localStorage
+  useEffect(() => {
+    const loaded = WarRoomService.getWhiteboardData();
+    setData(loaded);
   }, []);
 
-  useEffect(() => {
-    loadInitialData();
+  // ── CONTADOR DE ITENS CONCLUÍDOS ──
+  const { totalConcluidos, totalItens } = useMemo(() => {
+    let concluidos = 0;
+    let total = 0;
 
-    // Recalcula a cada 1 minuto (status de data e cotação)
-    const intervalMinute = setInterval(async () => {
-      const rate = await WarRoomService.fetchLiveUSDRate();
-      setFlow(prev => ({
-        ...prev,
-        cotacaoUSD: rate.bid,
-        variacaoUSD: rate.pctChange,
-      }));
-    }, 60000);
+    data.colunas.forEach(col => {
+      col.itens.forEach(it => {
+        total++;
+        if (it.concluido) concluidos++;
+      });
+    });
 
-    // Atualiza seguros a cada 5 minutos
-    const intervalFiveMinutes = setInterval(async () => {
-      const insurances = await WarRoomService.fetchExpiringInsurances();
-      setInsuranceAlerts(insurances);
-    }, 300000);
+    data.cronograma.forEach(blk => {
+      blk.itens.forEach(it => {
+        total++;
+        if (it.concluido) concluidos++;
+      });
+    });
 
-    return () => {
-      clearInterval(intervalMinute);
-      clearInterval(intervalFiveMinutes);
-    };
-  }, [loadInitialData]);
+    return { totalConcluidos: concluidos, totalItens: total };
+  }, [data]);
 
-  // ── CURSOR AUTO-HIDE EM MODO TV (3s de inatividade) ──
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
-    const handleMouseMove = () => {
-      setIsCursorHidden(false);
-      clearTimeout(timeoutId);
-      if (isTvMode) {
-        timeoutId = setTimeout(() => {
-          setIsCursorHidden(true);
-        }, 3000);
-      }
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      clearTimeout(timeoutId);
-    };
-  }, [isTvMode]);
-
-  // ── ATALHOS DE TECLADO (F / T = TV Mode, Esc = Sair) ──
+  // ── ATALHOS DE TECLADO (F ou T = MODO TV) ──
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
       if (e.key === 'f' || e.key === 'F' || e.key === 't' || e.key === 'T') {
-        // Evita disparar se estiver digitando em input
-        if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
         setIsTvMode(prev => !prev);
       } else if (e.key === 'Escape') {
         setIsTvMode(false);
@@ -124,140 +61,159 @@ export default function LousaOperacionalPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // ── AÇÕES DE OBRIGAÇÃO ──
-  const handleTogglePaid = (id: string) => {
-    const updated = WarRoomService.toggleObligationPaid(id);
-    setObligations(updated);
+  // ── AUTO-HIDE DO CURSOR EM MODO TV (3s sem movimento) ──
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+
+    const handleMouseMove = () => {
+      setIsCursorHidden(false);
+      clearTimeout(timeout);
+      if (isTvMode) {
+        timeout = setTimeout(() => {
+          setIsCursorHidden(true);
+        }, 3000);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      clearTimeout(timeout);
+    };
+  }, [isTvMode]);
+
+  // ── FULLSCREEN TOGGLE NA API DO BROWSER ──
+  const toggleTvMode = () => {
+    if (!isTvMode) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+      setIsTvMode(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+      setIsTvMode(false);
+      setIsCursorHidden(false);
+    }
   };
 
-  const handleAddObligation = (obData: Omit<WarRoomObligation, 'id' | 'status'>) => {
-    const updated = WarRoomService.addObligation(obData);
-    setObligations(updated);
+  // ── HANDLERS DE COLUNA ──
+  const handleToggleColumnItem = (colId: string, itemId: string) => {
+    const updated = WarRoomService.toggleColumnItem(data, colId, itemId);
+    setData(updated);
   };
 
-  // ── AÇÕES DOS PILARES ──
-  const handleToggleDemand = (itemId: string) => {
-    const updated = WarRoomService.toggleDemandItem(itemId);
-    setPillars(updated);
+  const handleAddColumnItem = (colId: string, text: string) => {
+    const updated = WarRoomService.addColumnItem(data, colId, text);
+    setData(updated);
   };
 
-  const handleAddDemand = (pilarId: string, itemData: { titulo: string; prioridade: 'critica' | 'alta' | 'normal'; responsavel?: string }) => {
-    const updated = WarRoomService.addDemandItem(pilarId, itemData);
-    setPillars(updated);
+  const handleDeleteColumnItem = (colId: string, itemId: string) => {
+    const updated = WarRoomService.deleteColumnItem(data, colId, itemId);
+    setData(updated);
   };
 
-  // ── AÇÕES DE FOLLOW THE MONEY ──
-  const handleUpdateFlow = (updatedFlow: FollowTheMoneyFlow) => {
-    WarRoomService.saveFlow(updatedFlow);
-    setFlow(updatedFlow);
+  // ── HANDLERS DE CÂMBIO ──
+  const handleUpdateQuote = (novaCotacao: string) => {
+    const updated = WarRoomService.updateQuote(data, novaCotacao);
+    setData(updated);
   };
 
-  const handleRefreshRate = async () => {
-    setIsRefreshingRate(true);
-    const rate = await WarRoomService.fetchLiveUSDRate();
-    setFlow(prev => ({
-      ...prev,
-      cotacaoUSD: rate.bid,
-      variacaoUSD: rate.pctChange,
-    }));
-    setIsRefreshingRate(false);
+  const handleAddCambioRow = (row: Omit<FollowTheMoneyRow, 'id'>) => {
+    const updated = WarRoomService.addFollowTheMoneyRow(data, row);
+    setData(updated);
   };
 
-  // ── CONTADORES DE CABEÇALHO ──
-  const counters: WarRoomSummaryCounters = useMemo(() => {
-    return WarRoomService.computeSummary(obligations, insuranceAlerts, pillars);
-  }, [obligations, insuranceAlerts, pillars]);
+  const handleDeleteCambioRow = (id: string) => {
+    const updated = WarRoomService.deleteFollowTheMoneyRow(data, id);
+    setData(updated);
+  };
+
+  // ── HANDLERS DE CRONOGRAMA ──
+  const handleToggleTimelineItem = (blockId: string, itemId: string) => {
+    const updated = WarRoomService.toggleTimelineItem(data, blockId, itemId);
+    setData(updated);
+  };
+
+  const handleAddTimelineItem = (blockId: string, dia: number, descricao: string) => {
+    const updated = WarRoomService.addTimelineItem(data, blockId, dia, descricao);
+    setData(updated);
+  };
+
+  const handleDeleteTimelineItem = (blockId: string, itemId: string) => {
+    const updated = WarRoomService.deleteTimelineItem(data, blockId, itemId);
+    setData(updated);
+  };
+
+  // ── RESTAURAR LOUSA ORIGINAL (DA FOTO) ──
+  const handleResetDefault = () => {
+    if (window.confirm('Deseja restaurar a lousa para o estado original fotografado? Todas as alterações manuais serão resetadas.')) {
+      const reset = WarRoomService.resetToDefault();
+      setData(reset);
+    }
+  };
 
   return (
-    <div className={`min-h-screen flex flex-col justify-between ${isCursorHidden ? 'cursor-none' : ''}`}>
-      
-      {/* 1. CABEÇALHO INSTITUCIONAL & STATUS */}
-      <WarRoomHeader
-        counters={counters}
+    <div
+      className={`min-h-screen bg-[#050811] text-slate-100 flex flex-col font-sans transition-all duration-300 ${
+        isCursorHidden ? 'cursor-none select-none' : ''
+      }`}
+    >
+      {/* ── CABEÇALHO DA LOUSA OPERACIONAL ── */}
+      <WhiteboardHeader
         isTvMode={isTvMode}
-        onToggleTvMode={() => setIsTvMode(prev => !prev)}
-        onOpenManagement={() => setIsManagementModalOpen(true)}
-        onOpenTodayModal={() => setIsBillsModalOpen(true)}
+        onToggleTvMode={toggleTvMode}
+        onResetDefault={handleResetDefault}
+        onOpenAddModal={(tab = 'demanda') => {
+          setModalTab(tab);
+          setIsModalOpen(true);
+        }}
+        totalConcluidos={totalConcluidos}
+        totalItens={totalItens}
       />
 
-      {/* 2. CORPO PRINCIPAL DO WAR ROOM (GRID ERGONÔMICO 16:9) */}
-      <main className="flex-1 w-full max-w-[1920px] mx-auto p-3 sm:p-5 flex flex-col gap-4">
-        
-        {/* LINHA SUPERIOR: CONTAS DO DIA (4 CNPJs) + RADAR DE SEGUROS */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Card Especial Contas a Vencer no Dia (4 empresas do Omie) */}
-          <div className="lg:col-span-6 xl:col-span-7">
-            <WarRoomTodayBillsCard
-              obligations={obligations}
-              onOpenDetails={() => setIsBillsModalOpen(true)}
-              onTogglePaid={handleTogglePaid}
-            />
-          </div>
+      {/* ── CORPO PRINCIPAL DA LOUSA (3 GRANDES SEÇÕES DA FOTO) ── */}
+      <main className="flex-1 w-full max-w-[1920px] mx-auto p-3 sm:p-5 space-y-4">
+        {/* SEÇÃO 1: AS 5 COLUNAS OPERACIONAIS DA LOUSA */}
+        <WhiteboardColumns
+          colunas={data.colunas}
+          onToggleItem={handleToggleColumnItem}
+          onAddItem={handleAddColumnItem}
+          onDeleteItem={handleDeleteColumnItem}
+        />
 
-          {/* Radar de Seguros & Apólices (< 30 Dias) */}
-          <div className="lg:col-span-6 xl:col-span-5">
-            <WarRoomInsuranceRadar
-              alerts={insuranceAlerts}
-              isLoading={isLoadingInsurances}
-            />
-          </div>
-        </div>
+        {/* SEÇÃO 2: FOLLOW THE MONEY (ESTEIRA CAMBIAL & COTAÇÃO) */}
+        <WhiteboardFollowTheMoney
+          followTheMoney={data.followTheMoney}
+          onUpdateQuote={handleUpdateQuote}
+          onAddRow={handleAddCambioRow}
+          onDeleteRow={handleDeleteCambioRow}
+        />
 
-        {/* LINHA INTERMEDIÁRIA: MONITOR DE RASTREIO FINANCEIRO (FOLLOW THE MONEY) */}
-        <div className="w-full">
-          <WarRoomFollowTheMoney
-            flow={flow}
-            onEditFlow={() => setIsManagementModalOpen(true)}
-            onRefreshRate={handleRefreshRate}
-            isRefreshingRate={isRefreshingRate}
-          />
-        </div>
-
-        {/* LINHA DE TIMELINE: OBRIGAÇÕES MENSAIS LINEARES (01 A 31) */}
-        <div className="w-full">
-          <WarRoomTimeline
-            obligations={obligations}
-            onTogglePaid={handleTogglePaid}
-            onOpenDetails={() => setIsBillsModalOpen(true)}
-          />
-        </div>
-
-        {/* LINHA ESTRATÉGICA: OS 5 PILARES OPERACIONAIS */}
-        <div className="w-full">
-          <WarRoomStrategicPillars
-            pillars={pillars}
-            onToggleDemand={handleToggleDemand}
-            onOpenManagement={() => setIsManagementModalOpen(true)}
-          />
-        </div>
-
+        {/* SEÇÃO 3: CRONOGRAMA DE VENCIMENTOS (6 BLOCOS DA LOUSA) */}
+        <WhiteboardTimeline
+          cronograma={data.cronograma}
+          onToggleItem={handleToggleTimelineItem}
+          onAddItem={handleAddTimelineItem}
+          onDeleteItem={handleDeleteTimelineItem}
+        />
       </main>
 
-      {/* 3. RODAPÉ FIXO: NEWS TICKER EM ROTAÇÃO CONTÍNUA */}
-      <WarRoomNewsTicker
-        obligations={obligations}
-        insuranceAlerts={insuranceAlerts}
-        flow={flow}
-      />
+      {/* ── LETREIRO NOTICIOSO / TICKER CONTÍNUO NO RODAPÉ ── */}
+      <WhiteboardNewsTicker cotacaoUsdGs={data.followTheMoney.cotacaoUsdGs} />
 
-      {/* 4. MODAIS DE DETALHES E GESTÃO */}
-      <WarRoomBillsDetailModal
-        isOpen={isBillsModalOpen}
-        onClose={() => setIsBillsModalOpen(false)}
-        obligations={obligations}
-        onTogglePaid={handleTogglePaid}
-        onOpenAddModal={() => setIsManagementModalOpen(true)}
+      {/* ── MODAL DE GESTÃO RÁPIDA ── */}
+      <WhiteboardModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        defaultTab={modalTab}
+        colunas={data.colunas}
+        cronograma={data.cronograma}
+        onAddDemanda={handleAddColumnItem}
+        onAddCambio={handleAddCambioRow}
+        onAddCronograma={handleAddTimelineItem}
       />
-
-      <WarRoomManagementModal
-        isOpen={isManagementModalOpen}
-        onClose={() => setIsManagementModalOpen(false)}
-        onAddObligation={handleAddObligation}
-        onAddDemand={handleAddDemand}
-        flow={flow}
-        onUpdateFlow={handleUpdateFlow}
-      />
-
     </div>
   );
 }

@@ -1,84 +1,62 @@
 /**
  * Types — Lousa Digital Operacional & War Room (Modo TV)
- * @version v.02.59.22
+ * Baseado fielmente na Lousa Operacional Física da Mar Brasil
+ * @version v.02.59.23
  */
 
-export type WarRoomCompany = 'MarBR' | 'DZM' | 'G2' | 'Conectius';
-
-export type ObligationStatus = 'atrasado' | 'hoje' | 'pendente' | 'pago';
-
-export interface WarRoomObligation {
+export interface WhiteboardItem {
   id: string;
-  titulo: string;
-  diaVencimento: number; // 1 a 31
-  mesReferencia?: string; // YYYY-MM
-  dataExata?: string; // YYYY-MM-DD
-  empresa: WarRoomCompany;
-  valor: number;
-  categoria: string;
-  status: ObligationStatus;
-  recorrente: boolean;
-  observacoes?: string;
+  texto: string;
+  concluido: boolean;
+  destaque?: boolean;
+  observacao?: string;
 }
 
-export type PillarId = 'contabilidade' | 'gateways' | 'cambio' | 'remessa' | 'lancamentos';
-
-export type DemandPriority = 'critica' | 'alta' | 'normal';
-
-export interface StrategicDemandItem {
+export interface WhiteboardColumn {
   id: string;
-  pilarId: PillarId;
-  titulo: string;
-  descricao?: string;
-  concluida: boolean;
-  prioridade: DemandPriority;
-  prazo?: string; // YYYY-MM-DD
-  responsavel?: string;
+  titulo: string; // Ex: "CONTABILIDADE PY:", "PAGOPAR CONTA G2:", "DLOCAL G2:", etc.
+  subtitulo?: string;
+  alertaDestaque?: string; // Ex: "* SUSPENSAS NOVAS CONTAS"
+  corMarcador: 'vermelho' | 'azul' | 'ciano' | 'esmeralda' | 'ambar';
+  itens: WhiteboardItem[];
 }
 
-export interface StrategicPillar {
-  id: PillarId;
-  numero: number;
-  nome: string;
-  subtitulo: string;
-  icone: string;
-  itens: StrategicDemandItem[];
-}
-
-export interface FollowTheMoneyFlow {
-  origemNome: string;
-  origemValor: number;
-  processadoraNome: string;
-  processadoraTaxa: number; // Ex: 3.5 (%)
-  intermediariaNome: string;
-  intermediariaValor: number;
-  contaFinalNome: string;
-  contaFinalValor: number;
-  taxaPercentualGlobal: number; // Ex: 4.8 (%)
-  moedaReferencia: string; // 'USD/BRL'
-  cotacaoUSD: number;
-  variacaoUSD?: number;
-  ultimaAtualizacao: string;
-}
-
-export interface InsuranceExpiringAlert {
+export interface FollowTheMoneyRow {
   id: string;
-  segurado: string;
-  tipo: string;
-  seguradora: string;
-  corretor?: string;
-  apolice?: string;
-  vencimento: string;
-  diasRestantes: number;
-  premio: number;
-  faixaAlerta: 'critico' | 'atencao' | 'planejamento'; // <10d, 11-20d, 21-30d
+  data: string; // "23/09"
+  de: string; // "MARBR"
+  para: string; // "SAASTKT-DLOCAL"
+  formato: string; // "CC", "MOEDA"
+  moeda: string; // "USD", "G$"
+  valor: string; // "9,99"
+  diferenca: string; // "0,35"
+  percentual: string; // "3,5%"
+  observacao?: string;
 }
 
-export interface WarRoomSummaryCounters {
-  atrasadosCount: number;
-  atrasadosTotal: number;
-  vencendoHojeCount: number;
-  vencendoHojeTotal: number;
-  segurosAlertaCount: number;
-  demandasCriticasCount: number;
+export interface FollowTheMoneyState {
+  cotacaoUsdGs: string; // "5930"
+  linhas: FollowTheMoneyRow[];
+}
+
+export interface WhiteboardTimelineItem {
+  id: string;
+  dia: number; // 5, 10, 15, 18, 20, 23, 25, 27, 30
+  descricao: string; // "05 - PLANNIGI", "10 - COTAS YBOX"
+  concluido: boolean;
+  empresa?: string;
+}
+
+export interface WhiteboardTimelineBlock {
+  id: string;
+  intervalo: string; // "01 a 05", "06 a 10", "11 a 15", "16 a 20", "21 a 25", "26 a 30/31"
+  diaInicio: number;
+  diaFim: number;
+  itens: WhiteboardTimelineItem[];
+}
+
+export interface WhiteboardDataState {
+  colunas: WhiteboardColumn[];
+  followTheMoney: FollowTheMoneyState;
+  cronograma: WhiteboardTimelineBlock[];
 }
