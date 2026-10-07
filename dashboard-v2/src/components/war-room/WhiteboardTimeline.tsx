@@ -2,14 +2,16 @@
 
 import React, { useState } from 'react';
 import { WhiteboardTimelineBlock } from '@/types/war-room';
-import { Check, Plus, Trash2, Edit3, X, GripVertical, RotateCcw, CalendarSync } from 'lucide-react';
+import { Check, Plus, Trash2, Edit3, X, GripVertical, RotateCcw, CalendarSync, AlertTriangle, User } from 'lucide-react';
 
 interface WhiteboardTimelineProps {
   cronograma: WhiteboardTimelineBlock[];
   mesReferencia?: string;
+  filterResponsible?: string | null;
+  onlyOverdue?: boolean;
   onToggleItem: (blockId: string, itemId: string) => void;
-  onAddItem: (blockId: string, dia: number, descricao: string) => void;
-  onEditItem: (blockId: string, itemId: string, dia: number, descricao: string) => void;
+  onAddItem: (blockId: string, dia: number, descricao: string, responsavel?: string) => void;
+  onEditItem: (blockId: string, itemId: string, dia: number, descricao: string, responsavel?: string) => void;
   onDeleteItem: (blockId: string, itemId: string) => void;
   onReorderItem?: (blockId: string, startIndex: number, endIndex: number) => void;
   onMoveItemBetweenBlocks?: (sourceBlockId: string, targetBlockId: string, itemId: string, targetIndex?: number) => void;
@@ -19,6 +21,8 @@ interface WhiteboardTimelineProps {
 export function WhiteboardTimeline({
   cronograma,
   mesReferencia,
+  filterResponsible,
+  onlyOverdue,
   onToggleItem,
   onAddItem,
   onEditItem,
@@ -35,11 +39,13 @@ export function WhiteboardTimeline({
   const [activeInputBlockId, setActiveInputBlockId] = useState<string | null>(null);
   const [inputDia, setInputDia] = useState<number>(todayDay);
   const [inputDesc, setInputDesc] = useState<string>('');
+  const [inputResp, setInputResp] = useState<string>('');
 
   // Estados de edição inline
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editDia, setEditDia] = useState<number>(todayDay);
   const [editDesc, setEditDesc] = useState<string>('');
+  const [editResp, setEditResp] = useState<string>('');
 
   // Estados de Drag & Drop
   const [draggedItem, setDraggedItem] = useState<{ blockId: string; itemId: string; index: number } | null>(null);
@@ -52,17 +58,17 @@ export function WhiteboardTimeline({
       return;
     }
     const diaValido = inputDia >= 1 && inputDia <= 31 ? inputDia : block.diaInicio;
-    onAddItem(block.id, diaValido, inputDesc.trim());
+    onAddItem(block.id, diaValido, inputDesc.trim(), inputResp.trim() || undefined);
     setInputDesc('');
+    setInputResp('');
     setActiveInputBlockId(null);
   };
 
-  const handleStartEdit = (item: { id: string; dia: number; descricao: string }) => {
+  const handleStartEdit = (item: { id: string; dia: number; descricao: string; responsavel?: string }) => {
     setEditingItemId(item.id);
     setEditDia(item.dia);
-
-    const match = item.descricao.match(/^(\d{1,2})\s*[-–—:]?\s*(.*)$/);
-    setEditDesc(match && match[2] ? match[2] : item.descricao);
+    setEditDesc(item.descricao);
+    setEditResp(item.responsavel || '');
   };
 
   const handleSaveEdit = (blockId: string, itemId: string) => {
@@ -70,46 +76,55 @@ export function WhiteboardTimeline({
       setEditingItemId(null);
       return;
     }
-    onEditItem(blockId, itemId, editDia, editDesc.trim());
+    const diaValido = editDia >= 1 && editDia <= 31 ? editDia : 1;
+    onEditItem(blockId, itemId, diaValido, editDesc.trim(), editResp.trim() || undefined);
     setEditingItemId(null);
   };
 
-  // ── DRAG & DROP HANDLERS ──
+  // ── HANDLERS DE DRAG & DROP NATIVO ──
   const handleDragStart = (e: React.DragEvent, blockId: string, itemId: string, index: number) => {
     setDraggedItem({ blockId, itemId, index });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ blockId, itemId, index }));
   };
 
-  const handleDragOverItem = (e: React.DragEvent, blockId: string, index: number) => {
+  const handleDragOverBlock = (e: React.DragEvent, blockId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverBlockId !== blockId) {
+      setDragOverBlockId(blockId);
+    }
+  };
+
+  const handleDragOverItem = (e: React.DragEvent, blockId: string, itemIndex: number) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setDragOverBlockId(blockId);
-    setDragOverItemIndex({ blockId, index });
-  };
-
-  const handleDragOverBlock = (e: React.DragEvent, blockId: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverBlockId(blockId);
+    setDragOverItemIndex({ blockId, index: itemIndex });
   };
 
   const handleDrop = (e: React.DragEvent, targetBlockId: string, targetIndex?: number) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!draggedItem) return;
+    if (!draggedItem) {
+      setDragOverBlockId(null);
+      setDragOverItemIndex(null);
+      return;
+    }
 
-    if (draggedItem.blockId === targetBlockId) {
+    const { blockId: sourceBlockId, itemId, index: sourceIndex } = draggedItem;
+
+    if (sourceBlockId === targetBlockId) {
       // Reordenação dentro do mesmo bloco
-      if (onReorderItem && targetIndex !== undefined && targetIndex !== draggedItem.index) {
-        onReorderItem(targetBlockId, draggedItem.index, targetIndex);
+      if (targetIndex !== undefined && targetIndex !== sourceIndex && onReorderItem) {
+        onReorderItem(targetBlockId, sourceIndex, targetIndex);
       }
     } else {
       // Movimentação entre blocos diferentes
       if (onMoveItemBetweenBlocks) {
-        onMoveItemBetweenBlocks(draggedItem.blockId, targetBlockId, draggedItem.itemId, targetIndex);
+        onMoveItemBetweenBlocks(sourceBlockId, targetBlockId, itemId, targetIndex);
       }
     }
 
@@ -125,37 +140,57 @@ export function WhiteboardTimeline({
   };
 
   return (
-    <section className="w-full">
-      {/* ── TÍTULO DA SEÇÃO CRONOGRAMA & STATUS DE RENOVAÇÃO AUTOMÁTICA ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5 px-1">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />
-          <h2 className="text-xs sm:text-sm font-black tracking-wider text-slate-200 uppercase font-mono">
-            CRONOGRAMA DE VENCIMENTOS DO MÊS (6 BLOCOS DA LOUSA)
-          </h2>
+    <section className="w-full bg-[#070c18]/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl relative">
+      {/* DATALIST DE SUGESTÃO DE RESPONSÁVEIS */}
+      <datalist id="responsavel-suggestions">
+        <option value="MANUS" />
+        <option value="CLARA" />
+        <option value="MARCO" />
+        <option value="DAUREN" />
+        <option value="PRISCILLA" />
+        <option value="ALDO" />
+        <option value="ADRIANA" />
+        <option value="FINANCEIRO" />
+        <option value="JURÍDICO" />
+        <option value="CONTÁBIL" />
+        <option value="TI" />
+      </datalist>
+
+      {/* ── CABEÇALHO DO CRONOGRAMA ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-4 border-b border-slate-800/80">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-white font-mono flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+              CRONOGRAMA DE VENCIMENTOS DO MÊS
+            </h2>
+
+            {/* BADGE DE CICLO MENSAL */}
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-[10px] font-black uppercase tracking-wider">
+              <CalendarSync size={11} className="text-cyan-400" />
+              Ciclo: {currentMonthName}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Régua temporal contínua dividida nos 6 blocos operacionais • Responsáveis destacados • Alerta de atrasos
+          </p>
         </div>
 
-        {/* CONTROLE DE CICLO MENSAL RECORRENTE */}
+        {/* CONTROLES DO CICLO E DRAG & DROP */}
         <div className="flex items-center gap-2">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 text-[11px] font-mono font-bold shadow-sm">
-            <CalendarSync size={13} className="text-cyan-400" />
-            <span className="capitalize">{currentMonthName}</span>
-            <span className="text-cyan-500 font-normal">| Auto-renovação ativa</span>
-          </div>
-
           {onResetCycle && (
             <button
               type="button"
               onClick={() => {
-                if (window.confirm('Deseja desmarcar todos os checks do mês para iniciar um novo ciclo de pagamentos recorrentes?')) {
+                if (window.confirm('Deseja desmarcar todos os checks do mês para iniciar um novo ciclo de pagamentos recorrentes? As obrigações e responsáveis permanecerão salvos.')) {
                   onResetCycle();
                 }
               }}
               title="Desmarcar todos os checks para o novo ciclo mensal"
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-slate-400 hover:text-white text-[11px] font-semibold transition-all"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-white text-[11px] font-bold transition-all shadow-sm"
             >
-              <RotateCcw size={11} />
-              <span className="hidden md:inline">Resetar Mês</span>
+              <RotateCcw size={11} className="text-cyan-400" />
+              <span>Renovar Ciclo Mensal</span>
             </button>
           )}
         </div>
@@ -165,12 +200,24 @@ export function WhiteboardTimeline({
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {cronograma.map((block) => {
           const isCurrentBlock = todayDay >= block.diaInicio && todayDay <= block.diaFim;
-          const totalItens = block.itens.length;
-          const concluidos = block.itens.filter(i => i.concluido).length;
           const isTargetBlock = dragOverBlockId === block.id;
 
           // Se estiver arrastando, preserva a ordem visual com reorder temporário se houver
-          const sortedItens = block.itens.slice().sort((a, b) => a.dia - b.dia);
+          let sortedItens = block.itens.slice().sort((a, b) => a.dia - b.dia);
+
+          // Filtragem por responsável se houver
+          if (filterResponsible) {
+            sortedItens = sortedItens.filter(it => it.responsavel?.toUpperCase() === filterResponsible.toUpperCase());
+          }
+
+          // Filtragem por apenas atrasadas
+          if (onlyOverdue) {
+            sortedItens = sortedItens.filter(it => !it.concluido && it.dia < todayDay);
+          }
+
+          const totalItens = block.itens.length;
+          const concluidos = block.itens.filter(i => i.concluido).length;
+          const atrasadosNoBloco = block.itens.filter(i => !i.concluido && i.dia < todayDay).length;
 
           return (
             <div
@@ -180,12 +227,14 @@ export function WhiteboardTimeline({
               className={`flex flex-col rounded-xl p-3 border transition-all relative ${
                 isTargetBlock
                   ? 'bg-cyan-950/40 border-cyan-400 ring-2 ring-cyan-400 shadow-xl'
+                  : atrasadosNoBloco > 0
+                  ? 'bg-[#0f1424] border-rose-500/40 hover:border-rose-500/70'
                   : isCurrentBlock
                   ? 'bg-[#0f172a] border-cyan-500 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-500/40'
                   : 'bg-[#0b1120]/90 border-slate-800/80 hover:border-slate-700/80'
               }`}
             >
-              {/* INDICADOR SE É O BLOCO DE HOJE */}
+              {/* INDICADOR SE É O BLOCO DE HOJE OU SE TEM ATRASO */}
               {isCurrentBlock && (
                 <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-cyan-500 text-slate-950 font-black text-[9px] uppercase tracking-wider flex items-center gap-1 shadow-md">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
@@ -203,9 +252,16 @@ export function WhiteboardTimeline({
                   {block.intervalo}
                 </span>
 
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold">
-                  {concluidos}/{totalItens}
-                </span>
+                <div className="flex items-center gap-1 font-mono text-[10px]">
+                  {atrasadosNoBloco > 0 && (
+                    <span className="px-1.5 py-0.5 rounded bg-rose-600/30 border border-rose-500/50 text-rose-300 font-bold animate-pulse">
+                      {atrasadosNoBloco} atr
+                    </span>
+                  )}
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold">
+                    {concluidos}/{totalItens}
+                  </span>
+                </div>
               </div>
 
               {/* LISTA DE VENCIMENTOS DO BLOCO COM ARRASTAR E SOLTAR */}
@@ -215,6 +271,7 @@ export function WhiteboardTimeline({
                   const isDraggingThis = draggedItem?.itemId === item.id;
                   const isDragOverThis =
                     dragOverItemIndex?.blockId === block.id && dragOverItemIndex?.index === index;
+                  const isOverdue = !item.concluido && item.dia < todayDay;
 
                   if (isEditingThis) {
                     return (
@@ -224,7 +281,7 @@ export function WhiteboardTimeline({
                           e.preventDefault();
                           handleSaveEdit(block.id, item.id);
                         }}
-                        className="p-1.5 rounded-lg bg-slate-950 border border-cyan-500/70 space-y-1.5 shadow-md"
+                        className="p-2 rounded-lg bg-slate-950 border border-cyan-500/70 space-y-1.5 shadow-md"
                       >
                         <div className="flex items-center gap-1">
                           <input
@@ -241,11 +298,25 @@ export function WhiteboardTimeline({
                             autoFocus
                             value={editDesc}
                             onChange={(e) => setEditDesc(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-cyan-400 uppercase"
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-cyan-400 uppercase font-mono"
                             placeholder="Obrigação..."
                           />
                         </div>
-                        <div className="flex justify-end gap-1">
+
+                        {/* SELETOR/INPUT DE RESPONSÁVEL */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-cyan-400 font-bold">👤</span>
+                          <input
+                            type="text"
+                            list="responsavel-suggestions"
+                            value={editResp}
+                            onChange={(e) => setEditResp(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-cyan-300 focus:outline-none focus:border-cyan-400 uppercase font-mono"
+                            placeholder="Responsável (ex: MANUS, CLARA)..."
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-1 pt-1">
                           <button
                             type="button"
                             onClick={() => setEditingItemId(null)}
@@ -256,7 +327,7 @@ export function WhiteboardTimeline({
                           </button>
                           <button
                             type="submit"
-                            className="px-2 py-0.5 rounded bg-cyan-600 text-white text-[10px] font-bold"
+                            className="px-2 py-0.5 rounded bg-cyan-600 text-white text-[10px] font-bold hover:bg-cyan-500"
                             title="Salvar alterações"
                           >
                             Salvar
@@ -282,6 +353,8 @@ export function WhiteboardTimeline({
                           ? 'border-t-2 border-t-cyan-400 bg-cyan-950/30'
                           : item.concluido
                           ? 'bg-slate-900/40 border-slate-800/60 opacity-60'
+                          : isOverdue
+                          ? 'bg-rose-950/30 border-rose-500/70 ring-1 ring-rose-500/40 shadow-sm shadow-rose-950/40'
                           : isCurrentBlock
                           ? 'bg-cyan-950/20 border-cyan-900/40 hover:border-cyan-500/40'
                           : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
@@ -301,24 +374,54 @@ export function WhiteboardTimeline({
                           className={`mt-0.5 w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0 border transition-all ${
                             item.concluido
                               ? 'bg-rose-500 border-rose-500 text-white shadow-sm'
+                              : isOverdue
+                              ? 'border-rose-400 bg-slate-950'
                               : 'border-slate-600 bg-slate-950'
                           }`}
                         >
                           {item.concluido && <Check size={10} strokeWidth={3} className="text-white" />}
                         </div>
 
-                        {/* DESCRIÇÃO DA LOUSA (SEMPRE COM O DIA FORMATADO: EX: 25 - MANUS) */}
-                        <span
-                          className={`text-xs font-semibold leading-tight tracking-tight ${
-                            item.concluido
-                              ? 'line-through text-slate-500'
-                              : isCurrentBlock
-                              ? 'text-cyan-200'
-                              : 'text-slate-200'
-                          }`}
-                        >
-                          {item.descricao}
-                        </span>
+                        {/* CONTEÚDO DA TAREFA: RESPONSÁVEL EM DESTAQUE NA FRENTE + DESCRIÇÃO */}
+                        <div className="min-w-0">
+                          <div className="flex items-center flex-wrap gap-1 leading-tight">
+                            {/* BADGE DO RESPONSÁVEL DESTACADO NA FRENTE */}
+                            {item.responsavel && (
+                              <span
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-cyan-950 border border-cyan-500/60 text-cyan-300 shadow-sm flex-shrink-0"
+                                title={`Responsável: ${item.responsavel}`}
+                              >
+                                <User size={9} className="text-cyan-400" />
+                                {item.responsavel}
+                              </span>
+                            )}
+
+                            {/* SINALIZADOR PULSANTE DE ATRASO */}
+                            {isOverdue && (
+                              <span
+                                className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse shadow-sm flex-shrink-0"
+                                title={`Atrasado! Vencimento era dia ${item.dia}`}
+                              >
+                                <AlertTriangle size={8} /> ATRASADO
+                              </span>
+                            )}
+
+                            {/* DESCRIÇÃO COM O DIA FORMATADO */}
+                            <span
+                              className={`text-xs font-semibold leading-tight tracking-tight ${
+                                item.concluido
+                                  ? 'line-through text-slate-500'
+                                  : isOverdue
+                                  ? 'text-rose-200 font-bold'
+                                  : isCurrentBlock
+                                  ? 'text-cyan-200'
+                                  : 'text-slate-200'
+                              }`}
+                            >
+                              {item.descricao}
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
                       {/* AÇÕES (EDITAR E EXCLUIR) */}
@@ -329,7 +432,7 @@ export function WhiteboardTimeline({
                             e.stopPropagation();
                             handleStartEdit(item);
                           }}
-                          title="Editar dia ou obrigação"
+                          title="Editar dia, obrigação ou responsável"
                           className="p-1 text-slate-400 hover:text-cyan-300 transition-colors"
                         >
                           <Edit3 size={11} />
@@ -376,20 +479,32 @@ export function WhiteboardTimeline({
                         placeholder="Dia"
                         value={inputDia}
                         onChange={(e) => setInputDia(Number(e.target.value))}
-                        className="w-12 bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:border-cyan-400"
+                        className="w-12 bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:border-cyan-400 font-bold"
                         title="Dia do vencimento"
                       />
                       <input
                         type="text"
                         autoFocus
-                        placeholder="Ex: MANUS ou CLARA..."
+                        placeholder="Obrigação (ex: MANUS, CLARA)..."
                         value={inputDesc}
                         onChange={(e) => setInputDesc(e.target.value)}
-                        className="w-full bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-cyan-400 uppercase"
+                        className="w-full bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-cyan-400 uppercase font-mono"
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span>Data prefixada automaticamente</span>
+
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        list="responsavel-suggestions"
+                        placeholder="Responsável (ex: MANUS, CLARA)..."
+                        value={inputResp}
+                        onChange={(e) => setInputResp(e.target.value)}
+                        className="w-full bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-[11px] text-cyan-300 focus:outline-none focus:border-cyan-400 uppercase font-mono"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+                      <span>Data prefixada auto</span>
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
@@ -414,6 +529,7 @@ export function WhiteboardTimeline({
                       setActiveInputBlockId(block.id);
                       setInputDia(block.diaInicio);
                       setInputDesc('');
+                      setInputResp('');
                     }}
                     className="w-full flex items-center justify-center gap-1 py-1 rounded text-[11px] font-semibold text-slate-400 hover:text-cyan-300 hover:bg-slate-800/40 transition-all border border-dashed border-slate-800"
                   >

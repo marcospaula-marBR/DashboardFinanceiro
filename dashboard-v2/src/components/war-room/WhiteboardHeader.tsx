@@ -11,7 +11,8 @@ import {
   Plus, 
   Clock, 
   CheckCircle2, 
-  AlertTriangle 
+  AlertTriangle,
+  Users
 } from 'lucide-react';
 
 interface WhiteboardHeaderProps {
@@ -21,6 +22,9 @@ interface WhiteboardHeaderProps {
   onOpenAddModal: (tab?: 'demanda' | 'cambio' | 'cronograma') => void;
   totalConcluidos: number;
   totalItens: number;
+  isResponsibleViewActive?: boolean;
+  onToggleResponsibleView?: () => void;
+  totalAtrasados?: number;
 }
 
 export function WhiteboardHeader({
@@ -30,6 +34,9 @@ export function WhiteboardHeader({
   onOpenAddModal,
   totalConcluidos,
   totalItens,
+  isResponsibleViewActive = false,
+  onToggleResponsibleView,
+  totalAtrasados = 0,
 }: WhiteboardHeaderProps) {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -160,6 +167,29 @@ export function WhiteboardHeader({
             <Plus size={13} />
             <span>Linha Câmbio</span>
           </button>
+
+          {/* QUADRO DE RESPONSÁVEIS */}
+          {onToggleResponsibleView && (
+            <button
+              onClick={onToggleResponsibleView}
+              title="Alternar exibição do Quadro por Responsáveis"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                isResponsibleViewActive
+                  ? 'bg-cyan-600/30 text-cyan-200 border-cyan-400 ring-1 ring-cyan-400 shadow-md shadow-cyan-950/40'
+                  : totalAtrasados > 0
+                  ? 'bg-rose-950/40 text-rose-300 border-rose-500/70 hover:bg-rose-900/40 shadow-sm'
+                  : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-600 hover:text-white'
+              }`}
+            >
+              <Users size={13} className={totalAtrasados > 0 ? 'text-rose-400' : 'text-cyan-400'} />
+              <span>Responsáveis</span>
+              {totalAtrasados > 0 && (
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse">
+                  {totalAtrasados} atr 🚨
+                </span>
+              )}
+            </button>
+          )}
 
           {/* RESTAURAR ORIGINAL DA LOUSA */}
           <button

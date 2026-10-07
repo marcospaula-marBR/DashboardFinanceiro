@@ -10,6 +10,7 @@ export interface WhiteboardItem {
   concluido: boolean;
   destaque?: boolean;
   observacao?: string;
+  responsavel?: string; // Nome do responsável pela ação humana (ex: "MANUS", "CLARA", "MARCO")
 }
 
 export interface WhiteboardColumn {
@@ -45,6 +46,7 @@ export interface WhiteboardTimelineItem {
   descricao: string; // "05 - PLANNIGI", "10 - COTAS YBOX"
   concluido: boolean;
   empresa?: string;
+  responsavel?: string; // Nome do responsável pela ação humana (ex: "MANUS", "CLARA", "MARCO")
 }
 
 export interface WhiteboardTimelineBlock {

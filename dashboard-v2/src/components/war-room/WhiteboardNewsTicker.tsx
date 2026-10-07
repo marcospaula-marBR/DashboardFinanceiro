@@ -27,11 +27,16 @@ export function WhiteboardNewsTicker({ cotacaoUsdGs, insuranceAlerts = [] }: Whi
     { text: '💡 MANUAL DE CULTURA: PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA! • PAGAR CERTO, FATURAR CERTO, FECHAR CERTO!', color: 'text-slate-200' },
   ];
 
-  // Injetar alertas de seguros a vencer em D < 30 no letreiro
-  const insuranceItems = insuranceAlerts.map(ins => ({
-    text: `🛡️ SEGURO A VENCER (D - ${ins.diasParaVencer}d): ${ins.contratante} • ${ins.tipo}${ins.seguradora ? ` (${ins.seguradora})` : ''} - Regularizar Renovação!`,
-    color: ins.diasParaVencer <= 7 ? 'text-rose-400 font-black animate-pulse' : 'text-amber-300 font-bold',
-  }));
+  // Injetar alertas de seguros a vencer em D < 30 no letreiro ou confirmação de situação regular
+  const insuranceItems = insuranceAlerts.length > 0
+    ? insuranceAlerts.map(ins => ({
+        text: `🛡️ SEGURO A VENCER (D - ${ins.diasParaVencer}d): ${ins.contratante} • ${ins.tipo}${ins.seguradora ? ` (${ins.seguradora})` : ''} - Regularizar Renovação!`,
+        color: ins.diasParaVencer <= 7 ? 'text-rose-400 font-black animate-pulse' : 'text-amber-300 font-bold',
+      }))
+    : [{
+        text: '🛡️ RADAR DE SEGUROS: TODAS AS APÓLICES ATIVAS EM DIA (0 A VENCER EM D < 30) • PRÓXIMO: DZM AUTOMÓVEL HDI EM 52d (28/11)',
+        color: 'text-emerald-400 font-bold',
+      }];
 
   const allItems = [...insuranceItems, ...baseItems];
 

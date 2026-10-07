@@ -26,11 +26,11 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       subtitulo: 'Operações e regularização no Paraguai',
       corMarcador: 'vermelho',
       itens: [
-        { id: 'it-1-1', texto: 'JUSTIFICAR DEPÓSITOS CONTA PESSOAL;', concluido: false },
-        { id: 'it-1-2', texto: 'ANALISAR MELHOR OPÇÃO P/ EMPRÉSTIMOS FEITOS PY (CONTABILIDADE + ALDO)', concluido: false },
-        { id: 'it-1-3', texto: 'FLUXO DLOCAL => UENO: COMO JUSTIFICAR?*', concluido: false, destaque: true },
-        { id: 'it-1-4', texto: 'DOMÍNIOS NIC.PY', concluido: true },
-        { id: 'it-1-5', texto: 'ERP PY', concluido: false },
+        { id: 'it-1-1', texto: 'JUSTIFICAR DEPÓSITOS CONTA PESSOAL;', concluido: false, responsavel: 'MARCO' },
+        { id: 'it-1-2', texto: 'ANALISAR MELHOR OPÇÃO P/ EMPRÉSTIMOS FEITOS PY (CONTABILIDADE + ALDO)', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'it-1-3', texto: 'FLUXO DLOCAL => UENO: COMO JUSTIFICAR?*', concluido: false, destaque: true, responsavel: 'MARCO' },
+        { id: 'it-1-4', texto: 'DOMÍNIOS NIC.PY', concluido: true, responsavel: 'TI / CONTÁBIL' },
+        { id: 'it-1-5', texto: 'ERP PY', concluido: false, responsavel: 'TI / CONTÁBIL' },
       ],
     },
     {
@@ -40,9 +40,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       alertaDestaque: '* SUSPENSAS NOVAS CONTAS',
       corMarcador: 'vermelho',
       itens: [
-        { id: 'it-2-1', texto: 'MSG ENVIADA', concluido: false },
-        { id: 'it-2-2', texto: 'RECEBIDO E-MAIL', concluido: false },
-        { id: 'it-2-3', texto: "RESPONDI PEDINDO CAMINHO + JOC'S", concluido: false },
+        { id: 'it-2-1', texto: 'MSG ENVIADA', concluido: false, responsavel: 'MANUS' },
+        { id: 'it-2-2', texto: 'RECEBIDO E-MAIL', concluido: false, responsavel: 'MANUS' },
+        { id: 'it-2-3', texto: "RESPONDI PEDINDO CAMINHO + JOC'S", concluido: false, responsavel: 'MARCO' },
       ],
     },
     {
@@ -51,10 +51,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       subtitulo: 'Validação e fluxo cambial',
       corMarcador: 'vermelho',
       itens: [
-        { id: 'it-3-1', texto: 'TABELA C/ FLUXO COMPLETO ATÉ VR EM USD NO UENO (PGTO DE U$ 9.99 DA MARBR)', concluido: false },
-        { id: 'it-3-2', texto: 'TESTAR SPLIT', concluido: false },
-        { id: 'it-3-3', texto: 'VALIDAÇÃO DA CONTA BANCÁRIA', concluido: false },
-        { id: 'it-3-4', texto: 'LIBERAÇÃO VALORES', concluido: true },
+        { id: 'it-3-1', texto: 'TABELA C/ FLUXO COMPLETO ATÉ VR EM USD NO UENO (PGTO DE U$ 9.99 DA MARBR)', concluido: false, responsavel: 'MANUS' },
+        { id: 'it-3-2', texto: 'TESTAR SPLIT', concluido: false, responsavel: 'MANUS' },
+        { id: 'it-3-3', texto: 'VALIDAÇÃO DA CONTA BANCÁRIA', concluido: false, responsavel: 'MARCO' },
+        { id: 'it-3-4', texto: 'LIBERAÇÃO VALORES', concluido: true, responsavel: 'FINANCEIRO' },
       ],
     },
     {
@@ -63,10 +63,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       subtitulo: 'Correios, Jurídico e Receita Federal',
       corMarcador: 'vermelho',
       itens: [
-        { id: 'it-4-1', texto: 'CRIAR GRUPO C/ JURÍDICO', concluido: false },
-        { id: 'it-4-2', texto: 'PAGAR CORREIOS DZM', concluido: true },
-        { id: 'it-4-3', texto: 'ABRIR CONTA CORREIOS G2', concluido: true },
-        { id: 'it-4-4', texto: 'PROCESSO JUNTO À RFB', concluido: false },
+        { id: 'it-4-1', texto: 'CRIAR GRUPO C/ JURÍDICO', concluido: false, responsavel: 'JURÍDICO' },
+        { id: 'it-4-2', texto: 'PAGAR CORREIOS DZM', concluido: true, responsavel: 'FINANCEIRO' },
+        { id: 'it-4-3', texto: 'ABRIR CONTA CORREIOS G2', concluido: true, responsavel: 'MANUS' },
+        { id: 'it-4-4', texto: 'PROCESSO JUNTO À RFB', concluido: false, responsavel: 'JURÍDICO' },
       ],
     },
     {
@@ -75,7 +75,7 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       subtitulo: 'Horizonte de Planejamento 2027',
       corMarcador: 'azul',
       itens: [
-        { id: 'it-5-1', texto: 'INSERIR LANÇAMENTOS RECORRENTES NO OMIE P/ 2027', concluido: false, destaque: true },
+        { id: 'it-5-1', texto: 'INSERIR LANÇAMENTOS RECORRENTES NO OMIE P/ 2027', concluido: false, destaque: true, responsavel: 'FINANCEIRO' },
       ],
     },
   ],
@@ -141,10 +141,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 1,
       diaFim: 5,
       itens: [
-        { id: 'tl-1', dia: 5, descricao: '05 - PLANNIGI', concluido: false },
-        { id: 'tl-2', dia: 5, descricao: '05 - CONTÁBIL PY', concluido: false },
-        { id: 'tl-3', dia: 5, descricao: '05 - ALDO', concluido: false },
-        { id: 'tl-4', dia: 5, descricao: '05 - G2 8112', concluido: false },
+        { id: 'tl-1', dia: 5, descricao: '05 - PLANNIGI', concluido: false, responsavel: 'MARCO' },
+        { id: 'tl-2', dia: 5, descricao: '05 - CONTÁBIL PY', concluido: false, responsavel: 'CONTÁBIL' },
+        { id: 'tl-3', dia: 5, descricao: '05 - ALDO', concluido: false, responsavel: 'ALDO' },
+        { id: 'tl-4', dia: 5, descricao: '05 - G2 8112', concluido: false, responsavel: 'FINANCEIRO' },
       ],
     },
     {
@@ -153,10 +153,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 6,
       diaFim: 10,
       itens: [
-        { id: 'tl-5', dia: 10, descricao: '10 - COTAS YBOX', concluido: false },
-        { id: 'tl-6', dia: 10, descricao: '10 - DZM 6827', concluido: false },
-        { id: 'tl-7', dia: 10, descricao: '10 - 9693', concluido: false },
-        { id: 'tl-8', dia: 10, descricao: '10 - MBR 8583', concluido: false },
+        { id: 'tl-5', dia: 10, descricao: '10 - COTAS YBOX', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-6', dia: 10, descricao: '10 - DZM 6827', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-7', dia: 10, descricao: '10 - 9693', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-8', dia: 10, descricao: '10 - MBR 8583', concluido: false, responsavel: 'FINANCEIRO' },
       ],
     },
     {
@@ -165,7 +165,7 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 11,
       diaFim: 15,
       itens: [
-        { id: 'tl-9', dia: 15, descricao: '15 - TERCEIRIZAÇÃO', concluido: false },
+        { id: 'tl-9', dia: 15, descricao: '15 - TERCEIRIZAÇÃO', concluido: false, responsavel: 'MANUS' },
       ],
     },
     {
@@ -174,9 +174,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 16,
       diaFim: 20,
       itens: [
-        { id: 'tl-10', dia: 18, descricao: '18 - YBOX - SICREDI', concluido: false },
-        { id: 'tl-11', dia: 20, descricao: '20 - I.N.S.S', concluido: false },
-        { id: 'tl-12', dia: 20, descricao: '20 - PGTO / DAS', concluido: false },
+        { id: 'tl-10', dia: 18, descricao: '18 - YBOX - SICREDI', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-11', dia: 20, descricao: '20 - I.N.S.S', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-12', dia: 20, descricao: '20 - PGTO / DAS', concluido: false, responsavel: 'FINANCEIRO' },
       ],
     },
     {
@@ -185,11 +185,11 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 21,
       diaFim: 25,
       itens: [
-        { id: 'tl-13', dia: 23, descricao: '23 - MBR 0137', concluido: false },
-        { id: 'tl-14', dia: 25, descricao: '25 - NUBANK DZM', concluido: false },
-        { id: 'tl-15', dia: 25, descricao: '25 - PIS / COFINS', concluido: false },
-        { id: 'tl-16', dia: 25, descricao: '25 - MANUS / CLARA - DZM', concluido: false },
-        { id: 'tl-17', dia: 27, descricao: '27 - BANCO DO BRASIL', concluido: false },
+        { id: 'tl-13', dia: 23, descricao: '23 - MBR 0137', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-14', dia: 25, descricao: '25 - NUBANK DZM', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-15', dia: 25, descricao: '25 - PIS / COFINS', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-16', dia: 25, descricao: '25 - MANUS / CLARA - DZM', concluido: false, responsavel: 'MANUS' },
+        { id: 'tl-17', dia: 27, descricao: '27 - BANCO DO BRASIL', concluido: false, responsavel: 'FINANCEIRO' },
       ],
     },
     {
@@ -198,9 +198,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 26,
       diaFim: 31,
       itens: [
-        { id: 'tl-18', dia: 30, descricao: '30 - TRI JAN/ABR/JUL/OUT', concluido: false },
-        { id: 'tl-19', dia: 30, descricao: '30 - DAS PARCELADA MBR', concluido: false },
-        { id: 'tl-20', dia: 30, descricao: '30 - CLARA - MBR', concluido: false },
+        { id: 'tl-18', dia: 30, descricao: '30 - TRI JAN/ABR/JUL/OUT', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-19', dia: 30, descricao: '30 - DAS PARCELADA MBR', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-20', dia: 30, descricao: '30 - CLARA - MBR', concluido: false, responsavel: 'CLARA' },
       ],
     },
   ],
@@ -258,6 +258,35 @@ export class WarRoomService {
   }
 
   /**
+   * Infere o responsável padrão para itens que ainda não tenham um definido
+   */
+  static inferDefaultResponsible(text: string): string | undefined {
+    const upper = (text || '').toUpperCase();
+    if (upper.includes('MANUS')) return 'MANUS';
+    if (upper.includes('CLARA')) return 'CLARA';
+    if (upper.includes('ALDO')) return 'ALDO';
+    if (upper.includes('MARCO')) return 'MARCO';
+    if (upper.includes('TERCEIRIZAÇÃO') || upper.includes('CORREIOS G2')) return 'MANUS';
+    if (
+      upper.includes('CORREIOS DZM') ||
+      upper.includes('INSS') ||
+      upper.includes('DAS') ||
+      upper.includes('PIS') ||
+      upper.includes('COFINS') ||
+      upper.includes('SICREDI') ||
+      upper.includes('NUBANK') ||
+      upper.includes('BANCO') ||
+      upper.includes('COTAS YBOX') ||
+      upper.includes('LIBERAÇÃO VALORES')
+    ) {
+      return 'FINANCEIRO';
+    }
+    if (upper.includes('JURÍDICO') || upper.includes('RFB')) return 'JURÍDICO';
+    if (upper.includes('CONTÁBIL') || upper.includes('ERP')) return 'CONTÁBIL';
+    return undefined;
+  }
+
+  /**
    * Obtém os dados da lousa com suporte a LocalStorage, sanitização e renovação automática mensal
    */
   static getWhiteboardData(): WhiteboardDataState {
@@ -291,8 +320,25 @@ export class WarRoomService {
           parsed.mesReferencia = currentMonthKey;
         }
 
+        // Hidratação/inferência de responsáveis se faltarem
+        if (parsed.colunas) {
+          parsed.colunas = parsed.colunas.map(col => ({
+            ...col,
+            itens: col.itens.map(it => ({
+              ...it,
+              responsavel: it.responsavel || this.inferDefaultResponsible(it.texto),
+            })),
+          }));
+        }
+
         if (parsed.cronograma) {
-          parsed.cronograma = this.sanitizeCronograma(parsed.cronograma);
+          parsed.cronograma = this.sanitizeCronograma(parsed.cronograma).map(blk => ({
+            ...blk,
+            itens: blk.itens.map(it => ({
+              ...it,
+              responsavel: it.responsavel || this.inferDefaultResponsible(it.descricao),
+            })),
+          }));
           // Persiste a versão sanitizada se houve correção ou virada de mês
           this.saveWhiteboardData(parsed);
         }
@@ -365,12 +411,18 @@ export class WarRoomService {
   static addColumnItem(
     currentState: WhiteboardDataState,
     columnId: string,
-    texto: string
+    texto: string,
+    responsavel?: string
   ): WhiteboardDataState {
+    const finalResp = responsavel?.trim()
+      ? responsavel.trim().toUpperCase()
+      : this.inferDefaultResponsible(texto);
+
     const newItem = {
       id: `it-${Date.now()}`,
       texto: texto.toUpperCase(),
       concluido: false,
+      responsavel: finalResp,
     };
 
     const updatedColunas = currentState.colunas.map(col => {
@@ -491,13 +543,14 @@ export class WarRoomService {
   }
 
   /**
-   * Atualiza texto de item de uma coluna
+   * Atualiza texto e responsável de item de uma coluna
    */
   static updateColumnItem(
     currentState: WhiteboardDataState,
     columnId: string,
     itemId: string,
-    novoTexto: string
+    novoTexto: string,
+    novoResponsavel?: string
   ): WhiteboardDataState {
     const updatedColunas = currentState.colunas.map(col => {
       if (col.id !== columnId) return col;
@@ -505,9 +558,15 @@ export class WarRoomService {
         ...col,
         itens: col.itens.map(item => {
           if (item.id !== itemId) return item;
+          const finalResp =
+            novoResponsavel !== undefined
+              ? (novoResponsavel ? novoResponsavel.trim().toUpperCase() : undefined)
+              : (item.responsavel || this.inferDefaultResponsible(novoTexto));
+
           return {
             ...item,
             texto: novoTexto.trim().toUpperCase(),
+            responsavel: finalResp,
           };
         }),
       };
@@ -539,21 +598,26 @@ export class WarRoomService {
   }
 
   /**
-   * Adiciona item a um bloco do cronograma com formatação automática de dia e ordenação crescente
+   * Adiciona item a um bloco do cronograma com formatação automática de dia, responsável e ordenação crescente
    */
   static addTimelineItem(
     currentState: WhiteboardDataState,
     blockId: string,
     dia: number,
-    descricao: string
+    descricao: string,
+    responsavel?: string
   ): WhiteboardDataState {
     const formatted = this.formatTimelineDescription(dia, descricao);
+    const finalResp = responsavel?.trim()
+      ? responsavel.trim().toUpperCase()
+      : this.inferDefaultResponsible(descricao);
 
     const newItem: WhiteboardTimelineItem = {
       id: `tl-${Date.now()}`,
       dia: formatted.dia,
       descricao: formatted.descricao,
       concluido: false,
+      responsavel: finalResp,
     };
 
     const updatedCronograma = currentState.cronograma.map(block => {
@@ -572,14 +636,15 @@ export class WarRoomService {
   }
 
   /**
-   * Edita item de um bloco do cronograma com formatação automática de dia e re-ordenação crescente
+   * Edita item de um bloco do cronograma com formatação automática de dia, responsável e re-ordenação crescente
    */
   static updateTimelineItem(
     currentState: WhiteboardDataState,
     blockId: string,
     itemId: string,
     dia: number,
-    descricao: string
+    descricao: string,
+    novoResponsavel?: string
   ): WhiteboardDataState {
     const formatted = this.formatTimelineDescription(dia, descricao);
 
@@ -587,10 +652,16 @@ export class WarRoomService {
       if (block.id !== blockId) return block;
       const itens = block.itens.map(item => {
         if (item.id !== itemId) return item;
+        const finalResp =
+          novoResponsavel !== undefined
+            ? (novoResponsavel ? novoResponsavel.trim().toUpperCase() : undefined)
+            : (item.responsavel || this.inferDefaultResponsible(descricao));
+
         return {
           ...item,
           dia: formatted.dia,
           descricao: formatted.descricao,
+          responsavel: finalResp,
         };
       });
       itens.sort((a, b) => a.dia - b.dia);

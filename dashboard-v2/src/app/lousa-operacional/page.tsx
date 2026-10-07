@@ -13,6 +13,8 @@ import { WhiteboardTimeline } from '@/components/war-room/WhiteboardTimeline';
 import { WhiteboardNewsTicker } from '@/components/war-room/WhiteboardNewsTicker';
 import { WhiteboardModal } from '@/components/war-room/WhiteboardModal';
 import { WhiteboardInsuranceAlertBanner } from '@/components/war-room/WhiteboardInsuranceAlertBanner';
+import { WhiteboardResponsibleBoard } from '@/components/war-room/WhiteboardResponsibleBoard';
+import { Users, Filter, AlertTriangle, User, CheckCircle2 } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -22,13 +24,18 @@ export default function LousaOperacionalPage() {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalTab, setModalTab] = useState<'demanda' | 'cambio' | 'cronograma'>('demanda');
 
-  // Carregar dados salvos no localStorage (com detecção automática de virada de mês)
+  // Estados de visão e filtro por responsáveis
+  const [isResponsibleBoardVisible, setIsResponsibleBoardVisible] = useState<boolean>(false);
+  const [selectedResponsible, setSelectedResponsible] = useState<string | null>(null);
+  const [onlyOverdueFilter, setOnlyOverdueFilter] = useState<boolean>(false);
+
+  // Carregar dados salvos no localStorage (com detecção automática de virada de mês e hidratação)
   useEffect(() => {
     const loaded = WarRoomService.getWhiteboardData();
     setData(loaded);
   }, []);
 
-  // Carregar apólices de seguro do banco para o Radar de Seguros (D < 30)
+  // Carregar apólices de seguro do banco para o Radar de Seguros
   useEffect(() => {
     fetchInsurancePolicies()
       .then(policies => {
@@ -39,7 +46,7 @@ export default function LousaOperacionalPage() {
       });
   }, []);
 
-  // Alertas de seguros formatados para o letreiro contínuo (D <= 30)
+  // Alertas de seguros formatados para o letreiro contínuo
   const insuranceAlerts = useMemo(() => {
     return insurancePolicies
       .filter(p => p.diasParaVencer !== undefined && p.diasParaVencer <= 30 && p.diasParaVencer >= -5)
@@ -51,6 +58,31 @@ export default function LousaOperacionalPage() {
         diasParaVencer: p.diasParaVencer ?? 0,
       }));
   }, [insurancePolicies]);
+
+  // ── APURAÇÃO DE DIAS E ATIVIDADES ATRASADAS ──
+  const todayDay = new Date().getDate();
+
+  const totalAtrasados = useMemo(() => {
+    let count = 0;
+    data.cronograma.forEach(blk => {
+      blk.itens.forEach(it => {
+        if (!it.concluido && it.dia < todayDay) count++;
+      });
+    });
+    return count;
+  }, [data, todayDay]);
+
+  // Lista de responsáveis únicos presentes na lousa
+  const distinctResponsibles = useMemo(() => {
+    const set = new Set<string>();
+    data.cronograma.forEach(blk => blk.itens.forEach(it => {
+      if (it.responsavel?.trim()) set.add(it.responsavel.trim().toUpperCase());
+    }));
+    data.colunas.forEach(col => col.itens.forEach(it => {
+      if (it.responsavel?.trim()) set.add(it.responsavel.trim().toUpperCase());
+    }));
+    return Array.from(set).sort();
+  }, [data]);
 
   // ── CONTADOR DE ITENS CONCLUÍDOS ──
   const { totalConcluidos, totalItens } = useMemo(() => {
@@ -132,13 +164,13 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
-  const handleAddColumnItem = (colId: string, text: string) => {
-    const updated = WarRoomService.addColumnItem(data, colId, text);
+  const handleAddColumnItem = (colId: string, text: string, responsavel?: string) => {
+    const updated = WarRoomService.addColumnItem(data, colId, text, responsavel);
     setData(updated);
   };
 
-  const handleEditColumnItem = (colId: string, itemId: string, texto: string) => {
-    const updated = WarRoomService.updateColumnItem(data, colId, itemId, texto);
+  const handleEditColumnItem = (colId: string, itemId: string, texto: string, responsavel?: string) => {
+    const updated = WarRoomService.updateColumnItem(data, colId, itemId, texto, responsavel);
     setData(updated);
   };
 
@@ -184,13 +216,13 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
-  const handleAddTimelineItem = (blockId: string, dia: number, descricao: string) => {
-    const updated = WarRoomService.addTimelineItem(data, blockId, dia, descricao);
+  const handleAddTimelineItem = (blockId: string, dia: number, descricao: string, responsavel?: string) => {
+    const updated = WarRoomService.addTimelineItem(data, blockId, dia, descricao, responsavel);
     setData(updated);
   };
 
-  const handleEditTimelineItem = (blockId: string, itemId: string, dia: number, descricao: string) => {
-    const updated = WarRoomService.updateTimelineItem(data, blockId, itemId, dia, descricao);
+  const handleEditTimelineItem = (blockId: string, itemId: string, dia: number, descricao: string, responsavel?: string) => {
+    const updated = WarRoomService.updateTimelineItem(data, blockId, itemId, dia, descricao, responsavel);
     setData(updated);
   };
 
@@ -219,6 +251,8 @@ export default function LousaOperacionalPage() {
     if (window.confirm('Deseja restaurar a lousa para o estado original fotografado? Todas as alterações manuais serão resetadas.')) {
       const reset = WarRoomService.resetToDefault();
       setData(reset);
+      setSelectedResponsible(null);
+      setOnlyOverdueFilter(false);
     }
   };
 
@@ -239,16 +273,115 @@ export default function LousaOperacionalPage() {
         }}
         totalConcluidos={totalConcluidos}
         totalItens={totalItens}
+        isResponsibleViewActive={isResponsibleBoardVisible}
+        onToggleResponsibleView={() => setIsResponsibleBoardVisible(prev => !prev)}
+        totalAtrasados={totalAtrasados}
       />
 
       {/* ── CORPO PRINCIPAL DA LOUSA ── */}
       <main className="flex-1 w-full max-w-[1920px] mx-auto p-3 sm:p-5 space-y-4">
-        {/* RADAR DE SEGUROS A VENCER (D < 30 DIAS) */}
+        {/* RADAR DE SEGUROS CORPORATIVOS (SEMPRE EM DESTAQUE COM HORIZONTE PREVENTIVO) */}
         <WhiteboardInsuranceAlertBanner policies={insurancePolicies} />
 
-        {/* SEÇÃO 1: AS 5 COLUNAS OPERACIONAIS DA LOUSA COM DRAG & DROP */}
+        {/* ── BARRA EXECUTIVA DE FILTROS POR RESPONSÁVEL & ATRASOS ── */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm">
+          <div className="flex items-center flex-wrap gap-1.5">
+            <span className="text-[11px] font-black uppercase text-slate-400 font-mono flex items-center gap-1.5 mr-1">
+              <Filter size={12} className="text-cyan-400" />
+              Filtrar por Responsável:
+            </span>
+
+            {/* BOTÃO TODOS */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedResponsible(null);
+                setOnlyOverdueFilter(false);
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                selectedResponsible === null && !onlyOverdueFilter
+                  ? 'bg-cyan-600 text-white shadow-sm'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              Todos ({totalItens})
+            </button>
+
+            {/* PÍLULA SÓ ATRASADAS COM PULSAR */}
+            {totalAtrasados > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOnlyOverdueFilter(prev => !prev);
+                  setSelectedResponsible(null);
+                }}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                  onlyOverdueFilter
+                    ? 'bg-rose-600 text-white ring-2 ring-rose-400 shadow-md animate-pulse'
+                    : 'bg-rose-950/40 text-rose-300 border border-rose-500/50 hover:bg-rose-900/40'
+                }`}
+              >
+                <AlertTriangle size={12} className="animate-pulse" />
+                <span>🚨 Só Atrasadas ({totalAtrasados})</span>
+              </button>
+            )}
+
+            {/* PÍLULAS DE CADA RESPONSÁVEL */}
+            {distinctResponsibles.map(resp => {
+              const isSelected = selectedResponsible?.toUpperCase() === resp.toUpperCase();
+              return (
+                <button
+                  key={resp}
+                  type="button"
+                  onClick={() => {
+                    setOnlyOverdueFilter(false);
+                    setSelectedResponsible(isSelected ? null : resp);
+                  }}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition-all ${
+                    isSelected
+                      ? 'bg-cyan-600 text-white shadow-sm ring-1 ring-cyan-400'
+                      : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <User size={11} className={isSelected ? 'text-white' : 'text-cyan-400'} />
+                  <span>{resp}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* BOTÃO PARA ALTERNAR EXIBIÇÃO DO QUADRO DE RESPONSÁVEIS */}
+          <button
+            type="button"
+            onClick={() => setIsResponsibleBoardVisible(prev => !prev)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
+              isResponsibleBoardVisible
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-cyan-500/40 hover:text-white'
+            }`}
+          >
+            <Users size={13} className="text-cyan-400" />
+            <span>{isResponsibleBoardVisible ? 'Ocultar Quadro de Responsáveis' : 'Ver Quadro por Responsáveis'}</span>
+          </button>
+        </div>
+
+        {/* ── QUADRO OPERACIONAL POR RESPONSÁVEIS (EXPANSÍVEL / DEDICADO) ── */}
+        {isResponsibleBoardVisible && (
+          <WhiteboardResponsibleBoard
+            colunas={data.colunas}
+            cronograma={data.cronograma}
+            onToggleColumnItem={handleToggleColumnItem}
+            onToggleTimelineItem={handleToggleTimelineItem}
+            onSelectResponsible={(resp) => setSelectedResponsible(resp)}
+            selectedResponsible={selectedResponsible}
+            onClose={() => setIsResponsibleBoardVisible(false)}
+          />
+        )}
+
+        {/* SEÇÃO 1: AS 5 COLUNAS OPERACIONAIS DA LOUSA COM DRAG & DROP E RESPONSÁVEIS */}
         <WhiteboardColumns
           colunas={data.colunas}
+          filterResponsible={selectedResponsible}
           onToggleItem={handleToggleColumnItem}
           onAddItem={handleAddColumnItem}
           onEditItem={handleEditColumnItem}
@@ -266,10 +399,12 @@ export default function LousaOperacionalPage() {
           onDeleteRow={handleDeleteCambioRow}
         />
 
-        {/* SEÇÃO 3: CRONOGRAMA DE VENCIMENTOS COM DRAG & DROP E CICLO MENSAL */}
+        {/* SEÇÃO 3: CRONOGRAMA DE VENCIMENTOS COM DRAG & DROP, RESPONSÁVEIS E ALERTA DE ATRASOS */}
         <WhiteboardTimeline
           cronograma={data.cronograma}
           mesReferencia={data.mesReferencia}
+          filterResponsible={selectedResponsible}
+          onlyOverdue={onlyOverdueFilter}
           onToggleItem={handleToggleTimelineItem}
           onAddItem={handleAddTimelineItem}
           onEditItem={handleEditTimelineItem}
@@ -300,3 +435,4 @@ export default function LousaOperacionalPage() {
     </div>
   );
 }
+

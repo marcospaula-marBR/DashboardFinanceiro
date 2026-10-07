@@ -10,9 +10,9 @@ interface WhiteboardModalProps {
   defaultTab?: 'demanda' | 'cambio' | 'cronograma';
   colunas: WhiteboardColumn[];
   cronograma: WhiteboardTimelineBlock[];
-  onAddDemanda: (columnId: string, texto: string) => void;
+  onAddDemanda: (columnId: string, texto: string, responsavel?: string) => void;
   onAddCambio: (row: Omit<FollowTheMoneyRow, 'id'>) => void;
-  onAddCronograma: (blockId: string, dia: number, descricao: string) => void;
+  onAddCronograma: (blockId: string, dia: number, descricao: string, responsavel?: string) => void;
 }
 
 export function WhiteboardModal({
@@ -30,6 +30,7 @@ export function WhiteboardModal({
   // Estados Demanda
   const [selectedColId, setSelectedColId] = useState(colunas[0]?.id || 'col-1');
   const [demandaTexto, setDemandaTexto] = useState('');
+  const [demandaResp, setDemandaResp] = useState('');
 
   // Estados Câmbio
   const [cambioData, setCambioData] = useState({
@@ -47,14 +48,16 @@ export function WhiteboardModal({
   const [selectedBlockId, setSelectedBlockId] = useState(cronograma[0]?.id || 'blk-1');
   const [cronogramaDia, setCronogramaDia] = useState(5);
   const [cronogramaDesc, setCronogramaDesc] = useState('');
+  const [cronogramaResp, setCronogramaResp] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmitDemanda = (e: React.FormEvent) => {
     e.preventDefault();
     if (!demandaTexto.trim()) return;
-    onAddDemanda(selectedColId, demandaTexto.trim());
+    onAddDemanda(selectedColId, demandaTexto.trim(), demandaResp.trim() || undefined);
     setDemandaTexto('');
+    setDemandaResp('');
     onClose();
   };
 
@@ -87,8 +90,9 @@ export function WhiteboardModal({
   const handleSubmitCronograma = (e: React.FormEvent) => {
     e.preventDefault();
     if (!cronogramaDesc.trim()) return;
-    onAddCronograma(selectedBlockId, cronogramaDia, cronogramaDesc.trim());
+    onAddCronograma(selectedBlockId, cronogramaDia, cronogramaDesc.trim(), cronogramaResp.trim() || undefined);
     setCronogramaDesc('');
+    setCronogramaResp('');
     onClose();
   };
 
@@ -180,6 +184,20 @@ export function WhiteboardModal({
                   value={demandaTexto}
                   onChange={(e) => setDemandaTexto(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5 flex items-center justify-between">
+                  <span>Responsável (Opcional):</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Executor da ação humana</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: MANUS, CLARA, MARCO, FINANCEIRO..."
+                  value={demandaResp}
+                  onChange={(e) => setDemandaResp(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono uppercase"
                 />
               </div>
 
@@ -371,6 +389,20 @@ export function WhiteboardModal({
                   value={cronogramaDesc}
                   onChange={(e) => setCronogramaDesc(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5 flex items-center justify-between">
+                  <span>Responsável (Opcional):</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Executor da ação humana</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: MANUS, CLARA, MARCO, ALDO..."
+                  value={cronogramaResp}
+                  onChange={(e) => setCronogramaResp(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono uppercase"
                 />
               </div>
 
