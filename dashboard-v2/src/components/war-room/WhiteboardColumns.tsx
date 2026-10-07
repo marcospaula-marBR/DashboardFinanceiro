@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import { WhiteboardColumn } from '@/types/war-room';
-import { Check, Plus, Trash2, AlertOctagon, HelpCircle } from 'lucide-react';
+import { Check, Plus, Trash2, Edit3, X, AlertOctagon } from 'lucide-react';
 
 interface WhiteboardColumnsProps {
   colunas: WhiteboardColumn[];
   onToggleItem: (columnId: string, itemId: string) => void;
   onAddItem: (columnId: string, text: string) => void;
+  onEditItem: (columnId: string, itemId: string, novoTexto: string) => void;
   onDeleteItem: (columnId: string, itemId: string) => void;
 }
 
@@ -15,10 +16,15 @@ export function WhiteboardColumns({
   colunas,
   onToggleItem,
   onAddItem,
+  onEditItem,
   onDeleteItem,
 }: WhiteboardColumnsProps) {
   const [activeInputColId, setActiveInputColId] = useState<string | null>(null);
   const [inputText, setInputText] = useState<string>('');
+
+  // Estados de edição inline
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editTexto, setEditTexto] = useState<string>('');
 
   const handleCreate = (colId: string) => {
     if (!inputText.trim()) {
@@ -28,6 +34,20 @@ export function WhiteboardColumns({
     onAddItem(colId, inputText.trim());
     setInputText('');
     setActiveInputColId(null);
+  };
+
+  const handleStartEdit = (item: { id: string; texto: string }) => {
+    setEditingItemId(item.id);
+    setEditTexto(item.texto);
+  };
+
+  const handleSaveEdit = (colId: string, itemId: string) => {
+    if (!editTexto.trim()) {
+      setEditingItemId(null);
+      return;
+    }
+    onEditItem(colId, itemId, editTexto.trim());
+    setEditingItemId(null);
   };
 
   return (
@@ -41,18 +61,16 @@ export function WhiteboardColumns({
           </h2>
         </div>
         <span className="text-[11px] text-slate-400 font-medium">
-          Clique no item para alternar o checkmark (✓)
+          Clique no item para alternar o check (✓) • Clique no lápis para editar
         </span>
       </div>
 
       {/* ── GRID DAS 5 COLUNAS DA LOUSA ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {colunas.map((col, index) => {
+        {colunas.map((col) => {
           const totalItens = col.itens.length;
           const concluidos = col.itens.filter(i => i.concluido).length;
-          const isFinished = totalItens > 0 && concluidos === totalItens;
 
-          // Borda divisória superior em estilo marcador de lousa
           const headerBorderColor =
             col.id === 'col-5'
               ? 'border-blue-500 text-blue-400'
@@ -97,6 +115,47 @@ export function WhiteboardColumns({
               {/* LISTA DE ITENS */}
               <div className="flex-1 space-y-1.5 min-h-[140px]">
                 {col.itens.map(item => {
+                  const isEditingThis = editingItemId === item.id;
+
+                  if (isEditingThis) {
+                    return (
+                      <form
+                        key={item.id}
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleSaveEdit(col.id, item.id);
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-950 border border-cyan-500/70 space-y-1.5 shadow-md"
+                      >
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editTexto}
+                          onChange={(e) => setEditTexto(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-400 uppercase font-mono"
+                          placeholder="Texto da demanda..."
+                        />
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingItemId(null)}
+                            className="p-1 rounded text-slate-400 hover:text-white"
+                            title="Cancelar edição"
+                          >
+                            <X size={12} />
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-2 py-0.5 rounded bg-cyan-600 text-white text-[10px] font-bold"
+                            title="Salvar alterações"
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </form>
+                    );
+                  }
+
                   return (
                     <div
                       key={item.id}
@@ -135,18 +194,32 @@ export function WhiteboardColumns({
                         </span>
                       </div>
 
-                      {/* BOTÃO EXCLUIR ITEM */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteItem(col.id, item.id);
-                        }}
-                        title="Excluir item"
-                        className="opacity-0 group-hover/item:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-opacity"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      {/* AÇÕES (EDITAR E EXCLUIR) */}
+                      <div className="flex items-center opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEdit(item);
+                          }}
+                          title="Editar demanda"
+                          className="p-1 text-slate-400 hover:text-cyan-300 transition-colors"
+                        >
+                          <Edit3 size={11} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteItem(col.id, item.id);
+                          }}
+                          title="Excluir item"
+                          className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -174,9 +247,15 @@ export function WhiteboardColumns({
                       placeholder="Novo item..."
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
-                      onBlur={() => handleCreate(col.id)}
-                      className="w-full bg-slate-950 border border-cyan-500/50 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-cyan-500/50 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none uppercase font-mono"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setActiveInputColId(null)}
+                      className="p-1 text-slate-400 hover:text-white"
+                    >
+                      <X size={12} />
+                    </button>
                     <button
                       type="submit"
                       className="px-2 py-1 rounded bg-cyan-600 text-white text-[10px] font-bold"

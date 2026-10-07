@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import { WhiteboardTimelineBlock } from '@/types/war-room';
-import { Calendar, Check, Plus, Trash2, Clock, CheckCircle2 } from 'lucide-react';
+import { Check, Plus, Trash2, Edit3, X } from 'lucide-react';
 
 interface WhiteboardTimelineProps {
   cronograma: WhiteboardTimelineBlock[];
   onToggleItem: (blockId: string, itemId: string) => void;
   onAddItem: (blockId: string, dia: number, descricao: string) => void;
+  onEditItem: (blockId: string, itemId: string, dia: number, descricao: string) => void;
   onDeleteItem: (blockId: string, itemId: string) => void;
 }
 
@@ -15,23 +16,49 @@ export function WhiteboardTimeline({
   cronograma,
   onToggleItem,
   onAddItem,
+  onEditItem,
   onDeleteItem,
 }: WhiteboardTimelineProps) {
   // Dia atual do mês (ex: 7)
   const todayDay = new Date().getDate();
 
+  // Estados de criação
   const [activeInputBlockId, setActiveInputBlockId] = useState<string | null>(null);
   const [inputDia, setInputDia] = useState<number>(todayDay);
   const [inputDesc, setInputDesc] = useState<string>('');
 
-  const handleCreate = (blockId: string) => {
+  // Estados de edição inline
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editDia, setEditDia] = useState<number>(todayDay);
+  const [editDesc, setEditDesc] = useState<string>('');
+
+  const handleCreate = (block: WhiteboardTimelineBlock) => {
     if (!inputDesc.trim()) {
       setActiveInputBlockId(null);
       return;
     }
-    onAddItem(blockId, inputDia, inputDesc.trim());
+    const diaValido = inputDia >= 1 && inputDia <= 31 ? inputDia : block.diaInicio;
+    onAddItem(block.id, diaValido, inputDesc.trim());
     setInputDesc('');
     setActiveInputBlockId(null);
+  };
+
+  const handleStartEdit = (item: { id: string; dia: number; descricao: string }) => {
+    setEditingItemId(item.id);
+    setEditDia(item.dia);
+
+    // Extrai o texto limpo sem o prefixo numérico para facilitar edição
+    const match = item.descricao.match(/^(\d{1,2})\s*[-–—:]?\s*(.*)$/);
+    setEditDesc(match && match[2] ? match[2] : item.descricao);
+  };
+
+  const handleSaveEdit = (blockId: string, itemId: string) => {
+    if (!editDesc.trim()) {
+      setEditingItemId(null);
+      return;
+    }
+    onEditItem(blockId, itemId, editDia, editDesc.trim());
+    setEditingItemId(null);
   };
 
   return (
@@ -45,7 +72,7 @@ export function WhiteboardTimeline({
           </h2>
         </div>
         <span className="text-[11px] text-slate-400 font-medium">
-          Destaque automático para o bloco do dia atual (Dia {todayDay})
+          Ordenação cronológica automática por dia • Clique no lápis para editar
         </span>
       </div>
 
@@ -55,6 +82,9 @@ export function WhiteboardTimeline({
           const isCurrentBlock = todayDay >= block.diaInicio && todayDay <= block.diaFim;
           const totalItens = block.itens.length;
           const concluidos = block.itens.filter(i => i.concluido).length;
+
+          // Garantir ordenação estrita crescente por dia
+          const sortedItens = block.itens.slice().sort((a, b) => a.dia - b.dia);
 
           return (
             <div
@@ -90,7 +120,59 @@ export function WhiteboardTimeline({
 
               {/* LISTA DE VENCIMENTOS DO BLOCO */}
               <div className="flex-1 space-y-1.5 min-h-[120px]">
-                {block.itens.map(item => {
+                {sortedItens.map(item => {
+                  const isEditingThis = editingItemId === item.id;
+
+                  if (isEditingThis) {
+                    return (
+                      <form
+                        key={item.id}
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleSaveEdit(block.id, item.id);
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-950 border border-cyan-500/70 space-y-1.5 shadow-md"
+                      >
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={1}
+                            max={31}
+                            value={editDia}
+                            onChange={(e) => setEditDia(Number(e.target.value))}
+                            className="w-12 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-xs text-cyan-300 font-bold text-center focus:outline-none focus:border-cyan-400"
+                            title="Dia do vencimento"
+                          />
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editDesc}
+                            onChange={(e) => setEditDesc(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-cyan-400 uppercase"
+                            placeholder="Obrigação..."
+                          />
+                        </div>
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingItemId(null)}
+                            className="p-1 rounded text-slate-400 hover:text-white"
+                            title="Cancelar edição"
+                          >
+                            <X size={12} />
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-2 py-0.5 rounded bg-cyan-600 text-white text-[10px] font-bold"
+                            title="Salvar alterações"
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </form>
+                    );
+                  }
+
                   return (
                     <div
                       key={item.id}
@@ -115,7 +197,7 @@ export function WhiteboardTimeline({
                           {item.concluido && <Check size={10} strokeWidth={3} className="text-white" />}
                         </div>
 
-                        {/* DESCRIÇÃO DA LOUSA (EX: 05 - CONTÁBIL PY) */}
+                        {/* DESCRIÇÃO DA LOUSA (SEMPRE COM O DIA FORMATADO: EX: 25 - MANUS) */}
                         <span
                           className={`text-xs font-semibold leading-tight tracking-tight ${
                             item.concluido
@@ -129,23 +211,39 @@ export function WhiteboardTimeline({
                         </span>
                       </div>
 
-                      {/* EXCLUIR */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteItem(block.id, item.id);
-                        }}
-                        title="Excluir item"
-                        className="opacity-0 group-hover/item:opacity-100 p-0.5 text-slate-500 hover:text-rose-400 transition-opacity"
-                      >
-                        <Trash2 size={11} />
-                      </button>
+                      {/* AÇÕES (EDITAR E EXCLUIR) */}
+                      <div className="flex items-center opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0">
+                        {/* EDITAR */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEdit(item);
+                          }}
+                          title="Editar dia ou obrigação"
+                          className="p-1 text-slate-400 hover:text-cyan-300 transition-colors"
+                        >
+                          <Edit3 size={11} />
+                        </button>
+
+                        {/* EXCLUIR */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteItem(block.id, item.id);
+                          }}
+                          title="Excluir item"
+                          className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
 
-                {block.itens.length === 0 && (
+                {sortedItens.length === 0 && (
                   <div className="text-center py-5 text-slate-500 text-[11px]">
                     Sem vencimentos
                   </div>
@@ -158,43 +256,47 @@ export function WhiteboardTimeline({
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
-                      handleCreate(block.id);
+                      handleCreate(block);
                     }}
                     className="space-y-1.5"
                   >
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        min={block.diaInicio}
-                        max={block.diaFim}
+                        min={1}
+                        max={31}
                         placeholder="Dia"
                         value={inputDia}
                         onChange={(e) => setInputDia(Number(e.target.value))}
-                        className="w-12 bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-white text-center focus:outline-none"
+                        className="w-12 bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:border-cyan-400"
+                        title="Dia do vencimento"
                       />
                       <input
                         type="text"
                         autoFocus
-                        placeholder="Ex: 10 - DZM..."
+                        placeholder="Ex: MANUS ou CLARA..."
                         value={inputDesc}
                         onChange={(e) => setInputDesc(e.target.value)}
-                        className="w-full bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none"
+                        className="w-full bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-cyan-400 uppercase"
                       />
                     </div>
-                    <div className="flex justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setActiveInputBlockId(null)}
-                        className="px-2 py-0.5 text-[10px] text-slate-400"
-                      >
-                        Canc
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-2 py-0.5 rounded bg-cyan-600 text-white text-[10px] font-bold"
-                      >
-                        Salvar
-                      </button>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>Data prefixada automaticamente</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setActiveInputBlockId(null)}
+                          className="px-2 py-0.5 text-slate-400 hover:text-white"
+                        >
+                          Canc
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-2 py-0.5 rounded bg-cyan-600 text-white font-bold hover:bg-cyan-500"
+                        >
+                          Salvar
+                        </button>
+                      </div>
                     </div>
                   </form>
                 ) : (

@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import { FollowTheMoneyState, FollowTheMoneyRow } from '@/types/war-room';
-import { Plus, Trash2, Edit3, ArrowRight, DollarSign, TrendingUp, Check } from 'lucide-react';
+import { Plus, Trash2, Edit3, ArrowRight, DollarSign, TrendingUp, Check, X } from 'lucide-react';
 
 interface WhiteboardFollowTheMoneyProps {
   followTheMoney: FollowTheMoneyState;
   onUpdateQuote: (novaCotacao: string) => void;
   onAddRow: (row: Omit<FollowTheMoneyRow, 'id'>) => void;
+  onUpdateRow: (row: FollowTheMoneyRow) => void;
   onDeleteRow: (id: string) => void;
 }
 
@@ -15,11 +16,16 @@ export function WhiteboardFollowTheMoney({
   followTheMoney,
   onUpdateQuote,
   onAddRow,
+  onUpdateRow,
   onDeleteRow,
 }: WhiteboardFollowTheMoneyProps) {
   const [isEditingQuote, setIsEditingQuote] = useState(false);
   const [quoteInput, setQuoteInput] = useState(followTheMoney.cotacaoUsdGs);
   const [isAddingRow, setIsAddingRow] = useState(false);
+
+  // Estados de edição de linha
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editRowForm, setEditRowForm] = useState<FollowTheMoneyRow | null>(null);
 
   // Formulário de nova linha
   const [formData, setFormData] = useState({
@@ -69,6 +75,19 @@ export function WhiteboardFollowTheMoney({
       observacao: '',
     });
     setIsAddingRow(false);
+  };
+
+  const handleStartEditRow = (row: FollowTheMoneyRow) => {
+    setEditingRowId(row.id);
+    setEditRowForm({ ...row });
+  };
+
+  const handleSaveEditRow = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editRowForm) return;
+    onUpdateRow(editRowForm);
+    setEditingRowId(null);
+    setEditRowForm(null);
   };
 
   return (
@@ -157,7 +176,7 @@ export function WhiteboardFollowTheMoney({
               required
               value={formData.de}
               onChange={(e) => setFormData({ ...formData, de: e.target.value })}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500"
+              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500 uppercase"
             />
             <input
               type="text"
@@ -165,21 +184,21 @@ export function WhiteboardFollowTheMoney({
               required
               value={formData.para}
               onChange={(e) => setFormData({ ...formData, para: e.target.value })}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500"
+              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500 uppercase"
             />
             <input
               type="text"
               placeholder="Formato (CC/MOEDA)"
               value={formData.formato}
               onChange={(e) => setFormData({ ...formData, formato: e.target.value })}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500"
+              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500 uppercase"
             />
             <input
               type="text"
               placeholder="Moeda (USD/G$)"
               value={formData.moeda}
               onChange={(e) => setFormData({ ...formData, moeda: e.target.value })}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500"
+              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500 uppercase"
             />
             <input
               type="text"
@@ -238,8 +257,100 @@ export function WhiteboardFollowTheMoney({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 text-xs font-mono">
-            {followTheMoney.linhas.map((row, idx) => {
-              const isFirst = idx === 0;
+            {followTheMoney.linhas.map((row) => {
+              const isEditingThis = editingRowId === row.id && editRowForm;
+
+              if (isEditingThis) {
+                return (
+                  <tr key={row.id} className="bg-slate-900 border border-cyan-500/40">
+                    <td className="py-2 px-1">
+                      <input
+                        type="text"
+                        value={editRowForm.data}
+                        onChange={(e) => setEditRowForm({ ...editRowForm, data: e.target.value })}
+                        className="w-16 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-xs text-white"
+                      />
+                    </td>
+                    <td className="py-2 px-1">
+                      <input
+                        type="text"
+                        value={editRowForm.de}
+                        onChange={(e) => setEditRowForm({ ...editRowForm, de: e.target.value.toUpperCase() })}
+                        className="w-20 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-xs text-cyan-300 font-bold uppercase"
+                      />
+                    </td>
+                    <td className="py-2 px-1">
+                      <input
+                        type="text"
+                        value={editRowForm.para}
+                        onChange={(e) => setEditRowForm({ ...editRowForm, para: e.target.value.toUpperCase() })}
+                        className="w-28 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-xs text-white uppercase"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      <input
+                        type="text"
+                        value={editRowForm.formato}
+                        onChange={(e) => setEditRowForm({ ...editRowForm, formato: e.target.value.toUpperCase() })}
+                        className="w-14 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-xs text-white text-center uppercase"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      <input
+                        type="text"
+                        value={editRowForm.moeda}
+                        onChange={(e) => setEditRowForm({ ...editRowForm, moeda: e.target.value.toUpperCase() })}
+                        className="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-xs text-emerald-300 text-center uppercase font-bold"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-right">
+                      <input
+                        type="text"
+                        value={editRowForm.valor}
+                        onChange={(e) => setEditRowForm({ ...editRowForm, valor: e.target.value })}
+                        className="w-20 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-xs text-white text-right font-bold"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      <input
+                        type="text"
+                        value={editRowForm.diferenca}
+                        onChange={(e) => setEditRowForm({ ...editRowForm, diferenca: e.target.value })}
+                        className="w-14 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-xs text-amber-300 text-center"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      <input
+                        type="text"
+                        value={editRowForm.percentual}
+                        onChange={(e) => setEditRowForm({ ...editRowForm, percentual: e.target.value })}
+                        className="w-14 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-xs text-rose-300 text-center"
+                      />
+                    </td>
+                    <td className="py-2 px-2 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingRowId(null);
+                          setEditRowForm(null);
+                        }}
+                        className="p-1 text-slate-400 hover:text-white"
+                        title="Cancelar"
+                      >
+                        <X size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveEditRow}
+                        className="p-1 bg-cyan-600 rounded text-white hover:bg-cyan-500 ml-1"
+                        title="Salvar alterações"
+                      >
+                        <Check size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }
 
               return (
                 <tr
@@ -305,6 +416,14 @@ export function WhiteboardFollowTheMoney({
 
                   {/* AÇÕES */}
                   <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditRow(row)}
+                      title="Editar etapa"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-cyan-300 transition-opacity mr-1"
+                    >
+                      <Edit3 size={13} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => onDeleteRow(row.id)}

@@ -208,7 +208,57 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
 
 export class WarRoomService {
   /**
-   * Obtém os dados da lousa com suporte a LocalStorage
+   * Garante que a descrição do vencimento sempre contenha o dia formatado (ex: "25 - MANUS")
+   * e extrai o dia correto caso o usuário tenha digitado "27 - BANCO DO BRASIL"
+   */
+  static formatTimelineDescription(dia: number, rawDesc: string): { dia: number; descricao: string } {
+    const clean = rawDesc.trim().toUpperCase();
+    let finalDia = dia;
+    let finalDesc = clean;
+
+    // Detecta se já começa com número do dia (ex: "25 - MANUS", "25 MANUS", "25: MANUS")
+    const match = clean.match(/^(\d{1,2})\s*[-–—:]?\s*(.*)$/);
+    if (match) {
+      const parsedDia = Number(match[1]);
+      if (parsedDia >= 1 && parsedDia <= 31) {
+        finalDia = parsedDia;
+        const rest = match[2].trim();
+        finalDesc = `${String(finalDia).padStart(2, '0')} - ${rest || 'OBRIGAÇÃO'}`;
+        return { dia: finalDia, descricao: finalDesc };
+      }
+    }
+
+    // Se o usuário digitou apenas a obrigação (ex: "MANUS"), prefixa com o dia selecionado
+    finalDesc = `${String(finalDia).padStart(2, '0')} - ${clean}`;
+    return { dia: finalDia, descricao: finalDesc };
+  }
+
+  /**
+   * Sanitiza e ordena cronograma garantindo prefixo do dia e ordem cronológica crescente
+   */
+  static sanitizeCronograma(cronograma: WhiteboardTimelineBlock[]): WhiteboardTimelineBlock[] {
+    return cronograma.map(block => {
+      const sanitizedItens = block.itens.map(item => {
+        const { dia, descricao } = this.formatTimelineDescription(item.dia, item.descricao);
+        return {
+          ...item,
+          dia,
+          descricao,
+        };
+      });
+
+      // Ordenar por dia crescente
+      sanitizedItens.sort((a, b) => a.dia - b.dia);
+
+      return {
+        ...block,
+        itens: sanitizedItens,
+      };
+    });
+  }
+
+  /**
+   * Obtém os dados da lousa com suporte a LocalStorage e sanitização de ordenação
    */
   static getWhiteboardData(): WhiteboardDataState {
     if (typeof window === 'undefined') return DEFAULT_WHITEBOARD_DATA;
@@ -216,13 +266,22 @@ export class WarRoomService {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed: WhiteboardDataState = JSON.parse(stored);
+        if (parsed.cronograma) {
+          parsed.cronograma = this.sanitizeCronograma(parsed.cronograma);
+          // Persiste a versão sanitizada se houve correção
+          this.saveWhiteboardData(parsed);
+        }
+        return parsed;
       }
     } catch (e) {
       console.warn('Erro ao ler dados da lousa do localStorage:', e);
     }
 
-    return DEFAULT_WHITEBOARD_DATA;
+    return {
+      ...DEFAULT_WHITEBOARD_DATA,
+      cronograma: this.sanitizeCronograma(DEFAULT_WHITEBOARD_DATA.cronograma),
+    };
   }
 
   /**
@@ -407,7 +466,55 @@ export class WarRoomService {
   }
 
   /**
-   * Adiciona item a um bloco do cronograma
+   * Atualiza texto de item de uma coluna
+   */
+  static updateColumnItem(
+    currentState: WhiteboardDataState,
+    columnId: string,
+    itemId: string,
+    novoTexto: string
+  ): WhiteboardDataState {
+    const updatedColunas = currentState.colunas.map(col => {
+      if (col.id !== columnId) return col;
+      return {
+        ...col,
+        itens: col.itens.map(item => {
+          if (item.id !== itemId) return item;
+          return {
+            ...item,
+            texto: novoTexto.trim().toUpperCase(),
+          };
+        }),
+      };
+    });
+
+    const newState = { ...currentState, colunas: updatedColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Atualiza linha existente do Follow The Money
+   */
+  static updateFollowTheMoneyRow(
+    currentState: WhiteboardDataState,
+    updatedRow: FollowTheMoneyRow
+  ): WhiteboardDataState {
+    const newState: WhiteboardDataState = {
+      ...currentState,
+      followTheMoney: {
+        ...currentState.followTheMoney,
+        linhas: currentState.followTheMoney.linhas.map(row =>
+          row.id === updatedRow.id ? updatedRow : row
+        ),
+      },
+    };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Adiciona item a um bloco do cronograma com formatação automática de dia e ordenação crescente
    */
   static addTimelineItem(
     currentState: WhiteboardDataState,
@@ -415,18 +522,56 @@ export class WarRoomService {
     dia: number,
     descricao: string
   ): WhiteboardDataState {
+    const formatted = this.formatTimelineDescription(dia, descricao);
+
     const newItem: WhiteboardTimelineItem = {
       id: `tl-${Date.now()}`,
-      dia,
-      descricao: descricao.toUpperCase(),
+      dia: formatted.dia,
+      descricao: formatted.descricao,
       concluido: false,
     };
 
     const updatedCronograma = currentState.cronograma.map(block => {
       if (block.id !== blockId) return block;
+      const itens = [...block.itens, newItem];
+      itens.sort((a, b) => a.dia - b.dia);
       return {
         ...block,
-        itens: [...block.itens, newItem],
+        itens,
+      };
+    });
+
+    const newState = { ...currentState, cronograma: updatedCronograma };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Edita item de um bloco do cronograma com formatação automática de dia e re-ordenação crescente
+   */
+  static updateTimelineItem(
+    currentState: WhiteboardDataState,
+    blockId: string,
+    itemId: string,
+    dia: number,
+    descricao: string
+  ): WhiteboardDataState {
+    const formatted = this.formatTimelineDescription(dia, descricao);
+
+    const updatedCronograma = currentState.cronograma.map(block => {
+      if (block.id !== blockId) return block;
+      const itens = block.itens.map(item => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          dia: formatted.dia,
+          descricao: formatted.descricao,
+        };
+      });
+      itens.sort((a, b) => a.dia - b.dia);
+      return {
+        ...block,
+        itens,
       };
     });
 

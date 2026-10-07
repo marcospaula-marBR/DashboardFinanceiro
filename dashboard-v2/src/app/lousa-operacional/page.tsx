@@ -109,6 +109,11 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
+  const handleEditColumnItem = (colId: string, itemId: string, texto: string) => {
+    const updated = WarRoomService.updateColumnItem(data, colId, itemId, texto);
+    setData(updated);
+  };
+
   const handleDeleteColumnItem = (colId: string, itemId: string) => {
     const updated = WarRoomService.deleteColumnItem(data, colId, itemId);
     setData(updated);
@@ -125,6 +130,11 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
+  const handleUpdateCambioRow = (row: FollowTheMoneyRow) => {
+    const updated = WarRoomService.updateFollowTheMoneyRow(data, row);
+    setData(updated);
+  };
+
   const handleDeleteCambioRow = (id: string) => {
     const updated = WarRoomService.deleteFollowTheMoneyRow(data, id);
     setData(updated);
@@ -138,6 +148,11 @@ export default function LousaOperacionalPage() {
 
   const handleAddTimelineItem = (blockId: string, dia: number, descricao: string) => {
     const updated = WarRoomService.addTimelineItem(data, blockId, dia, descricao);
+    setData(updated);
+  };
+
+  const handleEditTimelineItem = (blockId: string, itemId: string, dia: number, descricao: string) => {
+    const updated = WarRoomService.updateTimelineItem(data, blockId, itemId, dia, descricao);
     setData(updated);
   };
 
@@ -180,6 +195,7 @@ export default function LousaOperacionalPage() {
           colunas={data.colunas}
           onToggleItem={handleToggleColumnItem}
           onAddItem={handleAddColumnItem}
+          onEditItem={handleEditColumnItem}
           onDeleteItem={handleDeleteColumnItem}
         />
 
@@ -188,6 +204,7 @@ export default function LousaOperacionalPage() {
           followTheMoney={data.followTheMoney}
           onUpdateQuote={handleUpdateQuote}
           onAddRow={handleAddCambioRow}
+          onUpdateRow={handleUpdateCambioRow}
           onDeleteRow={handleDeleteCambioRow}
         />
 
@@ -196,6 +213,7 @@ export default function LousaOperacionalPage() {
           cronograma={data.cronograma}
           onToggleItem={handleToggleTimelineItem}
           onAddItem={handleAddTimelineItem}
+          onEditItem={handleEditTimelineItem}
           onDeleteItem={handleDeleteTimelineItem}
         />
       </main>
