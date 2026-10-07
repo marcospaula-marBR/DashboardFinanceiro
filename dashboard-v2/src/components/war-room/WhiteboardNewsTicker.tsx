@@ -28,42 +28,42 @@ export function WhiteboardNewsTicker({
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="w-full bg-[#050811] border border-slate-800/90 rounded-xl py-1.5 px-3 flex items-center overflow-hidden z-20 group/ticker ticker-container shadow-md relative transition-all"
+      className="w-full bg-[#050811] border border-slate-700/80 rounded-xl py-2.5 sm:py-3 px-3 sm:px-4 min-h-[48px] sm:min-h-[52px] flex items-center overflow-hidden z-20 group/ticker ticker-container shadow-lg relative transition-all"
     >
-      {/* ── BADGE FIXO DO RADAR (IDÊNTICO AO PADRÃO DA BARRA ORIGINAL) ── */}
-      <div className="flex items-center gap-1.5 bg-rose-600/20 border border-rose-500/40 text-rose-400 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider flex-shrink-0 mr-3 shadow-sm font-mono">
+      {/* ── BADGE FIXO DO RADAR (MAIOR VISIBILIDADE E FONTE ROBUSTA) ── */}
+      <div className="flex items-center gap-2 bg-rose-600/25 border border-rose-500/50 text-rose-300 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs sm:text-[13px] font-black uppercase tracking-wider flex-shrink-0 mr-3.5 shadow-md font-mono">
         {isHovered ? (
           <>
-            <Pause size={12} className="text-amber-400" />
+            <Pause size={15} className="text-amber-400" />
             <span className="text-amber-300">RADAR PAUSADO</span>
           </>
         ) : (
           <>
-            <Radio size={12} className="animate-pulse text-cyan-400" />
-            <span className="text-cyan-300">RADAR LOUSA</span>
+            <Radio size={15} className="animate-pulse text-cyan-400" />
+            <span className="text-cyan-200">RADAR LOUSA</span>
           </>
         )}
 
         {totalAtrasadas > 0 && (
-          <span className="ml-1 px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9px] font-black animate-pulse">
+          <span className="ml-1 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] sm:text-xs font-black animate-pulse shadow-sm">
             {totalAtrasadas} atr
           </span>
         )}
       </div>
 
-      {/* ── ESTEIRA EM MOVIMENTO CONTÍNUO: 5 ATIVIDADES POR RESPONSÁVEL DA ATRASADA A VENCER ── */}
+      {/* ── ESTEIRA EM MOVIMENTO CONTÍNUO: 5 ATIVIDADES POR RESPONSÁVEL COM MAIOR VISIBILIDADE ── */}
       <div
         className="flex-1 overflow-hidden relative cursor-default"
         title="Passe o mouse para pausar a leitura e marcar pendências"
       >
         {memberTaskGroups.length === 0 ? (
-          <div className="text-xs text-emerald-400 font-mono flex items-center gap-2">
-            <Check size={14} />
+          <div className="text-sm text-emerald-400 font-mono flex items-center gap-2 font-bold">
+            <Check size={16} />
             <span>TODAS AS ATIVIDADES HUMANAS ESTÃO CONCLUÍDAS E EM DIA! PARABÉNS À EQUIPE!</span>
           </div>
         ) : (
           <div
-            className="flex whitespace-nowrap animate-marquee items-center gap-8 text-xs font-mono"
+            className="flex whitespace-nowrap animate-marquee items-center gap-10 sm:gap-12 text-xs sm:text-[13px] font-mono"
             style={{ animationPlayState: isHovered ? 'paused' : 'running' }}
           >
             {/* Duplicar lista para efeito contínuo infinito no CSS Marquee sem cortes visuais */}
@@ -74,42 +74,42 @@ export function WhiteboardNewsTicker({
               return (
                 <div
                   key={`${group.nome}-${groupIdx}`}
-                  className="inline-flex items-center gap-2.5 flex-shrink-0 py-0.5"
+                  className="inline-flex items-center gap-3 flex-shrink-0 py-0.5"
                 >
-                  {/* TAG DO RESPONSÁVEL COM SUA COR */}
+                  {/* TAG ROBUSTA DO RESPONSÁVEL COM SUA COR */}
                   <button
                     type="button"
                     onClick={() => onSelectMember && onSelectMember(isSelected ? null : group.nome)}
-                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border transition-all ${
+                    className={`inline-flex items-center gap-2 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-lg text-xs sm:text-[13px] font-black uppercase tracking-wider border shadow-md transition-all ${
                       isSelected
-                        ? `${colorCfg.pillActiveClass} ring-1 ring-white shadow-sm`
+                        ? `${colorCfg.pillActiveClass} ring-2 ring-white shadow-lg scale-105`
                         : `${colorCfg.badgeClass} hover:opacity-100`
                     }`}
                     title={`Clique para filtrar por ${group.nome}`}
                   >
                     <span
-                      className={`w-2 h-2 rounded-full flex-shrink-0 ${group.atrasadas > 0 ? 'animate-ping' : ''}`}
+                      className={`w-3 h-3 rounded-full flex-shrink-0 ${group.atrasadas > 0 ? 'animate-ping' : ''}`}
                       style={{ backgroundColor: colorCfg.hex }}
                     />
                     <span>{group.nome}</span>
-                    <span className="text-[9px] opacity-75">
+                    <span className="text-[11px] opacity-80 font-mono">
                       ({group.tarefas.length})
                     </span>
                   </button>
 
-                  {/* AS ATÉ 5 TAREFAS POR ORDEM CRESCENTE DE DATA */}
-                  <div className="inline-flex items-center gap-2">
+                  {/* AS ATÉ 5 TAREFAS POR ORDEM CRESCENTE DE DATA COM CAIXAS E FONTES AMPLIADAS */}
+                  <div className="inline-flex items-center gap-2.5">
                     {group.tarefas.map((task) => (
                       <span
                         key={task.id}
-                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] transition-all ${
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs sm:text-[13px] shadow-sm transition-all ${
                           task.isOverdue
-                            ? 'bg-rose-950/60 border-rose-500/80 text-rose-200 ring-1 ring-rose-500/40 shadow-sm'
-                            : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
+                            ? 'bg-rose-950/70 border-rose-500/90 text-rose-100 ring-1 ring-rose-500/50 shadow-md'
+                            : 'bg-slate-900/95 border-slate-700 text-slate-100 hover:border-slate-500'
                         }`}
                         title={`${task.texto} • ${task.prazoTexto} • Origem: ${task.origemNome}`}
                       >
-                        {/* CHECKBOX PARA LIQUIDAR NA ESTEIRA */}
+                        {/* CHECKBOX AMPLIADO PARA LIQUIDAR NA ESTEIRA */}
                         {onToggleItem && (
                           <button
                             type="button"
@@ -117,51 +117,51 @@ export function WhiteboardNewsTicker({
                               e.stopPropagation();
                               onToggleItem(task.origem, task.origemId, task.itemId);
                             }}
-                            className={`w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0 border transition-all ${
+                            className={`w-4 h-4 sm:w-5 sm:h-5 rounded-md flex items-center justify-center flex-shrink-0 border transition-all ${
                               task.isOverdue
                                 ? 'border-rose-400 bg-slate-950 hover:bg-rose-600 hover:text-white'
-                                : 'border-slate-600 bg-slate-950 hover:bg-emerald-600 hover:text-white'
+                                : 'border-slate-500 bg-slate-950 hover:bg-emerald-600 hover:text-white'
                             }`}
                             title="Marcar como concluída (a próxima da fila assume esta posição)"
                           >
-                            <Check size={9} strokeWidth={3} className="text-slate-400 hover:text-white" />
+                            <Check size={11} strokeWidth={3} className="text-slate-400 hover:text-white" />
                           </button>
                         )}
 
-                        {/* BADGE DE PRAZO/DATA */}
+                        {/* BADGE DE PRAZO/DATA AMPLIADO */}
                         {task.isOverdue ? (
-                          <span className="px-1 py-0.2 rounded text-[8px] font-black uppercase bg-rose-600 text-white animate-pulse flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-black uppercase bg-rose-600 text-white animate-pulse flex-shrink-0 shadow-sm">
                             🚨 {task.prazoTexto}
                           </span>
                         ) : task.sortWeight === 0 ? (
-                          <span className="px-1 py-0.2 rounded text-[8px] font-black uppercase bg-amber-500 text-slate-950 flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-black uppercase bg-amber-500 text-slate-950 flex-shrink-0 shadow-sm">
                             ⭐ {task.prazoTexto}
                           </span>
                         ) : task.dia ? (
-                          <span className="px-1 py-0.2 rounded text-[8px] font-black font-mono bg-cyan-950 text-cyan-300 border border-cyan-800 flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-black font-mono bg-cyan-950 text-cyan-300 border border-cyan-800 flex-shrink-0">
                             {task.prazoTexto}
                           </span>
                         ) : (
-                          <span className="px-1 py-0.2 rounded text-[8px] font-black font-mono bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-black font-mono bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
                             {task.prazoTexto}
                           </span>
                         )}
 
-                        {/* TEXTO DA TAREFA */}
-                        <span className="font-semibold max-w-[200px] truncate">
+                        {/* TEXTO DA TAREFA AMPLIADO E NÍTIDO */}
+                        <span className="font-bold text-slate-100 max-w-[280px] sm:max-w-[340px] truncate">
                           {task.texto}
                         </span>
 
                         {/* ORIGEM RESUMIDA */}
-                        <span className="text-[8px] text-slate-500 font-mono">
-                          [{task.origemNome.slice(0, 10)}]
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          [{task.origemNome.slice(0, 12)}]
                         </span>
                       </span>
                     ))}
                   </div>
 
                   {/* SEPARADOR ENTRE RESPONSÁVEIS */}
-                  <span className="text-slate-700 font-black px-1.5">•</span>
+                  <span className="text-slate-600 font-black px-2 text-sm sm:text-base">•</span>
                 </div>
               );
             })}
@@ -170,7 +170,7 @@ export function WhiteboardNewsTicker({
       </div>
 
       {/* ── DICA NO CANTO DIREITO ── */}
-      <div className="hidden 2xl:flex items-center text-[10px] text-slate-400 font-mono ml-3 flex-shrink-0 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-800">
+      <div className="hidden 2xl:flex items-center text-xs text-slate-400 font-mono ml-3.5 flex-shrink-0 bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800 shadow-sm">
         {isHovered ? '⚡ Clique no check para liquidar' : 'Hover para pausar e marcar'}
       </div>
     </div>
