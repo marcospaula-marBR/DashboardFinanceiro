@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { WarRoomService, DEFAULT_WHITEBOARD_DATA } from '@/services/war-room.service';
-import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem } from '@/types/war-room';
+import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
 
@@ -16,6 +16,7 @@ import { WhiteboardInsuranceAlertBanner } from '@/components/war-room/Whiteboard
 import { WhiteboardResponsibleBoard } from '@/components/war-room/WhiteboardResponsibleBoard';
 import { WhiteboardEditDemandModal } from '@/components/war-room/WhiteboardEditDemandModal';
 import { WhiteboardArchivedModal } from '@/components/war-room/WhiteboardArchivedModal';
+import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDemandColumnModal';
 import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
@@ -31,7 +32,11 @@ export default function LousaOperacionalPage() {
   const [selectedResponsible, setSelectedResponsible] = useState<string | null>(null);
   const [onlyOverdueFilter, setOnlyOverdueFilter] = useState<boolean>(false);
 
-  // Estados de edição completa de demanda e histórico de arquivadas
+  // Estados de gestão de demanda inteira (coluna)
+  const [isDemandColumnModalOpen, setIsDemandColumnModalOpen] = useState<boolean>(false);
+  const [editingColumn, setEditingColumn] = useState<WhiteboardColumn | null>(null);
+
+  // Estados de edição completa de tarefa e histórico de arquivadas
   const [isArchivedModalOpen, setIsArchivedModalOpen] = useState<boolean>(false);
   const [editingDemand, setEditingDemand] = useState<{ colId: string; item: WhiteboardItem } | null>(null);
 
@@ -91,6 +96,12 @@ export default function LousaOperacionalPage() {
   }, [data]);
 
   // ── DEMANDAS ARQUIVADAS E HISTÓRICO ──
+  const archivedDemandsList = useMemo(() => {
+    return WarRoomService.getArchivedDemandsList(data);
+  }, [data]);
+
+  const totalArchivedDemandsCount = archivedDemandsList.length;
+
   const archivedDemands = useMemo(() => {
     return WarRoomService.getAllArchivedDemands(data);
   }, [data]);
@@ -173,19 +184,66 @@ export default function LousaOperacionalPage() {
     }
   };
 
-  // ── HANDLERS DE COLUNA ──
+  // ── HANDLERS DE DEMANDA INTEIRA (COLUNA DA LOUSA) ──
+  const handleArchiveDemand = (columnId: string) => {
+    const updated = WarRoomService.archiveDemand(data, columnId);
+    setData(updated);
+  };
+
+  const handleRestoreDemand = (columnId: string) => {
+    const updated = WarRoomService.restoreDemand(data, columnId);
+    setData(updated);
+  };
+
+  const handleDeleteDemand = (columnId: string) => {
+    const updated = WarRoomService.deleteDemand(data, columnId);
+    setData(updated);
+    setIsDemandColumnModalOpen(false);
+    setEditingColumn(null);
+  };
+
+  const handleSaveDemand = (payload: {
+    columnId?: string;
+    titulo: string;
+    subtitulo?: string;
+    alertaDestaque?: string;
+    dataLimite?: string;
+    corMarcador: 'vermelho' | 'azul' | 'ciano' | 'esmeralda' | 'ambar';
+  }) => {
+    if (payload.columnId) {
+      const updated = WarRoomService.updateDemand(data, payload.columnId, payload);
+      setData(updated);
+    } else {
+      const updated = WarRoomService.addDemand(data, payload);
+      setData(updated);
+    }
+    setIsDemandColumnModalOpen(false);
+    setEditingColumn(null);
+  };
+
+  const handleOpenAddDemand = () => {
+    setEditingColumn(null);
+    setIsDemandColumnModalOpen(true);
+  };
+
+  const handleOpenEditDemand = (column: WhiteboardColumn) => {
+    setEditingColumn(column);
+    setIsDemandColumnModalOpen(true);
+  };
+
+  // ── HANDLERS DE TAREFAS DE COLUNA ──
   const handleToggleColumnItem = (colId: string, itemId: string) => {
     const updated = WarRoomService.toggleColumnItem(data, colId, itemId);
     setData(updated);
   };
 
-  const handleAddColumnItem = (colId: string, text: string, responsavel?: string) => {
-    const updated = WarRoomService.addColumnItem(data, colId, text, responsavel);
+  const handleAddColumnItem = (colId: string, text: string, responsavel?: string, dataLimite?: string) => {
+    const updated = WarRoomService.addColumnItem(data, colId, text, responsavel, dataLimite);
     setData(updated);
   };
 
-  const handleEditColumnItem = (colId: string, itemId: string, texto: string, responsavel?: string) => {
-    const updated = WarRoomService.updateColumnItem(data, colId, itemId, texto, responsavel);
+  const handleEditColumnItem = (colId: string, itemId: string, texto: string, responsavel?: string, dataLimite?: string) => {
+    const updated = WarRoomService.updateColumnItem(data, colId, itemId, texto, responsavel, dataLimite);
     setData(updated);
   };
 
@@ -215,6 +273,7 @@ export default function LousaOperacionalPage() {
     updates: {
       texto: string;
       responsavel?: string;
+      dataLimite?: string;
       destaque?: boolean;
       observacao?: string;
       prioridade?: 'normal' | 'alta' | 'urgente';
@@ -441,7 +500,7 @@ export default function LousaOperacionalPage() {
           />
         )}
 
-        {/* SEÇÃO 1: AS 5 COLUNAS OPERACIONAIS DA LOUSA COM DRAG & DROP E RESPONSÁVEIS */}
+        {/* SEÇÃO 1: AS COLUNAS OPERACIONAIS DA LOUSA COM DRAG & DROP E GESTÃO DE DEMANDAS */}
         <WhiteboardColumns
           colunas={data.colunas}
           filterResponsible={selectedResponsible}
@@ -453,8 +512,13 @@ export default function LousaOperacionalPage() {
           onDeleteItem={handleDeleteColumnItem}
           onReorderItem={handleReorderColumnItem}
           onMoveItemBetweenColumns={handleMoveColumnItem}
+          onArchiveDemand={handleArchiveDemand}
+          onEditDemand={handleOpenEditDemand}
+          onDeleteDemand={handleDeleteDemand}
+          onAddDemand={handleOpenAddDemand}
           onOpenArchivedModal={() => setIsArchivedModalOpen(true)}
           totalArchivedCount={totalArchivedCount}
+          totalArchivedDemandsCount={totalArchivedDemandsCount}
         />
 
         {/* SEÇÃO 2: FOLLOW THE MONEY (ESTEIRA CAMBIAL & COTAÇÃO) */}
@@ -500,7 +564,7 @@ export default function LousaOperacionalPage() {
         onAddCronograma={handleAddTimelineItem}
       />
 
-      {/* ── MODAL DE EDIÇÃO COMPLETA DE DEMANDA ── */}
+      {/* ── MODAL DE EDIÇÃO COMPLETA DE TAREFA ── */}
       <WhiteboardEditDemandModal
         isOpen={!!editingDemand}
         onClose={() => setEditingDemand(null)}
@@ -518,10 +582,30 @@ export default function LousaOperacionalPage() {
         }}
       />
 
-      {/* ── MODAL DE HISTÓRICO DE DEMANDAS ARQUIVADAS ── */}
+      {/* ── MODAL DE GESTÃO DE DEMANDA INTEIRA (COLUNA DA LOUSA) ── */}
+      <WhiteboardDemandColumnModal
+        isOpen={isDemandColumnModalOpen}
+        onClose={() => {
+          setIsDemandColumnModalOpen(false);
+          setEditingColumn(null);
+        }}
+        column={editingColumn}
+        onSave={handleSaveDemand}
+        onArchive={handleArchiveDemand}
+        onDelete={handleDeleteDemand}
+      />
+
+      {/* ── MODAL DE HISTÓRICO DE DEMANDAS ARQUIVADAS E TAREFAS ── */}
       <WhiteboardArchivedModal
         isOpen={isArchivedModalOpen}
         onClose={() => setIsArchivedModalOpen(false)}
+        archivedDemands={archivedDemandsList}
+        onRestoreDemand={handleRestoreDemand}
+        onDeleteDemand={handleDeleteDemand}
+        onEditDemand={(col) => {
+          setIsArchivedModalOpen(false);
+          handleOpenEditDemand(col);
+        }}
         archivedItems={archivedDemands}
         onRestore={handleRestoreArchivedDemand}
         onDeletePermanent={handleDeleteArchivedPermanent}

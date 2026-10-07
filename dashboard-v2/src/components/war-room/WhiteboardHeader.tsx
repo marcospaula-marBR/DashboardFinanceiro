@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { APP_VERSION } from '@/version';
 import { 
   ArrowLeft, 
   Tv, 
@@ -86,6 +87,9 @@ export function WhiteboardHeader({
         {/* RELÓGIO & STATUS AO VIVO */}
         <div className="flex items-center gap-3 bg-slate-900/90 border border-slate-800 px-3.5 py-1.5 rounded-xl shadow-inner">
           <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 tracking-wider">
+              {APP_VERSION}
+            </span>
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />

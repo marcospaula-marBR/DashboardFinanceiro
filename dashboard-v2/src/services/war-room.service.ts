@@ -7,13 +7,115 @@
 import {
   WhiteboardDataState,
   WhiteboardColumn,
+  WhiteboardItem,
   FollowTheMoneyState,
   FollowTheMoneyRow,
   WhiteboardTimelineBlock,
   WhiteboardTimelineItem,
+  PrazoVisualInfo,
+  PrazoStatus,
 } from '@/types/war-room';
 
 const STORAGE_KEY = 'marbrasil_whiteboard_v2';
+
+/**
+ * Calcula o status visual do prazo para demandas e tarefas
+ * @returns 'atrasado' (vermelho) | 'hoje' (âmbar vivo) | 'em_dia' (âmbar/próximo) | 'distante' (verde) | 'sem_prazo' | 'concluido'
+ */
+export function calculatePrazoInfo(dataLimite?: string, concluido?: boolean): PrazoVisualInfo {
+  if (concluido) {
+    return {
+      status: 'concluido',
+      rotulo: 'Concluído',
+      rotuloCurto: '✓ OK',
+      badgeClass: 'bg-emerald-950/40 text-emerald-400 border border-emerald-500/30 font-medium',
+    };
+  }
+
+  if (!dataLimite || !dataLimite.trim()) {
+    return {
+      status: 'sem_prazo',
+      rotulo: '',
+      rotuloCurto: '',
+      badgeClass: '',
+    };
+  }
+
+  try {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    let ano = hoje.getFullYear();
+    let mes = hoje.getMonth();
+    let dia = hoje.getDate();
+
+    const parts = dataLimite.trim().split(/[-/]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        // YYYY-MM-DD
+        ano = parseInt(parts[0], 10);
+        mes = parseInt(parts[1], 10) - 1;
+        dia = parseInt(parts[2], 10);
+      } else {
+        // DD/MM/YYYY
+        dia = parseInt(parts[0], 10);
+        mes = parseInt(parts[1], 10) - 1;
+        ano = parseInt(parts[2], 10);
+      }
+    } else if (parts.length === 2) {
+      // DD/MM
+      dia = parseInt(parts[0], 10);
+      mes = parseInt(parts[1], 10) - 1;
+    }
+
+    const prazo = new Date(ano, mes, dia, 0, 0, 0, 0);
+    const diffMs = prazo.getTime() - hoje.getTime();
+    const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    const dataFormatada = `${String(dia).padStart(2, '0')}/${String(mes + 1).padStart(2, '0')}`;
+
+    if (diffDias < 0) {
+      const diasAtraso = Math.abs(diffDias);
+      return {
+        status: 'atrasado',
+        rotulo: `🚨 Atrasado (${diasAtraso}d)`,
+        rotuloCurto: `🚨 ${diasAtraso}d`,
+        badgeClass: 'bg-rose-950/90 border border-rose-500 text-rose-300 animate-pulse font-black shadow-sm',
+        diasRestantes: diffDias,
+      };
+    } else if (diffDias === 0) {
+      return {
+        status: 'hoje',
+        rotulo: '⚠️ Vence Hoje',
+        rotuloCurto: '⚠️ Hoje',
+        badgeClass: 'bg-amber-950/90 border border-amber-500 text-amber-300 animate-pulse font-black shadow-sm',
+        diasRestantes: 0,
+      };
+    } else if (diffDias <= 3) {
+      return {
+        status: 'em_dia',
+        rotulo: `⏳ Vence em ${diffDias}d (${dataFormatada})`,
+        rotuloCurto: `⏳ ${diffDias}d`,
+        badgeClass: 'bg-amber-950/50 border border-amber-500/50 text-amber-300 font-bold',
+        diasRestantes: diffDias,
+      };
+    } else {
+      return {
+        status: 'distante',
+        rotulo: `🗓️ ${dataFormatada} (${diffDias}d)`,
+        rotuloCurto: `🗓️ ${dataFormatada}`,
+        badgeClass: 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-medium',
+        diasRestantes: diffDias,
+      };
+    }
+  } catch {
+    return {
+      status: 'sem_prazo',
+      rotulo: dataLimite,
+      rotuloCurto: dataLimite,
+      badgeClass: 'bg-slate-800 text-slate-300 border-slate-700',
+    };
+  }
+}
 
 /**
  * Dados autênticos fotografados diretamente da Lousa Operacional
@@ -25,9 +127,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       titulo: 'CONTABILIDADE PY:',
       subtitulo: 'Operações e regularização no Paraguai',
       corMarcador: 'vermelho',
+      dataLimite: '2026-10-15',
       itens: [
-        { id: 'it-1-1', texto: 'JUSTIFICAR DEPÓSITOS CONTA PESSOAL;', concluido: false, responsavel: 'MARCO' },
-        { id: 'it-1-2', texto: 'ANALISAR MELHOR OPÇÃO P/ EMPRÉSTIMOS FEITOS PY (CONTABILIDADE + ALDO)', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'it-1-1', texto: 'JUSTIFICAR DEPÓSITOS CONTA PESSOAL;', concluido: false, responsavel: 'MARCO', dataLimite: '2026-10-05' },
+        { id: 'it-1-2', texto: 'ANALISAR MELHOR OPÇÃO P/ EMPRÉSTIMOS FEITOS PY (CONTABILIDADE + ALDO)', concluido: false, responsavel: 'FINANCEIRO', dataLimite: '2026-10-15' },
         { id: 'it-1-3', texto: 'FLUXO DLOCAL => UENO: COMO JUSTIFICAR?*', concluido: false, destaque: true, responsavel: 'MARCO' },
         { id: 'it-1-4', texto: 'DOMÍNIOS NIC.PY', concluido: true, responsavel: 'TI / CONTÁBIL' },
         { id: 'it-1-5', texto: 'ERP PY', concluido: false, responsavel: 'TI / CONTÁBIL' },
@@ -39,8 +142,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       subtitulo: 'Gateway e integração Paraguai',
       alertaDestaque: '* SUSPENSAS NOVAS CONTAS',
       corMarcador: 'vermelho',
+      dataLimite: '2026-10-07',
       itens: [
-        { id: 'it-2-1', texto: 'MSG ENVIADA', concluido: false, responsavel: 'MANUS' },
+        { id: 'it-2-1', texto: 'MSG ENVIADA', concluido: false, responsavel: 'MANUS', dataLimite: '2026-10-07' },
         { id: 'it-2-2', texto: 'RECEBIDO E-MAIL', concluido: false, responsavel: 'MANUS' },
         { id: 'it-2-3', texto: "RESPONDI PEDINDO CAMINHO + JOC'S", concluido: false, responsavel: 'MARCO' },
       ],
@@ -50,9 +154,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       titulo: 'DLOCAL G2:',
       subtitulo: 'Validação e fluxo cambial',
       corMarcador: 'vermelho',
+      dataLimite: '2026-10-12',
       itens: [
         { id: 'it-3-1', texto: 'TABELA C/ FLUXO COMPLETO ATÉ VR EM USD NO UENO (PGTO DE U$ 9.99 DA MARBR)', concluido: false, responsavel: 'MANUS' },
-        { id: 'it-3-2', texto: 'TESTAR SPLIT', concluido: false, responsavel: 'MANUS' },
+        { id: 'it-3-2', texto: 'TESTAR SPLIT', concluido: false, responsavel: 'MANUS', dataLimite: '2026-10-09' },
         { id: 'it-3-3', texto: 'VALIDAÇÃO DA CONTA BANCÁRIA', concluido: false, responsavel: 'MARCO' },
         { id: 'it-3-4', texto: 'LIBERAÇÃO VALORES', concluido: true, responsavel: 'FINANCEIRO' },
       ],
@@ -62,11 +167,12 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       titulo: 'REMESSA CONFORME:',
       subtitulo: 'Correios, Jurídico e Receita Federal',
       corMarcador: 'vermelho',
+      dataLimite: '2026-10-20',
       itens: [
         { id: 'it-4-1', texto: 'CRIAR GRUPO C/ JURÍDICO', concluido: false, responsavel: 'JURÍDICO' },
         { id: 'it-4-2', texto: 'PAGAR CORREIOS DZM', concluido: true, responsavel: 'FINANCEIRO' },
         { id: 'it-4-3', texto: 'ABRIR CONTA CORREIOS G2', concluido: true, responsavel: 'MANUS' },
-        { id: 'it-4-4', texto: 'PROCESSO JUNTO À RFB', concluido: false, responsavel: 'JURÍDICO' },
+        { id: 'it-4-4', texto: 'PROCESSO JUNTO À RFB', concluido: false, responsavel: 'JURÍDICO', dataLimite: '2026-10-25' },
       ],
     },
     {
@@ -74,8 +180,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       titulo: 'OUTUBRO / NOVEMBRO',
       subtitulo: 'Horizonte de Planejamento 2027',
       corMarcador: 'azul',
+      dataLimite: '2026-11-30',
       itens: [
-        { id: 'it-5-1', texto: 'INSERIR LANÇAMENTOS RECORRENTES NO OMIE P/ 2027', concluido: false, destaque: true, responsavel: 'FINANCEIRO' },
+        { id: 'it-5-1', texto: 'INSERIR LANÇAMENTOS RECORRENTES NO OMIE P/ 2027', concluido: false, destaque: true, responsavel: 'FINANCEIRO', dataLimite: '2026-11-30' },
       ],
     },
   ],
@@ -320,15 +427,23 @@ export class WarRoomService {
           parsed.mesReferencia = currentMonthKey;
         }
 
-        // Hidratação/inferência de responsáveis se faltarem
+        // Hidratação/inferência de responsáveis e prazos se faltarem
         if (parsed.colunas) {
-          parsed.colunas = parsed.colunas.map(col => ({
-            ...col,
-            itens: col.itens.map(it => ({
-              ...it,
-              responsavel: it.responsavel || this.inferDefaultResponsible(it.texto),
-            })),
-          }));
+          parsed.colunas = parsed.colunas.map(col => {
+            const defaultCol = DEFAULT_WHITEBOARD_DATA.colunas.find(c => c.id === col.id);
+            return {
+              ...col,
+              dataLimite: col.dataLimite || defaultCol?.dataLimite,
+              itens: col.itens.map(it => {
+                const defaultItem = defaultCol?.itens.find(i => i.id === it.id);
+                return {
+                  ...it,
+                  responsavel: it.responsavel || this.inferDefaultResponsible(it.texto),
+                  dataLimite: it.dataLimite || defaultItem?.dataLimite,
+                };
+              }),
+            };
+          });
         }
 
         if (parsed.cronograma) {
@@ -406,23 +521,25 @@ export class WarRoomService {
   }
 
   /**
-   * Adiciona novo item a uma coluna
+   * Adiciona novo item (tarefa) a uma demanda/coluna
    */
   static addColumnItem(
     currentState: WhiteboardDataState,
     columnId: string,
     texto: string,
-    responsavel?: string
+    responsavel?: string,
+    dataLimite?: string
   ): WhiteboardDataState {
     const finalResp = responsavel?.trim()
       ? responsavel.trim().toUpperCase()
       : this.inferDefaultResponsible(texto);
 
-    const newItem = {
+    const newItem: WhiteboardItem = {
       id: `it-${Date.now()}`,
       texto: texto.toUpperCase(),
       concluido: false,
       responsavel: finalResp,
+      dataLimite: dataLimite?.trim() || undefined,
     };
 
     const updatedColunas = currentState.colunas.map(col => {
@@ -439,7 +556,7 @@ export class WarRoomService {
   }
 
   /**
-   * Exclui item de uma coluna
+   * Exclui item (tarefa) de uma coluna
    */
   static deleteColumnItem(
     currentState: WhiteboardDataState,
@@ -457,6 +574,142 @@ export class WarRoomService {
     const newState = { ...currentState, colunas: updatedColunas };
     this.saveWhiteboardData(newState);
     return newState;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ── GESTÃO DE DEMANDAS INTEIRAS (COLUNAS DA LOUSA) ──
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Arquiva a demanda inteira (coluna), ocultando-a da lousa ativa a critério do usuário
+   * (independente de todas as tarefas estarem executadas ou não)
+   */
+  static archiveDemand(
+    currentState: WhiteboardDataState,
+    columnId: string
+  ): WhiteboardDataState {
+    const updatedColunas = currentState.colunas.map(col => {
+      if (col.id !== columnId) return col;
+      return {
+        ...col,
+        arquivado: true,
+        arquivadoEm: new Date().toISOString(),
+      };
+    });
+
+    const newState = { ...currentState, colunas: updatedColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Restaura uma demanda inteira (coluna) arquivada de volta para a lousa ativa
+   */
+  static restoreDemand(
+    currentState: WhiteboardDataState,
+    columnId: string
+  ): WhiteboardDataState {
+    const updatedColunas = currentState.colunas.map(col => {
+      if (col.id !== columnId) return col;
+      return {
+        ...col,
+        arquivado: false,
+        arquivadoEm: undefined,
+      };
+    });
+
+    const newState = { ...currentState, colunas: updatedColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Atualiza dados estruturais de uma demanda (coluna inteira: título, subtítulo, alerta, data limite, cor)
+   */
+  static updateDemand(
+    currentState: WhiteboardDataState,
+    columnId: string,
+    updates: {
+      titulo?: string;
+      subtitulo?: string;
+      alertaDestaque?: string;
+      dataLimite?: string;
+      corMarcador?: 'vermelho' | 'azul' | 'ciano' | 'esmeralda' | 'ambar';
+      arquivado?: boolean;
+    }
+  ): WhiteboardDataState {
+    const updatedColunas = currentState.colunas.map(col => {
+      if (col.id !== columnId) return col;
+      return {
+        ...col,
+        titulo: updates.titulo ? updates.titulo.trim().toUpperCase() : col.titulo,
+        subtitulo: updates.subtitulo !== undefined ? updates.subtitulo.trim() : col.subtitulo,
+        alertaDestaque: updates.alertaDestaque !== undefined ? updates.alertaDestaque.trim().toUpperCase() : col.alertaDestaque,
+        dataLimite: updates.dataLimite !== undefined ? updates.dataLimite.trim() : col.dataLimite,
+        corMarcador: updates.corMarcador || col.corMarcador,
+        arquivado: updates.arquivado !== undefined ? updates.arquivado : col.arquivado,
+        arquivadoEm: updates.arquivado ? (col.arquivadoEm || new Date().toISOString()) : (updates.arquivado === false ? undefined : col.arquivadoEm),
+      };
+    });
+
+    const newState = { ...currentState, colunas: updatedColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Adiciona uma nova demanda (coluna) na lousa
+   */
+  static addDemand(
+    currentState: WhiteboardDataState,
+    payload: {
+      titulo: string;
+      subtitulo?: string;
+      alertaDestaque?: string;
+      dataLimite?: string;
+      corMarcador?: 'vermelho' | 'azul' | 'ciano' | 'esmeralda' | 'ambar';
+    }
+  ): WhiteboardDataState {
+    const newCol: WhiteboardColumn = {
+      id: `col-${Date.now()}`,
+      titulo: payload.titulo.trim().toUpperCase(),
+      subtitulo: payload.subtitulo?.trim() || undefined,
+      alertaDestaque: payload.alertaDestaque?.trim() ? payload.alertaDestaque.trim().toUpperCase() : undefined,
+      corMarcador: payload.corMarcador || 'vermelho',
+      dataLimite: payload.dataLimite?.trim() || undefined,
+      itens: [],
+      criadoEm: new Date().toISOString(),
+    };
+
+    const newState = { ...currentState, colunas: [...currentState.colunas, newCol] };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Exclui uma demanda inteira (coluna) e todas as suas tarefas
+   */
+  static deleteDemand(
+    currentState: WhiteboardDataState,
+    columnId: string
+  ): WhiteboardDataState {
+    const updatedColunas = currentState.colunas.filter(col => col.id !== columnId);
+    const newState = { ...currentState, colunas: updatedColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Retorna a lista de todas as demandas (colunas) arquivadas
+   */
+  static getArchivedDemandsList(currentState: WhiteboardDataState): WhiteboardColumn[] {
+    return currentState.colunas
+      .filter(col => col.arquivado)
+      .sort((a, b) => {
+        const timeA = a.arquivadoEm ? new Date(a.arquivadoEm).getTime() : 0;
+        const timeB = b.arquivadoEm ? new Date(b.arquivadoEm).getTime() : 0;
+        return timeB - timeA;
+      });
   }
 
   /**
@@ -531,6 +784,7 @@ export class WarRoomService {
     updates: {
       texto: string;
       responsavel?: string;
+      dataLimite?: string;
       destaque?: boolean;
       observacao?: string;
       prioridade?: 'normal' | 'alta' | 'urgente';
@@ -557,6 +811,7 @@ export class WarRoomService {
               ...item,
               texto: updates.texto.trim().toUpperCase(),
               responsavel: finalResp,
+              dataLimite: updates.dataLimite !== undefined ? (updates.dataLimite.trim() || undefined) : item.dataLimite,
               destaque: updates.destaque !== undefined ? updates.destaque : item.destaque,
               observacao: updates.observacao !== undefined ? updates.observacao.trim() : item.observacao,
               prioridade: updates.prioridade || item.prioridade || 'normal',
@@ -725,7 +980,8 @@ export class WarRoomService {
     columnId: string,
     itemId: string,
     novoTexto: string,
-    novoResponsavel?: string
+    novoResponsavel?: string,
+    novaDataLimite?: string
   ): WhiteboardDataState {
     const updatedColunas = currentState.colunas.map(col => {
       if (col.id !== columnId) return col;
@@ -742,6 +998,7 @@ export class WarRoomService {
             ...item,
             texto: novoTexto.trim().toUpperCase(),
             responsavel: finalResp,
+            dataLimite: novaDataLimite !== undefined ? (novaDataLimite.trim() || undefined) : item.dataLimite,
           };
         }),
       };

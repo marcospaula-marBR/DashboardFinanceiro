@@ -11,12 +11,23 @@ export interface WhiteboardItem {
   destaque?: boolean;
   observacao?: string;
   responsavel?: string; // Nome do responsável pela ação humana (ex: "MANUS", "CLARA", "MARCO")
-  arquivado?: boolean; // Se foi finalizada e arquivada
-  arquivadoEm?: string; // Data ISO de conclusão/arquivamento (ex: "2026-10-07T11:00:00.000Z")
-  finalizadoPor?: string; // Quem finalizou/arquivou
-  colunaOrigemId?: string; // ID da coluna original (ex: "col-1")
-  colunaOrigemTitulo?: string; // Título da coluna original
+  dataLimite?: string; // Data limite da tarefa (formato YYYY-MM-DD ou DD/MM)
+  arquivado?: boolean; // Se a tarefa individual foi arquivada
+  arquivadoEm?: string;
+  finalizadoPor?: string;
+  colunaOrigemId?: string;
+  colunaOrigemTitulo?: string;
   prioridade?: 'normal' | 'alta' | 'urgente';
+}
+
+export type PrazoStatus = 'atrasado' | 'hoje' | 'em_dia' | 'distante' | 'sem_prazo' | 'concluido';
+
+export interface PrazoVisualInfo {
+  status: PrazoStatus;
+  rotulo: string; // Ex: "🚨 Atrasado (2d)", "⚠️ Vence Hoje", "⏳ Em dia (3d)", "🗓️ 15/10 (8d)"
+  rotuloCurto?: string; // Ex: "🚨 2d", "⚠️ Hoje", "⏳ 3d", "🗓️ 15/10"
+  badgeClass: string;
+  diasRestantes?: number;
 }
 
 export interface WhiteboardColumn {
@@ -26,6 +37,11 @@ export interface WhiteboardColumn {
   alertaDestaque?: string; // Ex: "* SUSPENSAS NOVAS CONTAS"
   corMarcador: 'vermelho' | 'azul' | 'ciano' | 'esmeralda' | 'ambar';
   itens: WhiteboardItem[];
+  // Propriedades da Demanda:
+  dataLimite?: string; // Data limite da demanda inteira (formato YYYY-MM-DD ou DD/MM)
+  arquivado?: boolean; // Se a demanda inteira está arquivada/oculta da lousa ativa
+  arquivadoEm?: string; // Data ISO em que a demanda foi arquivada
+  criadoEm?: string;
 }
 
 export interface FollowTheMoneyRow {

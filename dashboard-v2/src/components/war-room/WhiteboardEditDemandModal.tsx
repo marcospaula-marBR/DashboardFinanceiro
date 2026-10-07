@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { WhiteboardColumn, WhiteboardItem } from '@/types/war-room';
-import { X, Save, Trash2, Archive, User, AlertCircle, ArrowRightLeft, FileText } from 'lucide-react';
+import { calculatePrazoInfo } from '@/services/war-room.service';
+import { X, Save, Trash2, Archive, User, AlertCircle, ArrowRightLeft, FileText, Calendar, Clock } from 'lucide-react';
 
 interface WhiteboardEditDemandModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface WhiteboardEditDemandModalProps {
     updates: {
       texto: string;
       responsavel?: string;
+      dataLimite?: string;
       destaque?: boolean;
       observacao?: string;
       prioridade?: 'normal' | 'alta' | 'urgente';
@@ -38,6 +40,7 @@ export function WhiteboardEditDemandModal({
 }: WhiteboardEditDemandModalProps) {
   const [texto, setTexto] = useState('');
   const [responsavel, setResponsavel] = useState('');
+  const [dataLimite, setDataLimite] = useState('');
   const [targetColId, setTargetColId] = useState(columnId);
   const [destaque, setDestaque] = useState(false);
   const [prioridade, setPrioridade] = useState<'normal' | 'alta' | 'urgente'>('normal');
@@ -47,6 +50,7 @@ export function WhiteboardEditDemandModal({
     if (item) {
       setTexto(item.texto || '');
       setResponsavel(item.responsavel || '');
+      setDataLimite(item.dataLimite || '');
       setTargetColId(columnId);
       setDestaque(!!item.destaque);
       setPrioridade(item.prioridade || 'normal');
@@ -65,6 +69,7 @@ export function WhiteboardEditDemandModal({
     onSave(columnId, item.id, {
       texto: texto.trim().toUpperCase(),
       responsavel: responsavel.trim() || undefined,
+      dataLimite: dataLimite.trim() || undefined,
       destaque,
       prioridade,
       observacao: observacao.trim() || undefined,
@@ -72,6 +77,26 @@ export function WhiteboardEditDemandModal({
     });
     onClose();
   };
+
+  const setQuickPrazo = (diasAdicionais: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + diasAdicionais);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setDataLimite(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const setPrazoFimDoMes = () => {
+    const d = new Date();
+    const ultimoDia = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const yyyy = ultimoDia.getFullYear();
+    const mm = String(ultimoDia.getMonth() + 1).padStart(2, '0');
+    const dd = String(ultimoDia.getDate()).padStart(2, '0');
+    setDataLimite(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const prazoInfo = calculatePrazoInfo(dataLimite, item.concluido);
 
   const handleDelete = () => {
     if (window.confirm(`Tem certeza que deseja excluir a demanda "${item.texto}"?`)) {
@@ -96,10 +121,10 @@ export function WhiteboardEditDemandModal({
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
             <div>
               <h3 className="text-sm sm:text-base font-black uppercase text-white font-mono tracking-wider">
-                Editar Demanda Operacional
+                Editar Tarefa Operacional
               </h3>
               <p className="text-[11px] text-slate-400 font-medium">
-                Altere coluna de destino, executor responsável, urgência e notas
+                Altere coluna de destino, executor responsável, prazos e notas
               </p>
             </div>
           </div>
@@ -118,7 +143,7 @@ export function WhiteboardEditDemandModal({
           {/* TEXTO DA DEMANDA */}
           <div>
             <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider font-mono mb-1.5">
-              Descrição da Demanda *
+              Descrição da Tarefa *
             </label>
             <textarea
               rows={2}
@@ -135,7 +160,7 @@ export function WhiteboardEditDemandModal({
           <div>
             <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider font-mono mb-1.5 flex items-center gap-1.5">
               <ArrowRightLeft size={13} className="text-cyan-400" />
-              Coluna / Pilar Operacional
+              Coluna / Demanda de Destino
             </label>
             <select
               value={targetColId}
@@ -151,7 +176,7 @@ export function WhiteboardEditDemandModal({
             {targetColId !== columnId && (
               <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1">
                 <AlertCircle size={12} />
-                A demanda será transferida de &ldquo;{currentColumn?.titulo}&rdquo; para a coluna selecionada ao salvar.
+                A tarefa será transferida de &ldquo;{currentColumn?.titulo}&rdquo; para a demanda selecionada ao salvar.
               </p>
             )}
           </div>
@@ -190,6 +215,82 @@ export function WhiteboardEditDemandModal({
                   {r}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* DATA LIMITE (PRAZO) COM SINALIZAÇÃO SEMÂNTICA POR CORES */}
+          <div className="bg-[#050811] border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <Calendar size={14} className="text-cyan-400" />
+                Data Limite da Tarefa (Prazo)
+              </label>
+              {dataLimite && prazoInfo.status !== 'sem_prazo' && (
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono tracking-wide ${prazoInfo.badgeClass}`}>
+                  {prazoInfo.rotulo}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dataLimite}
+                onChange={(e) => setDataLimite(e.target.value)}
+                className="flex-1 bg-[#090e1a] border border-slate-700 rounded-lg px-3 py-2 text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
+              />
+              {dataLimite && (
+                <button
+                  type="button"
+                  onClick={() => setDataLimite('')}
+                  className="px-2.5 py-2 rounded-lg bg-slate-900 text-slate-400 hover:text-white text-xs border border-slate-800 hover:border-slate-700"
+                  title="Limpar prazo"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+
+            {/* ATALHOS RÁPIDOS DE PRAZO */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                <Clock size={10} /> Atalhos:
+              </span>
+              <button
+                type="button"
+                onClick={() => setQuickPrazo(0)}
+                className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-800 hover:border-amber-500/50"
+              >
+                Hoje
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuickPrazo(3)}
+                className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-800 hover:border-amber-500/50"
+              >
+                +3 dias
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuickPrazo(7)}
+                className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-800 hover:border-emerald-500/50"
+              >
+                +7 dias
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuickPrazo(15)}
+                className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-800 hover:border-emerald-500/50"
+              >
+                +15 dias
+              </button>
+              <button
+                type="button"
+                onClick={setPrazoFimDoMes}
+                className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-800 hover:border-cyan-500/50"
+              >
+                Fim do Mês
+              </button>
             </div>
           </div>
 
