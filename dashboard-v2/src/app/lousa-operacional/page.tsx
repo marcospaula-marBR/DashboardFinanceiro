@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList } from '@/services/war-room.service';
+import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
 import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
@@ -14,10 +14,11 @@ import { WhiteboardNewsTicker } from '@/components/war-room/WhiteboardNewsTicker
 import { WhiteboardModal } from '@/components/war-room/WhiteboardModal';
 import { WhiteboardInsuranceAlertBanner } from '@/components/war-room/WhiteboardInsuranceAlertBanner';
 import { WhiteboardResponsibleBoard } from '@/components/war-room/WhiteboardResponsibleBoard';
+import { WhiteboardResponsibleLegend } from '@/components/war-room/WhiteboardResponsibleLegend';
 import { WhiteboardEditDemandModal } from '@/components/war-room/WhiteboardEditDemandModal';
 import { WhiteboardArchivedModal } from '@/components/war-room/WhiteboardArchivedModal';
 import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDemandColumnModal';
-import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap } from 'lucide-react';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -116,6 +117,43 @@ export default function LousaOperacionalPage() {
     }));
     return Array.from(set).sort();
   }, [data]);
+
+  // Mapa de contadores por responsável para a legenda visual memorizável
+  const responsibleCountsMap = useMemo(() => {
+    const map: Record<string, { total: number; concluidos: number; pendentes: number; atrasados: number }> = {};
+
+    const registerTask = (resp: string, concluido: boolean, isOverdue: boolean) => {
+      const upper = resp.trim().toUpperCase();
+      if (!upper) return;
+      if (!map[upper]) {
+        map[upper] = { total: 0, concluidos: 0, pendentes: 0, atrasados: 0 };
+      }
+      map[upper].total++;
+      if (concluido) {
+        map[upper].concluidos++;
+      } else {
+        map[upper].pendentes++;
+        if (isOverdue) map[upper].atrasados++;
+      }
+    };
+
+    data.cronograma.forEach(blk => {
+      blk.itens.forEach(it => {
+        const isOverdue = !it.concluido && it.dia < todayDay;
+        extractResponsaveisList(it).forEach(r => registerTask(r, it.concluido, isOverdue));
+      });
+    });
+
+    data.colunas.forEach(col => {
+      col.itens.forEach(it => {
+        if (!it.arquivado) {
+          extractResponsaveisList(it).forEach(r => registerTask(r, it.concluido, false));
+        }
+      });
+    });
+
+    return map;
+  }, [data, todayDay]);
 
   // ── DEMANDAS ARQUIVADAS E HISTÓRICO ──
   const archivedDemandsList = useMemo(() => {
@@ -459,9 +497,13 @@ export default function LousaOperacionalPage() {
               </button>
             )}
 
-            {/* PÍLULAS DE CADA RESPONSÁVEL */}
+            {/* PÍLULAS DE CADA RESPONSÁVEL COM CORES INDIVIDUAIS MEMORIZÁVEIS */}
             {distinctResponsibles.map(resp => {
               const isSelected = selectedResponsible?.toUpperCase() === resp.toUpperCase();
+              const respColor = getResponsibleColor(resp);
+              const stats = responsibleCountsMap[resp.toUpperCase()];
+              const hasOverdue = stats ? stats.atrasados > 0 : false;
+
               return (
                 <button
                   key={resp}
@@ -470,14 +512,23 @@ export default function LousaOperacionalPage() {
                     setOnlyOverdueFilter(false);
                     setSelectedResponsible(isSelected ? null : resp);
                   }}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition-all ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition-all shadow-sm ${
                     isSelected
-                      ? 'bg-cyan-600 text-white shadow-sm ring-1 ring-cyan-400'
-                      : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700'
+                      ? `${respColor.pillActiveClass} ring-1 ring-white/50`
+                      : `${respColor.pillInactiveClass} hover:opacity-100`
                   }`}
+                  title={`${resp} (${respColor.label}): ${stats?.pendentes || 0} pendentes. Clique para filtrar.`}
                 >
-                  <User size={11} className={isSelected ? 'text-white' : 'text-cyan-400'} />
+                  <span
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${hasOverdue ? 'animate-ping' : ''}`}
+                    style={{ backgroundColor: respColor.hex }}
+                  />
                   <span>{resp}</span>
+                  {stats && stats.pendentes > 0 && (
+                    <span className="text-[10px] opacity-80 font-mono">
+                      ({stats.pendentes})
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -528,6 +579,17 @@ export default function LousaOperacionalPage() {
             </button>
           </div>
         </div>
+
+        {/* ── LEGENDA VISUAL POR MEMBRO & RESPONSÁVEL (CORES MEMORIZÁVEIS) ── */}
+        <WhiteboardResponsibleLegend
+          responsiblesList={distinctResponsibles}
+          countsMap={responsibleCountsMap}
+          selectedResponsible={selectedResponsible}
+          onSelectResponsible={(resp) => {
+            setOnlyOverdueFilter(false);
+            setSelectedResponsible(resp);
+          }}
+        />
 
         {/* ── QUADRO OPERACIONAL POR RESPONSÁVEIS (EXPANSÍVEL / DEDICADO) ── */}
         {isResponsibleBoardVisible && (

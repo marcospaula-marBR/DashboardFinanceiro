@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { WhiteboardColumn, WhiteboardItem } from '@/types/war-room';
-import { calculatePrazoInfo, extractResponsaveisList } from '@/services/war-room.service';
+import { calculatePrazoInfo, extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
 import { 
   Check, 
   Plus, 
@@ -509,15 +509,19 @@ export function WhiteboardColumns({
                                 <div className="min-w-0">
                                   {/* RESPONSÁVEIS */}
                                   <div className="flex items-center flex-wrap gap-1 mb-0.5">
-                                    {extractResponsaveisList(item).map((resp) => (
-                                      <span
-                                        key={resp}
-                                        className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-black uppercase tracking-wider bg-rose-950/80 border border-rose-500/50 text-rose-300"
-                                      >
-                                        <User size={8} />
-                                        {resp}
-                                      </span>
-                                    ))}
+                                    {extractResponsaveisList(item).map((resp) => {
+                                      const respColor = getResponsibleColor(resp);
+                                      return (
+                                        <span
+                                          key={resp}
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider border flex-shrink-0 ${respColor.badgeClass}`}
+                                          title={`Responsável: ${resp} (${respColor.label})`}
+                                        >
+                                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                                          <span>{resp}</span>
+                                        </span>
+                                      );
+                                    })}
 
                                     {item.dataLimite && itemPrazo.status !== 'sem_prazo' && (
                                       <span className={`inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-mono ${itemPrazo.badgeClass}`}>
@@ -737,14 +741,19 @@ export function WhiteboardColumns({
                         </div>
 
                         {/* BADGES DOS RESPONSÁVEIS */}
-                        {extractResponsaveisList(item).map((resp) => (
-                          <span
-                            key={resp}
-                            className="px-1 py-0.2 rounded text-[8px] font-black uppercase bg-rose-950 border border-rose-500/40 text-rose-300 flex-shrink-0"
-                          >
-                            {resp}
-                          </span>
-                        ))}
+                        {extractResponsaveisList(item).map((resp) => {
+                          const respColor = getResponsibleColor(resp);
+                          return (
+                            <span
+                              key={resp}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider border flex-shrink-0 ${respColor.badgeClass}`}
+                              title={`Responsável: ${resp} (${respColor.label})`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                              <span>{resp}</span>
+                            </span>
+                          );
+                        })}
 
                         <span className="font-semibold truncate max-w-[220px]">
                           {item.texto}
@@ -993,15 +1002,19 @@ export function WhiteboardColumns({
 
                           <div className="min-w-0">
                             <div className="flex items-center flex-wrap gap-1 mb-0.5">
-                              {extractResponsaveisList(item).map((resp) => (
-                                <span
-                                  key={resp}
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-rose-950 border border-rose-500/60 text-rose-300"
-                                >
-                                  <User size={8} />
-                                  {resp}
-                                </span>
-                              ))}
+                              {extractResponsaveisList(item).map((resp) => {
+                                const respColor = getResponsibleColor(resp);
+                                return (
+                                  <span
+                                    key={resp}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider border flex-shrink-0 ${respColor.badgeClass}`}
+                                    title={`Responsável: ${resp} (${respColor.label})`}
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                                    <span>{resp}</span>
+                                  </span>
+                                );
+                              })}
 
                               {item.dataLimite && itemPrazo.status !== 'sem_prazo' && (
                                 <span className={`inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-mono ${itemPrazo.badgeClass}`}>

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { WhiteboardTimelineBlock, WhiteboardTimelineItem, WhiteboardItem } from '@/types/war-room';
-import { extractResponsaveisList } from '@/services/war-room.service';
+import { extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
 import { 
   Check, 
   Plus, 
@@ -425,14 +425,19 @@ export function WhiteboardTimeline({
                         ⚡ DEMANDA: {hoveredDemand?.titulo.split(':')[0]}
                       </span>
 
-                      {extractResponsaveisList(demandTask).map((resp) => (
-                        <span
-                          key={resp}
-                          className="px-1 py-0.2 rounded text-[8px] font-black uppercase bg-slate-900 border border-cyan-500/40 text-white"
-                        >
-                          {resp}
-                        </span>
-                      ))}
+                      {extractResponsaveisList(demandTask).map((resp) => {
+                        const respColor = getResponsibleColor(resp);
+                        return (
+                          <span
+                            key={resp}
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider border flex-shrink-0 ${respColor.badgeClass}`}
+                            title={`Responsável: ${resp} (${respColor.label})`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                            <span>{resp}</span>
+                          </span>
+                        );
+                      })}
 
                       <span className="font-bold truncate max-w-[240px]">
                         {demandTask.texto}
@@ -532,15 +537,19 @@ export function WhiteboardTimeline({
                         </span>
 
                         {/* BADGES DOS RESPONSÁVEIS */}
-                        {extractResponsaveisList(item).map((resp) => (
-                          <span
-                            key={resp}
-                            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-black uppercase bg-cyan-950 border border-cyan-500/50 text-cyan-300 flex-shrink-0"
-                          >
-                            <User size={8} />
-                            {resp}
-                          </span>
-                        ))}
+                        {extractResponsaveisList(item).map((resp) => {
+                          const respColor = getResponsibleColor(resp);
+                          return (
+                            <span
+                              key={resp}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider border flex-shrink-0 ${respColor.badgeClass}`}
+                              title={`Responsável: ${resp} (${respColor.label})`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                              <span>{resp}</span>
+                            </span>
+                          );
+                        })}
 
                         {/* SINALIZADOR DE ATRASO */}
                         {isOverdue && (
@@ -736,10 +745,23 @@ export function WhiteboardTimeline({
                       }}
                       className="p-1.5 rounded-lg border border-cyan-400 bg-cyan-950/60 text-cyan-200 text-xs cursor-pointer animate-pulse shadow-md"
                     >
-                      <div className="flex items-center gap-1 mb-0.5">
+                      <div className="flex items-center gap-1 mb-0.5 flex-wrap">
                         <span className="px-1 py-0.2 rounded bg-cyan-900 text-[8px] font-black uppercase">
                           ⚡ {hoveredDemand?.titulo.split(':')[0]}
                         </span>
+                        {extractResponsaveisList(demandTask).map((resp) => {
+                          const respColor = getResponsibleColor(resp);
+                          return (
+                            <span
+                              key={resp}
+                              className={`inline-flex items-center gap-1 px-1 py-0.2 rounded text-[8px] font-black uppercase tracking-wider border flex-shrink-0 ${respColor.badgeClass}`}
+                              title={`Responsável: ${resp} (${respColor.label})`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                              <span>{resp}</span>
+                            </span>
+                          );
+                        })}
                       </div>
                       <p className="font-bold text-[11px] leading-tight">
                         {demandTask.texto}
@@ -784,15 +806,19 @@ export function WhiteboardTimeline({
 
                           <div className="min-w-0">
                             <div className="flex items-center flex-wrap gap-1 leading-tight">
-                              {extractResponsaveisList(item).map((resp) => (
-                                <span
-                                  key={resp}
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-cyan-950 border border-cyan-500/60 text-cyan-300"
-                                >
-                                  <User size={8} />
-                                  {resp}
-                                </span>
-                              ))}
+                              {extractResponsaveisList(item).map((resp) => {
+                                const respColor = getResponsibleColor(resp);
+                                return (
+                                  <span
+                                    key={resp}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider border flex-shrink-0 ${respColor.badgeClass}`}
+                                    title={`Responsável: ${resp} (${respColor.label})`}
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                                    <span>{resp}</span>
+                                  </span>
+                                );
+                              })}
 
                               {isOverdue && (
                                 <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-black uppercase bg-rose-600 text-white animate-pulse">

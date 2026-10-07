@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { WhiteboardColumn, WhiteboardTimelineBlock } from '@/types/war-room';
-import { extractResponsaveisList } from '@/services/war-room.service';
+import { extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
 import { User, Check, AlertTriangle, Clock, Calendar, CheckCircle2, ChevronRight, Filter, X, ArrowRight, Users } from 'lucide-react';
 
 interface ResponsibleTask {
@@ -238,6 +238,7 @@ export function WhiteboardResponsibleBoard({
       {/* ── GRID DOS CARDS DE CADA RESPONSÁVEL ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         {groups.map(group => {
+          const respColor = getResponsibleColor(group.nome);
           const isSelected = selectedResponsible?.toUpperCase() === group.nome.toUpperCase();
 
           return (
@@ -247,19 +248,23 @@ export function WhiteboardResponsibleBoard({
                 group.hasOverdue
                   ? 'bg-gradient-to-b from-rose-950/30 via-[#0b1120] to-[#070c18] border-rose-500/70 ring-1 ring-rose-500/40 shadow-lg shadow-rose-950/40'
                   : isSelected
-                  ? 'bg-cyan-950/20 border-cyan-400 ring-2 ring-cyan-400/50'
+                  ? `bg-slate-900/95 ${respColor.borderClass} ring-2 ${respColor.ringClass}`
                   : 'bg-[#0b1120]/90 border-slate-800/80 hover:border-slate-700'
               }`}
+              style={{
+                borderTopColor: group.hasOverdue ? undefined : respColor.hex,
+                borderTopWidth: '3px',
+              }}
             >
               {/* CABEÇALHO DO RESPONSÁVEL COM PULSAR SE ATRASADO */}
               <div className="flex items-start justify-between gap-2 pb-2.5 mb-2.5 border-b border-slate-800/80">
                 <div className="flex items-center gap-2 min-w-0">
-                  {/* AVATAR / ÍCONE COM PING SE HOUVER ATRASO */}
+                  {/* AVATAR / ÍCONE COM PING SE HOUVER ATRASO OU COR PERSONALIZADA */}
                   <div
-                    className={`relative w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs uppercase flex-shrink-0 border ${
+                    className={`relative w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs uppercase flex-shrink-0 border transition-all ${
                       group.hasOverdue
                         ? 'bg-rose-600/30 border-rose-500/70 text-rose-300 ring-2 ring-rose-500/40'
-                        : 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
+                        : `${respColor.bgClass} ${respColor.borderClass} ${respColor.textClass}`
                     }`}
                   >
                     {group.hasOverdue ? (
@@ -273,9 +278,15 @@ export function WhiteboardResponsibleBoard({
                   </div>
 
                   <div className="min-w-0">
-                    <h3 className="text-xs sm:text-sm font-black uppercase text-white truncate font-mono">
-                      {group.nome}
-                    </h3>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                      <h3 className="text-xs sm:text-sm font-black uppercase text-white truncate font-mono">
+                        {group.nome}
+                      </h3>
+                      <span className={`text-[8px] font-black uppercase px-1 py-0.2 rounded border ${respColor.badgeClass}`}>
+                        {respColor.label}
+                      </span>
+                    </div>
                     <p className="text-[10px] text-slate-400 font-mono">
                       {group.concluidos}/{group.total} Concluídas ({group.pendentes} pendentes)
                     </p>
@@ -363,10 +374,10 @@ export function WhiteboardResponsibleBoard({
                   <button
                     type="button"
                     onClick={() => onSelectResponsible(isSelected ? null : group.nome)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all shadow-sm ${
                       isSelected
-                        ? 'bg-cyan-600 text-white'
-                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800'
+                        ? `${respColor.pillActiveClass}`
+                        : `${respColor.pillInactiveClass} hover:opacity-100`
                     }`}
                   >
                     <span>{isSelected ? 'Filtrado' : 'Filtrar Lousa'}</span>

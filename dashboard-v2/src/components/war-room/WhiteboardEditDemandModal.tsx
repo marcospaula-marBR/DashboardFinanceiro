@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { WhiteboardColumn, WhiteboardItem } from '@/types/war-room';
-import { calculatePrazoInfo, extractResponsaveisList } from '@/services/war-room.service';
+import { calculatePrazoInfo, extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
 import { X, Save, Trash2, Archive, User, AlertCircle, ArrowRightLeft, FileText, Calendar, Clock, Plus, Users } from 'lucide-react';
 
 interface WhiteboardEditDemandModalProps {
@@ -133,7 +133,7 @@ export function WhiteboardEditDemandModal({
     onClose();
   };
 
-  const quickResponsibles = ['MANUS', 'CLARA', 'MARCO', 'ALDO', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
+  const quickResponsibles = ['MANUS', 'CLARA', 'MARCO', 'ALDO', 'DAUREN', 'PRISCILLA', 'ADRIANA', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
@@ -219,23 +219,26 @@ export function WhiteboardEditDemandModal({
               {selectedResponsaveis.length === 0 ? (
                 <span className="text-xs text-slate-500 italic">Nenhum responsável atribuído (clique nos atalhos abaixo ou adicione)</span>
               ) : (
-                selectedResponsaveis.map((resp) => (
-                  <span
-                    key={resp}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-950 border border-rose-500/60 text-rose-300 text-xs font-mono font-bold uppercase shadow-sm"
-                  >
-                    <User size={11} className="text-rose-400" />
-                    <span>{resp}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveResp(resp)}
-                      className="text-rose-400 hover:text-white rounded hover:bg-rose-900/60 p-0.5 transition-colors"
-                      title={`Remover ${resp}`}
+                selectedResponsaveis.map((resp) => {
+                  const respColor = getResponsibleColor(resp);
+                  return (
+                    <span
+                      key={resp}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold uppercase shadow-sm border ${respColor.badgeClass}`}
                     >
-                      <X size={11} />
-                    </button>
-                  </span>
-                ))
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                      <span>{resp}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveResp(resp)}
+                        className="opacity-70 hover:opacity-100 rounded p-0.5 transition-opacity"
+                        title={`Remover ${resp}`}
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  );
+                })
               )}
             </div>
 
@@ -265,23 +268,25 @@ export function WhiteboardEditDemandModal({
               </button>
             </div>
 
-            {/* PÍLULAS DE ATALHO RÁPIDO (TOGGLE) */}
+            {/* PÍLULAS DE ATALHO RÁPIDO (TOGGLE) COM CORES OFICIAIS */}
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               <span className="text-[10px] text-slate-500 font-mono">Atalhos rápidos:</span>
               {quickResponsibles.map((r) => {
                 const isSelected = selectedResponsaveis.includes(r);
+                const respColor = getResponsibleColor(r);
                 return (
                   <button
                     key={r}
                     type="button"
                     onClick={() => handleToggleResp(r)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase transition-all flex items-center gap-1 ${
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase transition-all flex items-center gap-1 shadow-sm ${
                       isSelected
-                        ? 'bg-rose-600 text-white shadow-sm ring-1 ring-rose-400'
-                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                        ? respColor.pillActiveClass
+                        : `${respColor.pillInactiveClass} hover:opacity-100`
                     }`}
                     title={isSelected ? `Clique para remover ${r}` : `Clique para adicionar ${r}`}
                   >
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
                     <span>{isSelected ? '✓' : '+'}</span>
                     <span>{r}</span>
                   </button>

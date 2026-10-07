@@ -49,6 +49,329 @@ export function extractResponsaveisList(
   return [];
 }
 
+export interface ResponsibleColorConfig {
+  nome: string;
+  badgeClass: string;
+  pillActiveClass: string;
+  pillInactiveClass: string;
+  borderClass: string;
+  bgClass: string;
+  textClass: string;
+  dotClass: string;
+  ringClass: string;
+  hex: string;
+  label: string;
+}
+
+/**
+ * Paleta de Cores Estrita e Memorizável por Membro/Responsável (Purple Ban respeitado: sem roxo/violeta)
+ */
+export const RESPONSIBLE_COLOR_MAP: Record<string, ResponsibleColorConfig> = {
+  'MANUS': {
+    nome: 'MANUS',
+    label: 'Ciano Vibrante',
+    badgeClass: 'bg-cyan-950/90 border-cyan-500/70 text-cyan-300 shadow-sm shadow-cyan-950/50',
+    pillActiveClass: 'bg-cyan-600 text-white ring-2 ring-cyan-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-cyan-300 border-cyan-500/40 hover:border-cyan-400',
+    borderClass: 'border-cyan-500/70',
+    bgClass: 'bg-cyan-950/40',
+    textClass: 'text-cyan-400',
+    dotClass: 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]',
+    ringClass: 'ring-cyan-400',
+    hex: '#06b6d4',
+  },
+  'CLARA': {
+    nome: 'CLARA',
+    label: 'Verde Esmeralda',
+    badgeClass: 'bg-emerald-950/90 border-emerald-500/70 text-emerald-300 shadow-sm shadow-emerald-950/50',
+    pillActiveClass: 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-emerald-300 border-emerald-500/40 hover:border-emerald-400',
+    borderClass: 'border-emerald-500/70',
+    bgClass: 'bg-emerald-950/40',
+    textClass: 'text-emerald-400',
+    dotClass: 'bg-emerald-400 shadow-[0_0_8px_#34d399]',
+    ringClass: 'ring-emerald-400',
+    hex: '#10b981',
+  },
+  'MARCO': {
+    nome: 'MARCO',
+    label: 'Âmbar Ouro',
+    badgeClass: 'bg-amber-950/90 border-amber-500/70 text-amber-300 shadow-sm shadow-amber-950/50',
+    pillActiveClass: 'bg-amber-600 text-white ring-2 ring-amber-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-amber-300 border-amber-500/40 hover:border-amber-400',
+    borderClass: 'border-amber-500/70',
+    bgClass: 'bg-amber-950/40',
+    textClass: 'text-amber-400',
+    dotClass: 'bg-amber-400 shadow-[0_0_8px_#fbbf24]',
+    ringClass: 'ring-amber-400',
+    hex: '#f59e0b',
+  },
+  'ALDO': {
+    nome: 'ALDO',
+    label: 'Azul Royal',
+    badgeClass: 'bg-blue-950/90 border-blue-500/70 text-blue-300 shadow-sm shadow-blue-950/50',
+    pillActiveClass: 'bg-blue-600 text-white ring-2 ring-blue-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-blue-300 border-blue-500/40 hover:border-blue-400',
+    borderClass: 'border-blue-500/70',
+    bgClass: 'bg-blue-950/40',
+    textClass: 'text-blue-400',
+    dotClass: 'bg-blue-400 shadow-[0_0_8px_#60a5fa]',
+    ringClass: 'ring-blue-400',
+    hex: '#3b82f6',
+  },
+  'DAUREN': {
+    nome: 'DAUREN',
+    label: 'Laranja Mar Brasil',
+    badgeClass: 'bg-orange-950/90 border-orange-500/70 text-orange-300 shadow-sm shadow-orange-950/50',
+    pillActiveClass: 'bg-orange-600 text-white ring-2 ring-orange-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-orange-300 border-orange-500/40 hover:border-orange-400',
+    borderClass: 'border-orange-500/70',
+    bgClass: 'bg-orange-950/40',
+    textClass: 'text-orange-400',
+    dotClass: 'bg-orange-400 shadow-[0_0_8px_#fb923c]',
+    ringClass: 'ring-orange-400',
+    hex: '#f97316',
+  },
+  'PRISCILLA': {
+    nome: 'PRISCILLA',
+    label: 'Rosa Rose',
+    badgeClass: 'bg-rose-950/90 border-rose-500/70 text-rose-300 shadow-sm shadow-rose-950/50',
+    pillActiveClass: 'bg-rose-600 text-white ring-2 ring-rose-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-rose-300 border-rose-500/40 hover:border-rose-400',
+    borderClass: 'border-rose-500/70',
+    bgClass: 'bg-rose-950/40',
+    textClass: 'text-rose-400',
+    dotClass: 'bg-rose-400 shadow-[0_0_8px_#fb7185]',
+    ringClass: 'ring-rose-400',
+    hex: '#f43f5e',
+  },
+  'ADRIANA': {
+    nome: 'ADRIANA',
+    label: 'Amarelo Ouro',
+    badgeClass: 'bg-yellow-950/90 border-yellow-500/70 text-yellow-300 shadow-sm shadow-yellow-950/50',
+    pillActiveClass: 'bg-yellow-500 text-slate-950 ring-2 ring-yellow-400 font-black shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-yellow-300 border-yellow-500/40 hover:border-yellow-400',
+    borderClass: 'border-yellow-500/70',
+    bgClass: 'bg-yellow-950/40',
+    textClass: 'text-yellow-400',
+    dotClass: 'bg-yellow-400 shadow-[0_0_8px_#facc15]',
+    ringClass: 'ring-yellow-400',
+    hex: '#eab308',
+  },
+  'FINANCEIRO': {
+    nome: 'FINANCEIRO',
+    label: 'Verde Petróleo / Menta',
+    badgeClass: 'bg-teal-950/90 border-teal-500/70 text-teal-300 shadow-sm shadow-teal-950/50',
+    pillActiveClass: 'bg-teal-600 text-white ring-2 ring-teal-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-teal-300 border-teal-500/40 hover:border-teal-400',
+    borderClass: 'border-teal-500/70',
+    bgClass: 'bg-teal-950/40',
+    textClass: 'text-teal-400',
+    dotClass: 'bg-teal-400 shadow-[0_0_8px_#2dd4bf]',
+    ringClass: 'ring-teal-400',
+    hex: '#14b8a6',
+  },
+  'JURÍDICO': {
+    nome: 'JURÍDICO',
+    label: 'Vermelho Carmim',
+    badgeClass: 'bg-red-950/90 border-red-500/70 text-red-300 shadow-sm shadow-red-950/50',
+    pillActiveClass: 'bg-red-600 text-white ring-2 ring-red-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-red-300 border-red-500/40 hover:border-red-400',
+    borderClass: 'border-red-500/70',
+    bgClass: 'bg-red-950/40',
+    textClass: 'text-red-400',
+    dotClass: 'bg-red-400 shadow-[0_0_8px_#f87171]',
+    ringClass: 'ring-red-400',
+    hex: '#ef4444',
+  },
+  'JURIDICO': {
+    nome: 'JURIDICO',
+    label: 'Vermelho Carmim',
+    badgeClass: 'bg-red-950/90 border-red-500/70 text-red-300 shadow-sm shadow-red-950/50',
+    pillActiveClass: 'bg-red-600 text-white ring-2 ring-red-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-red-300 border-red-500/40 hover:border-red-400',
+    borderClass: 'border-red-500/70',
+    bgClass: 'bg-red-950/40',
+    textClass: 'text-red-400',
+    dotClass: 'bg-red-400 shadow-[0_0_8px_#f87171]',
+    ringClass: 'ring-red-400',
+    hex: '#ef4444',
+  },
+  'CONTÁBIL': {
+    nome: 'CONTÁBIL',
+    label: 'Azul Céu',
+    badgeClass: 'bg-sky-950/90 border-sky-500/70 text-sky-300 shadow-sm shadow-sky-950/50',
+    pillActiveClass: 'bg-sky-600 text-white ring-2 ring-sky-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-sky-300 border-sky-500/40 hover:border-sky-400',
+    borderClass: 'border-sky-500/70',
+    bgClass: 'bg-sky-950/40',
+    textClass: 'text-sky-400',
+    dotClass: 'bg-sky-400 shadow-[0_0_8px_#38bdf8]',
+    ringClass: 'ring-sky-400',
+    hex: '#0ea5e9',
+  },
+  'CONTABIL': {
+    nome: 'CONTABIL',
+    label: 'Azul Céu',
+    badgeClass: 'bg-sky-950/90 border-sky-500/70 text-sky-300 shadow-sm shadow-sky-950/50',
+    pillActiveClass: 'bg-sky-600 text-white ring-2 ring-sky-400 shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-sky-300 border-sky-500/40 hover:border-sky-400',
+    borderClass: 'border-sky-500/70',
+    bgClass: 'bg-sky-950/40',
+    textClass: 'text-sky-400',
+    dotClass: 'bg-sky-400 shadow-[0_0_8px_#38bdf8]',
+    ringClass: 'ring-sky-400',
+    hex: '#0ea5e9',
+  },
+  'TI': {
+    nome: 'TI',
+    label: 'Verde Lima',
+    badgeClass: 'bg-lime-950/90 border-lime-500/70 text-lime-300 shadow-sm shadow-lime-950/50',
+    pillActiveClass: 'bg-lime-500 text-slate-950 ring-2 ring-lime-400 font-black shadow-md',
+    pillInactiveClass: 'bg-slate-950 text-lime-300 border-lime-500/40 hover:border-lime-400',
+    borderClass: 'border-lime-500/70',
+    bgClass: 'bg-lime-950/40',
+    textClass: 'text-lime-400',
+    dotClass: 'bg-lime-400 shadow-[0_0_8px_#a3e635]',
+    ringClass: 'ring-lime-400',
+    hex: '#84cc16',
+  },
+};
+
+/**
+ * Paleta circular de fallback para novos nomes cadastrados pela equipe (garante que não haja roxo/violeta)
+ */
+const FALLBACK_PALETTE: Omit<ResponsibleColorConfig, 'nome' | 'label'>[] = [
+  {
+    badgeClass: 'bg-cyan-950/90 border-cyan-500/70 text-cyan-300',
+    pillActiveClass: 'bg-cyan-600 text-white ring-2 ring-cyan-400',
+    pillInactiveClass: 'bg-slate-950 text-cyan-300 border-cyan-500/40',
+    borderClass: 'border-cyan-500/70',
+    bgClass: 'bg-cyan-950/40',
+    textClass: 'text-cyan-400',
+    dotClass: 'bg-cyan-400',
+    ringClass: 'ring-cyan-400',
+    hex: '#06b6d4',
+  },
+  {
+    badgeClass: 'bg-emerald-950/90 border-emerald-500/70 text-emerald-300',
+    pillActiveClass: 'bg-emerald-600 text-white ring-2 ring-emerald-400',
+    pillInactiveClass: 'bg-slate-950 text-emerald-300 border-emerald-500/40',
+    borderClass: 'border-emerald-500/70',
+    bgClass: 'bg-emerald-950/40',
+    textClass: 'text-emerald-400',
+    dotClass: 'bg-emerald-400',
+    ringClass: 'ring-emerald-400',
+    hex: '#10b981',
+  },
+  {
+    badgeClass: 'bg-amber-950/90 border-amber-500/70 text-amber-300',
+    pillActiveClass: 'bg-amber-600 text-white ring-2 ring-amber-400',
+    pillInactiveClass: 'bg-slate-950 text-amber-300 border-amber-500/40',
+    borderClass: 'border-amber-500/70',
+    bgClass: 'bg-amber-950/40',
+    textClass: 'text-amber-400',
+    dotClass: 'bg-amber-400',
+    ringClass: 'ring-amber-400',
+    hex: '#f59e0b',
+  },
+  {
+    badgeClass: 'bg-blue-950/90 border-blue-500/70 text-blue-300',
+    pillActiveClass: 'bg-blue-600 text-white ring-2 ring-blue-400',
+    pillInactiveClass: 'bg-slate-950 text-blue-300 border-blue-500/40',
+    borderClass: 'border-blue-500/70',
+    bgClass: 'bg-blue-950/40',
+    textClass: 'text-blue-400',
+    dotClass: 'bg-blue-400',
+    ringClass: 'ring-blue-400',
+    hex: '#3b82f6',
+  },
+  {
+    badgeClass: 'bg-orange-950/90 border-orange-500/70 text-orange-300',
+    pillActiveClass: 'bg-orange-600 text-white ring-2 ring-orange-400',
+    pillInactiveClass: 'bg-slate-950 text-orange-300 border-orange-500/40',
+    borderClass: 'border-orange-500/70',
+    bgClass: 'bg-orange-950/40',
+    textClass: 'text-orange-400',
+    dotClass: 'bg-orange-400',
+    ringClass: 'ring-orange-400',
+    hex: '#f97316',
+  },
+  {
+    badgeClass: 'bg-rose-950/90 border-rose-500/70 text-rose-300',
+    pillActiveClass: 'bg-rose-600 text-white ring-2 ring-rose-400',
+    pillInactiveClass: 'bg-slate-950 text-rose-300 border-rose-500/40',
+    borderClass: 'border-rose-500/70',
+    bgClass: 'bg-rose-950/40',
+    textClass: 'text-rose-400',
+    dotClass: 'bg-rose-400',
+    ringClass: 'ring-rose-400',
+    hex: '#f43f5e',
+  },
+  {
+    badgeClass: 'bg-teal-950/90 border-teal-500/70 text-teal-300',
+    pillActiveClass: 'bg-teal-600 text-white ring-2 ring-teal-400',
+    pillInactiveClass: 'bg-slate-950 text-teal-300 border-teal-500/40',
+    borderClass: 'border-teal-500/70',
+    bgClass: 'bg-teal-950/40',
+    textClass: 'text-teal-400',
+    dotClass: 'bg-teal-400',
+    ringClass: 'ring-teal-400',
+    hex: '#14b8a6',
+  },
+  {
+    badgeClass: 'bg-sky-950/90 border-sky-500/70 text-sky-300',
+    pillActiveClass: 'bg-sky-600 text-white ring-2 ring-sky-400',
+    pillInactiveClass: 'bg-slate-950 text-sky-300 border-sky-500/40',
+    borderClass: 'border-sky-500/70',
+    bgClass: 'bg-sky-950/40',
+    textClass: 'text-sky-400',
+    dotClass: 'bg-sky-400',
+    ringClass: 'ring-sky-400',
+    hex: '#0ea5e9',
+  },
+];
+
+/**
+ * Retorna a configuração de cor visual exclusiva e determinística de um responsável
+ */
+export function getResponsibleColor(name?: string | null): ResponsibleColorConfig {
+  if (!name || !name.trim()) {
+    return {
+      nome: 'SEM RESPONSÁVEL',
+      label: 'Cinza Neutro',
+      badgeClass: 'bg-slate-900 border-slate-700 text-slate-400',
+      pillActiveClass: 'bg-slate-700 text-white',
+      pillInactiveClass: 'bg-slate-950 text-slate-400 border-slate-800',
+      borderClass: 'border-slate-700',
+      bgClass: 'bg-slate-900/40',
+      textClass: 'text-slate-400',
+      dotClass: 'bg-slate-500',
+      ringClass: 'ring-slate-500',
+      hex: '#64748b',
+    };
+  }
+
+  const upper = name.trim().toUpperCase();
+  if (RESPONSIBLE_COLOR_MAP[upper]) {
+    return RESPONSIBLE_COLOR_MAP[upper];
+  }
+
+  // Se for nome desconhecido, calcular hash determinístico
+  let hash = 0;
+  for (let i = 0; i < upper.length; i++) {
+    hash = upper.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % FALLBACK_PALETTE.length;
+  const fallback = FALLBACK_PALETTE[index];
+
+  return {
+    nome: upper,
+    label: upper,
+    ...fallback,
+  };
+}
+
 /**
  * Calcula o status visual do prazo para demandas e tarefas
  * @returns 'atrasado' (vermelho) | 'hoje' (âmbar vivo) | 'em_dia' (âmbar/próximo) | 'distante' (verde) | 'sem_prazo' | 'concluido'
