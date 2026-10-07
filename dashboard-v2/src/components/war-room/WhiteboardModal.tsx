@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { WhiteboardColumn, WhiteboardTimelineBlock, FollowTheMoneyRow } from '@/types/war-room';
-import { X, Plus, Calendar, DollarSign, CheckSquare } from 'lucide-react';
+import { extractResponsaveisList } from '@/services/war-room.service';
+import { X, Plus, Calendar, DollarSign, CheckSquare, Users } from 'lucide-react';
 
 interface WhiteboardModalProps {
   isOpen: boolean;
@@ -10,9 +11,9 @@ interface WhiteboardModalProps {
   defaultTab?: 'demanda' | 'cambio' | 'cronograma';
   colunas: WhiteboardColumn[];
   cronograma: WhiteboardTimelineBlock[];
-  onAddDemanda: (columnId: string, texto: string, responsavel?: string) => void;
+  onAddDemanda: (columnId: string, texto: string, responsavel?: string, dataLimite?: string, responsaveis?: string[]) => void;
   onAddCambio: (row: Omit<FollowTheMoneyRow, 'id'>) => void;
-  onAddCronograma: (blockId: string, dia: number, descricao: string, responsavel?: string) => void;
+  onAddCronograma: (blockId: string, dia: number, descricao: string, responsavel?: string, responsaveis?: string[]) => void;
 }
 
 export function WhiteboardModal({
@@ -55,7 +56,8 @@ export function WhiteboardModal({
   const handleSubmitDemanda = (e: React.FormEvent) => {
     e.preventDefault();
     if (!demandaTexto.trim()) return;
-    onAddDemanda(selectedColId, demandaTexto.trim(), demandaResp.trim() || undefined);
+    const resps = extractResponsaveisList(demandaResp);
+    onAddDemanda(selectedColId, demandaTexto.trim(), resps.join(', ') || undefined, undefined, resps);
     setDemandaTexto('');
     setDemandaResp('');
     onClose();
@@ -90,7 +92,8 @@ export function WhiteboardModal({
   const handleSubmitCronograma = (e: React.FormEvent) => {
     e.preventDefault();
     if (!cronogramaDesc.trim()) return;
-    onAddCronograma(selectedBlockId, cronogramaDia, cronogramaDesc.trim(), cronogramaResp.trim() || undefined);
+    const resps = extractResponsaveisList(cronogramaResp);
+    onAddCronograma(selectedBlockId, cronogramaDia, cronogramaDesc.trim(), resps.join(', ') || undefined, resps);
     setCronogramaDesc('');
     setCronogramaResp('');
     onClose();

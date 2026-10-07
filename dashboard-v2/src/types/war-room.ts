@@ -10,7 +10,8 @@ export interface WhiteboardItem {
   concluido: boolean;
   destaque?: boolean;
   observacao?: string;
-  responsavel?: string; // Nome do responsável pela ação humana (ex: "MANUS", "CLARA", "MARCO")
+  responsavel?: string; // Nome do responsável (compatibilidade / texto formatado: ex: "MANUS, CLARA")
+  responsaveis?: string[]; // Lista de múltiplos responsáveis atribuídos à tarefa
   dataLimite?: string; // Data limite da tarefa (formato YYYY-MM-DD ou DD/MM)
   arquivado?: boolean; // Se a tarefa individual foi arquivada
   arquivadoEm?: string;
@@ -68,7 +69,8 @@ export interface WhiteboardTimelineItem {
   descricao: string; // "05 - PLANNIGI", "10 - COTAS YBOX"
   concluido: boolean;
   empresa?: string;
-  responsavel?: string; // Nome do responsável pela ação humana (ex: "MANUS", "CLARA", "MARCO")
+  responsavel?: string; // Nome do responsável (compatibilidade / texto formatado: ex: "MANUS, CLARA")
+  responsaveis?: string[]; // Lista de múltiplos responsáveis atribuídos à obrigação
 }
 
 export interface WhiteboardTimelineBlock {

@@ -2,10 +2,12 @@
 
 import React, { useMemo, useState } from 'react';
 import { WhiteboardColumn, WhiteboardTimelineBlock } from '@/types/war-room';
-import { User, Check, AlertTriangle, Clock, Calendar, CheckCircle2, ChevronRight, Filter, X, ArrowRight } from 'lucide-react';
+import { extractResponsaveisList } from '@/services/war-room.service';
+import { User, Check, AlertTriangle, Clock, Calendar, CheckCircle2, ChevronRight, Filter, X, ArrowRight, Users } from 'lucide-react';
 
 interface ResponsibleTask {
   id: string;
+  itemId: string; // ID real da tarefa
   origem: 'cronograma' | 'coluna';
   origemId: string; // blockId ou columnId
   origemNome: string;
@@ -48,7 +50,7 @@ export function WhiteboardResponsibleBoard({
   const today = new Date();
   const todayDay = today.getDate();
 
-  // Compilar todas as tarefas e agrupar por responsável
+  // Compilar todas as tarefas e agrupar por responsável (com suporte a múltiplos responsáveis)
   const { groups, totalAtrasadosGeral, totalTarefasGeral } = useMemo(() => {
     const allTasks: ResponsibleTask[] = [];
 
@@ -56,18 +58,36 @@ export function WhiteboardResponsibleBoard({
     cronograma.forEach(block => {
       block.itens.forEach(item => {
         const isOverdue = !item.concluido && item.dia < todayDay;
-        const resp = item.responsavel?.trim() || 'SEM RESPONSÁVEL';
-        allTasks.push({
-          id: item.id,
-          origem: 'cronograma',
-          origemId: block.id,
-          origemNome: `Bloco ${block.intervalo}`,
-          dia: item.dia,
-          texto: item.descricao,
-          concluido: item.concluido,
-          isOverdue,
-          responsavel: resp.toUpperCase(),
-        });
+        const resps = extractResponsaveisList(item);
+        if (resps.length === 0) {
+          allTasks.push({
+            id: item.id,
+            itemId: item.id,
+            origem: 'cronograma',
+            origemId: block.id,
+            origemNome: `Bloco ${block.intervalo}`,
+            dia: item.dia,
+            texto: item.descricao,
+            concluido: item.concluido,
+            isOverdue,
+            responsavel: 'SEM RESPONSÁVEL',
+          });
+        } else {
+          resps.forEach(resp => {
+            allTasks.push({
+              id: `${item.id}-${resp}`,
+              itemId: item.id,
+              origem: 'cronograma',
+              origemId: block.id,
+              origemNome: `Bloco ${block.intervalo}`,
+              dia: item.dia,
+              texto: item.descricao,
+              concluido: item.concluido,
+              isOverdue,
+              responsavel: resp,
+            });
+          });
+        }
       });
     });
 
@@ -75,17 +95,34 @@ export function WhiteboardResponsibleBoard({
     colunas.forEach(col => {
       col.itens.forEach(item => {
         if (item.arquivado) return;
-        const resp = item.responsavel?.trim() || 'SEM RESPONSÁVEL';
-        allTasks.push({
-          id: item.id,
-          origem: 'coluna',
-          origemId: col.id,
-          origemNome: col.titulo.replace(':', ''),
-          texto: item.texto,
-          concluido: item.concluido,
-          isOverdue: false, // Em colunas a data exata é do cronograma
-          responsavel: resp.toUpperCase(),
-        });
+        const resps = extractResponsaveisList(item);
+        if (resps.length === 0) {
+          allTasks.push({
+            id: item.id,
+            itemId: item.id,
+            origem: 'coluna',
+            origemId: col.id,
+            origemNome: col.titulo.replace(':', ''),
+            texto: item.texto,
+            concluido: item.concluido,
+            isOverdue: false,
+            responsavel: 'SEM RESPONSÁVEL',
+          });
+        } else {
+          resps.forEach(resp => {
+            allTasks.push({
+              id: `${item.id}-${resp}`,
+              itemId: item.id,
+              origem: 'coluna',
+              origemId: col.id,
+              origemNome: col.titulo.replace(':', ''),
+              texto: item.texto,
+              concluido: item.concluido,
+              isOverdue: false,
+              responsavel: resp,
+            });
+          });
+        }
       });
     });
 
@@ -265,9 +302,9 @@ export function WhiteboardResponsibleBoard({
                     key={`${task.origem}-${task.id}`}
                     onClick={() => {
                       if (task.origem === 'cronograma') {
-                        onToggleTimelineItem(task.origemId, task.id);
+                        onToggleTimelineItem(task.origemId, task.itemId);
                       } else {
-                        onToggleColumnItem(task.origemId, task.id);
+                        onToggleColumnItem(task.origemId, task.itemId);
                       }
                     }}
                     className={`flex items-start justify-between gap-1.5 p-2 rounded-lg border text-xs cursor-pointer transition-all ${

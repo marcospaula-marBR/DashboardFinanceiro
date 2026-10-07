@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { WhiteboardColumn, WhiteboardItem } from '@/types/war-room';
-import { calculatePrazoInfo } from '@/services/war-room.service';
+import { calculatePrazoInfo, extractResponsaveisList } from '@/services/war-room.service';
 import { 
   Check, 
   Plus, 
@@ -16,15 +16,16 @@ import {
   Calendar, 
   Clock, 
   Settings2,
-  Layers
+  Layers,
+  Users
 } from 'lucide-react';
 
 interface WhiteboardColumnsProps {
   colunas: WhiteboardColumn[];
   filterResponsible?: string | null;
   onToggleItem: (columnId: string, itemId: string) => void;
-  onAddItem: (columnId: string, text: string, responsavel?: string, dataLimite?: string) => void;
-  onEditItem: (columnId: string, itemId: string, novoTexto: string, novoResponsavel?: string, dataLimite?: string) => void;
+  onAddItem: (columnId: string, text: string, responsavel?: string, dataLimite?: string, responsaveis?: string[]) => void;
+  onEditItem: (columnId: string, itemId: string, novoTexto: string, novoResponsavel?: string, dataLimite?: string, novosResponsaveis?: string[]) => void;
   onOpenFullEdit?: (columnId: string, item: WhiteboardItem) => void;
   onArchiveItem?: (columnId: string, itemId: string) => void;
   onDeleteItem: (columnId: string, itemId: string) => void;
@@ -83,7 +84,8 @@ export function WhiteboardColumns({
       setActiveInputColId(null);
       return;
     }
-    onAddItem(colId, inputText.trim(), inputResp.trim() || undefined, inputDate.trim() || undefined);
+    const resps = extractResponsaveisList(inputResp);
+    onAddItem(colId, inputText.trim(), resps.join(', ') || undefined, inputDate.trim() || undefined, resps);
     setInputText('');
     setInputResp('');
     setInputDate('');
@@ -93,7 +95,8 @@ export function WhiteboardColumns({
   const handleStartEdit = (item: WhiteboardItem) => {
     setEditingItemId(item.id);
     setEditTexto(item.texto);
-    setEditResp(item.responsavel || '');
+    const resps = extractResponsaveisList(item);
+    setEditResp(resps.join(', '));
     setEditDate(item.dataLimite || '');
   };
 
@@ -102,7 +105,8 @@ export function WhiteboardColumns({
       setEditingItemId(null);
       return;
     }
-    onEditItem(colId, itemId, editTexto.trim(), editResp.trim() || undefined, editDate.trim() || undefined);
+    const resps = extractResponsaveisList(editResp);
+    onEditItem(colId, itemId, editTexto.trim(), resps.join(', ') || undefined, editDate.trim() || undefined, resps);
     setEditingItemId(null);
   };
 
@@ -260,7 +264,7 @@ export function WhiteboardColumns({
           let visibleItens = col.itens.filter(it => !it.arquivado);
           if (filterResponsible) {
             visibleItens = visibleItens.filter(
-              it => it.responsavel?.toUpperCase() === filterResponsible.toUpperCase()
+              it => extractResponsaveisList(it).includes(filterResponsible.toUpperCase())
             );
           }
 
@@ -427,7 +431,7 @@ export function WhiteboardColumns({
                             value={editResp}
                             onChange={(e) => setEditResp(e.target.value)}
                             className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-rose-300 focus:outline-none focus:border-cyan-400 uppercase font-mono"
-                            placeholder="Responsável..."
+                            placeholder="Responsáveis (ex: MANUS, CLARA)..."
                           />
                           <input
                             type="date"
@@ -502,16 +506,17 @@ export function WhiteboardColumns({
                         {/* CONTEÚDO DA TAREFA */}
                         <div className="min-w-0">
                           <div className="flex items-center flex-wrap gap-1 leading-snug">
-                            {/* BADGE DE RESPONSÁVEL */}
-                            {item.responsavel && (
+                            {/* BADGES DE MÚLTIPLOS RESPONSÁVEIS */}
+                            {extractResponsaveisList(item).map((resp) => (
                               <span
+                                key={resp}
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-rose-950 border border-rose-500/50 text-rose-300 shadow-sm flex-shrink-0"
-                                title={`Responsável: ${item.responsavel}`}
+                                title={`Responsável: ${resp}`}
                               >
                                 <User size={9} className="text-rose-400" />
-                                {item.responsavel}
+                                {resp}
                               </span>
-                            )}
+                            ))}
 
                             {/* BADGE DE PRAZO DA TAREFA (SINALIZAÇÃO POR CORES) */}
                             {item.dataLimite && itemPrazo.status !== 'sem_prazo' && (
@@ -606,7 +611,7 @@ export function WhiteboardColumns({
                       <input
                         type="text"
                         list="col-responsavel-suggestions"
-                        placeholder="Responsável..."
+                        placeholder="Responsáveis (ex: MANUS, CLARA)..."
                         value={inputResp}
                         onChange={(e) => setInputResp(e.target.value)}
                         className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-rose-300 focus:outline-none focus:border-rose-400 uppercase font-mono"

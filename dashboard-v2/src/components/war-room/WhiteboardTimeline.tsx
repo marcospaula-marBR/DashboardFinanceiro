@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from 'react';
-import { WhiteboardTimelineBlock } from '@/types/war-room';
+import { WhiteboardTimelineBlock, WhiteboardTimelineItem } from '@/types/war-room';
+import { extractResponsaveisList } from '@/services/war-room.service';
 import { Check, Plus, Trash2, Edit3, X, GripVertical, RotateCcw, CalendarSync, AlertTriangle, User } from 'lucide-react';
 
 interface WhiteboardTimelineProps {
@@ -10,8 +11,8 @@ interface WhiteboardTimelineProps {
   filterResponsible?: string | null;
   onlyOverdue?: boolean;
   onToggleItem: (blockId: string, itemId: string) => void;
-  onAddItem: (blockId: string, dia: number, descricao: string, responsavel?: string) => void;
-  onEditItem: (blockId: string, itemId: string, dia: number, descricao: string, responsavel?: string) => void;
+  onAddItem: (blockId: string, dia: number, descricao: string, responsavel?: string, responsaveis?: string[]) => void;
+  onEditItem: (blockId: string, itemId: string, dia: number, descricao: string, responsavel?: string, novosResponsaveis?: string[]) => void;
   onDeleteItem: (blockId: string, itemId: string) => void;
   onReorderItem?: (blockId: string, startIndex: number, endIndex: number) => void;
   onMoveItemBetweenBlocks?: (sourceBlockId: string, targetBlockId: string, itemId: string, targetIndex?: number) => void;
@@ -58,17 +59,19 @@ export function WhiteboardTimeline({
       return;
     }
     const diaValido = inputDia >= 1 && inputDia <= 31 ? inputDia : block.diaInicio;
-    onAddItem(block.id, diaValido, inputDesc.trim(), inputResp.trim() || undefined);
+    const resps = extractResponsaveisList(inputResp);
+    onAddItem(block.id, diaValido, inputDesc.trim(), resps.join(', ') || undefined, resps);
     setInputDesc('');
     setInputResp('');
     setActiveInputBlockId(null);
   };
 
-  const handleStartEdit = (item: { id: string; dia: number; descricao: string; responsavel?: string }) => {
+  const handleStartEdit = (item: WhiteboardTimelineItem) => {
     setEditingItemId(item.id);
     setEditDia(item.dia);
     setEditDesc(item.descricao);
-    setEditResp(item.responsavel || '');
+    const resps = extractResponsaveisList(item);
+    setEditResp(resps.join(', '));
   };
 
   const handleSaveEdit = (blockId: string, itemId: string) => {
@@ -77,7 +80,8 @@ export function WhiteboardTimeline({
       return;
     }
     const diaValido = editDia >= 1 && editDia <= 31 ? editDia : 1;
-    onEditItem(blockId, itemId, diaValido, editDesc.trim(), editResp.trim() || undefined);
+    const resps = extractResponsaveisList(editResp);
+    onEditItem(blockId, itemId, diaValido, editDesc.trim(), resps.join(', ') || undefined, resps);
     setEditingItemId(null);
   };
 
@@ -207,7 +211,9 @@ export function WhiteboardTimeline({
 
           // Filtragem por responsável se houver
           if (filterResponsible) {
-            sortedItens = sortedItens.filter(it => it.responsavel?.toUpperCase() === filterResponsible.toUpperCase());
+            sortedItens = sortedItens.filter(it =>
+              extractResponsaveisList(it).includes(filterResponsible.toUpperCase())
+            );
           }
 
           // Filtragem por apenas atrasadas
@@ -312,7 +318,7 @@ export function WhiteboardTimeline({
                             value={editResp}
                             onChange={(e) => setEditResp(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-cyan-300 focus:outline-none focus:border-cyan-400 uppercase font-mono"
-                            placeholder="Responsável (ex: MANUS, CLARA)..."
+                            placeholder="Responsáveis (ex: MANUS, CLARA)..."
                           />
                         </div>
 
@@ -385,16 +391,17 @@ export function WhiteboardTimeline({
                         {/* CONTEÚDO DA TAREFA: RESPONSÁVEL EM DESTAQUE NA FRENTE + DESCRIÇÃO */}
                         <div className="min-w-0">
                           <div className="flex items-center flex-wrap gap-1 leading-tight">
-                            {/* BADGE DO RESPONSÁVEL DESTACADO NA FRENTE */}
-                            {item.responsavel && (
+                            {/* BADGES DOS MÚLTIPLOS RESPONSÁVEIS DESTACADOS NA FRENTE */}
+                            {extractResponsaveisList(item).map((resp) => (
                               <span
+                                key={resp}
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-cyan-950 border border-cyan-500/60 text-cyan-300 shadow-sm flex-shrink-0"
-                                title={`Responsável: ${item.responsavel}`}
+                                title={`Responsável: ${resp}`}
                               >
                                 <User size={9} className="text-cyan-400" />
-                                {item.responsavel}
+                                {resp}
                               </span>
-                            )}
+                            ))}
 
                             {/* SINALIZADOR PULSANTE DE ATRASO */}
                             {isOverdue && (
@@ -496,7 +503,7 @@ export function WhiteboardTimeline({
                       <input
                         type="text"
                         list="responsavel-suggestions"
-                        placeholder="Responsável (ex: MANUS, CLARA)..."
+                        placeholder="Responsáveis (ex: MANUS, CLARA)..."
                         value={inputResp}
                         onChange={(e) => setInputResp(e.target.value)}
                         className="w-full bg-slate-950 border border-cyan-500/50 rounded px-1.5 py-0.5 text-[11px] text-cyan-300 focus:outline-none focus:border-cyan-400 uppercase font-mono"

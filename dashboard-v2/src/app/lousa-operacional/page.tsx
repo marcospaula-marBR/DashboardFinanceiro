@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { WarRoomService, DEFAULT_WHITEBOARD_DATA } from '@/services/war-room.service';
+import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList } from '@/services/war-room.service';
 import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
@@ -83,14 +83,14 @@ export default function LousaOperacionalPage() {
     return count;
   }, [data, todayDay]);
 
-  // Lista de responsáveis únicos presentes na lousa
+  // Lista de responsáveis únicos presentes na lousa (suporte a múltiplos por atividade)
   const distinctResponsibles = useMemo(() => {
     const set = new Set<string>();
     data.cronograma.forEach(blk => blk.itens.forEach(it => {
-      if (it.responsavel?.trim()) set.add(it.responsavel.trim().toUpperCase());
+      extractResponsaveisList(it).forEach(r => set.add(r));
     }));
     data.colunas.forEach(col => col.itens.forEach(it => {
-      if (it.responsavel?.trim()) set.add(it.responsavel.trim().toUpperCase());
+      extractResponsaveisList(it).forEach(r => set.add(r));
     }));
     return Array.from(set).sort();
   }, [data]);
@@ -237,13 +237,13 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
-  const handleAddColumnItem = (colId: string, text: string, responsavel?: string, dataLimite?: string) => {
-    const updated = WarRoomService.addColumnItem(data, colId, text, responsavel, dataLimite);
+  const handleAddColumnItem = (colId: string, text: string, responsavel?: string, dataLimite?: string, responsaveis?: string[]) => {
+    const updated = WarRoomService.addColumnItem(data, colId, text, responsavel, dataLimite, responsaveis);
     setData(updated);
   };
 
-  const handleEditColumnItem = (colId: string, itemId: string, texto: string, responsavel?: string, dataLimite?: string) => {
-    const updated = WarRoomService.updateColumnItem(data, colId, itemId, texto, responsavel, dataLimite);
+  const handleEditColumnItem = (colId: string, itemId: string, texto: string, responsavel?: string, dataLimite?: string, novosResponsaveis?: string[]) => {
+    const updated = WarRoomService.updateColumnItem(data, colId, itemId, texto, responsavel, dataLimite, novosResponsaveis);
     setData(updated);
   };
 
@@ -273,6 +273,7 @@ export default function LousaOperacionalPage() {
     updates: {
       texto: string;
       responsavel?: string;
+      responsaveis?: string[];
       dataLimite?: string;
       destaque?: boolean;
       observacao?: string;
@@ -322,13 +323,13 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
-  const handleAddTimelineItem = (blockId: string, dia: number, descricao: string, responsavel?: string) => {
-    const updated = WarRoomService.addTimelineItem(data, blockId, dia, descricao, responsavel);
+  const handleAddTimelineItem = (blockId: string, dia: number, descricao: string, responsavel?: string, responsaveis?: string[]) => {
+    const updated = WarRoomService.addTimelineItem(data, blockId, dia, descricao, responsavel, responsaveis);
     setData(updated);
   };
 
-  const handleEditTimelineItem = (blockId: string, itemId: string, dia: number, descricao: string, responsavel?: string) => {
-    const updated = WarRoomService.updateTimelineItem(data, blockId, itemId, dia, descricao, responsavel);
+  const handleEditTimelineItem = (blockId: string, itemId: string, dia: number, descricao: string, responsavel?: string, novosResponsaveis?: string[]) => {
+    const updated = WarRoomService.updateTimelineItem(data, blockId, itemId, dia, descricao, responsavel, novosResponsaveis);
     setData(updated);
   };
 

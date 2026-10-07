@@ -19,6 +19,37 @@ import {
 const STORAGE_KEY = 'marbrasil_whiteboard_v2';
 
 /**
+ * Extrai e normaliza a lista de múltiplos responsáveis atribuídos a uma atividade ou obrigação
+ * Suporta array de nomes, string com vírgula, barra ou sinal de mais (ex: "MANUS, CLARA", "MANUS / CLARA", "CONTÁBIL + ALDO")
+ */
+export function extractResponsaveisList(
+  target?: { responsavel?: string; responsaveis?: string[] } | string | string[] | null
+): string[] {
+  if (!target) return [];
+  if (Array.isArray(target)) {
+    return Array.from(new Set(target.map(r => (typeof r === 'string' ? r.trim().toUpperCase() : '')).filter(Boolean)));
+  }
+  if (typeof target === 'string') {
+    const parts = target
+      .split(/[,/+]|\s+e\s+|\s+E\s+|&/)
+      .map(p => p.trim().toUpperCase())
+      .filter(p => p.length > 0);
+    return Array.from(new Set(parts));
+  }
+  if (target.responsaveis && Array.isArray(target.responsaveis) && target.responsaveis.length > 0) {
+    return Array.from(new Set(target.responsaveis.map(r => (typeof r === 'string' ? r.trim().toUpperCase() : '')).filter(Boolean)));
+  }
+  if (target.responsavel && typeof target.responsavel === 'string') {
+    const parts = target.responsavel
+      .split(/[,/+]|\s+e\s+|\s+E\s+|&/)
+      .map(p => p.trim().toUpperCase())
+      .filter(p => p.length > 0);
+    return Array.from(new Set(parts));
+  }
+  return [];
+}
+
+/**
  * Calcula o status visual do prazo para demandas e tarefas
  * @returns 'atrasado' (vermelho) | 'hoje' (âmbar vivo) | 'em_dia' (âmbar/próximo) | 'distante' (verde) | 'sem_prazo' | 'concluido'
  */
@@ -118,6 +149,63 @@ export function calculatePrazoInfo(dataLimite?: string, concluido?: boolean): Pr
 }
 
 /**
+ * Infere a lista de responsáveis padrão a partir do texto ou descrição
+ */
+export function inferDefaultResponsaveis(text: string): string[] {
+  const upper = (text || '').toUpperCase();
+  const resps: string[] = [];
+
+  if (upper.includes('MANUS')) resps.push('MANUS');
+  if (upper.includes('CLARA')) resps.push('CLARA');
+  if (upper.includes('ALDO')) resps.push('ALDO');
+  if (upper.includes('MARCO')) resps.push('MARCO');
+  if (upper.includes('DAUREN')) resps.push('DAUREN');
+  if (upper.includes('PRISCILLA')) resps.push('PRISCILLA');
+  if (upper.includes('ADRIANA')) resps.push('ADRIANA');
+
+  if (upper.includes('TERCEIRIZAÇÃO') || upper.includes('CORREIOS G2')) {
+    if (!resps.includes('MANUS')) resps.push('MANUS');
+  }
+
+  if (
+    upper.includes('CORREIOS DZM') ||
+    upper.includes('INSS') ||
+    upper.includes('DAS') ||
+    upper.includes('PIS') ||
+    upper.includes('COFINS') ||
+    upper.includes('SICREDI') ||
+    upper.includes('NUBANK') ||
+    upper.includes('BANCO') ||
+    upper.includes('COTAS YBOX') ||
+    upper.includes('LIBERAÇÃO VALORES')
+  ) {
+    if (!resps.includes('FINANCEIRO')) resps.push('FINANCEIRO');
+  }
+
+  if (upper.includes('JURÍDICO') || upper.includes('RFB')) {
+    if (!resps.includes('JURÍDICO')) resps.push('JURÍDICO');
+  }
+
+  if (upper.includes('CONTÁBIL') || upper.includes('CONTABILIDADE')) {
+    if (!resps.includes('CONTÁBIL')) resps.push('CONTÁBIL');
+  }
+
+  if (upper.includes('ERP') || upper.includes('TI') || upper.includes('NIC.PY')) {
+    if (!resps.includes('TI')) resps.push('TI');
+  }
+
+  return Array.from(new Set(resps));
+}
+
+/**
+ * Infere o responsável padrão (texto formatado) para itens que ainda não tenham um definido
+ */
+export function inferDefaultResponsible(text: string): string | undefined {
+  const list = inferDefaultResponsaveis(text);
+  return list.length > 0 ? list.join(', ') : undefined;
+}
+
+/**
  * Dados autênticos fotografados diretamente da Lousa Operacional
  */
 export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
@@ -129,11 +217,11 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       corMarcador: 'vermelho',
       dataLimite: '2026-10-15',
       itens: [
-        { id: 'it-1-1', texto: 'JUSTIFICAR DEPÓSITOS CONTA PESSOAL;', concluido: false, responsavel: 'MARCO', dataLimite: '2026-10-05' },
-        { id: 'it-1-2', texto: 'ANALISAR MELHOR OPÇÃO P/ EMPRÉSTIMOS FEITOS PY (CONTABILIDADE + ALDO)', concluido: false, responsavel: 'FINANCEIRO', dataLimite: '2026-10-15' },
-        { id: 'it-1-3', texto: 'FLUXO DLOCAL => UENO: COMO JUSTIFICAR?*', concluido: false, destaque: true, responsavel: 'MARCO' },
-        { id: 'it-1-4', texto: 'DOMÍNIOS NIC.PY', concluido: true, responsavel: 'TI / CONTÁBIL' },
-        { id: 'it-1-5', texto: 'ERP PY', concluido: false, responsavel: 'TI / CONTÁBIL' },
+        { id: 'it-1-1', texto: 'JUSTIFICAR DEPÓSITOS CONTA PESSOAL;', concluido: false, responsavel: 'MARCO', responsaveis: ['MARCO'], dataLimite: '2026-10-05' },
+        { id: 'it-1-2', texto: 'ANALISAR MELHOR OPÇÃO P/ EMPRÉSTIMOS FEITOS PY (CONTABILIDADE + ALDO)', concluido: false, responsavel: 'CONTÁBIL, ALDO', responsaveis: ['CONTÁBIL', 'ALDO'], dataLimite: '2026-10-15' },
+        { id: 'it-1-3', texto: 'FLUXO DLOCAL => UENO: COMO JUSTIFICAR?*', concluido: false, destaque: true, responsavel: 'MARCO', responsaveis: ['MARCO'] },
+        { id: 'it-1-4', texto: 'DOMÍNIOS NIC.PY', concluido: true, responsavel: 'TI, CONTÁBIL', responsaveis: ['TI', 'CONTÁBIL'] },
+        { id: 'it-1-5', texto: 'ERP PY', concluido: false, responsavel: 'TI, CONTÁBIL', responsaveis: ['TI', 'CONTÁBIL'] },
       ],
     },
     {
@@ -144,9 +232,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       corMarcador: 'vermelho',
       dataLimite: '2026-10-07',
       itens: [
-        { id: 'it-2-1', texto: 'MSG ENVIADA', concluido: false, responsavel: 'MANUS', dataLimite: '2026-10-07' },
-        { id: 'it-2-2', texto: 'RECEBIDO E-MAIL', concluido: false, responsavel: 'MANUS' },
-        { id: 'it-2-3', texto: "RESPONDI PEDINDO CAMINHO + JOC'S", concluido: false, responsavel: 'MARCO' },
+        { id: 'it-2-1', texto: 'MSG ENVIADA', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'], dataLimite: '2026-10-07' },
+        { id: 'it-2-2', texto: 'RECEBIDO E-MAIL', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'] },
+        { id: 'it-2-3', texto: "RESPONDI PEDINDO CAMINHO + JOC'S", concluido: false, responsavel: 'MARCO', responsaveis: ['MARCO'] },
       ],
     },
     {
@@ -156,10 +244,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       corMarcador: 'vermelho',
       dataLimite: '2026-10-12',
       itens: [
-        { id: 'it-3-1', texto: 'TABELA C/ FLUXO COMPLETO ATÉ VR EM USD NO UENO (PGTO DE U$ 9.99 DA MARBR)', concluido: false, responsavel: 'MANUS' },
-        { id: 'it-3-2', texto: 'TESTAR SPLIT', concluido: false, responsavel: 'MANUS', dataLimite: '2026-10-09' },
-        { id: 'it-3-3', texto: 'VALIDAÇÃO DA CONTA BANCÁRIA', concluido: false, responsavel: 'MARCO' },
-        { id: 'it-3-4', texto: 'LIBERAÇÃO VALORES', concluido: true, responsavel: 'FINANCEIRO' },
+        { id: 'it-3-1', texto: 'TABELA C/ FLUXO COMPLETO ATÉ VR EM USD NO UENO (PGTO DE U$ 9.99 DA MARBR)', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'] },
+        { id: 'it-3-2', texto: 'TESTAR SPLIT', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'], dataLimite: '2026-10-09' },
+        { id: 'it-3-3', texto: 'VALIDAÇÃO DA CONTA BANCÁRIA', concluido: false, responsavel: 'MARCO', responsaveis: ['MARCO'] },
+        { id: 'it-3-4', texto: 'LIBERAÇÃO VALORES', concluido: true, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
     {
@@ -169,10 +257,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       corMarcador: 'vermelho',
       dataLimite: '2026-10-20',
       itens: [
-        { id: 'it-4-1', texto: 'CRIAR GRUPO C/ JURÍDICO', concluido: false, responsavel: 'JURÍDICO' },
-        { id: 'it-4-2', texto: 'PAGAR CORREIOS DZM', concluido: true, responsavel: 'FINANCEIRO' },
-        { id: 'it-4-3', texto: 'ABRIR CONTA CORREIOS G2', concluido: true, responsavel: 'MANUS' },
-        { id: 'it-4-4', texto: 'PROCESSO JUNTO À RFB', concluido: false, responsavel: 'JURÍDICO', dataLimite: '2026-10-25' },
+        { id: 'it-4-1', texto: 'CRIAR GRUPO C/ JURÍDICO', concluido: false, responsavel: 'JURÍDICO', responsaveis: ['JURÍDICO'] },
+        { id: 'it-4-2', texto: 'PAGAR CORREIOS DZM', concluido: true, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'it-4-3', texto: 'ABRIR CONTA CORREIOS G2', concluido: true, responsavel: 'MANUS', responsaveis: ['MANUS'] },
+        { id: 'it-4-4', texto: 'PROCESSO JUNTO À RFB', concluido: false, responsavel: 'JURÍDICO', responsaveis: ['JURÍDICO'], dataLimite: '2026-10-25' },
       ],
     },
     {
@@ -182,7 +270,7 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       corMarcador: 'azul',
       dataLimite: '2026-11-30',
       itens: [
-        { id: 'it-5-1', texto: 'INSERIR LANÇAMENTOS RECORRENTES NO OMIE P/ 2027', concluido: false, destaque: true, responsavel: 'FINANCEIRO', dataLimite: '2026-11-30' },
+        { id: 'it-5-1', texto: 'INSERIR LANÇAMENTOS RECORRENTES NO OMIE P/ 2027', concluido: false, destaque: true, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'], dataLimite: '2026-11-30' },
       ],
     },
   ],
@@ -248,10 +336,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 1,
       diaFim: 5,
       itens: [
-        { id: 'tl-1', dia: 5, descricao: '05 - PLANNIGI', concluido: false, responsavel: 'MARCO' },
-        { id: 'tl-2', dia: 5, descricao: '05 - CONTÁBIL PY', concluido: false, responsavel: 'CONTÁBIL' },
-        { id: 'tl-3', dia: 5, descricao: '05 - ALDO', concluido: false, responsavel: 'ALDO' },
-        { id: 'tl-4', dia: 5, descricao: '05 - G2 8112', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-1', dia: 5, descricao: '05 - PLANNIGI', concluido: false, responsavel: 'MARCO', responsaveis: ['MARCO'] },
+        { id: 'tl-2', dia: 5, descricao: '05 - CONTÁBIL PY', concluido: false, responsavel: 'CONTÁBIL', responsaveis: ['CONTÁBIL'] },
+        { id: 'tl-3', dia: 5, descricao: '05 - ALDO', concluido: false, responsavel: 'ALDO', responsaveis: ['ALDO'] },
+        { id: 'tl-4', dia: 5, descricao: '05 - G2 8112', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
     {
@@ -260,10 +348,10 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 6,
       diaFim: 10,
       itens: [
-        { id: 'tl-5', dia: 10, descricao: '10 - COTAS YBOX', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-6', dia: 10, descricao: '10 - DZM 6827', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-7', dia: 10, descricao: '10 - 9693', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-8', dia: 10, descricao: '10 - MBR 8583', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-5', dia: 10, descricao: '10 - COTAS YBOX', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-6', dia: 10, descricao: '10 - DZM 6827', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-7', dia: 10, descricao: '10 - 9693', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-8', dia: 10, descricao: '10 - MBR 8583', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
     {
@@ -272,7 +360,7 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 11,
       diaFim: 15,
       itens: [
-        { id: 'tl-9', dia: 15, descricao: '15 - TERCEIRIZAÇÃO', concluido: false, responsavel: 'MANUS' },
+        { id: 'tl-9', dia: 15, descricao: '15 - TERCEIRIZAÇÃO', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'] },
       ],
     },
     {
@@ -281,9 +369,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 16,
       diaFim: 20,
       itens: [
-        { id: 'tl-10', dia: 18, descricao: '18 - YBOX - SICREDI', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-11', dia: 20, descricao: '20 - I.N.S.S', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-12', dia: 20, descricao: '20 - PGTO / DAS', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-10', dia: 18, descricao: '18 - YBOX - SICREDI', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-11', dia: 20, descricao: '20 - I.N.S.S', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-12', dia: 20, descricao: '20 - PGTO / DAS', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
     {
@@ -292,11 +380,11 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 21,
       diaFim: 25,
       itens: [
-        { id: 'tl-13', dia: 23, descricao: '23 - MBR 0137', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-14', dia: 25, descricao: '25 - NUBANK DZM', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-15', dia: 25, descricao: '25 - PIS / COFINS', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-16', dia: 25, descricao: '25 - MANUS / CLARA - DZM', concluido: false, responsavel: 'MANUS' },
-        { id: 'tl-17', dia: 27, descricao: '27 - BANCO DO BRASIL', concluido: false, responsavel: 'FINANCEIRO' },
+        { id: 'tl-13', dia: 23, descricao: '23 - MBR 0137', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-14', dia: 25, descricao: '25 - NUBANK DZM', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-15', dia: 25, descricao: '25 - PIS / COFINS', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-16', dia: 25, descricao: '25 - MANUS / CLARA - DZM', concluido: false, responsavel: 'MANUS, CLARA', responsaveis: ['MANUS', 'CLARA'] },
+        { id: 'tl-17', dia: 27, descricao: '27 - BANCO DO BRASIL', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
     {
@@ -305,9 +393,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 26,
       diaFim: 31,
       itens: [
-        { id: 'tl-18', dia: 30, descricao: '30 - TRI JAN/ABR/JUL/OUT', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-19', dia: 30, descricao: '30 - DAS PARCELADA MBR', concluido: false, responsavel: 'FINANCEIRO' },
-        { id: 'tl-20', dia: 30, descricao: '30 - CLARA - MBR', concluido: false, responsavel: 'CLARA' },
+        { id: 'tl-18', dia: 30, descricao: '30 - TRI JAN/ABR/JUL/OUT', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-19', dia: 30, descricao: '30 - DAS PARCELADA MBR', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'tl-20', dia: 30, descricao: '30 - CLARA - MBR', concluido: false, responsavel: 'CLARA', responsaveis: ['CLARA'] },
       ],
     },
   ],
@@ -347,10 +435,13 @@ export class WarRoomService {
     return cronograma.map(block => {
       const sanitizedItens = block.itens.map(item => {
         const { dia, descricao } = this.formatTimelineDescription(item.dia, item.descricao);
+        const resps = extractResponsaveisList(item.responsaveis || item.responsavel || inferDefaultResponsaveis(descricao));
         return {
           ...item,
           dia,
           descricao,
+          responsaveis: resps,
+          responsavel: item.responsavel || (resps.length > 0 ? resps.join(', ') : undefined),
         };
       });
 
@@ -368,29 +459,14 @@ export class WarRoomService {
    * Infere o responsável padrão para itens que ainda não tenham um definido
    */
   static inferDefaultResponsible(text: string): string | undefined {
-    const upper = (text || '').toUpperCase();
-    if (upper.includes('MANUS')) return 'MANUS';
-    if (upper.includes('CLARA')) return 'CLARA';
-    if (upper.includes('ALDO')) return 'ALDO';
-    if (upper.includes('MARCO')) return 'MARCO';
-    if (upper.includes('TERCEIRIZAÇÃO') || upper.includes('CORREIOS G2')) return 'MANUS';
-    if (
-      upper.includes('CORREIOS DZM') ||
-      upper.includes('INSS') ||
-      upper.includes('DAS') ||
-      upper.includes('PIS') ||
-      upper.includes('COFINS') ||
-      upper.includes('SICREDI') ||
-      upper.includes('NUBANK') ||
-      upper.includes('BANCO') ||
-      upper.includes('COTAS YBOX') ||
-      upper.includes('LIBERAÇÃO VALORES')
-    ) {
-      return 'FINANCEIRO';
-    }
-    if (upper.includes('JURÍDICO') || upper.includes('RFB')) return 'JURÍDICO';
-    if (upper.includes('CONTÁBIL') || upper.includes('ERP')) return 'CONTÁBIL';
-    return undefined;
+    return inferDefaultResponsible(text);
+  }
+
+  /**
+   * Infere múltiplos responsáveis para itens
+   */
+  static inferDefaultResponsaveis(text: string): string[] {
+    return inferDefaultResponsaveis(text);
   }
 
   /**
@@ -427,7 +503,7 @@ export class WarRoomService {
           parsed.mesReferencia = currentMonthKey;
         }
 
-        // Hidratação/inferência de responsáveis e prazos se faltarem
+        // Hidratação/inferência de múltiplos responsáveis e prazos se faltarem
         if (parsed.colunas) {
           parsed.colunas = parsed.colunas.map(col => {
             const defaultCol = DEFAULT_WHITEBOARD_DATA.colunas.find(c => c.id === col.id);
@@ -436,9 +512,13 @@ export class WarRoomService {
               dataLimite: col.dataLimite || defaultCol?.dataLimite,
               itens: col.itens.map(it => {
                 const defaultItem = defaultCol?.itens.find(i => i.id === it.id);
+                const resps = extractResponsaveisList(
+                  it.responsaveis || it.responsavel || (defaultItem ? defaultItem.responsaveis || defaultItem.responsavel : inferDefaultResponsaveis(it.texto))
+                );
                 return {
                   ...it,
-                  responsavel: it.responsavel || this.inferDefaultResponsible(it.texto),
+                  responsaveis: resps,
+                  responsavel: it.responsavel || (resps.length > 0 ? resps.join(', ') : undefined),
                   dataLimite: it.dataLimite || defaultItem?.dataLimite,
                 };
               }),
@@ -449,10 +529,14 @@ export class WarRoomService {
         if (parsed.cronograma) {
           parsed.cronograma = this.sanitizeCronograma(parsed.cronograma).map(blk => ({
             ...blk,
-            itens: blk.itens.map(it => ({
-              ...it,
-              responsavel: it.responsavel || this.inferDefaultResponsible(it.descricao),
-            })),
+            itens: blk.itens.map(it => {
+              const resps = extractResponsaveisList(it.responsaveis || it.responsavel || inferDefaultResponsaveis(it.descricao));
+              return {
+                ...it,
+                responsaveis: resps,
+                responsavel: it.responsavel || (resps.length > 0 ? resps.join(', ') : undefined),
+              };
+            }),
           }));
           // Persiste a versão sanitizada se houve correção ou virada de mês
           this.saveWhiteboardData(parsed);
@@ -521,24 +605,30 @@ export class WarRoomService {
   }
 
   /**
-   * Adiciona novo item (tarefa) a uma demanda/coluna
+   * Adiciona novo item (tarefa) a uma demanda/coluna com suporte a múltiplos responsáveis
    */
   static addColumnItem(
     currentState: WhiteboardDataState,
     columnId: string,
     texto: string,
     responsavel?: string,
-    dataLimite?: string
+    dataLimite?: string,
+    responsaveis?: string[]
   ): WhiteboardDataState {
-    const finalResp = responsavel?.trim()
-      ? responsavel.trim().toUpperCase()
-      : this.inferDefaultResponsible(texto);
+    const respsList = extractResponsaveisList(
+      responsaveis && responsaveis.length > 0
+        ? responsaveis
+        : responsavel?.trim()
+        ? responsavel
+        : inferDefaultResponsaveis(texto)
+    );
 
     const newItem: WhiteboardItem = {
       id: `it-${Date.now()}`,
       texto: texto.toUpperCase(),
       concluido: false,
-      responsavel: finalResp,
+      responsaveis: respsList,
+      responsavel: respsList.length > 0 ? respsList.join(', ') : undefined,
       dataLimite: dataLimite?.trim() || undefined,
     };
 
@@ -802,15 +892,21 @@ export class WarRoomService {
         ...col,
         itens: col.itens.filter(item => {
           if (item.id === itemId) {
-            const finalResp =
-              updates.responsavel !== undefined
-                ? (updates.responsavel ? updates.responsavel.trim().toUpperCase() : undefined)
-                : (item.responsavel || this.inferDefaultResponsible(updates.texto));
+            const rawResps =
+              (updates as any).responsaveis !== undefined
+                ? (updates as any).responsaveis
+                : updates.responsavel !== undefined
+                ? updates.responsavel
+                : item.responsaveis || item.responsavel || inferDefaultResponsaveis(updates.texto);
+
+            const finalRespsList = extractResponsaveisList(rawResps);
+            const finalResp = finalRespsList.length > 0 ? finalRespsList.join(', ') : undefined;
 
             targetItem = {
               ...item,
               texto: updates.texto.trim().toUpperCase(),
               responsavel: finalResp,
+              responsaveis: finalRespsList,
               dataLimite: updates.dataLimite !== undefined ? (updates.dataLimite.trim() || undefined) : item.dataLimite,
               destaque: updates.destaque !== undefined ? updates.destaque : item.destaque,
               observacao: updates.observacao !== undefined ? updates.observacao.trim() : item.observacao,
@@ -981,7 +1077,8 @@ export class WarRoomService {
     itemId: string,
     novoTexto: string,
     novoResponsavel?: string,
-    novaDataLimite?: string
+    novaDataLimite?: string,
+    novosResponsaveis?: string[]
   ): WhiteboardDataState {
     const updatedColunas = currentState.colunas.map(col => {
       if (col.id !== columnId) return col;
@@ -989,15 +1086,21 @@ export class WarRoomService {
         ...col,
         itens: col.itens.map(item => {
           if (item.id !== itemId) return item;
-          const finalResp =
-            novoResponsavel !== undefined
-              ? (novoResponsavel ? novoResponsavel.trim().toUpperCase() : undefined)
-              : (item.responsavel || this.inferDefaultResponsible(novoTexto));
+          const rawResps =
+            novosResponsaveis !== undefined
+              ? novosResponsaveis
+              : novoResponsavel !== undefined
+              ? novoResponsavel
+              : item.responsaveis || item.responsavel || inferDefaultResponsaveis(novoTexto);
+
+          const finalRespsList = extractResponsaveisList(rawResps);
+          const finalResp = finalRespsList.length > 0 ? finalRespsList.join(', ') : undefined;
 
           return {
             ...item,
             texto: novoTexto.trim().toUpperCase(),
             responsavel: finalResp,
+            responsaveis: finalRespsList,
             dataLimite: novaDataLimite !== undefined ? (novaDataLimite.trim() || undefined) : item.dataLimite,
           };
         }),
@@ -1030,19 +1133,26 @@ export class WarRoomService {
   }
 
   /**
-   * Adiciona item a um bloco do cronograma com formatação automática de dia, responsável e ordenação crescente
+   * Adiciona item a um bloco do cronograma com formatação automática de dia, múltiplos responsáveis e ordenação crescente
    */
   static addTimelineItem(
     currentState: WhiteboardDataState,
     blockId: string,
     dia: number,
     descricao: string,
-    responsavel?: string
+    responsavel?: string,
+    responsaveis?: string[]
   ): WhiteboardDataState {
     const formatted = this.formatTimelineDescription(dia, descricao);
-    const finalResp = responsavel?.trim()
-      ? responsavel.trim().toUpperCase()
-      : this.inferDefaultResponsible(descricao);
+    const rawResps =
+      responsaveis !== undefined && responsaveis.length > 0
+        ? responsaveis
+        : responsavel?.trim()
+        ? responsavel
+        : inferDefaultResponsaveis(descricao);
+
+    const respsList = extractResponsaveisList(rawResps);
+    const finalResp = respsList.length > 0 ? respsList.join(', ') : undefined;
 
     const newItem: WhiteboardTimelineItem = {
       id: `tl-${Date.now()}`,
@@ -1050,6 +1160,7 @@ export class WarRoomService {
       descricao: formatted.descricao,
       concluido: false,
       responsavel: finalResp,
+      responsaveis: respsList,
     };
 
     const updatedCronograma = currentState.cronograma.map(block => {
@@ -1068,7 +1179,7 @@ export class WarRoomService {
   }
 
   /**
-   * Edita item de um bloco do cronograma com formatação automática de dia, responsável e re-ordenação crescente
+   * Edita item de um bloco do cronograma com formatação automática de dia, múltiplos responsáveis e re-ordenação crescente
    */
   static updateTimelineItem(
     currentState: WhiteboardDataState,
@@ -1076,7 +1187,8 @@ export class WarRoomService {
     itemId: string,
     dia: number,
     descricao: string,
-    novoResponsavel?: string
+    novoResponsavel?: string,
+    novosResponsaveis?: string[]
   ): WhiteboardDataState {
     const formatted = this.formatTimelineDescription(dia, descricao);
 
@@ -1084,16 +1196,22 @@ export class WarRoomService {
       if (block.id !== blockId) return block;
       const itens = block.itens.map(item => {
         if (item.id !== itemId) return item;
-        const finalResp =
-          novoResponsavel !== undefined
-            ? (novoResponsavel ? novoResponsavel.trim().toUpperCase() : undefined)
-            : (item.responsavel || this.inferDefaultResponsible(descricao));
+        const rawResps =
+          novosResponsaveis !== undefined
+            ? novosResponsaveis
+            : novoResponsavel !== undefined
+            ? novoResponsavel
+            : item.responsaveis || item.responsavel || inferDefaultResponsaveis(descricao);
+
+        const respsList = extractResponsaveisList(rawResps);
+        const finalResp = respsList.length > 0 ? respsList.join(', ') : undefined;
 
         return {
           ...item,
           dia: formatted.dia,
           descricao: formatted.descricao,
           responsavel: finalResp,
+          responsaveis: respsList,
         };
       });
       itens.sort((a, b) => a.dia - b.dia);
