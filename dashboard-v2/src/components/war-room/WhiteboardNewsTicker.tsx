@@ -64,7 +64,7 @@ export function WhiteboardNewsTicker({
         ) : (
           <div
             className="flex whitespace-nowrap animate-marquee items-center gap-10 sm:gap-12 text-xs sm:text-[13px] font-mono"
-            style={{ animationPlayState: isHovered ? 'paused' : 'running' }}
+            style={{ animationPlayState: isHovered ? 'paused' : 'running', animationDuration: '180s' }}
           >
             {/* Duplicar lista para efeito contínuo infinito no CSS Marquee sem cortes visuais */}
             {[...memberTaskGroups, ...memberTaskGroups].map((group, groupIdx) => {
