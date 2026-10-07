@@ -460,6 +460,181 @@ export class WarRoomService {
   }
 
   /**
+   * Finaliza e arquiva uma demanda operacional
+   */
+  static archiveColumnItem(
+    currentState: WhiteboardDataState,
+    columnId: string,
+    itemId: string,
+    finalizadoPor?: string
+  ): WhiteboardDataState {
+    const updatedColunas = currentState.colunas.map(col => {
+      if (col.id !== columnId) return col;
+      return {
+        ...col,
+        itens: col.itens.map(item => {
+          if (item.id !== itemId) return item;
+          return {
+            ...item,
+            concluido: true,
+            arquivado: true,
+            arquivadoEm: new Date().toISOString(),
+            finalizadoPor: finalizadoPor || item.responsavel || 'MARCO',
+            colunaOrigemId: col.id,
+            colunaOrigemTitulo: col.titulo,
+          };
+        }),
+      };
+    });
+
+    const newState = { ...currentState, colunas: updatedColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Restaura uma demanda arquivada de volta para a visão ativa da lousa
+   */
+  static restoreArchivedItem(
+    currentState: WhiteboardDataState,
+    columnId: string,
+    itemId: string
+  ): WhiteboardDataState {
+    const updatedColunas = currentState.colunas.map(col => {
+      if (col.id !== columnId) return col;
+      return {
+        ...col,
+        itens: col.itens.map(item => {
+          if (item.id !== itemId) return item;
+          return {
+            ...item,
+            arquivado: false,
+            concluido: false,
+            arquivadoEm: undefined,
+          };
+        }),
+      };
+    });
+
+    const newState = { ...currentState, colunas: updatedColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Atualização completa de uma demanda (texto, responsável, destaque, observação, coluna de destino, prioridade, arquivado)
+   */
+  static updateFullDemand(
+    currentState: WhiteboardDataState,
+    currentColId: string,
+    itemId: string,
+    updates: {
+      texto: string;
+      responsavel?: string;
+      destaque?: boolean;
+      observacao?: string;
+      prioridade?: 'normal' | 'alta' | 'urgente';
+      novaColunaId?: string;
+      arquivado?: boolean;
+    }
+  ): WhiteboardDataState {
+    const targetColId = updates.novaColunaId || currentColId;
+    let targetItem: any = null;
+
+    // Localiza e remove do local antigo
+    const intermediateColunas = currentState.colunas.map(col => {
+      if (col.id !== currentColId) return col;
+      return {
+        ...col,
+        itens: col.itens.filter(item => {
+          if (item.id === itemId) {
+            const finalResp =
+              updates.responsavel !== undefined
+                ? (updates.responsavel ? updates.responsavel.trim().toUpperCase() : undefined)
+                : (item.responsavel || this.inferDefaultResponsible(updates.texto));
+
+            targetItem = {
+              ...item,
+              texto: updates.texto.trim().toUpperCase(),
+              responsavel: finalResp,
+              destaque: updates.destaque !== undefined ? updates.destaque : item.destaque,
+              observacao: updates.observacao !== undefined ? updates.observacao.trim() : item.observacao,
+              prioridade: updates.prioridade || item.prioridade || 'normal',
+              arquivado: updates.arquivado !== undefined ? updates.arquivado : item.arquivado,
+              arquivadoEm: updates.arquivado ? (item.arquivadoEm || new Date().toISOString()) : (updates.arquivado === false ? undefined : item.arquivadoEm),
+              colunaOrigemId: targetColId,
+            };
+            return targetColId === currentColId;
+          }
+          return true;
+        }),
+      };
+    });
+
+    if (!targetItem) {
+      return currentState;
+    }
+
+    let finalColunas = intermediateColunas;
+    if (targetColId !== currentColId) {
+      finalColunas = intermediateColunas.map(col => {
+        if (col.id !== targetColId) return col;
+        return {
+          ...col,
+          itens: [...col.itens, targetItem],
+        };
+      });
+    } else {
+      finalColunas = intermediateColunas.map(col => {
+        if (col.id !== currentColId) return col;
+        return {
+          ...col,
+          itens: col.itens.map(item => (item.id === itemId ? targetItem : item)),
+        };
+      });
+    }
+
+    const newState = { ...currentState, colunas: finalColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Retorna todas as demandas arquivadas em todas as colunas
+   */
+  static getAllArchivedDemands(currentState: WhiteboardDataState): Array<{
+    item: import('@/types/war-room').WhiteboardItem;
+    colunaId: string;
+    colunaTitulo: string;
+  }> {
+    const archived: Array<{
+      item: import('@/types/war-room').WhiteboardItem;
+      colunaId: string;
+      colunaTitulo: string;
+    }> = [];
+
+    currentState.colunas.forEach(col => {
+      col.itens.forEach(it => {
+        if (it.arquivado) {
+          archived.push({
+            item: it,
+            colunaId: col.id,
+            colunaTitulo: col.titulo,
+          });
+        }
+      });
+    });
+
+    archived.sort((a, b) => {
+      const timeA = a.item.arquivadoEm ? new Date(a.item.arquivadoEm).getTime() : 0;
+      const timeB = b.item.arquivadoEm ? new Date(b.item.arquivadoEm).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    return archived;
+  }
+
+  /**
    * Atualiza a cotação USD = G$ do Follow The Money
    */
   static updateQuote(

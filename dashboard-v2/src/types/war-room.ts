@@ -11,6 +11,12 @@ export interface WhiteboardItem {
   destaque?: boolean;
   observacao?: string;
   responsavel?: string; // Nome do responsável pela ação humana (ex: "MANUS", "CLARA", "MARCO")
+  arquivado?: boolean; // Se foi finalizada e arquivada
+  arquivadoEm?: string; // Data ISO de conclusão/arquivamento (ex: "2026-10-07T11:00:00.000Z")
+  finalizadoPor?: string; // Quem finalizou/arquivou
+  colunaOrigemId?: string; // ID da coluna original (ex: "col-1")
+  colunaOrigemTitulo?: string; // Título da coluna original
+  prioridade?: 'normal' | 'alta' | 'urgente';
 }
 
 export interface WhiteboardColumn {

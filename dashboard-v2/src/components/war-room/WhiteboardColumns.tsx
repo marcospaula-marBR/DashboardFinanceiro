@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from 'react';
-import { WhiteboardColumn } from '@/types/war-room';
-import { Check, Plus, Trash2, Edit3, X, AlertOctagon, GripVertical, User } from 'lucide-react';
+import { WhiteboardColumn, WhiteboardItem } from '@/types/war-room';
+import { Check, Plus, Trash2, Edit3, X, AlertOctagon, GripVertical, User, Archive } from 'lucide-react';
 
 interface WhiteboardColumnsProps {
   colunas: WhiteboardColumn[];
@@ -10,9 +10,13 @@ interface WhiteboardColumnsProps {
   onToggleItem: (columnId: string, itemId: string) => void;
   onAddItem: (columnId: string, text: string, responsavel?: string) => void;
   onEditItem: (columnId: string, itemId: string, novoTexto: string, novoResponsavel?: string) => void;
+  onOpenFullEdit?: (columnId: string, item: WhiteboardItem) => void;
+  onArchiveItem?: (columnId: string, itemId: string) => void;
   onDeleteItem: (columnId: string, itemId: string) => void;
   onReorderItem?: (columnId: string, startIndex: number, endIndex: number) => void;
   onMoveItemBetweenColumns?: (sourceColId: string, targetColId: string, itemId: string, targetIndex?: number) => void;
+  onOpenArchivedModal?: () => void;
+  totalArchivedCount?: number;
 }
 
 export function WhiteboardColumns({
@@ -21,9 +25,13 @@ export function WhiteboardColumns({
   onToggleItem,
   onAddItem,
   onEditItem,
+  onOpenFullEdit,
+  onArchiveItem,
   onDeleteItem,
   onReorderItem,
   onMoveItemBetweenColumns,
+  onOpenArchivedModal,
+  totalArchivedCount,
 }: WhiteboardColumnsProps) {
   const [activeInputColId, setActiveInputColId] = useState<string | null>(null);
   const [inputText, setInputText] = useState<string>('');
@@ -148,23 +156,38 @@ export function WhiteboardColumns({
             DEMANDAS OPERACIONAIS EM FOCO (AS 5 COLUNAS DA LOUSA)
           </h2>
         </div>
-        <span className="text-[11px] text-slate-400 font-medium">
-          Responsáveis destacados • Arraste para reposicionar tarefas • Clique no lápis para editar
-        </span>
+
+        <div className="flex items-center flex-wrap gap-2">
+          {onOpenArchivedModal && (
+            <button
+              type="button"
+              onClick={onOpenArchivedModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono bg-emerald-950/50 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/60 hover:text-white transition-all shadow-sm"
+              title="Consultar histórico de demandas finalizadas e arquivadas"
+            >
+              <Archive size={13} className="text-emerald-400" />
+              <span>Histórico / Arquivadas ({totalArchivedCount ?? 0})</span>
+            </button>
+          )}
+          <span className="text-[11px] text-slate-400 font-medium hidden md:inline">
+            Responsáveis destacados • Lápis para editar • Caixa para arquivar
+          </span>
+        </div>
       </div>
 
       {/* ── GRID DAS 5 COLUNAS DA LOUSA COM SUPORTE A DRAG & DROP ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {colunas.map((col) => {
-          let visibleItens = col.itens;
+          // Filtrar apenas demandas ativas (não arquivadas)
+          let visibleItens = col.itens.filter(it => !it.arquivado);
           if (filterResponsible) {
             visibleItens = visibleItens.filter(
               it => it.responsavel?.toUpperCase() === filterResponsible.toUpperCase()
             );
           }
 
-          const totalItens = col.itens.length;
-          const concluidos = col.itens.filter(i => i.concluido).length;
+          const totalItens = col.itens.filter(i => !i.arquivado).length;
+          const concluidos = col.itens.filter(i => !i.arquivado && i.concluido).length;
           const isTargetCol = dragOverColId === col.id;
 
           const headerBorderColor =
@@ -343,30 +366,53 @@ export function WhiteboardColumns({
                         </div>
                       </div>
 
-                      {/* AÇÕES (EDITAR E EXCLUIR) */}
-                      <div className="flex items-center opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0">
+                      {/* AÇÕES (FINALIZAR & ARQUIVAR, EDITAR COMPLETA E EXCLUIR) */}
+                      <div className="flex items-center opacity-90 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity flex-shrink-0 gap-0.5">
+                        {/* FINALIZAR & ARQUIVAR */}
+                        {onArchiveItem && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onArchiveItem(col.id, item.id);
+                            }}
+                            title="Marcar como finalizada e arquivar da lousa ativa"
+                            className="p-1 text-slate-400 hover:text-emerald-300 hover:bg-emerald-950/50 rounded transition-colors"
+                          >
+                            <Archive size={12} />
+                          </button>
+                        )}
+
+                        {/* EDITAR COMPLETO (OU INLINE) */}
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleStartEdit(item);
+                            if (onOpenFullEdit) {
+                              onOpenFullEdit(col.id, item);
+                            } else {
+                              handleStartEdit(item);
+                            }
                           }}
-                          title="Editar demanda ou responsável"
-                          className="p-1 text-slate-400 hover:text-cyan-300 transition-colors"
+                          title="Editar demanda completa (texto, coluna, responsável, notas)"
+                          className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-cyan-950/50 rounded transition-colors"
                         >
-                          <Edit3 size={11} />
+                          <Edit3 size={12} />
                         </button>
 
+                        {/* EXCLUIR */}
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onDeleteItem(col.id, item.id);
+                            if (window.confirm(`Excluir a demanda "${item.texto}"?`)) {
+                              onDeleteItem(col.id, item.id);
+                            }
                           }}
-                          title="Excluir item"
-                          className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
+                          title="Excluir demanda"
+                          className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded transition-colors"
                         >
-                          <Trash2 size={11} />
+                          <Trash2 size={12} />
                         </button>
                       </div>
                     </div>

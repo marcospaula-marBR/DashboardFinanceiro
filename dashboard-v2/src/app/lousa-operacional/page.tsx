@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { WarRoomService, DEFAULT_WHITEBOARD_DATA } from '@/services/war-room.service';
-import { WhiteboardDataState, FollowTheMoneyRow } from '@/types/war-room';
+import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
 
@@ -14,7 +14,9 @@ import { WhiteboardNewsTicker } from '@/components/war-room/WhiteboardNewsTicker
 import { WhiteboardModal } from '@/components/war-room/WhiteboardModal';
 import { WhiteboardInsuranceAlertBanner } from '@/components/war-room/WhiteboardInsuranceAlertBanner';
 import { WhiteboardResponsibleBoard } from '@/components/war-room/WhiteboardResponsibleBoard';
-import { Users, Filter, AlertTriangle, User, CheckCircle2 } from 'lucide-react';
+import { WhiteboardEditDemandModal } from '@/components/war-room/WhiteboardEditDemandModal';
+import { WhiteboardArchivedModal } from '@/components/war-room/WhiteboardArchivedModal';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -28,6 +30,10 @@ export default function LousaOperacionalPage() {
   const [isResponsibleBoardVisible, setIsResponsibleBoardVisible] = useState<boolean>(false);
   const [selectedResponsible, setSelectedResponsible] = useState<string | null>(null);
   const [onlyOverdueFilter, setOnlyOverdueFilter] = useState<boolean>(false);
+
+  // Estados de edição completa de demanda e histórico de arquivadas
+  const [isArchivedModalOpen, setIsArchivedModalOpen] = useState<boolean>(false);
+  const [editingDemand, setEditingDemand] = useState<{ colId: string; item: WhiteboardItem } | null>(null);
 
   // Carregar dados salvos no localStorage (com detecção automática de virada de mês e hidratação)
   useEffect(() => {
@@ -84,15 +90,24 @@ export default function LousaOperacionalPage() {
     return Array.from(set).sort();
   }, [data]);
 
-  // ── CONTADOR DE ITENS CONCLUÍDOS ──
+  // ── DEMANDAS ARQUIVADAS E HISTÓRICO ──
+  const archivedDemands = useMemo(() => {
+    return WarRoomService.getAllArchivedDemands(data);
+  }, [data]);
+
+  const totalArchivedCount = archivedDemands.length;
+
+  // ── CONTADOR DE ITENS CONCLUÍDOS (APENAS ATIVOS NA LOUSA) ──
   const { totalConcluidos, totalItens } = useMemo(() => {
     let concluidos = 0;
     let total = 0;
 
     data.colunas.forEach(col => {
       col.itens.forEach(it => {
-        total++;
-        if (it.concluido) concluidos++;
+        if (!it.arquivado) {
+          total++;
+          if (it.concluido) concluidos++;
+        }
       });
     });
 
@@ -177,6 +192,38 @@ export default function LousaOperacionalPage() {
   const handleDeleteColumnItem = (colId: string, itemId: string) => {
     const updated = WarRoomService.deleteColumnItem(data, colId, itemId);
     setData(updated);
+  };
+
+  const handleArchiveColumnItem = (colId: string, itemId: string) => {
+    const updated = WarRoomService.archiveColumnItem(data, colId, itemId);
+    setData(updated);
+  };
+
+  const handleRestoreArchivedDemand = (colId: string, itemId: string) => {
+    const updated = WarRoomService.restoreArchivedItem(data, colId, itemId);
+    setData(updated);
+  };
+
+  const handleDeleteArchivedPermanent = (colId: string, itemId: string) => {
+    const updated = WarRoomService.deleteColumnItem(data, colId, itemId);
+    setData(updated);
+  };
+
+  const handleSaveFullDemand = (
+    currentColId: string,
+    itemId: string,
+    updates: {
+      texto: string;
+      responsavel?: string;
+      destaque?: boolean;
+      observacao?: string;
+      prioridade?: 'normal' | 'alta' | 'urgente';
+      novaColunaId?: string;
+    }
+  ) => {
+    const updated = WarRoomService.updateFullDemand(data, currentColId, itemId, updates);
+    setData(updated);
+    setEditingDemand(null);
   };
 
   const handleReorderColumnItem = (colId: string, startIndex: number, endIndex: number) => {
@@ -350,19 +397,35 @@ export default function LousaOperacionalPage() {
             })}
           </div>
 
-          {/* BOTÃO PARA ALTERNAR EXIBIÇÃO DO QUADRO DE RESPONSÁVEIS */}
-          <button
-            type="button"
-            onClick={() => setIsResponsibleBoardVisible(prev => !prev)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
-              isResponsibleBoardVisible
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
-                : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-cyan-500/40 hover:text-white'
-            }`}
-          >
-            <Users size={13} className="text-cyan-400" />
-            <span>{isResponsibleBoardVisible ? 'Ocultar Quadro de Responsáveis' : 'Ver Quadro por Responsáveis'}</span>
-          </button>
+          {/* AÇÕES DA BARRA DE FILTROS: HISTÓRICO DE ARQUIVADAS E QUADRO DE RESPONSÁVEIS */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsArchivedModalOpen(true)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono transition-all border ${
+                totalArchivedCount > 0
+                  ? 'bg-emerald-950/50 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/60 hover:text-white shadow-sm'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+              }`}
+              title="Consultar histórico de demandas finalizadas e arquivadas"
+            >
+              <Archive size={13} className={totalArchivedCount > 0 ? 'text-emerald-400' : 'text-slate-400'} />
+              <span>🗄️ Histórico ({totalArchivedCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsResponsibleBoardVisible(prev => !prev)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
+                isResponsibleBoardVisible
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                  : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-cyan-500/40 hover:text-white'
+              }`}
+            >
+              <Users size={13} className="text-cyan-400" />
+              <span>{isResponsibleBoardVisible ? 'Ocultar Quadro' : 'Quadro por Responsáveis'}</span>
+            </button>
+          </div>
         </div>
 
         {/* ── QUADRO OPERACIONAL POR RESPONSÁVEIS (EXPANSÍVEL / DEDICADO) ── */}
@@ -385,9 +448,13 @@ export default function LousaOperacionalPage() {
           onToggleItem={handleToggleColumnItem}
           onAddItem={handleAddColumnItem}
           onEditItem={handleEditColumnItem}
+          onOpenFullEdit={(colId, item) => setEditingDemand({ colId, item })}
+          onArchiveItem={handleArchiveColumnItem}
           onDeleteItem={handleDeleteColumnItem}
           onReorderItem={handleReorderColumnItem}
           onMoveItemBetweenColumns={handleMoveColumnItem}
+          onOpenArchivedModal={() => setIsArchivedModalOpen(true)}
+          totalArchivedCount={totalArchivedCount}
         />
 
         {/* SEÇÃO 2: FOLLOW THE MONEY (ESTEIRA CAMBIAL & COTAÇÃO) */}
@@ -431,6 +498,33 @@ export default function LousaOperacionalPage() {
         onAddDemanda={handleAddColumnItem}
         onAddCambio={handleAddCambioRow}
         onAddCronograma={handleAddTimelineItem}
+      />
+
+      {/* ── MODAL DE EDIÇÃO COMPLETA DE DEMANDA ── */}
+      <WhiteboardEditDemandModal
+        isOpen={!!editingDemand}
+        onClose={() => setEditingDemand(null)}
+        columnId={editingDemand?.colId || ''}
+        item={editingDemand?.item || null}
+        colunas={data.colunas}
+        onSave={handleSaveFullDemand}
+        onDelete={(colId, itemId) => {
+          handleDeleteColumnItem(colId, itemId);
+          setEditingDemand(null);
+        }}
+        onArchive={(colId, itemId) => {
+          handleArchiveColumnItem(colId, itemId);
+          setEditingDemand(null);
+        }}
+      />
+
+      {/* ── MODAL DE HISTÓRICO DE DEMANDAS ARQUIVADAS ── */}
+      <WhiteboardArchivedModal
+        isOpen={isArchivedModalOpen}
+        onClose={() => setIsArchivedModalOpen(false)}
+        archivedItems={archivedDemands}
+        onRestore={handleRestoreArchivedDemand}
+        onDeletePermanent={handleDeleteArchivedPermanent}
       />
     </div>
   );

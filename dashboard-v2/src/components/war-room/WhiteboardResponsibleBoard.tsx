@@ -71,9 +71,10 @@ export function WhiteboardResponsibleBoard({
       });
     });
 
-    // 2. Tarefas das Colunas
+    // 2. Tarefas das Colunas (apenas ativas, não arquivadas)
     colunas.forEach(col => {
       col.itens.forEach(item => {
+        if (item.arquivado) return;
         const resp = item.responsavel?.trim() || 'SEM RESPONSÁVEL';
         allTasks.push({
           id: item.id,
