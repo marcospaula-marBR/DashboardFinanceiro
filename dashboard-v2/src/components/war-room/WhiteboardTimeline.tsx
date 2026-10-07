@@ -2,25 +2,34 @@
 
 import React, { useState } from 'react';
 import { WhiteboardTimelineBlock } from '@/types/war-room';
-import { Check, Plus, Trash2, Edit3, X } from 'lucide-react';
+import { Check, Plus, Trash2, Edit3, X, GripVertical, RotateCcw, CalendarSync } from 'lucide-react';
 
 interface WhiteboardTimelineProps {
   cronograma: WhiteboardTimelineBlock[];
+  mesReferencia?: string;
   onToggleItem: (blockId: string, itemId: string) => void;
   onAddItem: (blockId: string, dia: number, descricao: string) => void;
   onEditItem: (blockId: string, itemId: string, dia: number, descricao: string) => void;
   onDeleteItem: (blockId: string, itemId: string) => void;
+  onReorderItem?: (blockId: string, startIndex: number, endIndex: number) => void;
+  onMoveItemBetweenBlocks?: (sourceBlockId: string, targetBlockId: string, itemId: string, targetIndex?: number) => void;
+  onResetCycle?: () => void;
 }
 
 export function WhiteboardTimeline({
   cronograma,
+  mesReferencia,
   onToggleItem,
   onAddItem,
   onEditItem,
   onDeleteItem,
+  onReorderItem,
+  onMoveItemBetweenBlocks,
+  onResetCycle,
 }: WhiteboardTimelineProps) {
-  // Dia atual do mês (ex: 7)
-  const todayDay = new Date().getDate();
+  const today = new Date();
+  const todayDay = today.getDate();
+  const currentMonthName = today.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   // Estados de criação
   const [activeInputBlockId, setActiveInputBlockId] = useState<string | null>(null);
@@ -31,6 +40,11 @@ export function WhiteboardTimeline({
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editDia, setEditDia] = useState<number>(todayDay);
   const [editDesc, setEditDesc] = useState<string>('');
+
+  // Estados de Drag & Drop
+  const [draggedItem, setDraggedItem] = useState<{ blockId: string; itemId: string; index: number } | null>(null);
+  const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
+  const [dragOverItemIndex, setDragOverItemIndex] = useState<{ blockId: string; index: number } | null>(null);
 
   const handleCreate = (block: WhiteboardTimelineBlock) => {
     if (!inputDesc.trim()) {
@@ -47,7 +61,6 @@ export function WhiteboardTimeline({
     setEditingItemId(item.id);
     setEditDia(item.dia);
 
-    // Extrai o texto limpo sem o prefixo numérico para facilitar edição
     const match = item.descricao.match(/^(\d{1,2})\s*[-–—:]?\s*(.*)$/);
     setEditDesc(match && match[2] ? match[2] : item.descricao);
   };
@@ -61,36 +74,113 @@ export function WhiteboardTimeline({
     setEditingItemId(null);
   };
 
+  // ── DRAG & DROP HANDLERS ──
+  const handleDragStart = (e: React.DragEvent, blockId: string, itemId: string, index: number) => {
+    setDraggedItem({ blockId, itemId, index });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify({ blockId, itemId, index }));
+  };
+
+  const handleDragOverItem = (e: React.DragEvent, blockId: string, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverBlockId(blockId);
+    setDragOverItemIndex({ blockId, index });
+  };
+
+  const handleDragOverBlock = (e: React.DragEvent, blockId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverBlockId(blockId);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetBlockId: string, targetIndex?: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedItem) return;
+
+    if (draggedItem.blockId === targetBlockId) {
+      // Reordenação dentro do mesmo bloco
+      if (onReorderItem && targetIndex !== undefined && targetIndex !== draggedItem.index) {
+        onReorderItem(targetBlockId, draggedItem.index, targetIndex);
+      }
+    } else {
+      // Movimentação entre blocos diferentes
+      if (onMoveItemBetweenBlocks) {
+        onMoveItemBetweenBlocks(draggedItem.blockId, targetBlockId, draggedItem.itemId, targetIndex);
+      }
+    }
+
+    setDraggedItem(null);
+    setDragOverBlockId(null);
+    setDragOverItemIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverBlockId(null);
+    setDragOverItemIndex(null);
+  };
+
   return (
     <section className="w-full">
-      {/* ── TÍTULO DA SEÇÃO CRONOGRAMA ── */}
-      <div className="flex items-center justify-between mb-2.5 px-1">
+      {/* ── TÍTULO DA SEÇÃO CRONOGRAMA & STATUS DE RENOVAÇÃO AUTOMÁTICA ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5 px-1">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />
           <h2 className="text-xs sm:text-sm font-black tracking-wider text-slate-200 uppercase font-mono">
             CRONOGRAMA DE VENCIMENTOS DO MÊS (6 BLOCOS DA LOUSA)
           </h2>
         </div>
-        <span className="text-[11px] text-slate-400 font-medium">
-          Ordenação cronológica automática por dia • Clique no lápis para editar
-        </span>
+
+        {/* CONTROLE DE CICLO MENSAL RECORRENTE */}
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 text-[11px] font-mono font-bold shadow-sm">
+            <CalendarSync size={13} className="text-cyan-400" />
+            <span className="capitalize">{currentMonthName}</span>
+            <span className="text-cyan-500 font-normal">| Auto-renovação ativa</span>
+          </div>
+
+          {onResetCycle && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Deseja desmarcar todos os checks do mês para iniciar um novo ciclo de pagamentos recorrentes?')) {
+                  onResetCycle();
+                }
+              }}
+              title="Desmarcar todos os checks para o novo ciclo mensal"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-slate-400 hover:text-white text-[11px] font-semibold transition-all"
+            >
+              <RotateCcw size={11} />
+              <span className="hidden md:inline">Resetar Mês</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* ── GRID DOS 6 BLOCOS DA LOUSA ── */}
+      {/* ── GRID DOS 6 BLOCOS DA LOUSA COM SUPORTE A DRAG & DROP ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {cronograma.map((block) => {
           const isCurrentBlock = todayDay >= block.diaInicio && todayDay <= block.diaFim;
           const totalItens = block.itens.length;
           const concluidos = block.itens.filter(i => i.concluido).length;
+          const isTargetBlock = dragOverBlockId === block.id;
 
-          // Garantir ordenação estrita crescente por dia
+          // Se estiver arrastando, preserva a ordem visual com reorder temporário se houver
           const sortedItens = block.itens.slice().sort((a, b) => a.dia - b.dia);
 
           return (
             <div
               key={block.id}
+              onDragOver={(e) => handleDragOverBlock(e, block.id)}
+              onDrop={(e) => handleDrop(e, block.id)}
               className={`flex flex-col rounded-xl p-3 border transition-all relative ${
-                isCurrentBlock
+                isTargetBlock
+                  ? 'bg-cyan-950/40 border-cyan-400 ring-2 ring-cyan-400 shadow-xl'
+                  : isCurrentBlock
                   ? 'bg-[#0f172a] border-cyan-500 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-500/40'
                   : 'bg-[#0b1120]/90 border-slate-800/80 hover:border-slate-700/80'
               }`}
@@ -118,10 +208,13 @@ export function WhiteboardTimeline({
                 </span>
               </div>
 
-              {/* LISTA DE VENCIMENTOS DO BLOCO */}
+              {/* LISTA DE VENCIMENTOS DO BLOCO COM ARRASTAR E SOLTAR */}
               <div className="flex-1 space-y-1.5 min-h-[120px]">
-                {sortedItens.map(item => {
+                {sortedItens.map((item, index) => {
                   const isEditingThis = editingItemId === item.id;
+                  const isDraggingThis = draggedItem?.itemId === item.id;
+                  const isDragOverThis =
+                    dragOverItemIndex?.blockId === block.id && dragOverItemIndex?.index === index;
 
                   if (isEditingThis) {
                     return (
@@ -176,16 +269,33 @@ export function WhiteboardTimeline({
                   return (
                     <div
                       key={item.id}
+                      draggable={!editingItemId}
+                      onDragStart={(e) => handleDragStart(e, block.id, item.id, index)}
+                      onDragOver={(e) => handleDragOverItem(e, block.id, index)}
+                      onDrop={(e) => handleDrop(e, block.id, index)}
+                      onDragEnd={handleDragEnd}
                       onClick={() => onToggleItem(block.id, item.id)}
-                      className={`group/item flex items-start justify-between gap-1.5 p-1.5 rounded-lg border cursor-pointer transition-all ${
-                        item.concluido
+                      className={`group/item flex items-start justify-between gap-1 p-1.5 rounded-lg border cursor-pointer transition-all ${
+                        isDraggingThis
+                          ? 'opacity-30 scale-95 border-dashed border-cyan-500'
+                          : isDragOverThis
+                          ? 'border-t-2 border-t-cyan-400 bg-cyan-950/30'
+                          : item.concluido
                           ? 'bg-slate-900/40 border-slate-800/60 opacity-60'
                           : isCurrentBlock
                           ? 'bg-cyan-950/20 border-cyan-900/40 hover:border-cyan-500/40'
                           : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
                       }`}
                     >
-                      <div className="flex items-start gap-1.5 min-w-0">
+                      <div className="flex items-start gap-1 min-w-0">
+                        {/* ALÇA DE ARRASTAR (GRIP) */}
+                        <div
+                          className="mt-0.5 text-slate-600 group-hover/item:text-slate-400 cursor-grab active:cursor-grabbing p-0.5"
+                          title="Arraste para reposicionar ou mover entre blocos"
+                        >
+                          <GripVertical size={11} />
+                        </div>
+
                         {/* CHECKBOX */}
                         <div
                           className={`mt-0.5 w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0 border transition-all ${
@@ -213,7 +323,6 @@ export function WhiteboardTimeline({
 
                       {/* AÇÕES (EDITAR E EXCLUIR) */}
                       <div className="flex items-center opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0">
-                        {/* EDITAR */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -226,7 +335,6 @@ export function WhiteboardTimeline({
                           <Edit3 size={11} />
                         </button>
 
-                        {/* EXCLUIR */}
                         <button
                           type="button"
                           onClick={(e) => {

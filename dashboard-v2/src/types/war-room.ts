@@ -56,6 +56,7 @@ export interface WhiteboardTimelineBlock {
 }
 
 export interface WhiteboardDataState {
+  mesReferencia?: string; // YYYY-MM para controle de renovação automática mensal
   colunas: WhiteboardColumn[];
   followTheMoney: FollowTheMoneyState;
   cronograma: WhiteboardTimelineBlock[];

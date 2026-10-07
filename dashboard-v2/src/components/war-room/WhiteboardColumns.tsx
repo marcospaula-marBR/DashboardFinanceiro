@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { WhiteboardColumn } from '@/types/war-room';
-import { Check, Plus, Trash2, Edit3, X, AlertOctagon } from 'lucide-react';
+import { Check, Plus, Trash2, Edit3, X, AlertOctagon, GripVertical } from 'lucide-react';
 
 interface WhiteboardColumnsProps {
   colunas: WhiteboardColumn[];
@@ -10,6 +10,8 @@ interface WhiteboardColumnsProps {
   onAddItem: (columnId: string, text: string) => void;
   onEditItem: (columnId: string, itemId: string, novoTexto: string) => void;
   onDeleteItem: (columnId: string, itemId: string) => void;
+  onReorderItem?: (columnId: string, startIndex: number, endIndex: number) => void;
+  onMoveItemBetweenColumns?: (sourceColId: string, targetColId: string, itemId: string, targetIndex?: number) => void;
 }
 
 export function WhiteboardColumns({
@@ -18,6 +20,8 @@ export function WhiteboardColumns({
   onAddItem,
   onEditItem,
   onDeleteItem,
+  onReorderItem,
+  onMoveItemBetweenColumns,
 }: WhiteboardColumnsProps) {
   const [activeInputColId, setActiveInputColId] = useState<string | null>(null);
   const [inputText, setInputText] = useState<string>('');
@@ -25,6 +29,11 @@ export function WhiteboardColumns({
   // Estados de edição inline
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editTexto, setEditTexto] = useState<string>('');
+
+  // Estados de Drag & Drop
+  const [draggedItem, setDraggedItem] = useState<{ columnId: string; itemId: string; index: number } | null>(null);
+  const [dragOverColId, setDragOverColId] = useState<string | null>(null);
+  const [dragOverItemIndex, setDragOverItemIndex] = useState<{ columnId: string; index: number } | null>(null);
 
   const handleCreate = (colId: string) => {
     if (!inputText.trim()) {
@@ -50,6 +59,54 @@ export function WhiteboardColumns({
     setEditingItemId(null);
   };
 
+  // ── DRAG & DROP HANDLERS ──
+  const handleDragStart = (e: React.DragEvent, columnId: string, itemId: string, index: number) => {
+    setDraggedItem({ columnId, itemId, index });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify({ columnId, itemId, index }));
+  };
+
+  const handleDragOverItem = (e: React.DragEvent, columnId: string, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverColId(columnId);
+    setDragOverItemIndex({ columnId, index });
+  };
+
+  const handleDragOverColumn = (e: React.DragEvent, columnId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverColId(columnId);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetColId: string, targetIndex?: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedItem) return;
+
+    if (draggedItem.columnId === targetColId) {
+      if (onReorderItem && targetIndex !== undefined && targetIndex !== draggedItem.index) {
+        onReorderItem(targetColId, draggedItem.index, targetIndex);
+      }
+    } else {
+      if (onMoveItemBetweenColumns) {
+        onMoveItemBetweenColumns(draggedItem.columnId, targetColId, draggedItem.itemId, targetIndex);
+      }
+    }
+
+    setDraggedItem(null);
+    setDragOverColId(null);
+    setDragOverItemIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverColId(null);
+    setDragOverItemIndex(null);
+  };
+
   return (
     <section className="w-full">
       {/* ── TÍTULO DA SEÇÃO OPERACIONAL ── */}
@@ -61,15 +118,16 @@ export function WhiteboardColumns({
           </h2>
         </div>
         <span className="text-[11px] text-slate-400 font-medium">
-          Clique no item para alternar o check (✓) • Clique no lápis para editar
+          Arraste para reposicionar tarefas • Clique no lápis para editar
         </span>
       </div>
 
-      {/* ── GRID DAS 5 COLUNAS DA LOUSA ── */}
+      {/* ── GRID DAS 5 COLUNAS DA LOUSA COM SUPORTE A DRAG & DROP ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {colunas.map((col) => {
           const totalItens = col.itens.length;
           const concluidos = col.itens.filter(i => i.concluido).length;
+          const isTargetCol = dragOverColId === col.id;
 
           const headerBorderColor =
             col.id === 'col-5'
@@ -79,7 +137,13 @@ export function WhiteboardColumns({
           return (
             <div
               key={col.id}
-              className="flex flex-col bg-[#0b1120]/90 border border-slate-800/80 hover:border-slate-700/80 rounded-xl p-3.5 shadow-md transition-all relative group"
+              onDragOver={(e) => handleDragOverColumn(e, col.id)}
+              onDrop={(e) => handleDrop(e, col.id)}
+              className={`flex flex-col rounded-xl p-3.5 shadow-md transition-all relative group ${
+                isTargetCol
+                  ? 'bg-rose-950/30 border-rose-500 ring-2 ring-rose-500/50'
+                  : 'bg-[#0b1120]/90 border border-slate-800/80 hover:border-slate-700/80'
+              }`}
             >
               {/* LINHA SUPERIOR ESTILO MARCADOR */}
               <div className={`h-1 w-full rounded-full mb-2.5 ${col.id === 'col-5' ? 'bg-blue-500' : 'bg-rose-500'}`} />
@@ -112,10 +176,13 @@ export function WhiteboardColumns({
                 </div>
               )}
 
-              {/* LISTA DE ITENS */}
+              {/* LISTA DE ITENS COM ARRASTAR E SOLTAR */}
               <div className="flex-1 space-y-1.5 min-h-[140px]">
-                {col.itens.map(item => {
+                {col.itens.map((item, index) => {
                   const isEditingThis = editingItemId === item.id;
+                  const isDraggingThis = draggedItem?.itemId === item.id;
+                  const isDragOverThis =
+                    dragOverItemIndex?.columnId === col.id && dragOverItemIndex?.index === index;
 
                   if (isEditingThis) {
                     return (
@@ -159,16 +226,33 @@ export function WhiteboardColumns({
                   return (
                     <div
                       key={item.id}
+                      draggable={!editingItemId}
+                      onDragStart={(e) => handleDragStart(e, col.id, item.id, index)}
+                      onDragOver={(e) => handleDragOverItem(e, col.id, index)}
+                      onDrop={(e) => handleDrop(e, col.id, index)}
+                      onDragEnd={handleDragEnd}
                       onClick={() => onToggleItem(col.id, item.id)}
-                      className={`group/item flex items-start justify-between gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
-                        item.concluido
+                      className={`group/item flex items-start justify-between gap-1 p-2 rounded-lg border cursor-pointer transition-all ${
+                        isDraggingThis
+                          ? 'opacity-30 scale-95 border-dashed border-rose-400'
+                          : isDragOverThis
+                          ? 'border-t-2 border-t-rose-400 bg-rose-950/20'
+                          : item.concluido
                           ? 'bg-slate-900/50 border-slate-800/60 opacity-60'
                           : item.destaque
                           ? 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50'
                           : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-800/60'
                       }`}
                     >
-                      <div className="flex items-start gap-2 min-w-0">
+                      <div className="flex items-start gap-1 min-w-0">
+                        {/* ALÇA DE ARRASTAR */}
+                        <div
+                          className="mt-0.5 text-slate-600 group-hover/item:text-slate-400 cursor-grab active:cursor-grabbing p-0.5"
+                          title="Arraste para reposicionar ou mover entre colunas"
+                        >
+                          <GripVertical size={11} />
+                        </div>
+
                         {/* CHECKBOX / CHECKMARK (COMO O DA LOUSA) */}
                         <div
                           className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all ${

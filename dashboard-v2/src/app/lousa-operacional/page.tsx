@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { WarRoomService, DEFAULT_WHITEBOARD_DATA } from '@/services/war-room.service';
 import { WhiteboardDataState, FollowTheMoneyRow } from '@/types/war-room';
+import { fetchInsurancePolicies } from '@/services/insurance.service';
+import { InsurancePolicy } from '@/types/insurance';
 
 import { WhiteboardHeader } from '@/components/war-room/WhiteboardHeader';
 import { WhiteboardColumns } from '@/components/war-room/WhiteboardColumns';
@@ -10,19 +12,45 @@ import { WhiteboardFollowTheMoney } from '@/components/war-room/WhiteboardFollow
 import { WhiteboardTimeline } from '@/components/war-room/WhiteboardTimeline';
 import { WhiteboardNewsTicker } from '@/components/war-room/WhiteboardNewsTicker';
 import { WhiteboardModal } from '@/components/war-room/WhiteboardModal';
+import { WhiteboardInsuranceAlertBanner } from '@/components/war-room/WhiteboardInsuranceAlertBanner';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
+  const [insurancePolicies, setInsurancePolicies] = useState<InsurancePolicy[]>([]);
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
   const [isCursorHidden, setIsCursorHidden] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalTab, setModalTab] = useState<'demanda' | 'cambio' | 'cronograma'>('demanda');
 
-  // Carregar dados salvos no localStorage
+  // Carregar dados salvos no localStorage (com detecção automática de virada de mês)
   useEffect(() => {
     const loaded = WarRoomService.getWhiteboardData();
     setData(loaded);
   }, []);
+
+  // Carregar apólices de seguro do banco para o Radar de Seguros (D < 30)
+  useEffect(() => {
+    fetchInsurancePolicies()
+      .then(policies => {
+        if (policies) setInsurancePolicies(policies);
+      })
+      .catch(err => {
+        console.warn('[LousaOperacional] Não foi possível carregar seguros no radar:', err);
+      });
+  }, []);
+
+  // Alertas de seguros formatados para o letreiro contínuo (D <= 30)
+  const insuranceAlerts = useMemo(() => {
+    return insurancePolicies
+      .filter(p => p.diasParaVencer !== undefined && p.diasParaVencer <= 30 && p.diasParaVencer >= -5)
+      .map(p => ({
+        id: p.id,
+        contratante: p.contratante,
+        tipo: p.tipo,
+        seguradora: p.seguradora,
+        diasParaVencer: p.diasParaVencer ?? 0,
+      }));
+  }, [insurancePolicies]);
 
   // ── CONTADOR DE ITENS CONCLUÍDOS ──
   const { totalConcluidos, totalItens } = useMemo(() => {
@@ -119,6 +147,16 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
+  const handleReorderColumnItem = (colId: string, startIndex: number, endIndex: number) => {
+    const updated = WarRoomService.reorderColumnItems(data, colId, startIndex, endIndex);
+    setData(updated);
+  };
+
+  const handleMoveColumnItem = (sourceColId: string, targetColId: string, itemId: string, targetIndex?: number) => {
+    const updated = WarRoomService.moveColumnItem(data, sourceColId, targetColId, itemId, targetIndex);
+    setData(updated);
+  };
+
   // ── HANDLERS DE CÂMBIO ──
   const handleUpdateQuote = (novaCotacao: string) => {
     const updated = WarRoomService.updateQuote(data, novaCotacao);
@@ -161,6 +199,21 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
+  const handleReorderTimelineItem = (blockId: string, startIndex: number, endIndex: number) => {
+    const updated = WarRoomService.reorderTimelineItems(data, blockId, startIndex, endIndex);
+    setData(updated);
+  };
+
+  const handleMoveTimelineItem = (sourceBlockId: string, targetBlockId: string, itemId: string, targetIndex?: number) => {
+    const updated = WarRoomService.moveTimelineItem(data, sourceBlockId, targetBlockId, itemId, targetIndex);
+    setData(updated);
+  };
+
+  const handleResetCycle = () => {
+    const updated = WarRoomService.resetMonthlyRecurringChecks(data);
+    setData(updated);
+  };
+
   // ── RESTAURAR LOUSA ORIGINAL (DA FOTO) ──
   const handleResetDefault = () => {
     if (window.confirm('Deseja restaurar a lousa para o estado original fotografado? Todas as alterações manuais serão resetadas.')) {
@@ -188,15 +241,20 @@ export default function LousaOperacionalPage() {
         totalItens={totalItens}
       />
 
-      {/* ── CORPO PRINCIPAL DA LOUSA (3 GRANDES SEÇÕES DA FOTO) ── */}
+      {/* ── CORPO PRINCIPAL DA LOUSA ── */}
       <main className="flex-1 w-full max-w-[1920px] mx-auto p-3 sm:p-5 space-y-4">
-        {/* SEÇÃO 1: AS 5 COLUNAS OPERACIONAIS DA LOUSA */}
+        {/* RADAR DE SEGUROS A VENCER (D < 30 DIAS) */}
+        <WhiteboardInsuranceAlertBanner policies={insurancePolicies} />
+
+        {/* SEÇÃO 1: AS 5 COLUNAS OPERACIONAIS DA LOUSA COM DRAG & DROP */}
         <WhiteboardColumns
           colunas={data.colunas}
           onToggleItem={handleToggleColumnItem}
           onAddItem={handleAddColumnItem}
           onEditItem={handleEditColumnItem}
           onDeleteItem={handleDeleteColumnItem}
+          onReorderItem={handleReorderColumnItem}
+          onMoveItemBetweenColumns={handleMoveColumnItem}
         />
 
         {/* SEÇÃO 2: FOLLOW THE MONEY (ESTEIRA CAMBIAL & COTAÇÃO) */}
@@ -208,18 +266,25 @@ export default function LousaOperacionalPage() {
           onDeleteRow={handleDeleteCambioRow}
         />
 
-        {/* SEÇÃO 3: CRONOGRAMA DE VENCIMENTOS (6 BLOCOS DA LOUSA) */}
+        {/* SEÇÃO 3: CRONOGRAMA DE VENCIMENTOS COM DRAG & DROP E CICLO MENSAL */}
         <WhiteboardTimeline
           cronograma={data.cronograma}
+          mesReferencia={data.mesReferencia}
           onToggleItem={handleToggleTimelineItem}
           onAddItem={handleAddTimelineItem}
           onEditItem={handleEditTimelineItem}
           onDeleteItem={handleDeleteTimelineItem}
+          onReorderItem={handleReorderTimelineItem}
+          onMoveItemBetweenBlocks={handleMoveTimelineItem}
+          onResetCycle={handleResetCycle}
         />
       </main>
 
-      {/* ── LETREIRO NOTICIOSO / TICKER CONTÍNUO NO RODAPÉ ── */}
-      <WhiteboardNewsTicker cotacaoUsdGs={data.followTheMoney.cotacaoUsdGs} />
+      {/* ── LETREIRO NOTICIOSO / TICKER CONTÍNUO NO RODAPÉ (COM PAUSA NO HOVER E SEGUROS D<30) ── */}
+      <WhiteboardNewsTicker
+        cotacaoUsdGs={data.followTheMoney.cotacaoUsdGs}
+        insuranceAlerts={insuranceAlerts}
+      />
 
       {/* ── MODAL DE GESTÃO RÁPIDA ── */}
       <WhiteboardModal

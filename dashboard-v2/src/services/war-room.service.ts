@@ -258,18 +258,42 @@ export class WarRoomService {
   }
 
   /**
-   * Obtém os dados da lousa com suporte a LocalStorage e sanitização de ordenação
+   * Obtém os dados da lousa com suporte a LocalStorage, sanitização e renovação automática mensal
    */
   static getWhiteboardData(): WhiteboardDataState {
-    if (typeof window === 'undefined') return DEFAULT_WHITEBOARD_DATA;
+    const hoje = new Date();
+    const currentMonthKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+
+    if (typeof window === 'undefined') {
+      return {
+        ...DEFAULT_WHITEBOARD_DATA,
+        mesReferencia: currentMonthKey,
+        cronograma: this.sanitizeCronograma(DEFAULT_WHITEBOARD_DATA.cronograma),
+      };
+    }
 
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed: WhiteboardDataState = JSON.parse(stored);
+
+        // ── RENOVAÇÃO AUTOMÁTICA NA VIRADA DO MÊS ──
+        if (parsed.mesReferencia && parsed.mesReferencia !== currentMonthKey) {
+          // Virada do mês detectada! Renovação automática de todos os eventos recorrentes da agenda
+          if (parsed.cronograma) {
+            parsed.cronograma = parsed.cronograma.map(block => ({
+              ...block,
+              itens: block.itens.map(item => ({ ...item, concluido: false })),
+            }));
+          }
+          parsed.mesReferencia = currentMonthKey;
+        } else if (!parsed.mesReferencia) {
+          parsed.mesReferencia = currentMonthKey;
+        }
+
         if (parsed.cronograma) {
           parsed.cronograma = this.sanitizeCronograma(parsed.cronograma);
-          // Persiste a versão sanitizada se houve correção
+          // Persiste a versão sanitizada se houve correção ou virada de mês
           this.saveWhiteboardData(parsed);
         }
         return parsed;
@@ -280,6 +304,7 @@ export class WarRoomService {
 
     return {
       ...DEFAULT_WHITEBOARD_DATA,
+      mesReferencia: currentMonthKey,
       cronograma: this.sanitizeCronograma(DEFAULT_WHITEBOARD_DATA.cronograma),
     };
   }
@@ -597,6 +622,160 @@ export class WarRoomService {
     });
 
     const newState = { ...currentState, cronograma: updatedCronograma };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Reseta manualmente os checks do cronograma para iniciar um novo ciclo mensal
+   */
+  static resetMonthlyRecurringChecks(currentState: WhiteboardDataState): WhiteboardDataState {
+    const hoje = new Date();
+    const currentMonthKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+
+    const updatedCronograma = currentState.cronograma.map(block => ({
+      ...block,
+      itens: block.itens.map(item => ({ ...item, concluido: false })),
+    }));
+
+    const newState: WhiteboardDataState = {
+      ...currentState,
+      mesReferencia: currentMonthKey,
+      cronograma: updatedCronograma,
+    };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Reordena itens dentro de um bloco do cronograma (Drag & Drop)
+   */
+  static reorderTimelineItems(
+    currentState: WhiteboardDataState,
+    blockId: string,
+    startIndex: number,
+    endIndex: number
+  ): WhiteboardDataState {
+    const updatedCronograma = currentState.cronograma.map(block => {
+      if (block.id !== blockId) return block;
+      const items = [...block.itens];
+      const [movedItem] = items.splice(startIndex, 1);
+      items.splice(endIndex, 0, movedItem);
+      return { ...block, itens: items };
+    });
+
+    const newState = { ...currentState, cronograma: updatedCronograma };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Move item entre blocos do cronograma (Drag & Drop)
+   */
+  static moveTimelineItem(
+    currentState: WhiteboardDataState,
+    sourceBlockId: string,
+    targetBlockId: string,
+    itemId: string,
+    targetIndex?: number
+  ): WhiteboardDataState {
+    let movedItem: WhiteboardTimelineItem | undefined;
+
+    // 1. Remover do bloco de origem
+    const withoutItem = currentState.cronograma.map(block => {
+      if (block.id !== sourceBlockId) return block;
+      const found = block.itens.find(i => i.id === itemId);
+      if (found) movedItem = { ...found };
+      return {
+        ...block,
+        itens: block.itens.filter(i => i.id !== itemId),
+      };
+    });
+
+    if (!movedItem) return currentState;
+
+    // 2. Inserir no bloco de destino
+    const withItem = withoutItem.map(block => {
+      if (block.id !== targetBlockId) return block;
+      let itemToInsert = { ...movedItem! };
+      if (itemToInsert.dia < block.diaInicio || itemToInsert.dia > block.diaFim) {
+        itemToInsert.dia = block.diaInicio;
+        const formatted = this.formatTimelineDescription(block.diaInicio, itemToInsert.descricao);
+        itemToInsert.descricao = formatted.descricao;
+      }
+
+      const items = [...block.itens];
+      if (targetIndex !== undefined && targetIndex >= 0 && targetIndex <= items.length) {
+        items.splice(targetIndex, 0, itemToInsert);
+      } else {
+        items.push(itemToInsert);
+      }
+      return { ...block, itens: items };
+    });
+
+    const newState = { ...currentState, cronograma: withItem };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Reordena itens dentro de uma coluna de demandas (Drag & Drop)
+   */
+  static reorderColumnItems(
+    currentState: WhiteboardDataState,
+    columnId: string,
+    startIndex: number,
+    endIndex: number
+  ): WhiteboardDataState {
+    const updatedColunas = currentState.colunas.map(col => {
+      if (col.id !== columnId) return col;
+      const items = [...col.itens];
+      const [movedItem] = items.splice(startIndex, 1);
+      items.splice(endIndex, 0, movedItem);
+      return { ...col, itens: items };
+    });
+
+    const newState = { ...currentState, colunas: updatedColunas };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Move item entre colunas de demandas (Drag & Drop)
+   */
+  static moveColumnItem(
+    currentState: WhiteboardDataState,
+    sourceColId: string,
+    targetColId: string,
+    itemId: string,
+    targetIndex?: number
+  ): WhiteboardDataState {
+    let movedItem: any;
+
+    const withoutItem = currentState.colunas.map(col => {
+      if (col.id !== sourceColId) return col;
+      const found = col.itens.find(i => i.id === itemId);
+      if (found) movedItem = { ...found };
+      return {
+        ...col,
+        itens: col.itens.filter(i => i.id !== itemId),
+      };
+    });
+
+    if (!movedItem) return currentState;
+
+    const withItem = withoutItem.map(col => {
+      if (col.id !== targetColId) return col;
+      const items = [...col.itens];
+      if (targetIndex !== undefined && targetIndex >= 0 && targetIndex <= items.length) {
+        items.splice(targetIndex, 0, movedItem);
+      } else {
+        items.push(movedItem);
+      }
+      return { ...col, itens: items };
+    });
+
+    const newState = { ...currentState, colunas: withItem };
     this.saveWhiteboardData(newState);
     return newState;
   }
