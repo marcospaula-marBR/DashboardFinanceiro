@@ -133,7 +133,7 @@ export function WhiteboardEditDemandModal({
     onClose();
   };
 
-  const quickResponsibles = ['MANUS', 'CLARA', 'MARCO', 'ALDO', 'DAUREN', 'PRISCILLA', 'ADRIANA', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
+  const quickResponsibles = ['MARCOS', 'MELISSA', 'MATHEUS', 'GUILHERME', 'FINANCEIRO', 'CONTABTI', 'CONTÁBIL', 'JURÍDICO', 'MANUS', 'MARCO', 'TI'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">

@@ -228,17 +228,17 @@ export function WhiteboardColumns({
     <section className="w-full bg-[#070c18]/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl relative">
       {/* DATALIST DE SUGESTÕES */}
       <datalist id="col-responsavel-suggestions">
-        <option value="MANUS" />
-        <option value="CLARA" />
-        <option value="MARCO" />
-        <option value="DAUREN" />
-        <option value="PRISCILLA" />
-        <option value="ALDO" />
-        <option value="ADRIANA" />
+        <option value="MARCOS" />
+        <option value="MELISSA" />
+        <option value="MATHEUS" />
+        <option value="GUILHERME" />
         <option value="FINANCEIRO" />
-        <option value="JURÍDICO" />
+        <option value="CONTABTI" />
         <option value="CONTÁBIL" />
-        <option value="TI / CONTÁBIL" />
+        <option value="JURÍDICO" />
+        <option value="MANUS" />
+        <option value="MARCO" />
+        <option value="TI" />
       </datalist>
 
       {/* CABEÇALHO DA SEÇÃO DE COLUNAS */}

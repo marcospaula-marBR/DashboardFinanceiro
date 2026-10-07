@@ -14,7 +14,6 @@ import { WhiteboardNewsTicker } from '@/components/war-room/WhiteboardNewsTicker
 import { WhiteboardModal } from '@/components/war-room/WhiteboardModal';
 import { WhiteboardInsuranceAlertBanner } from '@/components/war-room/WhiteboardInsuranceAlertBanner';
 import { WhiteboardResponsibleBoard } from '@/components/war-room/WhiteboardResponsibleBoard';
-import { WhiteboardResponsibleLegend } from '@/components/war-room/WhiteboardResponsibleLegend';
 import { WhiteboardEditDemandModal } from '@/components/war-room/WhiteboardEditDemandModal';
 import { WhiteboardArchivedModal } from '@/components/war-room/WhiteboardArchivedModal';
 import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDemandColumnModal';
@@ -602,17 +601,6 @@ export default function LousaOperacionalPage() {
             </button>
           </div>
         </div>
-
-        {/* ── LEGENDA VISUAL POR MEMBRO & RESPONSÁVEL (CORES MEMORIZÁVEIS) ── */}
-        <WhiteboardResponsibleLegend
-          responsiblesList={distinctResponsibles}
-          countsMap={responsibleCountsMap}
-          selectedResponsible={selectedResponsible}
-          onSelectResponsible={(resp) => {
-            setOnlyOverdueFilter(false);
-            setSelectedResponsible(resp);
-          }}
-        />
 
         {/* ── QUADRO OPERACIONAL POR RESPONSÁVEIS (EXPANSÍVEL / DEDICADO) ── */}
         {isResponsibleBoardVisible && (
