@@ -50,7 +50,7 @@ export function SideDrawer({ isOpen, onClose, employeeId, onDataChanged, onAddNe
       setStatusFilter('all');
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
-      setError('Falha ao carregar dados do colaborador');
+      setError('Falha ao carregar dados do contratado');
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +92,7 @@ export function SideDrawer({ isOpen, onClose, employeeId, onDataChanged, onAddNe
   };
 
   const onAntecipar = (contractId: string) => {
-    const qtyStr = window.prompt('Quantas parcelas o colaborador quer antecipar agora?', '1');
+    const qtyStr = window.prompt('Quantas parcelas o contratado quer antecipar agora?', '1');
     if (qtyStr !== null) {
       const qty = parseInt(qtyStr);
       if (!isNaN(qty) && qty > 0) {
@@ -227,7 +227,7 @@ export function SideDrawer({ isOpen, onClose, employeeId, onDataChanged, onAddNe
                   <p className="text-lg font-black text-red-600 tabular-nums">{formatCurrency(employee.balance)}</p>
                 </div>
                 <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                  <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">Remuneração</p>
+                  <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">Honorários</p>
                   <p className="text-lg font-black text-amber-600 tabular-nums">{formatCurrency(employee.remuneration)}</p>
                 </div>
               </div>

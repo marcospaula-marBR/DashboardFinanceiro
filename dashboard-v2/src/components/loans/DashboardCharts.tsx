@@ -87,7 +87,7 @@ export function DashboardCharts({ projectionsData = [], historyData = [], employ
     });
 
     const items = Array.from(totalsMap.entries()).map(([name, value]) => ({
-      name: name === "CLT" ? "Regime CLT" : name === "MEI" ? "Vínculo MEI" : name,
+      name: name === "CLT" ? "Regime CLT" : name === "MEI" ? "Regime MEI" : name,
       value: Number(value.toFixed(2)),
     })).sort((a, b) => b.value - a.value);
 
@@ -248,7 +248,7 @@ export function DashboardCharts({ projectionsData = [], historyData = [], employ
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
-                  Vínculo
+                  Regime
                 </button>
               </div>
 

@@ -291,7 +291,7 @@ export function PaymentProcessingModal({ isOpen, onClose, monthCycle }: PaymentP
                     }`}
                   >
                     <Users size={13} />
-                    <span>Por Colaborador ({groupedEmployees.length})</span>
+                    <span>Por Contratado ({groupedEmployees.length})</span>
                   </button>
                   <button
                     onClick={() => setViewMode('parcelas')}
@@ -318,7 +318,7 @@ export function PaymentProcessingModal({ isOpen, onClose, monthCycle }: PaymentP
             {/* Stats Cards (4 colunas) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50/80 border-b border-slate-100">
               <div className="bg-white p-3 rounded-xl border border-slate-200">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Colaboradores</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Contratados</p>
                 <p className="text-xl font-black text-slate-900">{groupedEmployees.length}</p>
                 <p className="text-xs text-slate-500">com parcelas no mês</p>
               </div>
@@ -432,11 +432,11 @@ export function PaymentProcessingModal({ isOpen, onClose, monthCycle }: PaymentP
                 </div>
               )}
 
-              {/* MODO 1: VISÃO AGRUPADA POR COLABORADOR */}
+              {/* MODO 1: VISÃO AGRUPADA POR CONTRATADO */}
               {viewMode === 'colaboradores' ? (
                 <div className="space-y-3">
                   {groupedEmployees.length === 0 ? (
-                    <p className="text-center text-slate-400 py-12">Nenhum colaborador com parcelas para este mês</p>
+                    <p className="text-center text-slate-400 py-12">Nenhum contratado com parcelas para este mês</p>
                   ) : (
                     groupedEmployees.map((emp) => {
                       const isExpanded = expandedEmployees.has(emp.employeeName);
@@ -452,12 +452,12 @@ export function PaymentProcessingModal({ isOpen, onClose, monthCycle }: PaymentP
                         >
                           {/* Cabeçalho do Colaborador */}
                           <div className="p-3.5 flex items-center gap-3 bg-slate-50/50">
-                            {/* Checkbox de seleção do colaborador */}
+                            {/* Checkbox de seleção do contratado */}
                             <button
                               onClick={() => toggleEmployeeSelection(emp.payments)}
                               disabled={!hasPending}
                               className={hasPending ? "cursor-pointer" : "cursor-not-allowed opacity-30"}
-                              title={hasPending ? "Selecionar todas as pendentes deste colaborador" : "Todas já pagas"}
+                              title={hasPending ? "Selecionar todas as pendentes deste contratado" : "Todas já pagas"}
                             >
                               {allPendingSelected ? (
                                 <CheckSquare size={20} className="text-emerald-600" />

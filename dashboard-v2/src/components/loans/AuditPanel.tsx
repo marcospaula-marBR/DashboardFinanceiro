@@ -259,7 +259,7 @@ export function AuditPanel({ onOpenContract }: AuditPanelProps) {
 
                     {/* Link para abrir no drawer */}
                     <p className="mt-3 text-[10px] text-slate-400 italic">
-                      Para corrigir parcelas, abra o colaborador na tabela principal e expanda o contrato.
+                      Para corrigir parcelas, abra o contratado na tabela principal e expanda o contrato.
                     </p>
                   </div>
                 )}

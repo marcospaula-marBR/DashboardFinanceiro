@@ -34,7 +34,7 @@ export function EmployeeTable({ employees, onEmployeeClick }: EmployeeTableProps
     <div className="card-premium overflow-hidden mt-6">
       <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
         <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-tight">
-          Listagem de Colaboradores
+          Listagem de Contratados
           <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500 font-bold">
             {employees.length} REGISTROS
           </span>
@@ -54,10 +54,10 @@ export function EmployeeTable({ employees, onEmployeeClick }: EmployeeTableProps
         <table className="w-full text-left">
           <thead>
             <tr className="bg-slate-50/80 text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
-              <th className="py-4 px-6 min-w-[300px]">Colaborador / Cargo</th>
+              <th className="py-4 px-6 min-w-[300px]">Contratado / Escopo</th>
               <th className="py-4 px-4 text-center">Empresa</th>
-              <th className="py-4 px-4 text-center whitespace-nowrap">Vínculo</th>
-              <th className="py-4 px-4 text-right">Remuneração</th>
+              <th className="py-4 px-4 text-center whitespace-nowrap">Regime</th>
+              <th className="py-4 px-4 text-right">Honorários</th>
               <th className="py-4 px-4 text-center">Restantes</th>
               <th className="py-4 px-4 text-right">Saldo Devedor</th>
               <th className="py-4 px-4 text-right">Mês Débito</th>
@@ -69,7 +69,7 @@ export function EmployeeTable({ employees, onEmployeeClick }: EmployeeTableProps
             {employees.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-12 text-center text-slate-400 text-sm italic">
-                  Nenhum colaborador encontrado para os filtros selecionados.
+                  Nenhum contratado encontrado para os filtros selecionados.
                 </td>
               </tr>
             ) : (
@@ -220,7 +220,7 @@ function EmployeeRow({
             <a 
               href={`/people?employeeId=${employee.id}`}
               className="p-2 hover:bg-emerald-500 hover:text-white rounded-lg transition-all text-slate-400 shadow-sm border border-transparent hover:border-emerald-600 flex items-center justify-center"
-              title="Ir para Ficha de RH (People)"
+              title="Ir para Ficha do Contratado (People)"
             >
               <ExternalLink size={16} />
             </a>
@@ -243,7 +243,7 @@ function EmployeeRow({
                   </div>
                 ) : contracts.length === 0 ? (
                   <div className="col-span-full text-center text-slate-400 py-12 text-sm font-bold border-2 border-dashed border-slate-200 rounded-2xl">
-                    Nenhum contrato ativo para este colaborador.
+                    Nenhum contrato ativo para este contratado.
                   </div>
                 ) : contracts.map((contract, i) => {
                   const installmentThisMonth = calcInstallmentForMonth(contract as any, currentMonthStr);

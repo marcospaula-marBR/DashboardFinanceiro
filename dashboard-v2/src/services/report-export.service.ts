@@ -129,8 +129,8 @@ export function buildFilterSummaryText(filters?: FilterValues, options?: ExportO
   const parts: string[] = [];
 
   if (filters?.empresa) parts.push(`Empresa: ${filters.empresa}`);
-  if (filters?.cargo) parts.push(`Cargo: ${filters.cargo}`);
-  if (filters?.vinculo) parts.push(`Vínculo: ${filters.vinculo}`);
+  if (filters?.cargo) parts.push(`Escopo: ${filters.cargo}`);
+  if (filters?.vinculo) parts.push(`Regime: ${filters.vinculo}`);
   if (filters?.status) parts.push(`Status RH: ${filters.status}`);
   if (filters?.remuneracaoRange) {
     const rangeMap: Record<string, string> = {
@@ -139,7 +139,7 @@ export function buildFilterSummaryText(filters?: FilterValues, options?: ExportO
       '3.5k-5k': 'R$ 3.500 - R$ 5.000',
       'acima5k': '> R$ 5.000'
     };
-    parts.push(`Faixa Salarial: ${rangeMap[filters.remuneracaoRange] || filters.remuneracaoRange}`);
+    parts.push(`Faixa de Valores: ${rangeMap[filters.remuneracaoRange] || filters.remuneracaoRange}`);
   }
   if (filters?.temAditivo) parts.push(filters.temAditivo === 'sim' ? 'Com Aditivos' : 'Sem Aditivos');
   if (filters?.search) parts.push(`Busca: "${filters.search}"`);
@@ -441,10 +441,10 @@ export class ReportExportService {
       const formatCur = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
       
       const filterSummary = buildFilterSummaryText(filters, options);
-      csv += `RELATÓRIO GERENCIAL DE EMPRÉSTIMOS DE COLABORADORES\n`;
+      csv += `RELATÓRIO GERENCIAL DE EMPRÉSTIMOS DE CONTRATADOS\n`;
       csv += `Filtros Aplicados:;${filterSummary}\n`;
       csv += `Data de Emissão:;${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}\n`;
-      csv += `Total de Colaboradores Filtrados:;${employees.length}\n\n`;
+      csv += `Total de Contratados Filtrados:;${employees.length}\n\n`;
 
       // 1. Resumo Gerencial do conjunto filtrado
       if (options?.includeSummary) {
@@ -455,17 +455,17 @@ export class ReportExportService {
         const contratosAtivos = employees.filter(e => e.loanStatus === 'Ativo').length;
 
         csv += 'RESUMO GERAL DOS DADOS FILTRADOS\n';
-        csv += `Colaboradores com Contratos Ativos:;${contratosAtivos}\n`;
+        csv += `Contratados com Contratos Ativos:;${contratosAtivos}\n`;
         csv += `Total Tomado (Filtrado):;${formatCur(totalEmprestado)}\n`;
         csv += `Total Recebido (Filtrado):;${formatCur(totalRecebido)}\n`;
         csv += `Saldo Devedor (Filtrado):;${formatCur(saldoDevedor)}\n`;
         csv += `Recebíveis Previstos no Mês:;${formatCur(recebivelMes)}\n\n`;
       }
       
-      csv += 'DETALHAMENTO CONSOLIDADO POR COLABORADOR\n\n';
+      csv += 'DETALHAMENTO CONSOLIDADO POR CONTRATADO\n\n';
 
       employees.forEach(emp => {
-        csv += `COLABORADOR:;${emp.name};Empresa:;${emp.company};Vínculo:;${emp.linkType};Status RH:;${emp.status};Cargo:;${emp.job_role || '-'}\n`;
+        csv += `CONTRATADO:;${emp.name};Empresa:;${emp.company};Regime:;${emp.linkType};Status RH:;${emp.status};Escopo:;${emp.job_role || '-'}\n`;
         csv += `Total Tomado:;${formatCur(emp.totalTaken || 0)};Total Recebido:;${formatCur(emp.totalReceived || 0)};Saldo Devedor:;${formatCur(emp.balance || 0)};Parcela Mensal:;${formatCur(emp.monthInstallment || 0)}\n`;
         
         const contracts = empContractsMap.get(emp.id) || [];
@@ -475,7 +475,7 @@ export class ReportExportService {
             csv += `${c.operationNumber};${formatCur(c.value || 0)};${c.installments || 0};${formatCur(c.installmentValue || 0)};${formatCur((c.value || 0) - (c.balance || 0))};${formatCur(c.balance || 0)};${(c.installments || 0) - (c.installmentsPaid || 0)};${c.status};${c.requestDate ? c.requestDate.split('T')[0] : ''};${c.startDate || ''};${c.endDate || ''}\n`;
           });
         } else {
-          csv += `Nenhum empréstimo ativo cadastrado para este colaborador.\n`;
+          csv += `Nenhum empréstimo ativo cadastrado para este contratado.\n`;
         }
         csv += '\n';
       });
@@ -492,12 +492,12 @@ export class ReportExportService {
   static async exportEmployeeReport(filters?: FilterValues): Promise<void> {
     const data = await this.getEmployeeReport(false, undefined, filters);
     const csv = this.convertToCSV(data, [
-      'Colaborador', 'Empresa', 'Vínculo', 'Status', 'Cargo',
+      'Contratado', 'Empresa', 'Regime', 'Status', 'Escopo',
       'Total Emprestado (R$)', 'Total Recebido (R$)', 'Saldo Devedor (R$)',
       'Parcela Mensal (R$)', 'Contratos Ativos', 'Aditivos'
     ]);
     
-    const filename = `Relatorio_Colaboradores_${new Date().toISOString().split('T')[0]}.csv`;
+    const filename = `Relatorio_Contratados_${new Date().toISOString().split('T')[0]}.csv`;
     this.downloadCSV(csv, filename);
   }
 
@@ -709,9 +709,9 @@ export class ReportExportService {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(71, 85, 105); // slate-600
-        const roleText = emp.job_role ? `  |  Cargo: ${emp.job_role}` : '';
+        const roleText = emp.job_role ? `  |  Escopo: ${emp.job_role}` : '';
         const aditivoText = emp.aditivoCount ? `  |  Aditivos: ${emp.aditivoCount}` : '';
-        doc.text(`Empresa: ${emp.company}  |  Vínculo: ${emp.linkType}  |  Status RH: ${emp.status}${roleText}${aditivoText}`, 14 + 85, currentY + 6);
+        doc.text(`Empresa: ${emp.company}  |  Regime: ${emp.linkType}  |  Status RH: ${emp.status}${roleText}${aditivoText}`, 14 + 85, currentY + 6);
         
         currentY += 11;
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { PlusCircle, FileText, Users, Home, CheckCircle2, FlaskConical, UserPlus, Trash2, Download } from "lucide-react";
+import { PlusCircle, FileText, Users, Home, CheckCircle2, FlaskConical, UserPlus, FileSignature, Trash2, Download } from "lucide-react";
 import { LoansService, fetchEmployees } from '@/services/loans.service';
 import { useDataMode } from "@/contexts/DataModeContext";
 import { PDFService } from '@/services/pdf.service';
@@ -173,9 +173,10 @@ export function HeaderDashboard({ activeFilters, isTestMode, onCreateEmployee, o
           <button 
             onClick={onCreateEmployee}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm"
+            title="Registrar novos contratos/prestadores no módulo People"
           >
-            <UserPlus size={18} />
-            <span>Registrar Pessoal</span>
+            <FileSignature size={18} />
+            <span>Registrar Contratos</span>
           </button>
         )}
 

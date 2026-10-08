@@ -331,7 +331,7 @@ export default function LoansPage() {
           ) : filteredStats && (
             <>
               <StatCard 
-                title="Colaboradores Ativos"
+                title="Contratados Ativos"
                 value={filteredStats.contratosAtivos.toString()}
                 icon={<FileCheck size={22} />}
                 color="purple"

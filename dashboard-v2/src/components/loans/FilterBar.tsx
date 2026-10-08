@@ -72,12 +72,12 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <User size={12} />
-              Colaborador
+              Contratado
             </label>
             <div className="relative">
               <input
                 type="text"
-                placeholder="Buscar por nome..."
+                placeholder="Buscar contratado..."
                 value={pending.search}
                 onChange={e => set("search", e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleApply()}
@@ -87,16 +87,16 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
             </div>
           </div>
 
-          {/* Cargo/Função */}
+          {/* Escopo */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Briefcase size={12} />
-              Função / Cargo
+              Escopo
             </label>
             <div className="relative">
               <input
                 type="text"
-                placeholder="Ex: Analista, Gerente..."
+                placeholder="Ex: Consultor, Coordenador..."
                 value={pending.cargo}
                 onChange={e => set("cargo", e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleApply()}
@@ -145,11 +145,11 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
         {/* Segunda Linha: Filtros Especializados */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full border-t border-slate-100 pt-4">
           
-          {/* Remuneração */}
+          {/* Faixa de Valores */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <BadgeDollarSign size={12} />
-              Faixa Salarial
+              Faixa de Valores
             </label>
             <select
               value={pending.remuneracaoRange}
@@ -164,18 +164,18 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
             </select>
           </div>
 
-          {/* Vínculo */}
+          {/* Regime */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Link2 size={12} />
-              Tipo de Vínculo
+              Regime
             </label>
             <select
               value={pending.vinculo}
               onChange={e => set("vinculo", e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none"
             >
-              <option value="">Todos os Vínculos</option>
+              <option value="">Todos os Regimes</option>
               <option value="CLT">CLT</option>
               <option value="PJ">PJ</option>
               <option value="Estagiário">Estagiário</option>
@@ -266,7 +266,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
           )}
           {active.cargo && (
             <span className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full border border-blue-200 uppercase">
-              CARGO: {active.cargo}
+              ESCOPO: {active.cargo}
             </span>
           )}
           {active.status && (
@@ -276,7 +276,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
           )}
           {active.remuneracaoRange && (
             <span className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-full border border-amber-200 uppercase">
-              SALÁRIO: {active.remuneracaoRange}
+              FAIXA: {active.remuneracaoRange}
             </span>
           )}
           {active.apenasMultiplosContratos && (

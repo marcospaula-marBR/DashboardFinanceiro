@@ -81,7 +81,7 @@ function SearchableEmployeeSelect({ employees, selectedId, onChange }: Searchabl
             <Search size={14} className="text-slate-400 flex-shrink-0" />
             <input
               type="text"
-              placeholder="Buscar colaborador..."
+              placeholder="Buscar contratado..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="w-full bg-transparent border-0 p-0 text-sm focus:ring-0 focus:outline-none placeholder:text-slate-400 text-slate-800"
@@ -90,7 +90,7 @@ function SearchableEmployeeSelect({ employees, selectedId, onChange }: Searchabl
           </div>
           <div className="overflow-y-auto flex-1 max-h-48 py-1">
             {filteredEmployees.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-slate-400 text-center">Nenhum colaborador encontrado</div>
+              <div className="px-3 py-2 text-xs text-slate-400 text-center">Nenhum contratado encontrado</div>
             ) : (
               filteredEmployees.map(e => (
                 <button
@@ -234,7 +234,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
   if (selectedEmpRaw && employeeDetails) {
     marginAvailable = employeeDetails.remuneration - employeeDetails.balance;
     if (requestedAmount > marginAvailable && requestedAmount > 0) {
-      marginError = `O valor excede a margem. Salário (R$ ${employeeDetails.remuneration.toFixed(2)}) - Dívida Ativa (R$ ${employeeDetails.balance.toFixed(2)}) = Margem Livre de R$ ${marginAvailable.toFixed(2)}`;
+      marginError = `O valor excede a margem. Honorários (R$ ${employeeDetails.remuneration.toFixed(2)}) - Dívida Ativa (R$ ${employeeDetails.balance.toFixed(2)}) = Margem Livre de R$ ${marginAvailable.toFixed(2)}`;
     }
 
     if (selectedEmpRaw.start_date) {
@@ -244,7 +244,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
       const diffMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
       
       if (diffMonths < 6) {
-        tenureError = `Colaborador possui Menos de 6 meses de empresa (Admissão: ${start.toLocaleDateString('pt-BR')}).`;
+        tenureError = `Contratado possui Menos de 6 meses de empresa (Início: ${start.toLocaleDateString('pt-BR')}).`;
       }
     }
   }
@@ -270,7 +270,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
   const handleProceedToPreview = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.employee_id) {
-      alert('Por favor, selecione um colaborador.');
+      alert('Por favor, selecione um contratado.');
       return;
     }
     if (!requestedAmount || requestedAmount <= 0) {
@@ -443,7 +443,7 @@ export function NewLoanModal({ isOpen, onClose, onSuccess, onGenerateTerm }: New
           {step === 'form' && (
             <form id="loanForm" onSubmit={handleProceedToPreview} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Colaborador Associado</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Contratado Associado</label>
                 <SearchableEmployeeSelect 
                   employees={employees}
                   selectedId={formData.employee_id}

@@ -90,7 +90,7 @@ export default function EmprestimosPage() {
       isOpen: true,
       title: "Detalhamento de Empréstimos Concedidos",
       subtitle: "Histórico geral de todos os empréstimos registrados para a seleção atual",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Valor Emprestado", "Status"],
+      headers: ["Contratado (Iniciais)", "Empresa", "Valor Emprestado", "Status"],
       items
     });
   };
@@ -111,7 +111,7 @@ export default function EmprestimosPage() {
       isOpen: true,
       title: "Detalhamento do Saldo Devedor",
       subtitle: "Contratos ativos com valores em aberto a receber",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Saldo Devedor", "Restantes", "Status"],
+      headers: ["Contratado (Iniciais)", "Empresa", "Saldo Devedor", "Restantes", "Status"],
       items
     });
   };
@@ -132,7 +132,7 @@ export default function EmprestimosPage() {
       isOpen: true,
       title: "Detalhamento de Valores Amortizados",
       subtitle: "Total amortizado e liquidado dos empréstimos",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Valor Concedido", "Total Já Pago", "Status"],
+      headers: ["Contratado (Iniciais)", "Empresa", "Valor Concedido", "Total Já Pago", "Status"],
       items
     });
   };
@@ -153,7 +153,7 @@ export default function EmprestimosPage() {
       isOpen: true,
       title: "Recebíveis Realizados no Ciclo",
       subtitle: "Parcelas e descontos em folha realizados (pagos) no mês de faturamento",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Valor Pago", "Status"],
+      headers: ["Contratado (Iniciais)", "Empresa", "Valor Pago", "Status"],
       items
     });
   };
@@ -172,9 +172,9 @@ export default function EmprestimosPage() {
 
     setDetailsModal({
       isOpen: true,
-      title: "Colaboradores com Contratos Ativos",
+      title: "Contratados com Contratos Ativos",
       subtitle: "Empréstimos com parcelas pendentes de desconto",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Cargo", "Saldo Devedor", "Status"],
+      headers: ["Contratado (Iniciais)", "Empresa", "Escopo", "Saldo Devedor", "Status"],
       items
     });
   };
@@ -195,7 +195,7 @@ export default function EmprestimosPage() {
       isOpen: true,
       title: "Contratos Totalmente Quitados",
       subtitle: "Empréstimos que foram quitados integralmente",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Total Emprestado", "Status"],
+      headers: ["Contratado (Iniciais)", "Empresa", "Total Emprestado", "Status"],
       items
     });
   };
@@ -217,7 +217,7 @@ export default function EmprestimosPage() {
       isOpen: true,
       title: "Cronograma de Término de Contratos (Última Parcela)",
       subtitle: "Datas da última parcela dos empréstimos ordenadas das mais distantes para as mais próximas",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Data da Última Parcela", "Valor Parcela", "Status"],
+      headers: ["Contratado (Iniciais)", "Empresa", "Data da Última Parcela", "Valor Parcela", "Status"],
       items
     });
   };
@@ -239,7 +239,7 @@ export default function EmprestimosPage() {
       isOpen: true,
       title: "Contratos Próximos de Encerrar",
       subtitle: "Empréstimos ativos ordenados por proximidade de encerramento",
-      headers: ["Colaborador (Iniciais)", "Empresa", "Mês de Encerramento", "Parcelas Restantes", "Status"],
+      headers: ["Contratado (Iniciais)", "Empresa", "Mês de Encerramento", "Parcelas Restantes", "Status"],
       items
     });
   };
@@ -629,7 +629,7 @@ export default function EmprestimosPage() {
           ) : filteredStats && (
             <>
               <StatCard 
-                title="Colaboradores Ativos"
+                title="Contratados Ativos"
                 value={filteredStats.contratosAtivos.toString()}
                 icon={<FileCheck size={22} />}
                 color="purple"
