@@ -157,7 +157,7 @@ export function BatchPdfExportModal({
           <div class="section">
             <div class="section-title">1. Informações Pessoais & Documentos</div>
             <div class="grid-3">
-              <div class="field"><span class="field-label">Nome Completo</span><span class="field-value">${profile.name || '-'}</span></div>
+              <div class="field"><span class="field-label">Representante</span><span class="field-value">${profile.name || '-'}</span></div>
               <div class="field"><span class="field-label">CPF</span><span class="field-value">${profile.document_id || '-'}</span></div>
               <div class="field"><span class="field-label">RG</span><span class="field-value">${profile.document_rg || '-'}</span></div>
               <div class="field"><span class="field-label">Razão Social (PJ)</span><span class="field-value">${profile.corporate_name || '-'}</span></div>
@@ -171,10 +171,10 @@ export function BatchPdfExportModal({
       if (includeContractual) {
         batchHtml += `
           <div class="section">
-            <div class="section-title">2. Dados Contratuais & Vínculo</div>
+            <div class="section-title">2. Dados Contratuais & Regime</div>
             <div class="grid-3">
-              <div class="field"><span class="field-label">Empresa do Vínculo</span><span class="field-value">${profile.company || '-'}</span></div>
-              <div class="field"><span class="field-label">Tipo de Vínculo</span><span class="field-value">${profile.linkType || '-'}</span></div>
+              <div class="field"><span class="field-label">Empresa do Regime</span><span class="field-value">${profile.company || '-'}</span></div>
+              <div class="field"><span class="field-label">Tipo de Regime</span><span class="field-value">${profile.linkType || '-'}</span></div>
               <div class="field"><span class="field-label">Setor / Departamento</span><span class="field-value">${profile.department || '-'}</span></div>
               <div class="field"><span class="field-label">Escopo do Contrato</span><span class="field-value">${profile.job_role || '-'}</span></div>
               <div class="field"><span class="field-label">Local de Prestação</span><span class="field-value">${profile.service_location || '-'}</span></div>
@@ -211,9 +211,9 @@ export function BatchPdfExportModal({
       if (includeRemuneration) {
         batchHtml += `
           <div class="section">
-            <div class="section-title">5. Remuneração Contratual</div>
+            <div class="section-title">5. Honorários Contratuais</div>
             <div class="grid-3">
-              <div class="field"><span class="field-label">Remuneração Base</span><span class="field-value">${formatCurrency(profile.remuneration_fixed || profile.remuneration || 0)}</span></div>
+              <div class="field"><span class="field-label">Valor Contrato</span><span class="field-value">${formatCurrency(profile.remuneration_fixed || profile.remuneration || 0)}</span></div>
               <div class="field"><span class="field-label">Bônus</span><span class="field-value">${formatCurrency(profile.remuneration_bonus || 0)}</span></div>
               <div class="field"><span class="field-label">Comissões</span><span class="field-value">${formatCurrency(profile.remuneration_commission || 0)}</span></div>
             </div>
@@ -232,7 +232,7 @@ export function BatchPdfExportModal({
             
             <div style="margin-bottom: 12px; background: #fffdf5; border: 1.5px solid #fef3c7; padding: 10px; border-radius: 8px;">
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">${isPJ ? 'Total Valor Contratual' : 'Total Fixo'}</span><span class="field-value">${formatCurrency(costTotals.fixed)}</span></div>
+                <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">${'Total Valor Contrato'}</span><span class="field-value">${formatCurrency(costTotals.fixed)}</span></div>
                 <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total Bônus</span><span class="field-value">${formatCurrency(costTotals.bonus)}</span></div>
                 <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total Comissões</span><span class="field-value">${formatCurrency(costTotals.comissao)}</span></div>
                 ${!isPJ ? `<div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total FGTS</span><span class="field-value">${formatCurrency(costTotals.fgts)}</span></div>` : ''}
@@ -312,8 +312,8 @@ export function BatchPdfExportModal({
               <thead>
                 <tr>
                   <th>Competência</th>
-                  <th>Vínculo</th>
-                  <th>${isPJ ? 'Valor Contratual' : 'Fixo'}</th>
+                  <th>Regime</th>
+                  <th>${'Valor Contrato'}</th>
                   <th>Bônus</th>
                   <th>Comissão</th>
                   ${!isPJ ? '<th>FGTS</th>' : ''}
@@ -376,7 +376,7 @@ export function BatchPdfExportModal({
             </div>
             <div>
               <h2 className="text-base font-black uppercase tracking-wide">Exportação de Fichas em Lote (PDF)</h2>
-              <p className="text-xs text-slate-400">Gere relatórios executivos consolidados para múltiplos colaboradores</p>
+              <p className="text-xs text-slate-400">Gere relatórios executivos consolidados para múltiplos contratados</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors">
@@ -391,7 +391,7 @@ export function BatchPdfExportModal({
           <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
               <Filter size={14} className="text-emerald-600" />
-              Filtros para Seleção de Colaboradores ({targetEmployees.length} de {employees.length} selecionados)
+              Filtros para Seleção de Contratados ({targetEmployees.length} de {employees.length} selecionados)
             </h3>
 
             {/* Filtro Empresa */}
@@ -449,7 +449,7 @@ export function BatchPdfExportModal({
             {/* Filtro Vínculo */}
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
-                <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Vínculo (CLT / PJ)</label>
+                <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Regime (CLT / PJ)</label>
                 <div className="flex items-center gap-2 text-[10px] font-bold">
                   <button onClick={() => setSelectedLinkTypes([...linkTypes])} className="text-emerald-600 hover:underline">Todos</button>
                   <span className="text-slate-300">|</span>
@@ -483,7 +483,7 @@ export function BatchPdfExportModal({
               </label>
               <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
                 <input type="checkbox" checked={includeContractual} onChange={e => setIncludeContractual(e.target.checked)} className="rounded text-emerald-600" />
-                <span>2. Dados Contratuais & Vínculo</span>
+                <span>2. Dados Contratuais & Regime</span>
               </label>
               <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
                 <input type="checkbox" checked={includeAddressContact} onChange={e => setIncludeAddressContact(e.target.checked)} className="rounded text-emerald-600" />
@@ -495,7 +495,7 @@ export function BatchPdfExportModal({
               </label>
               <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
                 <input type="checkbox" checked={includeRemuneration} onChange={e => setIncludeRemuneration(e.target.checked)} className="rounded text-emerald-600" />
-                <span>5. Remuneração Contratual</span>
+                <span>5. Honorários Contratuais</span>
               </label>
               <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
                 <input type="checkbox" checked={includeCostsHistory} onChange={e => setIncludeCostsHistory(e.target.checked)} className="rounded text-emerald-600" />

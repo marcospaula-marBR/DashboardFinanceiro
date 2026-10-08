@@ -148,7 +148,7 @@ export function ProfileExportModal({
     if (includePersonal) {
       csv += `"1. IDENTIFICAÇÃO E DADOS PESSOAIS"\n`;
       csv += `Campo;Valor\n`;
-      csv += `Nome Completo;${sanitize(profile.name)}\n`;
+      csv += `Representante;${sanitize(profile.name)}\n`;
       csv += `CPF;${sanitize(profile.document_id)}\n`;
       csv += `RG;${sanitize(profile.document_rg)}\n`;
       csv += `Gênero;${sanitize(profile.gender)}\n`;
@@ -160,10 +160,10 @@ export function ProfileExportModal({
       csv += `"2. DADOS CONTRATUAIS E EMPRESA"\n`;
       csv += `Campo;Valor\n`;
       csv += `Empresa;${sanitize(profile.company)}\n`;
-      csv += `Vínculo Contratual;${sanitize(profile.linkType)}\n`;
+      csv += `Regime Contratual;${sanitize(profile.linkType)}\n`;
       csv += `Escopo do Contrato;${sanitize(profile.job_role)}\n`;
       csv += `Setor / Departamento;${sanitize(profile.department)}\n`;
-      csv += `Data de Admissão;${sanitize(formatDate(profile.start_date))}\n`;
+      csv += `Início Contrato;${sanitize(formatDate(profile.start_date))}\n`;
       csv += `Vencimento do Contrato;${sanitize(formatDate(profile.contract_expiry_date))}\n`;
       csv += `Status do Cadastro;${sanitize(profile.status || 'Ativo')}\n`;
       csv += `Razão Social (PJ);${sanitize(profile.corporate_name)}\n`;
@@ -202,8 +202,8 @@ export function ProfileExportModal({
       const comm = profile.remuneration_commission || 0;
       const totalCost = fixed + bonus + conn + inc + comm;
 
-      csv += `"5. REMUNERAÇÃO E FICHA EXECUTIVA"\n`;
-      csv += `Item Remuneratório;Valor (R$)\n`;
+      csv += `"5. HONORÁRIOS E FICHA EXECUTIVA"\n`;
+      csv += `Item;Valor (R$)\n`;
       csv += `${remLabel.bruto};${fixed.toFixed(2).replace('.', ',')}\n`;
       csv += `Bônus;${bonus.toFixed(2).replace('.', ',')}\n`;
       csv += `Comissão;${comm.toFixed(2).replace('.', ',')}\n`;
@@ -213,7 +213,7 @@ export function ProfileExportModal({
     }
 
     if (includeTrajectory && history.length > 0) {
-      csv += `"6. TRAJETÓRIA E HISTÓRICO DE ALTERAÇÕES"\n`;
+      csv += `"6. TEMPO DE SERVIÇOS E HISTÓRICO DE ALTERAÇÕES"\n`;
       csv += `Data;Tipo de Evento;Valor Anterior;Novo Valor;Observações\n`;
       history.forEach(h => {
         csv += `${sanitize(formatDate(h.change_date))};${sanitize(h.event_type)};${sanitize(h.previous_value)};${sanitize(h.new_value)};${sanitize(h.observations)}\n`;
@@ -224,11 +224,11 @@ export function ProfileExportModal({
     if (includeCostsHistory && costs.length > 0) {
       const isCsvPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
       const sortedCostsCSV = [...costs].sort((a, b) => a.competencia.localeCompare(b.competencia));
-      csv += `"7. HISTÓRICO DE CUSTOS MENSAIS E TOTALIZADORES POR VERBA"\n`;
+      csv += `"7. HISTÓRICO DE CUSTOS MENSAIS E TOTALIZADORES POR VALORES"\n`;
       if (costTotals) {
-        csv += `"TOTALIZADORES ACUMULADOS POR VERBA"\n`;
-        csv += `Verba;Total Acumulado (R$)\n`;
-        csv += `${isCsvPJ ? 'Valor Contratual' : 'Salário Fixo'};${costTotals.fixed.toFixed(2).replace('.', ',')}\n`;
+        csv += `"TOTALIZADORES ACUMULADOS POR VALORES"\n`;
+        csv += `Item / Valor;Total Acumulado (R$)\n`;
+        csv += `${isCsvPJ ? 'Valor Contrato' : 'Valor Contrato (Fixo)'};${costTotals.fixed.toFixed(2).replace('.', ',')}\n`;
         csv += `Bônus;${costTotals.bonus.toFixed(2).replace('.', ',')}\n`;
         csv += `Comissão;${costTotals.comissao.toFixed(2).replace('.', ',')}\n`;
         if (!isCsvPJ) {
@@ -241,7 +241,7 @@ export function ProfileExportModal({
         csv += `TOTAL MENSAL DESEMBOLSADO;${costTotals.realCost.toFixed(2).replace('.', ',')}\n\n`;
       }
       csv += `DETALHAMENTO MENSAL DE CUSTOS\n`;
-      csv += `Período Competência;Tipo Vínculo;${isCsvPJ ? 'Valor Contratual' : 'Valor Fixo'};Bônus;Comissão${!isCsvPJ ? ';FGTS' : ''};Custo Real Desembolsado\n`;
+      csv += `Período Competência;Regime;${isCsvPJ ? 'Valor Contrato' : 'Valor Contrato (Fixo)'};Bônus;Comissão${!isCsvPJ ? ';FGTS' : ''};Custo Real Desembolsado\n`;
       sortedCostsCSV.forEach(c => {
         const isCLT = c.vinculo_tipo === 'CLT';
         const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
@@ -321,7 +321,7 @@ export function ProfileExportModal({
         <div class="section">
           <div class="section-title">${isPJ ? '1. Identificação da Empresa e Representante Legal' : '1. Identificação e Dados Pessoais'}</div>
           <div class="grid">
-            <div class="field"><span class="field-label">${isPJ ? 'Nome do Representante / Prestador' : 'Nome Completo'}</span><span class="field-value">${profile.name || '-'}</span></div>
+            <div class="field"><span class="field-label">${isPJ ? 'Nome do Representante / Prestador' : 'Representante'}</span><span class="field-value">${profile.name || '-'}</span></div>
             <div class="field"><span class="field-label">CPF</span><span class="field-value">${profile.document_id || '-'}</span></div>
             <div class="field"><span class="field-label">RG</span><span class="field-value">${profile.document_rg || '-'}</span></div>
             ${isPJ ? `
@@ -344,12 +344,12 @@ export function ProfileExportModal({
           <div class="section-title">${isPJ ? '2. Dados do Contrato e Prestação de Serviços' : '2. Dados Contratuais e Empresa'}</div>
           <div class="grid">
             <div class="field"><span class="field-label">Empresa Contratante</span><span class="field-value">${profile.company || '-'}</span></div>
-            <div class="field"><span class="field-label">Vínculo Contratual</span><span class="field-value">${profile.linkType || '-'}</span></div>
+            <div class="field"><span class="field-label">Regime Contratual</span><span class="field-value">${profile.linkType || '-'}</span></div>
             <div class="field"><span class="field-label">${isPJ ? 'Escopo / Objeto do Serviço' : 'Escopo do Contrato'}</span><span class="field-value">${profile.job_role || '-'}</span></div>
             <div class="field"><span class="field-label">${isPJ ? 'Área Atendida / Unidade' : 'Setor / Departamento'}</span><span class="field-value">${profile.department || '-'}</span></div>
-            <div class="field"><span class="field-label">${isPJ ? 'Início da Vigência / Prestação' : 'Data de Admissão'}</span><span class="field-value">${formatDate(profile.start_date)}</span></div>
+            <div class="field"><span class="field-label">${isPJ ? 'Início da Vigência / Prestação' : 'Início Contrato'}</span><span class="field-value">${formatDate(profile.start_date)}</span></div>
             <div class="field"><span class="field-label">${isPJ ? 'Vencimento / Término da Vigência' : 'Vencimento do Contrato'}</span><span class="field-value">${formatDate(profile.contract_expiry_date)}</span></div>
-            ${profile.resignation_date ? `<div class="field"><span class="field-label">${isPJ ? 'Data do Distrato / Rescisão' : 'Data de Demissão / Rescisão'}</span><span class="field-value">${formatDate(profile.resignation_date)}</span></div>` : ''}
+            ${profile.resignation_date ? `<div class="field"><span class="field-label">${isPJ ? 'Data do Distrato / Rescisão' : 'Data de Encerramento / Rescisão'}</span><span class="field-value">${formatDate(profile.resignation_date)}</span></div>` : ''}
             <div class="field"><span class="field-label">Status do Cadastro</span><span class="field-value">${profile.status || 'Ativo'}</span></div>
             ${profile.corporate_name && !isPJ ? `<div class="field"><span class="field-label">Razão Social (PJ)</span><span class="field-value">${profile.corporate_name}</span></div>` : ''}
             ${profile.pj_type && !isPJ ? `<div class="field"><span class="field-label">CNPJ (PJ)</span><span class="field-value">${profile.pj_type}</span></div>` : ''}
@@ -402,7 +402,7 @@ export function ProfileExportModal({
           <div class="section-title">5. Remuneração e Ficha Executiva</div>
           <table>
             <thead>
-              <tr><th>Item Remuneratório</th><th style="text-align: right;">Valor Mensal (R$)</th></tr>
+              <tr><th>Item</th><th style="text-align: right;">Valor Mensal (R$)</th></tr>
             </thead>
             <tbody>
               <tr><td>${remLabel.bruto}</td><td style="text-align: right; font-weight: 600;">${formatCurrency(fixed)}</td></tr>
@@ -410,18 +410,18 @@ export function ProfileExportModal({
               <tr><td>Comissão</td><td style="text-align: right; font-weight: 600;">${formatCurrency(comm)}</td></tr>
               <tr><td>Conectividade</td><td style="text-align: right; font-weight: 600;">${formatCurrency(conn)}</td></tr>
               <tr><td>Incentivos</td><td style="text-align: right; font-weight: 600;">${formatCurrency(inc)}</td></tr>
-              <tr style="background: #fffbeb; font-weight: 800; color: #92400e;"><td>CUSTO TOTAL ESTIMADO DA FOLHA</td><td style="text-align: right; color: #b45309; font-size: 14px;">${formatCurrency(totalCost)}</td></tr>
+              <tr style="background: #fffbeb; font-weight: 800; color: #92400e;"><td>CUSTO TOTAL</td><td style="text-align: right; color: #b45309; font-size: 14px;">${formatCurrency(totalCost)}</td></tr>
             </tbody>
           </table>
         </div>
       `;
     }
 
-    // 6. TRAJETÓRIA E HISTÓRICO
+    // 6. TEMPO DE SERVIÇOS E HISTÓRICO
     if (includeTrajectory && history.length > 0) {
       html += `
         <div class="section">
-          <div class="section-title">6. Trajetória e Histórico de Alterações</div>
+          <div class="section-title">6. Tempo de Serviços e Histórico de Alterações</div>
           <table>
             <thead>
               <tr><th>Data</th><th>Evento</th><th>Anterior</th><th>Novo Valor</th><th>Observações</th></tr>
@@ -456,17 +456,17 @@ export function ProfileExportModal({
 
       html += `
         <div class="section">
-          <div class="section-title">7. Histórico de Custos Mensais, Gráfico e Totalizadores por Verba</div>
+          <div class="section-title">7. Histórico de Custos Mensais, Gráfico e Totalizadores por Valores</div>
           
           ${costTotals ? `
-            <!-- Quadro de Totalizadores por Verbas Recebidas -->
+            <!-- Quadro de Totalizadores por Valores Recebidos -->
             <div style="margin-bottom: 18px; background: #fffdf5; border: 1.5px solid #fef3c7; padding: 14px; border-radius: 8px;">
               <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #92400e; margin-bottom: 10px; border-bottom: 1px solid #fde68a; padding-bottom: 4px;">
-                Totalizadores Acumulados de Verbas ${isPJ ? 'Contratuais' : 'Recebidas'} do Custo Histórico
+                Totalizadores Acumulados de Valores ${isPJ ? 'Contratuais' : 'Recebidos'} do Custo Histórico
               </div>
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
                 <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
-                  <span class="field-label">${isPJ ? 'Total Valor Contratual' : 'Total Salário Fixo'}</span>
+                  <span class="field-label">${isPJ ? 'Total Valor Contrato' : 'Total Valor Contrato (Fixo)'}</span>
                   <span class="field-value">${formatCurrency(costTotals.fixed)}</span>
                 </div>
                 <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
@@ -602,8 +602,8 @@ export function ProfileExportModal({
             <thead>
               <tr>
                 <th>Competência</th>
-                <th>Vínculo</th>
-                <th>${isPJ ? 'Valor Contratual' : 'Valor Fixo'}</th>
+                <th>Regime</th>
+                <th>Valor Contrato</th>
                 <th>Bônus</th>
                 <th>Comissão</th>
                 ${!isPJ ? '<th>FGTS</th>' : ''}
@@ -759,7 +759,7 @@ export function ProfileExportModal({
                 <Building2 size={15} className="text-amber-600" />
                 <span className="text-xs font-bold text-slate-800">2. Dados Contratuais e Empresa</span>
               </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">Cargo, Setor, Empresa, Vínculo, Admissão</span>
+              <span className="text-[10px] text-slate-400 ml-auto font-medium">Escopo, Setor, Empresa, Regime, Início Contrato</span>
             </div>
 
             {/* 3. Endereço e Contatos */}
@@ -808,7 +808,7 @@ export function ProfileExportModal({
               </div>
               <div className="flex items-center gap-2">
                 <DollarSign size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">5. Remuneração e Ficha Executiva</span>
+                <span className="text-xs font-bold text-slate-800">5. Honorários e Ficha Executiva</span>
               </div>
               <span className="text-[10px] text-slate-400 ml-auto font-medium">Fixo, Bônus, Comissão, Conectividade, Custo Total</span>
             </div>
@@ -825,7 +825,7 @@ export function ProfileExportModal({
               </div>
               <div className="flex items-center gap-2">
                 <History size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">6. Trajetória e Histórico de Alterações</span>
+                <span className="text-xs font-bold text-slate-800">6. Tempo de Serviços e Histórico de Alterações</span>
               </div>
               <span className="text-[10px] text-slate-400 ml-auto font-medium">{history.length} registro(s)</span>
             </div>

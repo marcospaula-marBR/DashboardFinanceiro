@@ -91,7 +91,7 @@ export function EmploymentBondTimeline({
     events.push({
       date: admissionDate,
       type: "admission",
-      label: "Admissão",
+      label: "Início Contrato",
       sub: firstBond
         ? `${firstBond.regime} • ${firstBond.contracting_company || "MarBR"}`
         : "",
@@ -106,7 +106,7 @@ export function EmploymentBondTimeline({
       type: "bond",
       label: bond.trigger_reason
         ? `Transição: ${bond.trigger_reason}`
-        : "Mudança de Vínculo",
+        : "Mudança de Regime",
       sub: `${bond.regime} • ${bond.contracting_company || "MarBR"}`,
       vinculo: bond.regime,
     });
@@ -158,10 +158,10 @@ export function EmploymentBondTimeline({
       <div className="text-center py-10">
         <Briefcase className="mx-auto mb-3 text-slate-300" size={32} />
         <p className="text-base text-slate-500">
-          Nenhum vínculo registrado ainda.
+          Nenhum regime registrado ainda.
         </p>
         <p className="text-sm text-slate-400 mt-1">
-          Adicione um vínculo para construir a trajetória.
+          Adicione um regime para construir o tempo de serviços.
         </p>
       </div>
     );

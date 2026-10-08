@@ -681,7 +681,7 @@ export function PayrollBatchImportModal({
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase block">Salário Base (Fixo)</label>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase block">Valor Contrato (Fixo)</label>
                             <input
                               type="number"
                               step="0.01"

@@ -131,7 +131,7 @@ export function PeopleTable({
       <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-tight">
-            Listagem de Colaboradores
+            Listagem de Contratados
             <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500 font-bold">
               {employees.length} REGISTROS
             </span>
@@ -190,9 +190,9 @@ export function PeopleTable({
         <table className="w-full text-left border-collapse" style={{ minWidth: '1150px' }}>
           <thead>
             <tr className="bg-slate-50/80 text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
-              <th className="py-4 px-6 min-w-[280px]">Integrante / Perfil</th>
+              <th className="py-4 px-6 min-w-[280px]">Contratado / Perfil</th>
               <th className="py-4 px-4 text-center">Classificação PB</th>
-              <th className="py-4 px-4 text-center">Vínculo & Natureza</th>
+              <th className="py-4 px-4 text-center">Regime & Natureza</th>
               <th className="py-4 px-4 text-center">Qualidade Cadastral</th>
               <th className="py-4 px-4 text-center">Empresa</th>
               <th className="py-4 px-4 text-right">Custo Contratual</th>
@@ -205,7 +205,7 @@ export function PeopleTable({
             {paginatedEmployees.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-12 text-center text-slate-400 text-sm italic">
-                  Nenhum colaborador encontrado para os filtros selecionados.
+                  Nenhum contratado encontrado para os filtros selecionados.
                 </td>
               </tr>
             ) : (
@@ -455,7 +455,7 @@ export function PeopleTable({
       <div className="md:hidden p-4 space-y-3 bg-slate-50/30">
         {paginatedEmployees.length === 0 ? (
           <p className="py-8 text-center text-slate-400 text-sm italic">
-            Nenhum colaborador encontrado para os filtros selecionados.
+            Nenhum contratado encontrado para os filtros selecionados.
           </p>
         ) : (
           paginatedEmployees.map((emp) => {

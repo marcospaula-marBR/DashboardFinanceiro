@@ -191,7 +191,7 @@ export default function PeoplePage() {
       (window as any).getPageContext = () => {
         return {
           pageType: 'PEOPLE_HR',
-          dataSummary: `Informações de Recursos Humanos da Mar Brasil. Total de colaboradores na base: ${employees.length}.`,
+          dataSummary: `Informações de Recursos Humanos da Mar Brasil. Total de contratados na base: ${employees.length}.`,
           employees: employees.map(e => ({
             id: e.id,
             name: e.name,
@@ -620,7 +620,7 @@ export default function PeoplePage() {
       );
       setEmployees(cleanData);
     } catch { 
-      setError('Falha ao carregar colaboradores'); 
+      setError('Falha ao carregar contratados'); 
     } finally { 
       setIsLoadingEmployees(false); 
     }
@@ -747,7 +747,7 @@ export default function PeoplePage() {
       await fetchData();
     } catch (err: unknown) {
       const error = err as Error;
-      alert(error.message || 'Erro ao excluir colaborador');
+      alert(error.message || 'Erro ao excluir contratado');
     }
   };
 
@@ -782,7 +782,7 @@ export default function PeoplePage() {
               <input
                 value={filterSearch}
                 onChange={e => setFilterSearch(e.target.value)}
-                placeholder="Nome, cargo, CNPJ..."
+                placeholder="Representante, escopo, CNPJ..."
                 className="w-full pl-9 pr-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white placeholder-slate-500 transition-all"
               />
             </div>
@@ -904,11 +904,11 @@ export default function PeoplePage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Vínculo Histórico</label>
+            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Regime Histórico</label>
             <MultiSelectDropdown
               value={filterVinculo}
               onChange={setFilterVinculo}
-              placeholder="Todos os Vínculos"
+              placeholder="Todos os Regimes"
               options={[
                 { label: 'CLT', value: 'CLT' },
                 { label: 'PJ', value: 'PJ' },
@@ -1071,7 +1071,7 @@ export default function PeoplePage() {
                     <input
                       value={filterSearch}
                       onChange={e => setFilterSearch(e.target.value)}
-                      placeholder="Nome, cargo, CNPJ..."
+                      placeholder="Representante, escopo, CNPJ..."
                       className="w-full pl-9 pr-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-white placeholder-slate-500 transition-all"
                     />
                   </div>
@@ -1320,7 +1320,7 @@ export default function PeoplePage() {
                     ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
                     : 'text-slate-400 hover:text-slate-600'
                 }`}
-                title="Mapa de Ecossistema (Órbitas & Vínculos)"
+                title="Mapa de Ecossistema (Órbitas & Regimes)"
               >
                 <Target size={15} />
               </button>
@@ -1363,7 +1363,7 @@ export default function PeoplePage() {
             <button
               onClick={() => setIsBatchPdfModalOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
-              title="Gerar fichas dos colaboradores em PDF em lote"
+              title="Gerar fichas dos contratados em PDF em lote"
             >
               <Printer size={14} /> Exportar Lote PDF
             </button>
@@ -1419,7 +1419,7 @@ export default function PeoplePage() {
                       <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
                       <div>
                         <div className="font-extrabold">Importar Planilha CLT</div>
-                        <div className="text-[10px] text-slate-400 font-normal">Holerites, Verbas e Rescisões (.xlsx / .csv)</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Holerites, Valores e Rescisões (.xlsx / .csv)</div>
                       </div>
                     </button>
 
@@ -1669,7 +1669,7 @@ export default function PeoplePage() {
                 <div className="text-left">
                   <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Custos Históricos</p>
                   <p className="text-sm font-bold text-slate-700">
-                    {historicalCostsSummary.count} colaborador{historicalCostsSummary.count !== 1 ? 'es' : ''} filtrado{historicalCostsSummary.count !== 1 ? 's' : ''}
+                    {historicalCostsSummary.count} contratado{historicalCostsSummary.count !== 1 ? 's' : ''} filtrado{historicalCostsSummary.count !== 1 ? 's' : ''}
                   </p>
                 </div>
                 {!isCostSectionOpen && showValues && (
@@ -1698,7 +1698,7 @@ export default function PeoplePage() {
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-100 text-blue-600 shrink-0">
                       <DollarSign size={20} />
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Salário Base</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Valor Contrato</p>
                   </div>
                   <p className="text-2xl font-black leading-tight text-blue-700">
                     {showValues ? formatCurrency(historicalCostsSummary.totalFixo) : '••••••'}
@@ -1811,12 +1811,12 @@ export default function PeoplePage() {
                 {/* Modal Header */}
                 {(() => {
                   const modeLabels: Record<string, { title: string; icon: ReactNode; color: string }> = {
-                    fixo:          { title: 'Salário Base (Fixo) por Colaborador',         icon: <DollarSign size={20} />, color: 'text-blue-400' },
-                    extras:        { title: 'Horas Extras & Adic. Noturno por Colaborador', icon: <Zap size={20} />,        color: 'text-amber-400' },
-                    bonus:         { title: 'Bônus & Comissões por Colaborador',            icon: <TrendingUp size={20} />, color: 'text-emerald-400' },
-                    beneficios:    { title: 'Benefícios & Conectividade por Colaborador',   icon: <Wifi size={20} />,       color: 'text-cyan-400' },
-                    decimo_ferias: { title: '13º, Férias & Rescisão por Colaborador',         icon: <Coins size={20} />,      color: 'text-indigo-400' },
-                    total:         { title: 'Total Geral Desembolsado por Colaborador',     icon: <Wallet size={20} />,     color: 'text-emerald-400' },
+                    fixo:          { title: 'Valor Contrato (Fixo) por Contratado',         icon: <DollarSign size={20} />, color: 'text-blue-400' },
+                    extras:        { title: 'Horas Extras & Adic. Noturno por Contratado', icon: <Zap size={20} />,        color: 'text-amber-400' },
+                    bonus:         { title: 'Bônus & Comissões por Contratado',            icon: <TrendingUp size={20} />, color: 'text-emerald-400' },
+                    beneficios:    { title: 'Benefícios & Conectividade por Contratado',   icon: <Wifi size={20} />,       color: 'text-cyan-400' },
+                    decimo_ferias: { title: '13º, Férias & Rescisão por Contratado',         icon: <Coins size={20} />,      color: 'text-indigo-400' },
+                    total:         { title: 'Total Geral Desembolsado por Contratado',     icon: <Wallet size={20} />,     color: 'text-emerald-400' },
                   };
                   const { title: modalTitle, icon: modalIcon, color: modalColor } = modeLabels[costDetailMode] || modeLabels['total'];
 
@@ -1853,7 +1853,7 @@ export default function PeoplePage() {
                           <div>
                             <h2 className="text-sm font-black tracking-widest uppercase text-slate-100">{modalTitle}</h2>
                             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                              {costByEmployee.length} colaborador{costByEmployee.length !== 1 ? 'es' : ''} com lançamentos &bull; Total: {showValues ? formatCurrency(grandTotal) : '••••••'}
+                              {costByEmployee.length} contratado{costByEmployee.length !== 1 ? 's' : ''} com lançamentos &bull; Total: {showValues ? formatCurrency(grandTotal) : '••••••'}
                             </p>
                           </div>
                         </div>
@@ -1876,7 +1876,7 @@ export default function PeoplePage() {
                             <thead className="sticky top-0 bg-slate-950 z-10">
                               <tr className="text-left border-b border-slate-800">
                                 <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
-                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Colaborador</th>
+                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Contratado</th>
                                 <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Total Acumulado</th>
                                 <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">% do Total</th>
                               </tr>
@@ -1928,7 +1928,7 @@ export default function PeoplePage() {
                               </tr>
                               <tr className="bg-slate-950/20">
                                 <td colSpan={2} className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                  Média por colaborador / mês
+                                  Média por contratado / mês
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <span className="text-sm font-bold tabular-nums text-slate-400">
@@ -1938,7 +1938,7 @@ export default function PeoplePage() {
                                     })() : '••••••'}
                                   </span>
                                   <p className="text-[10px] text-slate-600 mt-0.5">
-                                    {costByEmployee.length} colab. · {costByEmployee.reduce((s, r) => s + r.months, 0)} meses no total
+                                    {costByEmployee.length} contrat. · {costByEmployee.reduce((s, r) => s + r.months, 0)} meses no total
                                   </p>
                                 </td>
                                 <td className="px-4 py-3 text-[10px] text-slate-500">
@@ -1961,7 +1961,7 @@ export default function PeoplePage() {
              <div className="flex items-center justify-between gap-4">
                <div className="flex items-center gap-2">
                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                   <Target size={18} className="text-purple-600"/> Monitoramento de Pessoas
+                   <Target size={18} className="text-purple-600"/> Monitoramento de Contratos
                  </h3>
                  {filterInsight && (
                    <button onClick={() => setFilterInsight(null)} className="ml-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-200 hover:text-slate-800 transition-colors uppercase">
@@ -2183,7 +2183,7 @@ export default function PeoplePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
                 {paginatedGridEmployees.length === 0 ? (
                   <p className="py-12 text-center text-slate-400 text-sm italic col-span-full bg-white rounded-2xl border border-slate-200 shadow-sm">
-                    Nenhum colaborador encontrado para os filtros selecionados.
+                    Nenhum contratado encontrado para os filtros selecionados.
                   </p>
                 ) : (
                   paginatedGridEmployees.map(emp => {

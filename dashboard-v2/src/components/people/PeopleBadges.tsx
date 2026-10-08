@@ -47,7 +47,7 @@ export function formatCompanyTime(startDateStr?: string, endDateStr?: string): s
     months--;
   }
 
-  if (months < 0) return "Admissão futura";
+  if (months < 0) return "Início futuro";
   if (months === 0) return "Menos de 1 mês";
   
   const y = Math.floor(months / 12);
@@ -157,7 +157,7 @@ export function RelationshipNatureBadge({
   if (!nature) {
     return (
       <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200 uppercase">
-        Vínculo Indefinido
+        Regime Indefinido
       </span>
     );
   }
@@ -191,7 +191,7 @@ export function calculateEmployeeHealth(employee: Partial<Employee>): HealthResu
     // PF Internal parameters (Total weight = 100)
     // 1. Nome (15)
     if (employee.name && employee.name.trim().length > 0) score += 15;
-    else missingFields.push("Nome completo");
+    else missingFields.push("Representante");
 
     // 2. PB-ID (15)
     const pbId = employee.pbId || employee.metadata?.pbId;

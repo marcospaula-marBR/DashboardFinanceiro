@@ -1044,7 +1044,7 @@ export function PeopleGeoLocationMap({
             <span className="text-2xl font-black text-rose-600 dark:text-rose-400">
               {metrics.misallocatedCount}
             </span>
-            <span className="text-xs text-rose-500 font-bold">Colaboradores</span>
+            <span className="text-xs text-rose-500 font-bold">Contratados</span>
           </div>
           <div className="text-[10px] text-rose-500 mt-1 font-medium">Moram mais perto de outro posto disponível</div>
         </div>
@@ -1191,7 +1191,7 @@ export function PeopleGeoLocationMap({
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Filtrar colaborador, bairro ou cidade..."
+              placeholder="Filtrar contratado, bairro ou cidade..."
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
             />
           </div>
@@ -1240,7 +1240,7 @@ export function PeopleGeoLocationMap({
             onChange={e => setAddressFilterMode(e.target.value as any)}
             className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500"
           >
-            <option value="all">👥 Todos Colaboradores ({geoItems.length})</option>
+            <option value="all">👥 Todos Contratados ({geoItems.length})</option>
             <option value="with_address">🏠 Com Endereço Completo ({metrics.totalEmployeesWithAddress})</option>
             <option value="no_address">⚠️ Sem Endereço Completo ({metrics.totalWithoutCoordinates})</option>
           </select>
@@ -1303,11 +1303,11 @@ export function PeopleGeoLocationMap({
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-blue-500 border border-white shadow-xs shrink-0" />
-                <span className="text-slate-700 dark:text-slate-300">Colaborador CLT</span>
+                <span className="text-slate-700 dark:text-slate-300">Contratado CLT</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-purple-500 border border-white shadow-xs shrink-0" />
-                <span className="text-slate-700 dark:text-slate-300">Colaborador PJ</span>
+                <span className="text-slate-700 dark:text-slate-300">Contratado PJ</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-amber-500 border border-white shadow-xs shrink-0" />
@@ -1378,15 +1378,15 @@ export function PeopleGeoLocationMap({
             </div>
           )}
 
-          {/* Banner de Calibração GPS de Colaboradores (Drag & Drop) */}
+          {/* Banner de Calibração GPS de Contratados (Drag & Drop) */}
           {displayMode === 'employees_calibration' && (
             <div className="absolute top-4 right-4 z-20 bg-purple-600 text-white rounded-2xl p-3.5 shadow-xl border border-purple-500 text-xs max-w-xs space-y-2 pointer-events-auto animate-in slide-in-from-top">
               <div className="flex items-center gap-2 font-black uppercase text-[11px] tracking-wider">
                 <MapPin size={16} />
-                <span>Calibração GPS de Colaboradores</span>
+                <span>Calibração GPS de Contratados</span>
               </div>
               <p className="text-[11px] text-purple-100 leading-relaxed font-medium">
-                Arraste o marcador de qualquer colaborador no mapa para fixar a sua localização residencial com precisão milimétrica.
+                Arraste o marcador de qualquer contratado no mapa para fixar a sua localização residencial com precisão milimétrica.
               </p>
               
               {pendingEmployeeCoordDrag && (
@@ -1455,7 +1455,7 @@ export function PeopleGeoLocationMap({
                         </p>
                       )}
                       <p className="text-xs text-slate-400 mt-0.5">
-                        {activeEmployeeGeo.job_role || activeEmployeeGeo.department || 'Colaborador'} · <strong className="text-indigo-600 uppercase">{activeEmployeeGeo.linkType}</strong>
+                        {activeEmployeeGeo.job_role || activeEmployeeGeo.department || 'Contratado'} · <strong className="text-indigo-600 uppercase">{activeEmployeeGeo.linkType}</strong>
                       </p>
                     </div>
                   </div>
@@ -1581,7 +1581,7 @@ export function PeopleGeoLocationMap({
                 </div>
 
                 <div className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl">
-                  <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Colaboradores Mais Próximos deste Posto</span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Contratados Mais Próximos deste Posto</span>
                   <div className="divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[320px] overflow-y-auto space-y-1">
                     {filteredGeoItems
                       .map(item => ({
@@ -1648,7 +1648,7 @@ export function PeopleGeoLocationMap({
                   <div className="py-20 text-center text-slate-400 space-y-2">
                     <CheckCircle2 size={32} className="mx-auto text-emerald-500 opacity-60" />
                     <p className="text-xs font-bold uppercase text-slate-600">Alocação 100% Otimizada</p>
-                    <p className="text-[11px] text-slate-400">Todos os colaboradores com endereço moram no posto mais próximo.</p>
+                    <p className="text-[11px] text-slate-400">Todos os contratados com endereço moram no posto mais próximo.</p>
                   </div>
                 ) : (
                   geoItems
@@ -1712,7 +1712,7 @@ export function PeopleGeoLocationMap({
           </div>
 
           <span className="text-xs font-bold text-slate-500">
-            {metrics.misallocatedCount} colaboradores com ganho potencial de rota
+            {metrics.misallocatedCount} contratados com ganho potencial de rota
           </span>
         </div>
 
@@ -1720,7 +1720,7 @@ export function PeopleGeoLocationMap({
           <table className="w-full text-xs text-left">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                <th className="py-3 px-4">Colaborador</th>
+                <th className="py-3 px-4">Contratado</th>
                 <th className="py-3 px-3">Bairro / Cidade</th>
                 <th className="py-3 px-3">Posto Atual</th>
                 <th className="py-3 px-3 text-right">Distância Atual</th>

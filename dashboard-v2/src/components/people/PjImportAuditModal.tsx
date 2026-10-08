@@ -277,7 +277,7 @@ export function PjImportAuditModal({
             <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200/80">
               <RefreshCw className="w-10 h-10 text-teal-600 animate-spin mb-3" />
               <p className="text-sm font-semibold text-slate-800">Analisando dados Dianna (PJ)...</p>
-              <p className="text-xs text-slate-500">Calculando similaridade de nomes e cruzando com colaboradores do sistema</p>
+              <p className="text-xs text-slate-500">Calculando similaridade de nomes e cruzando com contratados do sistema</p>
             </div>
           )}
 

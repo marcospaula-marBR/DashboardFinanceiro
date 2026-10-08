@@ -318,7 +318,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                       <p className="text-3xl font-black text-emerald-400">{headcountStats.avgTenure}</p>
                     </div>
                     <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Colaboradores em Férias</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Contratados em Férias</p>
                       <p className="text-3xl font-black text-emerald-400">{headcountStats.ferias} Ativos</p>
                     </div>
                   </div>
@@ -381,7 +381,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                       <p className="text-3xl font-black text-blue-400">{headcountCltStats.estCount} Ativos</p>
                     </div>
                     <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-xl flex flex-col gap-1.5">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Salário CLT Médio</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Valor Médio CLT</p>
                       <p className="text-3xl font-black text-emerald-400">{formatCurrency(headcountCltStats.avgSalary)}</p>
                     </div>
                   </div>
@@ -407,7 +407,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                         <div key={i} className="py-3 flex justify-between items-center text-sm">
                           <div>
                             <p className="font-bold text-slate-200">{emp.name}</p>
-                            <p className="text-xs text-slate-500">{emp.company} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Cargo"}</p>
+                            <p className="text-xs text-slate-500">{emp.company} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Escopo"}</p>
                           </div>
                           <span className="text-xs font-black text-slate-300 bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700">
                             {emp.linkType}
@@ -481,7 +481,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                     <div className="space-y-4">
                       <div>
                         <div className="flex justify-between text-sm font-bold text-slate-200">
-                          <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Salário Fixo/Base</span>
+                          <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Valor Contrato (Fixo)</span>
                           <span className="font-extrabold">{formatCurrency(payrollCltStats.totalFixed)} ({Math.round((payrollCltStats.totalFixed / (payrollCltStats.sumTotal || 1)) * 100)}%)</span>
                         </div>
                       </div>
@@ -506,7 +506,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                     </div>
 
                     <div className="pt-4 border-t border-slate-800 flex justify-between items-center text-sm font-black text-slate-200">
-                      <span>SOMA TOTAL DE SALÁRIOS CLT:</span>
+                      <span>SOMA TOTAL DE VALORES CLT:</span>
                       <span className="text-emerald-400 text-xl font-extrabold">{formatCurrency(payrollCltStats.sumTotal)}</span>
                     </div>
                   </div>
@@ -640,7 +640,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                     </div>
 
                     {loansStats.highCommitment.length === 0 ? (
-                      <p className="text-sm text-slate-500 italic">Nenhum colaborador com comprometimento acima do limite recomendado.</p>
+                      <p className="text-sm text-slate-500 italic">Nenhum contratado com comprometimento acima do limite recomendado.</p>
                     ) : (
                       <div className="divide-y divide-slate-800">
                         {loansStats.highCommitment.map((emp, i) => {
@@ -649,7 +649,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                             <div key={i} className="py-3 flex justify-between items-center text-sm">
                               <div>
                                 <p className="font-bold text-slate-200">{emp.name}</p>
-                                <p className="text-xs text-slate-500">Parcela: {formatCurrency(emp.monthInstallment)} / Salário: {formatCurrency(emp.remuneration)}</p>
+                                <p className="text-xs text-slate-500">Parcela: {formatCurrency(emp.monthInstallment)} / Honorários: {formatCurrency(emp.remuneration)}</p>
                               </div>
                               <span className="px-3 py-1 bg-red-950 border border-red-800 text-red-400 font-bold rounded-lg text-xs">
                                 {pct}% de Renda
@@ -719,7 +719,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                         <span className="text-xs font-black text-rose-400">{healthStats.missingCpf} pendentes</span>
                       </div>
                       <div className="p-4 bg-slate-950/30 border border-slate-800 rounded-lg flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-400">Cargo / Cadeira</span>
+                        <span className="text-xs font-bold text-slate-400">Escopo / Cadeira</span>
                         <span className="text-xs font-black text-rose-400">{healthStats.missingRole} pendentes</span>
                       </div>
                       <div className="p-4 bg-slate-950/30 border border-slate-800 rounded-lg flex items-center justify-between">
@@ -923,7 +923,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                           <div key={i} className="py-3 flex justify-between items-center text-sm">
                             <div>
                               <p className="font-bold text-slate-200">{emp.name}</p>
-                              <p className="text-xs text-slate-500">{emp.company} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Cargo"}</p>
+                              <p className="text-xs text-slate-500">{emp.company} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Escopo"}</p>
                             </div>
                             <span className="text-xs font-black text-indigo-400 bg-indigo-950/50 px-3 py-1 rounded-lg border border-indigo-900/50">
                               Cadeira {level}
@@ -944,7 +944,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                     <div>
                       <p className="font-bold">Importância do ID Diana PB</p>
                       <p className="text-xs text-amber-400/90 mt-1">
-                        O PB-ID é o código único identificador que conecta a ficha do colaborador nos demais sistemas e planilhas financeiras de folha consolidada. Cadastros sem ID Diana PB não são exportados nos relatórios estruturados de conciliação.
+                        O PB-ID é o código único identificador que conecta a ficha do contratado nos demais sistemas e planilhas financeiras de folha consolidada. Cadastros sem ID Diana PB não são exportados nos relatórios estruturados de conciliação.
                       </p>
                     </div>
                   </div>
@@ -959,7 +959,7 @@ export function KPIStatsDrawer({ isOpen, onClose, mode, employees, monthlyCosts,
                           <div key={i} className="py-3 flex justify-between items-center text-sm">
                             <div>
                               <p className="font-bold text-slate-200">{emp.name}</p>
-                              <p className="text-xs text-slate-500">{emp.company} • {emp.linkType} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Cargo"}</p>
+                              <p className="text-xs text-slate-500">{emp.company} • {emp.linkType} • {emp.department || "Sem Setor"} • {emp.job_role || "Sem Escopo"}</p>
                             </div>
                             <span className="text-[10px] font-bold text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-900/50 uppercase tracking-widest">
                               Sem ID

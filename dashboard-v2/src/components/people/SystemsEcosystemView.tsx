@@ -521,7 +521,7 @@ export function SystemsEcosystemView({
             <AlertCircle size={36} className="mx-auto text-slate-400 mb-2" />
             <h4 className="text-sm font-bold text-slate-700">Nenhum integrante encontrado</h4>
             <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
-              Nenhum colaborador corresponde aos filtros de empresa, sistema ou busca selecionados.
+              Nenhum contratado corresponde aos filtros de empresa, sistema ou busca selecionados.
             </p>
             <button
               onClick={handleResetFilters}

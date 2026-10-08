@@ -288,8 +288,8 @@ export interface PeopleFilters {
 export function getRemunerationLabel(linkType: string): { short: string; full: string; bruto: string } {
   const isPJ = linkType === 'MEI' || linkType === 'PJ';
   return isPJ
-    ? { short: 'Valor Contratual', full: 'Valor do Contrato', bruto: 'Valor Contratual' }
-    : { short: 'Salário', full: 'Remuneração', bruto: 'Salário Bruto' };
+    ? { short: 'Valor Contrato', full: 'Valor Contrato', bruto: 'Valor Contrato' }
+    : { short: 'Valor Contrato', full: 'Honorários', bruto: 'Valor Contrato' };
 }
 
 export interface AuditIssue {

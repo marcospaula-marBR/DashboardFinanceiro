@@ -36,7 +36,7 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
       <p className="font-black text-slate-800 uppercase tracking-wider">{label}</p>
       {payload.map((entry, i: number) => {
         const color = entry.color;
-        const name = entry.name === 'clt' ? 'CLT (Salários)' : entry.name === 'mei' ? 'MEI / PJ (Contratos)' : 'Total Geral';
+        const name = entry.name === 'clt' ? 'CLT (Valores)' : entry.name === 'mei' ? 'MEI / PJ (Contratos)' : 'Total Geral';
         return (
           <div key={i} className="flex items-center justify-between gap-6">
             <div className="flex items-center gap-2">
@@ -123,7 +123,7 @@ export function PayrollCostChart({ costs }: PayrollCostChartProps) {
         <div className="flex items-center gap-4 text-[9px] font-bold uppercase tracking-wider">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-emerald-600" />
-            <span className="text-slate-500">CLT (Salários)</span>
+            <span className="text-slate-500">CLT (Valores)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-amber-500" />
@@ -133,7 +133,7 @@ export function PayrollCostChart({ costs }: PayrollCostChartProps) {
             <div className="w-4 h-0.5 bg-slate-900 relative flex items-center justify-center">
               <div className="w-1.5 h-1.5 rounded-full bg-slate-900" />
             </div>
-            <span className="text-slate-900">Total da Folha</span>
+            <span className="text-slate-900">Custo Total</span>
           </div>
         </div>
       </div>

@@ -148,15 +148,15 @@ export function BprCockpitModal({
   // Exportar Planilha CSV
   const handleExportCsv = () => {
     const headers = [
-      'ID Colaborador',
+      'ID Contratado',
       'Nome / Razao Social',
       'Responsavel',
       'Empresa',
       'Departamento',
-      'Cargo',
-      'Vinculo',
+      'Escopo',
+      'Regime',
       'Camada',
-      'Meta Media Ciclo (%)',
+      'Entregaveis Media Ciclo (%)',
       'Fator Bonus',
       'Status Elegibilidade',
       'Valor Base Camada (R$)',
@@ -885,7 +885,7 @@ export function BprCockpitModal({
                 type="button"
                 onClick={() => setConfig(prev => ({ ...prev, manuallyExcludedEmployeeIds: [] }))}
                 className="text-sm font-black text-amber-700 bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl hover:bg-amber-100 transition-all cursor-pointer flex items-center gap-1.5"
-                title="Clique para restaurar todos os colaboradores excluídos manualmente"
+                title="Clique para restaurar todos os contratados excluídos manualmente"
               >
                 <span>Restaurar {config.manuallyExcludedEmployeeIds.length} excluído(s)</span>
               </button>
@@ -898,22 +898,22 @@ export function BprCockpitModal({
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Buscar colaborador ou cargo..."
+                placeholder="Buscar contratado ou escopo..."
                 className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 shadow-sm"
               />
             </div>
           </div>
 
-          {/* 4. GRADE ANALÍTICA DE COLABORADORES */}
+          {/* 4. GRADE ANALÍTICA DE CONTRATADOS */}
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-black uppercase tracking-wider text-slate-500">
-                  <th className="py-3.5 px-5">Colaborador</th>
-                  <th className="py-3.5 px-4">Empresa / Vínculo</th>
+                  <th className="py-3.5 px-5">Contratado</th>
+                  <th className="py-3.5 px-4">Empresa / Regime</th>
                   <th className="py-3.5 px-4">Camada</th>
-                  <th className="py-3.5 px-4">Admissão ➔ Desligamento</th>
-                  <th className="py-3.5 px-4 text-center">Meta / Desempenho</th>
+                  <th className="py-3.5 px-4">Início Contrato ➔ Desligamento</th>
+                  <th className="py-3.5 px-4 text-center">Entregáveis / Desempenho</th>
                   <th className="py-3.5 px-4 text-center">Status Elegibilidade</th>
                   <th className="py-3.5 px-5 text-right">Valor BPR (R$)</th>
                   <th className="py-3.5 px-4 text-center">Ações</th>
@@ -923,7 +923,7 @@ export function BprCockpitModal({
                 {displayedCandidates.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-16 text-center text-slate-400 font-bold text-base">
-                      Nenhum colaborador encontrado com os filtros selecionados.
+                      Nenhum contratado encontrado com os filtros selecionados.
                     </td>
                   </tr>
                 ) : (
@@ -1058,7 +1058,7 @@ export function BprCockpitModal({
                                 }));
                               }}
                               className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                              title="Restaurar este colaborador à relação do BPR"
+                              title="Restaurar este contratado à relação do BPR"
                             >
                               Restaurar
                             </button>
@@ -1072,7 +1072,7 @@ export function BprCockpitModal({
                                 }));
                               }}
                               className="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                              title="Excluir este colaborador da relação e rateio do BPR"
+                              title="Excluir este contratado da relação e rateio do BPR"
                             >
                               Excluir
                             </button>
@@ -1094,7 +1094,7 @@ export function BprCockpitModal({
             <div>
               <span className="text-xs font-bold text-slate-400 uppercase block tracking-wider">Total Elegíveis:</span>
               <strong className="text-base font-black text-emerald-600">
-                {summary.totalEligible} colaboradores
+                {summary.totalEligible} contratados
               </strong>
             </div>
 
@@ -1141,7 +1141,7 @@ export function BprCockpitModal({
           <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-black text-slate-900 uppercase">Colaboradores com Glosa no Período</h3>
+                <h3 className="text-base font-black text-slate-900 uppercase">Contratados com Glosa no Período</h3>
                 <p className="text-sm text-slate-500">Selecione quem fará jus excepcionalmente ao BPR</p>
               </div>
               <button onClick={() => setIsGlosadosModalOpen(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
@@ -1149,7 +1149,7 @@ export function BprCockpitModal({
 
             <div className="max-h-72 overflow-y-auto space-y-1 pr-1 divide-y divide-slate-100">
               {summary.glosadosCandidates.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-sm">Nenhum colaborador com glosa registrado no período.</div>
+                <div className="py-8 text-center text-slate-400 text-sm">Nenhum contratado com glosa registrado no período.</div>
               ) : (
                 summary.glosadosCandidates.map(g => {
                   const isChecked = config.selectedGlosadosExceptions.includes(g.employeeId);
@@ -1210,7 +1210,7 @@ export function BprCockpitModal({
               <div>
                 <h3 className="text-base font-black text-slate-900 uppercase">Inativos entre o Fim do Ciclo e a Data de Pagamento</h3>
                 <p className="text-sm text-slate-500">
-                  Exibe apenas colaboradores que cumpriram 100% do período ({config.periodStartDate} a {config.periodEndDate}) e saíram antes do pagamento ({config.paymentDate})
+                  Exibe apenas contratados que cumpriram 100% do período ({config.periodStartDate} a {config.periodEndDate}) e saíram antes do pagamento ({config.paymentDate})
                 </p>
               </div>
               <button onClick={() => setIsInativosModalOpen(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
@@ -1219,7 +1219,7 @@ export function BprCockpitModal({
             <div className="max-h-72 overflow-y-auto space-y-1 pr-1 divide-y divide-slate-100">
               {summary.inativosCandidates.length === 0 ? (
                 <div className="py-8 text-center text-slate-400 text-sm">
-                  Nenhum colaborador cumpriu o ciclo integral e teve desligamento no intervalo pós-ciclo até a data de pagamento.
+                  Nenhum contratado cumpriu o ciclo integral e teve desligamento no intervalo pós-ciclo até a data de pagamento.
                 </div>
               ) : (
                 summary.inativosCandidates.map(i => {

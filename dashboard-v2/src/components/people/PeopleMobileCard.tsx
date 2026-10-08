@@ -177,7 +177,7 @@ export function PeopleMobileCard({
               onFilterSelect?.('company', employee.company);
             }}
             className="inline-flex items-center justify-center px-1.5 py-0.5 bg-white/90 hover:bg-slate-50 border border-slate-200/80 rounded-lg cursor-pointer transition-all shrink-0 shadow-2xs hover:scale-105"
-            title={`Empresa do Vínculo: ${employee.company} (Clique para filtrar)`}
+            title={`Empresa do Regime: ${employee.company} (Clique para filtrar)`}
           >
             <img 
               src={getCompanyLogoUrl(employee.company)} 
@@ -258,7 +258,7 @@ export function PeopleMobileCard({
                     onFilterSelect?.('job_role', employee.job_role || '');
                   }}
                   className="text-[10px] text-slate-500 font-medium truncate hover:underline cursor-pointer"
-                  title="Filtrar por este cargo"
+                  title="Filtrar por este escopo"
                 >
                   {employee.job_role}
                 </p>

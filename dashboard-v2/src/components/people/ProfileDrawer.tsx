@@ -30,14 +30,14 @@ interface HistoryItem {
 }
 
 const MERGE_FIELDS = [
-  { key: 'name', label: 'Nome Completo' },
+  { key: 'name', label: 'Representante' },
   { key: 'document_id', label: 'CPF' },
   { key: 'document_rg', label: 'RG' },
   { key: 'corporate_name', label: 'Razão Social' },
   { key: 'pj_type', label: 'CNPJ' },
-  { key: 'linkType', label: 'Vínculo' },
+  { key: 'linkType', label: 'Regime' },
   { key: 'company', label: 'Empresa' },
-  { key: 'remuneration_fixed', label: 'Salário / Valor Fixo', isCurrency: true },
+  { key: 'remuneration_fixed', label: 'Valor Contrato', isCurrency: true },
   { key: 'remuneration_bonus', label: 'Bônus', isCurrency: true },
   { key: 'remuneration_connectivity', label: 'Conectividade', isCurrency: true },
   { key: 'remuneration_incentives', label: 'Incentivos', isCurrency: true },
@@ -54,11 +54,11 @@ const MERGE_FIELDS = [
   { key: 'status', label: 'Status Cadastral' },
   { key: 'resignation_date', label: 'Data de Encerramento / Distrato', isDate: true },
   { key: 'status_end_date', label: 'Fim de Status', isDate: true },
-  { key: 'start_date', label: 'Data de Admissão', isDate: true },
+  { key: 'start_date', label: 'Início Contrato', isDate: true },
   { key: 'contract_expiry_date', label: 'Vencimento Contrato', isDate: true },
-  { key: 'job_role', label: 'Cargo / Função' },
+  { key: 'job_role', label: 'Escopo' },
   { key: 'department', label: 'Setor / Departamento' },
-  { key: 'department_start_date', label: 'Início no Setor/Função', isDate: true },
+  { key: 'department_start_date', label: 'Início no Setor/Escopo', isDate: true },
   { key: 'responsible_name', label: 'Nome do Responsável' },
   { key: 'responsible_cpf', label: 'CPF do Responsável' },
   { key: 'degree', label: 'Grau de Instrução' },
@@ -189,7 +189,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
   const handleSaveBond = async (bondData: Partial<EmploymentContract>) => {
     if (!profile.id) {
-      alert("Salve a ficha cadastral do colaborador antes de gerenciar vínculos.");
+      alert("Salve a ficha cadastral do contratado antes de gerenciar regimes.");
       return;
     }
     setIsSavingBond(true);
@@ -206,14 +206,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setBonds(updatedBonds || []);
       setEditingBond(null);
     } catch (err: any) {
-      alert("Erro ao salvar vínculo: " + err.message);
+      alert("Erro ao salvar regime: " + err.message);
     } finally {
       setIsSavingBond(false);
     }
   };
 
   const handleDeleteBond = async (bondId: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta transição de vínculo? Isso poderá alterar a linha do tempo do colaborador.")) return;
+    if (!confirm("Tem certeza que deseja excluir esta transição de regime? Isso poderá alterar a linha do tempo do contratado.")) return;
     try {
       await PeopleHRService.deleteEmploymentContract(bondId);
       if (profile.id) {
@@ -221,13 +221,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         setBonds(updatedBonds || []);
       }
     } catch (err: any) {
-      alert("Erro ao excluir vínculo: " + err.message);
+      alert("Erro ao excluir regime: " + err.message);
     }
   };
 
   const handleSaveHistoryItem = async (histData: Partial<HistoryItem>) => {
     if (!profile.id) {
-      alert("Salve a ficha cadastral do colaborador antes de gerenciar o histórico.");
+      alert("Salve a ficha cadastral do contratado antes de gerenciar o histórico.");
       return;
     }
     setIsSavingHistoryItem(true);
@@ -333,7 +333,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         PeopleHRService.getEmploymentContracts(id),
         PeopleHRService.getMonthlyCosts(id)
       ]);
-      if (!data) throw new Error("Colaborador não encontrado");
+      if (!data) throw new Error("Contratado não encontrado");
 
       // Se for um novo cadastro e já houver dados preenchidos (ex: PDF importado), abre a mesclagem
       if (!profile.id && (profile.name || profile.document_id || profile.corporate_name)) {
@@ -366,7 +366,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setIsEditMode(true);
       setIsSearchExistingOpen(false);
     } catch (err: any) {
-      alert(err.message || "Erro ao carregar colaborador");
+      alert(err.message || "Erro ao carregar contratado");
     } finally {
       setIsLoading(false);
     }
@@ -520,7 +520,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       // Validação de CNPJ (se for PJ)
       if (profile.linkType === 'PJ') {
         if (!profile.pj_type) {
-          throw new Error('CNPJ é obrigatório para colaboradores com vínculo PJ.');
+          throw new Error('CNPJ é obrigatório para contratados com regime PJ.');
         }
         const cleanCnpj = profile.pj_type.replace(/\D/g, '');
         if (cleanCnpj.length !== 14) {
@@ -622,7 +622,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     if (!newRelEmployeeId) return;
     const currentRels = profile.relationships || [];
     if (currentRels.some(r => r.employee_id === newRelEmployeeId)) {
-      alert("Este colaborador já está relacionado a este perfil.");
+      alert("Este contratado já está relacionado a este perfil.");
       return;
     }
     const updated = [
@@ -1106,7 +1106,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           ]);
           
           if (!existingProfile) {
-            throw new Error('Não foi possível carregar a ficha cadastral do colaborador existente.');
+            throw new Error('Não foi possível carregar a ficha cadastral do contratado existente.');
           }
 
           const incomingMapped = mapParsedDataToEmployee(data, profile);
@@ -1124,8 +1124,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           initializeMerge(existingProfile, incomingMapped, hist || [], bondsData || [], costsData || [], updatedMarkdownLink, data.signature_date || data.start_date);
         } catch (loadErr: unknown) {
           const error = loadErr as Error;
-          console.error('Erro ao carregar dados do colaborador existente:', error);
-          setError('Falha ao carregar colaborador existente.');
+          console.error('Erro ao carregar dados do contratado existente:', error);
+          setError('Falha ao carregar contratado existente.');
         } finally {
           setIsLoading(false);
           setIsParsingContract(false);
@@ -1774,14 +1774,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     setSaveCostError(null);
     try {
       if (!profile.start_date) {
-        throw new Error('A data de admissão original do colaborador precisa estar preenchida.');
+        throw new Error('A data de início de contrato original do contratado precisa estar preenchida.');
       }
       
       const startVal = new Date(profile.start_date + 'T00:00:00').getTime();
       const newCostVal = new Date(editingCostCompetencia + 'T00:00:00').getTime();
       
       if (newCostVal < startVal) {
-        throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior à data de admissão (${formatDateBR(profile.start_date)}).`);
+        throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior à data de início de contrato (${formatDateBR(profile.start_date)}).`);
       }
       
       const isCLT = editingCostType === 'CLT';
@@ -1990,7 +1990,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                    </div>
                    <div>
                       <h2 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
-                        {employeeId ? (isPJ ? (profile.corporate_name || 'Ficha do Prestador de Serviços (PJ)') : 'Ficha do Colaborador') : (isPJ ? 'Novo Prestador PJ / Fornecedor' : 'Novo Colaborador')}
+                        {employeeId ? (isPJ ? (profile.corporate_name || 'Ficha do Prestador de Serviços (PJ)') : 'Ficha do Contratado') : (isPJ ? 'Novo Prestador PJ / Fornecedor' : 'Novo Contratado')}
                       </h2>
                       <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
                         {isPJ ? 'Gestão de Contratos & Parceiros (PJ)' : 'Perfil Recursos Humanos'}
@@ -2004,7 +2004,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       <button
                         onClick={() => setIsExportModalOpen(true)}
                         className="flex items-center gap-1.5 p-2 px-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 rounded-lg transition-all text-amber-950 font-bold text-xs shadow-xs active:scale-95 cursor-pointer"
-                        title={isPJ ? "Exportar Ficha do Prestador (PDF/CSV)" : "Exportar Ficha do Colaborador (PDF/CSV)"}
+                        title={isPJ ? "Exportar Ficha do Prestador (PDF/CSV)" : "Exportar Ficha do Contratado (PDF/CSV)"}
                       >
                         <Download size={14} />
                         <span>Exportar Ficha</span>
@@ -2106,7 +2106,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       onClick={() => setActiveTab('trajetoria')}
                       className={`px-5 py-4 text-xs font-black tracking-wider uppercase border-b-2 transition-all ${activeTab === 'trajetoria' ? 'border-emerald-600 text-emerald-600 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                     >
-                      Trajetória
+                      Tempo de Serviços
                     </button>
                     <button 
                       onClick={() => setActiveTab('custo')}
@@ -2157,7 +2157,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       }`}
                     >
                       <Coins size={13} className={activeTab === 'bpr' ? 'text-amber-500' : 'text-slate-400'} />
-                      <span>BPR &amp; Metas</span>
+                      <span>BPR &amp; Entregáveis</span>
                     </button>
                   </>
                 )}
@@ -2213,7 +2213,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             </div>
                           )}
                           <div>
-                            <label className={labelClass}>Nome Completo</label>
+                            <label className={labelClass}>Representante</label>
                             <input 
                               type="text" 
                               value={profile.name || ''} 
@@ -2225,7 +2225,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           </div>
                           <div className="flex gap-4">
                              <div className="flex-1">
-                              <label className={labelClass}>Vínculo</label>
+                              <label className={labelClass}>Regime</label>
                               {isEditMode ? (
                                 <select value={profile.linkType || 'CLT'} onChange={e => handleChange('linkType', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-2">
                                   <option value="CLT">CLT</option>
@@ -2371,7 +2371,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           />
                         </div>
                         <div>
-                          <label className={labelClass}>Valor Fixo / Salário Base</label>
+                          <label className={labelClass}>Valor Contrato</label>
                           <input 
                             type="number" 
                             step="0.01" 
@@ -2463,7 +2463,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                          </div>
                            <div>
                              <div className="flex items-center justify-between">
-                               <label className={labelClass}>Data de Admissão / Início</label>
+                               <label className={labelClass}>Início Contrato</label>
                                {!isEditMode && profile.start_date && (
                                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
                                    {formatCompanyTime(
@@ -2515,12 +2515,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                            <div>
                              <label className={labelClass}>Data Revisão Valor Base</label>
                              <input type="date" name="last_raise_date" value={profile.last_raise_date || ''} onChange={e => handleChange('last_raise_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                             <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
+                             <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará o Início Contrato nos alertas</span>
                            </div>
                            <div>
                               <label className={labelClass}>Data Alteração Grau</label>
                               <input type="date" name="last_grade_date" value={profile.last_grade_date || ''} onChange={e => handleChange('last_grade_date', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                              <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará a Data de Admissão nos alertas</span>
+                              <span className="text-[9px] text-slate-400 mt-0.5 block">Se vazio, usará o Início Contrato nos alertas</span>
                            </div>
 
                         {/* BLOCO DE UNIFICAÇÃO DE VÍNCULO (TRANSIÇÃO CLT -> PJ) */}
@@ -2669,7 +2669,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             return (
                               <>
                                 <h4 className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-2 mb-3">
-                                  <Briefcase size={11}/> {isPJ ? 'Atuação — Área Atendida & Escopo do Serviço' : 'Posição Atual — Histórico de Setor & Cargo'}
+                                  <Briefcase size={11}/> {isPJ ? 'Atuação — Área Atendida & Escopo do Serviço' : 'Posição Atual — Histórico de Setor & Escopo'}
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                   <div>
@@ -2692,7 +2692,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                     </datalist>
                                   </div>
                                   <div>
-                                    <label className={labelClass}>{isPJ ? 'Escopo do Serviço / Especialidade' : 'Cargo / Função'}</label>
+                                    <label className={labelClass}>Escopo</label>
                                     <input 
                                       type="text" 
                                       value={profile.job_role || ''} 
@@ -3176,7 +3176,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               onChange={e => handleChange('executive_summary', e.target.value)} 
                               readOnly={!isEditMode} 
                               className={`${inputClass} min-h-[140px] resize-y`} 
-                              placeholder="Descreva detalhadamente o escopo e as principais responsabilidades desempenhadas pelo colaborador..." 
+                              placeholder="Descreva detalhadamente o escopo e as principais responsabilidades desempenhadas pelo contratado..." 
                             />
                           </div>
                         </div>
@@ -3208,7 +3208,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {profile.relationships.map((rel, idx) => {
                                   const targetEmp = allEmployees.find(e => e.id === rel.employee_id);
-                                  const targetName = targetEmp ? (isExternalEntity(targetEmp.entityType) && targetEmp.corporate_name ? targetEmp.corporate_name : targetEmp.name) : "Colaborador não encontrado";
+                                  const targetName = targetEmp ? (isExternalEntity(targetEmp.entityType) && targetEmp.corporate_name ? targetEmp.corporate_name : targetEmp.name) : "Contratado não encontrado";
                                   const targetRole = targetEmp ? (targetEmp.job_role || "Sem Cadeira") : "";
                                   
                                   return (
@@ -3324,7 +3324,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                       <div className="flex justify-between items-center border-b pb-2">
                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
-                          <Briefcase size={16} className="text-emerald-600" /> Trajetória Profissional
+                          <Briefcase size={16} className="text-emerald-600" /> Tempo de Serviços
                         </h4>
                       </div>
                       
@@ -3344,14 +3344,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 p-4">
                             <div className="flex justify-between items-center mb-3">
                               <h5 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-300">
-                                Transições de Vínculos (Contratos)
+                                Transições de Regimes (Contratos)
                               </h5>
                               <button
                                 type="button"
                                 onClick={() => setEditingBond({ regime: 'CLT', remuneration_base: 0, remuneration_bonus: 0, remuneration_incentives: 0, status: 'Ativo', start_date: new Date().toISOString().split('T')[0] })}
                                 className="text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-700 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg shadow-sm transition-all"
                               >
-                                + Adicionar Vínculo
+                                + Adicionar Regime
                               </button>
                             </div>
                             {bonds.length === 0 ? (
@@ -3386,7 +3386,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         type="button"
                                         onClick={() => setEditingBond(b)}
                                         className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
-                                        title="Editar Vínculo"
+                                        title="Editar Regime"
                                       >
                                         <Edit3 size={14} />
                                       </button>
@@ -3394,7 +3394,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         type="button"
                                         onClick={() => handleDeleteBond(b.id)}
                                         className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
-                                        title="Excluir Vínculo"
+                                        title="Excluir Regime"
                                       >
                                         <Trash2 size={14} />
                                       </button>
@@ -3848,7 +3848,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                                     <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
                                       <div>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Salário Base</p>
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Valor Contrato</p>
                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
                                           {formatCurrency(stats.fixedTotal || 0)}
                                         </p>
@@ -3907,12 +3907,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         average: stats.beneficiosAverage
                                       })}
                                       className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 rounded-xl p-3 flex flex-col justify-between shadow-sm cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-all group"
-                                      title="Clique para ver o detalhamento por verbas de benefícios"
+                                      title="Clique para ver o detalhamento por valores de benefícios"
                                     >
                                       <div>
                                         <div className="flex justify-between items-center">
                                           <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Benefícios</p>
-                                          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver verbas</span>
+                                          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
                                         </div>
                                         <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
                                           {formatCurrency(stats.beneficiosTotal || 0)}
@@ -3940,7 +3940,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       <div>
                                         <div className="flex justify-between items-center">
                                           <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">13º & Férias</p>
-                                          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver verbas</span>
+                                          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
                                         </div>
                                         <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
                                           {formatCurrency((stats.decimoTerceiroTotal || 0) + (stats.feriasTotal || 0))}
@@ -4064,7 +4064,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         <div>
                                           <div className="flex justify-between items-center">
                                             <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Outros Descontos</p>
-                                            <span className="text-[8px] font-black text-red-600 bg-red-100 dark:bg-red-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver verbas</span>
+                                            <span className="text-[8px] font-black text-red-600 bg-red-100 dark:bg-red-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
                                           </div>
                                           <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
                                             {formatCurrency(stats.descontosTotal - stats.faltasTotal - stats.consignadoTotal || 0)}
@@ -4200,7 +4200,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block border-b border-emerald-100/20 pb-0.5 mb-1.5 font-sans">Ganhos / Proventos</span>
                                             
                                             <div className="flex justify-between items-center py-0.5">
-                                              <span className="text-slate-500 font-semibold">Salário Base:</span>
+                                              <span className="text-slate-500 font-semibold">Valor Contrato:</span>
                                               <span className="text-slate-800 dark:text-slate-200 font-extrabold tabular-nums">{formatCurrency(c.valor_fixo || 0)}</span>
                                             </div>
                                             {!!c.valor_adiantamento && (
@@ -4454,7 +4454,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       ) : (
                         <div className="space-y-4">
                           <p className="text-sm text-slate-500 leading-relaxed">
-                            Foram encontradas <strong className="text-slate-800">{auditIssues.length} inconsistência(s)</strong> no prontuário deste colaborador. Use os botões rápidos abaixo para efetuar as correções imediatas:
+                            Foram encontradas <strong className="text-slate-800">{auditIssues.length} inconsistência(s)</strong> no prontuário deste contratado. Use os botões rápidos abaixo para efetuar as correções imediatas:
                           </p>
 
                           <div className="space-y-3">
@@ -4487,7 +4487,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         }}
                                         className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
                                       >
-                                        <PenBox size={13} /> Ajustar Admissão
+                                        <PenBox size={13} /> Ajustar Início Contrato
                                       </button>
                                     )}
 
@@ -4845,7 +4845,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <h4 className="text-xs font-black uppercase tracking-wider text-white">
-                                Metas Mensais &amp; Elegibilidade de BPR
+                                Entregáveis Mensais &amp; Elegibilidade de BPR
                               </h4>
                               <span className="bg-amber-500/30 text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-400/30">
                                 Ano {bprYear}
@@ -4881,7 +4881,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-2 shadow-lg shadow-amber-900/20 transition-all flex-1 sm:flex-none justify-center disabled:opacity-50"
                           >
                             {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                            <span>{isSaving ? 'Salvando...' : 'Salvar Metas'}</span>
+                            <span>{isSaving ? 'Salvando...' : 'Salvar Entregáveis'}</span>
                           </button>
                         </div>
                       </div>
@@ -5226,7 +5226,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             {/* Rodapé de Ações */}
                             <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
                               <span className="text-xs text-slate-400 font-semibold">
-                                As metas mensais e links comprobatórios recalculam e auditam o bônus no Cockpit do BPR.
+                                Os entregáveis mensais e links comprobatórios recalculam e auditam o bônus no Cockpit do BPR.
                               </span>
                               <button
                                 type="button"
@@ -5235,7 +5235,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
                               >
                                 {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                                <span>{isSaving ? 'Salvando...' : 'Salvar Metas do BPR'}</span>
+                                <span>{isSaving ? 'Salvando...' : 'Salvar Entregáveis do BPR'}</span>
                               </button>
                             </div>
                           </div>
@@ -5338,7 +5338,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                     <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block border-b pb-1">Proventos (Vencimentos)</span>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       <div>
-                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Salário Base (Fixo)</label>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Valor Contrato</label>
                         <input
                           type="number"
                           value={editingCostFixo}
@@ -5595,10 +5595,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                     </div>
                   </div>
 
-                  {/* Verbas Adicionais Extra Folha */}
+                  {/* Valores Adicionais */}
                   <div className="border border-slate-100 dark:border-slate-800 rounded-xl p-3 bg-indigo-50/10 dark:bg-indigo-950/10 border-indigo-150/40 dark:border-indigo-900/20 space-y-3">
                     <div className="flex justify-between items-center border-b border-indigo-100/30 pb-1">
-                      <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-400 uppercase tracking-wider block">Verbas Adicionais Extra Folha</span>
+                      <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-400 uppercase tracking-wider block">Valores Adicionais</span>
                       <span className="text-[8px] text-slate-400 font-bold uppercase">(Positivos somam, negativos descontam)</span>
                     </div>
 
@@ -5717,7 +5717,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 <>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Detalhamento de Verbas</span>
+                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Detalhamento de Valores</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -5737,7 +5737,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       <table className="w-full text-left border-collapse text-xs">
                         <thead>
                           <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                            <th className="p-2.5">Verba</th>
+                            <th className="p-2.5">Item</th>
                             <th className="p-2.5 text-right">Previsto</th>
                             <th className="p-2.5 text-center" style={{ width: '130px' }}>Pago (Real)</th>
                             <th className="p-2.5 text-right">Diferença</th>
@@ -5746,7 +5746,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
                           {/* Fixo */}
                           <tr>
-                            <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Fixo</td>
+                            <td className="p-2.5 font-bold text-slate-700 dark:text-slate-300">Valor Contrato</td>
                             <td className="p-2.5 text-right font-medium text-slate-500 dark:text-slate-400 tabular-nums">
                               {formatCurrency(profile?.remuneration_fixed || profile?.remuneration || 0)}
                             </td>
@@ -6129,7 +6129,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[70vh]">
             <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Buscar Colaborador Cadastrado</h3>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Buscar Contratado Cadastrado</h3>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Vincular ficha existente</p>
               </div>
               <button 
@@ -6143,7 +6143,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
               <input 
                 type="text"
-                placeholder="Pesquisar por nome, CPF, CNPJ ou cargo..."
+                placeholder="Pesquisar por Representante, CPF, CNPJ ou escopo..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
@@ -6157,7 +6157,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                   <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
                 </div>
               ) : filteredEmployees.length === 0 ? (
-                <p className="text-xs text-slate-400 italic text-center py-10">Nenhum colaborador encontrado.</p>
+                <p className="text-xs text-slate-400 italic text-center py-10">Nenhum contratado encontrado.</p>
               ) : (
                 filteredEmployees.map(emp => (
                   <div 
@@ -6199,7 +6199,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
               <div>
                 <h3 className="text-base font-black text-white tracking-tight flex items-center gap-2">
                   <AlertCircle size={18} className="text-blue-200" />
-                  Colaborador Já Cadastrado — Revisar Mesclagem
+                  Contratado Já Cadastrado — Revisar Mesclagem
                 </h3>
                 <p className="text-[11px] text-blue-200 font-medium mt-0.5">
                   Escolha quais dados devem ser atualizados na ficha. Os empréstimos nunca serão afetados.
@@ -6230,8 +6230,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       Contrato Histórico / Antigo Detectado
                     </p>
                     <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium mt-0.5">
-                      Este documento possui data de assinatura/início ({new Date(contractDate + "T12:00:00").toLocaleDateString('pt-BR')}) anterior à última atualização cadastral do colaborador no banco ({new Date(activeDate + "T12:00:00").toLocaleDateString('pt-BR')}).
-                      Por padrão, os dados mais recentes do banco foram mantidos para evitar o retrocesso de cargos ou salários atuais. O histórico e o documento serão anexados normalmente na trajetória do colaborador.
+                      Este documento possui data de assinatura/início ({new Date(contractDate + "T12:00:00").toLocaleDateString('pt-BR')}) anterior à última atualização cadastral do contratado no banco ({new Date(activeDate + "T12:00:00").toLocaleDateString('pt-BR')}).
+                      Por padrão, os dados mais recentes do banco foram mantidos para evitar o retrocesso de escopos ou honorários atuais. O histórico e o documento serão anexados normalmente no tempo de serviços do contratado.
                     </p>
                   </div>
                 </div>
@@ -6336,7 +6336,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
             <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between gap-4 shrink-0">
               <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
                 <Coins size={13} className="text-amber-500 shrink-0" />
-                <span>Os dados de empréstimos vinculados a este colaborador não serão afetados.</span>
+                <span>Os dados de empréstimos vinculados a este contratado não serão afetados.</span>
               </div>
               <div className="flex gap-2.5 shrink-0">
                 <button
@@ -6385,7 +6385,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg p-6 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4 shrink-0">
-              {editingBond.id ? 'Editar Vínculo Contratual' : 'Novo Vínculo Contratual'}
+              {editingBond.id ? 'Editar Regime Contratual' : 'Novo Regime Contratual'}
             </h4>
             
             <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-slate-800 dark:text-slate-200">
@@ -6470,7 +6470,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
               {/* Datas de Vigência */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Data Início</label>
+                  <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Início Contrato</label>
                   <input
                     type="date"
                     value={editingBond.start_date || ''}
@@ -6503,7 +6503,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 <h5 className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Detalhamento Financeiro (Mensal)</h5>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Remuneração Base</label>
+                    <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Valor Contrato</label>
                     <input
                       type="number"
                       step="0.01"
@@ -6565,7 +6565,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                     type="text"
                     value={editingBond.trigger_reason || ''}
                     onChange={e => setEditingBond(prev => ({ ...prev, trigger_reason: e.target.value }))}
-                    placeholder="Ex: Admissão, Promoção de Cargo"
+                    placeholder="Ex: Início de Contrato, Alteração de Escopo"
                     className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors"
                   />
                 </div>
@@ -6622,9 +6622,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                   onChange={e => setEditingHistoryItem(prev => ({ ...prev, event_type: e.target.value }))}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors text-slate-800 dark:text-slate-200"
                 >
-                  <option value="Cargo">Cargo (Função)</option>
+                  <option value="Cargo">Escopo</option>
                   <option value="Setor">Setor (Departamento)</option>
-                  <option value="Remuneração">Remuneração (Salário/Benefícios)</option>
+                  <option value="Remuneração">Honorários (Valores/Adicionais)</option>
                   <option value="Outro">Outro</option>
                 </select>
               </div>
@@ -6642,7 +6642,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 <textarea
                   value={editingHistoryItem.observations || ''}
                   onChange={e => setEditingHistoryItem(prev => ({ ...prev, observations: e.target.value }))}
-                  placeholder="Ex: Mudança de cargo de Estagiário para CLT"
+                  placeholder="Ex: Alteração de escopo do contrato"
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3.5 outline-none focus:border-emerald-500 transition-colors text-slate-800 dark:text-slate-200 h-24 resize-none"
                 />
               </div>
@@ -6688,7 +6688,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
             </div>
 
             <div className="p-5 space-y-3">
-              <p className="text-[10px] text-slate-500 font-bold uppercase">Composição das Verbas Mês a Mês</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Composição dos Valores Mês a Mês</p>
               
               <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
                 {verbaDetailModal.items.map((item, idx) => (

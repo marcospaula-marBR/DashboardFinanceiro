@@ -601,7 +601,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
           setSaveSuccessMessage(
             `Robô PDF: ${labelDoc} (${targetComp}) importado com sucesso!${totalFormatted} ` +
-            `${enrichedCount} colaborador(es) atualizados` +
+            `${enrichedCount} contratado(es) atualizados` +
             (newCount > 0 ? `, ${newCount} novo(s) adicionado(s)` : '') + '.'
           );
           setTimeout(() => setSaveSuccessMessage(null), 9000);
@@ -702,7 +702,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           setRows(mappedRows);
           setSaveSuccessMessage(
             `Robô PDF: Extrato Mensal (${targetComp}) importado com sucesso! ` +
-            `${data.totalParsed} colaboradores carregados (${matchedCount} vinculados ao People${newCount > 0 ? `, ${newCount} novo(s) pré-preenchido(s)` : ''}).`
+            `${data.totalParsed} contratados carregados (${matchedCount} vinculados ao People${newCount > 0 ? `, ${newCount} novo(s) pré-preenchido(s)` : ''}).`
           );
           setTimeout(() => setSaveSuccessMessage(null), 8000);
         }
@@ -735,7 +735,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         }
 
         setRows(mappedRows);
-        setSaveSuccessMessage(`Planilha "${file.name}" importada com sucesso: ${result.totalParsed} colaboradores carregados!`);
+        setSaveSuccessMessage(`Planilha "${file.name}" importada com sucesso: ${result.totalParsed} contratados carregados!`);
         setTimeout(() => setSaveSuccessMessage(null), 6000);
       }
     } catch (err: any) {
@@ -1087,11 +1087,11 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   // ── Copiar relatório executivo ────────────────
   const handleCopyReport = () => {
     let txt = `=== APURAÇÃO DE TERCEIRIZAÇÃO — ${competencia} ===\n\n`;
-    txt += `Colaboradores: ${rows.length}\n`;
+    txt += `Contratados: ${rows.length}\n`;
     txt += `Valor Bruto Total: ${fmt(colTotals.valorBruto)}\n`;
     txt += `Descontos de Folha: ${fmt(colTotals.valorDesconto)}\n`;
-    txt += `Valor Líquido de Salários: ${fmt(colTotals.valorLiquido)}\n`;
-    txt += `Subtotal de Verbas & Custos: ${fmt(subtotal)}\n`;
+    txt += `Valor Líquido: ${fmt(colTotals.valorLiquido)}\n`;
+    txt += `Subtotal de Valores & Custos: ${fmt(subtotal)}\n`;
     txt += `ISS/Impostos (${taxInputMode === 'rate' ? `${taxRate}%` : 'Fixo'}): ${fmt(calculatedTax)}\n`;
     txt += `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate}%` : fmt(adminFeeFixedAmount)}): ${fmt(calculatedAdminFee)}\n`;
     txt += `TOTAL APURADO BRUTO: ${fmt(totalApuradoBruto)}\n`;
@@ -1231,7 +1231,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             <div>
               <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wide block">Subtotal Geral</span>
               <span className="text-base font-black text-blue-700 block mt-0.5">{fmt(subtotal)}</span>
-              <span className="text-[9px] text-gray-400">Líquido ({fmt(colTotals.valorLiquido)}) + Verbas</span>
+              <span className="text-[9px] text-gray-400">Líquido ({fmt(colTotals.valorLiquido)}) + Valores</span>
             </div>
             <DollarSign size={20} className="text-blue-200" />
           </div>
@@ -1280,7 +1280,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         {/* ══ NAVEGAÇÃO DE ABAS ══════════════════════════════════ */}
         <div className="px-5 sm:px-7 bg-white border-b border-gray-100 flex items-center gap-1 overflow-x-auto shrink-0">
           {([
-            { key: 'main',       icon: Users,    label: `Colaboradores Terceirizados (${rows.length})` },
+            { key: 'main',       icon: Users,    label: `Contratados Terceirizados (${rows.length})` },
             { key: 'summary',    icon: Layers,   label: `Resumo por Localidade (${locationSummary.length})` },
             { key: 'settlement', icon: Landmark, label: `Apuração & Repasses (${repassLines.length})` }
           ] as const).map(({ key, icon: Icon, label }) => (
@@ -1406,7 +1406,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                         <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
                           {/* 1. Colaborador (FIXO) */}
                           <th className="py-3 px-3 min-w-[190px] w-[190px] sticky left-0 bg-gray-50 z-30">
-                            Colaborador
+                            Contratado
                           </th>
                           {/* 2. Localidade (FIXO) */}
                           <th className="py-3 px-3 min-w-[140px] w-[140px] sticky left-[190px] bg-gray-50 z-30">
@@ -1456,7 +1456,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                         {rows.length === 0 ? (
                           <tr>
                             <td colSpan={22} className="py-16 text-center text-gray-400 font-medium">
-                              Nenhum colaborador terceirizado encontrado para esta competência.{' '}
+                              Nenhum contratado terceirizado encontrado para esta competência.{' '}
                               <button onClick={handleAddManualRow} className="text-blue-500 underline mr-2">
                                 Adicionar linha manual
                               </button>
@@ -1743,7 +1743,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
                           <th className="py-3 px-4">Localidade</th>
-                          <th className="py-3 px-3 text-center">Colaboradores</th>
+                          <th className="py-3 px-3 text-center">Contratados</th>
                           <th className="py-3 px-3 text-right">Valor Bruto</th>
                           <th className="py-3 px-3 text-right">Descontos</th>
                           <th className="py-3 px-3 text-right">Valor Líquido</th>
@@ -1906,8 +1906,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                         {[
                           { label: 'Valor Bruto Total', value: colTotals.valorBruto, color: 'text-gray-700' },
                           { label: 'Descontos de Folha (-)', value: colTotals.valorDesconto, color: 'text-red-600' },
-                          { label: 'Valor Líquido de Salários', value: colTotals.valorLiquido, color: 'text-blue-800 font-bold' },
-                          { label: 'Subtotal Geral (Líquido + Verbas)', value: subtotal, color: 'text-gray-900 font-bold' },
+                          { label: 'Valor Líquido', value: colTotals.valorLiquido, color: 'text-blue-800 font-bold' },
+                          { label: 'Subtotal Geral (Líquido + Valores)', value: subtotal, color: 'text-gray-900 font-bold' },
                           { label: `ISS / Impostos (${taxInputMode === 'rate' ? `${taxRate.toFixed(2)}%` : 'Fixo'})`, value: calculatedTax, color: 'text-amber-600' },
                           { label: `Taxa Administrativa (${adminFeeMode === 'rate' ? `${adminFeeRate.toFixed(2)}%` : fmt(adminFeeFixedAmount)})`, value: calculatedAdminFee, color: 'text-blue-600' },
                         ].map(({ label, value, color }) => (
@@ -2081,7 +2081,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         <footer className="px-5 sm:px-7 py-3 bg-white border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shrink-0">
           <div className="flex items-center gap-4 text-gray-400 font-medium">
             <span>Competência: <strong className="text-gray-700">{competencia}</strong></span>
-            <span>Colaboradores: <strong className="text-gray-700">{rows.length}</strong></span>
+            <span>Contratados: <strong className="text-gray-700">{rows.length}</strong></span>
             {savedTimestamp && (
               <span className="text-emerald-600 font-bold flex items-center gap-1">
                 <Check size={12} />
