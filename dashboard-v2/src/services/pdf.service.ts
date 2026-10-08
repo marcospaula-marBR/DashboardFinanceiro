@@ -13,7 +13,7 @@ export class PDFService {
     const amount = loanData.amount || loanData.value || 0;
     
     if (!loanData || !amount) {
-      alert("Este colaborador não possui empréstimo registrado para gerar o termo.");
+      alert("Este contratado não possui empréstimo registrado para gerar o termo.");
       return;
     }
 

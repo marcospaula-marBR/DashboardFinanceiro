@@ -103,7 +103,7 @@ export function ProfileExportModal({
 
   if (!isOpen) return null;
 
-  const employeeName = profile.name || 'Colaborador';
+  const employeeName = profile.name || 'Contratado';
   const sanitizeFileName = (name: string) => name.replace(/[^a-zA-Z0-9_-]/g, '_');
 
   // FORMATADOR DATA PT-BR
@@ -142,7 +142,7 @@ export function ProfileExportModal({
     let csv = '';
     const sanitize = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
 
-    csv += `"FICHA CADASTRAL DO COLABORADOR"\n`;
+    csv += `"FICHA CADASTRAL DO CONTRATADO"\n`;
     csv += `"Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}"\n\n`;
 
     if (includePersonal) {
@@ -671,7 +671,7 @@ export function ProfileExportModal({
             </div>
             <div>
               <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                Exportar Ficha do Colaborador
+                Exportar Ficha do Contratado
               </h2>
               <p className="text-xs font-medium text-slate-500 mt-0.5">
                 {employeeName} • Escolha quais seções deseja incluir no documento

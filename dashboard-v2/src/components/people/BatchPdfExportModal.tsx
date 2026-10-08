@@ -71,7 +71,7 @@ export function BatchPdfExportModal({
 
   const handleExportBatchPDF = () => {
     if (targetEmployees.length === 0) {
-      alert('Nenhum colaborador selecionado para geração em lote.');
+      alert('Nenhum contratado selecionado para geração em lote.');
       return;
     }
 
@@ -85,7 +85,7 @@ export function BatchPdfExportModal({
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Fichas de Colaboradores em Lote (${targetEmployees.length} Registros)</title>
+        <title>Fichas de Contratados em Lote (${targetEmployees.length} Registros)</title>
         <style>
           @page { size: A4 portrait; margin: 15mm; }
           body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; background: #fff; margin: 0; padding: 0; font-size: 11px; }
@@ -107,7 +107,7 @@ export function BatchPdfExportModal({
     `;
 
     targetEmployees.forEach((profile, index) => {
-      const empName = profile.name || 'Colaborador';
+      const empName = profile.name || 'Contratado';
       const photoUrl = profile.avatar || (profile as any).photo_url || null;
       const companyLogoUrl = getCompanyLogoUrl(profile.company);
       const empCosts = allMonthlyCosts.filter(c => c.employee_id === profile.id);

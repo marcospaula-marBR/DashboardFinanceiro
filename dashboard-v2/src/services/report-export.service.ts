@@ -9,6 +9,7 @@ import { Employee } from '@/types/loans';
 
 export interface LoansReportData {
   colaborador: string;
+  contratado?: string;
   empresa: string;
   vinculo: string;
   status: string;
@@ -23,6 +24,7 @@ export interface LoansReportData {
 
 export interface ContractReportData {
   colaborador: string;
+  contratado?: string;
   empresa: string;
   contrato: string;
   valorTotal: number;
@@ -165,6 +167,7 @@ export class ReportExportService {
     
     return emps.map(item => ({
       colaborador: item.name,
+      contratado: item.name,
       empresa: item.company,
       vinculo: item.linkType,
       status: item.status,
@@ -212,6 +215,7 @@ export class ReportExportService {
       filteredContracts.forEach(c => {
         allContracts.push({
           colaborador: emp.name,
+          contratado: emp.name,
           empresa: emp.company,
           contrato: c.operationNumber,
           valorTotal: c.value || 0,
@@ -505,7 +509,7 @@ export class ReportExportService {
   static async exportContractReport(filters?: FilterValues): Promise<void> {
     const data = await this.getContractReport(false, undefined, filters);
     const csv = this.convertToCSV(data, [
-      'Colaborador', 'Empresa', 'Contrato', 'Valor Total (R$)',
+      'Contratado', 'Empresa', 'Contrato', 'Valor Total (R$)',
       'Qtd Parcelas', 'Valor Parcela (R$)', 'Recebido (R$)', 'Saldo (R$)',
       'Parcelas Pagas', 'Parcelas Restantes', 'Status', 'Data Início', 'Data Término'
     ]);
@@ -604,7 +608,7 @@ export class ReportExportService {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(16);
         doc.setTextColor(5, 150, 105);
-        doc.text('RELATÓRIO GERENCIAL DE EMPRÉSTIMOS DE COLABORADORES', 14, 18);
+        doc.text('RELATÓRIO GERENCIAL DE EMPRÉSTIMOS DE CONTRATADOS', 14, 18);
         
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
@@ -616,7 +620,7 @@ export class ReportExportService {
 
         doc.setFontSize(8.5);
         doc.setTextColor(148, 163, 184);
-        doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}  •  ${employees.length} colaborador(es) selecionado(s)`, 14, 31);
+        doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}  •  ${employees.length} contratado(s) selecionado(s)`, 14, 31);
 
         // Cards de resumo
         const startY = 40;
@@ -639,7 +643,7 @@ export class ReportExportService {
           doc.setTextColor(100, 116, 139);
           doc.text(title.toUpperCase(), x + 5, y + 7.5);
 
-          doc.setFontSize(11.5);
+          doc.setFontSize(value.length > 15 ? 10 : 11.5);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(15, 23, 42);
           doc.text(value, x + 5, y + 17);
@@ -649,7 +653,7 @@ export class ReportExportService {
         drawCard(14 + boxW + gap, startY, 'Total Recebido', formatCurrency(totalRecebido), [37, 99, 235]);
         drawCard(14 + (boxW + gap) * 2, startY, 'Saldo Devedor', formatCurrency(saldoDevedor), [220, 38, 38]);
         drawCard(14 + (boxW + gap) * 3, startY, 'Recebível no Mês', formatCurrency(recebivelMes), [217, 119, 6]);
-        drawCard(14 + (boxW + gap) * 4, startY, 'Contratos Ativos', `${contratosAtivosCount} (${employees.length} colab.)`, [100, 116, 139]);
+        drawCard(14 + (boxW + gap) * 4, startY, 'Contratos Ativos', `${contratosAtivosCount} (${employees.length} contratados)`, [100, 116, 139]);
 
         doc.addPage();
         addBackground();
@@ -663,16 +667,16 @@ export class ReportExportService {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(15);
       doc.setTextColor(5, 150, 105);
-      doc.text('DETALHAMENTO CONSOLIDADO POR COLABORADOR', 14, currentY);
+      doc.text('DETALHAMENTO CONSOLIDADO POR CONTRATADO', 14, currentY);
       
       doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
-      doc.text(`Filtros: ${filterSummaryText}  •  Total: ${employees.length} colaboradores`, 14, currentY + 5.5);
+      doc.text(`Filtros: ${filterSummaryText}  •  Total: ${employees.length} contratados`, 14, currentY + 5.5);
       
       currentY += 13;
 
-      // Se nenhum colaborador atendeu aos filtros
+      // Se nenhum contratado atendeu aos filtros
       if (employees.length === 0) {
         doc.setFillColor(248, 250, 252);
         doc.setDrawColor(226, 232, 240);
@@ -680,7 +684,7 @@ export class ReportExportService {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         doc.setTextColor(100, 116, 139);
-        doc.text('Nenhum colaborador ou contrato atende aos filtros selecionados.', 20, currentY + 14);
+        doc.text('Nenhum contratado ou contrato atende aos filtros selecionados.', 20, currentY + 14);
       }
 
       // 3. Iterar nos colaboradores filtrados e renderizar
@@ -759,7 +763,7 @@ export class ReportExportService {
           doc.setFont('helvetica', 'italic');
           doc.setFontSize(7.5);
           doc.setTextColor(148, 163, 184);
-          doc.text('Nenhum contrato com saldo em aberto para este colaborador.', 14, currentY + 3);
+          doc.text('Nenhum contrato com saldo em aberto para este contratado.', 14, currentY + 3);
           currentY += 8;
         }
       }
