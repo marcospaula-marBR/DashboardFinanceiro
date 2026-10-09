@@ -553,6 +553,10 @@ export function inferEntityType(employee: Partial<Employee>): EntityType {
     return "internal_person";
   }
 
+  if (linkType === 'pj' || linkType === 'mei') {
+    return "legal_entity";
+  }
+
   if (employee.metadata?.entityType) return employee.metadata.entityType;
   if (employee.entityType) return employee.entityType;
 
@@ -561,7 +565,7 @@ export function inferEntityType(employee: Partial<Employee>): EntityType {
   const hasPjType = typeof employee.pj_type === 'string' && employee.pj_type.trim().length > 0;
   const hasTaxRegime = typeof employee.tax_regime === 'string' && employee.tax_regime.trim().length > 0;
 
-  const isPJ = linkType === 'PJ' || linkType === 'MEI' || hasCorporateName || hasPjType || hasTaxRegime || isOutsourced;
+  const isPJ = linkType === 'pj' || linkType === 'mei' || hasCorporateName || hasPjType || hasTaxRegime || isOutsourced;
 
   return isPJ ? "legal_entity" : "internal_person";
 }
