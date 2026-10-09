@@ -16,7 +16,7 @@ import { ClearCostHistoryModal } from "./ClearCostHistoryModal";
 import { SystemsCatalogService } from "@/services/systems-catalog.service";
 import { OffboardingChecklistModal } from "./OffboardingChecklistModal";
 import { SystemAppIcon } from "./SystemAppIcon";
-import { GRUPO_EMPRESAS } from "@/types/loans";
+import { GRUPO_EMPRESAS, formatPjRole } from "@/types/loans";
 
 interface HistoryItem {
   id: string;
@@ -275,7 +275,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
   const formatHistoryObservations = (obs?: string) => {
     if (!obs) return '';
-    return obs
+    let res = obs
+      .replace(/\bCargo alterado\b/g, 'Escopo alterado')
+      .replace(/\bCargo registrado\b/g, 'Escopo registrado')
       .replace(/\bCargo\b/g, 'Escopo')
       .replace(/\bcargo\b/g, 'escopo')
       .replace(/\bCARGO\b/g, 'ESCOPO')
@@ -286,6 +288,18 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       .replace(/\bREMUNERAÇÃO\b/g, 'HONORÁRIOS')
       .replace(/\bSalário\b/g, 'Valor Contrato')
       .replace(/\bsalário\b/g, 'valor contrato');
+
+    const isPjContract = profile.linkType === 'PJ' || profile.linkType === 'MEI' || !!profile.pj_type;
+    if (isPjContract) {
+      res = res.replace(/'([^']+)'/g, (match, p1) => {
+        const t = p1.trim();
+        if (t && t !== '-' && !t.toLowerCase().startsWith('terceirizado') && !t.startsWith('R$') && !/^[\d.,/ -]+$/.test(t)) {
+          return `'Terceirizado ${t}'`;
+        }
+        return match;
+      });
+    }
+    return res;
   };
 
   useEffect(() => {
@@ -557,6 +571,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       // Guarda os vínculos antigos antes de salvar, pois salvar sobrescreve a base de dados
       const oldProfile = employeeId ? await PeopleService.getEmployeeProfile(employeeId, isTestMode) : null;
       const oldRels = oldProfile?.relationships || [];
+
+      // Se for PJ, assegurar que o Escopo inicie com "Terceirizado "
+      const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile));
+      if (isPJ && profile.job_role) {
+        profile.job_role = formatPjRole(profile.job_role);
+      }
 
       const saved = await PeopleService.saveEmployeeProfile(profile, isTestMode, !employeeId);
       
@@ -992,7 +1012,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         (mergedProfile as any)[field.key] = incomingVal;
         
         if (field.key === 'job_role' && existingVal !== incomingVal) {
-          historyChanges.push(`Escopo alterado de '${existingVal || '-'}' para '${incomingVal}'`);
+          const isPJMerge = existingProfile.linkType === 'PJ' || existingProfile.linkType === 'MEI' || incomingData.linkType === 'PJ' || incomingData.linkType === 'MEI';
+          const fromRole = isPJMerge ? formatPjRole(existingVal) : (existingVal || '-');
+          const toRole = isPJMerge ? formatPjRole(incomingVal) : (incomingVal || '-');
+          historyChanges.push(`Escopo alterado de '${fromRole}' para '${toRole}'`);
         } else if (field.key === 'department' && existingVal !== incomingVal) {
           historyChanges.push(`Setor/Departamento alterado de '${existingVal || '-'}' para '${incomingVal}'`);
         } else if (field.key === 'remuneration_fixed' && Number(existingVal || 0) !== Number(incomingVal || 0)) {
@@ -1008,7 +1031,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         // Se a seleção foi manter o existente (porque o contrato é antigo), ainda assim registramos a trajetória do valor antigo se ele for diferente!
         if (existingVal !== incomingVal && incomingVal !== undefined && incomingVal !== null && incomingVal !== '') {
           if (field.key === 'job_role') {
-            historyChanges.push(`Escopo registrado como '${incomingVal}'`);
+            const isPJMerge = existingProfile.linkType === 'PJ' || existingProfile.linkType === 'MEI' || incomingData.linkType === 'PJ' || incomingData.linkType === 'MEI';
+            const roleVal = isPJMerge ? formatPjRole(incomingVal) : incomingVal;
+            historyChanges.push(`Escopo registrado como '${roleVal}'`);
           } else if (field.key === 'department') {
             historyChanges.push(`Setor/Departamento registrado como '${incomingVal}'`);
           } else if (field.key === 'remuneration_fixed') {
@@ -1160,11 +1185,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       const docDate = data.signature_date || data.start_date || new Date().toISOString().split('T')[0];
       if (profile.id) {
         if (data.job_role && data.job_role !== profile.job_role) {
+          const isPJDoc = profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile));
+          const fromRole = isPJDoc ? formatPjRole(profile.job_role) : (profile.job_role || '-');
+          const toRole = isPJDoc ? formatPjRole(data.job_role) : (data.job_role || '-');
           setPendingHistoryItems(h => [...h, {
             employee_id: profile.id || '',
             event_type: 'Escopo',
             change_date: docDate,
-            observations: `Escopo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (via importação de contrato PDF)`
+            observations: `Escopo alterado de '${fromRole}' para '${toRole}' (via importação de contrato PDF)`
           }]);
         }
         if (data.department && data.department !== profile.department) {
@@ -2720,9 +2748,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       type="text" 
                                       value={profile.job_role || ''} 
                                       onChange={e => handleChange('job_role', e.target.value)} 
+                                      onBlur={() => {
+                                        if (isPJ && profile.job_role) {
+                                          handleChange('job_role', formatPjRole(profile.job_role));
+                                        }
+                                      }}
                                       readOnly={!isEditMode} 
                                       className={inputClass} 
-                                      placeholder={isPJ ? "Ex: Consultoria em TI, Médico..." : "Ex: Analista Financeiro"}
+                                      placeholder={isPJ ? "Ex: Terceirizado Consultoria em TI, Médico..." : "Ex: Analista Financeiro"}
                                     />
                                   </div>
                                   <div>

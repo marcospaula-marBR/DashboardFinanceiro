@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
-import { Employee, PeopleMetadata, EntityType, RelationshipNature, PeopleAIAgent, PeopleTemporaryDelegation, PeopleRelationship, mergePeopleMetadata, inferEntityType, normalizeCompanyName } from '@/types/loans';
+import { Employee, PeopleMetadata, EntityType, RelationshipNature, PeopleAIAgent, PeopleTemporaryDelegation, PeopleRelationship, mergePeopleMetadata, inferEntityType, normalizeCompanyName, formatPjRole } from '@/types/loans';
 
 export class PeopleService {
   /**
@@ -372,7 +372,11 @@ export class PeopleService {
       created_at: raw.created_at,
       
       // Novos campos RH
-      job_role: raw.job_role,
+      job_role: (() => {
+        if (!raw.job_role) return raw.job_role;
+        const isPJ = ((raw.employment_type || raw.link_type) === 'PJ' || (raw.employment_type || raw.link_type) === 'MEI' || !!raw.pj_type);
+        return isPJ ? formatPjRole(raw.job_role) : raw.job_role;
+      })(),
       department: raw.department,
       department_start_date: raw.department_start_date || '',
       commission_plan: raw.commission_plan || '',
@@ -467,7 +471,11 @@ export class PeopleService {
       status: profile.status,
       
       // Novos campos RH
-      job_role: profile.job_role,
+      job_role: (() => {
+        if (!profile.job_role) return profile.job_role;
+        const isPJ = (profile.linkType === 'PJ' || profile.linkType === 'MEI' || !!profile.pj_type);
+        return isPJ ? formatPjRole(profile.job_role) : profile.job_role;
+      })(),
       department: profile.department,
       nivel: profile.nivel || profile.camada || '',
       department_start_date: profile.department_start_date && profile.department_start_date.trim() !== '' ? profile.department_start_date : null,

@@ -612,5 +612,16 @@ export function normalizeCompanyName(company?: string): string {
   return c;
 }
 
+export function formatPjRole(role?: string | null): string {
+  if (!role) return '';
+  const trimmed = role.trim();
+  if (!trimmed) return '';
+  if (trimmed.toLowerCase().startsWith('terceirizado')) {
+    return trimmed;
+  }
+  return `Terceirizado ${trimmed}`;
+}
+
+
 
 

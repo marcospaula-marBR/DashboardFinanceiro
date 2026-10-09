@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { Employee, EmploymentContract, ContractAllocation, EmployeeEvent, MonthlyCost, AuditIssue, normalizeCompanyName } from '@/types/loans';
+import { Employee, EmploymentContract, ContractAllocation, EmployeeEvent, MonthlyCost, AuditIssue, normalizeCompanyName, formatPjRole } from '@/types/loans';
 import { LoansService } from './loans.service';
 
 interface RawEmployeeDb {
@@ -345,7 +345,11 @@ export const PeopleHRService = {
         city: emp.city,
         state: emp.state,
         department: emp.department,
-        job_role: emp.job_role,
+        job_role: (() => {
+          if (!emp.job_role) return emp.job_role;
+          const isPj = emp.employment_type === 'PJ' || emp.employment_type === 'MEI' || !!emp.pj_type;
+          return isPj ? formatPjRole(emp.job_role) : emp.job_role;
+        })(),
         start_date: emp.start_date,
         status_start_date: emp.status_start_date,
         status_end_date: emp.status_end_date,

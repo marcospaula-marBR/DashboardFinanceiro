@@ -18,7 +18,7 @@ import {
 import { parsePjFile, PjParseResult, PjParsedEmployee } from "@/utils/diannaPjFileParser";
 import { findBestNameMatch } from "@/utils/nameSimilarity";
 import { PeopleHRService } from "@/services/people-hr.service";
-import { Employee } from "@/types/loans";
+import { Employee, formatPjRole } from "@/types/loans";
 
 interface PjImportAuditModalProps {
   isOpen: boolean;
@@ -158,7 +158,7 @@ export function PjImportAuditModal({
             linkType: "PJ",
             status: pEmp.status === "Inativo" ? "Inativo" : "Ativo",
             department: pEmp.setor || matchedExisting?.department || "Operacional",
-            job_role: pEmp.ultimoCargo || pEmp.cargoInicial || matchedExisting?.job_role || "Prestador PJ",
+            job_role: formatPjRole(pEmp.ultimoCargo || pEmp.cargoInicial || matchedExisting?.job_role || "Prestador PJ"),
             start_date: pEmp.dataInicial || matchedExisting?.start_date,
             linked_previous_employee_id: matchedExisting ? matchedExisting.id : undefined,
             is_unified_history: matchedExisting ? true : undefined,
