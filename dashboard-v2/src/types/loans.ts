@@ -14,6 +14,7 @@ export interface Employee {
   name: string;
   company: string;
   linkType: string;
+  employment_type?: string;
   remuneration: number;
   totalTaken: number;
   totalReceived: number;

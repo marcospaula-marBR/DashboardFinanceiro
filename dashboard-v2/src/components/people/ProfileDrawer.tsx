@@ -2565,11 +2565,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                            <div>
                              <div className="flex items-center justify-between">
                                <label className={labelClass}>Final de Contrato</label>
-                               {!isEditMode && (profile.resignation_date || profile.status_end_date) && (
-                                 <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
-                                   Encerrado
-                                 </span>
-                               )}
+                               {!isEditMode && (profile.resignation_date || profile.status_end_date) && (() => {
+                                 const endDateStr = profile.resignation_date || profile.status_end_date;
+                                 const isPast = endDateStr ? new Date(endDateStr + 'T12:00:00').getTime() <= new Date().getTime() : false;
+                                 const isTerminated = profile.status === 'Inativo' || isPast;
+                                 if (isTerminated) {
+                                   return (
+                                     <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
+                                       Encerrado
+                                     </span>
+                                   );
+                                 }
+                                 return (
+                                   <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                     Término Previsto
+                                   </span>
+                                 );
+                               })()}
                              </div>
                              <input 
                                type="date" 

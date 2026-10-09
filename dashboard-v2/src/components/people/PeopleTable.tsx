@@ -13,6 +13,7 @@ import {
   RelationshipNatureBadge, 
   PeopleHealthBadge,
   formatCompanyTime,
+  calculateCombinedCompanyTime,
   getCompanyLogoUrl
 } from "./PeopleBadges";
 
@@ -21,6 +22,7 @@ import { PeopleHRService } from "@/services/people-hr.service";
 
 interface PeopleTableProps {
   employees: Employee[];
+  allEmployees?: Employee[];
   monthlyCosts?: MonthlyCost[];
   onEdit: (id: string) => void;
   onDelete: (employee: Employee) => void;
@@ -46,6 +48,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function PeopleTable({ 
   employees, 
+  allEmployees,
   monthlyCosts = [],
   onEdit, 
   onDelete, 
@@ -374,7 +377,7 @@ export function PeopleTable({
                               <span className="text-slate-400 text-xs">—</span>
                             )}
                             <div className="text-[10px] text-slate-400 font-medium leading-tight">
-                              {emp.remuneration_fixed !== undefined && emp.remuneration_fixed > 0 && (
+                              {emp.remuneration_fixed !== undefined && emp.remuneration_fixed > 0 && emp.remuneration_fixed !== emp.remuneration && (
                                 <div>Base: {formatCurrency(emp.remuneration_fixed)}</div>
                               )}
                               {emp.remuneration_bonus !== undefined && emp.remuneration_bonus > 0 && (
@@ -383,6 +386,20 @@ export function PeopleTable({
                               {emp.remuneration_commission !== undefined && emp.remuneration_commission > 0 && (
                                 <div className="text-purple-500 font-semibold">Comissão: {formatCurrency(emp.remuneration_commission)}</div>
                               )}
+                              {(() => {
+                                const empList = allEmployees || employees;
+                                const linkedPrevId = emp.metadata?.linked_previous_employee_id;
+                                const prevEmp = linkedPrevId ? empList.find(e => e.id === linkedPrevId) : undefined;
+                                if (prevEmp && prevEmp.remuneration > 0) {
+                                  const prevLabel = prevEmp.linkType || prevEmp.employment_type || 'CLT';
+                                  return (
+                                    <div className="mt-1 text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                      Anterior ({prevLabel}): {formatCurrency(prevEmp.remuneration)}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
                             {historicoCustoTotal !== undefined && historicoCustoTotal > 0 && (
                               <div className="mt-1 pt-1 border-t border-slate-100 text-[10px] text-slate-500 font-medium leading-tight text-right">
@@ -404,9 +421,44 @@ export function PeopleTable({
                           <span className="text-[10px] text-slate-400 tabular-nums">
                             {new Date(emp.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                           </span>
-                          <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                            {formatCompanyTime(emp.start_date)}
-                          </span>
+                          {(() => {
+                            const empList = allEmployees || employees;
+                            const linkedPrevId = emp.metadata?.linked_previous_employee_id;
+                            const prevEmp = linkedPrevId ? empList.find(e => e.id === linkedPrevId) : undefined;
+
+                            if (prevEmp) {
+                              const prevLabel = prevEmp.linkType || prevEmp.employment_type || 'CLT';
+                              const currLabel = emp.linkType || emp.employment_type || 'PJ';
+                              const prevEndDate = prevEmp.resignation_date || prevEmp.status_end_date;
+                              const currEndDate = emp.status === 'Inativo' ? (emp.resignation_date || emp.status_end_date) : undefined;
+                              const prevTenure = formatCompanyTime(prevEmp.start_date, prevEndDate, true);
+                              const currTenure = formatCompanyTime(emp.start_date, currEndDate, true);
+                              const combinedTenure = calculateCombinedCompanyTime(prevEmp.start_date, prevEndDate, emp.start_date, currEndDate);
+
+                              return (
+                                <div className="flex flex-col items-center gap-1 mt-0.5">
+                                  <div className="flex items-center gap-1 text-[9px] font-bold">
+                                    <span className="bg-slate-100 text-slate-600 px-1 py-0.2 rounded border border-slate-200">
+                                      {prevLabel}: {prevTenure}
+                                    </span>
+                                    <span className="bg-emerald-50 text-emerald-700 px-1 py-0.2 rounded border border-emerald-200">
+                                      {currLabel}: {currTenure}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
+                                    Total: {combinedTenure}
+                                  </span>
+                                </div>
+                              );
+                            }
+
+                            const endDate = emp.status === 'Inativo' ? (emp.resignation_date || emp.status_end_date) : undefined;
+                            return (
+                              <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                                {formatCompanyTime(emp.start_date, endDate)}
+                              </span>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <span className="text-xs text-slate-300">—</span>
@@ -496,6 +548,7 @@ export function PeopleTable({
               <div key={emp.id} className="relative group" onClick={() => onEmployeeClick(emp.id)}>
                 <PeopleMobileCard 
                   employee={emp}
+                  allEmployees={allEmployees || employees}
                   onClick={onEmployeeClick}
                   onEdit={onEdit}
                   onDelete={onDelete}

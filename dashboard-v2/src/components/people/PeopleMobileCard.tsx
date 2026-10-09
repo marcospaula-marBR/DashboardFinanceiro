@@ -11,11 +11,14 @@ import {
   RelationshipNatureBadge, 
   PeopleHealthBadge,
   formatCompanyTime,
+  calculateCombinedCompanyTime,
   getCompanyLogoUrl
 } from "./PeopleBadges";
 
 interface PeopleMobileCardProps {
   employee: Employee;
+  allEmployees?: Employee[];
+  linkedPreviousEmployee?: Employee;
   onClick: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (employee: Employee) => void;
@@ -53,6 +56,8 @@ export function PeopleMobileCard({
   onClick,
   onDelete,
   onEdit,
+  allEmployees,
+  linkedPreviousEmployee,
   showValues,
   hasAuditIssues = false,
   hasGlosa,
@@ -71,6 +76,40 @@ export function PeopleMobileCard({
   const [copied, setCopied] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+
+  // Detecção de vínculo unificado / anterior
+  const linkedPrev = useMemo(() => {
+    if (linkedPreviousEmployee) return linkedPreviousEmployee;
+    if (!allEmployees || allEmployees.length === 0) return undefined;
+
+    // 1. Link explícito via metadata
+    if (employee.metadata?.linked_previous_employee_id) {
+      const found = allEmployees.find(e => e.id === employee.metadata?.linked_previous_employee_id);
+      if (found) return found;
+    }
+
+    // 2. Se outro colaborador aponta para este como anterior, este é o anterior, não o ativo/recente
+    const isPointedAsPrevious = allEmployees.some(e => e.metadata?.linked_previous_employee_id === employee.id);
+    if (isPointedAsPrevious) return undefined;
+
+    // 3. Fallback por CPF idêntico (11 dígitos):
+    const getCpf = (emp: Employee) => {
+      const raw = emp.responsible_cpf || (emp.linkType === 'CLT' || emp.employment_type === 'CLT' || emp.employment_type === 'Estagiário' ? emp.document_id : undefined);
+      return raw?.replace(/\D/g, '') || '';
+    };
+    const myCpf = getCpf(employee);
+    if (myCpf && myCpf.length === 11) {
+      const others = allEmployees.filter(e => e.id !== employee.id && getCpf(e) === myCpf);
+      if (others.length > 0) {
+        const sorted = [...others].sort((a, b) => new Date(a.start_date || 0).getTime() - new Date(b.start_date || 0).getTime());
+        const oldest = sorted[0];
+        if (employee.status === 'Ativo' || (new Date(employee.start_date || 0).getTime() >= new Date(oldest.start_date || 0).getTime())) {
+          return oldest;
+        }
+      }
+    }
+    return undefined;
+  }, [employee, linkedPreviousEmployee, allEmployees]);
 
   const handleCopyPix = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -159,6 +198,11 @@ export function PeopleMobileCard({
       <div className="absolute top-3.5 right-4 flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
         {/* Linha superior: Alertas de Auditoria + Badge de Status */}
         <div className="flex items-center gap-1.5">
+          {linkedPrev && (
+            <span className="text-[9px] font-black border uppercase px-2 py-0.5 rounded-full shrink-0 bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs" title="Cadastro com múltiplos regimes unificados">
+              2 Vínculos
+            </span>
+          )}
           {hasAuditIssues && (
             <span className="text-amber-500 shrink-0 cursor-help" title="Possui pendências de auditoria">
               <AlertCircle size={14} className="fill-amber-50" />
@@ -384,10 +428,41 @@ export function PeopleMobileCard({
                   {startFormatted}
                 </span>
               </div>
-              {employee.start_date && (
-                <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full ml-4 self-start">
-                  {formatCompanyTime(employee.start_date)}
-                </span>
+              {linkedPrev ? (() => {
+                const prevLabel = linkedPrev.linkType || linkedPrev.employment_type || 'CLT';
+                const currLabel = employee.linkType || employee.employment_type || 'PJ';
+                const prevEndDate = linkedPrev.resignation_date || linkedPrev.status_end_date;
+                const currEndDate = employee.status === 'Inativo' ? (employee.resignation_date || employee.status_end_date) : undefined;
+                const prevTenure = formatCompanyTime(linkedPrev.start_date, prevEndDate, true);
+                const currTenure = formatCompanyTime(employee.start_date, currEndDate, true);
+                const combinedTenure = calculateCombinedCompanyTime(linkedPrev.start_date, prevEndDate, employee.start_date, currEndDate);
+
+                return (
+                  <div className="flex flex-col gap-1 ml-4 mt-0.5">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-[9px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+                        {prevLabel}: {prevTenure}
+                      </span>
+                      <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shadow-2xs">
+                        {currLabel}: {currTenure}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full self-start flex items-center gap-1 shadow-xs">
+                      <span className="text-[9px] uppercase tracking-wide text-indigo-500 font-bold">Total:</span>
+                      <span>{combinedTenure}</span>
+                      <span className="text-[8px] text-indigo-400 font-normal">({prevLabel} + {currLabel})</span>
+                    </span>
+                  </div>
+                );
+              })() : (
+                employee.start_date && (
+                  <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full ml-4 self-start">
+                    {formatCompanyTime(
+                      employee.start_date,
+                      employee.status === 'Inativo' ? (employee.resignation_date || employee.status_end_date) : undefined
+                    )}
+                  </span>
+                )
               )}
             </div>
             <div className="flex items-center gap-1.5 text-slate-400 mt-1">
@@ -425,7 +500,7 @@ export function PeopleMobileCard({
               </p>
               {/* Detalhamento de Base e Bônus */}
               <div className="mt-0.5 flex flex-col items-end text-[10px] text-slate-400 font-medium">
-                {employee.remuneration_fixed !== undefined && employee.remuneration_fixed > 0 && (
+                {employee.remuneration_fixed !== undefined && employee.remuneration_fixed > 0 && employee.remuneration_fixed !== employee.remuneration && (
                   <span className="tabular-nums">Base: {BRL.format(employee.remuneration_fixed)}</span>
                 )}
                 {employee.remuneration_bonus !== undefined && employee.remuneration_bonus > 0 && (
@@ -434,6 +509,14 @@ export function PeopleMobileCard({
                 {employee.remuneration_commission !== undefined && employee.remuneration_commission > 0 && (
                   <span className="tabular-nums text-purple-500 font-semibold">Comissão: {BRL.format(employee.remuneration_commission)}</span>
                 )}
+                {linkedPrev && linkedPrev.remuneration > 0 && (() => {
+                  const prevLabel = linkedPrev.linkType || linkedPrev.employment_type || 'CLT';
+                  return (
+                    <span className="mt-0.5 text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 tabular-nums" title={`Remuneração no vínculo anterior (${prevLabel})`}>
+                      Anterior ({prevLabel}): {BRL.format(linkedPrev.remuneration)}
+                    </span>
+                  );
+                })()}
               </div>
               {/* Custo Histórico */}
               {showValues && (historicoCustoTotal !== undefined || historicoCustoMedio !== undefined) && (

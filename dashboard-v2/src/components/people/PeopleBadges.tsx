@@ -34,7 +34,7 @@ export function formatWhatsAppLink(phone?: string): string | null {
   return `https://wa.me/${normalized}`;
 }
 
-export function formatCompanyTime(startDateStr?: string, endDateStr?: string): string | null {
+export function formatCompanyTime(startDateStr?: string, endDateStr?: string, hideDistratoSuffix?: boolean): string | null {
   if (!startDateStr) return null;
   const start = new Date(startDateStr + "T12:00:00");
   const end = endDateStr ? new Date(endDateStr + "T12:00:00") : new Date();
@@ -57,6 +57,7 @@ export function formatCompanyTime(startDateStr?: string, endDateStr?: string): s
   const mStr = m > 0 ? `${m} ${m === 1 ? 'mês' : 'meses'}` : '';
   
   const timeStr = yStr && mStr ? `${yStr} e ${mStr}` : (yStr || mStr);
+  if (hideDistratoSuffix) return timeStr;
   return endDateStr ? `${timeStr} (Distrato)` : timeStr;
 }
 

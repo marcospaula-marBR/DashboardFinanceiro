@@ -131,14 +131,14 @@ export default function PeoplePage() {
   // Filters state
   const [filterSearch, setFilterSearch] = useState('');
   const [filterEmpresa, setFilterEmpresa] = useState<string[]>([]);
-  const [filterStatus, setFilterStatus] = useState<string[]>(['Ativo']);
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [filterVinculo, setFilterVinculo] = useState<string[]>([]);
   const [filterSetor, setFilterSetor] = useState<string[]>([]);
   const [filterGrau, setFilterGrau] = useState<string[]>([]);
   const [filterTerceirizado, setFilterTerceirizado] = useState<string[]>([]);
   const [filterLocalPrestacao, setFilterLocalPrestacao] = useState<string[]>([]);
   const [filterRegimeTributario, setFilterRegimeTributario] = useState<string[]>([]);
-  const [showInativos, setShowInativos] = useState(false);
+  const [showInativos, setShowInativos] = useState(true);
 
   // Novas variáveis de filtros do Cockpit
   const [filterEntityType, setFilterEntityType] = useState<string[]>([]);
@@ -668,8 +668,9 @@ export default function PeoplePage() {
     setFilterQuality([]);
     setFilterHasPbId([]);
     setFilterBpr([]);
+    setFilterStatus([]);
     setFilterInsight(null);
-    setShowInativos(false);
+    setShowInativos(true);
   };
 
   const insightCounts = useMemo(() => {
@@ -2104,6 +2105,7 @@ export default function PeoplePage() {
           ) : viewMode === 'table' ? (
             <PeopleTable
               employees={filteredEmployees}
+              allEmployees={employees}
               monthlyCosts={monthlyCosts}
               onEdit={handleEmployeeClick}
               onDelete={(emp) => setDeleteTarget(emp)}
@@ -2228,6 +2230,7 @@ export default function PeoplePage() {
                       <PeopleMobileCard
                         key={emp.id}
                         employee={emp}
+                        allEmployees={employees}
                         onClick={handleEmployeeClick}
                         onEdit={handleEmployeeClick}
                         onDelete={(e) => setDeleteTarget(e)}
