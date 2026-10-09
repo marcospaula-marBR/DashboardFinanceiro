@@ -30,6 +30,7 @@ interface RawEmployeeDb {
   job_role?: string;
   metadata?: any;
   start_date?: string;
+  resignation_date?: string;
   status_start_date?: string;
   status_end_date?: string;
   linkedin_url?: string;
@@ -351,8 +352,9 @@ export const PeopleHRService = {
           return isPj ? formatPjRole(emp.job_role) : emp.job_role;
         })(),
         start_date: emp.start_date,
+        resignation_date: emp.resignation_date || (emp as any).resignation_date || emp.status_end_date,
         status_start_date: emp.status_start_date,
-        status_end_date: emp.status_end_date,
+        status_end_date: emp.status_end_date || emp.resignation_date || (emp as any).resignation_date,
         linkedin_url: emp.linkedin_url,
         instagram_url: emp.instagram_url,
         emergency_contact_name: emp.emergency_contact_name,
