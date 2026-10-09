@@ -110,34 +110,90 @@ export class PeopleService {
 
       if (existingRecord) {
         // UPDATE
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from(table)
           .update(updateData)
           .eq('id', id)
           .select()
           .single();
         
+        // Resolução resiliente para colisão de CPF em múltiplos vínculos (employees_document_id_key)
+        if (error && error.message?.includes('employees_document_id_key')) {
+          console.warn('[PeopleService] Conflito em employees_document_id_key detectado. Aplicando fallback de unicidade para PJ...');
+          const isPJ = (payload.linkType === 'PJ' || payload.linkType === 'MEI' || !!payload.pj_type);
+          if (isPJ) {
+            const fallbackDoc = payload.pj_type || `${(payload.document_id || payload.responsible_cpf || '').replace(/\D/g, '')}-PJ`;
+            const retryPayload = { ...updateData, document_id: fallbackDoc };
+            const retryRes = await supabase
+              .from(table)
+              .update(retryPayload)
+              .eq('id', id)
+              .select()
+              .single();
+            if (!retryRes.error) {
+              data = retryRes.data;
+              error = null;
+            }
+          }
+        }
+
         if (error) throw new Error(`Falha ao atualizar colaborador: ${error.message}`);
         return data;
       } else {
         // INSERT com ID preexistente (gerado localmente para upload de foto/contrato)
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from(table)
           .insert([dbPayload])
           .select()
           .single();
         
+        if (error && error.message?.includes('employees_document_id_key')) {
+          console.warn('[PeopleService] Conflito em employees_document_id_key no insert. Aplicando fallback de unicidade para PJ...');
+          const isPJ = (payload.linkType === 'PJ' || payload.linkType === 'MEI' || !!payload.pj_type);
+          if (isPJ) {
+            const fallbackDoc = payload.pj_type || `${(payload.document_id || payload.responsible_cpf || '').replace(/\D/g, '')}-PJ`;
+            const retryPayload = { ...dbPayload, document_id: fallbackDoc };
+            const retryRes = await supabase
+              .from(table)
+              .insert([retryPayload])
+              .select()
+              .single();
+            if (!retryRes.error) {
+              data = retryRes.data;
+              error = null;
+            }
+          }
+        }
+
         if (error) throw new Error(`Falha ao registrar novo colaborador: ${error.message}`);
         return data;
       }
     } else {
       // INSERT sem ID (geração automática pelo Supabase)
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from(table)
         .insert([updateData])
         .select()
         .single();
       
+      if (error && error.message?.includes('employees_document_id_key')) {
+        console.warn('[PeopleService] Conflito em employees_document_id_key no insert automatico. Aplicando fallback de unicidade para PJ...');
+        const isPJ = (payload.linkType === 'PJ' || payload.linkType === 'MEI' || !!payload.pj_type);
+        if (isPJ) {
+          const fallbackDoc = payload.pj_type || `${(payload.document_id || payload.responsible_cpf || '').replace(/\D/g, '')}-PJ`;
+          const retryPayload = { ...updateData, document_id: fallbackDoc };
+          const retryRes = await supabase
+            .from(table)
+            .insert([retryPayload])
+            .select()
+            .single();
+          if (!retryRes.error) {
+            data = retryRes.data;
+            error = null;
+          }
+        }
+      }
+
       if (error) throw new Error(`Falha ao registrar novo colaborador: ${error.message}`);
       return data;
     }
@@ -242,7 +298,7 @@ export class PeopleService {
       }
     }
 
-    // 2. Comparar CPF (campo document_id)
+    // 2. Comparar CPF (campos document_id e responsible_cpf)
     if (keys.cpf) {
       const cleanCpf = keys.cpf.replace(/\D/g, '');
       if (cleanCpf && cleanCpf.length === 11) {
@@ -250,8 +306,8 @@ export class PeopleService {
         
         const { data } = await supabase
           .from(table)
-          .select('id, full_name, document_id, pj_type')
-          .or(`document_id.eq."${cleanCpf}",document_id.eq."${formattedCpf}"`);
+          .select('id, full_name, document_id, pj_type, responsible_cpf')
+          .or(`document_id.eq."${cleanCpf}",document_id.eq."${formattedCpf}",responsible_cpf.eq."${cleanCpf}",responsible_cpf.eq."${formattedCpf}"`);
         
         if (data && data.length > 0) return data[0];
       }
@@ -344,16 +400,30 @@ export class PeopleService {
       return data;
     };
 
+    const isPJ = ((raw.employment_type || raw.link_type) === 'PJ' || (raw.employment_type || raw.link_type) === 'MEI' || !!raw.pj_type);
+    const cleanDoc = (raw.document_id || '').replace(/\D/g, '');
+    const cleanResp = (raw.responsible_cpf || '').replace(/\D/g, '');
+
+    // Identifica com fidelidade o CPF pessoal (11 dígitos) e o CNPJ corporativo (14 dígitos)
+    const legitCpf = cleanResp.length === 11 
+      ? raw.responsible_cpf 
+      : (cleanDoc.length === 11 ? raw.document_id : (raw.metadata?.cpf || raw.metadata?.responsible_cpf || ''));
+
+    const legitCnpj = raw.pj_type 
+      ? raw.pj_type 
+      : (cleanDoc.length === 14 ? raw.document_id : (raw.metadata?.cnpj || ''));
+
     return {
       id: raw.id,
       name: raw.full_name || raw.name,
       corporate_name: raw.corporate_name,
-      responsible_name: raw.responsible_name,
-      responsible_cpf: raw.responsible_cpf,
+      responsible_name: raw.responsible_name || (isPJ ? (raw.full_name || raw.name) : undefined),
+      responsible_cpf: legitCpf || raw.responsible_cpf,
       responsible_rg: raw.responsible_rg,
-      document_id: raw.document_id,
+      // Para PJ: o CPF exibido e editado na UI deve ser o CPF pessoal do prestador (11 dígitos), nunca o CNPJ
+      document_id: isPJ ? (legitCpf || (cleanDoc.length === 11 ? raw.document_id : '')) : raw.document_id,
       document_rg: raw.document_rg,
-      pj_type: raw.pj_type,
+      pj_type: legitCnpj || raw.pj_type,
       linkType: (() => {
         const t = (raw.employment_type || raw.link_type || 'CLT') as string;
         if (t.toLowerCase().includes('estag') || t.toLowerCase().includes('estág')) return 'Estagiário';
@@ -452,16 +522,36 @@ export class PeopleService {
   }
 
   private static mapProfileToRaw(profile: Partial<Employee>): any {
+    const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI' || !!profile.pj_type;
+    const cleanDoc = (profile.document_id || '').replace(/\D/g, '');
+    const cleanResp = (profile.responsible_cpf || '').replace(/\D/g, '');
+    const cleanCnpj = (profile.pj_type || '').replace(/\D/g, '');
+
+    const personalCpf = cleanResp.length === 11 
+      ? profile.responsible_cpf 
+      : (cleanDoc.length === 11 ? profile.document_id : (profile.metadata?.cpf || ''));
+
+    const corporateCnpj = cleanCnpj.length === 14 
+      ? profile.pj_type 
+      : (cleanDoc.length === 14 ? profile.document_id : (profile.metadata?.cnpj || ''));
+
+    // Resolução do document_id para persistência no Supabase:
+    // Para PJ, usa o CNPJ (14 dígitos) se disponível para evitar colisão na constraint única (employees_document_id_key)
+    // caso o colaborador já possua vínculo CLT/Estágio anterior no banco com o mesmo CPF.
+    const resolvedDbDocumentId = isPJ
+      ? (corporateCnpj || (cleanDoc.length === 14 ? profile.document_id : (personalCpf || profile.document_id)))
+      : (personalCpf || profile.document_id);
+
     return {
       id: profile.id,
       full_name: profile.name,
       corporate_name: profile.corporate_name,
       responsible_name: profile.responsible_name,
-      responsible_cpf: profile.responsible_cpf,
+      responsible_cpf: personalCpf || profile.responsible_cpf,
       responsible_rg: profile.responsible_rg,
-      document_id: profile.document_id,
+      document_id: resolvedDbDocumentId,
       document_rg: profile.document_rg,
-      pj_type: profile.pj_type,
+      pj_type: corporateCnpj || profile.pj_type,
       employment_type: profile.linkType,
       company: normalizeCompanyName(profile.company),
       remuneration: (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0),

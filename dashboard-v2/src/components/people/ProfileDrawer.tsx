@@ -547,19 +547,26 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         }
       }
 
-      // Validação de CPF
-      if (profile.document_id) {
-        const cleanCpf = profile.document_id.replace(/\D/g, '');
-        if (cleanCpf.length !== 11) {
-          throw new Error('CPF deve conter exatamente 11 dígitos.');
-        }
-        if (!isValidCPF(profile.document_id)) {
-          throw new Error('CPF inválido (dígitos verificadores incorretos).');
+      // Validação de CPF (Pessoal ou Responsável Legal)
+      const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile));
+      const cpfToValidate = isPJ
+        ? (profile.responsible_cpf || (profile.document_id && profile.document_id.replace(/\D/g, '').length === 11 ? profile.document_id : ''))
+        : profile.document_id;
+
+      if (cpfToValidate) {
+        const cleanCpf = cpfToValidate.replace(/\D/g, '');
+        if (cleanCpf.length > 0) {
+          if (cleanCpf.length !== 11) {
+            throw new Error('CPF deve conter exatamente 11 dígitos.');
+          }
+          if (!isValidCPF(cpfToValidate)) {
+            throw new Error('CPF inválido (dígitos verificadores incorretos).');
+          }
         }
       }
 
-      // Validação de CPF do responsável legal
-      if (profile.responsible_cpf) {
+      // Validação de CPF do responsável legal (se preenchido e for PJ)
+      if (isPJ && profile.responsible_cpf) {
         const cleanRespCpf = profile.responsible_cpf.replace(/\D/g, '');
         if (cleanRespCpf.length > 0) {
           if (cleanRespCpf.length !== 11) {
@@ -590,7 +597,6 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       const oldRels = oldProfile?.relationships || [];
 
       // Se for PJ, assegurar que o Escopo inicie com "Terceirizado "
-      const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile));
       if (isPJ && profile.job_role) {
         profile.job_role = formatPjRole(profile.job_role);
       }
@@ -661,8 +667,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         if (field === 'name' || field === 'linkType') {
           next.responsible_name = next.name || '';
         }
-        if (field === 'document_id' || field === 'linkType') {
-          next.responsible_cpf = next.document_id || '';
+        if (field === 'document_id' || field === 'responsible_cpf' || field === 'linkType') {
+          const cleanDoc = (next.document_id || '').replace(/\D/g, '');
+          const cleanResp = (next.responsible_cpf || '').replace(/\D/g, '');
+          if (cleanResp.length === 11) {
+            next.document_id = next.responsible_cpf;
+          } else if (cleanDoc.length === 11) {
+            next.responsible_cpf = next.document_id;
+          }
         }
       }
       
@@ -1496,6 +1508,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const handleCPFChange = (val: string) => {
     const formatted = formatCPF(val);
     handleChange('document_id', formatted);
+    handleChange('responsible_cpf', formatted);
   };
 
   const handleCNPJChange = (val: string) => {
@@ -2410,7 +2423,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         <div>
                           <label className={labelClass}>CPF</label>
-                          <input type="text" value={profile.document_id || ''} onChange={e => handleCPFChange(e.target.value)} readOnly={!isEditMode} className={inputClass} placeholder="000.000.000-00"/>
+                          <input 
+                            type="text" 
+                            value={(() => {
+                              const resp = profile.responsible_cpf || '';
+                              const doc = profile.document_id || '';
+                              if (resp.replace(/\D/g, '').length === 11) return resp;
+                              if (doc.replace(/\D/g, '').length === 11) return doc;
+                              return resp || (doc.replace(/\D/g, '').length !== 14 ? doc : '');
+                            })()} 
+                            onChange={e => handleCPFChange(e.target.value)} 
+                            readOnly={!isEditMode} 
+                            className={inputClass} 
+                            placeholder="000.000.000-00"
+                          />
                         </div>
                         <div>
                           <label className={labelClass}>RG</label>

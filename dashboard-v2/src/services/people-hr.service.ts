@@ -329,9 +329,17 @@ export const PeopleHRService = {
         monthInstallment: l ? l.monthInstallment : 0,
         contractsCount: l ? l.contractsCount : 0,
         status: emp.status || 'Ativo',
-        pj_type: emp.pj_type,
+        pj_type: emp.pj_type || ((emp.document_id && emp.document_id.replace(/\D/g, '').length === 14) ? emp.document_id : undefined),
         corporate_name: emp.corporate_name,
-        document_id: emp.document_id,
+        document_id: (() => {
+          const isPj = emp.employment_type === 'PJ' || emp.employment_type === 'MEI' || !!emp.pj_type;
+          const cleanDoc = (emp.document_id || '').replace(/\D/g, '');
+          const cleanResp = (emp.responsible_cpf || '').replace(/\D/g, '');
+          if (isPj) {
+            return cleanResp.length === 11 ? emp.responsible_cpf : (cleanDoc.length === 11 ? emp.document_id : emp.document_id);
+          }
+          return emp.document_id;
+        })(),
         document_rg: emp.document_rg,
         phone: emp.phone,
         email: emp.email,
@@ -362,7 +370,7 @@ export const PeopleHRService = {
         photo_url: emp.photo_url || (emp as any).avatar_url || (emp.metadata && (emp.metadata.photo_url || emp.metadata.avatar_url || emp.metadata.foto)) || undefined,
         avatar_url: emp.photo_url || (emp as any).avatar_url || (emp.metadata && (emp.metadata.photo_url || emp.metadata.avatar_url || emp.metadata.foto)) || undefined,
         avatar: emp.photo_url || (emp as any).avatar_url || undefined,
-        responsible_cpf: emp.responsible_cpf,
+        responsible_cpf: emp.responsible_cpf || ((emp.document_id && emp.document_id.replace(/\D/g, '').length === 11) ? emp.document_id : undefined),
         responsible_rg: emp.responsible_rg,
         remuneration_fixed: emp.remuneration_fixed ? parseFloat(String(emp.remuneration_fixed)) : 0,
         remuneration_bonus: emp.remuneration_bonus ? parseFloat(String(emp.remuneration_bonus)) : 0,

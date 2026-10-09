@@ -435,6 +435,8 @@ export default function PeoplePage() {
         e.name.toLowerCase().includes(t) ||
         (e.corporate_name || '').toLowerCase().includes(t) ||
         (e.document_id || '').toLowerCase().includes(t) ||
+        (e.responsible_cpf || '').toLowerCase().includes(t) ||
+        (e.pj_type || '').toLowerCase().includes(t) ||
         (e.job_role || '').toLowerCase().includes(t)
       );
     }
