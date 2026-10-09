@@ -265,6 +265,29 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     }
   };
 
+  const formatHistoryType = (type?: string) => {
+    if (!type) return 'Escopo';
+    const t = type.trim();
+    if (t === 'Cargo' || t.toLowerCase() === 'cargo' || t.toLowerCase() === 'função') return 'Escopo';
+    if (t === 'Remuneração' || t.toLowerCase() === 'remuneração') return 'Honorários';
+    return t;
+  };
+
+  const formatHistoryObservations = (obs?: string) => {
+    if (!obs) return '';
+    return obs
+      .replace(/\bCargo\b/g, 'Escopo')
+      .replace(/\bcargo\b/g, 'escopo')
+      .replace(/\bCARGO\b/g, 'ESCOPO')
+      .replace(/\bFunção\b/g, 'Escopo')
+      .replace(/\bfunção\b/g, 'escopo')
+      .replace(/\bRemuneração\b/g, 'Honorários')
+      .replace(/\bremuneração\b/g, 'honorários')
+      .replace(/\bREMUNERAÇÃO\b/g, 'HONORÁRIOS')
+      .replace(/\bSalário\b/g, 'Valor Contrato')
+      .replace(/\bsalário\b/g, 'valor contrato');
+  };
+
   useEffect(() => {
     if (isOpen) {
       if (employeeId) {
@@ -969,11 +992,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         (mergedProfile as any)[field.key] = incomingVal;
         
         if (field.key === 'job_role' && existingVal !== incomingVal) {
-          historyChanges.push(`Cargo alterado de '${existingVal || '-'}' para '${incomingVal}'`);
+          historyChanges.push(`Escopo alterado de '${existingVal || '-'}' para '${incomingVal}'`);
         } else if (field.key === 'department' && existingVal !== incomingVal) {
           historyChanges.push(`Setor/Departamento alterado de '${existingVal || '-'}' para '${incomingVal}'`);
         } else if (field.key === 'remuneration_fixed' && Number(existingVal || 0) !== Number(incomingVal || 0)) {
-          historyChanges.push(`Remuneração alterada de ${formatCurrency(Number(existingVal || 0))} para ${formatCurrency(Number(incomingVal || 0))}`);
+          historyChanges.push(`Honorários alterados de ${formatCurrency(Number(existingVal || 0))} para ${formatCurrency(Number(incomingVal || 0))}`);
         } else if (field.key === 'remuneration_incentives' && Number(existingVal || 0) !== Number(incomingVal || 0)) {
           historyChanges.push(`Incentivos alterados de ${formatCurrency(Number(existingVal || 0))} para ${formatCurrency(Number(incomingVal || 0))}`);
         } else if (field.key === 'remuneration_connectivity' && Number(existingVal || 0) !== Number(incomingVal || 0)) {
@@ -985,11 +1008,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         // Se a seleção foi manter o existente (porque o contrato é antigo), ainda assim registramos a trajetória do valor antigo se ele for diferente!
         if (existingVal !== incomingVal && incomingVal !== undefined && incomingVal !== null && incomingVal !== '') {
           if (field.key === 'job_role') {
-            historyChanges.push(`Cargo registrado como '${incomingVal}'`);
+            historyChanges.push(`Escopo registrado como '${incomingVal}'`);
           } else if (field.key === 'department') {
             historyChanges.push(`Setor/Departamento registrado como '${incomingVal}'`);
           } else if (field.key === 'remuneration_fixed') {
-            historyChanges.push(`Remuneração registrada como ${formatCurrency(Number(incomingVal))}`);
+            historyChanges.push(`Honorários registrados como ${formatCurrency(Number(incomingVal))}`);
           } else if (field.key === 'remuneration_incentives') {
             historyChanges.push(`Incentivos registrados como ${formatCurrency(Number(incomingVal))}`);
           } else if (field.key === 'remuneration_connectivity') {
@@ -1011,9 +1034,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     
     historyChanges.forEach(changeText => {
       let event_type = 'Outro';
-      if (changeText.startsWith("Cargo")) event_type = "Cargo";
+      if (changeText.startsWith("Cargo") || changeText.startsWith("Escopo")) event_type = "Escopo";
       else if (changeText.startsWith("Setor/Departamento") || changeText.startsWith("Setor")) event_type = "Setor";
-      else if (changeText.startsWith("Remuneração") || changeText.startsWith("Incentivos") || changeText.startsWith("Conectividade")) event_type = "Remuneração";
+      else if (changeText.startsWith("Remuneração") || changeText.startsWith("Honorários") || changeText.startsWith("Incentivos") || changeText.startsWith("Conectividade")) event_type = "Honorários";
 
       newHistoryItems.push({
         employee_id: mergedProfile.id || '',
@@ -1139,9 +1162,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         if (data.job_role && data.job_role !== profile.job_role) {
           setPendingHistoryItems(h => [...h, {
             employee_id: profile.id || '',
-            event_type: 'Cargo',
+            event_type: 'Escopo',
             change_date: docDate,
-            observations: `Cargo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (via importação de contrato PDF)`
+            observations: `Escopo alterado de '${profile.job_role || '-'}' para '${data.job_role}' (via importação de contrato PDF)`
           }]);
         }
         if (data.department && data.department !== profile.department) {
@@ -1155,9 +1178,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         if (data.remuneration_fixed !== undefined && data.remuneration_fixed !== null && Number(data.remuneration_fixed || 0) !== Number(profile.remuneration_fixed || 0)) {
           setPendingHistoryItems(h => [...h, {
             employee_id: profile.id || '',
-            event_type: 'Remuneração',
+            event_type: 'Honorários',
             change_date: docDate,
-            observations: `Remuneração alterada de ${formatCurrency(Number(profile.remuneration_fixed || 0))} para ${formatCurrency(Number(data.remuneration_fixed || 0))} (via importação de contrato PDF)`
+            observations: `Honorários alterados de ${formatCurrency(Number(profile.remuneration_fixed || 0))} para ${formatCurrency(Number(data.remuneration_fixed || 0))} (via importação de contrato PDF)`
           }]);
         }
         if (data.remuneration_incentives !== undefined && data.remuneration_incentives !== null && Number(data.remuneration_incentives || 0) !== Number(profile.remuneration_incentives || 0)) {
@@ -2718,11 +2741,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           })()}
                           <div className="mt-3 space-y-2">
                               <p className="text-[10px] font-bold text-slate-400 uppercase">Histórico de Mudanças</p>
-                              {history.filter(h => h.event_type?.toLowerCase().includes('setor') || h.event_type?.toLowerCase().includes('cargo') || h.event_type?.toLowerCase().includes('função')).map((h, i) => (
-                                <div key={i} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-100">
-                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{h.event_type}</span>
-                                  <span className="text-[10px] text-slate-500">{h.change_date}</span>
-                                  {h.observations && <span className="text-[10px] text-slate-600 truncate">{h.observations}</span>}
+                              {history.filter(h => {
+                                const t = (h.event_type || '').toLowerCase();
+                                return t.includes('setor') || t.includes('cargo') || t.includes('função') || t.includes('escopo');
+                              }).map((h, i) => (
+                                <div key={i} className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-100 dark:border-slate-800">
+                                  <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40 px-2 py-0.5 rounded">{formatHistoryType(h.event_type)}</span>
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400">{h.change_date}</span>
+                                  {h.observations && <span className="text-[10px] text-slate-600 dark:text-slate-300 truncate">{formatHistoryObservations(h.observations)}</span>}
                                 </div>
                               ))}
                             </div>
@@ -3413,7 +3439,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               </h5>
                               <button
                                 type="button"
-                                onClick={() => setEditingHistoryItem({ event_type: 'Cargo', change_date: new Date().toISOString().split('T')[0] })}
+                                onClick={() => setEditingHistoryItem({ event_type: 'Escopo', change_date: new Date().toISOString().split('T')[0] })}
                                 className="text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-700 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg shadow-sm transition-all"
                               >
                                 + Adicionar Evento
@@ -3427,11 +3453,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   <div key={h.id} className="p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center justify-between gap-3 hover:border-slate-200 dark:hover:border-slate-700 transition-all">
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 px-1.5 py-0.2 rounded uppercase font-bold">{h.event_type}</span>
+                                        <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 px-1.5 py-0.2 rounded uppercase font-bold">{formatHistoryType(h.event_type)}</span>
                                         <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-medium">{new Date(h.change_date + "T12:00:00").toLocaleDateString('pt-BR')}</span>
                                       </div>
                                       <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mt-1.5 break-words">
-                                        {h.observations}
+                                        {formatHistoryObservations(h.observations)}
                                       </p>
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
@@ -6618,13 +6644,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
               <div>
                 <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase block mb-1">Tipo de Evento</label>
                 <select
-                  value={editingHistoryItem.event_type || 'Cargo'}
+                  value={editingHistoryItem.event_type === 'Cargo' ? 'Escopo' : (editingHistoryItem.event_type || 'Escopo')}
                   onChange={e => setEditingHistoryItem(prev => ({ ...prev, event_type: e.target.value }))}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs py-2 px-3 outline-none focus:border-emerald-500 transition-colors text-slate-800 dark:text-slate-200"
                 >
-                  <option value="Cargo">Escopo</option>
+                  <option value="Escopo">Escopo</option>
                   <option value="Setor">Setor (Departamento)</option>
-                  <option value="Remuneração">Honorários (Valores/Adicionais)</option>
+                  <option value="Honorários">Honorários (Valores/Adicionais)</option>
                   <option value="Outro">Outro</option>
                 </select>
               </div>

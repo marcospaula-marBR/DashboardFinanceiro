@@ -216,7 +216,9 @@ export function ProfileExportModal({
       csv += `"6. TEMPO DE SERVIÇOS E HISTÓRICO DE ALTERAÇÕES"\n`;
       csv += `Data;Tipo de Evento;Valor Anterior;Novo Valor;Observações\n`;
       history.forEach(h => {
-        csv += `${sanitize(formatDate(h.change_date))};${sanitize(h.event_type)};${sanitize(h.previous_value)};${sanitize(h.new_value)};${sanitize(h.observations)}\n`;
+        const evType = (h.event_type === 'Cargo' || h.event_type?.toLowerCase().includes('função')) ? 'Escopo' : (h.event_type === 'Remuneração' ? 'Honorários' : h.event_type);
+        const obs = (h.observations || '').replace(/\bCargo\b/g, 'Escopo').replace(/\bcargo\b/g, 'escopo').replace(/\bRemuneração\b/g, 'Honorários').replace(/\bremuneração\b/g, 'honorários');
+        csv += `${sanitize(formatDate(h.change_date))};${sanitize(evType)};${sanitize(h.previous_value)};${sanitize(h.new_value)};${sanitize(obs)}\n`;
       });
       csv += `\n`;
     }
@@ -427,15 +429,19 @@ export function ProfileExportModal({
               <tr><th>Data</th><th>Evento</th><th>Anterior</th><th>Novo Valor</th><th>Observações</th></tr>
             </thead>
             <tbody>
-              ${history.map(h => `
+              ${history.map(h => {
+                const evType = (h.event_type === 'Cargo' || h.event_type?.toLowerCase().includes('função')) ? 'Escopo' : (h.event_type === 'Remuneração' ? 'Honorários' : h.event_type);
+                const obs = (h.observations || '').replace(/\bCargo\b/g, 'Escopo').replace(/\bcargo\b/g, 'escopo').replace(/\bRemuneração\b/g, 'Honorários').replace(/\bremuneração\b/g, 'honorários');
+                return `
                 <tr>
                   <td>${formatDate(h.change_date)}</td>
-                  <td><strong>${h.event_type}</strong></td>
+                  <td><strong>${evType}</strong></td>
                   <td>${h.previous_value || '-'}</td>
                   <td>${h.new_value || '-'}</td>
-                  <td>${h.observations || '-'}</td>
+                  <td>${obs || '-'}</td>
                 </tr>
-              `).join('')}
+              `;
+              }).join('')}
             </tbody>
           </table>
         </div>

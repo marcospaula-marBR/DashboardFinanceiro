@@ -113,15 +113,24 @@ export function EmploymentBondTimeline({
   });
 
   additives
-    .filter((a) => ["Cargo", "Remuneração", "Setor"].includes(a.event_type))
+    .filter((a) => ["Cargo", "Escopo", "Remuneração", "Honorários", "Setor"].includes(a.event_type))
     .forEach((a) => {
       // Find matching aditivo document roughly by year/month if possible, or just attach the most recent one.
       // For simplicity, we attach all "Aditivo" links to additive events, or try to match.
+      const formattedType = (a.event_type === "Cargo" || a.event_type?.toLowerCase().includes("função"))
+        ? "Escopo"
+        : (a.event_type === "Remuneração" ? "Honorários" : a.event_type);
+      const formattedSub = (a.observations || "")
+        .replace(/\bCargo\b/g, "Escopo")
+        .replace(/\bcargo\b/g, "escopo")
+        .replace(/\bRemuneração\b/g, "Honorários")
+        .replace(/\bremuneração\b/g, "honorários");
+
       events.push({
         date: a.change_date,
         type: "additive",
-        label: `Aditivo – ${a.event_type}`,
-        sub: a.observations || "",
+        label: `Aditivo – ${formattedType}`,
+        sub: formattedSub,
         documentLinks: parsedAditivos, // Will show all aditivos for now
       });
     });
