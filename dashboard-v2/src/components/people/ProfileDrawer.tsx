@@ -2422,21 +2422,87 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                       {/* Fields */}
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         <div>
-                          <label className={labelClass}>CPF</label>
-                          <input 
-                            type="text" 
-                            value={(() => {
-                              const resp = profile.responsible_cpf || '';
-                              const doc = profile.document_id || '';
-                              if (resp.replace(/\D/g, '').length === 11) return resp;
-                              if (doc.replace(/\D/g, '').length === 11) return doc;
-                              return resp || (doc.replace(/\D/g, '').length !== 14 ? doc : '');
-                            })()} 
-                            onChange={e => handleCPFChange(e.target.value)} 
-                            readOnly={!isEditMode} 
-                            className={inputClass} 
-                            placeholder="000.000.000-00"
-                          />
+                          <div className="flex items-center justify-between mb-1">
+                            <label className={`${labelClass} mb-0 flex items-center gap-1.5`}>
+                              <UserRound size={12} className={profile.linkType === 'PJ' ? "text-blue-500" : "text-slate-400"} />
+                              <span>{profile.linkType === 'PJ' ? 'CPF (Prestador / Pessoa Física)' : 'CPF'}</span>
+                            </label>
+                            {profile.linkType === 'PJ' && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 tracking-wider">
+                                Pessoa Física
+                              </span>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <input 
+                              type="text" 
+                              value={(() => {
+                                const resp = profile.responsible_cpf || '';
+                                const doc = profile.document_id || '';
+                                if (resp.replace(/\D/g, '').length === 11) return resp;
+                                if (doc.replace(/\D/g, '').length === 11) return doc;
+                                return resp || (doc.replace(/\D/g, '').length !== 14 ? doc : '');
+                              })()} 
+                              onChange={e => handleCPFChange(e.target.value)} 
+                              readOnly={!isEditMode} 
+                              className={`${inputClass} pr-8 ${(() => {
+                                const cur = (profile.responsible_cpf || profile.document_id || '').replace(/\D/g, '');
+                                if (cur.length === 0) return '';
+                                if (cur.length === 11 && isValidCPF(profile.responsible_cpf || profile.document_id || '')) return 'border-emerald-500/70 focus:border-emerald-500 bg-emerald-50/10';
+                                if (cur.length < 11) return 'border-amber-400/80 focus:border-amber-500 bg-amber-50/10';
+                                return 'border-rose-400/80 focus:border-rose-500 bg-rose-50/10';
+                              })()}`} 
+                              placeholder="000.000.000-00"
+                            />
+                            {/* Ícone de status em tempo real */}
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                              {(() => {
+                                const cur = (profile.responsible_cpf || profile.document_id || '').replace(/\D/g, '');
+                                if (cur.length === 0) return null;
+                                if (cur.length === 11 && isValidCPF(profile.responsible_cpf || profile.document_id || '')) {
+                                  return <CheckCircle2 size={14} className="text-emerald-500" />;
+                                }
+                                if (cur.length < 11) {
+                                  return <AlertCircle size={14} className="text-amber-500" />;
+                                }
+                                return <AlertCircle size={14} className="text-rose-500" />;
+                              })()}
+                            </div>
+                          </div>
+                          {/* Helper / Validação em tempo real */}
+                          {(() => {
+                            const cur = (profile.responsible_cpf || profile.document_id || '').replace(/\D/g, '');
+                            if (cur.length === 0) {
+                              return profile.linkType === 'PJ' ? (
+                                <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                  <UserRound size={10} className="text-blue-500 shrink-0" />
+                                  Documento do prestador físico titular. Não use o CNPJ aqui.
+                                </p>
+                              ) : null;
+                            }
+                            if (cur.length === 11 && isValidCPF(profile.responsible_cpf || profile.document_id || '')) {
+                              return (
+                                <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                                  <CheckCircle2 size={11} className="shrink-0" />
+                                  CPF pessoal autêntico e validado (11 dígitos).
+                                </p>
+                              );
+                            }
+                            if (cur.length < 11) {
+                              return (
+                                <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                                  <AlertCircle size={11} className="shrink-0" />
+                                  {cur.length} de 11 dígitos preenchidos.
+                                </p>
+                              );
+                            }
+                            return (
+                              <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mt-1 flex items-center gap-1">
+                                <AlertCircle size={11} className="shrink-0" />
+                                Dígitos verificadores do CPF inválidos.
+                              </p>
+                            );
+                          })()}
                         </div>
                         <div>
                           <label className={labelClass}>RG</label>
@@ -3285,51 +3351,147 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                         {/* PJ Data (if applicable) */}
                         {profile.linkType === 'PJ' && (
-                          <div>
-                            <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-4">Dados da Empresa (PJ)</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="col-span-2 md:col-span-1">
-                                <label className={labelClass}>CNPJ</label>
-                                <input 
-                                  type="text" 
-                                  value={profile.pj_type || ''} 
-                                  onChange={e => handleCNPJChange(e.target.value)} 
-                                  readOnly={!isEditMode} 
-                                  className={inputClass} 
-                                  placeholder="00.000.000/0000-00"
-                                />
+                          <div className="space-y-4">
+                            {/* Card Pedagógico de Separação Documental */}
+                            <div className="p-3 bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/70 dark:border-blue-900/40 rounded-xl text-xs space-y-1">
+                              <div className="flex items-center gap-1.5 font-bold text-blue-900 dark:text-blue-300 text-[11px] uppercase tracking-wider">
+                                <Shield size={13} className="text-blue-600 dark:text-blue-400" /> Separação de Identificadores — PJ vs. Prestador
                               </div>
-                              <div className="col-span-2 md:col-span-1">
-                                <label className={labelClass}>Regime Tributário</label>
-                                {isEditMode ? (
-                                  <select 
-                                    value={profile.tax_regime || ''} 
-                                    onChange={e => handleChange('tax_regime', e.target.value)} 
-                                    className={inputClass}
-                                  >
-                                    <option value="">Selecione o regime...</option>
-                                    <option value="MEI">MEI (Microempreendedor Individual)</option>
-                                    <option value="Simples Nacional">Simples Nacional</option>
-                                    <option value="Lucro Presumido">Lucro Presumido</option>
-                                    <option value="Lucro Real">Lucro Real</option>
-                                  </select>
-                                ) : (
-                                  <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
-                                    {profile.tax_regime || 'Não Identificado'}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="col-span-2">
-                                <label className={labelClass}>Razão Social</label>
-                                <input type="text" value={profile.corporate_name || ''} onChange={e => handleChange('corporate_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
-                              </div>
-                              <div>
-                                <label className={labelClass}>Representante Legal (Sincronizado)</label>
-                                <input type="text" value={profile.responsible_name || ''} readOnly className={`${inputClass} bg-slate-50 cursor-not-allowed`} placeholder="Auto-preenchido pelo nome pessoal"/>
-                              </div>
-                              <div>
-                                <label className={labelClass}>CPF do Responsável (Sincronizado)</label>
-                                <input type="text" value={profile.responsible_cpf || ''} readOnly className={`${inputClass} bg-slate-50 cursor-not-allowed`} placeholder="Auto-preenchido pelo CPF pessoal"/>
+                              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                                O <strong className="text-slate-900 dark:text-slate-200">CNPJ (14 dígitos)</strong> é o documento fiscal da empresa contratada emitente de NFs. O <strong className="text-slate-900 dark:text-slate-200">CPF (11 dígitos)</strong> identifica a pessoa física titular/representante, sincronizado automaticamente entre as abas.
+                              </p>
+                            </div>
+
+                            <div>
+                              <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white border-b pb-2.5 mb-4 flex items-center gap-2">
+                                <Building2 size={15} className="text-amber-500" /> Dados da Empresa (PJ)
+                              </h4>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2 md:col-span-1">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className={`${labelClass} mb-0 flex items-center gap-1.5`}>
+                                      <Building2 size={12} className="text-amber-500" />
+                                      <span>CNPJ (Empresa Contratada)</span>
+                                    </label>
+                                    <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 tracking-wider">
+                                      Pessoa Jurídica
+                                    </span>
+                                  </div>
+                                  <div className="relative">
+                                    <input 
+                                      type="text" 
+                                      value={profile.pj_type || ''} 
+                                      onChange={e => handleCNPJChange(e.target.value)} 
+                                      readOnly={!isEditMode} 
+                                      className={`${inputClass} pr-8 ${(() => {
+                                        const cur = (profile.pj_type || '').replace(/\D/g, '');
+                                        if (cur.length === 0) return '';
+                                        if (cur.length === 14 && isValidCNPJ(profile.pj_type || '')) return 'border-emerald-500/70 focus:border-emerald-500 bg-emerald-50/10';
+                                        if (cur.length < 14) return 'border-amber-400/80 focus:border-amber-500 bg-amber-50/10';
+                                        return 'border-rose-400/80 focus:border-rose-500 bg-rose-50/10';
+                                      })()}`} 
+                                      placeholder="00.000.000/0000-00"
+                                    />
+                                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                      {(() => {
+                                        const cur = (profile.pj_type || '').replace(/\D/g, '');
+                                        if (cur.length === 0) return null;
+                                        if (cur.length === 14 && isValidCNPJ(profile.pj_type || '')) {
+                                          return <CheckCircle2 size={14} className="text-emerald-500" />;
+                                        }
+                                        if (cur.length < 14) {
+                                          return <AlertCircle size={14} className="text-amber-500" />;
+                                        }
+                                        return <AlertCircle size={14} className="text-rose-500" />;
+                                      })()}
+                                    </div>
+                                  </div>
+                                  {(() => {
+                                    const cur = (profile.pj_type || '').replace(/\D/g, '');
+                                    if (cur.length === 0) {
+                                      return (
+                                        <p className="text-[10px] text-slate-400 mt-1">
+                                          CNPJ da empresa contratada constante no contrato e notas fiscais.
+                                        </p>
+                                      );
+                                    }
+                                    if (cur.length === 14 && isValidCNPJ(profile.pj_type || '')) {
+                                      return (
+                                        <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                                          <CheckCircle2 size={11} className="shrink-0" />
+                                          CNPJ da empresa válido e autenticado (14 dígitos).
+                                        </p>
+                                      );
+                                    }
+                                    if (cur.length < 14) {
+                                      return (
+                                        <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                                          <AlertCircle size={11} className="shrink-0" />
+                                          {cur.length} de 14 dígitos preenchidos.
+                                        </p>
+                                      );
+                                    }
+                                    return (
+                                      <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mt-1 flex items-center gap-1">
+                                        <AlertCircle size={11} className="shrink-0" />
+                                        Dígitos verificadores do CNPJ incorretos.
+                                      </p>
+                                    );
+                                  })()}
+                                </div>
+                                <div className="col-span-2 md:col-span-1">
+                                  <label className={labelClass}>Regime Tributário</label>
+                                  {isEditMode ? (
+                                    <select 
+                                      value={profile.tax_regime || ''} 
+                                      onChange={e => handleChange('tax_regime', e.target.value)} 
+                                      className={inputClass}
+                                    >
+                                      <option value="">Selecione o regime...</option>
+                                      <option value="MEI">MEI (Microempreendedor Individual)</option>
+                                      <option value="Simples Nacional">Simples Nacional</option>
+                                      <option value="Lucro Presumido">Lucro Presumido</option>
+                                      <option value="Lucro Real">Lucro Real</option>
+                                    </select>
+                                  ) : (
+                                    <span className="text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
+                                      {profile.tax_regime || 'Não Identificado'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="col-span-2">
+                                  <label className={labelClass}>Razão Social</label>
+                                  <input type="text" value={profile.corporate_name || ''} onChange={e => handleChange('corporate_name', e.target.value)} readOnly={!isEditMode} className={inputClass}/>
+                                </div>
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className={`${labelClass} mb-0`}>Representante Legal</label>
+                                    <span className="text-[9px] font-bold text-blue-700 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                                      <CheckCircle2 size={10} /> Sincronizado
+                                    </span>
+                                  </div>
+                                  <input type="text" value={profile.responsible_name || ''} readOnly className={`${inputClass} bg-slate-50 dark:bg-slate-900 cursor-not-allowed`} placeholder="Auto-preenchido pelo nome pessoal"/>
+                                  <p className="text-[10px] text-slate-400 mt-1">Titular que assina e responde pela prestação.</p>
+                                </div>
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className={`${labelClass} mb-0`}>CPF do Responsável</label>
+                                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                                      <CheckCircle2 size={10} /> Sincronizado
+                                    </span>
+                                  </div>
+                                  <input 
+                                    type="text" 
+                                    value={profile.responsible_cpf || (profile.document_id && profile.document_id.replace(/\D/g, '').length === 11 ? profile.document_id : '')} 
+                                    readOnly 
+                                    className={`${inputClass} bg-slate-50 dark:bg-slate-900 cursor-not-allowed font-mono text-xs`} 
+                                    placeholder="Auto-preenchido pelo CPF pessoal"
+                                  />
+                                  <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                                    <UserRound size={10} className="text-blue-500 shrink-0" />
+                                    Reflete o CPF pessoal informado na aba Empresa & Prestador.
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </div>
