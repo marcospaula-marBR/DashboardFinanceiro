@@ -60,6 +60,29 @@ export function formatCompanyTime(startDateStr?: string, endDateStr?: string): s
   return endDateStr ? `${timeStr} (Distrato)` : timeStr;
 }
 
+export function calculateCombinedCompanyTime(start1?: string, end1?: string, start2?: string, end2?: string): string | null {
+  const getMonths = (s?: string, e?: string) => {
+    if (!s) return 0;
+    const start = new Date(s + "T12:00:00");
+    const end = e ? new Date(e + "T12:00:00") : new Date();
+    let m = (end.getFullYear() - start.getFullYear()) * 12;
+    m -= start.getMonth();
+    m += end.getMonth();
+    if (end.getDate() < start.getDate()) m--;
+    return Math.max(0, m);
+  };
+
+  const m1 = getMonths(start1, end1);
+  const m2 = getMonths(start2, end2);
+  const totalMonths = m1 + m2;
+  if (totalMonths === 0) return "Menos de 1 mês";
+  const y = Math.floor(totalMonths / 12);
+  const m = totalMonths % 12;
+  const yStr = y > 0 ? `${y} ${y === 1 ? 'ano' : 'anos'}` : '';
+  const mStr = m > 0 ? `${m} ${m === 1 ? 'mês' : 'meses'}` : '';
+  return yStr && mStr ? `${yStr} e ${mStr}` : (yStr || mStr);
+}
+
 // ─── Classification Badge (E1 to O3 with Stars) ──────────────────────────────
 
 import { getGrauLabel } from '@/types/loans';

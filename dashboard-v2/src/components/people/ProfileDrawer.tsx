@@ -10,7 +10,7 @@ import { PeopleHRService } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
 import { LoansService, formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
-import { isExternalEntity, formatCompanyTime, RELATIONSHIP_NATURE_LABELS } from "./PeopleBadges";
+import { isExternalEntity, formatCompanyTime, calculateCombinedCompanyTime, RELATIONSHIP_NATURE_LABELS } from "./PeopleBadges";
 import { ProfileExportModal } from "./ProfileExportModal";
 import { ClearCostHistoryModal } from "./ClearCostHistoryModal";
 import { SystemsCatalogService } from "@/services/systems-catalog.service";
@@ -419,6 +419,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   });
 
   const [previousEmployeeProfile, setPreviousEmployeeProfile] = useState<Partial<Employee> | null>(null);
+  const [previousCosts, setPreviousCosts] = useState<MonthlyCost[]>([]);
+  const [previousHistory, setPreviousHistory] = useState<HistoryItem[]>([]);
 
   const fetchProfile = async (id: string) => {
     setIsLoading(true);
@@ -431,23 +433,37 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         PeopleHRService.getMonthlyCosts(id)
       ]);
       setProfile(data || {});
-      setHistory(hist || []);
       setBonds(bondsData || []);
 
       let mergedCosts = costsData || [];
+      let mergedHistory = hist || [];
       setPreviousEmployeeProfile(null);
+      setPreviousCosts([]);
+      setPreviousHistory([]);
 
       if (data?.linked_previous_employee_id) {
         try {
-          const [prevProfile, prevCosts] = await Promise.all([
+          const [prevProfile, prevCosts, prevHist] = await Promise.all([
             PeopleService.getEmployeeProfile(data.linked_previous_employee_id, isTestMode),
-            PeopleHRService.getMonthlyCosts(data.linked_previous_employee_id)
+            PeopleHRService.getMonthlyCosts(data.linked_previous_employee_id),
+            PeopleService.getEmployeeHistory(data.linked_previous_employee_id, isTestMode)
           ]);
           if (prevProfile) setPreviousEmployeeProfile(prevProfile);
+          if (prevCosts) setPreviousCosts(prevCosts);
+          if (prevHist) setPreviousHistory(prevHist as any);
+
           if (prevCosts && prevCosts.length > 0 && data.is_unified_history !== false) {
-            const currentComps = new Set((costsData || []).map(c => c.competencia));
-            const filteredPrev = prevCosts.filter(c => !currentComps.has(c.competencia));
+            const currentComps = new Set((costsData || []).map((c: MonthlyCost) => c.competencia));
+            const filteredPrev = prevCosts.filter((c: MonthlyCost) => !currentComps.has(c.competencia));
             mergedCosts = [...filteredPrev, ...(costsData || [])];
+          }
+
+          if (prevHist && prevHist.length > 0 && data.is_unified_history !== false) {
+            const currentHistIds = new Set((hist || []).map(h => h.id));
+            const filteredPrevHist = (prevHist as any[]).filter(h => !currentHistIds.has(h.id));
+            mergedHistory = [...filteredPrevHist, ...(hist || [])].sort(
+              (a, b) => new Date(b.change_date || b.created_at || 0).getTime() - new Date(a.change_date || a.created_at || 0).getTime()
+            );
           }
         } catch (linkErr) {
           console.warn("Erro ao buscar dados do vinculo CLT/anterior:", linkErr);
@@ -455,6 +471,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       }
 
       setCosts(mergedCosts);
+      setHistory(mergedHistory);
 
       // Buscar posição de empréstimos corporativos
       try {
@@ -2516,14 +2533,18 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                              <div className="flex items-center justify-between">
                                <label className={labelClass}>Início Contrato</label>
                                {!isEditMode && profile.start_date && (
-                                 <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                                   {formatCompanyTime(
-                                     profile.linked_previous_employee_id && previousEmployeeProfile?.start_date && profile.is_unified_history !== false
-                                       ? previousEmployeeProfile.start_date
-                                       : profile.start_date,
-                                     profile.status === 'Inativo' ? (profile.resignation_date || profile.status_end_date) : undefined
-                                   )}
-                                   {profile.linked_previous_employee_id && previousEmployeeProfile?.start_date && profile.is_unified_history !== false && " (CLT + PJ)"}
+                                 <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                                   {profile.linked_previous_employee_id && previousEmployeeProfile?.start_date && profile.is_unified_history !== false
+                                     ? (calculateCombinedCompanyTime(
+                                         previousEmployeeProfile.start_date,
+                                         previousEmployeeProfile.resignation_date,
+                                         profile.start_date,
+                                         profile.status === 'Inativo' ? (profile.resignation_date || profile.status_end_date) : undefined
+                                       ) || formatCompanyTime(profile.start_date)) + " (CLT + PJ)"
+                                     : formatCompanyTime(
+                                         profile.start_date,
+                                         profile.status === 'Inativo' ? (profile.resignation_date || profile.status_end_date) : undefined
+                                       )}
                                  </span>
                                )}
                              </div>
@@ -2575,86 +2596,221 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                            </div>
 
                         {/* BLOCO DE UNIFICAÇÃO DE VÍNCULO (TRANSIÇÃO CLT -> PJ) */}
-                        <div className="col-span-2 p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 mt-2">
-                          <div className="flex items-center justify-between">
+                        <div className="col-span-2 p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3 mt-2 shadow-sm">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <LinkIcon className="w-4 h-4 text-indigo-600" />
-                              <span className="text-xs font-bold text-slate-900">Unificação de Cadastro (Transição CLT ➔ PJ)</span>
-                            </div>
-                            {profile.linked_previous_employee_id && (
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                ✦ Histórico Unificado (CLT + PJ)
+                              <LinkIcon className="w-4 h-4 text-emerald-600" />
+                              <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                Unificação de Cadastro (Transição CLT ➔ PJ / Múltiplos Vínculos)
                               </span>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <label className={labelClass}>Vincular ao Cadastro CLT / Anterior</label>
-                                {isEditMode && !profile.linked_previous_employee_id && (
+                            </div>
+                            {profile.linked_previous_employee_id && previousEmployeeProfile && (
+                              <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                  ✦ Regimes Consolidados ({previousEmployeeProfile.linkType || 'CLT'} + {profile.linkType || 'PJ'})
+                                </span>
+                                {isEditMode && (
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const match = allEmployees.find(e => 
-                                        e.id !== profile.id && 
-                                        (e.name.toLowerCase().trim() === (profile.name || '').toLowerCase().trim() ||
-                                         (e.document_id && profile.document_id && e.document_id.replace(/\D/g, '') === profile.document_id.replace(/\D/g, '')))
-                                      );
-                                      if (match) {
-                                        handleChange('linked_previous_employee_id', match.id);
-                                        handleChange('is_unified_history', true);
-                                      } else {
-                                        alert("Nenhum outro cadastro com nome ou CPF idêntico foi encontrado para vincular automaticamente.");
-                                      }
+                                      if (confirm("Deseja desvincular este cadastro da ficha anterior?")) {
+                                        handleChange('linked_previous_employee_id', '');
+                                        handleChange('is_unified_history', false);
+                                        setPreviousEmployeeProfile(null);
+                                      } 
                                     }}
-                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                                    className="text-[10px] font-bold text-rose-600 hover:text-rose-800 hover:underline ml-1"
                                   >
-                                    ⚡ Auto-Detectar Cadastro CLT
+                                    Desvincular
                                   </button>
                                 )}
                               </div>
-                              {isEditMode ? (
-                                <select
-                                  value={profile.linked_previous_employee_id || ''}
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    handleChange('linked_previous_employee_id', val);
-                                    if (val) handleChange('is_unified_history', true);
-                                  }}
-                                  className="w-full bg-white border border-slate-200 rounded-lg text-xs py-1.5 px-2 outline-none focus:border-indigo-500 font-medium"
-                                >
-                                  <option value="">Nenhum (Cadastro Independente)</option>
-                                  {allEmployees
-                                    .filter(e => e.id !== profile.id)
-                                    .map(e => (
-                                      <option key={e.id} value={e.id}>
-                                        🔗 {e.name} ({e.linkType || 'CLT'} - {e.status})
-                                      </option>
-                                    ))}
-                                </select>
-                              ) : (
-                                <span className="text-xs font-semibold text-slate-700 block mt-1">
-                                  {profile.linked_previous_employee_id
-                                    ? `Vincular a: ${allEmployees.find(e => e.id === profile.linked_previous_employee_id)?.name || previousEmployeeProfile?.name || profile.linked_previous_employee_id}`
-                                    : 'Nenhum vínculo anterior acumulado'}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 mt-5">
-                              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                                <input
-                                  type="checkbox"
-                                  checked={profile.is_unified_history !== false}
-                                  onChange={e => handleChange('is_unified_history', e.target.checked)}
-                                  disabled={!isEditMode || !profile.linked_previous_employee_id}
-                                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 disabled:opacity-50"
-                                />
-                                <span>Somar tempo de casa e valores acumulados nos dois regimes</span>
-                              </label>
-                            </div>
+                            )}
                           </div>
+
+                          {profile.linked_previous_employee_id && previousEmployeeProfile ? (
+                            /* CARD EXECUTIVO DE VÍNCULOS UNIFICADOS */
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {/* Bloco 1: Vínculo Anterior */}
+                                <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-xs shadow-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">1º Vínculo (Anterior)</span>
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                      {previousEmployeeProfile.linkType || 'CLT'} • Rescindido
+                                    </span>
+                                  </div>
+                                  <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                                    {previousEmployeeProfile.name}
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                                    <div>
+                                      <span className="text-[9px] block text-slate-400 font-semibold uppercase">Escopo / Cargo</span>
+                                      <span className="font-medium text-slate-700 dark:text-slate-300 truncate block">
+                                        {previousEmployeeProfile.job_role || 'Estagiário de RH'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-[9px] block text-slate-400 font-semibold uppercase">Empresa</span>
+                                      <span className="font-medium text-slate-700 dark:text-slate-300 block">
+                                        {previousEmployeeProfile.company || 'MarBR'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-[9px] block text-slate-400 font-semibold uppercase">Período Vigência</span>
+                                      <span className="font-medium text-slate-700 dark:text-slate-300 block">
+                                        {previousEmployeeProfile.start_date ? new Date(previousEmployeeProfile.start_date + 'T12:00:00').toLocaleDateString('pt-BR') : '-'} a {previousEmployeeProfile.resignation_date ? new Date(previousEmployeeProfile.resignation_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Rescisão'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-[9px] block text-slate-400 font-semibold uppercase">Tempo de Casa CLT</span>
+                                      <span className="font-bold text-slate-700 dark:text-slate-300 block">
+                                        {formatCompanyTime(previousEmployeeProfile.start_date, previousEmployeeProfile.resignation_date)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Bloco 2: Vínculo Vigente */}
+                                <div className="p-3 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/60 rounded-xl space-y-2 text-xs shadow-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">2º Vínculo (Vigente)</span>
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                      {profile.linkType || 'PJ'} • {profile.status || 'Ativo'}
+                                    </span>
+                                  </div>
+                                  <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                                    {profile.corporate_name || profile.name}
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                                    <div>
+                                      <span className="text-[9px] block text-slate-400 font-semibold uppercase">Escopo Contratado</span>
+                                      <span className="font-medium text-slate-700 dark:text-slate-300 truncate block">
+                                        {profile.job_role || 'Terceirizado...'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-[9px] block text-slate-400 font-semibold uppercase">Empresa</span>
+                                      <span className="font-medium text-slate-700 dark:text-slate-300 block">
+                                        {profile.company || 'MarBR'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-[9px] block text-slate-400 font-semibold uppercase">Início Contrato</span>
+                                      <span className="font-medium text-slate-700 dark:text-slate-300 block">
+                                        {profile.start_date ? new Date(profile.start_date + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-[9px] block text-slate-400 font-semibold uppercase">Tempo de Casa PJ</span>
+                                      <span className="font-bold text-emerald-600 dark:text-emerald-400 block">
+                                        {formatCompanyTime(profile.start_date, profile.status === 'Inativo' ? (profile.resignation_date || profile.status_end_date) : undefined)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Barra Consolidada de Tempo e Opção de Soma */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                                    Tempo Total de Casa Unificado
+                                  </span>
+                                  <span className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
+                                    {calculateCombinedCompanyTime(
+                                      previousEmployeeProfile.start_date,
+                                      previousEmployeeProfile.resignation_date,
+                                      profile.start_date,
+                                      profile.status === 'Inativo' ? (profile.resignation_date || profile.status_end_date) : undefined
+                                    )}
+                                  </span>
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                  <input
+                                    type="checkbox"
+                                    checked={profile.is_unified_history !== false}
+                                    onChange={e => handleChange('is_unified_history', e.target.checked)}
+                                    disabled={!isEditMode}
+                                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 disabled:opacity-60"
+                                  />
+                                  <span>Somar tempo de casa e valores acumulados nos dois regimes</span>
+                                </label>
+                              </div>
+                            </div>
+                          ) : (
+                            /* QUANDO AINDA NÃO POSSUI VÍNCULO ANTERIOR */
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className={labelClass}>Vincular ao Cadastro CLT / Anterior</label>
+                                  {isEditMode && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const match = allEmployees.find(e => 
+                                          e.id !== profile.id && 
+                                          (e.name.toLowerCase().trim() === (profile.name || '').toLowerCase().trim() ||
+                                           (e.document_id && profile.document_id && e.document_id.replace(/\D/g, '') === profile.document_id.replace(/\D/g, '')))
+                                        );
+                                        if (match) {
+                                          handleChange('linked_previous_employee_id', match.id);
+                                          handleChange('is_unified_history', true);
+                                          if (profile.id) fetchProfile(profile.id);
+                                        } else {
+                                          alert("Nenhum outro cadastro com nome ou CPF idêntico foi encontrado para vincular automaticamente.");
+                                        }
+                                      }}
+                                      className="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 underline"
+                                    >
+                                      ⚡ Auto-Detectar por CPF/Nome
+                                    </button>
+                                  )}
+                                </div>
+                                {isEditMode ? (
+                                  <select
+                                    value={profile.linked_previous_employee_id || ''}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      handleChange('linked_previous_employee_id', val);
+                                      if (val) {
+                                        handleChange('is_unified_history', true);
+                                        PeopleService.getEmployeeProfile(val, isTestMode).then(setPreviousEmployeeProfile).catch(() => {});
+                                      } else {
+                                        setPreviousEmployeeProfile(null);
+                                      }
+                                    }}
+                                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-2.5 outline-none focus:border-emerald-500 font-medium"
+                                  >
+                                    <option value="">Nenhum (Cadastro Independente)</option>
+                                    {allEmployees
+                                      .filter(e => e.id !== profile.id)
+                                      .map(e => (
+                                        <option key={e.id} value={e.id}>
+                                          🔗 {e.name} ({e.linkType || 'CLT'} - {e.status})
+                                        </option>
+                                      ))}
+                                  </select>
+                                ) : (
+                                  <span className="text-xs font-semibold text-slate-500 block py-1">
+                                    Nenhum vínculo anterior acumulado (Cadastro independente)
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 pb-1">
+                                <label className="flex items-center gap-2 text-xs font-semibold text-slate-500 cursor-not-allowed">
+                                  <input
+                                    type="checkbox"
+                                    checked={false}
+                                    disabled={true}
+                                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 opacity-40"
+                                  />
+                                  <span>Somar tempo de casa e valores acumulados nos dois regimes</span>
+                                </label>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="col-span-2 mt-4">
@@ -6799,6 +6955,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         bonds={bonds}
         costs={costs}
         loanSummary={loanSummary}
+        previousProfile={previousEmployeeProfile}
+        previousCosts={previousCosts}
+        previousHistory={previousHistory}
       />
 
       {/* Modal de Limpeza de Custo Histórico */}

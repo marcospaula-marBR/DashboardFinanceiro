@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { X, Download, FileText, CheckSquare, Square, Printer, FileSpreadsheet, User, Building2, MapPin, CreditCard, DollarSign, History, Calculator, HelpCircle } from 'lucide-react';
+import { X, Download, FileText, CheckSquare, Square, Printer, FileSpreadsheet, User, Building2, MapPin, CreditCard, DollarSign, History, Calculator, HelpCircle, Link as LinkIcon } from 'lucide-react';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel } from '@/types/loans';
 import { formatCurrency } from '@/services/loans.service';
+import { formatCompanyTime, calculateCombinedCompanyTime } from './PeopleBadges';
 
 interface HistoryItem {
   id: string;
@@ -22,6 +23,9 @@ interface ProfileExportModalProps {
   bonds?: EmploymentContract[];
   costs?: MonthlyCost[];
   loanSummary?: { totalTaken: number; totalReceived: number; balance: number } | null;
+  previousProfile?: Partial<Employee> | null;
+  previousCosts?: MonthlyCost[];
+  previousHistory?: HistoryItem[];
 }
 
 export function ProfileExportModal({
@@ -31,9 +35,28 @@ export function ProfileExportModal({
   history = [],
   bonds = [],
   costs = [],
-  loanSummary = null
+  loanSummary = null,
+  previousProfile = null,
+  previousCosts = [],
+  previousHistory = []
 }: ProfileExportModalProps) {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'csv'>('pdf');
+  const [isUnifiedExport, setIsUnifiedExport] = useState(profile.is_unified_history !== false);
+
+  // Filtrar custos e histórico se o usuário optar por NÃO unificar
+  const effectiveCosts = useMemo(() => {
+    if (!isUnifiedExport && previousProfile && profile.id) {
+      return costs.filter(c => c.employee_id === profile.id);
+    }
+    return costs;
+  }, [costs, isUnifiedExport, previousProfile, profile.id]);
+
+  const effectiveHistory = useMemo(() => {
+    if (!isUnifiedExport && previousProfile && profile.id) {
+      return history.filter(h => h.employee_id === profile.id);
+    }
+    return history;
+  }, [history, isUnifiedExport, previousProfile, profile.id]);
 
   // Seleção Módulos/Abas do Cadastro
   const [includePersonal, setIncludePersonal] = useState(true);
@@ -47,8 +70,8 @@ export function ProfileExportModal({
 
   // Totalizadores acumulados do histórico de custos por verbas
   const costTotals = useMemo(() => {
-    if (!costs || costs.length === 0) return null;
-    return costs.reduce((acc, c) => {
+    if (!effectiveCosts || effectiveCosts.length === 0) return null;
+    return effectiveCosts.reduce((acc, c) => {
       const fixed = c.valor_fixo || 0;
       const bonus = c.valor_bonus || 0;
       const comissao = c.valor_comissao || 0;
@@ -99,7 +122,7 @@ export function ProfileExportModal({
       adiantamento: 0, decimo: 0, ferias: 0, rescisao: 0, descontos: 0,
       fgts: 0, inss: 0, irrf: 0, liquido: 0, realCost: 0
     });
-  }, [costs]);
+  }, [effectiveCosts]);
 
   if (!isOpen) return null;
 
@@ -170,6 +193,23 @@ export function ProfileExportModal({
       csv += `CNPJ (PJ);${sanitize(profile.pj_type)}\n`;
       csv += `Nome do Responsável;${sanitize(profile.responsible_name)}\n`;
       csv += `CPF do Responsável;${sanitize(profile.responsible_cpf)}\n\n`;
+
+      if (isUnifiedExport && previousProfile) {
+        csv += `"2.1. VÍNCULO CONTRATUAL ANTERIOR (CLT / ESTÁGIO)"\n`;
+        csv += `Campo;Valor\n`;
+        csv += `Regime Anterior;${sanitize(previousProfile.linkType || 'CLT')}\n`;
+        csv += `Empresa Anterior;${sanitize(previousProfile.company || 'MarBR')}\n`;
+        csv += `Cargo / Escopo Anterior;${sanitize(previousProfile.job_role)}\n`;
+        csv += `Início Contrato Anterior;${sanitize(formatDate(previousProfile.start_date))}\n`;
+        csv += `Rescisão Anterior;${sanitize(formatDate(previousProfile.resignation_date))}\n`;
+        csv += `Tempo de Casa Anterior;${sanitize(formatCompanyTime(previousProfile.start_date, previousProfile.resignation_date))}\n\n`;
+
+        csv += `"2.2. TEMPO DE CASA CONSOLIDADO"\n`;
+        csv += `Campo;Valor\n`;
+        csv += `Tempo no Vínculo Atual;${sanitize(formatCompanyTime(profile.start_date, profile.status === 'Inativo' ? (profile.resignation_date || profile.status_end_date) : undefined))}\n`;
+        csv += `Tempo no Vínculo Anterior;${sanitize(formatCompanyTime(previousProfile.start_date, previousProfile.resignation_date))}\n`;
+        csv += `TEMPO TOTAL CONSOLIDADO;${sanitize(calculateCombinedCompanyTime(previousProfile.start_date, previousProfile.resignation_date, profile.start_date, profile.status === 'Inativo' ? (profile.resignation_date || profile.status_end_date) : undefined))}\n\n`;
+      }
     }
 
     if (includeAddressContact) {
@@ -305,6 +345,7 @@ export function ProfileExportModal({
               <p style="margin: 3px 0 0 0; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
                 ${isPJ ? 'Ficha do Prestador de Serviços (PJ)' : 'Ficha Cadastral Executiva'} • ${profile.job_role || (isPJ ? 'Escopo Especializado' : 'Função não informada')}
               </p>
+              ${isUnifiedExport && previousProfile ? `<div style="margin-top: 4px;"><span style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 9999px; font-size: 9px; font-weight: 800; text-transform: uppercase;">✦ Histórico Unificado (${previousProfile.linkType || 'CLT'} + ${profile.linkType || 'PJ'})</span></div>` : ''}
               <p style="margin: 2px 0 0 0; color: #334155; font-size: 11px; font-weight: 600;">
                 Empresa Contratante: <strong style="color: #b45309;">${profile.company || 'MarBR'}</strong> &nbsp;|&nbsp; Regime: <strong>${profile.linkType || 'CLT'}</strong>
               </p>
@@ -356,6 +397,7 @@ export function ProfileExportModal({
             ${profile.corporate_name && !isPJ ? `<div class="field"><span class="field-label">Razão Social (PJ)</span><span class="field-value">${profile.corporate_name}</span></div>` : ''}
             ${profile.pj_type && !isPJ ? `<div class="field"><span class="field-label">CNPJ (PJ)</span><span class="field-value">${profile.pj_type}</span></div>` : ''}
           </div>
+          ${isUnifiedExport && previousProfile ? `<div style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;"><div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 8px;">Quadro de Vínculos Contratuais e Tempo de Casa Consolidado</div><div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 11px;"><div style="background: #ffffff; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;"><strong style="color: #64748b; font-size: 10px; text-transform: uppercase; display: block;">1º Vínculo (Anterior - ${previousProfile.linkType || "CLT"})</strong><div style="font-weight: 700; margin-top: 2px;">${previousProfile.job_role || "Estagiário de RH"} • ${previousProfile.company || "MarBR"}</div><div style="color: #475569; margin-top: 2px;">Vigência: ${formatDate(previousProfile.start_date)} a ${formatDate(previousProfile.resignation_date || "Rescisão")}</div><div style="font-weight: 700; color: #334155; margin-top: 2px;">Tempo no Vínculo: ${formatCompanyTime(previousProfile.start_date, previousProfile.resignation_date)}</div></div><div style="background: #ffffff; padding: 10px; border-radius: 6px; border: 1px solid #a7f3d0;"><strong style="color: #047857; font-size: 10px; text-transform: uppercase; display: block;">2º Vínculo (Vigente - ${profile.linkType || "PJ"})</strong><div style="font-weight: 700; margin-top: 2px;">${profile.job_role || "Terceirizado..."} • ${profile.company || "MarBR"}</div><div style="color: #475569; margin-top: 2px;">Início: ${formatDate(profile.start_date)}</div><div style="font-weight: 700; color: #047857; margin-top: 2px;">Tempo no Vínculo: ${formatCompanyTime(profile.start_date, profile.status === "Inativo" ? (profile.resignation_date || profile.status_end_date) : undefined)}</div></div></div><div style="margin-top: 10px; padding: 8px 12px; background: #ecfdf5; border-radius: 6px; border-left: 3px solid #10b981; display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 11px; font-weight: 800; color: #065f46; text-transform: uppercase;">TEMPO TOTAL DE CASA ACUMULADO (AMBOS OS REGIMES):</span><span style="font-size: 12px; font-weight: 800; color: #047857;">${calculateCombinedCompanyTime(previousProfile.start_date, previousProfile.resignation_date, profile.start_date, profile.status === "Inativo" ? (profile.resignation_date || profile.status_end_date) : undefined)}</span></div></div>` : ''}
         </div>
       `;
     }
@@ -727,6 +769,43 @@ export function ProfileExportModal({
 
         {/* Seleção de Módulos (Abas do Cadastro) */}
         <div className="flex-1 p-6 overflow-y-auto space-y-4">
+          {/* BANNER INTERATIVO DE UNIFICAÇÃO DE VÍNCULOS (CLT + PJ) */}
+          {previousProfile && (
+            <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50/40 to-slate-50 border border-emerald-300 rounded-2xl shadow-xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 mt-0.5">
+                    <LinkIcon size={16} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-800">
+                        Unificar com Vínculo Anterior ({previousProfile.linkType || 'CLT'})
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-200/80 text-emerald-900">
+                        {previousProfile.name}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+                      {isUnifiedExport
+                        ? '✦ Ficha Unificada: consolida tempo total de casa, histórico e custos acumulados nos dois regimes (CLT + PJ).'
+                        : '📄 Ficha Isolada: exporta estritamente os dados contratuais e custos da vigência atual (' + (profile.linkType || 'PJ') + ').'}
+                    </p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={isUnifiedExport}
+                    onChange={e => setIsUnifiedExport(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+            </div>
+          )}
+
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
             <span>Selecione as Seções da Ficha para Incluir</span>
             <span className="text-[10px] text-slate-400 font-normal">Marque/desmarque o que deseja exportar</span>
