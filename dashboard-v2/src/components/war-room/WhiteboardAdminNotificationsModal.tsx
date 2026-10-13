@@ -18,7 +18,8 @@ import {
   MessageSquare,
   Copy,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
 import { HelpOffer, RegisteredDevice } from '@/types/collaborative-portal';
@@ -407,12 +408,26 @@ export function WhiteboardAdminNotificationsModal({
 
               {/* STATUS DE DISPOSITIVOS POR MEMBRO */}
               <div>
-                <h4 className="text-xs font-bold text-slate-300 uppercase font-mono mb-2 flex items-center justify-between">
-                  <span>Membros & Status de Conexão:</span>
-                  <span className="text-[10px] text-cyan-400 font-normal">
-                    {devices.length} dispositivo{devices.length !== 1 ? 's' : ''} ativo{devices.length !== 1 ? 's' : ''}
-                  </span>
-                </h4>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase font-mono">
+                    Membros & Status de Conexão:
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-cyan-400 font-mono">
+                      {devices.length} dispositivo{devices.length !== 1 ? 's' : ''} ativo{devices.length !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={loadData}
+                      disabled={loading}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-[10px] text-slate-300 hover:text-white font-mono font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                      title="Verificar se novos aparelhos conectaram agora"
+                    >
+                      <RefreshCw size={11} className={loading ? 'animate-spin text-cyan-400' : 'text-cyan-400'} />
+                      <span>{loading ? 'Atualizando...' : 'Atualizar'}</span>
+                    </button>
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
                   {allMembers.map(m => {

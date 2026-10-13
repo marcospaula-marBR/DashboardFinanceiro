@@ -6,6 +6,7 @@ import { PortalNavigation } from '@/components/collaborative-portal/PortalNaviga
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
 import { CollaborativeActivity, ActivityUrgencyGroup } from '@/types/collaborative-portal';
 import { getResponsibleColor } from '@/services/war-room.service';
+import { supabase } from '@/lib/supabase';
 import { 
   AlertTriangle, 
   Clock, 
@@ -90,7 +91,46 @@ function MinhasAtividadesContent() {
     }
   };
 
-  // 4. Habilitar Notificações Web Push e Vincular ao Membro
+  // 4.1 Disparador universal nativo compatível com Motorola Android (Chrome) e Windows 11
+  const triggerNativeNotification = async (title: string, body: string, tag?: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') return;
+    }
+
+    const options: any = {
+      body,
+      icon: '/Favicon.png',
+      badge: '/Favicon.png',
+      tag: tag || `marbrasil-${Date.now()}`,
+      vibrate: [200, 100, 200],
+      renotify: true,
+      data: { url: '/minhas-atividades' },
+    };
+
+    // No Android Chrome (PWA / Mobile), showNotification via Service Worker é OBRIGATÓRIO
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration && registration.showNotification) {
+          await registration.showNotification(title, options);
+          return;
+        }
+      } catch (swErr) {
+        console.warn('Falha no showNotification do Service Worker, tentando fallback:', swErr);
+      }
+    }
+
+    // Fallback para Desktop Windows 11 Google Chrome
+    try {
+      new Notification(title, options);
+    } catch (notifErr) {
+      console.warn('Erro na instanciação direta de Notification:', notifErr);
+    }
+  };
+
+  // 4.2 Habilitar Notificações Web Push e Vincular ao Membro
   const handleEnableDevicePush = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       alert('Seu navegador atual não suporta notificações Web Push nativas.');
@@ -118,27 +158,25 @@ function MinhasAtividadesContent() {
         setJustActivatedFeedback(true);
         setTimeout(() => setJustActivatedFeedback(false), 4000);
 
-        try {
-          new Notification(`🔔 Notificações Ativadas — ${activeMember}`, {
-            body: `Aparelho conectado com sucesso! Você receberá avisos automáticos de novas tarefas designadas a você.`,
-            icon: '/Favicon.png',
-          });
-        } catch {}
+        await triggerNativeNotification(
+          `🔔 Notificações Ativadas — ${activeMember}`,
+          `Aparelho conectado com sucesso! Você receberá avisos automáticos de novas tarefas designadas a você.`,
+          `activate-${activeMember}`
+        );
       }
     } catch (e) {
       console.warn('Erro ao habilitar notificações:', e);
     }
   };
 
-  const handleTestDeviceNotification = () => {
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification(`🚨 Alerta Teste — ${activeMember}`, {
-          body: `Notificação teste entregue com sucesso pela Central Mar Brasil para ${activeMember}.`,
-          icon: '/Favicon.png',
-        });
-      } catch {}
-    }
+  const handleTestDeviceNotification = async () => {
+    await triggerNativeNotification(
+      `🚨 Alerta Teste — ${activeMember}`,
+      `Notificação teste entregue com sucesso pela Central Mar Brasil no seu aparelho.`,
+      `test-${Date.now()}`
+    );
+    setJustActivatedFeedback(true);
+    setTimeout(() => setJustActivatedFeedback(false), 3000);
   };
 
   // 5. Carregar dados das atividades
@@ -156,6 +194,43 @@ function MinhasAtividadesContent() {
 
   useEffect(() => {
     loadData();
+  }, [activeMember]);
+
+  // 6. Escuta em Tempo Real (Supabase Realtime) e Polling para Notificações e Comunicados à Equipe
+  useEffect(() => {
+    if (!activeMember) return;
+
+    // Escuta novas notificações no Supabase (Broadcasts e Novas Tarefas)
+    const channel = supabase
+      .channel(`mobile-notifs-${activeMember.toLowerCase()}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const newNotif = payload.new as any;
+          if (!newNotif) return;
+
+          const targetMember = newNotif.target_member_name?.trim().toUpperCase();
+          const isForAll = newNotif.target_type === 'all' || !targetMember;
+          const isForMe = targetMember === activeMember.toUpperCase();
+
+          if (isForAll || isForMe) {
+            triggerNativeNotification(newNotif.title, newNotif.body, `notif-${newNotif.id}`);
+            loadData();
+          }
+        }
+      )
+      .subscribe();
+
+    // Polling suave de resguardo a cada 15 segundos para redes móveis onde WebSocket suspende em segundo plano
+    const interval = setInterval(() => {
+      loadData();
+    }, 15000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, [activeMember]);
 
   // Filtrar apenas atividades atribuídas ao membro ativo

@@ -242,35 +242,9 @@ export function WhiteboardEditDemandModal({
               )}
             </div>
 
-            {/* INPUT PARA DIGITAR E ADICIONAR NOVO RESPONSÁVEL */}
-            <div className="flex items-center gap-1.5">
-              <input
-                type="text"
-                list="modal-resp-suggestions"
-                value={customRespInput}
-                onChange={(e) => setCustomRespInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddCustomResp();
-                  }
-                }}
-                placeholder="Digitar outro responsável e pressionar Adicionar..."
-                className="flex-1 bg-[#090e1a] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-rose-400 uppercase font-mono"
-              />
-              <button
-                type="button"
-                onClick={handleAddCustomResp}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 text-xs font-bold font-mono transition-colors"
-              >
-                <Plus size={12} />
-                <span>Adicionar</span>
-              </button>
-            </div>
-
-            {/* PÍLULAS DE ATALHO RÁPIDO (TOGGLE) COM CORES OFICIAIS */}
+            {/* PÍLULAS DE SELEÇÃO EXCLUSIVA DE MEMBROS CADASTRADOS */}
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-[10px] text-slate-500 font-mono">Atalhos rápidos:</span>
+              <span className="text-[10px] text-slate-400 font-mono">Membros Cadastrados (Clique para atribuir):</span>
               {quickResponsibles.map((r) => {
                 const isSelected = selectedResponsaveis.includes(r);
                 const respColor = getResponsibleColor(r);

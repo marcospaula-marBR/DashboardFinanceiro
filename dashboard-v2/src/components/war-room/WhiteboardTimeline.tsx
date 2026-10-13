@@ -165,21 +165,22 @@ export function WhiteboardTimeline({
     setCustomRespInput('');
   };
 
+  const handleChangeEditDia = (novoDia: number) => {
+    const diaLimitado = Math.max(1, Math.min(31, Math.floor(novoDia)));
+    setEditDia(diaLimitado);
+    setEditDesc(prev => {
+      const match = prev.trim().match(/^(\d{1,2})\s*[-–—:]?\s*(.*)$/);
+      const textoBase = match ? (match[2].trim() || 'OBRIGAÇÃO') : prev.trim();
+      return `${String(diaLimitado).padStart(2, '0')} - ${textoBase}`;
+    });
+  };
+
   const handleToggleEditResp = (respName: string) => {
     const upper = respName.trim().toUpperCase();
     if (!upper) return;
     setEditResponsaveis(prev => 
       prev.includes(upper) ? prev.filter(r => r !== upper) : [...prev, upper]
     );
-  };
-
-  const handleAddCustomEditResp = () => {
-    const upper = customRespInput.trim().toUpperCase();
-    if (!upper) return;
-    if (!editResponsaveis.includes(upper)) {
-      setEditResponsaveis(prev => [...prev, upper]);
-    }
-    setCustomRespInput('');
   };
 
   const handleSaveModalEdit = (e?: React.FormEvent) => {
@@ -1043,7 +1044,7 @@ export function WhiteboardTimeline({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setEditDia(prev => Math.max(1, prev - 1))}
+                    onClick={() => handleChangeEditDia(editDia - 1)}
                     className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold flex items-center justify-center hover:bg-slate-800 transition-colors"
                   >
                     -
@@ -1053,13 +1054,13 @@ export function WhiteboardTimeline({
                     min={1}
                     max={31}
                     value={editDia}
-                    onChange={(e) => setEditDia(Math.max(1, Math.min(31, parseInt(e.target.value, 10) || 1)))}
+                    onChange={(e) => handleChangeEditDia(parseInt(e.target.value, 10) || 1)}
                     className="w-20 px-3 py-2 rounded-xl bg-slate-950 border border-cyan-500/50 text-cyan-300 font-mono font-black text-center text-base focus:outline-none focus:ring-1 focus:ring-cyan-400"
                     required
                   />
                   <button
                     type="button"
-                    onClick={() => setEditDia(prev => Math.min(31, prev + 1))}
+                    onClick={() => handleChangeEditDia(editDia + 1)}
                     className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold flex items-center justify-center hover:bg-slate-800 transition-colors"
                   >
                     +
@@ -1088,14 +1089,14 @@ export function WhiteboardTimeline({
               {/* SELETOR DE RESPONSÁVEIS OFICIAIS */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase font-mono mb-1.5 flex items-center justify-between">
-                  <span>Responsáveis Atribuídos:</span>
+                  <span>Responsáveis Atribuídos (Apenas Cadastrados):</span>
                   <span className="text-[10px] text-cyan-400 font-normal">
                     {editResponsaveis.length} selecionado{editResponsaveis.length !== 1 ? 's' : ''}
                   </span>
                 </label>
 
-                {/* BOTÕES DE CLIQUE RÁPIDO PARA MEMBROS REAIS */}
-                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                {/* BOTÕES DE CLIQUE RÁPIDO PARA MEMBROS REAIS CADASTRADOS */}
+                <div className="flex flex-wrap gap-1.5">
                   {['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'].map(memberName => {
                     const isSelected = editResponsaveis.includes(memberName);
                     const colorConfig = getResponsibleColor(memberName);
@@ -1117,30 +1118,6 @@ export function WhiteboardTimeline({
                       </button>
                     );
                   })}
-                </div>
-
-                {/* ADICIONAR OUTRO EXECUTOR */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={customRespInput}
-                    onChange={(e) => setCustomRespInput(e.target.value)}
-                    placeholder="Outro responsável..."
-                    className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white uppercase font-mono focus:outline-none focus:border-cyan-500"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddCustomEditResp();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCustomEditResp}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition-colors"
-                  >
-                    + Adicionar
-                  </button>
                 </div>
               </div>
 

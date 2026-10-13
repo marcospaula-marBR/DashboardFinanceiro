@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { WhiteboardColumn, WhiteboardTimelineBlock, FollowTheMoneyRow } from '@/types/war-room';
-import { extractResponsaveisList } from '@/services/war-room.service';
-import { X, Plus, Calendar, DollarSign, CheckSquare, Users } from 'lucide-react';
+import { extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
+import { X, Plus, Calendar, DollarSign, CheckSquare, Users, Check } from 'lucide-react';
 
 interface WhiteboardModalProps {
   isOpen: boolean;
@@ -192,16 +192,40 @@ export function WhiteboardModal({
 
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5 flex items-center justify-between">
-                  <span>Responsável (Opcional):</span>
-                  <span className="text-[10px] text-slate-400 font-normal">Executor da ação humana</span>
+                  <span>Responsáveis Atribuídos (Apenas Cadastrados):</span>
+                  <span className="text-[10px] text-cyan-400 font-normal">
+                    {extractResponsaveisList(demandaResp).length} selecionado(s)
+                  </span>
                 </label>
-                <input
-                  type="text"
-                  placeholder="Ex: MARCOS, MATHEUS, MELISSA, GUILHERME, FINANCEIRO..."
-                  value={demandaResp}
-                  onChange={(e) => setDemandaResp(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono uppercase"
-                />
+                <div className="flex flex-wrap gap-1.5">
+                  {['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'].map(memberName => {
+                    const currentList = extractResponsaveisList(demandaResp);
+                    const isSelected = currentList.includes(memberName);
+                    const colorConfig = getResponsibleColor(memberName);
+
+                    return (
+                      <button
+                        key={memberName}
+                        type="button"
+                        onClick={() => {
+                          const updated = isSelected 
+                            ? currentList.filter(r => r !== memberName)
+                            : [...currentList, memberName];
+                          setDemandaResp(updated.join(', '));
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono transition-all border ${
+                          isSelected
+                            ? colorConfig.pillActiveClass
+                            : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${colorConfig.dotClass}`} />
+                        <span>{memberName}</span>
+                        {isSelected && <Check size={11} className="stroke-[3]" />}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -397,16 +421,40 @@ export function WhiteboardModal({
 
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5 flex items-center justify-between">
-                  <span>Responsável (Opcional):</span>
-                  <span className="text-[10px] text-slate-400 font-normal">Executor da ação humana</span>
+                  <span>Responsáveis Atribuídos (Apenas Cadastrados):</span>
+                  <span className="text-[10px] text-cyan-400 font-normal">
+                    {extractResponsaveisList(cronogramaResp).length} selecionado(s)
+                  </span>
                 </label>
-                <input
-                  type="text"
-                  placeholder="Ex: MARCOS, MATHEUS, MELISSA, GUILHERME..."
-                  value={cronogramaResp}
-                  onChange={(e) => setCronogramaResp(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono uppercase"
-                />
+                <div className="flex flex-wrap gap-1.5">
+                  {['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'].map(memberName => {
+                    const currentList = extractResponsaveisList(cronogramaResp);
+                    const isSelected = currentList.includes(memberName);
+                    const colorConfig = getResponsibleColor(memberName);
+
+                    return (
+                      <button
+                        key={memberName}
+                        type="button"
+                        onClick={() => {
+                          const updated = isSelected 
+                            ? currentList.filter(r => r !== memberName)
+                            : [...currentList, memberName];
+                          setCronogramaResp(updated.join(', '));
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono transition-all border ${
+                          isSelected
+                            ? colorConfig.pillActiveClass
+                            : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${colorConfig.dotClass}`} />
+                        <span>{memberName}</span>
+                        {isSelected && <Check size={11} className="stroke-[3]" />}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

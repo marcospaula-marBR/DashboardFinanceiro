@@ -15,6 +15,7 @@ import {
   PrazoVisualInfo,
   PrazoStatus,
 } from '@/types/war-room';
+import { supabase } from '@/lib/supabase';
 
 const STORAGE_KEY = 'marbrasil_whiteboard_v2';
 
@@ -694,28 +695,35 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
 
 export class WarRoomService {
   /**
-   * Garante que a descrição do vencimento sempre contenha o dia formatado (ex: "25 - MANUS")
-   * e extrai o dia correto caso o usuário tenha digitado "27 - BANCO DO BRASIL"
+   * Retorna o ID do bloco do cronograma mensal correspondente a um dia do mês (1 a 31)
+   */
+  static getTimelineBlockIdForDay(dia: number): string {
+    const num = Math.max(1, Math.min(31, Math.floor(dia)));
+    if (num <= 5) return 'blk-1';
+    if (num <= 10) return 'blk-2';
+    if (num <= 15) return 'blk-3';
+    if (num <= 20) return 'blk-4';
+    if (num <= 25) return 'blk-5';
+    return 'blk-6';
+  }
+
+  /**
+   * Garante que a descrição do vencimento sempre contenha o dia formatado (ex: "30 - OBRIGAÇÃO")
+   * e prioriza estritamente o dia selecionado pelo usuário.
    */
   static formatTimelineDescription(dia: number, rawDesc: string): { dia: number; descricao: string } {
     const clean = rawDesc.trim().toUpperCase();
-    let finalDia = dia;
-    let finalDesc = clean;
 
-    // Detecta se já começa com número do dia (ex: "25 - MANUS", "25 MANUS", "25: MANUS")
+    // Remove qualquer prefixo de número anterior (ex: "11 - ATUALIZAR...", "11: ...", "11 ...")
     const match = clean.match(/^(\d{1,2})\s*[-–—:]?\s*(.*)$/);
+    let textoBase = clean;
     if (match) {
-      const parsedDia = Number(match[1]);
-      if (parsedDia >= 1 && parsedDia <= 31) {
-        finalDia = parsedDia;
-        const rest = match[2].trim();
-        finalDesc = `${String(finalDia).padStart(2, '0')} - ${rest || 'OBRIGAÇÃO'}`;
-        return { dia: finalDia, descricao: finalDesc };
-      }
+      textoBase = match[2].trim() || 'OBRIGAÇÃO';
     }
 
-    // Se o usuário digitou apenas a obrigação (ex: "MANUS"), prefixa com o dia selecionado
-    finalDesc = `${String(finalDia).padStart(2, '0')} - ${clean}`;
+    // O dia selecionado tem precedência absoluta sobre o prefixo da string
+    const finalDia = dia >= 1 && dia <= 31 ? dia : (match && Number(match[1]) >= 1 && Number(match[1]) <= 31 ? Number(match[1]) : 1);
+    const finalDesc = `${String(finalDia).padStart(2, '0')} - ${textoBase}`;
     return { dia: finalDia, descricao: finalDesc };
   }
 
@@ -846,14 +854,33 @@ export class WarRoomService {
   }
 
   /**
-   * Grava os dados da lousa no LocalStorage
+   * Grava os dados da lousa no LocalStorage e sincroniza com o banco de produção Supabase
    */
   static saveWhiteboardData(data: WhiteboardDataState): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch (e) {
+        console.error('Erro ao salvar dados da lousa:', e);
+      }
+    }
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch (e) {
-      console.error('Erro ao salvar dados da lousa:', e);
+      Promise.resolve(
+        supabase
+          .from('whiteboard_state')
+          .upsert({
+            id: 'current_state',
+            data,
+            updated_at: new Date().toISOString(),
+          })
+      )
+        .then(({ error }) => {
+          if (error) console.warn('[WarRoomService] Aviso na sincronização com Supabase:', error.message);
+        })
+        .catch(err => console.warn('[WarRoomService] Erro ao sincronizar com Supabase:', err));
+    } catch {
+      // resguardo offline
     }
   }
 
@@ -1470,7 +1497,8 @@ export class WarRoomService {
   }
 
   /**
-   * Edita item de um bloco do cronograma com formatação automática de dia, múltiplos responsáveis e re-ordenação crescente
+   * Edita item do cronograma com formatação automática de dia, múltiplos responsáveis,
+   * re-ordenação crescente e movimentação automática para o bloco correto se o dia mudar.
    */
   static updateTimelineItem(
     currentState: WhiteboardDataState,
@@ -1482,35 +1510,62 @@ export class WarRoomService {
     novosResponsaveis?: string[]
   ): WhiteboardDataState {
     const formatted = this.formatTimelineDescription(dia, descricao);
+    const targetBlockId = this.getTimelineBlockIdForDay(formatted.dia);
 
-    const updatedCronograma = currentState.cronograma.map(block => {
-      if (block.id !== blockId) return block;
-      const itens = block.itens.map(item => {
-        if (item.id !== itemId) return item;
+    let updatedItem: WhiteboardTimelineItem | null = null;
+
+    // 1. Encontrar o item e atualizar suas propriedades
+    currentState.cronograma.forEach(block => {
+      const found = block.itens.find(i => i.id === itemId);
+      if (found) {
         const rawResps =
           novosResponsaveis !== undefined
             ? novosResponsaveis
             : novoResponsavel !== undefined
             ? novoResponsavel
-            : item.responsaveis || item.responsavel || inferDefaultResponsaveis(descricao);
+            : found.responsaveis || found.responsavel || inferDefaultResponsaveis(descricao);
 
         const respsList = extractResponsaveisList(rawResps);
         const finalResp = respsList.length > 0 ? respsList.join(', ') : undefined;
 
-        return {
-          ...item,
+        updatedItem = {
+          ...found,
           dia: formatted.dia,
           descricao: formatted.descricao,
           responsavel: finalResp,
           responsaveis: respsList,
         };
-      });
-      itens.sort((a, b) => a.dia - b.dia);
-      return {
-        ...block,
-        itens,
-      };
+      }
     });
+
+    if (!updatedItem) return currentState;
+
+    // 2. Se o novo dia permanece no mesmo bloco
+    let updatedCronograma: WhiteboardTimelineBlock[];
+    if (targetBlockId === blockId) {
+      updatedCronograma = currentState.cronograma.map(block => {
+        if (block.id !== blockId) return block;
+        const itens = block.itens.map(item => (item.id === itemId ? updatedItem! : item));
+        itens.sort((a, b) => a.dia - b.dia);
+        return { ...block, itens };
+      });
+    } else {
+      // 3. O dia mudou de período (ex: dia 11 foi para dia 30 -> migra de blk-3 para blk-6)
+      updatedCronograma = currentState.cronograma.map(block => {
+        if (block.id === blockId) {
+          return {
+            ...block,
+            itens: block.itens.filter(item => item.id !== itemId),
+          };
+        }
+        if (block.id === targetBlockId) {
+          const itens = [...block.itens.filter(item => item.id !== itemId), updatedItem!];
+          itens.sort((a, b) => a.dia - b.dia);
+          return { ...block, itens };
+        }
+        return block;
+      });
+    }
 
     const newState = { ...currentState, cronograma: updatedCronograma };
     this.saveWhiteboardData(newState);

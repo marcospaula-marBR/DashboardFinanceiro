@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PortalNavigation } from '@/components/collaborative-portal/PortalNavigation';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
 import { PortalNotification, RegisteredDevice, NotificationPriority } from '@/types/collaborative-portal';
+import { supabase } from '@/lib/supabase';
 import { 
   Bell, 
   BellRing, 
@@ -20,7 +21,8 @@ import {
   Trash2, 
   Info,
   ExternalLink,
-  Laptop
+  Laptop,
+  RefreshCw
 } from 'lucide-react';
 
 const CANONICAL_MEMBERS = ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
@@ -33,6 +35,7 @@ function NotificacoesContent() {
   const [activeTab, setActiveTab] = useState<'all' | 'urgent' | 'important' | 'info'>('all');
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [testSent, setTestSent] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Sincronizar membro ativo com URL ou LocalStorage
   useEffect(() => {
@@ -59,13 +62,100 @@ function NotificacoesContent() {
   };
 
   // Carregar dados
+  const loadData = async () => {
+    setIsRefreshing(true);
+    try {
+      const [notifs, devs] = await Promise.all([
+        CollaborativePortalService.getNotifications(undefined, activeMember),
+        CollaborativePortalService.getAllRegisteredDevices(),
+      ]);
+      setNotifications(notifs);
+      setDevices(devs);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
-    CollaborativePortalService.getNotifications(undefined, activeMember).then(setNotifications);
-    CollaborativePortalService.getAllRegisteredDevices().then(setDevices);
+    loadData();
 
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotificationPermission(Notification.permission);
     }
+  }, [activeMember]);
+
+  // Disparador universal nativo compatível com Motorola Android (Chrome) e Windows 11
+  const triggerNativeNotification = async (title: string, body: string, tag?: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') return;
+    }
+
+    const options: any = {
+      body,
+      icon: '/Favicon.png',
+      badge: '/Favicon.png',
+      tag: tag || `marbrasil-${Date.now()}`,
+      vibrate: [200, 100, 200],
+      renotify: true,
+      data: { url: '/equipe/notificacoes' },
+    };
+
+    // No Android Chrome (PWA / Mobile), showNotification via Service Worker é OBRIGATÓRIO
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration && registration.showNotification) {
+          await registration.showNotification(title, options);
+          return;
+        }
+      } catch (swErr) {
+        console.warn('Falha no showNotification do Service Worker, tentando fallback:', swErr);
+      }
+    }
+
+    // Fallback para Desktop Windows 11 Google Chrome
+    try {
+      new Notification(title, options);
+    } catch (notifErr) {
+      console.warn('Erro na instanciação direta de Notification:', notifErr);
+    }
+  };
+
+  // Escuta Realtime de notificações do Supabase
+  useEffect(() => {
+    if (!activeMember) return;
+
+    const channel = supabase
+      .channel(`team-notifs-${activeMember.toLowerCase()}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const newNotif = payload.new as any;
+          if (!newNotif) return;
+
+          const targetMember = newNotif.target_member_name?.trim().toUpperCase();
+          const isForAll = newNotif.target_type === 'all' || !targetMember;
+          const isForMe = targetMember === activeMember.toUpperCase();
+
+          if (isForAll || isForMe) {
+            triggerNativeNotification(newNotif.title, newNotif.body, `notif-${newNotif.id}`);
+            loadData();
+          }
+        }
+      )
+      .subscribe();
+
+    const interval = setInterval(() => {
+      loadData();
+    }, 15000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, [activeMember]);
 
   // Solicitar ativação de notificações nativas Web Push
@@ -80,7 +170,6 @@ function NotificacoesContent() {
       setNotificationPermission(perm);
 
       if (perm === 'granted') {
-        // Detectar tipo de aparelho
         const isWindows = /Windows/i.test(navigator.userAgent);
         const isAndroid = /Android/i.test(navigator.userAgent);
         const label = isWindows 
@@ -89,7 +178,7 @@ function NotificacoesContent() {
           ? 'Motorola Android (Chrome)' 
           : 'Navegador Web';
 
-        const newDevice = await CollaborativePortalService.registerMemberDevice({
+        await CollaborativePortalService.registerMemberDevice({
           memberName: activeMember,
           deviceLabel: label,
           deviceType: isWindows ? 'desktop' : isAndroid ? 'mobile' : 'other',
@@ -99,10 +188,11 @@ function NotificacoesContent() {
         setDevices(devList);
 
         // Disparo teste imediato de boas-vindas
-        new Notification(`🔔 Mar Brasil — Notificações Ativadas (${activeMember})`, {
-          body: `Dispositivo ${label} conectado com sucesso para receber tarefas de ${activeMember}.`,
-          icon: '/Favicon.png',
-        });
+        await triggerNativeNotification(
+          `🔔 Mar Brasil — Notificações Ativadas (${activeMember})`,
+          `Dispositivo ${label} conectado com sucesso para receber tarefas de ${activeMember}.`,
+          `welcome-${Date.now()}`
+        );
       }
     } catch (e) {
       console.error('Erro ao solicitar permissão de push:', e);
@@ -110,14 +200,15 @@ function NotificacoesContent() {
   };
 
   // Enviar Notificação de Teste
-  const handleSendTestNotification = () => {
+  const handleSendTestNotification = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
 
     if (Notification.permission === 'granted') {
-      new Notification('🚨 TESTE: Mar Brasil Operacional', {
-        body: 'Notificação teste entregue com sucesso em seu dispositivo.',
-        icon: '/Favicon.png',
-      });
+      await triggerNativeNotification(
+        '🚨 TESTE: Mar Brasil Operacional',
+        'Notificação teste entregue com sucesso em seu dispositivo.',
+        `test-${Date.now()}`
+      );
       setTestSent(true);
       setTimeout(() => setTestSent(false), 3000);
     } else {
@@ -126,9 +217,10 @@ function NotificacoesContent() {
   };
 
   // Remover dispositivo
-  const handleRemoveDevice = (id: string) => {
-    CollaborativePortalService.removeDevice(id);
-    setDevices(CollaborativePortalService.getRegisteredDevices());
+  const handleRemoveDevice = async (id: string) => {
+    await CollaborativePortalService.removeDevice(id);
+    const devs = await CollaborativePortalService.getAllRegisteredDevices();
+    setDevices(devs);
   };
 
   // Filtragem por prioridade
@@ -172,6 +264,16 @@ function NotificacoesContent() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={loadData}
+              disabled={isRefreshing}
+              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 transition-colors flex items-center gap-1.5 min-h-[44px]"
+              title="Recarregar dispositivos e alertas"
+            >
+              <RefreshCw size={13} className={`text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
+            </button>
+
             <button
               onClick={handleSendTestNotification}
               className="px-3 py-2 rounded-xl text-xs font-bold text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 transition-colors flex items-center gap-1.5 min-h-[44px]"

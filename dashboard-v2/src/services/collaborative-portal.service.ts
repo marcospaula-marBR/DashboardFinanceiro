@@ -190,7 +190,25 @@ export class CollaborativePortalService {
       });
     }
 
-    return activities;
+    // Desduplicação inteligente por chave normalizada (elimina tarefas duplicadas no mobile)
+    const seenMap = new Set<string>();
+    const deduplicated: CollaborativeActivity[] = [];
+
+    activities.forEach(act => {
+      const normTitle = act.titulo
+        .replace(/[*:]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+      
+      const dedupeKey = `${act.origemTipo}:${normTitle}`;
+      if (!seenMap.has(dedupeKey)) {
+        seenMap.add(dedupeKey);
+        deduplicated.push(act);
+      }
+    });
+
+    return deduplicated;
   }
 
   /**
