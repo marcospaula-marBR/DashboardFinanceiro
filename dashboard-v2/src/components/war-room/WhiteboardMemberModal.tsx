@@ -408,7 +408,7 @@ export function WhiteboardMemberModal({
                     autoFocus
                     value={nome}
                     onChange={(e) => setNome(e.target.value.toUpperCase())}
-                    placeholder="EX: MANUS, CLARA, MARCO, ALDO..."
+                    placeholder="EX: MARCOS, MATHEUS, MELISSA, GUILHERME..."
                     className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold text-sm uppercase focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder:text-slate-600"
                   />
                   <span className="absolute right-3 top-3 text-[10px] text-slate-500 font-mono font-bold">

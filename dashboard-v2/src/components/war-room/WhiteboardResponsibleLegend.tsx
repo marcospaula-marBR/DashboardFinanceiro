@@ -19,8 +19,8 @@ export function WhiteboardResponsibleLegend({
   onSelectResponsible,
   className = '',
 }: WhiteboardResponsibleLegendProps) {
-  // Garantir que todos os membros principais da equipe sempre constem na legenda se houver na lousa ou por padrão
-  const defaultTeam = ['MANUS', 'CLARA', 'MARCO', 'ALDO', 'DAUREN', 'PRISCILLA', 'ADRIANA', 'FINANCEIRO', 'CONTÁBIL', 'JURÍDICO', 'TI'];
+  // Garantir que todos os membros oficiais da equipe sempre constem na legenda
+  const defaultTeam = ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'CONTÁBIL', 'JURÍDICO', 'TI'];
   
   // Unir a lista de presentes com os principais
   const allNames = Array.from(new Set([...responsiblesList, ...defaultTeam]))

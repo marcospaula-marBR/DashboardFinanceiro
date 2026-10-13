@@ -44,7 +44,7 @@ export function WhiteboardAdminNotificationsModal({
 
   // Estados do formulário de disparo manual
   const [targetType, setTargetType] = useState<'all' | 'member'>('all');
-  const [selectedMember, setSelectedMember] = useState<string>(allMembers[0] || 'MANUS');
+  const [selectedMember, setSelectedMember] = useState<string>(allMembers[0] || 'MARCOS');
   const [broadcastPriority, setBroadcastPriority] = useState<'info' | 'important' | 'urgent'>('important');
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastBody, setBroadcastBody] = useState('');
@@ -52,6 +52,7 @@ export function WhiteboardAdminNotificationsModal({
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
 
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedMemberName, setCopiedMemberName] = useState<string | null>(null);
 
   // Carregar dados ao abrir o modal
   const loadData = async () => {
@@ -115,10 +116,19 @@ export function WhiteboardAdminNotificationsModal({
 
   const handleCopyActivationLink = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://dashboard-financeiro-eight.vercel.app';
-    const text = `🔔 *CENTRAL DE NOTIFICAÇÕES MAR BRASIL*\n\nPara receber os avisos das suas tarefas no seu celular Motorola Android ou Windows 11:\n1. Acesse: ${origin}/minhas-atividades\n2. Selecione o seu nome.\n3. Clique em "Ativar Alertas neste Aparelho".`;
+    const text = `🔔 *CENTRAL DE NOTIFICAÇÕES MAR BRASIL*\n\nPara receber os avisos das suas tarefas no seu celular Motorola Android ou no computador Windows 11:\n1. Acesse: ${origin}/minhas-atividades\n2. Selecione o seu nome no topo da tela.\n3. Toque no botão verde "Ativar Alertas neste Aparelho".\n4. Toque em "Permitir" na notificação do Google Chrome.\n\nPronto! Você receberá suas tarefas com som e notificação direta no aparelho.`;
     navigator.clipboard.writeText(text);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 3000);
+  };
+
+  const handleCopyIndividualMemberLink = (memberName: string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://dashboard-financeiro-eight.vercel.app';
+    const link = `${origin}/minhas-atividades?membro=${encodeURIComponent(memberName)}`;
+    const text = `🔔 *CENTRAL MAR BRASIL — ATIVAÇÃO PARA ${memberName}*\n\nPara receber os avisos das suas tarefas no seu celular Motorola Android ou Windows 11:\n1. Acesse seu link exclusivo: ${link}\n2. Toque no botão verde "Ativar Alertas para ${memberName}".\n3. Toque em "Permitir" na notificação do Google Chrome.\n\nPronto! Seu aparelho estará oficialmente conectado ao seu nome.`;
+    navigator.clipboard.writeText(text);
+    setCopiedMemberName(memberName);
+    setTimeout(() => setCopiedMemberName(null), 3000);
   };
 
   const pendingOffers = helpOffers.filter(o => o.status === 'pendente');
@@ -444,11 +454,23 @@ export function WhiteboardAdminNotificationsModal({
                           </div>
                         </div>
 
-                        {isConnected && (
-                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30 flex-shrink-0">
-                            🟢 Conectado
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {isConnected ? (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30 flex-shrink-0">
+                              🟢 Conectado
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyIndividualMemberLink(m)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-[10px] text-cyan-300 font-mono font-bold transition-all shadow-sm active:scale-95"
+                              title={`Copiar convite com link direto para ${m}`}
+                            >
+                              {copiedMemberName === m ? <Check size={11} className="text-emerald-300" /> : <Copy size={11} />}
+                              <span>{copiedMemberName === m ? 'Copiado!' : 'Copiar Link'}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

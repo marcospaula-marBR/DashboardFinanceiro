@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { PortalNavigation } from '@/components/collaborative-portal/PortalNavigation';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
 import { PortalNotification, RegisteredDevice, NotificationPriority } from '@/types/collaborative-portal';
@@ -22,13 +23,40 @@ import {
   Laptop
 } from 'lucide-react';
 
-export default function NotificacoesPage() {
-  const [activeMember, setActiveMember] = useState<string>('MANUS');
+const CANONICAL_MEMBERS = ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
+
+function NotificacoesContent() {
+  const searchParams = useSearchParams();
+  const [activeMember, setActiveMember] = useState<string>('MARCOS');
   const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const [devices, setDevices] = useState<RegisteredDevice[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'urgent' | 'important' | 'info'>('all');
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [testSent, setTestSent] = useState<boolean>(false);
+
+  // Sincronizar membro ativo com URL ou LocalStorage
+  useEffect(() => {
+    const urlMember = searchParams?.get('membro')?.toUpperCase();
+    if (urlMember && CANONICAL_MEMBERS.includes(urlMember)) {
+      setActiveMember(urlMember);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mb_collaborative_member_name', urlMember);
+      }
+    } else if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('mb_collaborative_member_name')?.toUpperCase();
+      if (saved && CANONICAL_MEMBERS.includes(saved)) {
+        setActiveMember(saved);
+      }
+    }
+  }, [searchParams]);
+
+  const handleSelectMember = (name: string) => {
+    const upper = name.toUpperCase();
+    setActiveMember(upper);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mb_collaborative_member_name', upper);
+    }
+  };
 
   // Carregar dados
   useEffect(() => {
@@ -116,7 +144,8 @@ export default function NotificacoesPage() {
       {/* NAVEGAÇÃO UNIFICADA */}
       <PortalNavigation 
         activeMember={activeMember}
-        onSelectMember={setActiveMember}
+        onSelectMember={handleSelectMember}
+        availableMembers={CANONICAL_MEMBERS}
       />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6 space-y-6">
@@ -338,7 +367,7 @@ export default function NotificacoesPage() {
                       {/* AÇÃO: ABRIR TAREFA */}
                       <div className="shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/80">
                         <Link
-                          href="/minhas-atividades"
+                          href={`/minhas-atividades?membro=${encodeURIComponent(activeMember)}`}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-colors min-h-[44px]"
                         >
                           <span>Abrir Atividade</span>
@@ -355,5 +384,17 @@ export default function NotificacoesPage() {
 
       </main>
     </div>
+  );
+}
+
+export default function NotificacoesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#050811] flex items-center justify-center text-slate-400">
+        Carregando Central de Notificações...
+      </div>
+    }>
+      <NotificacoesContent />
+    </Suspense>
   );
 }

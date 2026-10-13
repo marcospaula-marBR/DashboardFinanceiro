@@ -197,7 +197,7 @@ export function WhiteboardModal({
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: MANUS, CLARA, MARCO, FINANCEIRO..."
+                  placeholder="Ex: MARCOS, MATHEUS, MELISSA, GUILHERME, FINANCEIRO..."
                   value={demandaResp}
                   onChange={(e) => setDemandaResp(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono uppercase"
@@ -402,7 +402,7 @@ export function WhiteboardModal({
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: MANUS, CLARA, MARCO, ALDO..."
+                  placeholder="Ex: MARCOS, MATHEUS, MELISSA, GUILHERME..."
                   value={cronogramaResp}
                   onChange={(e) => setCronogramaResp(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono uppercase"

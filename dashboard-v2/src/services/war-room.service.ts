@@ -197,32 +197,6 @@ export const RESPONSIBLE_COLOR_MAP: Record<string, ResponsibleColorConfig> = {
     ringClass: 'ring-red-400',
     hex: '#ef4444',
   },
-  'MANUS': {
-    nome: 'MANUS',
-    label: 'Ciano Vibrante',
-    badgeClass: 'bg-cyan-950/90 border-cyan-500/70 text-cyan-300 shadow-sm shadow-cyan-950/50',
-    pillActiveClass: 'bg-cyan-600 text-white ring-2 ring-cyan-400 shadow-md',
-    pillInactiveClass: 'bg-slate-950 text-cyan-300 border-cyan-500/40 hover:border-cyan-400',
-    borderClass: 'border-cyan-500/70',
-    bgClass: 'bg-cyan-950/40',
-    textClass: 'text-cyan-400',
-    dotClass: 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]',
-    ringClass: 'ring-cyan-400',
-    hex: '#06b6d4',
-  },
-  'MARCO': {
-    nome: 'MARCO',
-    label: 'Laranja Vibrante',
-    badgeClass: 'bg-orange-950/90 border-orange-500/70 text-orange-300 shadow-sm shadow-orange-950/50',
-    pillActiveClass: 'bg-orange-600 text-white ring-2 ring-orange-400 shadow-md',
-    pillInactiveClass: 'bg-slate-950 text-orange-300 border-orange-500/40 hover:border-orange-400',
-    borderClass: 'border-orange-500/70',
-    bgClass: 'bg-orange-950/40',
-    textClass: 'text-orange-400',
-    dotClass: 'bg-orange-400 shadow-[0_0_8px_#fb923c]',
-    ringClass: 'ring-orange-400',
-    hex: '#f97316',
-  },
   'TI': {
     nome: 'TI',
     label: 'Verde Lima',
@@ -235,32 +209,6 @@ export const RESPONSIBLE_COLOR_MAP: Record<string, ResponsibleColorConfig> = {
     dotClass: 'bg-lime-400 shadow-[0_0_8px_#a3e635]',
     ringClass: 'ring-lime-400',
     hex: '#84cc16',
-  },
-  'ALDO': {
-    nome: 'ALDO',
-    label: 'Azul Índigo',
-    badgeClass: 'bg-indigo-950/90 border-indigo-500/70 text-indigo-300 shadow-sm shadow-indigo-950/50',
-    pillActiveClass: 'bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-md',
-    pillInactiveClass: 'bg-slate-950 text-indigo-300 border-indigo-500/40 hover:border-indigo-400',
-    borderClass: 'border-indigo-500/70',
-    bgClass: 'bg-indigo-950/40',
-    textClass: 'text-indigo-400',
-    dotClass: 'bg-indigo-400 shadow-[0_0_8px_#818cf8]',
-    ringClass: 'ring-indigo-400',
-    hex: '#6366f1',
-  },
-  'CLARA': {
-    nome: 'CLARA',
-    label: 'Verde Menta',
-    badgeClass: 'bg-emerald-950/90 border-emerald-500/70 text-emerald-300 shadow-sm shadow-emerald-950/50',
-    pillActiveClass: 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-md',
-    pillInactiveClass: 'bg-slate-950 text-emerald-300 border-emerald-500/40 hover:border-emerald-400',
-    borderClass: 'border-emerald-500/70',
-    bgClass: 'bg-emerald-950/40',
-    textClass: 'text-emerald-400',
-    dotClass: 'bg-emerald-400 shadow-[0_0_8px_#34d399]',
-    ringClass: 'ring-emerald-400',
-    hex: '#10b981',
   },
 };
 
@@ -504,17 +452,10 @@ export function inferDefaultResponsaveis(text: string): string[] {
   const upper = (text || '').toUpperCase();
   const resps: string[] = [];
 
-  if (upper.includes('MANUS')) resps.push('MANUS');
-  if (upper.includes('CLARA')) resps.push('CLARA');
-  if (upper.includes('ALDO')) resps.push('ALDO');
-  if (upper.includes('MARCO')) resps.push('MARCO');
-  if (upper.includes('DAUREN')) resps.push('DAUREN');
-  if (upper.includes('PRISCILLA')) resps.push('PRISCILLA');
-  if (upper.includes('ADRIANA')) resps.push('ADRIANA');
-
-  if (upper.includes('TERCEIRIZAÇÃO') || upper.includes('CORREIOS G2')) {
-    if (!resps.includes('MANUS')) resps.push('MANUS');
-  }
+  if (upper.includes('MARCOS')) resps.push('MARCOS');
+  if (upper.includes('MATHEUS')) resps.push('MATHEUS');
+  if (upper.includes('MELISSA')) resps.push('MELISSA');
+  if (upper.includes('GUILHERME')) resps.push('GUILHERME');
 
   if (
     upper.includes('CORREIOS DZM') ||
@@ -526,7 +467,8 @@ export function inferDefaultResponsaveis(text: string): string[] {
     upper.includes('NUBANK') ||
     upper.includes('BANCO') ||
     upper.includes('COTAS YBOX') ||
-    upper.includes('LIBERAÇÃO VALORES')
+    upper.includes('LIBERAÇÃO VALORES') ||
+    upper.includes('RECORRENTES')
   ) {
     if (!resps.includes('FINANCEIRO')) resps.push('FINANCEIRO');
   }
@@ -555,7 +497,7 @@ export function inferDefaultResponsible(text: string): string | undefined {
 }
 
 /**
- * Dados autênticos fotografados diretamente da Lousa Operacional
+ * Dados autênticos da Lousa Operacional da Equipe Mar Brasil
  */
 export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
   colunas: [
@@ -566,9 +508,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       corMarcador: 'vermelho',
       dataLimite: '2026-10-15',
       itens: [
-        { id: 'it-1-1', texto: 'JUSTIFICAR DEPÓSITOS CONTA PESSOAL;', concluido: false, responsavel: 'MARCO', responsaveis: ['MARCO'], dataLimite: '2026-10-05' },
-        { id: 'it-1-2', texto: 'ANALISAR MELHOR OPÇÃO P/ EMPRÉSTIMOS FEITOS PY (CONTABILIDADE + ALDO)', concluido: false, responsavel: 'CONTÁBIL, ALDO', responsaveis: ['CONTÁBIL', 'ALDO'], dataLimite: '2026-10-15' },
-        { id: 'it-1-3', texto: 'FLUXO DLOCAL => UENO: COMO JUSTIFICAR?*', concluido: false, destaque: true, responsavel: 'MARCO', responsaveis: ['MARCO'] },
+        { id: 'it-1-1', texto: 'JUSTIFICAR DEPÓSITOS CONTA PESSOAL;', concluido: false, responsavel: 'MARCOS', responsaveis: ['MARCOS'], dataLimite: '2026-10-05' },
+        { id: 'it-1-2', texto: 'ANALISAR MELHOR OPÇÃO P/ EMPRÉSTIMOS FEITOS PY (CONTABILIDADE + GUILHERME)', concluido: false, responsavel: 'CONTÁBIL, GUILHERME', responsaveis: ['CONTÁBIL', 'GUILHERME'], dataLimite: '2026-10-15' },
+        { id: 'it-1-3', texto: 'FLUXO DLOCAL => UENO: COMO JUSTIFICAR?*', concluido: false, destaque: true, responsavel: 'MARCOS', responsaveis: ['MARCOS'] },
         { id: 'it-1-4', texto: 'DOMÍNIOS NIC.PY', concluido: true, responsavel: 'TI, CONTÁBIL', responsaveis: ['TI', 'CONTÁBIL'] },
         { id: 'it-1-5', texto: 'ERP PY', concluido: false, responsavel: 'TI, CONTÁBIL', responsaveis: ['TI', 'CONTÁBIL'] },
       ],
@@ -581,9 +523,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       corMarcador: 'vermelho',
       dataLimite: '2026-10-07',
       itens: [
-        { id: 'it-2-1', texto: 'MSG ENVIADA', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'], dataLimite: '2026-10-07' },
-        { id: 'it-2-2', texto: 'RECEBIDO E-MAIL', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'] },
-        { id: 'it-2-3', texto: "RESPONDI PEDINDO CAMINHO + JOC'S", concluido: false, responsavel: 'MARCO', responsaveis: ['MARCO'] },
+        { id: 'it-2-1', texto: 'MSG ENVIADA', concluido: false, responsavel: 'MATHEUS', responsaveis: ['MATHEUS'], dataLimite: '2026-10-07' },
+        { id: 'it-2-2', texto: 'RECEBIDO E-MAIL', concluido: false, responsavel: 'MATHEUS', responsaveis: ['MATHEUS'] },
+        { id: 'it-2-3', texto: "RESPONDI PEDINDO CAMINHO + JOC'S", concluido: false, responsavel: 'MARCOS', responsaveis: ['MARCOS'] },
       ],
     },
     {
@@ -593,9 +535,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       corMarcador: 'vermelho',
       dataLimite: '2026-10-12',
       itens: [
-        { id: 'it-3-1', texto: 'TABELA C/ FLUXO COMPLETO ATÉ VR EM USD NO UENO (PGTO DE U$ 9.99 DA MARBR)', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'] },
-        { id: 'it-3-2', texto: 'TESTAR SPLIT', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'], dataLimite: '2026-10-09' },
-        { id: 'it-3-3', texto: 'VALIDAÇÃO DA CONTA BANCÁRIA', concluido: false, responsavel: 'MARCO', responsaveis: ['MARCO'] },
+        { id: 'it-3-1', texto: 'TABELA C/ FLUXO COMPLETO ATÉ VR EM USD NO UENO (PGTO DE U$ 9.99 DA MARBR)', concluido: false, responsavel: 'GUILHERME', responsaveis: ['GUILHERME'] },
+        { id: 'it-3-2', texto: 'TESTAR SPLIT', concluido: false, responsavel: 'GUILHERME', responsaveis: ['GUILHERME'], dataLimite: '2026-10-09' },
+        { id: 'it-3-3', texto: 'VALIDAÇÃO DA CONTA BANCÁRIA', concluido: false, responsavel: 'MARCOS', responsaveis: ['MARCOS'] },
         { id: 'it-3-4', texto: 'LIBERAÇÃO VALORES', concluido: true, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
@@ -608,7 +550,7 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       itens: [
         { id: 'it-4-1', texto: 'CRIAR GRUPO C/ JURÍDICO', concluido: false, responsavel: 'JURÍDICO', responsaveis: ['JURÍDICO'] },
         { id: 'it-4-2', texto: 'PAGAR CORREIOS DZM', concluido: true, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
-        { id: 'it-4-3', texto: 'ABRIR CONTA CORREIOS G2', concluido: true, responsavel: 'MANUS', responsaveis: ['MANUS'] },
+        { id: 'it-4-3', texto: 'ABRIR CONTA CORREIOS G2', concluido: true, responsavel: 'MELISSA', responsaveis: ['MELISSA'] },
         { id: 'it-4-4', texto: 'PROCESSO JUNTO À RFB', concluido: false, responsavel: 'JURÍDICO', responsaveis: ['JURÍDICO'], dataLimite: '2026-10-25' },
       ],
     },
@@ -685,9 +627,9 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 1,
       diaFim: 5,
       itens: [
-        { id: 'tl-1', dia: 5, descricao: '05 - PLANNIGI', concluido: false, responsavel: 'MARCO', responsaveis: ['MARCO'] },
+        { id: 'tl-1', dia: 5, descricao: '05 - PLANNIGI', concluido: false, responsavel: 'MARCOS', responsaveis: ['MARCOS'] },
         { id: 'tl-2', dia: 5, descricao: '05 - CONTÁBIL PY', concluido: false, responsavel: 'CONTÁBIL', responsaveis: ['CONTÁBIL'] },
-        { id: 'tl-3', dia: 5, descricao: '05 - ALDO', concluido: false, responsavel: 'ALDO', responsaveis: ['ALDO'] },
+        { id: 'tl-3', dia: 5, descricao: '05 - ROTINAS OPERACIONAIS', concluido: false, responsavel: 'GUILHERME', responsaveis: ['GUILHERME'] },
         { id: 'tl-4', dia: 5, descricao: '05 - G2 8112', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
@@ -709,7 +651,7 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       diaInicio: 11,
       diaFim: 15,
       itens: [
-        { id: 'tl-9', dia: 15, descricao: '15 - TERCEIRIZAÇÃO', concluido: false, responsavel: 'MANUS', responsaveis: ['MANUS'] },
+        { id: 'tl-9', dia: 15, descricao: '15 - TERCEIRIZAÇÃO', concluido: false, responsavel: 'MELISSA', responsaveis: ['MELISSA'] },
       ],
     },
     {
@@ -732,7 +674,7 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
         { id: 'tl-13', dia: 23, descricao: '23 - MBR 0137', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
         { id: 'tl-14', dia: 25, descricao: '25 - NUBANK DZM', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
         { id: 'tl-15', dia: 25, descricao: '25 - PIS / COFINS', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
-        { id: 'tl-16', dia: 25, descricao: '25 - MANUS / CLARA - DZM', concluido: false, responsavel: 'MANUS, CLARA', responsaveis: ['MANUS', 'CLARA'] },
+        { id: 'tl-16', dia: 25, descricao: '25 - RECORRENTES DZM', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
         { id: 'tl-17', dia: 27, descricao: '27 - BANCO DO BRASIL', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
@@ -744,7 +686,7 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       itens: [
         { id: 'tl-18', dia: 30, descricao: '30 - TRI JAN/ABR/JUL/OUT', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
         { id: 'tl-19', dia: 30, descricao: '30 - DAS PARCELADA MBR', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
-        { id: 'tl-20', dia: 30, descricao: '30 - CLARA - MBR', concluido: false, responsavel: 'CLARA', responsaveis: ['CLARA'] },
+        { id: 'tl-20', dia: 30, descricao: '30 - RECORRENTES MBR', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
       ],
     },
   ],

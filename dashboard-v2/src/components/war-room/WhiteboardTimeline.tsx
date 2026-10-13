@@ -86,11 +86,14 @@ export function WhiteboardTimeline({
   const [inputDesc, setInputDesc] = useState<string>('');
   const [inputResp, setInputResp] = useState<string>('');
 
-  // Estados de edição inline
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  // Estados de edição da tarefa do calendário (Modal executivo completo)
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [editingBlockIntervalo, setEditingBlockIntervalo] = useState<string>('');
+  const [editingItem, setEditingItem] = useState<WhiteboardTimelineItem | null>(null);
   const [editDia, setEditDia] = useState<number>(todayDay);
   const [editDesc, setEditDesc] = useState<string>('');
-  const [editResp, setEditResp] = useState<string>('');
+  const [editResponsaveis, setEditResponsaveis] = useState<string[]>([]);
+  const [customRespInput, setCustomRespInput] = useState<string>('');
 
   // Estados de Drag & Drop
   const [draggedItem, setDraggedItem] = useState<{ blockId: string; itemId: string; index: number } | null>(null);
@@ -152,23 +155,58 @@ export function WhiteboardTimeline({
     setActiveInputBlockId(null);
   };
 
-  const handleStartEdit = (item: WhiteboardTimelineItem) => {
-    setEditingItemId(item.id);
+  const handleStartEdit = (block: WhiteboardTimelineBlock, item: WhiteboardTimelineItem) => {
+    setEditingBlockId(block.id);
+    setEditingBlockIntervalo(block.intervalo);
+    setEditingItem(item);
     setEditDia(item.dia);
     setEditDesc(item.descricao);
-    const resps = extractResponsaveisList(item);
-    setEditResp(resps.join(', '));
+    setEditResponsaveis(extractResponsaveisList(item));
+    setCustomRespInput('');
   };
 
-  const handleSaveEdit = (blockId: string, itemId: string) => {
-    if (!editDesc.trim()) {
-      setEditingItemId(null);
+  const handleToggleEditResp = (respName: string) => {
+    const upper = respName.trim().toUpperCase();
+    if (!upper) return;
+    setEditResponsaveis(prev => 
+      prev.includes(upper) ? prev.filter(r => r !== upper) : [...prev, upper]
+    );
+  };
+
+  const handleAddCustomEditResp = () => {
+    const upper = customRespInput.trim().toUpperCase();
+    if (!upper) return;
+    if (!editResponsaveis.includes(upper)) {
+      setEditResponsaveis(prev => [...prev, upper]);
+    }
+    setCustomRespInput('');
+  };
+
+  const handleSaveModalEdit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingItem || !editingBlockId || !editDesc.trim()) {
+      setEditingItem(null);
       return;
     }
-    const diaValido = editDia >= 1 && editDia <= 31 ? editDia : 1;
-    const resps = extractResponsaveisList(editResp);
-    onEditItem(blockId, itemId, diaValido, editDesc.trim(), resps.join(', ') || undefined, resps);
-    setEditingItemId(null);
+    const diaValido = editDia >= 1 && editDia <= 31 ? editDia : editingItem.dia;
+    const resps = Array.from(new Set(editResponsaveis.filter(Boolean)));
+    onEditItem(
+      editingBlockId,
+      editingItem.id,
+      diaValido,
+      editDesc.trim(),
+      resps.join(', ') || undefined,
+      resps
+    );
+    setEditingItem(null);
+  };
+
+  const handleDeleteEditingItem = () => {
+    if (!editingItem || !editingBlockId) return;
+    if (window.confirm(`Deseja realmente excluir a obrigação "${editingItem.descricao}" do calendário?`)) {
+      onDeleteItem(editingBlockId, editingItem.id);
+      setEditingItem(null);
+    }
   };
 
   // ── HANDLERS DE DRAG & DROP NATIVO ──
@@ -267,15 +305,12 @@ export function WhiteboardTimeline({
       {/* DATALIST DE SUGESTÃO DE RESPONSÁVEIS */}
       <datalist id="responsavel-suggestions">
         <option value="MARCOS" />
-        <option value="MELISSA" />
         <option value="MATHEUS" />
+        <option value="MELISSA" />
         <option value="GUILHERME" />
         <option value="FINANCEIRO" />
-        <option value="CONTABTI" />
-        <option value="CONTÁBIL" />
         <option value="JURÍDICO" />
-        <option value="MANUS" />
-        <option value="MARCO" />
+        <option value="CONTÁBIL" />
         <option value="TI" />
       </datalist>
 
@@ -574,55 +609,11 @@ export function WhiteboardTimeline({
                   {/* ── LISTA DE OBRIGAÇÕES DO BLOCO ── */}
                   {sortedItens.map((item, index) => {
                     const isOverdue = !item.concluido && item.dia < todayDay;
-                    const isEditingThis = editingItemId === item.id;
-
-                    if (isEditingThis) {
-                      return (
-                        <form
-                          key={item.id}
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            handleSaveEdit(block.id, item.id);
-                          }}
-                          className="flex-shrink-0 flex items-center gap-1.5 p-1 bg-slate-950 border border-cyan-500 rounded-lg shadow-md"
-                        >
-                          <input
-                            type="number"
-                            min={1}
-                            max={31}
-                            value={editDia}
-                            onChange={(e) => setEditDia(Number(e.target.value))}
-                            className="w-10 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-xs text-cyan-300 font-bold text-center"
-                          />
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editDesc}
-                            onChange={(e) => setEditDesc(e.target.value)}
-                            className="w-36 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-white uppercase font-mono"
-                            placeholder="Obrigação..."
-                          />
-                          <button
-                            type="submit"
-                            className="px-2 py-0.5 rounded bg-cyan-600 text-white text-[10px] font-bold"
-                          >
-                            OK
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingItemId(null)}
-                            className="p-1 text-slate-400 hover:text-white"
-                          >
-                            <X size={11} />
-                          </button>
-                        </form>
-                      );
-                    }
 
                     return (
                       <div
                         key={item.id}
-                        draggable={!editingItemId}
+                        draggable={!editingItem}
                         onDragStart={(e) => handleDragStart(e, block.id, item.id, index)}
                         onDragOver={(e) => handleDragOverItem(e, block.id, index)}
                         onDrop={(e) => handleDrop(e, block.id, index)}
@@ -694,12 +685,12 @@ export function WhiteboardTimeline({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleStartEdit(item);
+                              handleStartEdit(block, item);
                             }}
                             className="p-0.5 text-slate-400 hover:text-cyan-300"
-                            title="Editar"
+                            title="Editar Obrigação"
                           >
-                            <Edit3 size={10} />
+                            <Edit3 size={11} />
                           </button>
                           <button
                             type="button"
@@ -915,7 +906,7 @@ export function WhiteboardTimeline({
                     return (
                       <div
                         key={item.id}
-                        draggable={!editingItemId}
+                        draggable={!editingItem}
                         onDragStart={(e) => handleDragStart(e, block.id, item.id, index)}
                         onDragOver={(e) => handleDragOverItem(e, block.id, index)}
                         onDrop={(e) => handleDrop(e, block.id, index)}
@@ -980,11 +971,12 @@ export function WhiteboardTimeline({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleStartEdit(item);
+                              handleStartEdit(block, item);
                             }}
                             className="p-1 text-slate-400 hover:text-cyan-300"
+                            title="Editar Obrigação"
                           >
-                            <Edit3 size={11} />
+                            <Edit3 size={12} />
                           </button>
                           <button
                             type="button"
@@ -1004,6 +996,184 @@ export function WhiteboardTimeline({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── MODAL EXECUTIVO DE EDIÇÃO DA TAREFA DO CALENDÁRIO ── */}
+      {editingItem && editingBlockId && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setEditingItem(null)}
+        >
+          <div 
+            className="w-full max-w-lg bg-[#090e1a] border border-cyan-500/50 rounded-2xl shadow-2xl shadow-cyan-950/50 flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* CABEÇALHO DO MODAL */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-[#060a13]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                  <Edit3 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black uppercase text-white font-mono tracking-wide">
+                    EDITAR OBRIGAÇÃO DO CALENDÁRIO
+                  </h3>
+                  <span className="text-[11px] text-cyan-400 font-mono">
+                    Período: {editingBlockIntervalo}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* FORMULÁRIO */}
+            <form onSubmit={handleSaveModalEdit} className="p-4 sm:p-5 space-y-4">
+              {/* CAMPO DIA DO MÊS */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase font-mono mb-1.5">
+                  Dia de Vencimento no Mês (1 a 31):
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditDia(prev => Math.max(1, prev - 1))}
+                    className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold flex items-center justify-center hover:bg-slate-800 transition-colors"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={editDia}
+                    onChange={(e) => setEditDia(Math.max(1, Math.min(31, parseInt(e.target.value, 10) || 1)))}
+                    className="w-20 px-3 py-2 rounded-xl bg-slate-950 border border-cyan-500/50 text-cyan-300 font-mono font-black text-center text-base focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditDia(prev => Math.min(31, prev + 1))}
+                    className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold flex items-center justify-center hover:bg-slate-800 transition-colors"
+                  >
+                    +
+                  </button>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {`Dia ${String(editDia).padStart(2, '0')} do mês`}
+                  </span>
+                </div>
+              </div>
+
+              {/* CAMPO DESCRIÇÃO DA OBRIGAÇÃO */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase font-mono mb-1.5">
+                  Descrição da Obrigação:
+                </label>
+                <input
+                  type="text"
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Ex: 25 - RECORRENTES DZM"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-cyan-500 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  required
+                />
+              </div>
+
+              {/* SELETOR DE RESPONSÁVEIS OFICIAIS */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase font-mono mb-1.5 flex items-center justify-between">
+                  <span>Responsáveis Atribuídos:</span>
+                  <span className="text-[10px] text-cyan-400 font-normal">
+                    {editResponsaveis.length} selecionado{editResponsaveis.length !== 1 ? 's' : ''}
+                  </span>
+                </label>
+
+                {/* BOTÕES DE CLIQUE RÁPIDO PARA MEMBROS REAIS */}
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'].map(memberName => {
+                    const isSelected = editResponsaveis.includes(memberName);
+                    const colorConfig = getResponsibleColor(memberName);
+
+                    return (
+                      <button
+                        key={memberName}
+                        type="button"
+                        onClick={() => handleToggleEditResp(memberName)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono transition-all border ${
+                          isSelected
+                            ? colorConfig.pillActiveClass
+                            : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-500'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${colorConfig.dotClass}`} />
+                        <span>{memberName}</span>
+                        {isSelected && <Check size={11} className="stroke-[3]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* ADICIONAR OUTRO EXECUTOR */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={customRespInput}
+                    onChange={(e) => setCustomRespInput(e.target.value)}
+                    placeholder="Outro responsável..."
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white uppercase font-mono focus:outline-none focus:border-cyan-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomEditResp();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomEditResp}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition-colors"
+                  >
+                    + Adicionar
+                  </button>
+                </div>
+              </div>
+
+              {/* RODAPÉ DO MODAL COM AÇÕES */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 gap-2">
+                <button
+                  type="button"
+                  onClick={handleDeleteEditingItem}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 text-xs font-bold transition-all"
+                >
+                  <Trash2 size={13} />
+                  <span>Excluir</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingItem(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs font-mono shadow-lg shadow-cyan-950/50 transition-all min-h-[38px]"
+                  >
+                    <Check size={14} className="stroke-[3]" />
+                    <span>Salvar Alterações</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </section>

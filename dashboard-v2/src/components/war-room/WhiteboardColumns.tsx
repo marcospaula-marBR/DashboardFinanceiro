@@ -229,15 +229,12 @@ export function WhiteboardColumns({
       {/* DATALIST DE SUGESTÕES */}
       <datalist id="col-responsavel-suggestions">
         <option value="MARCOS" />
-        <option value="MELISSA" />
         <option value="MATHEUS" />
+        <option value="MELISSA" />
         <option value="GUILHERME" />
         <option value="FINANCEIRO" />
-        <option value="CONTABTI" />
-        <option value="CONTÁBIL" />
         <option value="JURÍDICO" />
-        <option value="MANUS" />
-        <option value="MARCO" />
+        <option value="CONTÁBIL" />
         <option value="TI" />
       </datalist>
 

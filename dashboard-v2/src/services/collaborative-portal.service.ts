@@ -716,25 +716,7 @@ export class CollaborativePortalService {
       console.warn('Erro ao ler dispositivos locais:', e);
     }
 
-    // Dispositivo padrão atual detectado
-    const isWindows = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent);
-    const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
-    const deviceLabel = isWindows 
-      ? 'Windows 11 (Google Chrome)' 
-      : isAndroid 
-      ? 'Motorola Android (Chrome)' 
-      : 'Navegador Web Ativo';
-
-    return [
-      {
-        id: 'dev-current',
-        deviceLabel,
-        deviceType: isWindows ? 'desktop' : isAndroid ? 'mobile' : 'other',
-        active: true,
-        lastSeenAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-      }
-    ];
+    return [];
   }
 
   /**
@@ -936,7 +918,7 @@ export class CollaborativePortalService {
         priority: 'important',
         category: 'task_alert',
         activityId: 'tl-16',
-        activityTitle: '25 - MANUS / CLARA - DZM',
+        activityTitle: '25 - FECHAMENTO OPERACIONAL - MARCOS / MATHEUS',
         requiresAck: false,
         acknowledged: false,
         createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),

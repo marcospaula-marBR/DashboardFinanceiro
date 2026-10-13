@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PortalNavigation } from '@/components/collaborative-portal/PortalNavigation';
 import { HelpOfferModal } from '@/components/collaborative-portal/HelpOfferModal';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
@@ -23,10 +24,37 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-export default function LousaEquipePage() {
-  const [activeMember, setActiveMember] = useState<string>('CLARA');
+const CANONICAL_MEMBERS = ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
+
+function LousaEquipeContent() {
+  const searchParams = useSearchParams();
+  const [activeMember, setActiveMember] = useState<string>('MARCOS');
   const [allActivities, setAllActivities] = useState<CollaborativeActivity[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Sincronizar membro ativo com URL ou LocalStorage
+  useEffect(() => {
+    const urlMember = searchParams?.get('membro')?.toUpperCase();
+    if (urlMember && CANONICAL_MEMBERS.includes(urlMember)) {
+      setActiveMember(urlMember);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mb_collaborative_member_name', urlMember);
+      }
+    } else if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('mb_collaborative_member_name')?.toUpperCase();
+      if (saved && CANONICAL_MEMBERS.includes(saved)) {
+        setActiveMember(saved);
+      }
+    }
+  }, [searchParams]);
+
+  const handleSelectMember = (name: string) => {
+    const upper = name.toUpperCase();
+    setActiveMember(upper);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mb_collaborative_member_name', upper);
+    }
+  };
 
   // Filtros avançados
   const [filterMember, setFilterMember] = useState<string>('TODOS');
@@ -54,11 +82,20 @@ export default function LousaEquipePage() {
     loadData();
   }, [activeMember]);
 
-  // Lista de todos os responsáveis presentes
+  // Lista de todos os responsáveis presentes sanitizada apenas com membros canônicos
   const distinctMembers = useMemo(() => {
     const set = new Set<string>();
-    allActivities.forEach(a => a.responsaveis.forEach(r => set.add(r)));
-    return Array.from(set).sort();
+    allActivities.forEach(a => {
+      a.responsaveis.forEach(r => {
+        const up = r.toUpperCase();
+        if (CANONICAL_MEMBERS.includes(up)) {
+          set.add(up);
+        }
+      });
+    });
+    // Garante que a equipe principal sempre apareça nos filtros
+    ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME'].forEach(m => set.add(m));
+    return Array.from(set);
   }, [allActivities]);
 
   // Mapa de carga de trabalho por membro (para identificar sobrecargas)
@@ -147,7 +184,8 @@ export default function LousaEquipePage() {
       {/* NAVEGAÇÃO UNIFICADA */}
       <PortalNavigation 
         activeMember={activeMember}
-        onSelectMember={setActiveMember}
+        onSelectMember={handleSelectMember}
+        availableMembers={CANONICAL_MEMBERS}
       />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6 space-y-5">
@@ -408,5 +446,17 @@ export default function LousaEquipePage() {
         onSubmitOffer={handleOfferHelpSubmit}
       />
     </div>
+  );
+}
+
+export default function LousaEquipePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#050811] flex items-center justify-center text-slate-400">
+        Carregando Lousa da Equipe...
+      </div>
+    }>
+      <LousaEquipeContent />
+    </Suspense>
   );
 }

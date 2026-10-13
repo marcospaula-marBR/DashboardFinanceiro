@@ -22,9 +22,9 @@ interface PortalNavigationProps {
 }
 
 export function PortalNavigation({
-  activeMember = 'MANUS',
+  activeMember = 'MARCOS',
   onSelectMember,
-  availableMembers = ['MANUS', 'CLARA', 'MARCO', 'ALDO', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'],
+  availableMembers = ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'],
   unreadNotificationsCount = 2,
 }: PortalNavigationProps) {
   const pathname = usePathname();
