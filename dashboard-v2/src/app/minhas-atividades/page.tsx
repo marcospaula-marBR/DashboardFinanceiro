@@ -19,6 +19,7 @@ import {
   Sparkles, 
   Inbox, 
   Bell, 
+  BellRing,
   Smartphone,
   UserCheck,
   RefreshCw
@@ -46,6 +47,40 @@ function MinhasAtividadesContent() {
   const [deviceLabel, setDeviceLabel] = useState<string>('');
   const [justActivatedFeedback, setJustActivatedFeedback] = useState<boolean>(false);
 
+  const [incomingAlert, setIncomingAlert] = useState<{ title: string; body: string } | null>(null);
+
+  // Sintetizador sonoro leve com Web Audio API para alerta audível mesmo em celular
+  const playNotificationSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.15);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1174, now + 0.18);
+      gain2.gain.setValueAtTime(0.35, now + 0.18);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.18);
+      osc2.stop(now + 0.38);
+    } catch {}
+  };
+
   // 1. Resolver membro ativo: Parâmetro da URL (?membro=MARCOS) ou LocalStorage ou Padrão MARCOS
   useEffect(() => {
     let resolvedMember = 'MARCOS';
@@ -70,13 +105,22 @@ function MinhasAtividadesContent() {
     setActiveMember(resolvedMember);
   }, [searchParams]);
 
-  // 2. Detectar permissão nativa e tipo de dispositivo
+  // 2. Registrar Service Worker no navegador e detectar permissão nativa
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setDeviceConnected(Notification.permission === 'granted');
-      const isWindows = /Windows/i.test(navigator.userAgent);
-      const isAndroid = /Android/i.test(navigator.userAgent);
-      setDeviceLabel(isWindows ? 'Windows 11 (Google Chrome)' : isAndroid ? 'Motorola Android (Chrome)' : 'Google Chrome');
+    if (typeof window !== 'undefined') {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker
+          .register('/sw.js', { scope: '/' })
+          .then((reg) => console.log('[SW] Service Worker registrado:', reg.scope))
+          .catch((err) => console.warn('[SW] Erro ao registrar SW:', err));
+      }
+
+      if ('Notification' in window) {
+        setDeviceConnected(Notification.permission === 'granted');
+        const isWindows = /Windows/i.test(navigator.userAgent);
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        setDeviceLabel(isWindows ? 'Windows 11 (Google Chrome)' : isAndroid ? 'Motorola Android (Chrome)' : 'Google Chrome');
+      }
     }
   }, []);
 
@@ -93,10 +137,29 @@ function MinhasAtividadesContent() {
 
   // 4.1 Disparador universal nativo compatível com Motorola Android (Chrome) e Windows 11
   const triggerNativeNotification = async (title: string, body: string, tag?: string) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (typeof window === 'undefined') return;
+
+    // Disparar feedback sonoro e tátil imediato no celular
+    try {
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 100, 200, 100, 300]);
+      }
+      playNotificationSound();
+    } catch {}
+
+    // Exibir banner toast flutuante no topo da tela do celular
+    setIncomingAlert({ title, body });
+    setTimeout(() => setIncomingAlert(null), 5000);
+
+    if (!('Notification' in window)) return;
+
     if (Notification.permission !== 'granted') {
-      const p = await Notification.requestPermission();
-      if (p !== 'granted') return;
+      try {
+        const p = await Notification.requestPermission();
+        if (p !== 'granted') return;
+      } catch {
+        return;
+      }
     }
 
     const options: any = {
@@ -112,9 +175,19 @@ function MinhasAtividadesContent() {
     // No Android Chrome (PWA / Mobile), showNotification via Service Worker é OBRIGATÓRIO
     if ('serviceWorker' in navigator) {
       try {
-        const registration = await navigator.serviceWorker.ready;
-        if (registration && registration.showNotification) {
-          await registration.showNotification(title, options);
+        let reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) {
+          reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        }
+
+        const readyReg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<ServiceWorkerRegistration | null>((r) => setTimeout(() => r(reg || null), 1200))
+        ]);
+
+        const activeReg = readyReg || reg;
+        if (activeReg && activeReg.showNotification) {
+          await activeReg.showNotification(title, options);
           return;
         }
       } catch (swErr) {
@@ -200,9 +273,11 @@ function MinhasAtividadesContent() {
   useEffect(() => {
     if (!activeMember) return;
 
+    let lastKnownTimestamp = new Date().toISOString();
+
     // Escuta novas notificações no Supabase (Broadcasts e Novas Tarefas)
     const channel = supabase
-      .channel(`mobile-notifs-${activeMember.toLowerCase()}`)
+      .channel(`mobile-notifs-${activeMember.toLowerCase()}-${Date.now()}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications' },
@@ -215,17 +290,42 @@ function MinhasAtividadesContent() {
           const isForMe = targetMember === activeMember.toUpperCase();
 
           if (isForAll || isForMe) {
+            lastKnownTimestamp = newNotif.created_at || new Date().toISOString();
             triggerNativeNotification(newNotif.title, newNotif.body, `notif-${newNotif.id}`);
             loadData();
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Supabase Realtime] Status da conexão no celular:', status);
+      });
 
-    // Polling suave de resguardo a cada 15 segundos para redes móveis onde WebSocket suspende em segundo plano
-    const interval = setInterval(() => {
-      loadData();
-    }, 15000);
+    // Polling inteligente de resguardo a cada 8 segundos: busca novas notificações inseridas
+    const interval = setInterval(async () => {
+      try {
+        const { data: latestNotifs } = await supabase
+          .from('notifications')
+          .select('*')
+          .gt('created_at', lastKnownTimestamp)
+          .order('created_at', { ascending: true });
+
+        if (latestNotifs && latestNotifs.length > 0) {
+          for (const notif of latestNotifs) {
+            const target = notif.target_member_name?.trim().toUpperCase();
+            const isAll = notif.target_type === 'all' || !target;
+            const isMe = target === activeMember.toUpperCase();
+
+            if (isAll || isMe) {
+              lastKnownTimestamp = notif.created_at;
+              triggerNativeNotification(notif.title, notif.body, `notif-${notif.id}`);
+            }
+          }
+          loadData();
+        }
+      } catch (pollErr) {
+        console.warn('[Polling] Aviso na verificação de notificações:', pollErr);
+      }
+    }, 8000);
 
     return () => {
       supabase.removeChannel(channel);
@@ -329,6 +429,25 @@ function MinhasAtividadesContent() {
 
   return (
     <div className="min-h-screen bg-[#050811] text-slate-100 pb-24 md:pb-12">
+      {/* ALERTA VISUAL INSTANTÂNEO FLUTUANTE (FEEDBACK TRÍPLICE NO MOBILE) */}
+      {incomingAlert && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md p-4 rounded-2xl bg-gradient-to-r from-emerald-950 to-slate-900 border-2 border-emerald-500 shadow-2xl shadow-emerald-950/80 animate-in slide-in-from-top duration-300">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+              <BellRing size={20} className="animate-bounce" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-black text-emerald-300 uppercase tracking-wide">
+                {incomingAlert.title}
+              </h4>
+              <p className="text-xs text-white font-medium mt-0.5 leading-snug">
+                {incomingAlert.body}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* NAVEGAÇÃO UNIFICADA COM MEMBROS OFICIAIS */}
       <PortalNavigation 
         activeMember={activeMember}
