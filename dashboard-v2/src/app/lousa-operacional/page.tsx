@@ -17,7 +17,8 @@ import { WhiteboardResponsibleBoard } from '@/components/war-room/WhiteboardResp
 import { WhiteboardEditDemandModal } from '@/components/war-room/WhiteboardEditDemandModal';
 import { WhiteboardArchivedModal } from '@/components/war-room/WhiteboardArchivedModal';
 import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDemandColumnModal';
-import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette } from 'lucide-react';
+import { WhiteboardMemberModal } from '@/components/war-room/WhiteboardMemberModal';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -52,6 +53,10 @@ export default function LousaOperacionalPage() {
   // Estados de edição completa de tarefa e histórico de arquivadas
   const [isArchivedModalOpen, setIsArchivedModalOpen] = useState<boolean>(false);
   const [editingDemand, setEditingDemand] = useState<{ colId: string; item: WhiteboardItem } | null>(null);
+
+  // Estados de gestão de membros (editar, excluir e adicionar)
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState<boolean>(false);
+  const [editingMemberName, setEditingMemberName] = useState<string | null>(null);
 
   // Ao ativar o Modo TV, ajusta automaticamente as demandas em títulos e cronograma em linhas
   useEffect(() => {
@@ -417,6 +422,39 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
+  // ── HANDLERS DE GESTÃO DE MEMBROS (EDITAR / EXCLUIR / NOVO) ──
+  const handleOpenMemberModal = (memberName: string | null) => {
+    setEditingMemberName(memberName);
+    setIsMemberModalOpen(true);
+  };
+
+  const handleSaveMember = (
+    oldName: string | null,
+    newName: string,
+    selectedColorHex?: string,
+    linkedEmployeeId?: string
+  ) => {
+    if (oldName && oldName.toUpperCase() !== newName.toUpperCase()) {
+      const updated = WarRoomService.renameMember(data, oldName, newName);
+      setData(updated);
+      if (selectedResponsible?.toUpperCase() === oldName.toUpperCase()) {
+        setSelectedResponsible(newName);
+      }
+    }
+    setIsMemberModalOpen(false);
+    setEditingMemberName(null);
+  };
+
+  const handleDeleteMember = (memberName: string, reassignedTo?: string | null) => {
+    const updated = WarRoomService.deleteMember(data, memberName, reassignedTo);
+    setData(updated);
+    if (selectedResponsible?.toUpperCase() === memberName.toUpperCase()) {
+      setSelectedResponsible(reassignedTo ? reassignedTo.toUpperCase() : null);
+    }
+    setIsMemberModalOpen(false);
+    setEditingMemberName(null);
+  };
+
   // ── RESTAURAR LOUSA ORIGINAL (DA FOTO) ──
   const handleResetDefault = () => {
     if (window.confirm('Deseja restaurar a lousa para o estado original fotografado? Todas as alterações manuais serão resetadas.')) {
@@ -536,6 +574,17 @@ export default function LousaOperacionalPage() {
                 </button>
               );
             })}
+
+            {/* BOTÃO RÁPIDO PARA ADICIONAR OU GERENCIAR MEMBRO */}
+            <button
+              type="button"
+              onClick={() => handleOpenMemberModal(null)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 border border-dashed border-slate-700 hover:border-cyan-500/50 transition-all shadow-sm"
+              title="Cadastrar um novo membro na lousa"
+            >
+              <Plus size={11} className="text-cyan-400" />
+              <span>+ Membro</span>
+            </button>
           </div>
 
           {/* AÇÕES DA BARRA DE FILTROS: ZERO-SCROLL TV, HISTÓRICO E QUADRO DE RESPONSÁVEIS */}
@@ -594,6 +643,7 @@ export default function LousaOperacionalPage() {
             onSelectResponsible={(resp) => setSelectedResponsible(resp)}
             selectedResponsible={selectedResponsible}
             onClose={() => setIsResponsibleBoardVisible(false)}
+            onOpenMemberModal={handleOpenMemberModal}
           />
         )}
 
@@ -732,6 +782,20 @@ export default function LousaOperacionalPage() {
         archivedItems={archivedDemands}
         onRestore={handleRestoreArchivedDemand}
         onDeletePermanent={handleDeleteArchivedPermanent}
+      />
+
+      {/* ── MODAL DE GESTÃO DE MEMBROS (EDITAR / EXCLUIR / NOVO) ── */}
+      <WhiteboardMemberModal
+        isOpen={isMemberModalOpen}
+        onClose={() => {
+          setIsMemberModalOpen(false);
+          setEditingMemberName(null);
+        }}
+        memberName={editingMemberName}
+        allMembers={distinctResponsibles}
+        totalTasksCount={editingMemberName ? responsibleCountsMap[editingMemberName.toUpperCase()]?.total || 0 : 0}
+        onSaveMember={handleSaveMember}
+        onDeleteMember={handleDeleteMember}
       />
     </div>
   );

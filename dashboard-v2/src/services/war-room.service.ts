@@ -1749,6 +1749,114 @@ export class WarRoomService {
     this.saveWhiteboardData(newState);
     return newState;
   }
+
+  /**
+   * Edita ou renomeia um membro em todas as tarefas e cronograma da lousa
+   */
+  static renameMember(
+    currentState: WhiteboardDataState,
+    oldName: string,
+    newName: string
+  ): WhiteboardDataState {
+    const oldUpper = oldName.trim().toUpperCase();
+    const newUpper = newName.trim().toUpperCase();
+    if (!oldUpper || !newUpper || oldUpper === newUpper) return currentState;
+
+    // 1. Atualizar em todas as colunas
+    const updatedColunas = currentState.colunas.map(col => ({
+      ...col,
+      itens: col.itens.map(item => {
+        const resps = extractResponsaveisList(item);
+        if (!resps.includes(oldUpper)) return item;
+        const newResps = Array.from(new Set(resps.map(r => r === oldUpper ? newUpper : r)));
+        return {
+          ...item,
+          responsaveis: newResps,
+          responsavel: newResps.join(', '),
+        };
+      })
+    }));
+
+    // 2. Atualizar em todo o cronograma
+    const updatedCronograma = currentState.cronograma.map(block => ({
+      ...block,
+      itens: block.itens.map(item => {
+        const resps = extractResponsaveisList(item);
+        if (!resps.includes(oldUpper)) return item;
+        const newResps = Array.from(new Set(resps.map(r => r === oldUpper ? newUpper : r)));
+        return {
+          ...item,
+          responsaveis: newResps,
+          responsavel: newResps.join(', '),
+        };
+      })
+    }));
+
+    const newState = {
+      ...currentState,
+      colunas: updatedColunas,
+      cronograma: updatedCronograma,
+    };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
+
+  /**
+   * Exclui um membro da lousa, opcionalmente reatribuindo suas tarefas para outro responsável
+   */
+  static deleteMember(
+    currentState: WhiteboardDataState,
+    memberName: string,
+    reassignedTo?: string | null
+  ): WhiteboardDataState {
+    const targetUpper = memberName.trim().toUpperCase();
+    const reassignUpper = reassignedTo ? reassignedTo.trim().toUpperCase() : null;
+    if (!targetUpper) return currentState;
+
+    // 1. Remover ou reatribuir nas colunas
+    const updatedColunas = currentState.colunas.map(col => ({
+      ...col,
+      itens: col.itens.map(item => {
+        const resps = extractResponsaveisList(item);
+        if (!resps.includes(targetUpper)) return item;
+        let newResps = resps.filter(r => r !== targetUpper);
+        if (reassignUpper && reassignUpper !== targetUpper) {
+          newResps = Array.from(new Set([...newResps, reassignUpper]));
+        }
+        return {
+          ...item,
+          responsaveis: newResps,
+          responsavel: newResps.length > 0 ? newResps.join(', ') : undefined,
+        };
+      })
+    }));
+
+    // 2. Remover ou reatribuir no cronograma
+    const updatedCronograma = currentState.cronograma.map(block => ({
+      ...block,
+      itens: block.itens.map(item => {
+        const resps = extractResponsaveisList(item);
+        if (!resps.includes(targetUpper)) return item;
+        let newResps = resps.filter(r => r !== targetUpper);
+        if (reassignUpper && reassignUpper !== targetUpper) {
+          newResps = Array.from(new Set([...newResps, reassignUpper]));
+        }
+        return {
+          ...item,
+          responsaveis: newResps,
+          responsavel: newResps.length > 0 ? newResps.join(', ') : undefined,
+        };
+      })
+    }));
+
+    const newState = {
+      ...currentState,
+      colunas: updatedColunas,
+      cronograma: updatedCronograma,
+    };
+    this.saveWhiteboardData(newState);
+    return newState;
+  }
 }
 
 export interface MemberActiveTask {

@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { WhiteboardColumn, WhiteboardTimelineBlock } from '@/types/war-room';
 import { extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
-import { User, Check, AlertTriangle, Clock, Calendar, CheckCircle2, ChevronRight, Filter, X, ArrowRight, Users } from 'lucide-react';
+import { User, Check, AlertTriangle, Clock, Calendar, CheckCircle2, ChevronRight, Filter, X, ArrowRight, Users, Edit3, Plus } from 'lucide-react';
 
 interface ResponsibleTask {
   id: string;
@@ -36,6 +36,7 @@ interface WhiteboardResponsibleBoardProps {
   onSelectResponsible?: (name: string | null) => void;
   selectedResponsible?: string | null;
   onClose?: () => void;
+  onOpenMemberModal?: (memberName: string | null) => void;
 }
 
 export function WhiteboardResponsibleBoard({
@@ -46,6 +47,7 @@ export function WhiteboardResponsibleBoard({
   onSelectResponsible,
   selectedResponsible,
   onClose,
+  onOpenMemberModal,
 }: WhiteboardResponsibleBoardProps) {
   const today = new Date();
   const todayDay = today.getDate();
@@ -211,6 +213,18 @@ export function WhiteboardResponsibleBoard({
 
         {/* CONTROLES / FECHAR */}
         <div className="flex items-center gap-2">
+          {onOpenMemberModal && (
+            <button
+              type="button"
+              onClick={() => onOpenMemberModal(null)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold transition-all shadow-sm"
+              title="Cadastrar um novo membro na Lousa"
+            >
+              <Plus size={13} />
+              <span>Novo Membro</span>
+            </button>
+          )}
+
           {selectedResponsible && onSelectResponsible && (
             <button
               type="button"
@@ -293,17 +307,34 @@ export function WhiteboardResponsibleBoard({
                   </div>
                 </div>
 
-                {/* SINALIZADOR PULSANTE DE ATRASO */}
-                {group.hasOverdue ? (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse shadow-sm flex items-center gap-1 flex-shrink-0">
-                    <AlertTriangle size={10} />
-                    {group.atrasados} Atrasada{group.atrasados > 1 ? 's' : ''}
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 flex-shrink-0">
-                    {group.pendentes === 0 ? 'Concluído' : 'Em Dia'}
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* SINALIZADOR PULSANTE DE ATRASO OU EM DIA */}
+                  {group.hasOverdue ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse shadow-sm flex items-center gap-1">
+                      <AlertTriangle size={10} />
+                      {group.atrasados} atr
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">
+                      {group.pendentes === 0 ? 'Concluído' : 'Em Dia'}
+                    </span>
+                  )}
+
+                  {/* BOTÃO EDITAR / GERENCIAR MEMBRO */}
+                  {onOpenMemberModal && group.nome !== 'SEM RESPONSÁVEL' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenMemberModal(group.nome);
+                      }}
+                      className="p-1 rounded text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-700"
+                      title={`Editar ou excluir membro ${group.nome}`}
+                    >
+                      <Edit3 size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* LISTA DE TAREFAS DESTE RESPONSÁVEL */}
