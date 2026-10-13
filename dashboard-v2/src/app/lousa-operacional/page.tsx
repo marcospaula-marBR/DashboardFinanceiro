@@ -18,7 +18,9 @@ import { WhiteboardEditDemandModal } from '@/components/war-room/WhiteboardEditD
 import { WhiteboardArchivedModal } from '@/components/war-room/WhiteboardArchivedModal';
 import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDemandColumnModal';
 import { WhiteboardMemberModal } from '@/components/war-room/WhiteboardMemberModal';
-import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus } from 'lucide-react';
+import { WhiteboardAdminNotificationsModal } from '@/components/war-room/WhiteboardAdminNotificationsModal';
+import { CollaborativePortalService } from '@/services/collaborative-portal.service';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -57,6 +59,21 @@ export default function LousaOperacionalPage() {
   // Estados de gestão de membros (editar, excluir e adicionar)
   const [isMemberModalOpen, setIsMemberModalOpen] = useState<boolean>(false);
   const [editingMemberName, setEditingMemberName] = useState<string | null>(null);
+
+  // Estados da Central de Notificações Administrativa e Ofertas de Ajuda
+  const [isAdminNotificationsModalOpen, setIsAdminNotificationsModalOpen] = useState<boolean>(false);
+  const [pendingHelpOffersCount, setPendingHelpOffersCount] = useState<number>(0);
+
+  const refreshHelpOffers = useCallback(() => {
+    CollaborativePortalService.getHelpOffers().then(offers => {
+      const count = offers.filter(o => o.status === 'pendente').length;
+      setPendingHelpOffersCount(count);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshHelpOffers();
+  }, [refreshHelpOffers]);
 
   // Ao ativar o Modo TV, ajusta automaticamente as demandas em títulos e cronograma em linhas
   useEffect(() => {
@@ -630,6 +647,26 @@ export default function LousaOperacionalPage() {
               <Users size={12} className="text-cyan-400" />
               <span>{isResponsibleBoardVisible ? 'Ocultar Quadro' : 'Quadro por Responsáveis'}</span>
             </button>
+
+            {/* BOTÃO DA CENTRAL DE NOTIFICAÇÕES & OFERTAS DE AJUDA */}
+            <button
+              type="button"
+              onClick={() => setIsAdminNotificationsModalOpen(true)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
+                pendingHelpOffersCount > 0
+                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/60 shadow-md shadow-emerald-950/50 animate-pulse'
+                  : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-cyan-500/40 hover:text-white'
+              }`}
+              title="Central de Notificações, Disparos e Gestão de Ofertas de Ajuda"
+            >
+              <Bell size={12} className={pendingHelpOffersCount > 0 ? 'text-emerald-400' : 'text-slate-400'} />
+              <span>🔔 Central Notificações</span>
+              {pendingHelpOffersCount > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-slate-950 font-black">
+                  🤝 {pendingHelpOffersCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -796,6 +833,15 @@ export default function LousaOperacionalPage() {
         totalTasksCount={editingMemberName ? responsibleCountsMap[editingMemberName.toUpperCase()]?.total || 0 : 0}
         onSaveMember={handleSaveMember}
         onDeleteMember={handleDeleteMember}
+      />
+
+      {/* ── MODAL ADMINISTRATIVO DE NOTIFICAÇÕES & OFERTAS DE AJUDA ── */}
+      <WhiteboardAdminNotificationsModal
+        isOpen={isAdminNotificationsModalOpen}
+        onClose={() => setIsAdminNotificationsModalOpen(false)}
+        allMembers={distinctResponsibles}
+        pendingHelpOffersCount={pendingHelpOffersCount}
+        onOfferDecided={refreshHelpOffers}
       />
     </div>
   );

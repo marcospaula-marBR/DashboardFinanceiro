@@ -15,7 +15,8 @@ import {
   Landmark,
   HandCoins,
   WalletCards,
-  Tv
+  Tv,
+  CheckSquare
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
 };
 
 const SATELLITES = [
+  { href: "/minhas-atividades", icon: CheckSquare, title: "Portal da Equipe", sub: "Minhas Atividades & Notificações" },
   { href: "/lousa-operacional", icon: Tv, title: "Lousa Operacional", sub: "War Room Modo TV" },
   { href: "/recebiveis", icon: BadgeDollarSign, title: "Recebíveis & Comissões", sub: "Unificado (Omie & Manual)" },
   { href: "/gestao-integrada.html", icon: Receipt, title: "Gestão Integrada", sub: "Faturamento & Impostos" },

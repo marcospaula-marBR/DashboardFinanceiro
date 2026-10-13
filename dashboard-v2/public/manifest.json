@@ -1,0 +1,24 @@
+{
+  "name": "PORTAL DA EQUIPE — MAR BRASIL",
+  "short_name": "Portal Mar Brasil",
+  "description": "Portal Colaborativo da Equipe & Central de Notificações Inteligentes da Mar Brasil",
+  "start_url": "/minhas-atividades",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050811",
+  "theme_color": "#060a13",
+  "icons": [
+    {
+      "src": "/Favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/Mar-Brasil-sem-fundo-preto.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
