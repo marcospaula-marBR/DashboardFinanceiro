@@ -18,10 +18,11 @@ export interface CollaborativeActivity {
   id: string;
   titulo: string;
   descricao: string;
-  origemTipo: 'coluna' | 'cronograma';
+  origemTipo: 'coluna' | 'cronograma' | 'rotina_semanal';
   origemId: string;
   origemTitulo: string;
   dia?: number;
+  diaSemana?: string;
   dataLimite?: string;
   prazoInfo: PrazoVisualInfo;
   concluido: boolean;

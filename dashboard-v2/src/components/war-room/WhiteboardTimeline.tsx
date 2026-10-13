@@ -1,8 +1,19 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { WhiteboardTimelineBlock, WhiteboardTimelineItem, WhiteboardItem } from '@/types/war-room';
-import { extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
+import { 
+  WhiteboardTimelineBlock, 
+  WhiteboardTimelineItem, 
+  WhiteboardItem,
+  WhiteboardWeekdayBlock,
+  WhiteboardWeekdayItem,
+  WeekdayKey
+} from '@/types/war-room';
+import { 
+  extractResponsaveisList, 
+  getResponsibleColor,
+  DEFAULT_WEEKDAY_BLOCKS
+} from '@/services/war-room.service';
 import { 
   Check, 
   Plus, 
@@ -21,13 +32,15 @@ import {
   ChevronUp,
   ChevronDown,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Calendar
 } from 'lucide-react';
 
-export type TimelineLayoutMode = 'rows' | 'grid';
+export type TimelineLayoutMode = 'rows' | 'grid' | 'week';
 
 interface WhiteboardTimelineProps {
   cronograma: WhiteboardTimelineBlock[];
+  gradeSemanal?: WhiteboardWeekdayBlock[];
   mesReferencia?: string;
   filterResponsible?: string | null;
   onlyOverdue?: boolean;
@@ -48,10 +61,16 @@ interface WhiteboardTimelineProps {
   onReorderItem?: (blockId: string, startIndex: number, endIndex: number) => void;
   onMoveItemBetweenBlocks?: (sourceBlockId: string, targetBlockId: string, itemId: string, targetIndex?: number) => void;
   onResetCycle?: () => void;
+  onToggleWeekdayItem?: (diaSemana: WeekdayKey, itemId: string) => void;
+  onAddWeekdayItem?: (diaSemana: WeekdayKey, descricao: string, responsavel?: string, responsaveis?: string[]) => void;
+  onEditWeekdayItem?: (diaSemana: WeekdayKey, itemId: string, descricao: string, responsaveis: string[]) => void;
+  onDeleteWeekdayItem?: (diaSemana: WeekdayKey, itemId: string) => void;
+  onResetWeekdayCycle?: () => void;
 }
 
 export function WhiteboardTimeline({
   cronograma,
+  gradeSemanal,
   mesReferencia,
   filterResponsible,
   onlyOverdue,
@@ -67,6 +86,11 @@ export function WhiteboardTimeline({
   onReorderItem,
   onMoveItemBetweenBlocks,
   onResetCycle,
+  onToggleWeekdayItem,
+  onAddWeekdayItem,
+  onEditWeekdayItem,
+  onDeleteWeekdayItem,
+  onResetWeekdayCycle,
 }: WhiteboardTimelineProps) {
   const today = new Date();
   const todayDay = today.getDate();
@@ -85,6 +109,22 @@ export function WhiteboardTimeline({
   const [inputDia, setInputDia] = useState<number>(todayDay);
   const [inputDesc, setInputDesc] = useState<string>('');
   const [inputResp, setInputResp] = useState<string>('');
+
+  // Estados da Grade Semanal Recorrente
+  const CANONICAL_MEMBERS = ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'] as const;
+  const weekdayBlocks = (gradeSemanal && gradeSemanal.length === 5) ? gradeSemanal : DEFAULT_WEEKDAY_BLOCKS;
+
+  const [activeInputWeekday, setActiveInputWeekday] = useState<WeekdayKey | null>(null);
+  const [inputWeekdayDesc, setInputWeekdayDesc] = useState<string>('');
+  const [inputWeekdayResps, setInputWeekdayResps] = useState<string[]>(['MARCOS']);
+
+  const [editingWeekdayState, setEditingWeekdayState] = useState<{
+    diaSemana: WeekdayKey;
+    diaNome: string;
+    item: WhiteboardWeekdayItem;
+  } | null>(null);
+  const [editWeekdayDesc, setEditWeekdayDesc] = useState<string>('');
+  const [editWeekdayResps, setEditWeekdayResps] = useState<string[]>([]);
 
   // Estados de edição da tarefa do calendário (Modal executivo completo)
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
@@ -208,6 +248,30 @@ export function WhiteboardTimeline({
       onDeleteItem(editingBlockId, editingItem.id);
       setEditingItem(null);
     }
+  };
+
+  // ── HANDLERS DA GRADE SEMANAL RECORRENTE ──
+  const handleStartEditWeekday = (diaSemana: WeekdayKey, item: WhiteboardWeekdayItem) => {
+    const block = weekdayBlocks.find(b => b.diaSemana === diaSemana);
+    setEditingWeekdayState({
+      diaSemana,
+      diaNome: block ? block.nome : diaSemana.toUpperCase(),
+      item,
+    });
+    setEditWeekdayDesc(item.descricao);
+    setEditWeekdayResps(extractResponsaveisList(item.responsaveis || item.responsavel));
+  };
+
+  const handleSaveNewWeekdayItem = (diaSemana: WeekdayKey) => {
+    if (!inputWeekdayDesc.trim()) {
+      setActiveInputWeekday(null);
+      return;
+    }
+    const resps = inputWeekdayResps.length > 0 ? inputWeekdayResps : ['MARCOS'];
+    onAddWeekdayItem?.(diaSemana, inputWeekdayDesc.trim().toUpperCase(), resps[0], resps);
+    setInputWeekdayDesc('');
+    setInputWeekdayResps(['MARCOS']);
+    setActiveInputWeekday(null);
   };
 
   // ── HANDLERS DE DRAG & DROP NATIVO ──
@@ -392,7 +456,7 @@ export function WhiteboardTimeline({
             </button>
           )}
 
-          {/* SELETOR DE MODO: LINHAS (TV) / GRADE */}
+          {/* SELETOR DE MODO: LINHAS (TV) / GRADE (6 BLOCOS) / GRADE SEMANAL */}
           <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
             <button
               type="button"
@@ -411,7 +475,7 @@ export function WhiteboardTimeline({
             <button
               type="button"
               onClick={() => handleSetLayoutMode('grid')}
-              title="Modo Grade: visualização em 6 caixas verticais."
+              title="Modo Grade: visualização em 6 caixas verticais por período do mês."
               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold transition-all ${
                 activeLayout === 'grid'
                   ? 'bg-cyan-600 text-white shadow-sm ring-1 ring-cyan-400'
@@ -421,22 +485,54 @@ export function WhiteboardTimeline({
               <LayoutGrid size={12} className={activeLayout === 'grid' ? 'text-white' : 'text-cyan-400'} />
               <span>Grade (6 Blocos)</span>
             </button>
-          </div>
 
-          {onResetCycle && (
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm('Deseja desmarcar todos os checks do mês para iniciar um novo ciclo de pagamentos recorrentes? As obrigações e responsáveis permanecerão salvos.')) {
-                  onResetCycle();
-                }
-              }}
-              title="Desmarcar todos os checks para o novo ciclo mensal"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-white text-xs font-bold transition-all shadow-sm"
+              onClick={() => handleSetLayoutMode('week')}
+              title="Modo Grade Semanal: visualização em 5 colunas (Segunda a Sexta) para rotinas e atividades específicas recorrentes."
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold transition-all ${
+                activeLayout === 'week'
+                  ? 'bg-cyan-600 text-white shadow-sm ring-1 ring-cyan-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
             >
-              <RotateCcw size={11} className="text-cyan-400" />
-              <span>Renovar Ciclo</span>
+              <CalendarSync size={12} className={activeLayout === 'week' ? 'text-white' : 'text-cyan-400'} />
+              <span>Grade Semanal (5 Dias)</span>
             </button>
+          </div>
+
+          {activeLayout === 'week' ? (
+            onResetWeekdayCycle && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Deseja desmarcar todas as rotinas semanais para iniciar um novo ciclo da semana? As atividades e responsáveis permanecerão salvos.')) {
+                    onResetWeekdayCycle();
+                  }
+                }}
+                title="Desmarcar todos os checks para o novo ciclo semanal"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-white text-xs font-bold transition-all shadow-sm"
+              >
+                <RotateCcw size={11} className="text-cyan-400" />
+                <span>Renovar Semana</span>
+              </button>
+            )
+          ) : (
+            onResetCycle && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Deseja desmarcar todos os checks do mês para iniciar um novo ciclo de pagamentos recorrentes? As obrigações e responsáveis permanecerão salvos.')) {
+                    onResetCycle();
+                  }
+                }}
+                title="Desmarcar todos os checks para o novo ciclo mensal"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-white text-xs font-bold transition-all shadow-sm"
+              >
+                <RotateCcw size={11} className="text-cyan-400" />
+                <span>Renovar Ciclo</span>
+              </button>
+            )
           )}
         </div>
       </div>
@@ -1000,6 +1096,257 @@ export function WhiteboardTimeline({
         </div>
       )}
 
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* CASO 3: VISÃO EM GRADE SEMANAL (5 DIAS: SEGUNDA A SEXTA)             */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {activeLayout === 'week' && (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between px-1 text-xs text-slate-400">
+            <span className="font-mono text-[11px] text-cyan-400 flex items-center gap-1.5 font-bold">
+              <CalendarSync size={13} />
+              Rotinas recorrentes da semana • Execução contínua de Segunda a Sexta
+            </span>
+            <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+              Hoje é {['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][today.getDay()]}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {weekdayBlocks.map((block) => {
+              const jsDay = today.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
+              const weekdayKeyMap: Record<WeekdayKey, number> = {
+                seg: 1,
+                ter: 2,
+                qua: 3,
+                qui: 4,
+                sex: 5,
+              };
+              const isCurrentWeekday = jsDay === weekdayKeyMap[block.diaSemana];
+              const isPastWeekday = jsDay > weekdayKeyMap[block.diaSemana] && jsDay <= 5;
+
+              let sortedItens = block.itens.slice();
+              if (filterResponsible) {
+                sortedItens = sortedItens.filter(it =>
+                  extractResponsaveisList(it.responsaveis || it.responsavel).includes(filterResponsible.toUpperCase())
+                );
+              }
+              if (onlyOverdue) {
+                sortedItens = sortedItens.filter(it => !it.concluido && isPastWeekday);
+              }
+
+              const totalItens = block.itens.length;
+              const concluidos = block.itens.filter(i => i.concluido).length;
+              const pendentesAtrasados = block.itens.filter(i => !i.concluido && isPastWeekday).length;
+
+              return (
+                <div
+                  key={block.diaSemana}
+                  className={`flex flex-col rounded-xl p-3 border transition-all relative ${
+                    isCurrentWeekday
+                      ? 'bg-[#0f172a] border-cyan-500 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-500/40'
+                      : pendentesAtrasados > 0
+                      ? 'bg-[#0f1424] border-rose-500/40 hover:border-rose-500/70'
+                      : 'bg-[#0b1120]/90 border-slate-800/80 hover:border-slate-700/80'
+                  }`}
+                >
+                  {isCurrentWeekday && (
+                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-cyan-500 text-slate-950 font-black text-[9px] uppercase tracking-wider flex items-center gap-1 shadow-md">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
+                      <span>⭐ DIA DE HOJE</span>
+                    </div>
+                  )}
+
+                  {/* CABEÇALHO DO DIA */}
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 pt-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`font-mono text-xs sm:text-sm font-black tracking-wide ${
+                        isCurrentWeekday ? 'text-cyan-400' : 'text-slate-200'
+                      }`}>
+                        {block.sigla}
+                      </span>
+                      <span className="text-[10px] sm:text-xs text-slate-400 font-semibold truncate">
+                        • {block.nome.split('-')[0]}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 font-mono text-[10px] flex-shrink-0">
+                      {pendentesAtrasados > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-rose-600/30 border border-rose-500/50 text-rose-300 font-bold animate-pulse">
+                          {pendentesAtrasados} pend
+                        </span>
+                      )}
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold">
+                        {concluidos}/{totalItens}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ITENS DA ROTINA DO DIA */}
+                  <div className="flex-1 space-y-1.5 min-h-[140px]">
+                    {sortedItens.length === 0 ? (
+                      <div className="p-3 rounded-lg border border-dashed border-slate-800 text-center text-[11px] text-slate-400 italic">
+                        Nenhuma rotina cadastrada
+                      </div>
+                    ) : (
+                      sortedItens.map((item) => {
+                        const resps = extractResponsaveisList(item.responsaveis || item.responsavel);
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => onToggleWeekdayItem?.(block.diaSemana, item.id)}
+                            className={`group/witem flex items-start justify-between gap-1.5 p-2 rounded-lg border cursor-pointer transition-all ${
+                              item.concluido
+                                ? 'bg-slate-900/40 border-slate-800/60 opacity-60'
+                                : isCurrentWeekday
+                                ? 'bg-cyan-950/20 border-cyan-900/40 hover:border-cyan-500/40'
+                                : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                              <div
+                                className={`mt-0.5 w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0 border transition-all ${
+                                  item.concluido ? 'bg-cyan-500 border-cyan-500 text-slate-950 shadow-sm' : 'border-slate-600 bg-slate-950'
+                                }`}
+                              >
+                                {item.concluido && <Check size={10} strokeWidth={3} />}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center flex-wrap gap-1 leading-tight mb-1">
+                                  {resps.map((resp) => {
+                                    const respColor = getResponsibleColor(resp);
+                                    return (
+                                      <span
+                                        key={resp}
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider border flex-shrink-0 ${respColor.badgeClass}`}
+                                      >
+                                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: respColor.hex }} />
+                                        <span>{resp}</span>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                                <p className={`text-xs font-semibold leading-tight break-words ${
+                                  item.concluido ? 'line-through text-slate-400' : 'text-slate-200'
+                                }`}>
+                                  {item.descricao}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center opacity-0 group-hover/witem:opacity-100 transition-opacity flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartEditWeekday(block.diaSemana, item);
+                                }}
+                                className="p-1 text-slate-400 hover:text-cyan-300"
+                                title="Editar Rotina"
+                              >
+                                <Edit3 size={11} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`Excluir a rotina "${item.descricao}"?`)) {
+                                    onDeleteWeekdayItem?.(block.diaSemana, item.id);
+                                  }
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-400"
+                                title="Excluir Rotina"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* ADICIONAR NOVA ROTINA NESTE DIA */}
+                  <div className="pt-2 mt-2 border-t border-slate-800/80">
+                    {activeInputWeekday === block.diaSemana ? (
+                      <div className="p-2 rounded-lg bg-slate-950 border border-cyan-500/50 space-y-2">
+                        <input
+                          type="text"
+                          value={inputWeekdayDesc}
+                          onChange={(e) => setInputWeekdayDesc(e.target.value)}
+                          placeholder="Descrição da rotina..."
+                          autoFocus
+                          className="w-full px-2 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded text-white focus:outline-none focus:border-cyan-400 font-mono"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveNewWeekdayItem(block.diaSemana);
+                            if (e.key === 'Escape') setActiveInputWeekday(null);
+                          }}
+                        />
+
+                        {/* SELETOR DE RESPONSÁVEIS */}
+                        <div className="flex flex-wrap gap-1">
+                          {CANONICAL_MEMBERS.map(m => {
+                            const isSelected = inputWeekdayResps.includes(m);
+                            const c = getResponsibleColor(m);
+                            return (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => {
+                                  setInputWeekdayResps(prev =>
+                                    prev.includes(m) ? prev.filter(r => r !== m) : [...prev, m]
+                                  );
+                                }}
+                                className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border transition-all ${
+                                  isSelected ? c.pillActiveClass : 'bg-slate-900 border-slate-800 text-slate-400'
+                                }`}
+                              >
+                                {m}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setActiveInputWeekday(null)}
+                            className="px-2 py-1 text-[10px] text-slate-400 hover:text-white rounded"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveNewWeekdayItem(block.diaSemana)}
+                            disabled={!inputWeekdayDesc.trim()}
+                            className="px-2.5 py-1 text-[10px] font-bold bg-cyan-600 hover:bg-cyan-500 text-white rounded disabled:opacity-50"
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveInputWeekday(block.diaSemana);
+                          setInputWeekdayDesc('');
+                          setInputWeekdayResps(['MARCOS']);
+                        }}
+                        className="w-full py-1.5 px-2 rounded-lg border border-dashed border-slate-800 hover:border-cyan-500/50 text-[10px] text-slate-400 hover:text-cyan-300 font-bold flex items-center justify-center gap-1 transition-all"
+                      >
+                        <Plus size={11} />
+                        <span>Adicionar Rotina</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── MODAL EXECUTIVO DE EDIÇÃO DA TAREFA DO CALENDÁRIO ── */}
       {editingItem && editingBlockId && (
         <div 
@@ -1143,6 +1490,145 @@ export function WhiteboardTimeline({
                   <button
                     type="submit"
                     className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs font-mono shadow-lg shadow-cyan-950/50 transition-all min-h-[38px]"
+                  >
+                    <Check size={14} className="stroke-[3]" />
+                    <span>Salvar Alterações</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ── MODAL EXECUTIVO DE EDIÇÃO DA ROTINA SEMANAL ── */}
+      {editingWeekdayState && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setEditingWeekdayState(null)}
+        >
+          <div 
+            className="w-full max-w-lg bg-[#090e1a] border border-cyan-500/50 rounded-2xl shadow-2xl shadow-cyan-950/50 flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* CABEÇALHO DO MODAL */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-[#060a13]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                  <CalendarSync size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black uppercase text-white font-mono tracking-wide">
+                    EDITAR ROTINA SEMANAL
+                  </h3>
+                  <span className="text-[11px] text-cyan-400 font-mono">
+                    Dia: {editingWeekdayState.diaNome}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingWeekdayState(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* FORMULÁRIO */}
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!editWeekdayDesc.trim()) return;
+                onEditWeekdayItem?.(
+                  editingWeekdayState.diaSemana,
+                  editingWeekdayState.item.id,
+                  editWeekdayDesc.trim().toUpperCase(),
+                  editWeekdayResps
+                );
+                setEditingWeekdayState(null);
+              }} 
+              className="p-4 sm:p-5 space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase font-mono mb-1.5">
+                  Descrição da Rotina:
+                </label>
+                <input
+                  type="text"
+                  value={editWeekdayDesc}
+                  onChange={(e) => setEditWeekdayDesc(e.target.value)}
+                  placeholder="Ex: FECHAMENTO OPERACIONAL & PREVISÃO DE CAIXA"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-cyan-500 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase font-mono mb-1.5 flex items-center justify-between">
+                  <span>Responsáveis Atribuídos (Apenas Cadastrados):</span>
+                  <span className="text-[10px] text-cyan-400 font-normal">
+                    {editWeekdayResps.length} selecionado{editWeekdayResps.length !== 1 ? 's' : ''}
+                  </span>
+                </label>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {CANONICAL_MEMBERS.map(memberName => {
+                    const isSelected = editWeekdayResps.includes(memberName);
+                    const colorConfig = getResponsibleColor(memberName);
+
+                    return (
+                      <button
+                        key={memberName}
+                        type="button"
+                        onClick={() => {
+                          setEditWeekdayResps(prev =>
+                            prev.includes(memberName) 
+                              ? prev.filter(r => r !== memberName) 
+                              : [...prev, memberName]
+                          );
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono transition-all border ${
+                          isSelected
+                            ? colorConfig.pillActiveClass
+                            : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-500'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${colorConfig.dotClass}`} />
+                        <span>{memberName}</span>
+                        {isSelected && <Check size={11} className="stroke-[3]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-800 mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Deseja excluir a rotina "${editingWeekdayState.item.descricao}"?`)) {
+                      onDeleteWeekdayItem?.(editingWeekdayState.diaSemana, editingWeekdayState.item.id);
+                      setEditingWeekdayState(null);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold transition-all"
+                >
+                  <Trash2 size={13} />
+                  <span>Excluir Rotina</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingWeekdayState(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!editWeekdayDesc.trim()}
+                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs font-mono shadow-lg shadow-cyan-950/50 transition-all min-h-[38px] disabled:opacity-50"
                   >
                     <Check size={14} className="stroke-[3]" />
                     <span>Salvar Alterações</span>

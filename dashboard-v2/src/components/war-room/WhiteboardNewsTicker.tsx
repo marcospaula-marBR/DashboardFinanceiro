@@ -6,7 +6,7 @@ import { Pause, Zap, Check, AlertTriangle, Clock, Calendar, Users, ChevronRight,
 
 interface WhiteboardNewsTickerProps {
   memberTaskGroups: MemberActiveTaskGroup[];
-  onToggleItem?: (origem: 'cronograma' | 'coluna', origemId: string, itemId: string) => void;
+  onToggleItem?: (origem: 'cronograma' | 'coluna' | 'semanal', origemId: string, itemId: string) => void;
   onSelectMember?: (name: string | null) => void;
   selectedMember?: string | null;
   cotacaoUsdGs?: string;

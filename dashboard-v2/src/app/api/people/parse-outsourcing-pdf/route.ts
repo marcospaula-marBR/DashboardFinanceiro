@@ -60,6 +60,15 @@ const MONTHS_MAP: Record<string, string> = {
  * No pdf-parse, o cabeçalho "DZM - AGOSTO/2026" aparece no FINAL do texto.
  */
 function extractCompetencia(text: string): string {
+  // 1. Prioriza competência no formato MM/YYYY próximo ao cabeçalho ou após a palavra Competência
+  const headerMatch = text.match(/Compet[êe]ncia:?\s*(\d{2}\/\d{4})/i) ||
+                      text.match(/EXTRATO\s+MENSAL\s*[\r\n]+\s*(\d{2}\/\d{4})/i) ||
+                      text.match(/(\d{2}\/\d{4})\s*[\r\n]+\s*Empresa:/i);
+  if (headerMatch) {
+    const [m, y] = headerMatch[1].split('/');
+    return `${y}-${m}`;
+  }
+
   const extMatch = text.match(
     /(JANEIRO|FEVEREIRO|MAR[CÇ]O|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)[\/\-\s]+(\d{4})/i
   );
@@ -77,23 +86,82 @@ function extractCompetencia(text: string): string {
 }
 
 /**
- * Detecta o tipo de documento PDF pelo conteúdo.
- * No pdf-parse, o título (VALE ALIMENTAÇÃO / VALE TRANSPORTE) aparece no FINAL do texto.
+ * Detecta com alta precisão o tipo de documento PDF pelo conteúdo textual extraído.
+ * A ordem de verificação é CRÍTICA: relatórios de Extrato Mensal/Folha Contábil
+ * contêm rubricas e descontos com os nomes "Vale Alimentação" e "Vale Transporte",
+ * portanto a detecção de Extrato Mensal deve preceder as detecções de VA e VT.
  */
 function detectDocType(text: string): PdfDocType {
   const upper = text.toUpperCase();
-  if (upper.includes('VALE ALIMENTA') || upper.includes('VALE REFEIC') || upper.includes('CESTA BASICA')) {
+  const cpfs = text.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/g) || [];
+
+  // 1. Extrato Mensal / Folha Contábil (Domínio Sistemas / Realcontábil / etc.)
+  const hasExtratoTitle =
+    upper.includes('EXTRATO MENSAL') ||
+    upper.includes('FOLHA MENSAL') ||
+    upper.includes('FOLHA DE PAGAMENTO') ||
+    upper.includes('DEMONSTRATIVO DE PAGAMENTO') ||
+    upper.includes('RELAÇÃO DE LÍQUIDOS') ||
+    upper.includes('RELACAO DE LIQUIDOS') ||
+    upper.includes('RESUMO POR RUBRICAS');
+
+  const hasDominioMarkers =
+    upper.includes('EMPR.:') ||
+    upper.includes('EMPR:') ||
+    /\b\d+\s*[A-ZÀ-Ú\s]{3,}EMPR\.?:/i.test(text);
+
+  const hasPayrollKeywords =
+    (upper.includes('PROVENTOS') && upper.includes('DESCONTOS')) ||
+    upper.includes('LÍQUIDO GERAL') ||
+    upper.includes('LIQUIDO GERAL') ||
+    upper.includes('CÁLCULO:FOLHA') ||
+    upper.includes('CALCULO:FOLHA') ||
+    upper.includes('VÍNCULO:') ||
+    upper.includes('VINCULO:') ||
+    upper.includes('HORAS MÊS:') ||
+    upper.includes('HORAS MES:') ||
+    upper.includes('BASE DO FGTS');
+
+  if (hasExtratoTitle || hasDominioMarkers || (cpfs.length >= 2 && hasPayrollKeywords)) {
+    return 'extrato_mensal';
+  }
+
+  // 2. VT (Vale Transporte)
+  const isVtSpecific =
+    upper.includes('COLABORADOR:ITINER') ||
+    upper.includes('ITINERÁRIO') ||
+    upper.includes('ITINERARIO') ||
+    upper.includes('ONIBUS') ||
+    upper.includes('QTD SABADO') ||
+    (upper.includes('SEGUNDA A SEXTA') && upper.includes('VALE TRANSPORTE'));
+
+  if (isVtSpecific) {
+    return 'vt';
+  }
+
+  // 3. VA (Vale Alimentação / Refeição / Cesta Básica)
+  const isVaSpecific =
+    upper.includes('COLABORADOR:VA') ||
+    upper.includes('CESTA BASICA') ||
+    upper.includes('CESTA BÁSICA') ||
+    upper.includes('VALE REFEIC') ||
+    (upper.includes('VALE ALIMENTA') && !upper.includes('VALE TRANSPORTE'));
+
+  if (isVaSpecific) {
     return 'va';
   }
+
+  // Fallbacks
   if (upper.includes('VALE TRANSPORTE')) {
     return 'vt';
   }
-  if (upper.includes('EMPR.:') || upper.includes('PROVENTOS') || upper.includes('HOLERITE')) {
+  if (upper.includes('VALE ALIMENTA')) {
+    return 'va';
+  }
+  if (upper.includes('PROVENTOS') || upper.includes('HOLERITE') || cpfs.length > 0) {
     return 'extrato_mensal';
   }
-  if (/\b\d{3,4}\s+[\d,\.]+[DC]\b/.test(text.slice(0, 2000))) {
-    return 'extrato_mensal';
-  }
+
   return 'unknown';
 }
 
@@ -102,7 +170,12 @@ function extractEmpresa(text: string): string {
   const m = text.match(
     /^([A-Z][A-Z\s\.]+?)\s*-\s*(JANEIRO|FEVEREIRO|MAR|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)/im
   );
-  return m ? m[1].trim() : 'DZM';
+  if (m) return m[1].trim();
+  const empMatch = text.match(/(\d+\s*-\s*[A-Z0-9\.\s]+(?:LTDA|S\/A|ME|EPP))/i);
+  if (empMatch) return empMatch[1].trim();
+  const filialMatch = text.match(/Filial:\s*([^\r\n]+)/i);
+  if (filialMatch) return filialMatch[1].trim();
+  return 'DZM';
 }
 
 // ─── Parser: VA (Vale Alimentação / Refeição / Cesta Básica) ──────────────────
@@ -316,6 +389,7 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
+    const requestedDocType = (formData.get('docType') as string | null)?.toLowerCase();
 
     if (!file) {
       return NextResponse.json({ error: 'Nenhum arquivo PDF enviado.' }, { status: 400 });
@@ -331,7 +405,11 @@ export async function POST(req: Request) {
     }
 
     const competencia = extractCompetencia(text);
-    const docType = detectDocType(text);
+    const detectedType = detectDocType(text);
+    const docType: PdfDocType =
+      (requestedDocType && ['extrato_mensal', 'va', 'vt'].includes(requestedDocType))
+        ? (requestedDocType as PdfDocType)
+        : detectedType;
     const empresa = extractEmpresa(text);
 
     // ── VA ─────────────────────────────────────────────────────────────────────

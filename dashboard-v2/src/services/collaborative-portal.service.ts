@@ -16,10 +16,11 @@ import {
 import { 
   WarRoomService, 
   DEFAULT_WHITEBOARD_DATA, 
+  DEFAULT_WEEKDAY_BLOCKS,
   calculatePrazoInfo, 
   extractResponsaveisList 
 } from '@/services/war-room.service';
-import { WhiteboardDataState } from '@/types/war-room';
+import { WhiteboardDataState, PrazoVisualInfo } from '@/types/war-room';
 
 const LOCAL_HELP_OFFERS_KEY = 'marbrasil_help_offers_v1';
 const LOCAL_ACKS_KEY = 'marbrasil_task_acks_v1';
@@ -185,6 +186,84 @@ export class CollaborativePortalService {
             acknowledgedByName: ackRecord?.memberName,
             helpOffersCount: pendingOffers.length,
             userHasPendingHelpOffer: userHasPending,
+          });
+        });
+      });
+    }
+
+    // Processar rotinas da Grade Semanal Recorrente (Segunda a Sexta)
+    const gradeSemanal = (whiteboardData.gradeSemanal && whiteboardData.gradeSemanal.length === 5)
+      ? whiteboardData.gradeSemanal
+      : DEFAULT_WEEKDAY_BLOCKS;
+
+    if (gradeSemanal && Array.isArray(gradeSemanal)) {
+      const hoje = new Date();
+      const currentJsDay = hoje.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
+      const weekdayKeyMap: Record<string, number> = {
+        seg: 1,
+        ter: 2,
+        qua: 3,
+        qui: 4,
+        sex: 5,
+      };
+
+      gradeSemanal.forEach(block => {
+        const blockJsDay = weekdayKeyMap[block.diaSemana] || 1;
+        const isToday = currentJsDay === blockJsDay;
+        const isPastDay = currentJsDay > blockJsDay && currentJsDay <= 5;
+
+        block.itens.forEach(item => {
+          const resps = extractResponsaveisList(item.responsaveis || item.responsavel);
+          
+          let prazoVisual: PrazoVisualInfo;
+          if (item.concluido) {
+            prazoVisual = {
+              status: 'concluido',
+              rotulo: 'Concluído',
+              badgeClass: 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300',
+              diasRestantes: 0,
+            };
+          } else if (isToday) {
+            prazoVisual = {
+              status: 'hoje',
+              rotulo: 'Hoje (Rotina)',
+              badgeClass: 'bg-cyan-950/80 border-cyan-400 text-cyan-200 ring-1 ring-cyan-400',
+              diasRestantes: 0,
+            };
+          } else if (isPastDay) {
+            prazoVisual = {
+              status: 'atrasado',
+              rotulo: `Atrasada (${block.sigla})`,
+              badgeClass: 'bg-rose-950/80 border-rose-500 text-rose-300 ring-1 ring-rose-500/50 animate-pulse',
+              diasRestantes: -(currentJsDay - blockJsDay),
+            };
+          } else {
+            const diasFaltam = blockJsDay > currentJsDay ? blockJsDay - currentJsDay : (7 - currentJsDay + blockJsDay);
+            prazoVisual = {
+              status: 'em_dia',
+              rotulo: `Toda ${block.nome.split('-')[0]}`,
+              badgeClass: 'bg-slate-900 border-slate-700 text-slate-300',
+              diasRestantes: diasFaltam,
+            };
+          }
+
+          activities.push({
+            id: item.id,
+            titulo: item.descricao,
+            descricao: `Rotina Recorrente Semanal • ${block.nome}`,
+            origemTipo: 'rotina_semanal',
+            origemId: block.diaSemana,
+            origemTitulo: `🗓️ Toda ${block.nome.split('-')[0]}`,
+            diaSemana: block.diaSemana,
+            prazoInfo: prazoVisual,
+            concluido: item.concluido,
+            destaque: item.destaque,
+            prioridade: (isPastDay && !item.concluido) ? 'urgente' : 'normal',
+            responsaveis: resps,
+            requiresAck: false,
+            ackStatus: 'nao_requer',
+            helpOffersCount: 0,
+            userHasPendingHelpOffer: false,
           });
         });
       });

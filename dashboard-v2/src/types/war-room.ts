@@ -81,9 +81,29 @@ export interface WhiteboardTimelineBlock {
   itens: WhiteboardTimelineItem[];
 }
 
+export type WeekdayKey = 'seg' | 'ter' | 'qua' | 'qui' | 'sex';
+
+export interface WhiteboardWeekdayItem {
+  id: string;
+  diaSemana: WeekdayKey;
+  descricao: string;
+  concluido: boolean;
+  responsavel?: string;
+  responsaveis?: string[];
+  destaque?: boolean;
+}
+
+export interface WhiteboardWeekdayBlock {
+  diaSemana: WeekdayKey;
+  nome: string; // "Segunda-feira", "Terça-feira", etc.
+  sigla: string; // "SEG", "TER", "QUA", "QUI", "SEX"
+  itens: WhiteboardWeekdayItem[];
+}
+
 export interface WhiteboardDataState {
   mesReferencia?: string; // YYYY-MM para controle de renovação automática mensal
   colunas: WhiteboardColumn[];
   followTheMoney: FollowTheMoneyState;
   cronograma: WhiteboardTimelineBlock[];
+  gradeSemanal?: WhiteboardWeekdayBlock[];
 }

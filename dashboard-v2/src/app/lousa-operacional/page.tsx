@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor, getTopTasksPerMember } from '@/services/war-room.service';
-import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn } from '@/types/war-room';
+import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn, WeekdayKey } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
 
@@ -136,6 +136,9 @@ export default function LousaOperacionalPage() {
     data.colunas.forEach(col => col.itens.forEach(it => {
       extractResponsaveisList(it).forEach(r => set.add(r));
     }));
+    data.gradeSemanal?.forEach(blk => blk.itens.forEach(it => {
+      extractResponsaveisList(it.responsaveis || it.responsavel).forEach(r => set.add(r));
+    }));
     return Array.from(set).sort();
   }, [data]);
 
@@ -170,6 +173,12 @@ export default function LousaOperacionalPage() {
         if (!it.arquivado) {
           extractResponsaveisList(it).forEach(r => registerTask(r, it.concluido, false));
         }
+      });
+    });
+
+    data.gradeSemanal?.forEach(blk => {
+      blk.itens.forEach(it => {
+        extractResponsaveisList(it.responsaveis || it.responsavel).forEach(r => registerTask(r, it.concluido, false));
       });
     });
 
@@ -209,6 +218,13 @@ export default function LousaOperacionalPage() {
     });
 
     data.cronograma.forEach(blk => {
+      blk.itens.forEach(it => {
+        total++;
+        if (it.concluido) concluidos++;
+      });
+    });
+
+    data.gradeSemanal?.forEach(blk => {
       blk.itens.forEach(it => {
         total++;
         if (it.concluido) concluidos++;
@@ -475,6 +491,43 @@ export default function LousaOperacionalPage() {
 
   const handleResetCycle = () => {
     const updated = WarRoomService.resetMonthlyRecurringChecks(data);
+    setData(updated);
+  };
+
+  // ── HANDLERS DA GRADE SEMANAL RECORRENTE (SEGUNDA A SEXTA) ──
+  const handleToggleWeekdayItem = (diaSemana: WeekdayKey, itemId: string) => {
+    const updated = WarRoomService.toggleWeekdayItem(data, diaSemana, itemId);
+    setData(updated);
+  };
+
+  const handleAddWeekdayItem = (diaSemana: WeekdayKey, descricao: string, responsavel?: string, responsaveis?: string[]) => {
+    const updated = WarRoomService.addWeekdayItem(data, diaSemana, descricao, responsavel, responsaveis);
+    setData(updated);
+
+    const targetResps = extractResponsaveisList({ responsavel, responsaveis });
+    if (targetResps.length > 0) {
+      CollaborativePortalService.createAutomaticTaskNotification({
+        taskTitle: descricao,
+        origin: `Grade Semanal Recorrente (${diaSemana.toUpperCase()})`,
+        responsaveis: targetResps,
+        prazo: `Toda ${diaSemana.toUpperCase()}`,
+        isUrgent: false,
+      }).catch(err => console.warn('Erro ao disparar notificação de rotina semanal:', err));
+    }
+  };
+
+  const handleEditWeekdayItem = (diaSemana: WeekdayKey, itemId: string, descricao: string, responsaveis: string[]) => {
+    const updated = WarRoomService.editWeekdayItem(data, diaSemana, itemId, descricao, responsaveis);
+    setData(updated);
+  };
+
+  const handleDeleteWeekdayItem = (diaSemana: WeekdayKey, itemId: string) => {
+    const updated = WarRoomService.deleteWeekdayItem(data, diaSemana, itemId);
+    setData(updated);
+  };
+
+  const handleResetWeekdayCycle = () => {
+    const updated = WarRoomService.resetWeekdayCycle(data);
     setData(updated);
   };
 
@@ -803,6 +856,7 @@ export default function LousaOperacionalPage() {
         {/* SEÇÃO 3: CRONOGRAMA DE VENCIMENTOS DO MÊS EM LINHAS OU GRADE COM PROJEÇÃO SINCRONIZADA */}
         <WhiteboardTimeline
           cronograma={data.cronograma}
+          gradeSemanal={data.gradeSemanal}
           mesReferencia={data.mesReferencia}
           filterResponsible={selectedResponsible}
           onlyOverdue={onlyOverdueFilter}
@@ -815,6 +869,8 @@ export default function LousaOperacionalPage() {
               onToggleItem={(origem, origemId, itemId) => {
                 if (origem === 'cronograma') {
                   handleToggleTimelineItem(origemId, itemId);
+                } else if (origem === 'semanal') {
+                  handleToggleWeekdayItem(origemId as WeekdayKey, itemId);
                 } else {
                   handleToggleColumnItem(origemId, itemId);
                 }
@@ -835,6 +891,11 @@ export default function LousaOperacionalPage() {
           onReorderItem={handleReorderTimelineItem}
           onMoveItemBetweenBlocks={handleMoveTimelineItem}
           onResetCycle={handleResetCycle}
+          onToggleWeekdayItem={handleToggleWeekdayItem}
+          onAddWeekdayItem={handleAddWeekdayItem}
+          onEditWeekdayItem={handleEditWeekdayItem}
+          onDeleteWeekdayItem={handleDeleteWeekdayItem}
+          onResetWeekdayCycle={handleResetWeekdayCycle}
         />
       </main>
 

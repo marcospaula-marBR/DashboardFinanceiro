@@ -14,6 +14,9 @@ import {
   WhiteboardTimelineItem,
   PrazoVisualInfo,
   PrazoStatus,
+  WhiteboardWeekdayBlock,
+  WhiteboardWeekdayItem,
+  WeekdayKey,
 } from '@/types/war-room';
 import { supabase } from '@/lib/supabase';
 
@@ -691,7 +694,56 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
       ],
     },
   ],
+  gradeSemanal: [
+    {
+      diaSemana: 'seg',
+      nome: 'Segunda-feira',
+      sigla: 'SEG',
+      itens: [
+        { id: 'wd-seg-1', diaSemana: 'seg', descricao: 'ALINHAMENTO SEMANAL DE PRIORIDADES', concluido: false, responsavel: 'MARCOS', responsaveis: ['MARCOS'] },
+        { id: 'wd-seg-2', diaSemana: 'seg', descricao: 'CONTAS A PAGAR & CONCILIAÇÃO DA SEMANA', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+      ],
+    },
+    {
+      diaSemana: 'ter',
+      nome: 'Terça-feira',
+      sigla: 'TER',
+      itens: [
+        { id: 'wd-ter-1', diaSemana: 'ter', descricao: 'EMISSÃO E VALIDAÇÃO DE NOTAS FISCAIS', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'wd-ter-2', diaSemana: 'ter', descricao: 'ACOMPANHAMENTO DE ATENDIMENTOS E JURÍDICO', concluido: false, responsavel: 'JURÍDICO', responsaveis: ['JURÍDICO'] },
+      ],
+    },
+    {
+      diaSemana: 'qua',
+      nome: 'Quarta-feira',
+      sigla: 'QUA',
+      itens: [
+        { id: 'wd-qua-1', diaSemana: 'qua', descricao: 'CONCILIAÇÃO CAMBIAL & REVISÃO DLOCAL', concluido: false, responsavel: 'GUILHERME', responsaveis: ['GUILHERME'] },
+        { id: 'wd-qua-2', diaSemana: 'qua', descricao: 'ROTINAS OPERACIONAIS G2 & TI', concluido: false, responsavel: 'TI', responsaveis: ['TI'] },
+      ],
+    },
+    {
+      diaSemana: 'qui',
+      nome: 'Quinta-feira',
+      sigla: 'QUI',
+      itens: [
+        { id: 'wd-qui-1', diaSemana: 'qui', descricao: 'REVISÃO DE CONTRATOS & PEOPLEBOARD', concluido: false, responsavel: 'MELISSA', responsaveis: ['MELISSA'] },
+        { id: 'wd-qui-2', diaSemana: 'qui', descricao: 'AUDITORIA CONTÁBIL & FECHAMENTO PARCIAL', concluido: false, responsavel: 'CONTÁBIL', responsaveis: ['CONTÁBIL'] },
+      ],
+    },
+    {
+      diaSemana: 'sex',
+      nome: 'Sexta-feira',
+      sigla: 'SEX',
+      itens: [
+        { id: 'wd-sex-1', diaSemana: 'sex', descricao: 'FECHAMENTO OPERACIONAL & PREVISÃO DE CAIXA', concluido: false, responsavel: 'FINANCEIRO', responsaveis: ['FINANCEIRO'] },
+        { id: 'wd-sex-2', diaSemana: 'sex', descricao: 'CHECK DE PENDÊNCIAS CRÍTICAS DA SEMANA', concluido: false, responsavel: 'MARCOS', responsaveis: ['MARCOS'] },
+      ],
+    },
+  ],
 };
+
+export const DEFAULT_WEEKDAY_BLOCKS: WhiteboardWeekdayBlock[] = DEFAULT_WHITEBOARD_DATA.gradeSemanal || [];
 
 export class WarRoomService {
   /**
@@ -840,6 +892,11 @@ export class WarRoomService {
           // Persiste a versão sanitizada se houve correção ou virada de mês
           this.saveWhiteboardData(parsed);
         }
+
+        if (!parsed.gradeSemanal || !Array.isArray(parsed.gradeSemanal) || parsed.gradeSemanal.length !== 5) {
+          parsed.gradeSemanal = DEFAULT_WEEKDAY_BLOCKS;
+        }
+
         return parsed;
       }
     } catch (e) {
@@ -850,6 +907,7 @@ export class WarRoomService {
       ...DEFAULT_WHITEBOARD_DATA,
       mesReferencia: currentMonthKey,
       cronograma: this.sanitizeCronograma(DEFAULT_WHITEBOARD_DATA.cronograma),
+      gradeSemanal: DEFAULT_WEEKDAY_BLOCKS,
     };
   }
 
@@ -896,6 +954,151 @@ export class WarRoomService {
       }
     }
     return DEFAULT_WHITEBOARD_DATA;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // ── MÉTODOS DE CONTROLE DA GRADE SEMANAL RECORRENTE (SEGUNDA A SEXTA) ──
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Obtém os blocos dos dias da semana (Segunda a Sexta)
+   */
+  static getWeekdayBlocks(data?: WhiteboardDataState): WhiteboardWeekdayBlock[] {
+    const current = data || this.getWhiteboardData();
+    if (current.gradeSemanal && Array.isArray(current.gradeSemanal) && current.gradeSemanal.length === 5) {
+      return current.gradeSemanal;
+    }
+    return DEFAULT_WEEKDAY_BLOCKS;
+  }
+
+  /**
+   * Alterna a conclusão de uma rotina semanal específica
+   */
+  static toggleWeekdayItem(data: WhiteboardDataState, diaSemana: WeekdayKey, itemId: string): WhiteboardDataState {
+    const grade = (data.gradeSemanal && data.gradeSemanal.length === 5) 
+      ? [...data.gradeSemanal] 
+      : [...DEFAULT_WEEKDAY_BLOCKS];
+
+    const updated = grade.map(block => {
+      if (block.diaSemana !== diaSemana) return block;
+      return {
+        ...block,
+        itens: block.itens.map(it => it.id === itemId ? { ...it, concluido: !it.concluido } : it)
+      };
+    });
+
+    const nextState: WhiteboardDataState = { ...data, gradeSemanal: updated };
+    this.saveWhiteboardData(nextState);
+    return nextState;
+  }
+
+  /**
+   * Adiciona uma nova atividade recorrente a um dia da semana
+   */
+  static addWeekdayItem(
+    data: WhiteboardDataState, 
+    diaSemana: WeekdayKey, 
+    descricao: string, 
+    responsavel?: string, 
+    responsaveis?: string[]
+  ): WhiteboardDataState {
+    const grade = (data.gradeSemanal && data.gradeSemanal.length === 5) 
+      ? [...data.gradeSemanal] 
+      : [...DEFAULT_WEEKDAY_BLOCKS];
+
+    const resps = responsaveis && responsaveis.length > 0 ? responsaveis : (responsavel ? [responsavel] : ['MARCOS']);
+    const newItem: WhiteboardWeekdayItem = {
+      id: `wd-${diaSemana}-${Date.now()}`,
+      diaSemana,
+      descricao: descricao.trim().toUpperCase(),
+      responsavel: resps[0],
+      responsaveis: resps,
+      concluido: false,
+    };
+
+    const updated = grade.map(block => {
+      if (block.diaSemana !== diaSemana) return block;
+      return {
+        ...block,
+        itens: [...block.itens, newItem]
+      };
+    });
+
+    const nextState: WhiteboardDataState = { ...data, gradeSemanal: updated };
+    this.saveWhiteboardData(nextState);
+    return nextState;
+  }
+
+  /**
+   * Edita uma atividade recorrente existente da semana
+   */
+  static editWeekdayItem(
+    data: WhiteboardDataState,
+    diaSemana: WeekdayKey,
+    itemId: string,
+    descricao: string,
+    responsaveis: string[]
+  ): WhiteboardDataState {
+    const grade = (data.gradeSemanal && data.gradeSemanal.length === 5) 
+      ? [...data.gradeSemanal] 
+      : [...DEFAULT_WEEKDAY_BLOCKS];
+
+    const resps = responsaveis.length > 0 ? responsaveis : ['MARCOS'];
+    const updated = grade.map(block => {
+      if (block.diaSemana !== diaSemana) return block;
+      return {
+        ...block,
+        itens: block.itens.map(it => it.id === itemId ? {
+          ...it,
+          descricao: descricao.trim().toUpperCase(),
+          responsavel: resps[0],
+          responsaveis: resps
+        } : it)
+      };
+    });
+
+    const nextState: WhiteboardDataState = { ...data, gradeSemanal: updated };
+    this.saveWhiteboardData(nextState);
+    return nextState;
+  }
+
+  /**
+   * Exclui uma atividade recorrente da semana
+   */
+  static deleteWeekdayItem(data: WhiteboardDataState, diaSemana: WeekdayKey, itemId: string): WhiteboardDataState {
+    const grade = (data.gradeSemanal && data.gradeSemanal.length === 5) 
+      ? [...data.gradeSemanal] 
+      : [...DEFAULT_WEEKDAY_BLOCKS];
+
+    const updated = grade.map(block => {
+      if (block.diaSemana !== diaSemana) return block;
+      return {
+        ...block,
+        itens: block.itens.filter(it => it.id !== itemId)
+      };
+    });
+
+    const nextState: WhiteboardDataState = { ...data, gradeSemanal: updated };
+    this.saveWhiteboardData(nextState);
+    return nextState;
+  }
+
+  /**
+   * Reinicia o ciclo semanal: desmarca todas as rotinas para a nova semana
+   */
+  static resetWeekdayCycle(data: WhiteboardDataState): WhiteboardDataState {
+    const grade = (data.gradeSemanal && data.gradeSemanal.length === 5) 
+      ? [...data.gradeSemanal] 
+      : [...DEFAULT_WEEKDAY_BLOCKS];
+
+    const updated = grade.map(block => ({
+      ...block,
+      itens: block.itens.map(it => ({ ...it, concluido: false }))
+    }));
+
+    const nextState: WhiteboardDataState = { ...data, gradeSemanal: updated };
+    this.saveWhiteboardData(nextState);
+    return nextState;
   }
 
   /**
@@ -1859,7 +2062,7 @@ export class WarRoomService {
 export interface MemberActiveTask {
   id: string;
   itemId: string;
-  origem: 'cronograma' | 'coluna';
+  origem: 'cronograma' | 'coluna' | 'semanal';
   origemId: string;
   origemNome: string;
   texto: string;
@@ -1980,6 +2183,51 @@ export function getTopTasksPerMember(data: WhiteboardDataState, maxPerMember = 5
       });
     });
   });
+
+  // 3. Tarefas da Grade Semanal Recorrente
+  if (data.gradeSemanal && Array.isArray(data.gradeSemanal)) {
+    const jsDay = today.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
+    const weekdayMap: Record<string, number> = {
+      seg: 1,
+      ter: 2,
+      qua: 3,
+      qui: 4,
+      sex: 5,
+    };
+
+    data.gradeSemanal.forEach(block => {
+      const blockJsDay = weekdayMap[block.diaSemana] || 1;
+      const isToday = jsDay === blockJsDay;
+      const isOverdue = jsDay > blockJsDay && jsDay <= 5;
+      const diasAtraso = isOverdue ? jsDay - blockJsDay : 0;
+      const prazoTexto = isToday 
+        ? `Toda ${block.sigla} (HOJE)` 
+        : isOverdue 
+        ? `Toda ${block.sigla} (${diasAtraso}d atr)` 
+        : `Toda ${block.sigla}`;
+
+      const sortWeight = isOverdue ? -diasAtraso : isToday ? 0 : (blockJsDay > jsDay ? blockJsDay - jsDay : 7 - jsDay + blockJsDay);
+
+      block.itens.forEach(item => {
+        if (item.concluido) return;
+        const resps = extractResponsaveisList(item.responsaveis || item.responsavel);
+        resps.forEach(resp => {
+          registerTask(resp, {
+            id: `semanal-${item.id}-${resp}`,
+            itemId: item.id,
+            origem: 'semanal',
+            origemId: block.diaSemana,
+            origemNome: `Toda ${block.nome.split('-')[0]}`,
+            texto: item.descricao,
+            isOverdue,
+            diasAtraso,
+            prazoTexto,
+            sortWeight,
+          });
+        });
+      });
+    });
+  }
 
   // Apenas membros existentes que possuem tarefas ativas registradas
   const allNames = Array.from(memberTasksMap.keys());
