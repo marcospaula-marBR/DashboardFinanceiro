@@ -39,6 +39,7 @@ interface WhiteboardTimelineProps {
     corMarcador?: string;
     itens: WhiteboardItem[];
   } | null;
+  newsTickerSlot?: React.ReactNode;
   onToggleDemandItem?: (colId: string, itemId: string) => void;
   onToggleItem: (blockId: string, itemId: string) => void;
   onAddItem: (blockId: string, dia: number, descricao: string, responsavel?: string, responsaveis?: string[]) => void;
@@ -57,6 +58,7 @@ export function WhiteboardTimeline({
   layoutMode: initialLayoutMode = 'rows',
   onLayoutModeChange,
   hoveredDemand,
+  newsTickerSlot,
   onToggleDemandItem,
   onToggleItem,
   onAddItem,
@@ -402,6 +404,13 @@ export function WhiteboardTimeline({
           )}
         </div>
       </div>
+
+      {/* ── RADAR LOUSA: TAREFAS POR MEMBROS DA EQUIPE (LOGO ACIMA DOS CARDS DAS GRADES DO CALENDÁRIO) ── */}
+      {newsTickerSlot && (
+        <div className="mb-3">
+          {newsTickerSlot}
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────── */}
       {/* CASO 1: VISÃO EM LINHAS HORIZONTAIS COM ESTEIRA (PADRÃO PARA TV)     */}
