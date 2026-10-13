@@ -13,8 +13,12 @@ import {
   Link2, 
   Users, 
   CheckCircle2,
-  HelpCircle
+  HelpCircle,
+  Plus,
+  Edit3,
+  Search
 } from 'lucide-react';
+import { CollaborativePortalService } from '@/services/collaborative-portal.service';
 
 interface EmployeeOption {
   id: string;
@@ -42,7 +46,7 @@ export const APPROVED_MEMBER_COLORS = [
 interface WhiteboardMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  memberName: string | null; // Se fornecido, modo edição; se null, novo membro
+  memberName: string | null; // Se fornecido, modo edição direta
   allMembers: string[];
   totalTasksCount?: number;
   onSaveMember: (oldName: string | null, newName: string, selectedColorHex?: string, linkedEmployeeId?: string) => void;
@@ -58,16 +62,20 @@ export function WhiteboardMemberModal({
   onSaveMember,
   onDeleteMember,
 }: WhiteboardMemberModalProps) {
-  const isEditing = Boolean(memberName);
+  // Aba ativa: 'list' (gerenciar todos), 'form' (editar/criar), 'delete' (confirmar exclusão)
+  const [activeTab, setActiveTab] = useState<'list' | 'form'>('list');
+  const [selectedTargetMember, setSelectedTargetMember] = useState<string | null>(null);
 
   const [nome, setNome] = useState('');
   const [selectedColorHex, setSelectedColorHex] = useState(APPROVED_MEMBER_COLORS[0].hex);
   const [linkedEmployeeId, setLinkedEmployeeId] = useState<string>('');
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
 
   // Estados de confirmação de exclusão
   const [isDeletingStep, setIsDeletingStep] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<string>('');
   const [reassignTo, setReassignTo] = useState<string>('');
 
   // Carregar lista de colaboradores de employees do Supabase para o vínculo
@@ -104,14 +112,18 @@ export function WhiteboardMemberModal({
     };
   }, [isOpen]);
 
-  // Inicializar dados do membro
+  // Inicializar dados do membro quando o modal abre
   useEffect(() => {
     if (memberName) {
+      setSelectedTargetMember(memberName);
       setNome(memberName);
+      setActiveTab('form');
       setIsDeletingStep(false);
       setReassignTo('');
     } else {
+      setSelectedTargetMember(null);
       setNome('');
+      setActiveTab('list'); // Abre listando todos os membros por padrão
       setIsDeletingStep(false);
       setReassignTo('');
       setSelectedColorHex(APPROVED_MEMBER_COLORS[0].hex);
@@ -121,22 +133,59 @@ export function WhiteboardMemberModal({
 
   if (!isOpen) return null;
 
+  // Iniciar criação de novo membro
+  const handleStartNewMember = () => {
+    setSelectedTargetMember(null);
+    setNome('');
+    setSelectedColorHex(APPROVED_MEMBER_COLORS[0].hex);
+    setLinkedEmployeeId('');
+    setIsDeletingStep(false);
+    setActiveTab('form');
+  };
+
+  // Iniciar edição de um membro específico a partir da lista
+  const handleStartEditMember = (targetName: string) => {
+    setSelectedTargetMember(targetName);
+    setNome(targetName);
+    setIsDeletingStep(false);
+    setActiveTab('form');
+  };
+
+  // Iniciar exclusão de um membro
+  const handleStartDeleteMember = (targetName: string) => {
+    setMemberToDelete(targetName);
+    setIsDeletingStep(true);
+    setReassignTo('');
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanNome = nome.trim().toUpperCase();
     if (!cleanNome) return;
 
-    onSaveMember(isEditing ? memberName : null, cleanNome, selectedColorHex, linkedEmployeeId || undefined);
+    onSaveMember(selectedTargetMember, cleanNome, selectedColorHex, linkedEmployeeId || undefined);
     onClose();
   };
 
-  const handleConfirmDelete = () => {
-    if (!memberName || !onDeleteMember) return;
-    onDeleteMember(memberName, reassignTo.trim() ? reassignTo.trim().toUpperCase() : null);
+  const handleConfirmDelete = async () => {
+    if (!memberToDelete || !onDeleteMember) return;
+    
+    // 1. Excluir no estado da lousa com reatribuição opcional
+    onDeleteMember(memberToDelete, reassignTo.trim() ? reassignTo.trim().toUpperCase() : null);
+    
+    // 2. Excluir também no Supabase da tabela whiteboard_member_links
+    await CollaborativePortalService.deleteMemberFromDatabase(memberToDelete);
+
+    setIsDeletingStep(false);
+    setMemberToDelete('');
     onClose();
   };
 
-  const otherMembers = allMembers.filter(m => m.toUpperCase() !== memberName?.toUpperCase());
+  const filteredMembers = allMembers.filter(m => 
+    m.toUpperCase().includes(searchFilter.toUpperCase().trim())
+  );
+
+  const otherMembers = allMembers.filter(m => m.toUpperCase() !== (memberToDelete || selectedTargetMember)?.toUpperCase());
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -152,12 +201,10 @@ export function WhiteboardMemberModal({
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-black uppercase text-white font-mono tracking-wide">
-                {isEditing ? `Editar Membro: ${memberName}` : 'Novo Membro na Lousa'}
+                Gestão de Membros & Usuários da Lousa
               </h2>
               <p className="text-[11px] text-slate-400">
-                {isEditing 
-                  ? 'Renomeie, ajuste a cor ou vincule ao cadastro do colaborador'
-                  : 'Cadastre um novo responsável para atribuição de tarefas e notificações'}
+                Cadastre, edite ou exclua responsáveis pelas atividades operacionais
               </p>
             </div>
           </div>
@@ -171,9 +218,183 @@ export function WhiteboardMemberModal({
           </button>
         </div>
 
-        {/* CORPO DO FORMULÁRIO */}
+        {/* ABAS DO MODAL (QUANDO NÃO ESTIVER EM CONFIRMAÇÃO DE EXCLUSÃO) */}
+        {!isDeletingStep && (
+          <div className="flex items-center border-b border-slate-800 bg-slate-950/60 px-4 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('list');
+                setSelectedTargetMember(null);
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold font-mono transition-all border-b-2 ${
+                activeTab === 'list'
+                  ? 'border-cyan-400 text-cyan-300 bg-slate-900/60 rounded-t-lg'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Users size={13} />
+              <span>👥 Membros Cadastrados ({allMembers.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleStartNewMember}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold font-mono transition-all border-b-2 ${
+                activeTab === 'form' && !selectedTargetMember
+                  ? 'border-cyan-400 text-cyan-300 bg-slate-900/60 rounded-t-lg'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Plus size={13} />
+              <span>➕ Novo Membro</span>
+            </button>
+
+            {selectedTargetMember && activeTab === 'form' && (
+              <span className="ml-auto text-[11px] font-mono text-cyan-400 font-bold flex items-center gap-1">
+                <span>Editando:</span>
+                <span className="text-white bg-slate-800 px-2 py-0.5 rounded">{selectedTargetMember}</span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* CORPO DO MODAL */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {!isDeletingStep ? (
+          
+          {/* PASSO DE CONFIRMAÇÃO DE EXCLUSÃO */}
+          {isDeletingStep ? (
+            <div className="space-y-4 p-4 rounded-xl bg-rose-950/30 border border-rose-500/40 animate-in fade-in">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-rose-600/30 border border-rose-500 text-rose-400 flex-shrink-0">
+                  <AlertTriangle size={22} className="animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase text-rose-200 font-mono">
+                    Excluir Membro "{memberToDelete}" da Lousa?
+                  </h3>
+                  <p className="text-xs text-rose-300/80 mt-1 leading-relaxed">
+                    Esta ação removerá este responsável da visualização da Lousa e da Central de Notificações.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 font-mono">
+                  Reatribuir tarefas pendentes deste membro para:
+                </label>
+                <select
+                  value={reassignTo}
+                  onChange={(e) => setReassignTo(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="">— Apenas remover o membro (Tarefas ficam sem executor) —</option>
+                  {otherMembers.map(m => (
+                    <option key={m} value={m}>
+                      Transferir todas as tarefas para {m}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Selecione outro colega para herdar as tarefas abertas, ou deixe em branco para desatribuir.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-rose-900/40">
+                <button
+                  type="button"
+                  onClick={() => setIsDeletingStep(false)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-rose-950 font-mono"
+                >
+                  <Trash2 size={13} />
+                  <span>Confirmar Exclusão</span>
+                </button>
+              </div>
+            </div>
+          ) : activeTab === 'list' ? (
+            
+            /* ABA 1: LISTA DE MEMBROS CADASTRADOS (COM BOTÃO DE EXCLUIR E EDITAR) */
+            <div className="space-y-3">
+              {/* CAMPO DE BUSCA RÁPIDA */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-3 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Buscar membro por nome..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>Clique em <strong>Editar</strong> para renomear/cor ou <strong>Excluir</strong> para remover da lousa.</span>
+                <span className="font-mono text-cyan-400">{filteredMembers.length} membros</span>
+              </div>
+
+              {/* LISTA EM CARDS */}
+              <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                {filteredMembers.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs font-mono">
+                    Nenhum membro encontrado com "{searchFilter}".
+                  </div>
+                ) : (
+                  filteredMembers.map(m => (
+                    <div
+                      key={m}
+                      className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/90 hover:border-slate-700 flex items-center justify-between gap-2 transition-all shadow-sm"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center font-mono font-black text-xs text-white">
+                          {m.substring(0, 2)}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-white uppercase font-mono tracking-wide truncate">
+                            {m}
+                          </h4>
+                          <span className="text-[10px] text-slate-400">
+                            Responsável Operacional
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* BOTÕES DE AÇÃO: EDITAR E EXCLUIR */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditMember(m)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all border border-slate-700"
+                          title={`Editar ${m}`}
+                        >
+                          <Edit3 size={11} className="text-cyan-400" />
+                          <span>Editar</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleStartDeleteMember(m)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-xs font-bold transition-all border border-rose-500/30 hover:border-rose-500"
+                          title={`Excluir ${m} da lousa`}
+                        >
+                          <Trash2 size={11} className="text-rose-400" />
+                          <span>Excluir</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+
+            /* ABA 2: FORMULÁRIO DE EDIÇÃO OU CRIAÇÃO */
             <form id="member-form" onSubmit={handleSubmit} className="space-y-4">
               {/* CAMPO: NOME DO MEMBRO */}
               <div>
@@ -195,7 +416,7 @@ export function WhiteboardMemberModal({
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Ao renomear, todas as tarefas ativas e obrigações com este nome serão atualizadas automaticamente.
+                  Ao renomear, todas as tarefas ativas com este nome serão atualizadas automaticamente.
                 </p>
               </div>
 
@@ -267,97 +488,62 @@ export function WhiteboardMemberModal({
                 </p>
               </div>
 
-              {/* ÁREA DE PERIGO: EXCLUIR MEMBRO (APENAS EM EDIÇÃO) */}
-              {isEditing && onDeleteMember && (
-                <div className="pt-3 border-t border-slate-800/80">
+              {/* BOTÃO DE EXCLUSÃO DESTACADO QUANDO EM MODO EDIÇÃO */}
+              {selectedTargetMember && (
+                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => setIsDeletingStep(true)}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-400 hover:text-rose-300 hover:underline transition-all"
+                    onClick={() => handleStartDeleteMember(selectedTargetMember)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-950/40 text-rose-300 hover:text-white hover:bg-rose-900/60 border border-rose-500/40 text-xs font-bold transition-all"
                   >
-                    <Trash2 size={13} />
-                    <span>Deseja excluir este membro da lousa?</span>
+                    <Trash2 size={13} className="text-rose-400" />
+                    <span>Excluir Membro "{selectedTargetMember}"</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('list')}
+                    className="text-xs text-slate-400 hover:text-white underline font-mono"
+                  >
+                    Voltar para lista
                   </button>
                 </div>
               )}
             </form>
-          ) : (
-            /* PASSO DE CONFIRMAÇÃO DE EXCLUSÃO COM REATRIBUIÇÃO */
-            <div className="space-y-4 p-4 rounded-xl bg-rose-950/30 border border-rose-500/40 animate-in fade-in">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-rose-600/30 border border-rose-500 text-rose-400 flex-shrink-0">
-                  <AlertTriangle size={20} className="animate-pulse" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black uppercase text-rose-200 font-mono">
-                    Excluir Membro "{memberName}"?
-                  </h3>
-                  <p className="text-xs text-rose-300/80 mt-1">
-                    Este membro possui <strong>{totalTasksCount}</strong> tarefa{totalTasksCount !== 1 ? 's' : ''} associada{totalTasksCount !== 1 ? 's' : ''} na Lousa Operacional.
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 font-mono">
-                  Reatribuir tarefas pendentes para:
-                </label>
-                <select
-                  value={reassignTo}
-                  onChange={(e) => setReassignTo(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
-                >
-                  <option value="">— Apenas remover o membro (Tarefas ficam sem executor) —</option>
-                  {otherMembers.map(m => (
-                    <option key={m} value={m}>
-                      Transferir tudo para {m}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Selecione outro membro para herdar as tarefas abertas, ou deixe em branco para desatribuir.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsDeletingStep(false)}
-                  className="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmDelete}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-rose-950"
-                >
-                  <Trash2 size={13} />
-                  <span>Confirmar Exclusão</span>
-                </button>
-              </div>
-            </div>
           )}
         </div>
 
-        {/* RODAPÉ COM AÇÕES */}
+        {/* RODAPÉ DO MODAL */}
         {!isDeletingStep && (
-          <div className="flex items-center justify-end gap-2.5 p-4 sm:p-5 border-t border-slate-800 bg-[#060a13]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              form="member-form"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md font-mono"
-            >
-              <Check size={14} />
-              <span>{isEditing ? 'Salvar Membro' : 'Criar Membro'}</span>
-            </button>
+          <div className="flex items-center justify-between p-4 sm:p-5 border-t border-slate-800 bg-[#060a13]">
+            {activeTab === 'form' ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab('list')}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all"
+              >
+                Voltar à Lista
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all"
+              >
+                Fechar
+              </button>
+            )}
+
+            {activeTab === 'form' && (
+              <button
+                type="submit"
+                form="member-form"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md font-mono"
+              >
+                <Check size={14} />
+                <span>{selectedTargetMember ? 'Salvar Membro' : 'Criar Membro'}</span>
+              </button>
+            )}
           </div>
         )}
       </div>

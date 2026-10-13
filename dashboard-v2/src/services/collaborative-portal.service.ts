@@ -10,7 +10,8 @@ import {
   ActivityUrgencyGroup, 
   HelpOffer, 
   PortalNotification,
-  RegisteredDevice
+  RegisteredDevice,
+  NotificationPriority
 } from '@/types/collaborative-portal';
 import { 
   WarRoomService, 
@@ -510,39 +511,197 @@ export class CollaborativePortalService {
   }
 
   /**
-   * Obtém as notificações do colaborador
+   * Obtém as notificações do colaborador (por perfil ou por nome de membro da Lousa)
    */
-  static async getNotifications(profileId?: string): Promise<PortalNotification[]> {
+  static async getNotifications(profileId?: string, memberName?: string): Promise<PortalNotification[]> {
     try {
-      if (profileId) {
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('*')
-          .or(`target_type.eq.all,target_profile_id.eq.${profileId}`)
-          .order('created_at', { ascending: false })
-          .limit(50);
+      let query = supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
 
-        if (data && !error && data.length > 0) {
-          return data.map(n => ({
-            id: n.id,
-            title: n.title,
-            body: n.body,
-            priority: n.priority as any,
-            category: n.category as any,
-            activityId: n.activity_id,
-            activityTitle: n.activity_title,
-            requiresAck: n.requires_ack,
-            acknowledged: false,
-            createdAt: n.created_at,
-            read: true,
-          }));
-        }
+      const conditions: string[] = ['target_type.eq.all'];
+      if (profileId) {
+        conditions.push(`target_profile_id.eq.${profileId}`);
       }
-    } catch {
-      // Fallback
+      if (memberName) {
+        conditions.push(`target_member_name.eq.${memberName.trim().toUpperCase()}`);
+      }
+
+      const { data, error } = await query.or(conditions.join(','));
+
+      if (data && !error && data.length > 0) {
+        return data.map(n => ({
+          id: n.id,
+          title: n.title,
+          body: n.body,
+          priority: n.priority as any,
+          category: n.category as any,
+          targetType: n.target_type as any,
+          targetMemberName: n.target_member_name,
+          activityId: n.activity_id,
+          activityTitle: n.activity_title,
+          requiresAck: n.requires_ack,
+          acknowledged: false,
+          createdAt: n.created_at,
+          read: true,
+        }));
+      }
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Fallback de notificações para local:', err);
     }
 
-    return this.getLocalNotifications();
+    const localList = this.getLocalNotifications();
+    if (memberName) {
+      const clean = memberName.trim().toUpperCase();
+      return localList.filter(n => !n.targetMemberName || n.targetMemberName.toUpperCase() === clean || n.targetType === 'all');
+    }
+    return localList;
+  }
+
+  /**
+   * DISPARO AUTOMÁTICO DE NOTIFICAÇÃO:
+   * Acionado imediatamente quando o administrador cria uma nova tarefa com responsável designado
+   * ou atribui um colaborador a uma demanda existente.
+   */
+  static async createAutomaticTaskNotification({
+    taskTitle,
+    origin,
+    responsaveis,
+    prazo,
+    isUrgent,
+    activityId,
+  }: {
+    taskTitle: string;
+    origin: string;
+    responsaveis: string[];
+    prazo?: string;
+    isUrgent?: boolean;
+    activityId?: string;
+  }): Promise<void> {
+    if (!responsaveis || responsaveis.length === 0) return;
+
+    const distinctResps = Array.from(
+      new Set(responsaveis.map(r => r.trim().toUpperCase()).filter(Boolean))
+    );
+    if (distinctResps.length === 0) return;
+
+    for (const resp of distinctResps) {
+      const title = isUrgent
+        ? `🚨 Demanda Urgente Atribuída: ${taskTitle}`
+        : `📋 Nova Atividade Atribuída: ${taskTitle}`;
+      const body = `Você foi designado como responsável por esta demanda em ${origin}.${
+        prazo ? ` Prazo: ${prazo}.` : ''
+      }`;
+
+      const notifObj: PortalNotification = {
+        id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        title,
+        body,
+        priority: isUrgent ? 'urgent' : 'important',
+        category: 'task_alert',
+        targetType: 'member',
+        targetMemberName: resp,
+        activityTitle: taskTitle,
+        activityId,
+        requiresAck: Boolean(isUrgent),
+        acknowledged: false,
+        createdAt: new Date().toISOString(),
+        read: false,
+      };
+
+      // 1. Persistir no Supabase
+      try {
+        await supabase.from('notifications').insert({
+          title: notifObj.title,
+          body: notifObj.body,
+          priority: notifObj.priority,
+          category: notifObj.category,
+          target_type: 'member',
+          target_member_name: resp,
+          activity_title: taskTitle,
+          activity_id: activityId || null,
+          requires_ack: notifObj.requiresAck,
+        });
+      } catch (err) {
+        console.warn('[CollaborativePortalService] Erro ao gravar notificação no Supabase:', err);
+      }
+
+      // 2. Persistir no cache local
+      this.saveLocalNotification(notifObj);
+
+      // 3. Disparar notificação nativa imediata no navegador se compatível e autorizado
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification(notifObj.title, {
+            body: notifObj.body,
+            icon: '/Favicon.png',
+            tag: `task-${activityId || Date.now()}`,
+          });
+        } catch (pushErr) {
+          console.warn('Erro ao disparar Web Push no navegador:', pushErr);
+        }
+      }
+    }
+  }
+
+  /**
+   * Envia um comunicado administrativo manual para toda a equipe ou para um membro específico
+   */
+  static async sendBroadcastNotification({
+    title,
+    body,
+    priority,
+    targetType,
+    targetMemberName,
+  }: {
+    title: string;
+    body: string;
+    priority: NotificationPriority;
+    targetType: 'all' | 'member';
+    targetMemberName?: string;
+  }): Promise<boolean> {
+    const notifObj: PortalNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      title,
+      body,
+      priority,
+      category: 'manual_broadcast',
+      targetType,
+      targetMemberName: targetMemberName ? targetMemberName.trim().toUpperCase() : undefined,
+      requiresAck: priority === 'urgent',
+      acknowledged: false,
+      createdAt: new Date().toISOString(),
+      read: false,
+    };
+
+    try {
+      await supabase.from('notifications').insert({
+        title: notifObj.title,
+        body: notifObj.body,
+        priority: notifObj.priority,
+        category: notifObj.category,
+        target_type: targetType,
+        target_member_name: notifObj.targetMemberName || null,
+        requires_ack: notifObj.requiresAck,
+      });
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Erro ao gravar broadcast no Supabase:', err);
+    }
+
+    this.saveLocalNotification(notifObj);
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body,
+          icon: '/Favicon.png',
+        });
+      } catch {}
+    }
+
+    return true;
   }
 
   /**
@@ -579,7 +738,81 @@ export class CollaborativePortalService {
   }
 
   /**
-   * Salva dispositivo cadastrado
+   * Cadastra e vincula o dispositivo atual ao membro selecionado no Supabase e no cache local
+   */
+  static async registerMemberDevice({
+    memberName,
+    deviceLabel,
+    deviceType,
+  }: {
+    memberName: string;
+    deviceLabel: string;
+    deviceType: 'desktop' | 'mobile' | 'tablet' | 'other';
+  }): Promise<RegisteredDevice> {
+    const cleanMember = memberName.trim().toUpperCase();
+    const newDevice: RegisteredDevice = {
+      id: `dev-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      memberName: cleanMember,
+      deviceLabel,
+      deviceType,
+      endpoint: `endpoint-${cleanMember}-${Date.now()}`,
+      active: true,
+      lastSeenAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+
+    // 1. Salvar no Supabase
+    try {
+      await supabase.from('push_subscriptions').insert({
+        member_name: cleanMember,
+        device_label: deviceLabel,
+        device_type: deviceType,
+        endpoint: newDevice.endpoint,
+        p256dh: 'browser_p256dh',
+        auth: 'browser_auth',
+        active: true,
+      });
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Gravando dispositivo local:', err);
+    }
+
+    // 2. Salvar no localStorage
+    this.saveDevice(newDevice);
+
+    return newDevice;
+  }
+
+  /**
+   * Retorna todos os dispositivos cadastrados no sistema (do Supabase e local)
+   */
+  static async getAllRegisteredDevices(): Promise<RegisteredDevice[]> {
+    try {
+      const { data, error } = await supabase
+        .from('push_subscriptions')
+        .select('*')
+        .order('last_seen_at', { ascending: false });
+
+      if (data && !error && data.length > 0) {
+        return data.map(d => ({
+          id: d.id,
+          memberName: d.member_name,
+          deviceLabel: d.device_label,
+          deviceType: d.device_type as any,
+          endpoint: d.endpoint,
+          active: d.active,
+          lastSeenAt: d.last_seen_at,
+          createdAt: d.created_at,
+        }));
+      }
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Erro ao carregar dispositivos do Supabase:', err);
+    }
+
+    return this.getRegisteredDevices();
+  }
+
+  /**
+   * Salva dispositivo cadastrado no cache local
    */
   static saveDevice(device: RegisteredDevice): void {
     if (typeof window === 'undefined') return;
@@ -589,6 +822,36 @@ export class CollaborativePortalService {
       localStorage.setItem(LOCAL_DEVICES_KEY, JSON.stringify(list));
     } catch (e) {
       console.error('Erro ao salvar dispositivo:', e);
+    }
+  }
+
+  /**
+   * Salva uma notificação no cache local
+   */
+  static saveLocalNotification(notification: PortalNotification): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const list = this.getLocalNotifications();
+      list.unshift(notification);
+      localStorage.setItem(LOCAL_NOTIFICATIONS_KEY, JSON.stringify(list.slice(0, 50)));
+    } catch (e) {
+      console.error('Erro ao salvar notificação local:', e);
+    }
+  }
+
+  /**
+   * Remove um membro cadastrado da tabela whiteboard_member_links no Supabase
+   */
+  static async deleteMemberFromDatabase(memberName: string): Promise<void> {
+    const clean = memberName.trim().toUpperCase();
+    if (!clean) return;
+    try {
+      await supabase
+        .from('whiteboard_member_links')
+        .delete()
+        .eq('member_name', clean);
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Erro ao excluir vínculo do membro no Supabase:', err);
     }
   }
 

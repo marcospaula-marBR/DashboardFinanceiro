@@ -64,6 +64,10 @@ export interface PortalNotification {
   body: string;
   priority: NotificationPriority;
   category: NotificationCategory;
+  targetType?: 'all' | 'employee' | 'role' | 'member';
+  targetMemberName?: string;
+  targetProfileId?: string;
+  targetEmployeeId?: string;
   activityId?: string;
   activityTitle?: string;
   requiresAck: boolean;
@@ -74,8 +78,11 @@ export interface PortalNotification {
 
 export interface RegisteredDevice {
   id: string;
+  memberName?: string;
+  employeeId?: string;
   deviceLabel: string;
   deviceType: 'desktop' | 'mobile' | 'tablet' | 'other';
+  endpoint?: string;
   active: boolean;
   lastSeenAt: string;
   createdAt: string;

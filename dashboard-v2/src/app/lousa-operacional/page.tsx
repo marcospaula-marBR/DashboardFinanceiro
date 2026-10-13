@@ -20,7 +20,7 @@ import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDem
 import { WhiteboardMemberModal } from '@/components/war-room/WhiteboardMemberModal';
 import { WhiteboardAdminNotificationsModal } from '@/components/war-room/WhiteboardAdminNotificationsModal';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
-import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell } from 'lucide-react';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell, Edit3 } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -326,6 +326,19 @@ export default function LousaOperacionalPage() {
   const handleAddColumnItem = (colId: string, text: string, responsavel?: string, dataLimite?: string, responsaveis?: string[]) => {
     const updated = WarRoomService.addColumnItem(data, colId, text, responsavel, dataLimite, responsaveis);
     setData(updated);
+
+    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO PARA OS RESPONSÁVEIS DESIGNADOS
+    const targetResps = extractResponsaveisList({ responsavel, responsaveis });
+    if (targetResps.length > 0) {
+      const colObj = data.colunas.find(c => c.id === colId);
+      CollaborativePortalService.createAutomaticTaskNotification({
+        taskTitle: text,
+        origin: colObj ? `Coluna "${colObj.titulo}"` : 'Demandas Operacionais',
+        responsaveis: targetResps,
+        prazo: dataLimite,
+        isUrgent: colObj?.corMarcador === 'vermelho' || Boolean(dataLimite && new Date(dataLimite) <= new Date()),
+      }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
+    }
   };
 
   const handleEditColumnItem = (colId: string, itemId: string, texto: string, responsavel?: string, dataLimite?: string, novosResponsaveis?: string[]) => {
@@ -370,6 +383,19 @@ export default function LousaOperacionalPage() {
     const updated = WarRoomService.updateFullDemand(data, currentColId, itemId, updates);
     setData(updated);
     setEditingDemand(null);
+
+    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO SE FORAM ATRIBUÍDOS RESPONSÁVEIS
+    const targetResps = extractResponsaveisList({ responsavel: updates.responsavel, responsaveis: updates.responsaveis });
+    if (targetResps.length > 0) {
+      CollaborativePortalService.createAutomaticTaskNotification({
+        taskTitle: updates.texto,
+        origin: 'Demandas Operacionais (Atualizada)',
+        responsaveis: targetResps,
+        prazo: updates.dataLimite,
+        isUrgent: updates.prioridade === 'urgente',
+        activityId: itemId,
+      }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
+    }
   };
 
   const handleReorderColumnItem = (colId: string, startIndex: number, endIndex: number) => {
@@ -412,6 +438,19 @@ export default function LousaOperacionalPage() {
   const handleAddTimelineItem = (blockId: string, dia: number, descricao: string, responsavel?: string, responsaveis?: string[]) => {
     const updated = WarRoomService.addTimelineItem(data, blockId, dia, descricao, responsavel, responsaveis);
     setData(updated);
+
+    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO PARA OS RESPONSÁVEIS DESIGNADOS
+    const targetResps = extractResponsaveisList({ responsavel, responsaveis });
+    if (targetResps.length > 0) {
+      const isUrgent = dia <= todayDay;
+      CollaborativePortalService.createAutomaticTaskNotification({
+        taskTitle: descricao,
+        origin: `Cronograma de Vencimentos (Dia ${dia})`,
+        responsaveis: targetResps,
+        prazo: `Dia ${dia}`,
+        isUrgent,
+      }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
+    }
   };
 
   const handleEditTimelineItem = (blockId: string, itemId: string, dia: number, descricao: string, responsavel?: string, novosResponsaveis?: string[]) => {
@@ -462,12 +501,14 @@ export default function LousaOperacionalPage() {
     setEditingMemberName(null);
   };
 
-  const handleDeleteMember = (memberName: string, reassignedTo?: string | null) => {
+  const handleDeleteMember = async (memberName: string, reassignedTo?: string | null) => {
     const updated = WarRoomService.deleteMember(data, memberName, reassignedTo);
     setData(updated);
     if (selectedResponsible?.toUpperCase() === memberName.toUpperCase()) {
       setSelectedResponsible(reassignedTo ? reassignedTo.toUpperCase() : null);
     }
+    // Remove do Supabase (whiteboard_member_links)
+    await CollaborativePortalService.deleteMemberFromDatabase(memberName);
     setIsMemberModalOpen(false);
     setEditingMemberName(null);
   };
@@ -556,7 +597,7 @@ export default function LousaOperacionalPage() {
               </button>
             )}
 
-            {/* PÍLULAS DE CADA RESPONSÁVEL COM CORES INDIVIDUAIS MEMORIZÁVEIS */}
+            {/* PÍLULAS DE CADA RESPONSÁVEL COM CORES INDIVIDUAIS MEMORIZÁVEIS E AÇÃO DE GESTÃO */}
             {distinctResponsibles.map(resp => {
               const isSelected = selectedResponsible?.toUpperCase() === resp.toUpperCase();
               const respColor = getResponsibleColor(resp);
@@ -564,38 +605,73 @@ export default function LousaOperacionalPage() {
               const hasOverdue = stats ? stats.atrasados > 0 : false;
 
               return (
-                <button
+                <div
                   key={resp}
-                  type="button"
-                  onClick={() => {
-                    setOnlyOverdueFilter(false);
-                    setSelectedResponsible(isSelected ? null : resp);
-                  }}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition-all shadow-sm ${
-                    isSelected
-                      ? `${respColor.pillActiveClass} ring-1 ring-white/50`
-                      : `${respColor.pillInactiveClass} hover:opacity-100`
-                  }`}
-                  title={`${resp} (${respColor.label}): ${stats?.pendentes || 0} pendentes. Clique para filtrar.`}
+                  className="inline-flex items-center rounded-lg shadow-sm border border-transparent hover:border-slate-700/60 transition-all"
                 >
-                  <span
-                    className={`w-2 h-2 rounded-full flex-shrink-0 ${hasOverdue ? 'animate-ping' : ''}`}
-                    style={{ backgroundColor: respColor.hex }}
-                  />
-                  <span>{resp}</span>
-                  {stats && stats.pendentes > 0 && (
-                    <span className="text-[10px] opacity-80 font-mono">
-                      ({stats.pendentes})
-                    </span>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOnlyOverdueFilter(false);
+                      setSelectedResponsible(isSelected ? null : resp);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold uppercase transition-all rounded-l-lg ${
+                      isSelected
+                        ? `${respColor.pillActiveClass} ring-1 ring-white/50`
+                        : `${respColor.pillInactiveClass} hover:opacity-100`
+                    }`}
+                    title={`${resp} (${respColor.label}): ${stats?.pendentes || 0} pendentes. Clique para filtrar.`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ${hasOverdue ? 'animate-ping' : ''}`}
+                      style={{ backgroundColor: respColor.hex }}
+                    />
+                    <span>{resp}</span>
+                    {stats && stats.pendentes > 0 && (
+                      <span className="text-[10px] opacity-80 font-mono">
+                        ({stats.pendentes})
+                      </span>
+                    )}
+                  </button>
+
+                  {/* BOTÃO RÁPIDO PARA EDITAR OU EXCLUIR ESTE MEMBRO ESPECÍFICO */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenMemberModal(resp);
+                    }}
+                    className={`px-1.5 py-1 text-xs transition-all border-l border-slate-700/60 rounded-r-lg ${
+                      isSelected
+                        ? `${respColor.pillActiveClass} opacity-90 hover:opacity-100`
+                        : `${respColor.pillInactiveClass} opacity-60 hover:opacity-100 hover:bg-slate-800`
+                    }`}
+                    title={`Gerenciar, editar ou excluir ${resp}`}
+                  >
+                    <Edit3 size={11} className="text-slate-300 hover:text-cyan-300" />
+                  </button>
+                </div>
               );
             })}
 
-            {/* BOTÃO RÁPIDO PARA ADICIONAR OU GERENCIAR MEMBRO */}
+            {/* BOTÃO PROEMINENTE: GESTÃO DE MEMBROS (VER TODOS, EDITAR, EXCLUIR) */}
             <button
               type="button"
               onClick={() => handleOpenMemberModal(null)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono text-cyan-300 hover:text-white bg-cyan-950/50 hover:bg-cyan-900/70 border border-cyan-500/50 transition-all shadow-sm"
+              title="Abrir painel completo de gestão de membros (excluir, editar ou renomear)"
+            >
+              <Users size={12} className="text-cyan-400" />
+              <span>👥 Gestão de Membros</span>
+            </button>
+
+            {/* ATALHO RÁPIDO PARA ADICIONAR NOVO MEMBRO */}
+            <button
+              type="button"
+              onClick={() => {
+                setEditingMemberName(null);
+                setIsMemberModalOpen(true);
+              }}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 border border-dashed border-slate-700 hover:border-cyan-500/50 transition-all shadow-sm"
               title="Cadastrar um novo membro na lousa"
             >

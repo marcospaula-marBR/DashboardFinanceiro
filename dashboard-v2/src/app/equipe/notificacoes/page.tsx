@@ -32,13 +32,13 @@ export default function NotificacoesPage() {
 
   // Carregar dados
   useEffect(() => {
-    CollaborativePortalService.getNotifications().then(setNotifications);
-    setDevices(CollaborativePortalService.getRegisteredDevices());
+    CollaborativePortalService.getNotifications(undefined, activeMember).then(setNotifications);
+    CollaborativePortalService.getAllRegisteredDevices().then(setDevices);
 
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotificationPermission(Notification.permission);
     }
-  }, []);
+  }, [activeMember]);
 
   // Solicitar ativação de notificações nativas Web Push
   const handleEnablePush = async () => {
@@ -61,21 +61,18 @@ export default function NotificacoesPage() {
           ? 'Motorola Android (Chrome)' 
           : 'Navegador Web';
 
-        const newDevice: RegisteredDevice = {
-          id: `dev-${Date.now()}`,
+        const newDevice = await CollaborativePortalService.registerMemberDevice({
+          memberName: activeMember,
           deviceLabel: label,
           deviceType: isWindows ? 'desktop' : isAndroid ? 'mobile' : 'other',
-          active: true,
-          lastSeenAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-        };
+        });
 
-        CollaborativePortalService.saveDevice(newDevice);
-        setDevices(CollaborativePortalService.getRegisteredDevices());
+        const devList = await CollaborativePortalService.getAllRegisteredDevices();
+        setDevices(devList);
 
         // Disparo teste imediato de boas-vindas
-        new Notification('🔔 Mar Brasil — Notificações Ativadas', {
-          body: `Dispositivo ${label} conectado com sucesso à Central de Notificações.`,
+        new Notification(`🔔 Mar Brasil — Notificações Ativadas (${activeMember})`, {
+          body: `Dispositivo ${label} conectado com sucesso para receber tarefas de ${activeMember}.`,
           icon: '/Favicon.png',
         });
       }

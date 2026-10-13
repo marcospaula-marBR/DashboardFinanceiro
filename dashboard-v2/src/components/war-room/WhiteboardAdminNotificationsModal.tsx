@@ -15,7 +15,10 @@ import {
   XCircle, 
   Flame,
   Check,
-  MessageSquare
+  MessageSquare,
+  Copy,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
 import { HelpOffer, RegisteredDevice } from '@/types/collaborative-portal';
@@ -48,13 +51,16 @@ export function WhiteboardAdminNotificationsModal({
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
 
+  const [copiedLink, setCopiedLink] = useState(false);
+
   // Carregar dados ao abrir o modal
   const loadData = async () => {
     setLoading(true);
     try {
       const offers = await CollaborativePortalService.getHelpOffers();
       setHelpOffers(offers);
-      setDevices(CollaborativePortalService.getRegisteredDevices());
+      const devList = await CollaborativePortalService.getAllRegisteredDevices();
+      setDevices(devList);
     } finally {
       setLoading(false);
     }
@@ -81,14 +87,21 @@ export function WhiteboardAdminNotificationsModal({
     if (onOfferDecided) onOfferDecided();
   };
 
-  // Envio de Atualização à Equipe
+  // Envio de Atualização à Equipe (Gravando no Supabase e disparando push)
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastTitle.trim() || !broadcastBody.trim()) return;
 
     setSendingBroadcast(true);
     try {
-      // Simulação / Registro de broadcast
+      await CollaborativePortalService.sendBroadcastNotification({
+        title: broadcastTitle.trim(),
+        body: broadcastBody.trim(),
+        priority: broadcastPriority,
+        targetType,
+        targetMemberName: targetType === 'member' ? selectedMember : undefined,
+      });
+
       setBroadcastSuccess(true);
       setTimeout(() => {
         setBroadcastSuccess(false);
@@ -98,6 +111,14 @@ export function WhiteboardAdminNotificationsModal({
     } finally {
       setSendingBroadcast(false);
     }
+  };
+
+  const handleCopyActivationLink = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://dashboard-financeiro-eight.vercel.app';
+    const text = `🔔 *CENTRAL DE NOTIFICAÇÕES MAR BRASIL*\n\nPara receber os avisos das suas tarefas no seu celular Motorola Android ou Windows 11:\n1. Acesse: ${origin}/minhas-atividades\n2. Selecione o seu nome.\n3. Clique em "Ativar Alertas neste Aparelho".`;
+    navigator.clipboard.writeText(text);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
   };
 
   const pendingOffers = helpOffers.filter(o => o.status === 'pendente');
@@ -349,34 +370,107 @@ export function WhiteboardAdminNotificationsModal({
             </form>
           )}
 
-          {/* ── ABA 3: DISPOSITIVOS CONECTADOS ── */}
+          {/* ── ABA 3: DISPOSITIVOS & MEMBROS CONECTADOS ── */}
           {activeTab === 'dispositivos' && (
-            <div className="space-y-3">
-              <div className="text-xs text-slate-400">
-                Dispositivos com assinaturas Web Push ativas cadastradas pelos colaboradores:
+            <div className="space-y-4">
+              {/* BANNER COM BOTÃO DE COPIAR LINK DE ATIVAÇÃO PARA A EQUIPE */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase font-mono flex items-center gap-2">
+                    <Smartphone size={14} className="text-cyan-400" />
+                    <span>Como Conectar os Celulares e PCs da Equipe</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Envie o link de ativação para a equipe no WhatsApp. O colaborador escolhe seu nome e ativa com 1 toque.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyActivationLink}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition-all shadow-md min-h-[44px]"
+                >
+                  {copiedLink ? <Check size={14} className="text-emerald-300" /> : <Copy size={14} />}
+                  <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link para Equipe'}</span>
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {devices.map(dev => (
-                  <div
-                    key={dev.id}
-                    className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300">
-                        <Smartphone size={18} />
+              {/* STATUS DE DISPOSITIVOS POR MEMBRO */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-300 uppercase font-mono mb-2 flex items-center justify-between">
+                  <span>Membros & Status de Conexão:</span>
+                  <span className="text-[10px] text-cyan-400 font-normal">
+                    {devices.length} dispositivo{devices.length !== 1 ? 's' : ''} ativo{devices.length !== 1 ? 's' : ''}
+                  </span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                  {allMembers.map(m => {
+                    const memberDevs = devices.filter(d => d.memberName?.toUpperCase() === m.toUpperCase());
+                    const isConnected = memberDevs.length > 0;
+
+                    return (
+                      <div
+                        key={m}
+                        className={`p-3 rounded-xl border flex items-center justify-between gap-2 transition-all ${
+                          isConnected
+                            ? 'bg-slate-900/90 border-emerald-500/40'
+                            : 'bg-slate-950/60 border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-black text-xs ${
+                            isConnected ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/50' : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            {m.substring(0, 2)}
+                          </div>
+                          <div className="min-w-0">
+                            <h5 className="text-xs font-bold text-white uppercase font-mono truncate">{m}</h5>
+                            <span className="text-[10px] flex items-center gap-1.5">
+                              {isConnected ? (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span className="text-emerald-300 font-medium truncate">
+                                    {memberDevs[0].deviceLabel}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                                  <span className="text-slate-400">Aguardando ativação</span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        {isConnected && (
+                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30 flex-shrink-0">
+                            🟢 Conectado
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-white">{dev.deviceLabel}</h4>
-                        <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          <span>Ativo para recebimento de push</span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* LISTA DE DISPOSITIVOS DETECTADOS NO SISTEMA */}
+              {devices.length > 0 && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1.5">
+                  <h5 className="text-[11px] font-bold text-slate-400 uppercase font-mono">Assinaturas Push Registradas:</h5>
+                  <div className="space-y-1 text-xs">
+                    {devices.map(d => (
+                      <div key={d.id} className="text-[11px] text-slate-300 flex items-center justify-between py-1 border-b border-slate-900 last:border-0">
+                        <span>• <strong>{d.memberName || 'Geral'}</strong> — {d.deviceLabel}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {new Date(d.lastSeenAt).toLocaleDateString('pt-BR')}
                         </span>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           )}
 

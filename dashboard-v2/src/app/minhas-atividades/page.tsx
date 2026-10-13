@@ -15,7 +15,9 @@ import {
   ShieldCheck,
   Check,
   Sparkles,
-  Inbox
+  Inbox,
+  Bell,
+  Smartphone
 } from 'lucide-react';
 
 export default function MinhasAtividadesPage() {
@@ -23,6 +25,60 @@ export default function MinhasAtividadesPage() {
   const [allActivities, setAllActivities] = useState<CollaborativeActivity[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [ackLoadingId, setAckLoadingId] = useState<string | null>(null);
+  const [deviceConnected, setDeviceConnected] = useState<boolean>(false);
+  const [deviceLabel, setDeviceLabel] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setDeviceConnected(Notification.permission === 'granted');
+      const isWindows = /Windows/i.test(navigator.userAgent);
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      setDeviceLabel(isWindows ? 'Windows 11 (Google Chrome)' : isAndroid ? 'Motorola Android (Chrome)' : 'Google Chrome');
+    }
+  }, []);
+
+  const handleEnableDevicePush = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('Seu navegador atual não suporta notificações Web Push nativas.');
+      return;
+    }
+
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        const isWindows = /Windows/i.test(navigator.userAgent);
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const label = isWindows 
+          ? 'Windows 11 (Google Chrome)' 
+          : isAndroid 
+          ? 'Motorola Android (Chrome)' 
+          : 'Google Chrome';
+
+        await CollaborativePortalService.registerMemberDevice({
+          memberName: activeMember,
+          deviceLabel: label,
+          deviceType: isWindows ? 'desktop' : isAndroid ? 'mobile' : 'other',
+        });
+
+        setDeviceConnected(true);
+        new Notification(`🔔 Notificações Ativadas — ${activeMember}`, {
+          body: `Aparelho conectado! Você receberá avisos automáticos de novas tarefas atribuídas a você.`,
+          icon: '/Favicon.png',
+        });
+      }
+    } catch (e) {
+      console.warn('Erro ao habilitar notificações:', e);
+    }
+  };
+
+  const handleTestDeviceNotification = () => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(`🚨 Alerta Teste: ${activeMember}`, {
+        body: 'Notificação teste entregue com sucesso pela Central Mar Brasil.',
+        icon: '/Favicon.png',
+      });
+    }
+  };
 
   // Carregar dados das atividades
   const loadData = async () => {
@@ -185,7 +241,56 @@ export default function MinhasAtividadesPage() {
           </div>
         </div>
 
+        {/* CARD DE HABILITAÇÃO DE DISPOSITIVOS & WEB PUSH (WINDOWS 11 / MOTOROLA ANDROID) */}
+        <div className="p-3.5 sm:p-4 rounded-xl bg-slate-950/90 border border-slate-800 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className={`p-2 rounded-xl flex-shrink-0 ${
+              deviceConnected 
+                ? 'bg-emerald-950/60 border border-emerald-500/50 text-emerald-400' 
+                : 'bg-cyan-950/60 border border-cyan-500/50 text-cyan-400'
+            }`}>
+              {deviceConnected ? <CheckCircle2 size={20} /> : <Bell size={20} className="animate-bounce" />}
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-white uppercase font-mono flex items-center gap-2">
+                <span>{deviceConnected ? 'Notificações Ativas neste Aparelho' : 'Receber Alertas neste Aparelho'}</span>
+                <span className="text-[10px] px-2 py-0.2 rounded font-mono font-bold uppercase bg-slate-800 text-slate-300">
+                  {activeMember}
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {deviceConnected
+                  ? `Este dispositivo (${deviceLabel}) está conectado para receber alertas de novas tarefas atribuídas a ${activeMember}.`
+                  : `Habilite o Google Chrome (no seu Windows 11 ou celular Motorola Android) para receber avisos automáticos e som sempre que uma nova tarefa for designada a você.`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {!deviceConnected ? (
+              <button
+                type="button"
+                onClick={handleEnableDevicePush}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-cyan-950/60 min-h-[44px]"
+              >
+                <Bell size={15} />
+                <span>Ativar Alertas para {activeMember}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleTestDeviceNotification}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all border border-slate-700 min-h-[44px]"
+              >
+                <Sparkles size={13} className="text-cyan-400" />
+                <span>Enviar Teste</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* LOADING STATE */}
+
         {loading && (
           <div className="text-center py-12 text-slate-500 text-xs">
             Carregando atividades da equipe...
