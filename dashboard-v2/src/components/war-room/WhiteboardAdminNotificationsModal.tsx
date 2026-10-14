@@ -51,6 +51,16 @@ export function WhiteboardAdminNotificationsModal({
   const [broadcastBody, setBroadcastBody] = useState('');
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
+  const [lastDeliveryInfo, setLastDeliveryInfo] = useState<{ deliveredCount: number; totalChecked: number; targetText: string } | null>(null);
+
+  // Estados de conexão direta do dispositivo atual
+  const [connectingMyDevice, setConnectingMyDevice] = useState(false);
+  const [myDeviceFeedback, setMyDeviceFeedback] = useState<string | null>(null);
+  const [deviceMemberSelect, setDeviceMemberSelect] = useState<string>(allMembers[0] || 'MARCOS');
+
+  // Estados de teste de ping push
+  const [sendingTestPing, setSendingTestPing] = useState(false);
+  const [testPingResult, setTestPingResult] = useState<string | null>(null);
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedMemberName, setCopiedMemberName] = useState<string | null>(null);
@@ -95,8 +105,9 @@ export function WhiteboardAdminNotificationsModal({
     if (!broadcastTitle.trim() || !broadcastBody.trim()) return;
 
     setSendingBroadcast(true);
+    setLastDeliveryInfo(null);
     try {
-      await CollaborativePortalService.sendBroadcastNotification({
+      const res = await CollaborativePortalService.sendBroadcastNotification({
         title: broadcastTitle.trim(),
         body: broadcastBody.trim(),
         priority: broadcastPriority,
@@ -105,18 +116,70 @@ export function WhiteboardAdminNotificationsModal({
       });
 
       setBroadcastSuccess(true);
+      setLastDeliveryInfo({
+        deliveredCount: res.deliveredCount,
+        totalChecked: res.totalChecked,
+        targetText: targetType === 'all' ? 'Toda a Equipe' : selectedMember,
+      });
+
       setTimeout(() => {
         setBroadcastSuccess(false);
         setBroadcastTitle('');
         setBroadcastBody('');
-      }, 2500);
+      }, 5000);
     } finally {
       setSendingBroadcast(false);
     }
   };
 
+  // Conectar este aparelho diretamente aos alertas Web Push
+  const handleConnectCurrentDevice = async () => {
+    setConnectingMyDevice(true);
+    setMyDeviceFeedback(null);
+    try {
+      const res = await CollaborativePortalService.subscribeDeviceToPush(deviceMemberSelect);
+      if (res.success) {
+        setMyDeviceFeedback(`✅ Aparelho conectado com sucesso como ${deviceMemberSelect}! Teste enviado ao aparelho.`);
+        await loadData();
+      } else {
+        setMyDeviceFeedback(`⚠️ Não foi possível conectar: ${res.error || 'Permissão negada ou não suportada'}`);
+      }
+    } catch (err: any) {
+      setMyDeviceFeedback(`❌ Erro: ${err?.message || 'Falha ao registrar'}`);
+    } finally {
+      setConnectingMyDevice(false);
+      setTimeout(() => setMyDeviceFeedback(null), 8000);
+    }
+  };
+
+  // Enviar teste de ping push em tempo real para aparelhos conectados
+  const handleSendTestPing = async (targetMember?: string) => {
+    setSendingTestPing(true);
+    setTestPingResult(null);
+    try {
+      const res = await CollaborativePortalService.sendBroadcastNotification({
+        title: targetMember ? `🚨 Teste de Alerta: ${targetMember}` : '🚨 Teste de Alerta: Toda a Equipe',
+        body: 'Se você está vendo esta notificação, seu celular está 100% conectado ao Google FCM e recebendo alertas.',
+        priority: 'urgent',
+        targetType: targetMember ? 'member' : 'all',
+        targetMemberName: targetMember,
+      });
+
+      if (res.deliveredCount > 0) {
+        setTestPingResult(`✅ Notificação entregue a ${res.deliveredCount} aparelho(s) via Google FCM!`);
+      } else {
+        setTestPingResult(`⚠️ Nenhum celular ativo encontrado para ${targetMember || 'a equipe'}. Ative alertas no aparelho primeiro.`);
+      }
+    } catch (err: any) {
+      setTestPingResult(`❌ Falha: ${err?.message || 'Erro ao enviar'}`);
+    } finally {
+      setSendingTestPing(false);
+      setTimeout(() => setTestPingResult(null), 7000);
+    }
+  };
+
   const handleCopyActivationLink = () => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://dashboard-financeiro-eight.vercel.app';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://dashboard-financeiro-mar-brasil.vercel.app';
     const text = `🔔 *CENTRAL DE NOTIFICAÇÕES MAR BRASIL*\n\nPara receber os avisos das suas tarefas no seu celular Motorola Android ou no computador Windows 11:\n1. Acesse: ${origin}/minhas-atividades\n2. Selecione o seu nome no topo da tela.\n3. Toque no botão verde "Ativar Alertas neste Aparelho".\n4. Toque em "Permitir" na notificação do Google Chrome.\n\nPronto! Você receberá suas tarefas com som e notificação direta no aparelho.`;
     navigator.clipboard.writeText(text);
     setCopiedLink(true);
@@ -124,7 +187,7 @@ export function WhiteboardAdminNotificationsModal({
   };
 
   const handleCopyIndividualMemberLink = (memberName: string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://dashboard-financeiro-eight.vercel.app';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://dashboard-financeiro-mar-brasil.vercel.app';
     const link = `${origin}/minhas-atividades?membro=${encodeURIComponent(memberName)}`;
     const text = `🔔 *CENTRAL MAR BRASIL — ATIVAÇÃO PARA ${memberName}*\n\nPara receber os avisos das suas tarefas no seu celular Motorola Android ou Windows 11:\n1. Acesse seu link exclusivo: ${link}\n2. Toque no botão verde "Ativar Alertas para ${memberName}".\n3. Toque em "Permitir" na notificação do Google Chrome.\n\nPronto! Seu aparelho estará oficialmente conectado ao seu nome.`;
     navigator.clipboard.writeText(text);
@@ -361,10 +424,24 @@ export function WhiteboardAdminNotificationsModal({
                 />
               </div>
 
-              {broadcastSuccess && (
-                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-2">
-                  <CheckCircle2 size={16} />
-                  <span>Notificação disparada com sucesso para os dispositivos ativos!</span>
+              {broadcastSuccess && lastDeliveryInfo && (
+                <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                  lastDeliveryInfo.deliveredCount > 0
+                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
+                    : 'bg-amber-950/40 border-amber-500/50 text-amber-300'
+                }`}>
+                  {lastDeliveryInfo.deliveredCount > 0 ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                  <div>
+                    <div>{lastDeliveryInfo.deliveredCount > 0
+                      ? `✅ Notificação entregue para ${lastDeliveryInfo.deliveredCount} aparelho(s) via Google FCM (${lastDeliveryInfo.targetText})!`
+                      : `ℹ️ Notificação gravada no sistema! Nenhum celular com alertas ativos foi encontrado para ${lastDeliveryInfo.targetText}.`
+                    }</div>
+                    {lastDeliveryInfo.deliveredCount === 0 && (
+                      <div className="text-[11px] font-normal text-slate-400 mt-0.5">
+                        Dica: Ative os alertas no celular do colaborador acessando a aba "Dispositivos Conectados".
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -375,7 +452,7 @@ export function WhiteboardAdminNotificationsModal({
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs transition-all shadow-lg shadow-cyan-950/50 min-h-[44px]"
                 >
                   <Send size={14} />
-                  <span>{sendingBroadcast ? 'Enviando...' : '📱 Disparar Atualização à Equipe'}</span>
+                  <span>{sendingBroadcast ? 'Enviando...' : '📱 Disparar Atualização aos Celulares'}</span>
                 </button>
               </div>
             </form>
@@ -384,6 +461,78 @@ export function WhiteboardAdminNotificationsModal({
           {/* ── ABA 3: DISPOSITIVOS & MEMBROS CONECTADOS ── */}
           {activeTab === 'dispositivos' && (
             <div className="space-y-4">
+              {/* CARD DE CONEXÃO DIRETA DESTE APARELHO */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-cyan-950/40 to-slate-900 border border-cyan-500/30 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase font-mono flex items-center gap-2">
+                      <Smartphone size={15} className="text-cyan-400" />
+                      <span>Conectar Este Aparelho / Celular aos Alertas</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Vincule este navegador (Motorola Android / Windows 11) diretamente a um membro para receber pushes em segundo plano.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={deviceMemberSelect}
+                      onChange={(e) => setDeviceMemberSelect(e.target.value)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white font-mono font-bold focus:border-cyan-400"
+                    >
+                      {allMembers.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handleConnectCurrentDevice}
+                      disabled={connectingMyDevice}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono text-xs font-black transition-all shadow-md active:scale-95 disabled:opacity-50 min-h-[38px]"
+                    >
+                      {connectingMyDevice ? <RefreshCw size={12} className="animate-spin" /> : <Bell size={12} />}
+                      <span>{connectingMyDevice ? 'Conectando...' : 'Ativar Alertas Neste Aparelho'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {myDeviceFeedback && (
+                  <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-xs text-cyan-200">
+                    {myDeviceFeedback}
+                  </div>
+                )}
+              </div>
+
+              {/* CARD DE TESTE DE PING PUSH */}
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-slate-300">
+                  <div className="font-bold text-white flex items-center gap-1.5">
+                    <Flame size={14} className="text-amber-400" />
+                    <span>Testar Notificação Push em Todos os Celulares</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    Dispara um alerta sonoro e vibratório de validação via Google FCM para todos os aparelhos ativos.
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSendTestPing()}
+                  disabled={sendingTestPing}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400/50 text-cyan-200 font-mono text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50 min-h-[36px]"
+                >
+                  <Send size={12} className={sendingTestPing ? 'animate-pulse' : ''} />
+                  <span>{sendingTestPing ? 'Disparando...' : '🚨 Testar Todos os Celulares'}</span>
+                </button>
+              </div>
+
+              {testPingResult && (
+                <div className="p-2.5 rounded-lg bg-slate-950/80 border border-cyan-500/40 text-xs text-cyan-300 font-medium">
+                  {testPingResult}
+                </div>
+              )}
+
               {/* BANNER COM BOTÃO DE COPIAR LINK DE ATIVAÇÃO PARA A EQUIPE */}
               <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -471,9 +620,21 @@ export function WhiteboardAdminNotificationsModal({
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {isConnected ? (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30 flex-shrink-0">
-                              🟢 Conectado
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30 flex-shrink-0">
+                                🟢 Conectado
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleSendTestPing(m)}
+                                disabled={sendingTestPing}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-500/40 text-[9px] text-cyan-300 font-mono font-bold transition-all active:scale-95"
+                                title={`Enviar push de teste para ${m}`}
+                              >
+                                <Send size={10} />
+                                <span>Testar</span>
+                              </button>
+                            </div>
                           ) : (
                             <button
                               type="button"

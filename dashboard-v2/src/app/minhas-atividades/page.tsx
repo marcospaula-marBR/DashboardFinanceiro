@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PortalNavigation } from '@/components/collaborative-portal/PortalNavigation';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
 import { CollaborativeActivity, ActivityUrgencyGroup } from '@/types/collaborative-portal';
 import { getResponsibleColor } from '@/services/war-room.service';
 import { supabase } from '@/lib/supabase';
+import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array } from '@/lib/web-push.config';
 import { 
   AlertTriangle, 
   Clock, 
@@ -22,7 +23,9 @@ import {
   BellRing,
   Smartphone,
   UserCheck,
-  RefreshCw
+  RefreshCw,
+  Megaphone,
+  Volume2
 } from 'lucide-react';
 
 const OFFICIAL_MEMBERS = [
@@ -48,20 +51,49 @@ function MinhasAtividadesContent() {
   const [justActivatedFeedback, setJustActivatedFeedback] = useState<boolean>(false);
 
   const [incomingAlert, setIncomingAlert] = useState<{ title: string; body: string } | null>(null);
+  const [recentAnnouncements, setRecentAnnouncements] = useState<any[]>([]);
+
+  // Rastreamento resiliente de IDs já exibidos/alertados neste dispositivo
+  const seenNotificationIdsRef = useRef<Set<string>>(new Set());
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Inicializa ou retoma contexto de áudio na primeira interação do usuário na página
+  const unlockAudioContext = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume();
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    const handleGesture = () => unlockAudioContext();
+    window.addEventListener('click', handleGesture, { passive: true });
+    window.addEventListener('touchstart', handleGesture, { passive: true });
+    return () => {
+      window.removeEventListener('click', handleGesture);
+      window.removeEventListener('touchstart', handleGesture);
+    };
+  }, []);
 
   // Sintetizador sonoro leve com Web Audio API para alerta audível mesmo em celular
   const playNotificationSound = () => {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      unlockAudioContext();
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
       const now = ctx.currentTime;
       
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = 'sine';
       osc1.frequency.setValueAtTime(880, now);
-      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.setValueAtTime(0.35, now);
       gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
@@ -72,7 +104,7 @@ function MinhasAtividadesContent() {
       const gain2 = ctx.createGain();
       osc2.type = 'sine';
       osc2.frequency.setValueAtTime(1174, now + 0.18);
-      gain2.gain.setValueAtTime(0.35, now + 0.18);
+      gain2.gain.setValueAtTime(0.4, now + 0.18);
       gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
@@ -149,17 +181,12 @@ function MinhasAtividadesContent() {
 
     // Exibir banner toast flutuante no topo da tela do celular
     setIncomingAlert({ title, body });
-    setTimeout(() => setIncomingAlert(null), 5000);
+    setTimeout(() => setIncomingAlert(null), 6000);
 
     if (!('Notification' in window)) return;
 
     if (Notification.permission !== 'granted') {
-      try {
-        const p = await Notification.requestPermission();
-        if (p !== 'granted') return;
-      } catch {
-        return;
-      }
+      return;
     }
 
     const options: any = {
@@ -167,7 +194,7 @@ function MinhasAtividadesContent() {
       icon: '/Favicon.png',
       badge: '/Favicon.png',
       tag: tag || `marbrasil-${Date.now()}`,
-      vibrate: [200, 100, 200],
+      vibrate: [200, 100, 200, 100, 300],
       renotify: true,
       data: { url: '/minhas-atividades' },
     };
@@ -203,39 +230,42 @@ function MinhasAtividadesContent() {
     }
   };
 
-  // 4.2 Habilitar Notificações Web Push e Vincular ao Membro
+  // 4.2 Sincronizar inscrição de Web Push real no Google Cloud Messaging (FCM)
+  const syncPushSubscription = async (member: string) => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    try {
+      const res = await CollaborativePortalService.subscribeDeviceToPush(member);
+      if (res.success) {
+        setDeviceConnected(true);
+      }
+    } catch (err) {
+      console.warn('[MinhasAtividades] Erro ao sincronizar push subscription:', err);
+    }
+  };
+
+  // 4.3 Habilitar Notificações Web Push e Vincular ao Membro
   const handleEnableDevicePush = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       alert('Seu navegador atual não suporta notificações Web Push nativas.');
       return;
     }
 
+    unlockAudioContext();
+
     try {
-      const perm = await Notification.requestPermission();
-      if (perm === 'granted') {
-        const isWindows = /Windows/i.test(navigator.userAgent);
-        const isAndroid = /Android/i.test(navigator.userAgent);
-        const label = isWindows 
-          ? 'Windows 11 (Google Chrome)' 
-          : isAndroid 
-          ? 'Motorola Android (Chrome)' 
-          : 'Google Chrome';
-
-        await CollaborativePortalService.registerMemberDevice({
-          memberName: activeMember,
-          deviceLabel: label,
-          deviceType: isWindows ? 'desktop' : isAndroid ? 'mobile' : 'other',
-        });
-
+      const res = await CollaborativePortalService.subscribeDeviceToPush(activeMember);
+      if (res.success) {
         setDeviceConnected(true);
         setJustActivatedFeedback(true);
         setTimeout(() => setJustActivatedFeedback(false), 4000);
 
         await triggerNativeNotification(
           `🔔 Notificações Ativadas — ${activeMember}`,
-          `Aparelho conectado com sucesso! Você receberá avisos automáticos de novas tarefas designadas a você.`,
+          `Aparelho conectado com sucesso ao Google Cloud Messaging! Você receberá avisos automáticos e som na tela.`,
           `activate-${activeMember}`
         );
+      } else {
+        alert(res.error || 'Não foi possível conectar o dispositivo.');
       }
     } catch (e) {
       console.warn('Erro ao habilitar notificações:', e);
@@ -243,6 +273,15 @@ function MinhasAtividadesContent() {
   };
 
   const handleTestDeviceNotification = async () => {
+    unlockAudioContext();
+    await CollaborativePortalService.dispatchPushToServer({
+      targetType: 'member',
+      targetMemberName: activeMember,
+      title: `🚨 Alerta Teste — ${activeMember}`,
+      body: `Notificação teste entregue com sucesso pela Central Mar Brasil no seu aparelho.`,
+      priority: 'urgent',
+      tag: `test-${Date.now()}`,
+    });
     await triggerNativeNotification(
       `🚨 Alerta Teste — ${activeMember}`,
       `Notificação teste entregue com sucesso pela Central Mar Brasil no seu aparelho.`,
@@ -265,17 +304,56 @@ function MinhasAtividadesContent() {
     }
   };
 
+  // 6. Buscar comunicados recentes e disparar alerta apenas se for inédito
+  const checkRecentNotifications = async (shouldAlertOnNew = true) => {
+    if (!activeMember) return;
+    try {
+      const { data: notifs } = await supabase
+        .from('notifications')
+        .select('*')
+        .or(`target_type.eq.all,target_member_name.eq.${activeMember.toUpperCase()}`)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (notifs && notifs.length > 0) {
+        setRecentAnnouncements(notifs);
+
+        const nowMs = Date.now();
+        for (const notif of notifs) {
+          const isUnseen = !seenNotificationIdsRef.current.has(notif.id);
+          seenNotificationIdsRef.current.add(notif.id);
+
+          if (isUnseen && shouldAlertOnNew) {
+            const notifCreatedMs = notif.created_at ? new Date(notif.created_at).getTime() : nowMs;
+            const isFresh = nowMs - notifCreatedMs < 20 * 60 * 1000; // Criada nos últimos 20 minutos
+            if (isFresh) {
+              triggerNativeNotification(notif.title, notif.body, `notif-${notif.id}`);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[MinhasAtividades] Erro ao buscar avisos recentes:', e);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, [activeMember]);
 
-  // 6. Escuta em Tempo Real (Supabase Realtime) e Polling para Notificações e Comunicados à Equipe
+  // 7. Escuta em Tempo Real (Supabase Realtime), Polling e Retomada de Tela (VisibilityChange)
   useEffect(() => {
     if (!activeMember) return;
 
-    let lastKnownTimestamp = new Date().toISOString();
+    // 1. Carga inicial dos comunicados sem alertar retroativamente em massa
+    checkRecentNotifications(false);
 
-    // Escuta novas notificações no Supabase (Broadcasts e Novas Tarefas)
+    // 2. Sincronizar inscrição de push se permissão já estiver ativa
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      syncPushSubscription(activeMember);
+    }
+
+    // 3. Canal Realtime Supabase ouvindo INSERT na tabela notifications
     const channel = supabase
       .channel(`mobile-notifs-${activeMember.toLowerCase()}-${Date.now()}`)
       .on(
@@ -290,46 +368,35 @@ function MinhasAtividadesContent() {
           const isForMe = targetMember === activeMember.toUpperCase();
 
           if (isForAll || isForMe) {
-            lastKnownTimestamp = newNotif.created_at || new Date().toISOString();
+            seenNotificationIdsRef.current.add(newNotif.id);
             triggerNativeNotification(newNotif.title, newNotif.body, `notif-${newNotif.id}`);
+            checkRecentNotifications(false);
             loadData();
           }
         }
       )
       .subscribe((status) => {
-        console.log('[Supabase Realtime] Status da conexão no celular:', status);
+        console.log('[Supabase Realtime] Conexão no celular:', status);
       });
 
-    // Polling inteligente de resguardo a cada 8 segundos: busca novas notificações inseridas
-    const interval = setInterval(async () => {
-      try {
-        const { data: latestNotifs } = await supabase
-          .from('notifications')
-          .select('*')
-          .gt('created_at', lastKnownTimestamp)
-          .order('created_at', { ascending: true });
+    // 4. Polling inteligente a cada 6 segundos para resguardo se WebSocket oscilar
+    const interval = setInterval(() => {
+      checkRecentNotifications(true);
+    }, 6000);
 
-        if (latestNotifs && latestNotifs.length > 0) {
-          for (const notif of latestNotifs) {
-            const target = notif.target_member_name?.trim().toUpperCase();
-            const isAll = notif.target_type === 'all' || !target;
-            const isMe = target === activeMember.toUpperCase();
-
-            if (isAll || isMe) {
-              lastKnownTimestamp = notif.created_at;
-              triggerNativeNotification(notif.title, notif.body, `notif-${notif.id}`);
-            }
-          }
-          loadData();
-        }
-      } catch (pollErr) {
-        console.warn('[Polling] Aviso na verificação de notificações:', pollErr);
+    // 5. Escuta de retorno de tela / desbloqueio de celular (Visibility Change)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkRecentNotifications(true);
+        loadData();
       }
-    }, 8000);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [activeMember]);
 
@@ -608,6 +675,81 @@ function MinhasAtividadesContent() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* CARD EXECUTIVO: COMUNICADOS DA LIDERANÇA & AVISOS RECENTES */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#070b14] via-[#0b1222] to-[#070b14] border border-cyan-900/40 shadow-xl space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+            <div className="flex items-center gap-2">
+              <Megaphone size={16} className="text-cyan-400 animate-pulse" />
+              <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white font-mono">
+                Avisos da Liderança & Comunicados Recentes
+              </h2>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 font-bold">
+              {recentAnnouncements.length} {recentAnnouncements.length === 1 ? 'aviso' : 'avisos'}
+            </span>
+          </div>
+
+          {recentAnnouncements.length === 0 ? (
+            <div className="p-4 text-center rounded-xl bg-slate-950/40 border border-slate-900 text-slate-400 text-xs flex items-center justify-center gap-2">
+              <Volume2 size={15} className="text-slate-500" />
+              <span>Nenhum comunicado recente nas últimas horas. Canal conectado e pronto para alertas.</span>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto no-scrollbar">
+              {recentAnnouncements.map((notif) => {
+                const isAll = notif.target_type === 'all' || !notif.target_member_name;
+                const isUrgent = notif.priority === 'urgent';
+                const dateStr = notif.created_at
+                  ? new Date(notif.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                  : '--:--';
+
+                return (
+                  <div
+                    key={notif.id}
+                    className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                      isUrgent
+                        ? 'bg-rose-950/20 border-rose-500/40'
+                        : 'bg-slate-900/60 border-slate-800 hover:border-cyan-800/60'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                        isUrgent ? 'bg-rose-400 animate-ping' : 'bg-cyan-400'
+                      }`} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-bold text-white uppercase font-mono truncate">
+                            {notif.title}
+                          </h4>
+                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            isAll
+                              ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/40'
+                              : 'bg-emerald-950 text-emerald-300 border border-emerald-800/40'
+                          }`}>
+                            {isAll ? '📢 Toda a Equipe' : `👤 Exclusivo: ${notif.target_member_name}`}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            {dateStr}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-0.5 leading-snug break-words">
+                          {notif.body}
+                        </p>
+                      </div>
+                    </div>
+
+                    {notif.requires_ack && (
+                      <span className="text-[10px] font-mono px-2 py-1 rounded bg-amber-950/60 text-amber-300 border border-amber-500/40 font-bold shrink-0 self-start sm:self-center">
+                        ⚠️ Requer Atenção
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* LOADING STATE */}

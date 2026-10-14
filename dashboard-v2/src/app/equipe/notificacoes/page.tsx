@@ -195,11 +195,67 @@ function NotificacoesContent() {
     }
   };
 
-  // Escuta Realtime de notificações do Supabase
+  // Rastreamento resiliente de IDs já exibidos/alertados neste dispositivo
+  const seenNotificationIdsRef = React.useRef<Set<string>>(new Set());
+  const audioCtxRef = React.useRef<AudioContext | null>(null);
+
+  const unlockAudioContext = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume();
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    const handleGesture = () => unlockAudioContext();
+    window.addEventListener('click', handleGesture, { passive: true });
+    window.addEventListener('touchstart', handleGesture, { passive: true });
+    return () => {
+      window.removeEventListener('click', handleGesture);
+      window.removeEventListener('touchstart', handleGesture);
+    };
+  }, []);
+
+  // Escuta Realtime de notificações do Supabase com Polling e VisibilityChange
   useEffect(() => {
     if (!activeMember) return;
 
-    let lastKnownTimestamp = new Date().toISOString();
+    const checkRecent = async (alertNew = true) => {
+      try {
+        const { data: latestNotifs } = await supabase
+          .from('notifications')
+          .select('*')
+          .or(`target_type.eq.all,target_member_name.eq.${activeMember.toUpperCase()}`)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (latestNotifs && latestNotifs.length > 0) {
+          const nowMs = Date.now();
+          for (const notif of latestNotifs) {
+            const isUnseen = !seenNotificationIdsRef.current.has(notif.id);
+            seenNotificationIdsRef.current.add(notif.id);
+
+            if (isUnseen && alertNew) {
+              const createdMs = notif.created_at ? new Date(notif.created_at).getTime() : nowMs;
+              if (nowMs - createdMs < 20 * 60 * 1000) {
+                triggerNativeNotification(notif.title, notif.body, `notif-${notif.id}`);
+              }
+            }
+          }
+          loadData();
+        }
+      } catch (err) {
+        console.warn('[Team Polling] Aviso:', err);
+      }
+    };
+
+    checkRecent(false);
 
     const channel = supabase
       .channel(`team-notifs-${activeMember.toLowerCase()}-${Date.now()}`)
@@ -215,7 +271,7 @@ function NotificacoesContent() {
           const isForMe = targetMember === activeMember.toUpperCase();
 
           if (isForAll || isForMe) {
-            lastKnownTimestamp = newNotif.created_at || new Date().toISOString();
+            seenNotificationIdsRef.current.add(newNotif.id);
             triggerNativeNotification(newNotif.title, newNotif.body, `notif-${newNotif.id}`);
             loadData();
           }
@@ -223,36 +279,22 @@ function NotificacoesContent() {
       )
       .subscribe();
 
-    // Polling inteligente de resguardo a cada 8 segundos
-    const interval = setInterval(async () => {
-      try {
-        const { data: latestNotifs } = await supabase
-          .from('notifications')
-          .select('*')
-          .gt('created_at', lastKnownTimestamp)
-          .order('created_at', { ascending: true });
+    // Polling inteligente de resguardo a cada 6 segundos
+    const interval = setInterval(() => {
+      checkRecent(true);
+    }, 6000);
 
-        if (latestNotifs && latestNotifs.length > 0) {
-          for (const notif of latestNotifs) {
-            const target = notif.target_member_name?.trim().toUpperCase();
-            const isAll = notif.target_type === 'all' || !target;
-            const isMe = target === activeMember.toUpperCase();
-
-            if (isAll || isMe) {
-              lastKnownTimestamp = notif.created_at;
-              triggerNativeNotification(notif.title, notif.body, `notif-${notif.id}`);
-            }
-          }
-          loadData();
-        }
-      } catch (pollErr) {
-        console.warn('[Team Polling] Aviso:', pollErr);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkRecent(true);
       }
-    }, 8000);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [activeMember]);
 
@@ -264,33 +306,19 @@ function NotificacoesContent() {
     }
 
     try {
-      const perm = await Notification.requestPermission();
-      setNotificationPermission(perm);
-
-      if (perm === 'granted') {
-        const isWindows = /Windows/i.test(navigator.userAgent);
-        const isAndroid = /Android/i.test(navigator.userAgent);
-        const label = isWindows 
-          ? 'Windows 11 (Google Chrome)' 
-          : isAndroid 
-          ? 'Motorola Android (Chrome)' 
-          : 'Navegador Web';
-
-        await CollaborativePortalService.registerMemberDevice({
-          memberName: activeMember,
-          deviceLabel: label,
-          deviceType: isWindows ? 'desktop' : isAndroid ? 'mobile' : 'other',
-        });
-
+      unlockAudioContext();
+      const res = await CollaborativePortalService.subscribeDeviceToPush(activeMember);
+      if (res.success) {
+        setNotificationPermission('granted');
         const devList = await CollaborativePortalService.getAllRegisteredDevices();
         setDevices(devList);
-
-        // Disparo teste imediato de boas-vindas
         await triggerNativeNotification(
           `🔔 Mar Brasil — Notificações Ativadas (${activeMember})`,
-          `Dispositivo ${label} conectado com sucesso para receber tarefas de ${activeMember}.`,
+          `Dispositivo conectado com sucesso para receber tarefas e avisos em tempo real.`,
           `welcome-${Date.now()}`
         );
+      } else {
+        alert(res.error || 'Não foi possível conectar o dispositivo.');
       }
     } catch (e) {
       console.error('Erro ao solicitar permissão de push:', e);
@@ -302,6 +330,15 @@ function NotificacoesContent() {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
 
     if (Notification.permission === 'granted') {
+      unlockAudioContext();
+      await CollaborativePortalService.dispatchPushToServer({
+        targetType: 'member',
+        targetMemberName: activeMember,
+        title: '🚨 TESTE: Mar Brasil Operacional',
+        body: `Notificação teste entregue via Google Cloud Messaging no seu aparelho (${activeMember}).`,
+        priority: 'urgent',
+        tag: `test-${Date.now()}`,
+      });
       await triggerNativeNotification(
         '🚨 TESTE: Mar Brasil Operacional',
         'Notificação teste entregue com sucesso em seu dispositivo.',

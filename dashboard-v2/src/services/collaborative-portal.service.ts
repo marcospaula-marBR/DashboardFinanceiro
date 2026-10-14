@@ -18,9 +18,11 @@ import {
   DEFAULT_WHITEBOARD_DATA, 
   DEFAULT_WEEKDAY_BLOCKS,
   calculatePrazoInfo, 
-  extractResponsaveisList 
+  extractResponsaveisList,
+  inferDefaultResponsaveis
 } from '@/services/war-room.service';
 import { WhiteboardDataState, PrazoVisualInfo } from '@/types/war-room';
+import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array } from '@/lib/web-push.config';
 
 const LOCAL_HELP_OFFERS_KEY = 'marbrasil_help_offers_v1';
 const LOCAL_ACKS_KEY = 'marbrasil_task_acks_v1';
@@ -658,6 +660,37 @@ export class CollaborativePortalService {
   }
 
   /**
+   * Dispara o envio de Web Push nativo no servidor (FCM / Google Cloud Messaging)
+   * para alcançar celulares mesmo bloqueados, com tela apagada ou app fechado.
+   */
+  static async dispatchPushToServer(payload: {
+    title: string;
+    body: string;
+    priority?: string;
+    category?: string;
+    targetType?: 'all' | 'member';
+    targetMemberName?: string;
+    activityId?: string;
+    url?: string;
+    tag?: string;
+  }): Promise<{ success: boolean; deliveredCount?: number; totalChecked?: number; message?: string }> {
+    try {
+      if (typeof window !== 'undefined') {
+        const res = await fetch('/api/notifications/dispatch-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        return json;
+      }
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Aviso no despacho Web Push:', err);
+    }
+    return { success: false, deliveredCount: 0, totalChecked: 0 };
+  }
+
+  /**
    * DISPARO AUTOMÁTICO DE NOTIFICAÇÃO:
    * Acionado imediatamente quando o administrador cria uma nova tarefa com responsável designado
    * ou atribui um colaborador a uma demanda existente.
@@ -676,71 +709,94 @@ export class CollaborativePortalService {
     prazo?: string;
     isUrgent?: boolean;
     activityId?: string;
-  }): Promise<void> {
-    if (!responsaveis || responsaveis.length === 0) return;
-
-    const distinctResps = Array.from(
-      new Set(responsaveis.map(r => r.trim().toUpperCase()).filter(Boolean))
+  }): Promise<{ deliveredTotal: number }> {
+    let distinctResps = Array.from(
+      new Set((responsaveis || []).map(r => r.trim().toUpperCase()).filter(Boolean))
     );
-    if (distinctResps.length === 0) return;
 
-    for (const resp of distinctResps) {
+    // Se estiver vazio, tenta inferir responsável padrão do texto da tarefa
+    if (distinctResps.length === 0) {
+      distinctResps = inferDefaultResponsaveis(taskTitle);
+    }
+
+    let deliveredTotal = 0;
+
+    // Se não há responsável específico ou se foi atribuído a EQUIPE / TODOS / GERAL:
+    const isTeamBroadcast = distinctResps.length === 0 || distinctResps.some(r => r === 'EQUIPE' || r === 'TODOS' || r === 'GERAL');
+
+    if (isTeamBroadcast) {
       const title = isUrgent
-        ? `🚨 Demanda Urgente Atribuída: ${taskTitle}`
-        : `📋 Nova Atividade Atribuída: ${taskTitle}`;
-      const body = `Você foi designado como responsável por esta demanda em ${origin}.${
-        prazo ? ` Prazo: ${prazo}.` : ''
-      }`;
+        ? `🚨 Demanda Urgente da Equipe: ${taskTitle}`
+        : `📋 Nova Demanda da Equipe: ${taskTitle}`;
+      const body = `Nova atividade atribuída a toda a equipe em ${origin}.${prazo ? ` Prazo: ${prazo}.` : ''}`;
 
-      const notifObj: PortalNotification = {
-        id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      try {
+        await supabase.from('notifications').insert({
+          title,
+          body,
+          priority: isUrgent ? 'urgent' : 'important',
+          category: 'task_alert',
+          target_type: 'all',
+          target_member_name: null,
+          activity_title: taskTitle,
+          activity_id: activityId || null,
+          requires_ack: Boolean(isUrgent),
+        });
+      } catch (err) {
+        console.warn('[CollaborativePortalService] Erro ao gravar notificação de equipe no Supabase:', err);
+      }
+
+      const res = await this.dispatchPushToServer({
         title,
         body,
         priority: isUrgent ? 'urgent' : 'important',
         category: 'task_alert',
-        targetType: 'member',
-        targetMemberName: resp,
-        activityTitle: taskTitle,
+        targetType: 'all',
         activityId,
-        requiresAck: Boolean(isUrgent),
-        acknowledged: false,
-        createdAt: new Date().toISOString(),
-        read: false,
-      };
+        url: '/minhas-atividades',
+        tag: `task-team-${activityId || Date.now()}`,
+      });
+      deliveredTotal += (res?.deliveredCount || 0);
+    } else {
+      // Disparo individual para cada colaborador designado
+      for (const resp of distinctResps) {
+        const title = isUrgent
+          ? `🚨 Demanda Urgente Atribuída: ${taskTitle}`
+          : `📋 Nova Atividade Atribuída: ${taskTitle}`;
+        const body = `Você foi designado como responsável por esta demanda em ${origin}.${prazo ? ` Prazo: ${prazo}.` : ''}`;
 
-      // 1. Persistir no Supabase
-      try {
-        await supabase.from('notifications').insert({
-          title: notifObj.title,
-          body: notifObj.body,
-          priority: notifObj.priority,
-          category: notifObj.category,
-          target_type: 'member',
-          target_member_name: resp,
-          activity_title: taskTitle,
-          activity_id: activityId || null,
-          requires_ack: notifObj.requiresAck,
-        });
-      } catch (err) {
-        console.warn('[CollaborativePortalService] Erro ao gravar notificação no Supabase:', err);
-      }
-
-      // 2. Persistir no cache local
-      this.saveLocalNotification(notifObj);
-
-      // 3. Disparar notificação nativa imediata no navegador se compatível e autorizado
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
         try {
-          new Notification(notifObj.title, {
-            body: notifObj.body,
-            icon: '/Favicon.png',
-            tag: `task-${activityId || Date.now()}`,
+          await supabase.from('notifications').insert({
+            title,
+            body,
+            priority: isUrgent ? 'urgent' : 'important',
+            category: 'task_alert',
+            target_type: 'member',
+            target_member_name: resp,
+            activity_title: taskTitle,
+            activity_id: activityId || null,
+            requires_ack: Boolean(isUrgent),
           });
-        } catch (pushErr) {
-          console.warn('Erro ao disparar Web Push no navegador:', pushErr);
+        } catch (err) {
+          console.warn('[CollaborativePortalService] Erro ao gravar notificação no Supabase:', err);
         }
+
+        const res = await this.dispatchPushToServer({
+          title,
+          body,
+          priority: isUrgent ? 'urgent' : 'important',
+          category: 'task_alert',
+          targetType: 'member',
+          targetMemberName: resp,
+          activityId,
+          url: `/minhas-atividades?membro=${encodeURIComponent(resp)}`,
+          tag: `task-${resp}-${activityId || Date.now()}`,
+        });
+        deliveredTotal += (res?.deliveredCount || 0);
       }
     }
+
+    return { deliveredTotal };
   }
 
   /**
@@ -758,7 +814,8 @@ export class CollaborativePortalService {
     priority: NotificationPriority;
     targetType: 'all' | 'member';
     targetMemberName?: string;
-  }): Promise<boolean> {
+  }): Promise<{ success: boolean; deliveredCount: number; totalChecked: number; message?: string }> {
+    const cleanMember = targetMemberName ? targetMemberName.trim().toUpperCase() : undefined;
     const notifObj: PortalNotification = {
       id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title,
@@ -766,7 +823,7 @@ export class CollaborativePortalService {
       priority,
       category: 'manual_broadcast',
       targetType,
-      targetMemberName: targetMemberName ? targetMemberName.trim().toUpperCase() : undefined,
+      targetMemberName: cleanMember,
       requiresAck: priority === 'urgent',
       acknowledged: false,
       createdAt: new Date().toISOString(),
@@ -780,7 +837,7 @@ export class CollaborativePortalService {
         priority: notifObj.priority,
         category: notifObj.category,
         target_type: targetType,
-        target_member_name: notifObj.targetMemberName || null,
+        target_member_name: cleanMember || null,
         requires_ack: notifObj.requiresAck,
       });
     } catch (err) {
@@ -788,6 +845,20 @@ export class CollaborativePortalService {
     }
 
     this.saveLocalNotification(notifObj);
+
+    // Disparar Web Push Serverless via FCM para acordar dispositivos cadastrados
+    const dispatchRes = await this.dispatchPushToServer({
+      title,
+      body,
+      priority,
+      category: 'manual_broadcast',
+      targetType,
+      targetMemberName: cleanMember,
+      url: targetType === 'member' && cleanMember
+        ? `/minhas-atividades?membro=${encodeURIComponent(cleanMember)}`
+        : '/minhas-atividades',
+      tag: `broadcast-${Date.now()}`,
+    });
 
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       try {
@@ -798,7 +869,12 @@ export class CollaborativePortalService {
       } catch {}
     }
 
-    return true;
+    return {
+      success: true,
+      deliveredCount: dispatchRes?.deliveredCount || 0,
+      totalChecked: dispatchRes?.totalChecked || 0,
+      message: dispatchRes?.message,
+    };
   }
 
   /**
@@ -817,42 +893,240 @@ export class CollaborativePortalService {
   }
 
   /**
-   * Cadastra e vincula o dispositivo atual ao membro selecionado no Supabase e no cache local
+   * Registra a inscrição real de Web Push (PushManager) no Google FCM / Windows
+   * e vincula o dispositivo no Supabase (push_subscriptions).
+   */
+  static async subscribeDeviceToPush(memberName: string): Promise<{
+    success: boolean;
+    error?: string;
+    endpoint?: string;
+    deviceLabel?: string;
+  }> {
+    if (typeof window === 'undefined') {
+      return { success: false, error: 'Executado fora do navegador' };
+    }
+
+    if (!('serviceWorker' in navigator)) {
+      return { success: false, error: 'Navegador não suporta Service Worker' };
+    }
+
+    if (!('PushManager' in window) && !('pushManager' in (navigator.serviceWorker as any))) {
+      return { success: false, error: 'Navegador não suporta Web Push nativo' };
+    }
+
+    if (!('Notification' in window)) {
+      return { success: false, error: 'Navegador não suporta notificações' };
+    }
+
+    try {
+      // 1. Pedir permissão ao usuário
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        return { success: false, error: 'Permissão de notificação negada pelo usuário' };
+      }
+
+      // 2. Registrar o Service Worker oficial
+      let reg: ServiceWorkerRegistration;
+      try {
+        reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      } catch (swErr: any) {
+        return { success: false, error: `Falha ao registrar Service Worker: ${swErr?.message}` };
+      }
+
+      // Aguardar SW ficar pronto com timeout defensivo de 3 segundos
+      const readyReg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<ServiceWorkerRegistration | null>((resolve) =>
+          setTimeout(() => resolve(reg || null), 3000)
+        ),
+      ]);
+
+      const activeReg = readyReg || reg;
+      if (!activeReg || !activeReg.pushManager) {
+        return { success: false, error: 'PushManager não disponível no Service Worker' };
+      }
+
+      // 3. Obter ou criar inscrição no Google FCM via VAPID
+      let sub = await activeReg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await activeReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as unknown as BufferSource,
+        });
+      }
+
+      if (!sub || !sub.endpoint) {
+        return { success: false, error: 'Não foi possível gerar a assinatura Web Push no navegador' };
+      }
+
+      const rawKeys = (sub as any).toJSON()?.keys || {};
+      const p256dh = rawKeys.p256dh;
+      const auth = rawKeys.auth;
+
+      if (!p256dh || !auth) {
+        return { success: false, error: 'Chaves criptográficas (p256dh/auth) ausentes na assinatura' };
+      }
+
+      // 4. Identificar dispositivo
+      const isWindows = /Windows/i.test(navigator.userAgent);
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const isMac = /Macintosh/i.test(navigator.userAgent);
+      const isIOS = /iPhone|iPad/i.test(navigator.userAgent);
+      const deviceLabel = isAndroid
+        ? 'Motorola Android (Chrome)'
+        : isWindows
+        ? 'Windows 11 (Google Chrome)'
+        : isIOS
+        ? 'Apple iOS'
+        : isMac
+        ? 'macOS (Chrome)'
+        : 'Navegador Web';
+      const deviceType: 'desktop' | 'mobile' | 'tablet' | 'other' = (isAndroid || isIOS) ? 'mobile' : 'desktop';
+
+      const cleanMember = memberName.trim().toUpperCase() || 'EQUIPE';
+
+      // 5. Gravar no Supabase (push_subscriptions)
+      const { data: existing } = await supabase
+        .from('push_subscriptions')
+        .select('id')
+        .eq('endpoint', sub.endpoint)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        await supabase
+          .from('push_subscriptions')
+          .update({
+            member_name: cleanMember,
+            device_label: deviceLabel,
+            device_type: deviceType,
+            p256dh,
+            auth,
+            active: true,
+            last_seen_at: new Date().toISOString(),
+          })
+          .eq('id', existing[0].id);
+      } else {
+        await supabase.from('push_subscriptions').insert({
+          member_name: cleanMember,
+          device_label: deviceLabel,
+          device_type: deviceType,
+          endpoint: sub.endpoint,
+          p256dh,
+          auth,
+          active: true,
+          last_seen_at: new Date().toISOString(),
+        });
+      }
+
+      // 6. Gravar também no cache local
+      this.saveDevice({
+        id: `dev-${Date.now()}`,
+        memberName: cleanMember,
+        deviceLabel,
+        deviceType,
+        endpoint: sub.endpoint,
+        active: true,
+        lastSeenAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+
+      // 7. Enviar notificação teste de confirmação via servidor para validar de ponta a ponta
+      this.dispatchPushToServer({
+        title: `🔔 Alertas Ativados — ${cleanMember}`,
+        body: `Seu aparelho (${deviceLabel}) está conectado e pronto para receber notificações em tempo real.`,
+        priority: 'urgent',
+        targetType: 'member',
+        targetMemberName: cleanMember,
+        url: `/minhas-atividades?membro=${encodeURIComponent(cleanMember)}`,
+        tag: `welcome-${cleanMember}-${Date.now()}`,
+      });
+
+      return {
+        success: true,
+        endpoint: sub.endpoint,
+        deviceLabel,
+      };
+    } catch (err: any) {
+      console.error('[CollaborativePortalService] Erro ao registrar Web Push:', err);
+      return {
+        success: false,
+        error: err?.message || 'Erro desconhecido ao registrar Web Push',
+      };
+    }
+  }
+
+  /**
+   * Cadastra e vincula o dispositivo atual ao membro selecionado no Supabase e no cache local.
+   * Suporta credenciais reais de Web Push (PushSubscription endpoint, p256dh, auth).
    */
   static async registerMemberDevice({
     memberName,
     deviceLabel,
     deviceType,
+    endpoint,
+    p256dh,
+    auth,
   }: {
     memberName: string;
     deviceLabel: string;
     deviceType: 'desktop' | 'mobile' | 'tablet' | 'other';
+    endpoint?: string;
+    p256dh?: string;
+    auth?: string;
   }): Promise<RegisteredDevice> {
     const cleanMember = memberName.trim().toUpperCase();
+    const finalEndpoint = endpoint || `endpoint-${cleanMember}-${Date.now()}`;
+    const finalP256dh = p256dh || 'browser_p256dh';
+    const finalAuth = auth || 'browser_auth';
+
     const newDevice: RegisteredDevice = {
       id: `dev-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       memberName: cleanMember,
       deviceLabel,
       deviceType,
-      endpoint: `endpoint-${cleanMember}-${Date.now()}`,
+      endpoint: finalEndpoint,
       active: true,
       lastSeenAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };
 
-    // 1. Salvar no Supabase
+    // 1. Salvar ou atualizar no Supabase (se já houver o endpoint, atualiza titular)
     try {
-      await supabase.from('push_subscriptions').insert({
-        member_name: cleanMember,
-        device_label: deviceLabel,
-        device_type: deviceType,
-        endpoint: newDevice.endpoint,
-        p256dh: 'browser_p256dh',
-        auth: 'browser_auth',
-        active: true,
-      });
+      if (finalEndpoint.startsWith('http')) {
+        const { data: existing } = await supabase
+          .from('push_subscriptions')
+          .select('id')
+          .eq('endpoint', finalEndpoint)
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          await supabase
+            .from('push_subscriptions')
+            .update({
+              member_name: cleanMember,
+              device_label: deviceLabel,
+              device_type: deviceType,
+              p256dh: finalP256dh,
+              auth: finalAuth,
+              active: true,
+              last_seen_at: new Date().toISOString(),
+            })
+            .eq('id', existing[0].id);
+        } else {
+          await supabase.from('push_subscriptions').insert({
+            member_name: cleanMember,
+            device_label: deviceLabel,
+            device_type: deviceType,
+            endpoint: finalEndpoint,
+            p256dh: finalP256dh,
+            auth: finalAuth,
+            active: true,
+            last_seen_at: new Date().toISOString(),
+          });
+        }
+      }
     } catch (err) {
-      console.warn('[CollaborativePortalService] Gravando dispositivo local:', err);
+      console.warn('[CollaborativePortalService] Gravando dispositivo no Supabase:', err);
     }
 
     // 2. Salvar no localStorage
@@ -862,16 +1136,18 @@ export class CollaborativePortalService {
   }
 
   /**
-   * Retorna todos os dispositivos cadastrados no sistema (do Supabase e local)
+   * Retorna todos os dispositivos autenticados cadastrados no sistema (do Supabase com endpoint HTTP válido)
    */
   static async getAllRegisteredDevices(): Promise<RegisteredDevice[]> {
     try {
       const { data, error } = await supabase
         .from('push_subscriptions')
         .select('*')
+        .eq('active', true)
+        .like('endpoint', 'http%')
         .order('last_seen_at', { ascending: false });
 
-      if (data && !error && data.length > 0) {
+      if (data && !error) {
         return data.map(d => ({
           id: d.id,
           memberName: d.member_name,
@@ -887,7 +1163,7 @@ export class CollaborativePortalService {
       console.warn('[CollaborativePortalService] Erro ao carregar dispositivos do Supabase:', err);
     }
 
-    return this.getRegisteredDevices();
+    return this.getRegisteredDevices().filter(d => d.endpoint?.startsWith('http'));
   }
 
   /**

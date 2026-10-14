@@ -32,7 +32,11 @@ self.addEventListener('push', (event) => {
     body: data.body,
     icon: '/Favicon.png',
     badge: '/Favicon.png',
-    vibrate: [200, 100, 200],
+    vibrate: [300, 150, 300, 150, 300],
+    tag: data.tag || `mb-alert-${Date.now()}`,
+    renotify: true,
+    requireInteraction: data.priority === 'urgent',
+    timestamp: data.timestamp || Date.now(),
     data: {
       url: data.url || '/minhas-atividades',
       activityId: data.activityId,
@@ -40,7 +44,7 @@ self.addEventListener('push', (event) => {
     actions: [
       {
         action: 'open',
-        title: 'Abrir Atividade',
+        title: '📱 Abrir Atividade',
       },
     ],
   };

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor, getTopTasksPerMember } from '@/services/war-room.service';
+import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor, getTopTasksPerMember, inferDefaultResponsaveis } from '@/services/war-room.service';
 import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn, WeekdayKey } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
@@ -74,6 +74,19 @@ export default function LousaOperacionalPage() {
   useEffect(() => {
     refreshHelpOffers();
   }, [refreshHelpOffers]);
+
+  // Registro automático do Service Worker para suporte a Web Push e alertas em segundo plano
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => {
+          console.log('[LousaOperacional] Service Worker ativo:', reg.scope);
+        })
+        .catch(err => {
+          console.warn('[LousaOperacional] Falha ao registrar Service Worker:', err);
+        });
+    }
+  }, []);
 
   // Ao ativar o Modo TV, ajusta automaticamente as demandas em títulos e cronograma em linhas
   useEffect(() => {
@@ -343,23 +356,38 @@ export default function LousaOperacionalPage() {
     const updated = WarRoomService.addColumnItem(data, colId, text, responsavel, dataLimite, responsaveis);
     setData(updated);
 
-    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO PARA OS RESPONSÁVEIS DESIGNADOS
-    const targetResps = extractResponsaveisList({ responsavel, responsaveis });
-    if (targetResps.length > 0) {
-      const colObj = data.colunas.find(c => c.id === colId);
-      CollaborativePortalService.createAutomaticTaskNotification({
-        taskTitle: text,
-        origin: colObj ? `Coluna "${colObj.titulo}"` : 'Demandas Operacionais',
-        responsaveis: targetResps,
-        prazo: dataLimite,
-        isUrgent: colObj?.corMarcador === 'vermelho' || Boolean(dataLimite && new Date(dataLimite) <= new Date()),
-      }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
+    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO PARA OS RESPONSÁVEIS DESIGNADOS OU EQUIPE
+    let targetResps = extractResponsaveisList({ responsavel, responsaveis });
+    if (targetResps.length === 0) {
+      targetResps = inferDefaultResponsaveis(text);
     }
+    const colObj = data.colunas.find(c => c.id === colId);
+    CollaborativePortalService.createAutomaticTaskNotification({
+      taskTitle: text,
+      origin: colObj ? `Coluna "${colObj.titulo}"` : 'Demandas Operacionais',
+      responsaveis: targetResps.length > 0 ? targetResps : ['EQUIPE'],
+      prazo: dataLimite,
+      isUrgent: colObj?.corMarcador === 'vermelho' || Boolean(dataLimite && new Date(dataLimite) <= new Date()),
+    }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
   };
 
   const handleEditColumnItem = (colId: string, itemId: string, texto: string, responsavel?: string, dataLimite?: string, novosResponsaveis?: string[]) => {
     const updated = WarRoomService.updateColumnItem(data, colId, itemId, texto, responsavel, dataLimite, novosResponsaveis);
     setData(updated);
+
+    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO AO ATUALIZAR DEMANDA
+    let targetResps = extractResponsaveisList({ responsavel, responsaveis: novosResponsaveis });
+    if (targetResps.length === 0) {
+      targetResps = inferDefaultResponsaveis(texto);
+    }
+    const colObj = data.colunas.find(c => c.id === colId);
+    CollaborativePortalService.createAutomaticTaskNotification({
+      taskTitle: `[Atualização] ${texto}`,
+      origin: colObj ? `Coluna "${colObj.titulo}"` : 'Demandas Operacionais',
+      responsaveis: targetResps.length > 0 ? targetResps : ['EQUIPE'],
+      prazo: dataLimite,
+      activityId: itemId,
+    }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
   };
 
   const handleDeleteColumnItem = (colId: string, itemId: string) => {
@@ -400,18 +428,19 @@ export default function LousaOperacionalPage() {
     setData(updated);
     setEditingDemand(null);
 
-    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO SE FORAM ATRIBUÍDOS RESPONSÁVEIS
-    const targetResps = extractResponsaveisList({ responsavel: updates.responsavel, responsaveis: updates.responsaveis });
-    if (targetResps.length > 0) {
-      CollaborativePortalService.createAutomaticTaskNotification({
-        taskTitle: updates.texto,
-        origin: 'Demandas Operacionais (Atualizada)',
-        responsaveis: targetResps,
-        prazo: updates.dataLimite,
-        isUrgent: updates.prioridade === 'urgente',
-        activityId: itemId,
-      }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
+    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO SE FORAM ATRIBUÍDOS RESPONSÁVEIS OU EQUIPE
+    let targetResps = extractResponsaveisList({ responsavel: updates.responsavel, responsaveis: updates.responsaveis });
+    if (targetResps.length === 0) {
+      targetResps = inferDefaultResponsaveis(updates.texto);
     }
+    CollaborativePortalService.createAutomaticTaskNotification({
+      taskTitle: updates.texto,
+      origin: 'Demandas Operacionais (Atualizada)',
+      responsaveis: targetResps.length > 0 ? targetResps : ['EQUIPE'],
+      prazo: updates.dataLimite,
+      isUrgent: updates.prioridade === 'urgente',
+      activityId: itemId,
+    }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
   };
 
   const handleReorderColumnItem = (colId: string, startIndex: number, endIndex: number) => {
@@ -455,23 +484,37 @@ export default function LousaOperacionalPage() {
     const updated = WarRoomService.addTimelineItem(data, blockId, dia, descricao, responsavel, responsaveis);
     setData(updated);
 
-    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO PARA OS RESPONSÁVEIS DESIGNADOS
-    const targetResps = extractResponsaveisList({ responsavel, responsaveis });
-    if (targetResps.length > 0) {
-      const isUrgent = dia <= todayDay;
-      CollaborativePortalService.createAutomaticTaskNotification({
-        taskTitle: descricao,
-        origin: `Cronograma de Vencimentos (Dia ${dia})`,
-        responsaveis: targetResps,
-        prazo: `Dia ${dia}`,
-        isUrgent,
-      }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
+    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO PARA OS RESPONSÁVEIS DESIGNADOS OU EQUIPE
+    let targetResps = extractResponsaveisList({ responsavel, responsaveis });
+    if (targetResps.length === 0) {
+      targetResps = inferDefaultResponsaveis(descricao);
     }
+    const isUrgent = dia <= todayDay;
+    CollaborativePortalService.createAutomaticTaskNotification({
+      taskTitle: descricao,
+      origin: `Cronograma de Vencimentos (Dia ${dia})`,
+      responsaveis: targetResps.length > 0 ? targetResps : ['EQUIPE'],
+      prazo: `Dia ${dia}`,
+      isUrgent,
+    }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
   };
 
   const handleEditTimelineItem = (blockId: string, itemId: string, dia: number, descricao: string, responsavel?: string, novosResponsaveis?: string[]) => {
     const updated = WarRoomService.updateTimelineItem(data, blockId, itemId, dia, descricao, responsavel, novosResponsaveis);
     setData(updated);
+
+    // DISPARO AUTOMÁTICO DE NOTIFICAÇÃO AO ATUALIZAR ITEM DE CRONOGRAMA
+    let targetResps = extractResponsaveisList({ responsavel, responsaveis: novosResponsaveis });
+    if (targetResps.length === 0) {
+      targetResps = inferDefaultResponsaveis(descricao);
+    }
+    CollaborativePortalService.createAutomaticTaskNotification({
+      taskTitle: `[Vencimento Dia ${dia}] ${descricao}`,
+      origin: `Cronograma Atualizado`,
+      responsaveis: targetResps.length > 0 ? targetResps : ['EQUIPE'],
+      prazo: `Dia ${dia}`,
+      activityId: itemId,
+    }).catch(err => console.warn('Erro ao disparar notificação automática:', err));
   };
 
   const handleDeleteTimelineItem = (blockId: string, itemId: string) => {
@@ -504,21 +547,34 @@ export default function LousaOperacionalPage() {
     const updated = WarRoomService.addWeekdayItem(data, diaSemana, descricao, responsavel, responsaveis);
     setData(updated);
 
-    const targetResps = extractResponsaveisList({ responsavel, responsaveis });
-    if (targetResps.length > 0) {
-      CollaborativePortalService.createAutomaticTaskNotification({
-        taskTitle: descricao,
-        origin: `Grade Semanal Recorrente (${diaSemana.toUpperCase()})`,
-        responsaveis: targetResps,
-        prazo: `Toda ${diaSemana.toUpperCase()}`,
-        isUrgent: false,
-      }).catch(err => console.warn('Erro ao disparar notificação de rotina semanal:', err));
+    let targetResps = extractResponsaveisList({ responsavel, responsaveis });
+    if (targetResps.length === 0) {
+      targetResps = inferDefaultResponsaveis(descricao);
     }
+    CollaborativePortalService.createAutomaticTaskNotification({
+      taskTitle: descricao,
+      origin: `Grade Semanal Recorrente (${diaSemana.toUpperCase()})`,
+      responsaveis: targetResps.length > 0 ? targetResps : ['EQUIPE'],
+      prazo: `Toda ${diaSemana.toUpperCase()}`,
+      isUrgent: false,
+    }).catch(err => console.warn('Erro ao disparar notificação de rotina semanal:', err));
   };
 
   const handleEditWeekdayItem = (diaSemana: WeekdayKey, itemId: string, descricao: string, responsaveis: string[]) => {
     const updated = WarRoomService.editWeekdayItem(data, diaSemana, itemId, descricao, responsaveis);
     setData(updated);
+
+    let targetResps = extractResponsaveisList(responsaveis);
+    if (targetResps.length === 0) {
+      targetResps = inferDefaultResponsaveis(descricao);
+    }
+    CollaborativePortalService.createAutomaticTaskNotification({
+      taskTitle: `[Rotina ${diaSemana.toUpperCase()}] ${descricao}`,
+      origin: `Rotina Semanal Atualizada`,
+      responsaveis: targetResps.length > 0 ? targetResps : ['EQUIPE'],
+      prazo: `Toda ${diaSemana.toUpperCase()}`,
+      activityId: itemId,
+    }).catch(err => console.warn('Erro ao disparar notificação de rotina semanal:', err));
   };
 
   const handleDeleteWeekdayItem = (diaSemana: WeekdayKey, itemId: string) => {
