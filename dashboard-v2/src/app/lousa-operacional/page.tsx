@@ -348,8 +348,21 @@ export default function LousaOperacionalPage() {
 
   // ── HANDLERS DE TAREFAS DE COLUNA ──
   const handleToggleColumnItem = (colId: string, itemId: string) => {
+    const col = data.colunas.find(c => c.id === colId);
+    const item = col?.itens.find(i => i.id === itemId);
+    const willBeCompleted = item ? !item.concluido : false;
+
     const updated = WarRoomService.toggleColumnItem(data, colId, itemId);
     setData(updated);
+
+    if (willBeCompleted && item) {
+      CollaborativePortalService.notifyGestorOnTaskCompleted({
+        taskTitle: item.texto,
+        origin: col ? `Coluna "${col.titulo.replace(':', '')}"` : 'Demandas Operacionais',
+        responsaveis: extractResponsaveisList(item),
+        activityId: itemId,
+      }).catch(err => console.warn('Erro ao notificar gestor sobre conclusão:', err));
+    }
   };
 
   const handleAddColumnItem = (colId: string, text: string, responsavel?: string, dataLimite?: string, responsaveis?: string[]) => {
@@ -476,8 +489,21 @@ export default function LousaOperacionalPage() {
 
   // ── HANDLERS DE CRONOGRAMA ──
   const handleToggleTimelineItem = (blockId: string, itemId: string) => {
+    const block = data.cronograma.find(b => b.id === blockId);
+    const item = block?.itens.find(i => i.id === itemId);
+    const willBeCompleted = item ? !item.concluido : false;
+
     const updated = WarRoomService.toggleTimelineItem(data, blockId, itemId);
     setData(updated);
+
+    if (willBeCompleted && item) {
+      CollaborativePortalService.notifyGestorOnTaskCompleted({
+        taskTitle: item.descricao,
+        origin: `Cronograma (Dia ${item.dia})`,
+        responsaveis: extractResponsaveisList(item),
+        activityId: itemId,
+      }).catch(err => console.warn('Erro ao notificar gestor sobre conclusão:', err));
+    }
   };
 
   const handleAddTimelineItem = (blockId: string, dia: number, descricao: string, responsavel?: string, responsaveis?: string[]) => {
@@ -539,8 +565,21 @@ export default function LousaOperacionalPage() {
 
   // ── HANDLERS DA GRADE SEMANAL RECORRENTE (SEGUNDA A SEXTA) ──
   const handleToggleWeekdayItem = (diaSemana: WeekdayKey, itemId: string) => {
+    const block = data.gradeSemanal?.find(b => b.diaSemana === diaSemana);
+    const item = block?.itens.find(i => i.id === itemId);
+    const willBeCompleted = item ? !item.concluido : false;
+
     const updated = WarRoomService.toggleWeekdayItem(data, diaSemana, itemId);
     setData(updated);
+
+    if (willBeCompleted && item) {
+      CollaborativePortalService.notifyGestorOnTaskCompleted({
+        taskTitle: item.descricao,
+        origin: `Grade Semanal (${block?.nome || diaSemana})`,
+        responsaveis: extractResponsaveisList(item),
+        activityId: itemId,
+      }).catch(err => console.warn('Erro ao notificar gestor sobre conclusão:', err));
+    }
   };
 
   const handleAddWeekdayItem = (diaSemana: WeekdayKey, descricao: string, responsavel?: string, responsaveis?: string[]) => {

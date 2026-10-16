@@ -46,6 +46,7 @@ function MinhasAtividadesContent() {
   const [allActivities, setAllActivities] = useState<CollaborativeActivity[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [ackLoadingId, setAckLoadingId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
   const [deviceConnected, setDeviceConnected] = useState<boolean>(false);
   const [deviceLabel, setDeviceLabel] = useState<string>('');
   const [justActivatedFeedback, setJustActivatedFeedback] = useState<boolean>(false);
@@ -424,6 +425,24 @@ function MinhasAtividadesContent() {
       console.error('Erro ao confirmar ciência:', e);
     } finally {
       setAckLoadingId(null);
+    }
+  };
+
+  // Manipulador de alternância de conclusão da atividade (notifica o Gestor Marcos se concluída)
+  const handleToggleActivity = async (activity: CollaborativeActivity) => {
+    setCompletingId(activity.id);
+    try {
+      const res = await CollaborativePortalService.toggleActivityCompletion(activity, activeMember);
+      if (res.success) {
+        if (res.newState) {
+          playNotificationSound();
+        }
+        await loadData();
+      }
+    } catch (e) {
+      console.error('Erro ao alternar status da atividade:', e);
+    } finally {
+      setCompletingId(null);
     }
   };
 
@@ -852,30 +871,50 @@ function MinhasAtividadesContent() {
                                   })}
                                 </div>
 
-                                {activity.requiresAck && activity.ackStatus !== 'confirmada' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleConfirmAck(activity)}
-                                    disabled={ackLoadingId === activity.id}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase font-mono tracking-wider transition-all shadow-md active:scale-95"
-                                  >
-                                    <ShieldCheck size={13} />
-                                    <span>{ackLoadingId === activity.id ? 'Gravando...' : 'Confirmar Ciência'}</span>
-                                  </button>
-                                )}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {activity.requiresAck && activity.ackStatus !== 'confirmada' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleConfirmAck(activity)}
+                                      disabled={ackLoadingId === activity.id}
+                                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase font-mono tracking-wider transition-all shadow-md active:scale-95"
+                                    >
+                                      <ShieldCheck size={13} />
+                                      <span>{ackLoadingId === activity.id ? 'Gravando...' : 'Confirmar Ciência'}</span>
+                                    </button>
+                                  )}
 
-                                {activity.ackStatus === 'confirmada' && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-md font-mono">
-                                    <Check size={11} className="stroke-[3]" />
-                                    <span>Ciência Confirmada</span>
-                                  </span>
-                                )}
+                                  {activity.ackStatus === 'confirmada' && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-cyan-400 font-bold bg-cyan-950/60 border border-cyan-500/40 px-2 py-0.5 rounded-md font-mono">
+                                      <Check size={11} className="stroke-[3]" />
+                                      <span>Ciência Confirmada</span>
+                                    </span>
+                                  )}
 
-                                {activity.concluido && (
-                                  <span className="text-[11px] font-bold text-slate-400">
-                                    Finalizada
-                                  </span>
-                                )}
+                                  {!activity.concluido ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleActivity(activity)}
+                                      disabled={completingId === activity.id}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase font-mono tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50 min-h-[36px]"
+                                      title="Concluir tarefa e avisar a liderança"
+                                    >
+                                      <CheckCircle2 size={13} className={completingId === activity.id ? 'animate-spin' : ''} />
+                                      <span>{completingId === activity.id ? 'Salvando...' : 'Concluir'}</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleActivity(activity)}
+                                      disabled={completingId === activity.id}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-[10px] font-mono transition-all border border-slate-800"
+                                      title="Reabrir tarefa na lousa"
+                                    >
+                                      <Check size={11} className="text-emerald-400 stroke-[3]" />
+                                      <span>Concluída (Reabrir)</span>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
 
                             </div>

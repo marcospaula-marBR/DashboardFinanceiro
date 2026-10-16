@@ -21,7 +21,7 @@ import {
   extractResponsaveisList,
   inferDefaultResponsaveis
 } from '@/services/war-room.service';
-import { WhiteboardDataState, PrazoVisualInfo } from '@/types/war-room';
+import { WhiteboardDataState, PrazoVisualInfo, WeekdayKey } from '@/types/war-room';
 import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array } from '@/lib/web-push.config';
 
 const LOCAL_HELP_OFFERS_KEY = 'marbrasil_help_offers_v1';
@@ -816,6 +816,154 @@ export class CollaborativePortalService {
     }
 
     return { deliveredTotal };
+  }
+
+  /**
+   * NOTIFICAÇÃO DE CONCLUSÃO DE TAREFA PARA O GESTOR (MARCOS):
+   * Dispara imediatamente um alerta Web Push para o Gestor (Marcos) sempre que qualquer
+   * tarefa for marcada como concluída por membros da equipe (Melissa, Matheus, Guilherme, etc.).
+   * Se o próprio Marcos marcou uma tarefa própria exclusivamente sua, não o sobrecarrega com avisos redundantes.
+   */
+  static async notifyGestorOnTaskCompleted({
+    taskTitle,
+    origin,
+    completedBy,
+    responsaveis,
+    activityId,
+  }: {
+    taskTitle: string;
+    origin: string;
+    completedBy?: string;
+    responsaveis?: string[];
+    activityId?: string;
+  }): Promise<{ success: boolean; deliveredTotal?: number }> {
+    const cleanCompletedBy = completedBy ? completedBy.trim().toUpperCase() : undefined;
+    const distinctResps = extractResponsaveisList(responsaveis);
+
+    // Se Marcos concluiu sua própria tarefa exclusiva, não precisa enviar push para si mesmo
+    const isOnlyMarcos = distinctResps.length === 1 && distinctResps[0] === 'MARCOS';
+    const isMarcosSelfAction = (cleanCompletedBy === 'MARCOS') && isOnlyMarcos;
+
+    if (isMarcosSelfAction) {
+      return { success: true, deliveredTotal: 0 };
+    }
+
+    // Identificar o responsável ou executor para exibição clara no título
+    let executorLabel = cleanCompletedBy;
+    if (!executorLabel || executorLabel === 'MARCOS') {
+      const nonMarcosResps = distinctResps.filter(r => r !== 'MARCOS');
+      if (nonMarcosResps.length > 0) {
+        executorLabel = nonMarcosResps.join(', ');
+      } else if (distinctResps.length > 0) {
+        executorLabel = distinctResps.join(', ');
+      } else {
+        executorLabel = 'Equipe';
+      }
+    }
+
+    const title = `✅ Tarefa Concluída por ${executorLabel}: ${taskTitle}`;
+    const body = `A atividade "${taskTitle}" (${origin}) foi marcada como concluída por ${executorLabel}. Toque para abrir a Lousa.`;
+
+    try {
+      // 1. Gravar no banco de dados para histórico do Gestor
+      await supabase.from('notifications').insert({
+        title,
+        body,
+        priority: 'important',
+        category: 'task_completion',
+        target_type: 'member',
+        target_member_name: 'MARCOS',
+        activity_title: taskTitle,
+        activity_id: activityId || null,
+        url: '/lousa-operacional',
+        requires_ack: false,
+        created_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Erro ao gravar notificação de conclusão para o Gestor:', err);
+    }
+
+    // 2. Disparar Web Push para os aparelhos de Marcos (Android Motorola / Windows 11)
+    const res = await this.dispatchPushToServer({
+      title,
+      body,
+      priority: 'important',
+      category: 'task_completion',
+      targetType: 'member',
+      targetMemberName: 'MARCOS',
+      activityId,
+      url: '/lousa-operacional',
+      tag: `task-completed-${activityId || Date.now()}`,
+    });
+
+    return { success: true, deliveredTotal: res?.deliveredCount || 0 };
+  }
+
+  /**
+   * Conclui ou reabre uma atividade diretamente pelo Portal Minhas Atividades
+   * Sincroniza com whiteboard_state no Supabase e notifica o Gestor (Marcos) se concluída.
+   */
+  static async toggleActivityCompletion(
+    activity: CollaborativeActivity,
+    memberExecuting: string
+  ): Promise<{ success: boolean; newState: boolean }> {
+    try {
+      // 1. Obter estado atual da lousa
+      let currentData = WarRoomService.getWhiteboardData();
+      try {
+        const { data: row } = await supabase
+          .from('whiteboard_state')
+          .select('data')
+          .eq('id', 'current_state')
+          .maybeSingle();
+        if (row?.data) {
+          currentData = row.data as WhiteboardDataState;
+        }
+      } catch (e) {
+        console.warn('[CollaborativePortal] Falha ao ler whiteboard_state para toggle:', e);
+      }
+
+      const nextConcluido = !activity.concluido;
+
+      if (activity.origemTipo === 'coluna') {
+        const nextState = WarRoomService.toggleColumnItem(
+          currentData,
+          activity.origemId,
+          activity.id
+        );
+        WarRoomService.saveWhiteboardData(nextState);
+      } else if (activity.origemTipo === 'cronograma') {
+        const nextState = WarRoomService.toggleTimelineItem(
+          currentData,
+          activity.origemId,
+          activity.id
+        );
+        WarRoomService.saveWhiteboardData(nextState);
+      } else if (activity.origemTipo === 'rotina_semanal') {
+        const nextState = WarRoomService.toggleWeekdayItem(
+          currentData,
+          activity.origemId as WeekdayKey,
+          activity.id
+        );
+        WarRoomService.saveWhiteboardData(nextState);
+      }
+
+      // Se a atividade acabou de ser CONCLUÍDA, notifica o gestor (Marcos)
+      if (nextConcluido) {
+        await this.notifyGestorOnTaskCompleted({
+          taskTitle: activity.titulo,
+          origin: activity.origemTitulo || 'Minhas Atividades',
+          completedBy: memberExecuting,
+          responsaveis: activity.responsaveis,
+          activityId: activity.id,
+        });
+      }
+
+      return { success: true, newState: nextConcluido };
+    } catch (err: any) {
+      console.error('[CollaborativePortal] Erro ao alternar conclusão da atividade:', err);
+      return { success: false, newState: activity.concluido };
+    }
   }
 
   /**

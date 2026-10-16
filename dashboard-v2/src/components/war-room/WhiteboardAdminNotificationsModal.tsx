@@ -77,6 +77,10 @@ export function WhiteboardAdminNotificationsModal({
     error?: string;
   } | null>(null);
 
+  // Estados de teste do alerta de conclusão para o Gestor Marcos
+  const [testingGestorAlert, setTestingGestorAlert] = useState(false);
+  const [gestorAlertResult, setGestorAlertResult] = useState<string | null>(null);
+
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedMemberName, setCopiedMemberName] = useState<string | null>(null);
 
@@ -205,6 +209,31 @@ export function WhiteboardAdminNotificationsModal({
       setDailyCronResult({ success: false, error: err?.message || 'Falha na requisição' });
     } finally {
       setTriggeringDailyCron(false);
+    }
+  };
+
+  // Disparo de teste para o alerta de conclusão de tarefa ao Gestor (Marcos)
+  const handleTestGestorCompletionAlert = async () => {
+    setTestingGestorAlert(true);
+    setGestorAlertResult(null);
+    try {
+      const res = await CollaborativePortalService.notifyGestorOnTaskCompleted({
+        taskTitle: 'TESTE: Relatório Semanal de Atividades Concluído',
+        origin: 'Lousa Operacional (Teste de Validação)',
+        completedBy: 'MELISSA',
+        responsaveis: ['MELISSA'],
+        activityId: `test-gestor-${Date.now()}`,
+      });
+      if (res.deliveredTotal && res.deliveredTotal > 0) {
+        setGestorAlertResult(`✅ Notificação entregue para ${res.deliveredTotal} aparelho(s) de MARCOS via Google FCM!`);
+      } else {
+        setGestorAlertResult('ℹ️ Notificação gravada no sistema para MARCOS. Verifique se seu celular está ativo na aba "Dispositivos Conectados".');
+      }
+    } catch (err: any) {
+      setGestorAlertResult(`❌ Falha: ${err?.message || 'Erro ao enviar'}`);
+    } finally {
+      setTestingGestorAlert(false);
+      setTimeout(() => setGestorAlertResult(null), 8000);
     }
   };
 
@@ -541,6 +570,43 @@ export function WhiteboardAdminNotificationsModal({
                         <span>Erro no disparo: {dailyCronResult.error || 'Falha na requisição'}</span>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── CARD: NOTIFICAÇÃO DE CONCLUSÕES AO GESTOR (MARCOS) ── */}
+              <div className="pt-5 border-t border-slate-800/80 space-y-3">
+                <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CheckCircle2 size={16} className="text-emerald-400" />
+                      <h4 className="text-xs font-bold text-white uppercase font-mono">
+                        Notificações de Conclusão ao Gestor (Marcos)
+                      </h4>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30">
+                        Ativo
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 max-w-xl">
+                      Sempre que Melissa, Matheus, Guilherme ou outros membros concluírem tarefas na Lousa ou no Portal, Marcos recebe um alerta com som e vibração no celular.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleTestGestorCompletionAlert}
+                    disabled={testingGestorAlert}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/50 text-xs font-bold text-emerald-200 transition-all shadow-md active:scale-95 disabled:opacity-50 min-h-[44px] flex-shrink-0"
+                  >
+                    <Send size={13} className={testingGestorAlert ? 'animate-spin text-emerald-400' : 'text-emerald-400'} />
+                    <span>{testingGestorAlert ? 'Disparando Teste...' : '🧪 Testar Alerta ao Gestor'}</span>
+                  </button>
+                </div>
+
+                {gestorAlertResult && (
+                  <div className="p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-950/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                    <span>{gestorAlertResult}</span>
                   </div>
                 )}
               </div>
