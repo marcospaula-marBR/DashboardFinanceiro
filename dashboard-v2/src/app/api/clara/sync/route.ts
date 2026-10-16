@@ -12,6 +12,9 @@ export async function POST(req: Request) {
     const forceFullSync = Boolean(body.forceFullSync);
     const companyId = body.companyId || body.company || 'marbrasil';
     const companyName = body.companyName;
+    const cycleStartDate = body.cycleStartDate;
+    const cycleClosingDate = body.cycleClosingDate;
+    const cycleId = body.cycleId;
 
     const summary = await ClaraSyncService.syncClaraTransactions({
       trigger,
@@ -19,6 +22,9 @@ export async function POST(req: Request) {
       forceFullSync,
       companyId,
       companyName,
+      cycleStartDate,
+      cycleClosingDate,
+      cycleId,
     });
 
     return NextResponse.json({

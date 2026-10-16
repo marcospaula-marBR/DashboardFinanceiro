@@ -38,7 +38,12 @@ import {
   Zap,
   Inbox,
 } from "lucide-react";
-import { calculateCardDueDate } from "@/utils/clara-billing-cycle";
+import { 
+  calculateCardDueDate, 
+  getCurrentBillingCycle, 
+  getRecentBillingCycles, 
+  BillingCycleInfo 
+} from "@/utils/clara-billing-cycle";
 
 const COMPANIES_LIST = [
   { id: 'mar-brasil', name: 'Mar Brasil', cnpj: '02.233.923/0001-19', fullName: 'Mar Brasil Serviços e Locações Ltda' },
@@ -50,6 +55,12 @@ export default function ClaraIntegrationPage() {
   // Empresa Ativa para Sincronização e Auditoria Fiscal de CNPJ
   const [selectedCompanyId, setSelectedCompanyId] = useState('mar-brasil');
   const activeCompany = COMPANIES_LIST.find(c => c.id === selectedCompanyId) || COMPANIES_LIST[0];
+
+  // Ciclos de Faturamento Clara (Corte no dia 23, Vencimento no dia 30)
+  const [billingCycles] = useState<BillingCycleInfo[]>(() => getRecentBillingCycles(12));
+  const currentCycle = billingCycles[0] || getCurrentBillingCycle();
+  const [selectedCycleId, setSelectedCycleId] = useState<string>(currentCycle.cycleId);
+  const activeCycle = billingCycles.find(c => c.cycleId === selectedCycleId) || null;
 
   // Dados
   const [transactions, setTransactions] = useState<ClaraTransactionRecord[]>([]);
@@ -71,10 +82,25 @@ export default function ClaraIntegrationPage() {
   const [search, setSearch] = useState("");
   const [syncStatus, setSyncStatus] = useState("PENDING_SYNC");
   const [claraStatus, setClaraStatus] = useState("ALL");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState<string>(currentCycle.startDate);
+  const [endDate, setEndDate] = useState<string>(currentCycle.closingDate);
   const [page, setPage] = useState(1);
   const pageSize = 25;
+
+  const handleCycleChange = (cycleId: string) => {
+    setSelectedCycleId(cycleId);
+    setPage(1);
+    if (cycleId === 'ALL') {
+      setStartDate('');
+      setEndDate('');
+    } else {
+      const cycle = billingCycles.find(c => c.cycleId === cycleId);
+      if (cycle) {
+        setStartDate(cycle.startDate);
+        setEndDate(cycle.closingDate);
+      }
+    }
+  };
 
   const handleTabChange = (tab: 'PENDING' | 'SYNCED' | 'ALL') => {
     setViewTab(tab);
@@ -213,10 +239,13 @@ export default function ClaraIntegrationPage() {
     };
   }, [activeCompany, metrics, total, viewTab, syncStatus, claraStatus, search, transactions, selectedUuids, categories, departments, projects]);
 
-  const handleSyncNow = async () => {
+  const handleSyncNow = async (forceOption?: boolean | unknown) => {
     setSyncing(true);
     setSyncResult(null);
     try {
+      const isForce = typeof forceOption === 'boolean' ? forceOption : false;
+      const isFull = isForce || selectedCycleId === 'ALL';
+      const targetCycle = activeCycle;
       const res = await fetch('/api/clara/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -224,6 +253,10 @@ export default function ClaraIntegrationPage() {
           trigger: 'MANUAL',
           companyId: selectedCompanyId,
           companyName: activeCompany.name,
+          cycleStartDate: isFull ? undefined : targetCycle?.startDate,
+          cycleClosingDate: isFull ? undefined : targetCycle?.closingDate,
+          cycleId: isFull ? undefined : targetCycle?.cycleId,
+          forceFullSync: isFull,
         }),
       });
 
@@ -467,6 +500,26 @@ export default function ClaraIntegrationPage() {
 
           {/* Botões de Ação Principal */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Seletor de Ciclo de Fatura Clara */}
+            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-2xs">
+              <Calendar size={16} className="text-blue-600 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Fatura / Ciclo:</span>
+                <select
+                  value={selectedCycleId}
+                  onChange={e => handleCycleChange(e.target.value)}
+                  className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer pr-1"
+                >
+                  {billingCycles.map(cycle => (
+                    <option key={cycle.cycleId} value={cycle.cycleId}>
+                      {cycle.label} {cycle.isCurrent ? '⭐ [Vigente]' : ''}
+                    </option>
+                  ))}
+                  <option value="ALL">Todas as Faturas (Histórico Completo)</option>
+                </select>
+              </div>
+            </div>
+
             {/* Seletor de Empresa Ativa para Auditoria Fiscal de CNPJ */}
             <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs">
               <Building2 size={16} className="text-emerald-600 shrink-0" />
@@ -487,12 +540,19 @@ export default function ClaraIntegrationPage() {
             </div>
 
             <button
-              onClick={handleSyncNow}
+              onClick={() => handleSyncNow(false)}
               disabled={syncing}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+              title={activeCycle ? `Sincroniza apenas transações de ${activeCycle.startDate} a ${activeCycle.closingDate}` : 'Sincronizar lançamentos'}
             >
               <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
-              <span>{syncing ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
+              <span>
+                {syncing 
+                  ? 'Sincronizando...' 
+                  : selectedCycleId === 'ALL' 
+                    ? 'Sincronizar Histórico' 
+                    : `Sincronizar Fatura (${activeCycle?.shortLabel || 'Atual'})`}
+              </span>
             </button>
 
             <button
@@ -529,6 +589,46 @@ export default function ClaraIntegrationPage() {
             </button>
           </div>
         </div>
+
+        {/* Banner Informativo Executivo do Ciclo de Fatura */}
+        {activeCycle && (
+          <div className="mb-6 px-4 py-3 bg-blue-50/90 border border-blue-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 text-blue-700 rounded-xl shrink-0">
+                <Calendar size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-blue-950">
+                    {activeCycle.label}
+                  </h3>
+                  {activeCycle.isCurrent && (
+                    <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider">
+                      Fatura Vigente
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-blue-800 mt-0.5">
+                  Compras de <strong>{activeCycle.startDate.split('-').reverse().join('/')}</strong> a <strong>{activeCycle.closingDate.split('-').reverse().join('/')}</strong> (Corte no dia 23) com vencimento automático do boleto em <strong className="text-blue-900 underline">{activeCycle.dueDate.split('-').reverse().join('/')}</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0 self-end md:self-auto">
+              {selectedCycleId !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => handleSyncNow(true)}
+                  disabled={syncing}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                  title="Sincronizar todo o histórico antigo da Clara"
+                >
+                  Forçar Sync Completo
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Banner de Modo Seguro (Safe Mode) */}
         {metrics.safeMode && (
@@ -699,19 +799,17 @@ export default function ClaraIntegrationPage() {
 
             {/* Botão de Limpar Filtros */}
             <div className="flex items-center gap-2">
-              {(search || syncStatus !== 'PENDING_SYNC' || claraStatus !== 'ALL' || startDate || endDate) && (
+              {(search || syncStatus !== 'PENDING_SYNC' || claraStatus !== 'ALL' || selectedCycleId !== currentCycle.cycleId) && (
                 <button
                   onClick={() => {
                     setSearch('');
                     handleTabChange('PENDING');
                     setClaraStatus('ALL');
-                    setStartDate('');
-                    setEndDate('');
-                    setPage(1);
+                    handleCycleChange(currentCycle.cycleId);
                   }}
                   className="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer w-full text-center"
                 >
-                  Restaurar Fila Padrão
+                  Restaurar Fila Padrão (Fatura Vigente)
                 </button>
               )}
             </div>
@@ -888,7 +986,7 @@ export default function ClaraIntegrationPage() {
                       <span>Ver transações no Omie ({metrics.syncedCount})</span>
                     </button>
                     <button
-                      onClick={handleSyncNow}
+                      onClick={() => handleSyncNow(false)}
                       disabled={syncing}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
                     >

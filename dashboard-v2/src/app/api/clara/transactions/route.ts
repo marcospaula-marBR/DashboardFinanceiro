@@ -26,7 +26,7 @@ export async function GET(req: Request) {
         endDate,
         companyId,
       }),
-      ClaraSyncService.getMetrics(companyId),
+      ClaraSyncService.getMetrics(companyId, startDate, endDate),
     ]);
 
     return NextResponse.json({

@@ -15,7 +15,7 @@ import { ClaraClient } from './clara-client';
 import { ClaraOmieMapper } from './clara-omie-mapper';
 import { ClaraStorageService } from './clara-storage.service';
 import { ClaraOcrService } from './clara-ocr.service';
-import { calculateCardDueDate } from '@/utils/clara-billing-cycle';
+import { calculateCardDueDate, getCurrentBillingCycle } from '@/utils/clara-billing-cycle';
 
 // Armazenamento em memória para caso a tabela ainda não exista no Supabase
 let memoryTransactions: Map<string, ClaraTransactionRecord> = new Map();
@@ -27,6 +27,9 @@ export interface SyncOptions {
   forceFullSync?: boolean;
   companyId?: string;
   companyName?: string;
+  cycleStartDate?: string;   // Ex: '2026-09-24'
+  cycleClosingDate?: string; // Ex: '2026-10-23'
+  cycleId?: string;          // Ex: '2026-10'
 }
 
 export interface SyncResultSummary {
@@ -306,35 +309,37 @@ export class ClaraSyncService {
       // 1. Configura cliente da Clara
       const claraClient = new ClaraClient(config);
 
-      // 2. Determina estratégia de busca
-      // Se for a primeira execução ou forceFullSync, busca sem filtro restritivo de data para trazer o histórico da Clara
+      // 2. Determina estratégia de busca por ciclo de fatura
+      // Por padrão, sincroniza apenas o ciclo da fatura solicitado ou vigente (evita recarregar lançamentos antigos)
       let claraRawList: ClaraRawTransaction[] = [];
-      const isInitialSync = options.forceFullSync || memoryTransactions.size === 0;
+      const currentCycle = getCurrentBillingCycle();
+      const cycleStart = options.cycleStartDate || currentCycle.startDate;
+      const cycleEnd = options.cycleClosingDate || currentCycle.closingDate;
 
       try {
-        if (isInitialSync) {
+        if (options.forceFullSync) {
           claraRawList = await claraClient.getAllTransactions({ size: 100, page: 0 });
         } else {
-          const overlapDays = config.overlap_days || 15;
-          const startDate = new Date();
-          startDate.setDate(startDate.getDate() - overlapDays);
-          const startDateStr = startDate.toISOString().split('T')[0];
           claraRawList = await claraClient.getAllTransactions({
-            lastUpdateDateRangeStart: startDateStr,
+            lastUpdateDateRangeStart: cycleStart,
+            lastUpdateDateRangeEnd: cycleEnd,
             size: 100,
             page: 0,
           });
         }
       } catch (err: any) {
-        console.warn('[ClaraSyncService] Busca com filtro falhou, buscando sem filtro de data:', err.message);
-        claraRawList = await claraClient.getAllTransactions({ size: 100, page: 0 });
-      }
-
-      // Fallback: se a busca com filtro retornou vazia, busca todas as páginas disponíveis
-      if (claraRawList.length === 0) {
+        console.warn('[ClaraSyncService] Busca com filtro de ciclo falhou, tentando fallback:', err.message);
         try {
-          claraRawList = await claraClient.getAllTransactions({ size: 100, page: 0 });
-        } catch {}
+          claraRawList = await claraClient.getAllTransactions({
+            lastUpdateDateRangeStart: cycleStart,
+            size: 100,
+            page: 0,
+          });
+        } catch {
+          if (options.forceFullSync) {
+            claraRawList = await claraClient.getAllTransactions({ size: 100, page: 0 });
+          }
+        }
       }
 
       received = claraRawList.length;
@@ -722,7 +727,8 @@ export class ClaraSyncService {
         query = query.gte('operation_date', params.startDate);
       }
       if (params.endDate) {
-        query = query.lte('operation_date', params.endDate);
+        const endIso = params.endDate.includes('T') ? params.endDate : `${params.endDate}T23:59:59.999Z`;
+        query = query.lte('operation_date', endIso);
       }
       if (params.search) {
         query = query.or(`merchant_name.ilike.%${params.search}%,user_name.ilike.%${params.search}%,authorization_number.ilike.%${params.search}%,clara_uuid.ilike.%${params.search}%`);
@@ -757,6 +763,13 @@ export class ClaraSyncService {
         return cId.includes('mar');
       });
     }
+    if (params.startDate) {
+      items = items.filter(t => t.operation_date >= params.startDate!);
+    }
+    if (params.endDate) {
+      const endIso = params.endDate.includes('T') ? params.endDate : `${params.endDate}T23:59:59.999Z`;
+      items = items.filter(t => t.operation_date <= endIso);
+    }
     if (params.syncStatus && params.syncStatus !== 'ALL') {
       if (params.syncStatus === 'PENDING_SYNC') {
         items = items.filter(t => t.sync_status !== 'SYNCED' && t.sync_status !== 'IGNORED');
@@ -790,7 +803,7 @@ export class ClaraSyncService {
   /**
    * Retorna métricas de KPIs para o painel de topo
    */
-  public static async getMetrics(companyId?: string): Promise<{
+  public static async getMetrics(companyId?: string, startDate?: string, endDate?: string): Promise<{
     totalTransactions: number;
     syncedCount: number;
     pendingCount: number;
@@ -807,9 +820,16 @@ export class ClaraSyncService {
     try {
       let q = supabase
         .from('clara_transactions')
-        .select('sync_status, amount, omie_launch_id, updated_at, company_id');
+        .select('sync_status, amount, omie_launch_id, updated_at, company_id, operation_date');
       if (companyId && companyId !== 'all') {
         q = q.ilike('company_id', `%${companyId}%`);
+      }
+      if (startDate) {
+        q = q.gte('operation_date', startDate);
+      }
+      if (endDate) {
+        const endIso = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`;
+        q = q.lte('operation_date', endIso);
       }
       const { data } = await q;
       if (data && data.length > 0) rows = data as any;
@@ -835,6 +855,14 @@ export class ClaraSyncService {
         }
         return cId.includes('mar');
       });
+    }
+
+    if (startDate) {
+      rows = rows.filter(t => t.operation_date >= startDate);
+    }
+    if (endDate) {
+      const endIso = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`;
+      rows = rows.filter(t => t.operation_date <= endIso);
     }
 
     let syncedCount = 0;
