@@ -146,6 +146,10 @@ export default function ClaraIntegrationPage() {
       if (selectedCompanyId) params.set('companyId', selectedCompanyId);
 
       const res = await fetch(`/api/clara/transactions?${params.toString()}`);
+      if (!res.ok) {
+        console.warn(`[fetchTransactions] Servidor retornou status ${res.status}`);
+        return;
+      }
       const json = await res.json();
       if (json.status === 'success' && json.data) {
         setTransactions(json.data.transactions || []);
@@ -222,6 +226,24 @@ export default function ClaraIntegrationPage() {
           companyName: activeCompany.name,
         }),
       });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        let errMsg = `Falha no servidor (HTTP ${res.status})`;
+        try {
+          const errJson = JSON.parse(text);
+          if (errJson.message) errMsg = errJson.message;
+        } catch {
+          if (res.status === 504 || text.includes('FUNCTION_INVOCATION_TIMEOUT') || text.includes('timed out')) {
+            errMsg = 'Tempo limite de sincronização excedido na nuvem.';
+          } else if (text.length > 0 && text.length < 160) {
+            errMsg = `${errMsg}: ${text}`;
+          }
+        }
+        alert(`Erro na sincronização: ${errMsg}`);
+        return;
+      }
+
       const data = await res.json();
       if (data.status === 'success') {
         setSyncResult(data.data);
@@ -230,10 +252,10 @@ export default function ClaraIntegrationPage() {
         }
         await fetchTransactions();
       } else {
-        alert(`Erro na sincronização: ${data.message}`);
+        alert(`Erro na sincronização: ${data.message || 'Erro desconhecido'}`);
       }
     } catch (e: any) {
-      alert(`Falha de rede ao sincronizar: ${e.message}`);
+      alert(`Falha de comunicação ao sincronizar: ${e.message}`);
     } finally {
       setSyncing(false);
     }
@@ -253,12 +275,24 @@ export default function ClaraIntegrationPage() {
           companyName: activeCompany.name,
         }),
       });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        let errMsg = `Falha no servidor (HTTP ${res.status})`;
+        try {
+          const errJson = JSON.parse(text);
+          if (errJson.message) errMsg = errJson.message;
+        } catch {}
+        alert(`Erro na auditoria em lote: ${errMsg}`);
+        return;
+      }
+
       const data = await res.json();
-      if (res.ok && data.status === 'success') {
+      if (data.status === 'success') {
         alert(data.message);
         await fetchTransactions();
       } else {
-        alert(`Erro na auditoria em lote: ${data.message}`);
+        alert(`Erro na auditoria em lote: ${data.message || 'Erro desconhecido'}`);
       }
     } catch (e: any) {
       alert(`Falha de conexão ao auditar em lote: ${e.message}`);
@@ -308,13 +342,25 @@ export default function ClaraIntegrationPage() {
           uuids: selectedUuids,
         }),
       });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        let errMsg = `Falha no servidor (HTTP ${res.status})`;
+        try {
+          const errJson = JSON.parse(text);
+          if (errJson.message) errMsg = errJson.message;
+        } catch {}
+        alert(`Erro ao processar lote: ${errMsg}`);
+        return;
+      }
+
       const data = await res.json();
       if (data.status === 'success') {
         alert(data.message);
         setSelectedUuids([]);
         await fetchTransactions();
       } else {
-        alert(`Erro ao processar lote: ${data.message}`);
+        alert(`Erro ao processar lote: ${data.message || 'Erro desconhecido'}`);
       }
     } catch (e: any) {
       alert(`Falha ao processar lote: ${e.message}`);
@@ -346,6 +392,18 @@ export default function ClaraIntegrationPage() {
           due_date: batchDueDate || undefined,
         }),
       });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        let errMsg = `Falha no servidor (HTTP ${res.status})`;
+        try {
+          const errJson = JSON.parse(text);
+          if (errJson.message) errMsg = errJson.message;
+        } catch {}
+        alert(`Erro: ${errMsg}`);
+        return;
+      }
+
       const data = await res.json();
       if (data.status === 'success') {
         alert(data.message);
@@ -357,7 +415,7 @@ export default function ClaraIntegrationPage() {
         setBatchDueDate("");
         await fetchTransactions();
       } else {
-        alert(`Erro: ${data.message}`);
+        alert(`Erro: ${data.message || 'Erro desconhecido'}`);
       }
     } catch (e: any) {
       alert(`Falha: ${e.message}`);
@@ -388,8 +446,8 @@ export default function ClaraIntegrationPage() {
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         
-        {/* Header Corporativo Oficial (Sem botão Início para isolar ambiente dos operadores de cartão) */}
-        <HeaderFinanceiro showHomeButton={false} />
+        {/* Header Corporativo Oficial */}
+        <HeaderFinanceiro showHomeButton={true} />
 
         {/* Título & Subtítulo do Módulo */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">

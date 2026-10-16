@@ -1,7 +1,7 @@
 -- ============================================================================
 -- MIGRATION: Integração Clara Cartões → Omie
--- Data: 2026-09-02
--- Descrição: Tabelas de controle, auditoria, mapeamento e fila para envio
+-- Data: 2026-09-02 (Refinado em 2026-10-16)
+-- Descrição: Tabelas de controle, auditoria fiscal, mapeamento e fila para envio
 --            de transações e comprovantes da Clara ao Omie ERP.
 -- ============================================================================
 
@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.clara_config (
     private_key_pem TEXT,
     base_url TEXT DEFAULT 'https://public-api.br.clara.com',
     omie_n_cod_cc BIGINT,
+    omie_supplier_code BIGINT,
     omie_cc_descricao TEXT,
     company_name TEXT DEFAULT 'Mar Brasil',
     auto_sync_enabled BOOLEAN DEFAULT FALSE,
@@ -21,11 +22,18 @@ CREATE TABLE IF NOT EXISTS public.clara_config (
     safe_mode BOOLEAN DEFAULT TRUE, -- Modo de Teste: gera payload sem disparar IncluirLancCC real
     default_omie_category TEXT,
     default_omie_department TEXT,
+    default_omie_project TEXT,
     block_if_unmapped BOOLEAN DEFAULT TRUE,
     overlap_days INT DEFAULT 3,
     last_connection_test TIMESTAMPTZ,
     last_connection_status TEXT,
     last_connection_message TEXT,
+    active_company_id TEXT DEFAULT 'marbrasil',
+    active_company_name TEXT DEFAULT 'Mar Brasil',
+    active_company_cnpj TEXT DEFAULT '02.233.923/0001-19',
+    card_closing_day INT DEFAULT 23,
+    card_due_day INT DEFAULT 30,
+    auto_ocr_on_sync BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -68,6 +76,7 @@ CREATE TABLE IF NOT EXISTS public.clara_transactions (
     omie_account_id BIGINT,  -- nCodCC
     omie_category_code TEXT,
     omie_department_code TEXT,
+    omie_project_code TEXT,
     
     -- Anexos / Comprovantes
     has_attachments BOOLEAN DEFAULT FALSE,
@@ -80,6 +89,24 @@ CREATE TABLE IF NOT EXISTS public.clara_transactions (
     sync_attempts INT DEFAULT 0,
     last_sync_attempt TIMESTAMPTZ,
     last_sync_error TEXT,
+
+    -- Auditoria Fiscal & OCR
+    invoice_cnpj_tomador TEXT,
+    invoice_cnpj_emitente TEXT,
+    invoice_razao_social_tomador TEXT,
+    invoice_numero TEXT,
+    cnpj_match_status TEXT DEFAULT 'PENDING', -- MATCH, DIVERGENT, NOT_FOUND, PENDING
+    cnpj_divergence_reason TEXT,
+    
+    -- Datas Contábeis e Financeiras
+    invoice_issue_date TEXT,
+    registration_date TEXT,
+    due_date TEXT,
+    company_id TEXT DEFAULT 'marbrasil',
+    company_name TEXT DEFAULT 'Mar Brasil',
+    
+    -- Parcelamento
+    installments_info JSONB,
     
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -93,6 +120,8 @@ CREATE INDEX IF NOT EXISTS idx_clara_tx_op_date ON public.clara_transactions(ope
 CREATE INDEX IF NOT EXISTS idx_clara_tx_merchant ON public.clara_transactions(merchant_name);
 CREATE INDEX IF NOT EXISTS idx_clara_tx_user ON public.clara_transactions(user_name);
 CREATE INDEX IF NOT EXISTS idx_clara_tx_omie_launch ON public.clara_transactions(omie_launch_id);
+CREATE INDEX IF NOT EXISTS idx_clara_tx_company ON public.clara_transactions(company_id);
+CREATE INDEX IF NOT EXISTS idx_clara_tx_cnpj_status ON public.clara_transactions(cnpj_match_status);
 
 -- 3. MAPEAMENTO DE CATEGORIAS (Clara -> Omie)
 CREATE TABLE IF NOT EXISTS public.clara_category_mappings (
@@ -159,7 +188,7 @@ ALTER TABLE public.clara_department_mappings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clara_sync_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clara_sync_logs ENABLE ROW LEVEL SECURITY;
 
--- Políticas de acesso aberto com Service Role
+-- Políticas de acesso aberto com Service Role e anon (Dashboard Operacional)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'clara_config' AND policyname = 'Allow all clara_config') THEN
     CREATE POLICY "Allow all clara_config" ON public.clara_config FOR ALL USING (TRUE) WITH CHECK (TRUE);

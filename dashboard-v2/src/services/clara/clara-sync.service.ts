@@ -347,27 +347,32 @@ export class ClaraSyncService {
       const catMap = new Map<string, string>();
       categoryMappings.forEach(m => catMap.set(m.clara_category.trim().toLowerCase(), m.omie_category_code.trim()));
 
-      // 4. Processa cada transação Clara
+      // 3.1 Carrega transações existentes em lote para a memória de forma instantânea
+      const existingMap = new Map<string, ClaraTransactionRecord>();
+      try {
+        const { data: dbExisting } = await supabase
+          .from('clara_transactions')
+          .select('*');
+        if (dbExisting && dbExisting.length > 0) {
+          dbExisting.forEach((t: any) => existingMap.set(t.clara_uuid, t));
+        }
+      } catch (e: any) {
+        console.warn('[ClaraSyncService] Aviso ao carregar clara_transactions existentes:', e.message);
+      }
+      memoryTransactions.forEach((t, k) => {
+        if (!existingMap.has(k)) existingMap.set(k, t);
+      });
+
+      // 4. Processa cada transação Clara em memória
       const toSyncReady: ClaraTransactionRecord[] = [];
+      const recordsToPersist = new Map<string, ClaraTransactionRecord>();
 
       for (const raw of claraRawList) {
         const normalized = this.normalizeClaraTransaction(raw, config);
         if (!normalized.clara_uuid) continue;
 
-        // Verifica se já existe no banco
-        let existingRecord: ClaraTransactionRecord | null = await ClaraStorageService.getTransaction(normalized.clara_uuid, DEFAULT_CLARA_CONFIG);
-        if (!existingRecord) {
-          try {
-            const { data } = await supabase
-              .from('clara_transactions')
-              .select('*')
-              .eq('clara_uuid', normalized.clara_uuid)
-              .maybeSingle();
-            if (data) existingRecord = data;
-          } catch {
-            existingRecord = memoryTransactions.get(normalized.clara_uuid) || null;
-          }
-        }
+        // Consulta instantânea no mapa em lote
+        const existingRecord = existingMap.get(normalized.clara_uuid) || null;
 
         if (existingRecord) {
           // Já sincronizada com o Omie?
@@ -377,6 +382,7 @@ export class ClaraSyncService {
             if (normalized.has_attachments && !existingRecord.attachments_synced) {
               toSyncReady.push(existingRecord);
             }
+            recordsToPersist.set(existingRecord.clara_uuid, existingRecord);
             continue;
           }
           // Transação existente mas ainda não enviada: atualiza dados
@@ -392,14 +398,14 @@ export class ClaraSyncService {
         if (normalized.transaction_type !== 'PURCHASE') {
           normalized.sync_status = 'IGNORED';
           ignored++;
-          await this.saveLocalTransaction(normalized);
+          recordsToPersist.set(normalized.clara_uuid, normalized);
           continue;
         }
 
         if (normalized.transaction_status !== 'AUTHORIZED') {
           normalized.sync_status = 'IGNORED';
           ignored++;
-          await this.saveLocalTransaction(normalized);
+          recordsToPersist.set(normalized.clara_uuid, normalized);
           continue;
         }
 
@@ -440,7 +446,7 @@ export class ClaraSyncService {
           toSyncReady.push(normalized);
         }
 
-        await this.saveLocalTransaction(normalized);
+        recordsToPersist.set(normalized.clara_uuid, normalized);
       }
 
       run.transactions_created = created;
@@ -465,7 +471,7 @@ export class ClaraSyncService {
             tx.sync_status = 'READY';
             tx.last_sync_attempt = new Date().toISOString();
             tx.last_sync_error = 'Modo de Teste ativo: lançamento pronto para inclusão no Omie.';
-            await this.saveLocalTransaction(tx);
+            recordsToPersist.set(tx.clara_uuid, tx);
             continue;
           }
 
@@ -504,7 +510,7 @@ export class ClaraSyncService {
             tx.sync_status = 'ERROR';
             tx.last_sync_error = `Omie IncluirContaPagar: ${msg}`;
             tx.sync_attempts = (tx.sync_attempts || 0) + 1;
-            await this.saveLocalTransaction(tx);
+            recordsToPersist.set(tx.clara_uuid, tx);
             continue;
           }
         }
@@ -556,15 +562,18 @@ export class ClaraSyncService {
           }
         }
 
-        await this.saveLocalTransaction(tx);
+        recordsToPersist.set(tx.clara_uuid, tx);
       }
 
-      // 7. AUDITORIA FISCAL IA AUTOMÁTICA (Auto-OCR): se habilitada, analisa novos comprovantes
+      // 6.1 PERSISTÊNCIA EM LOTE DE ALTA PERFORMANCE (Evita 300+ round-trips e timeout)
+      const allToSave = Array.from(recordsToPersist.values());
+      await this.saveLocalTransactionsBatch(allToSave);
+
+      // 7. AUDITORIA FISCAL IA AUTOMÁTICA (Auto-OCR): se habilitada, analisa comprovantes recentes
       let autoOcrSummary: any = null;
       if (config.auto_ocr_on_sync !== false) {
         try {
-          const state = await ClaraStorageService.getState(config);
-          const pendingTxs = Object.values(state.transactions).filter(
+          const pendingTxs = allToSave.filter(
             t => (t.has_attachments || (t.attachments_count && t.attachments_count > 0)) &&
                  (!t.cnpj_match_status || t.cnpj_match_status === 'PENDING')
           );
@@ -573,12 +582,16 @@ export class ClaraSyncService {
             const targetCnpj = config.active_company_cnpj || '02.233.923/0001-19';
             const targetName = config.active_company_name || 'Mar Brasil';
             autoOcrSummary = await ClaraOcrService.processBatchOcr(
-              pendingTxs.slice(0, 15), // Processa até 15 comprovantes concorrentes
+              pendingTxs.slice(0, 3), // Limite de 3 durante o sync rápido para manter tempo de resposta sob controle
               config,
               targetCnpj,
               targetName,
-              3
+              2
             );
+
+            if (autoOcrSummary?.updatedTransactions?.length > 0) {
+              await this.saveLocalTransactionsBatch(autoOcrSummary.updatedTransactions);
+            }
           }
         } catch (ocrErr: any) {
           console.warn('[ClaraSyncService] Aviso no Auto-OCR durante sync:', ocrErr.message);
@@ -618,8 +631,36 @@ export class ClaraSyncService {
   }
 
   /**
-   * Salva transação localmente com persistência dupla (Supabase + fallback memória)
+   * Salva lista de transações em lote com persistência de alta performance
    */
+  public static async saveLocalTransactionsBatch(txList: ClaraTransactionRecord[]): Promise<void> {
+    if (!txList || txList.length === 0) return;
+    const now = new Date().toISOString();
+    for (const tx of txList) {
+      tx.updated_at = now;
+      memoryTransactions.set(tx.clara_uuid, tx);
+    }
+
+    // 1. Persiste em lote na tabela dedicada clara_transactions do Supabase (chunks de 100)
+    try {
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < txList.length; i += CHUNK_SIZE) {
+        const chunk = txList.slice(i, i + CHUNK_SIZE);
+        const { error } = await supabase
+          .from('clara_transactions')
+          .upsert(chunk, { onConflict: 'clara_uuid' });
+        if (error) {
+          console.warn('[ClaraSyncService] Aviso no upsert em lote:', error.message);
+        }
+      }
+    } catch (e: any) {
+      console.warn('[ClaraSyncService] Erro ao salvar clara_transactions no Supabase:', e.message);
+    }
+
+    // 2. Persiste em lote no ClaraStorageService (uma única gravação consolidada de backup)
+    await ClaraStorageService.saveTransactionsBatch(txList, DEFAULT_CLARA_CONFIG).catch(() => {});
+  }
+
   /**
    * Salva transação localmente com persistência dupla (ClaraStorageService + Supabase + memória)
    */

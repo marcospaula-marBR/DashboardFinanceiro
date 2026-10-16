@@ -3,6 +3,9 @@ import { ClaraOcrService } from '@/services/clara/clara-ocr.service';
 import { ClaraStorageService } from '@/services/clara/clara-storage.service';
 import { DEFAULT_CLARA_CONFIG, DEFAULT_CLARA_CONFIG_DZM } from '@/services/clara/clara-config.service';
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
