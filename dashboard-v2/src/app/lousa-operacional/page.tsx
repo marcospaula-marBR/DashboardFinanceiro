@@ -20,7 +20,7 @@ import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDem
 import { WhiteboardMemberModal } from '@/components/war-room/WhiteboardMemberModal';
 import { WhiteboardAdminNotificationsModal } from '@/components/war-room/WhiteboardAdminNotificationsModal';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
-import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell, Edit3 } from 'lucide-react';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell, Edit3, Trophy } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -59,6 +59,7 @@ export default function LousaOperacionalPage() {
   // Estados de gestão de membros (editar, excluir e adicionar)
   const [isMemberModalOpen, setIsMemberModalOpen] = useState<boolean>(false);
   const [editingMemberName, setEditingMemberName] = useState<string | null>(null);
+  const [memberModalInitialTab, setMemberModalInitialTab] = useState<'list' | 'ranking' | 'form'>('list');
 
   // Estados da Central de Notificações Administrativa e Ofertas de Ajuda
   const [isAdminNotificationsModalOpen, setIsAdminNotificationsModalOpen] = useState<boolean>(false);
@@ -626,9 +627,10 @@ export default function LousaOperacionalPage() {
     setData(updated);
   };
 
-  // ── HANDLERS DE GESTÃO DE MEMBROS (EDITAR / EXCLUIR / NOVO) ──
-  const handleOpenMemberModal = (memberName: string | null) => {
+  // ── HANDLERS DE GESTÃO DE MEMBROS (EDITAR / EXCLUIR / NOVO / RANKING) ──
+  const handleOpenMemberModal = (memberName: string | null, tab: 'list' | 'ranking' | 'form' = 'list') => {
     setEditingMemberName(memberName);
+    setMemberModalInitialTab(memberName ? 'form' : tab);
     setIsMemberModalOpen(true);
   };
 
@@ -805,12 +807,23 @@ export default function LousaOperacionalPage() {
             {/* BOTÃO PROEMINENTE: GESTÃO DE MEMBROS (VER TODOS, EDITAR, EXCLUIR) */}
             <button
               type="button"
-              onClick={() => handleOpenMemberModal(null)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono text-cyan-300 hover:text-white bg-cyan-950/50 hover:bg-cyan-900/70 border border-cyan-500/50 transition-all shadow-sm"
+              onClick={() => handleOpenMemberModal(null, 'list')}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono text-cyan-300 hover:text-white bg-cyan-950/50 hover:bg-cyan-900/70 border border-cyan-500/50 transition-all shadow-sm min-h-[34px]"
               title="Abrir painel completo de gestão de membros (excluir, editar ou renomear)"
             >
               <Users size={12} className="text-cyan-400" />
               <span>👥 Gestão de Membros</span>
+            </button>
+
+            {/* BOTÃO EXECUTIVO: RANKING DE PRODUTIVIDADE DA EQUIPE */}
+            <button
+              type="button"
+              onClick={() => handleOpenMemberModal(null, 'ranking')}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono text-amber-300 hover:text-white bg-amber-950/50 hover:bg-amber-900/70 border border-amber-500/50 transition-all shadow-sm min-h-[34px]"
+              title="Visualizar Ranking Executivo de Produtividade e Entregas Concluídas por Membro"
+            >
+              <Trophy size={12} className="text-amber-400" />
+              <span>🏆 Produtividade</span>
             </button>
 
             {/* ATALHO RÁPIDO PARA ADICIONAR NOVO MEMBRO */}
@@ -818,9 +831,10 @@ export default function LousaOperacionalPage() {
               type="button"
               onClick={() => {
                 setEditingMemberName(null);
+                setMemberModalInitialTab('form');
                 setIsMemberModalOpen(true);
               }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 border border-dashed border-slate-700 hover:border-cyan-500/50 transition-all shadow-sm"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 border border-dashed border-slate-700 hover:border-cyan-500/50 transition-all shadow-sm min-h-[34px]"
               title="Cadastrar um novo membro na lousa"
             >
               <Plus size={11} className="text-cyan-400" />
@@ -1053,16 +1067,19 @@ export default function LousaOperacionalPage() {
         onDeletePermanent={handleDeleteArchivedPermanent}
       />
 
-      {/* ── MODAL DE GESTÃO DE MEMBROS (EDITAR / EXCLUIR / NOVO) ── */}
+      {/* ── MODAL DE GESTÃO DE MEMBROS (EDITAR / EXCLUIR / NOVO / RANKING) ── */}
       <WhiteboardMemberModal
         isOpen={isMemberModalOpen}
         onClose={() => {
           setIsMemberModalOpen(false);
           setEditingMemberName(null);
+          setMemberModalInitialTab('list');
         }}
         memberName={editingMemberName}
         allMembers={distinctResponsibles}
         totalTasksCount={editingMemberName ? responsibleCountsMap[editingMemberName.toUpperCase()]?.total || 0 : 0}
+        initialTab={memberModalInitialTab}
+        responsibleCountsMap={responsibleCountsMap}
         onSaveMember={handleSaveMember}
         onDeleteMember={handleDeleteMember}
       />

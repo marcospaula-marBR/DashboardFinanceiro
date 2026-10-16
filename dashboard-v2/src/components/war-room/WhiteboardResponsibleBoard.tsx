@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { WhiteboardColumn, WhiteboardTimelineBlock } from '@/types/war-room';
 import { extractResponsaveisList, getResponsibleColor } from '@/services/war-room.service';
-import { User, Check, AlertTriangle, Clock, Calendar, CheckCircle2, ChevronRight, Filter, X, ArrowRight, Users, Edit3, Plus } from 'lucide-react';
+import { User, Check, AlertTriangle, Clock, Calendar, CheckCircle2, ChevronRight, Filter, X, ArrowRight, Users, Edit3, Plus, Trophy } from 'lucide-react';
 
 interface ResponsibleTask {
   id: string;
@@ -36,7 +36,7 @@ interface WhiteboardResponsibleBoardProps {
   onSelectResponsible?: (name: string | null) => void;
   selectedResponsible?: string | null;
   onClose?: () => void;
-  onOpenMemberModal?: (memberName: string | null) => void;
+  onOpenMemberModal?: (memberName: string | null, initialTab?: 'list' | 'form' | 'ranking') => void;
 }
 
 export function WhiteboardResponsibleBoard({
@@ -214,15 +214,27 @@ export function WhiteboardResponsibleBoard({
         {/* CONTROLES / FECHAR */}
         <div className="flex items-center gap-2">
           {onOpenMemberModal && (
-            <button
-              type="button"
-              onClick={() => onOpenMemberModal(null)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold transition-all shadow-sm"
-              title="Cadastrar um novo membro na Lousa"
-            >
-              <Plus size={13} />
-              <span>Novo Membro</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => onOpenMemberModal(null, 'ranking')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 hover:text-white border border-amber-500/40 hover:border-amber-400 text-xs font-mono font-bold transition-all shadow-sm min-h-[36px]"
+                title="Visualizar Ranking de Produtividade e Entregas da Equipe"
+              >
+                <Trophy size={13} className="text-amber-400" />
+                <span>🏆 Produtividade</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onOpenMemberModal(null, 'form')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold transition-all shadow-sm min-h-[36px]"
+                title="Cadastrar um novo membro na Lousa"
+              >
+                <Plus size={13} />
+                <span>Novo Membro</span>
+              </button>
+            </>
           )}
 
           {selectedResponsible && onSelectResponsible && (

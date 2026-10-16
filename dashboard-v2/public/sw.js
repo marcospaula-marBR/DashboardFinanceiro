@@ -1,7 +1,7 @@
 /**
  * Service Worker — Mar Brasil Web Push & PWA
- * Suporte a notificações em segundo plano para Windows 11 e Android
- * @version v.02.59.49
+ * Suporte a notificações em segundo plano para Windows 11 e Android (Motorola / Chrome)
+ * @version v.02.59.61
  */
 
 self.addEventListener('install', (event) => {
@@ -28,37 +28,41 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const options = {
+  const origin = self.location.origin || '';
+  const iconUrl = origin ? `${origin}/Favicon.png` : '/Favicon.png';
+  const targetUrl = data.url || '/minhas-atividades';
+
+  // Configuração compatível com Android Mobile (Chrome/Motorola) e Windows 11
+  // Evitamos requireInteraction e actions no push direto de segundo plano,
+  // pois no Android Mobile isso pode gerar TypeError ou falha silenciosa de permissão.
+  const primaryOptions = {
     body: data.body,
-    icon: '/Favicon.png',
-    badge: '/Favicon.png',
-    vibrate: [300, 150, 300, 150, 300],
-    tag: data.tag || `mb-alert-${Date.now()}`,
-    renotify: true,
-    requireInteraction: data.priority === 'urgent',
-    timestamp: data.timestamp || Date.now(),
+    icon: iconUrl,
+    badge: iconUrl,
+    vibrate: [250, 100, 250, 100, 250],
+    tag: data.tag || `mb-${Date.now()}`,
     data: {
-      url: data.url || '/minhas-atividades',
+      url: targetUrl,
       activityId: data.activityId,
+      timestamp: Date.now(),
     },
-    actions: [
-      {
-        action: 'open',
-        title: '📱 Abrir Atividade',
-      },
-    ],
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options).catch((err) => {
-      // Fallback defensivo caso opções avançadas (vibrate/actions) não sejam aceitas pelo sistema operacional
-      console.warn('[SW] showNotification com options falhou, tentando fallback simples:', err);
-      return self.registration.showNotification(data.title, {
-        body: data.body,
-        icon: '/Favicon.png',
-        badge: '/Favicon.png',
-      });
-    })
+    self.registration
+      .showNotification(data.title, primaryOptions)
+      .catch((err) => {
+        console.warn('[SW] Falha nas opções avançadas, tentando fallback simples:', err);
+        // Fallback ultra-simples para garantir entrega mesmo em aparelhos restritivos
+        return self.registration.showNotification(data.title, {
+          body: data.body,
+          icon: iconUrl,
+          data: { url: targetUrl },
+        });
+      })
+      .catch((finalErr) => {
+        console.error('[SW] Erro irrecuperável no showNotification:', finalErr);
+      })
   );
 });
 
@@ -69,9 +73,15 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Se já houver janela aberta, focar nela
+      // Se já houver janela aberta, focar nela e navegar
       for (const client of windowClients) {
-        if (client.url.includes(targetUrl) && 'focus' in client) {
+        if ('focus' in client) {
+          if (client.url.includes(targetUrl)) {
+            return client.focus();
+          }
+          if ('navigate' in client) {
+            return client.navigate(targetUrl).then((c) => (c ? c.focus() : client.focus()));
+          }
           return client.focus();
         }
       }

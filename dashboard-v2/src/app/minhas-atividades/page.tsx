@@ -25,7 +25,10 @@ import {
   UserCheck,
   RefreshCw,
   Megaphone,
-  Volume2
+  Volume2,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle
 } from 'lucide-react';
 
 const OFFICIAL_MEMBERS = [
@@ -53,6 +56,7 @@ function MinhasAtividadesContent() {
 
   const [incomingAlert, setIncomingAlert] = useState<{ title: string; body: string } | null>(null);
   const [recentAnnouncements, setRecentAnnouncements] = useState<any[]>([]);
+  const [showAndroidBatteryGuide, setShowAndroidBatteryGuide] = useState<boolean>(false);
 
   // Rastreamento resiliente de IDs já exibidos/alertados neste dispositivo
   const seenNotificationIdsRef = useRef<Set<string>>(new Set());
@@ -144,7 +148,10 @@ function MinhasAtividadesContent() {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker
           .register('/sw.js', { scope: '/' })
-          .then((reg) => console.log('[SW] Service Worker registrado:', reg.scope))
+          .then((reg) => {
+            console.log('[SW] Service Worker registrado:', reg.scope);
+            reg.update().catch(() => {});
+          })
           .catch((err) => console.warn('[SW] Erro ao registrar SW:', err));
       }
 
@@ -694,6 +701,84 @@ function MinhasAtividadesContent() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* GUIA EXECUTIVO: RECEBER ALERTAS COM TELA BLOQUEADA / SEGUNDO PLANO NO ANDROID */}
+        <div className="rounded-2xl border border-slate-800/90 bg-[#070b14] overflow-hidden shadow-lg transition-all">
+          <button
+            type="button"
+            onClick={() => setShowAndroidBatteryGuide(prev => !prev)}
+            className="w-full p-3.5 sm:p-4 flex items-center justify-between text-left hover:bg-slate-900/40 transition-colors min-h-[48px]"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <HelpCircle size={16} />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-slate-200 font-mono uppercase tracking-wide truncate">
+                  💡 Como receber notificações com tela bloqueada ou app fechado?
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Dica de configuração de bateria para celulares Android (Motorola / Chrome)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-slate-400 shrink-0 ml-2">
+              <span className="text-[10px] font-mono font-bold hidden sm:inline text-amber-400/90">
+                {showAndroidBatteryGuide ? 'Recolher' : 'Ver Instruções'}
+              </span>
+              {showAndroidBatteryGuide ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </div>
+          </button>
+
+          {showAndroidBatteryGuide && (
+            <div className="p-4 pt-1 border-t border-slate-800/80 bg-slate-950/60 space-y-3 text-xs animate-in fade-in duration-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                {/* PASSO 1: BATERIA IRRESTRITA */}
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-amber-500/30 space-y-1.5">
+                  <div className="flex items-center gap-2 text-amber-400 font-mono font-bold text-xs uppercase">
+                    <span className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-[10px]">1</span>
+                    <span>Bateria Irrestrita</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    No Android, abra <strong>Configurações &gt; Apps &gt; Chrome &gt; Bateria</strong> e marque <strong>"Sem restrições" (ou Irrestrita)</strong>.
+                  </p>
+                  <p className="text-[10px] text-slate-400 leading-snug">
+                    <em>No modo padrão "Otimizada", o Android desliga a conexão do Chrome em segundo plano quando a tela apaga para poupar bateria.</em>
+                  </p>
+                </div>
+
+                {/* PASSO 2: INSTALAR PWA */}
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-cyan-500/30 space-y-1.5">
+                  <div className="flex items-center gap-2 text-cyan-400 font-mono font-bold text-xs uppercase">
+                    <span className="w-5 h-5 rounded-full bg-cyan-500/20 flex items-center justify-center text-[10px]">2</span>
+                    <span>Instalar na Tela Inicial</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    No Chrome, toque nos <strong>3 pontinhos</strong> no topo e selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
+                  </p>
+                  <p className="text-[10px] text-slate-400 leading-snug">
+                    <em>Aplicativos instalados recebem prioridade máxima do sistema para emitir som e vibração de alerta.</em>
+                  </p>
+                </div>
+
+                {/* PASSO 3: SOM E NOTIFICAÇÃO NATIVA */}
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 space-y-1.5">
+                  <div className="flex items-center gap-2 text-emerald-400 font-mono font-bold text-xs uppercase">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px]">3</span>
+                    <span>Som & Teste Real</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Certifique-se de que o modo "Não Perturbe" está desativado e clique no botão <strong>"Testar Alerta"</strong> acima para conferir o toque.
+                  </p>
+                  <p className="text-[10px] text-slate-400 leading-snug">
+                    <em>Aparelhos ativos na base recebem automaticamente as novas demandas criadas na Lousa.</em>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* CARD EXECUTIVO: COMUNICADOS DA LIDERANÇA & AVISOS RECENTES */}
