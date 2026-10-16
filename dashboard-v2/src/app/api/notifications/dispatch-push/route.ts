@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
       .eq('active', true);
 
     if (targetType === 'member' && targetMemberName) {
-      query = query.eq('member_name', targetMemberName.trim().toUpperCase());
+      const cleanMember = targetMemberName.replace(/^[@#]/, '').trim().toUpperCase();
+      query = query.ilike('member_name', cleanMember);
     }
 
     const { data: subs, error: subsErr } = await query;

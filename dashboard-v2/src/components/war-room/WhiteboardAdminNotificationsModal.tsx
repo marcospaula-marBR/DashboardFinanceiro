@@ -62,6 +62,21 @@ export function WhiteboardAdminNotificationsModal({
   const [sendingTestPing, setSendingTestPing] = useState(false);
   const [testPingResult, setTestPingResult] = useState<string | null>(null);
 
+  // Estados de teste do Resumo Diário das 09h30 (Vercel Cron)
+  const [triggeringDailyCron, setTriggeringDailyCron] = useState(false);
+  const [dailyCronResult, setDailyCronResult] = useState<{
+    success: boolean;
+    date?: string;
+    weekday?: string;
+    totalHoje?: number;
+    totalRotinasHoje?: number;
+    totalCronogramaHoje?: number;
+    totalAtrasadas?: number;
+    devicesReached?: number;
+    message?: string;
+    error?: string;
+  } | null>(null);
+
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedMemberName, setCopiedMemberName] = useState<string | null>(null);
 
@@ -175,6 +190,21 @@ export function WhiteboardAdminNotificationsModal({
     } finally {
       setSendingTestPing(false);
       setTimeout(() => setTestPingResult(null), 7000);
+    }
+  };
+
+  // Disparo manual para testar a automação diária das 09h30
+  const handleTriggerDailyCron = async () => {
+    setTriggeringDailyCron(true);
+    setDailyCronResult(null);
+    try {
+      const res = await fetch('/api/cron/daily-summary?force=true');
+      const data = await res.json();
+      setDailyCronResult(data);
+    } catch (err: any) {
+      setDailyCronResult({ success: false, error: err?.message || 'Falha na requisição' });
+    } finally {
+      setTriggeringDailyCron(false);
     }
   };
 
@@ -353,109 +383,168 @@ export function WhiteboardAdminNotificationsModal({
 
           {/* ── ABA 2: ENVIAR ATUALIZAÇÃO À EQUIPE ── */}
           {activeTab === 'disparo' && (
-            <form onSubmit={handleSendBroadcast} className="space-y-4">
-              <div className="p-3 rounded-xl bg-cyan-950/20 border border-cyan-500/30 text-xs text-cyan-200">
-                Dispare notificações manuais que serão entregues nos celulares Android e computadores Windows 11 dos colaboradores.
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">Destinatário:</label>
-                  <select
-                    value={targetType}
-                    onChange={(e: any) => setTargetType(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
-                  >
-                    <option value="all">📢 Toda a Equipe</option>
-                    <option value="member">👤 Colaborador Específico</option>
-                  </select>
+            <div className="space-y-6">
+              <form onSubmit={handleSendBroadcast} className="space-y-4">
+                <div className="p-3 rounded-xl bg-cyan-950/20 border border-cyan-500/30 text-xs text-cyan-200">
+                  Dispare notificações manuais que serão entregues nos celulares Android e computadores Windows 11 dos colaboradores.
                 </div>
 
-                {targetType === 'member' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Selecione o Membro:</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">Destinatário:</label>
                     <select
-                      value={selectedMember}
-                      onChange={(e) => setSelectedMember(e.target.value)}
+                      value={targetType}
+                      onChange={(e: any) => setTargetType(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
                     >
-                      {allMembers.map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
+                      <option value="all">📢 Toda a Equipe</option>
+                      <option value="member">👤 Colaborador Específico</option>
                     </select>
+                  </div>
+
+                  {targetType === 'member' && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">Selecione o Membro:</label>
+                      <select
+                        value={selectedMember}
+                        onChange={(e) => setSelectedMember(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      >
+                        {allMembers.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">Prioridade:</label>
+                    <select
+                      value={broadcastPriority}
+                      onChange={(e: any) => setBroadcastPriority(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="urgent">🔴 Urgente (Exige Ciência)</option>
+                      <option value="important">🟠 Importante</option>
+                      <option value="info">🟢 Informativa</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Título do Comunicado:</label>
+                  <input
+                    type="text"
+                    value={broadcastTitle}
+                    onChange={(e) => setBroadcastTitle(e.target.value)}
+                    placeholder="Ex: Alinhamento de Prioridades da Semana"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Mensagem:</label>
+                  <textarea
+                    value={broadcastBody}
+                    onChange={(e) => setBroadcastBody(e.target.value)}
+                    placeholder="Digite o conteúdo da notificação a ser exibida nas telas..."
+                    rows={3}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    required
+                  />
+                </div>
+
+                {broadcastSuccess && lastDeliveryInfo && (
+                  <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                    lastDeliveryInfo.deliveredCount > 0
+                      ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
+                      : 'bg-amber-950/40 border-amber-500/50 text-amber-300'
+                  }`}>
+                    {lastDeliveryInfo.deliveredCount > 0 ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                    <div>
+                      <div>{lastDeliveryInfo.deliveredCount > 0
+                        ? `✅ Notificação entregue para ${lastDeliveryInfo.deliveredCount} aparelho(s) via Google FCM (${lastDeliveryInfo.targetText})!`
+                        : `ℹ️ Notificação gravada no sistema! Nenhum celular com alertas ativos foi encontrado para ${lastDeliveryInfo.targetText}.`
+                      }</div>
+                      {lastDeliveryInfo.deliveredCount === 0 && (
+                        <div className="text-[11px] font-normal text-slate-400 mt-0.5">
+                          Dica: Ative os alertas no celular do colaborador acessando a aba "Dispositivos Conectados".
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">Prioridade:</label>
-                  <select
-                    value={broadcastPriority}
-                    onChange={(e: any) => setBroadcastPriority(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={sendingBroadcast}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs transition-all shadow-lg shadow-cyan-950/50 min-h-[44px]"
                   >
-                    <option value="urgent">🔴 Urgente (Exige Ciência)</option>
-                    <option value="important">🟠 Importante</option>
-                    <option value="info">🟢 Informativa</option>
-                  </select>
+                    <Send size={14} />
+                    <span>{sendingBroadcast ? 'Enviando...' : '📱 Disparar Atualização aos Celulares'}</span>
+                  </button>
                 </div>
-              </div>
+              </form>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Título do Comunicado:</label>
-                <input
-                  type="text"
-                  value={broadcastTitle}
-                  onChange={(e) => setBroadcastTitle(e.target.value)}
-                  placeholder="Ex: Alinhamento de Prioridades da Semana"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
-                  required
-                />
-              </div>
+              {/* ── CARD: AUTOMAÇÃO DIÁRIA DAS 09H30 ── */}
+              <div className="pt-5 border-t border-slate-800/80 space-y-3">
+                <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Clock size={16} className="text-cyan-400" />
+                      <h4 className="text-xs font-bold text-white uppercase font-mono">
+                        Notificação Automática Diária de 09h30
+                      </h4>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30">
+                        Vercel Cron (Seg–Sex)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 max-w-xl">
+                      Dispara de segunda a sexta-feira às 09:30 (Horário de Brasília) para todos os celulares: Grade Semanal do dia, vencimentos de hoje e pendências em atraso.
+                    </p>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Mensagem:</label>
-                <textarea
-                  value={broadcastBody}
-                  onChange={(e) => setBroadcastBody(e.target.value)}
-                  placeholder="Digite o conteúdo da notificação a ser exibida nas telas..."
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500"
-                  required
-                />
-              </div>
+                  <button
+                    type="button"
+                    onClick={handleTriggerDailyCron}
+                    disabled={triggeringDailyCron}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-xs font-bold text-cyan-200 transition-all shadow-md active:scale-95 disabled:opacity-50 min-h-[44px] flex-shrink-0"
+                  >
+                    <RefreshCw size={13} className={triggeringDailyCron ? 'animate-spin text-cyan-400' : 'text-cyan-400'} />
+                    <span>{triggeringDailyCron ? 'Compilando e Disparando...' : '⏰ Testar Envio de 09h30 Agora'}</span>
+                  </button>
+                </div>
 
-              {broadcastSuccess && lastDeliveryInfo && (
-                <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
-                  lastDeliveryInfo.deliveredCount > 0
-                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
-                    : 'bg-amber-950/40 border-amber-500/50 text-amber-300'
-                }`}>
-                  {lastDeliveryInfo.deliveredCount > 0 ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-                  <div>
-                    <div>{lastDeliveryInfo.deliveredCount > 0
-                      ? `✅ Notificação entregue para ${lastDeliveryInfo.deliveredCount} aparelho(s) via Google FCM (${lastDeliveryInfo.targetText})!`
-                      : `ℹ️ Notificação gravada no sistema! Nenhum celular com alertas ativos foi encontrado para ${lastDeliveryInfo.targetText}.`
-                    }</div>
-                    {lastDeliveryInfo.deliveredCount === 0 && (
-                      <div className="text-[11px] font-normal text-slate-400 mt-0.5">
-                        Dica: Ative os alertas no celular do colaborador acessando a aba "Dispositivos Conectados".
+                {dailyCronResult && (
+                  <div className={`p-3.5 rounded-xl border text-xs ${
+                    dailyCronResult.success
+                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                      : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                  }`}>
+                    {dailyCronResult.success ? (
+                      <div className="space-y-1.5">
+                        <div className="font-bold flex items-center gap-1.5 text-emerald-300">
+                          <CheckCircle2 size={15} />
+                          <span>Resumo diário disparado com sucesso! ({dailyCronResult.weekday}, {dailyCronResult.date})</span>
+                        </div>
+                        <div className="text-[11px] text-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 font-mono">
+                          <div>• Tarefas Hoje: <strong>{dailyCronResult.totalHoje ?? 0}</strong> ({dailyCronResult.totalRotinasHoje ?? 0} rotinas, {dailyCronResult.totalCronogramaHoje ?? 0} vencimentos)</div>
+                          <div>• Em atraso: <strong>{dailyCronResult.totalAtrasadas ?? 0}</strong></div>
+                          <div>• Dispositivos notificados: <strong>{dailyCronResult.devicesReached ?? 0}</strong> celular(es) via FCM</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle size={15} className="text-rose-400" />
+                        <span>Erro no disparo: {dailyCronResult.error || 'Falha na requisição'}</span>
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={sendingBroadcast}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs transition-all shadow-lg shadow-cyan-950/50 min-h-[44px]"
-                >
-                  <Send size={14} />
-                  <span>{sendingBroadcast ? 'Enviando...' : '📱 Disparar Atualização aos Celulares'}</span>
-                </button>
+                )}
               </div>
-            </form>
+            </div>
           )}
 
           {/* ── ABA 3: DISPOSITIVOS & MEMBROS CONECTADOS ── */}

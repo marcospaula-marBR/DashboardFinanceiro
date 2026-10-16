@@ -30,23 +30,25 @@ export function extractResponsaveisList(
   target?: { responsavel?: string; responsaveis?: string[] } | string | string[] | null
 ): string[] {
   if (!target) return [];
+  const cleanItem = (r: string) => r.replace(/^[@#]/, '').replace(/[:;,]$/, '').trim().toUpperCase();
+
   if (Array.isArray(target)) {
-    return Array.from(new Set(target.map(r => (typeof r === 'string' ? r.trim().toUpperCase() : '')).filter(Boolean)));
+    return Array.from(new Set(target.map(r => (typeof r === 'string' ? cleanItem(r) : '')).filter(Boolean)));
   }
   if (typeof target === 'string') {
     const parts = target
       .split(/[,/+]|\s+e\s+|\s+E\s+|&/)
-      .map(p => p.trim().toUpperCase())
+      .map(p => cleanItem(p))
       .filter(p => p.length > 0);
     return Array.from(new Set(parts));
   }
   if (target.responsaveis && Array.isArray(target.responsaveis) && target.responsaveis.length > 0) {
-    return Array.from(new Set(target.responsaveis.map(r => (typeof r === 'string' ? r.trim().toUpperCase() : '')).filter(Boolean)));
+    return Array.from(new Set(target.responsaveis.map(r => (typeof r === 'string' ? cleanItem(r) : '')).filter(Boolean)));
   }
   if (target.responsavel && typeof target.responsavel === 'string') {
     const parts = target.responsavel
       .split(/[,/+]|\s+e\s+|\s+E\s+|&/)
-      .map(p => p.trim().toUpperCase())
+      .map(p => cleanItem(p))
       .filter(p => p.length > 0);
     return Array.from(new Set(parts));
   }
@@ -453,9 +455,29 @@ export function calculatePrazoInfo(dataLimite?: string, concluido?: boolean): Pr
  * Infere a lista de responsáveis padrão a partir do texto ou descrição
  */
 export function inferDefaultResponsaveis(text: string): string[] {
-  const upper = (text || '').toUpperCase();
+  if (!text) return [];
+  const upper = text.toUpperCase();
   const resps: string[] = [];
 
+  // 1. Extração direta de menções com @ ou # (ex: @MARCOS, @melissa, @matheus, @guilherme)
+  const mentions = text.match(/[@#]([a-zA-ZÀ-ÿ0-9_-]+)/g);
+  if (mentions) {
+    mentions.forEach(m => {
+      const clean = m.replace(/^[@#]/, '').trim().toUpperCase();
+      if (clean) resps.push(clean);
+    });
+  }
+
+  // 2. Extração de padrões de prefixo [NOME] ou NOME: no início da tarefa
+  const prefixMatch = text.match(/^\[?([a-zA-ZÀ-ÿ]+)\]?[:\s-]/);
+  if (prefixMatch) {
+    const candidate = prefixMatch[1].toUpperCase();
+    if (['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'].includes(candidate)) {
+      resps.push(candidate);
+    }
+  }
+
+  // 3. Menções nominais no corpo do texto
   if (upper.includes('MARCOS')) resps.push('MARCOS');
   if (upper.includes('MATHEUS')) resps.push('MATHEUS');
   if (upper.includes('MELISSA')) resps.push('MELISSA');

@@ -710,11 +710,9 @@ export class CollaborativePortalService {
     isUrgent?: boolean;
     activityId?: string;
   }): Promise<{ deliveredTotal: number }> {
-    let distinctResps = Array.from(
-      new Set((responsaveis || []).map(r => r.trim().toUpperCase()).filter(Boolean))
-    );
+    let distinctResps = extractResponsaveisList(responsaveis);
 
-    // Se estiver vazio, tenta inferir responsável padrão do texto da tarefa
+    // Se estiver vazio, tenta inferir responsável padrão do texto da tarefa (incluindo menções @nome)
     if (distinctResps.length === 0) {
       distinctResps = inferDefaultResponsaveis(taskTitle);
     }
@@ -793,6 +791,27 @@ export class CollaborativePortalService {
           tag: `task-${resp}-${activityId || Date.now()}`,
         });
         deliveredTotal += (res?.deliveredCount || 0);
+      }
+
+      // FALLBACK INTELIGENTE: Se nenhum dos membros designados possuía aparelho ativo conectado
+      // dispara notificação de equipe para que os gestores e a equipe não percam a demanda
+      if (deliveredTotal === 0) {
+        const fallbackTitle = isUrgent
+          ? `🚨 Demanda Urgente [${distinctResps.join(', ')}]: ${taskTitle}`
+          : `📋 Nova Demanda [${distinctResps.join(', ')}]: ${taskTitle}`;
+        const fallbackBody = `Atividade atribuída a ${distinctResps.join(', ')} em ${origin}.${prazo ? ` Prazo: ${prazo}.` : ''} (Aviso à equipe)`;
+
+        const resFallback = await this.dispatchPushToServer({
+          title: fallbackTitle,
+          body: fallbackBody,
+          priority: isUrgent ? 'urgent' : 'important',
+          category: 'task_alert',
+          targetType: 'all',
+          activityId,
+          url: '/minhas-atividades',
+          tag: `task-fallback-${activityId || Date.now()}`,
+        });
+        deliveredTotal += (resFallback?.deliveredCount || 0);
       }
     }
 

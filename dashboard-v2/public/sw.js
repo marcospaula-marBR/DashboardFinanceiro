@@ -50,7 +50,15 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title, options).catch((err) => {
+      // Fallback defensivo caso opções avançadas (vibrate/actions) não sejam aceitas pelo sistema operacional
+      console.warn('[SW] showNotification com options falhou, tentando fallback simples:', err);
+      return self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: '/Favicon.png',
+        badge: '/Favicon.png',
+      });
+    })
   );
 });
 
