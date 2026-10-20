@@ -1366,9 +1366,9 @@ export default function PeoplePage() {
             <button
               onClick={() => setIsBatchPdfModalOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
-              title="Gerar fichas dos contratados em PDF em lote"
+              title="Gerar relatórios de auditoria de faturamento e custos ou fichas em lote (PDF / CSV)"
             >
-              <Printer size={14} /> Exportar Lote PDF
+              <FileText size={14} /> Relatórios & Auditoria em Lote
             </button>
 
             {/* BOTÃO ATALHO: TERCEIRIZAÇÃO */}
@@ -2305,6 +2305,7 @@ export default function PeoplePage() {
         isOpen={isProfileDrawerOpen}
         setores={setores}
         initialTab={drawerInitialTab}
+        onOpenBatchAudit={() => setIsBatchPdfModalOpen(true)}
         onClose={() => {
           setIsProfileDrawerOpen(false);
           setSelectedEmployee(undefined);

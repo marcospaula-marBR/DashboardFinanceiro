@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature, EmployeeSystemAccess, SystemItem, inferEntityType } from "@/types/loans";
@@ -72,13 +72,15 @@ interface ProfileDrawerProps {
   isTestMode?: boolean;
   setores?: string[];
   initialTab?: 'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos' | 'bpr';
+  onOpenBatchAudit?: () => void;
 }
 
-export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [], initialTab = 'pessoal' }: ProfileDrawerProps) {
+export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [], initialTab = 'pessoal', onOpenBatchAudit }: ProfileDrawerProps) {
   const { isTestMode: contextIsTestMode } = useDataMode();
   const isTestMode = propIsTestMode ?? contextIsTestMode;
   
   const [profile, setProfile] = useState<Partial<Employee>>({});
+  const isPJ = profile.linkType?.toUpperCase() === 'PJ' || Boolean(profile.pj_type) || Boolean(profile.corporate_name);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +158,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
   // Estados para busca de colaboradores cadastrados
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportOnlyCosts, setExportOnlyCosts] = useState(false);
   const [isSearchExistingOpen, setIsSearchExistingOpen] = useState(false);
   const [isDiannaImportOpen, setIsDiannaImportOpen] = useState(false);
   const [diannaResults, setDiannaResults] = useState<any[]>([]);
@@ -1858,11 +1861,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         throw new Error('A data de início de contrato original do contratado precisa estar preenchida.');
       }
       
-      const startVal = new Date(profile.start_date + 'T00:00:00').getTime();
-      const newCostVal = new Date(editingCostCompetencia + 'T00:00:00').getTime();
+      const startYearMonth = profile.start_date.slice(0, 7);
+      const costYearMonth = editingCostCompetencia.slice(0, 7);
       
-      if (newCostVal < startVal) {
-        throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior à data de início de contrato (${formatDateBR(profile.start_date)}).`);
+      if (costYearMonth < startYearMonth) {
+        throw new Error(`Bloqueio de Auditoria: A competência ${formatMonthCompetenciaBR(editingCostCompetencia)} é anterior ao mês de início de contrato (${formatDateBR(profile.start_date)}).`);
       }
       
       const isCLT = editingCostType === 'CLT';
@@ -3882,9 +3885,30 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                       <div className="flex justify-between items-center border-b pb-2">
                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
-                          <Coins size={16} className="text-emerald-600" /> Histórico Mensal de Custos
+                          <Coins size={16} className="text-emerald-600" /> {isPJ ? 'Histórico de Faturamento e Custos por Competência' : 'Histórico de Custos por Competência'}
                         </h4>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            onClick={() => {
+                              setExportOnlyCosts(true);
+                              setIsExportModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm border border-emerald-300"
+                            title="Gerar Relatório de Auditoria de Faturamento e Custos por Competência com Fontes"
+                          >
+                            <FileText size={14} className="text-emerald-600" />
+                            Relatório de Auditoria
+                          </button>
+                          {onOpenBatchAudit && (
+                            <button
+                              onClick={onOpenBatchAudit}
+                              className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm border border-indigo-200"
+                              title="Abrir Auditoria de Faturamento e Custos com Múltiplos Colaboradores"
+                            >
+                              <Users size={14} className="text-indigo-600" />
+                              Auditoria em Lote
+                            </button>
+                          )}
                           <button
                             onClick={handleSearchDianna}
                             disabled={isSearchingExisting}
@@ -3896,7 +3920,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           <button
                             onClick={() => setIsClearHistoryModalOpen(true)}
                             className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm border border-rose-200"
-                            title="Limpar lançamentos de custos históricos por período"
+                            title="Limpar lançamentos de custos históricos por competência"
                           >
                             <Trash2 size={14} />
                             Limpar Histórico
@@ -4035,7 +4059,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/60 dark:border-slate-800/60 pb-2">
                                   <div className="flex items-center gap-1.5 text-xs font-black text-slate-500 uppercase tracking-wider">
                                     <Filter size={14} className="text-slate-400" />
-                                    Filtros de Histórico
+                                    Filtros por Competência
                                   </div>
                                   {(costPeriodFilter !== 'all' || costSelectedYears.length > 0 || costSelectedMonths.length > 0) && (
                                     <button
@@ -4052,20 +4076,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                   <div>
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Período Rápido</label>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Competência Rápida</label>
                                     <select
                                       value={costPeriodFilter}
                                       onChange={e => setCostPeriodFilter(e.target.value as any)}
                                       className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-200"
                                     >
-                                      <option value="all">Todo o Histórico</option>
-                                      <option value="3m">Últimos 3 Meses</option>
-                                      <option value="6m">Últimos 6 Meses</option>
-                                      <option value="12m">Últimos 12 Meses</option>
+                                      <option value="all">Todas as Competências</option>
+                                      <option value="3m">Últimas 3 Competências</option>
+                                      <option value="6m">Últimas 6 Competências</option>
+                                      <option value="12m">Últimas 12 Competências</option>
                                     </select>
                                   </div>
                                   <div>
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Anos (Múltipla)</label>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Anos de Competência</label>
                                     <div className="flex flex-wrap gap-1">
                                       {availableYears.map(year => {
                                         const selected = costSelectedYears.includes(year);
@@ -4090,7 +4114,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Meses (Múltipla)</label>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Competências (Mês)</label>
                                     <div className="flex flex-wrap gap-0.5 max-h-[72px] overflow-y-auto pr-1">
                                       {availableMonths.map(m => {
                                         const selected = costSelectedMonths.includes(m.val);
@@ -4119,7 +4143,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                               <div className="text-center py-10 bg-slate-50 border border-dashed rounded-2xl">
                                 <Coins className="mx-auto mb-2 text-slate-300" size={32} />
-                                <p className="text-sm text-slate-500 font-bold">Sem dados de custos para os filtros aplicados.</p>
+                                <p className="text-sm text-slate-500 font-bold">Sem competências de custos para os filtros aplicados.</p>
                                 <p className="text-xs text-slate-400 mt-1">Os dados serão importados da planilha Dianna na Fase 2.</p>
                               </div>
                             </div>
@@ -4133,7 +4157,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/60 dark:border-slate-800/60 pb-2">
                                 <div className="flex items-center gap-1.5 text-xs font-black text-slate-500 uppercase tracking-wider">
                                   <Filter size={14} className="text-slate-400" />
-                                  Filtros de Histórico
+                                  Filtros por Competência
                                 </div>
                                 {(costPeriodFilter !== 'all' || costSelectedYears.length > 0 || costSelectedMonths.length > 0) && (
                                   <button
@@ -4150,20 +4174,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Período Rápido</label>
+                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Competência Rápida</label>
                                   <select
                                     value={costPeriodFilter}
                                     onChange={e => setCostPeriodFilter(e.target.value as any)}
                                     className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-200"
                                   >
-                                    <option value="all">Todo o Histórico</option>
-                                    <option value="3m">Últimos 3 Meses</option>
-                                    <option value="6m">Últimos 6 Meses</option>
-                                    <option value="12m">Últimos 12 Meses</option>
+                                    <option value="all">Todas as Competências</option>
+                                    <option value="3m">Últimas 3 Competências</option>
+                                    <option value="6m">Últimas 6 Competências</option>
+                                    <option value="12m">Últimas 12 Competências</option>
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Anos (Múltipla)</label>
+                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Anos de Competência</label>
                                   <div className="flex flex-wrap gap-1">
                                     {availableYears.map(year => {
                                       const selected = costSelectedYears.includes(year);
@@ -4188,7 +4212,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   </div>
                                 </div>
                                 <div>
-                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Meses (Múltipla)</label>
+                                  <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Competências (Mês)</label>
                                   <div className="flex flex-wrap gap-0.5 max-h-[72px] overflow-y-auto pr-1">
                                     {availableMonths.map(m => {
                                       const selected = costSelectedMonths.includes(m.val);
@@ -4259,7 +4283,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             <div className="space-y-4 text-left">
                               {profile?.linkType === 'CLT' ? (
                                 <div>
-                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Ganhos CLT (Média do Período)</h5>
+                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Ganhos CLT (Média por Competência)</h5>
                                   <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                                     <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
                                       <div>
@@ -4369,7 +4393,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 </div>
                                ) : (
                                 <div>
-                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Ganhos Recebidos</h5>
+                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Valores por Competência</h5>
                                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                                     <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
                                       <div>
@@ -4532,7 +4556,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             </div>
  
                             <div className="space-y-2">
-                              <h5 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Lançamentos Recentes ({stats.count})</h5>
+                              <h5 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Competências Lançadas ({stats.count})</h5>
                               <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-950 max-h-[250px] overflow-y-auto shadow-sm">
                                 {filteredCosts.map((c, i) => {
                                   const fixedVal = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
@@ -4544,6 +4568,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         <div>
                                           <div className="flex items-center gap-2 flex-wrap">
                                             <p className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase">
+                                              <span className="text-emerald-700 dark:text-emerald-400 font-extrabold mr-1">Competência:</span>
                                               {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                                             </p>
                                             {(() => {
@@ -4790,7 +4815,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   <div className="flex items-center justify-between border-b dark:border-slate-800 pb-2.5">
                                     <h5 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
                                       <BarChart3 size={16} className="text-emerald-600" />
-                                      Evolução do Custo Histórico Mês a Mês (Rótulos de Valor R$)
+                                      Evolução do Custo Histórico por Competência (Rótulos de Valor R$)
                                     </h5>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase">
                                       {filteredCosts.length} Competência(s) Filtrada(s)
@@ -5724,9 +5749,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                 <div>
                   <label className={labelClass}>Competência Mensal</label>
                   <input 
-                    type="date" 
-                    value={editingCostCompetencia} 
-                    onChange={e => setEditingCostCompetencia(e.target.value)} 
+                    type="month" 
+                    value={editingCostCompetencia ? editingCostCompetencia.slice(0, 7) : ''} 
+                    onChange={e => setEditingCostCompetencia(e.target.value ? `${e.target.value}-01` : '')} 
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                   />
                 </div>
@@ -7149,7 +7174,11 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       {/* Modal de Exportação Customizada da Ficha */}
       <ProfileExportModal
         isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
+        onClose={() => {
+          setIsExportModalOpen(false);
+          setExportOnlyCosts(false);
+        }}
+        initialOnlyCosts={exportOnlyCosts}
         profile={profile}
         history={history}
         bonds={bonds}
@@ -7158,6 +7187,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         previousProfile={previousEmployeeProfile}
         previousCosts={previousCosts}
         previousHistory={previousHistory}
+        onOpenBatchAudit={onOpenBatchAudit}
       />
 
       {/* Modal de Limpeza de Custo Histórico */}

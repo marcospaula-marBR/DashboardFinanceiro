@@ -1,8 +1,30 @@
-import React, { useState, useMemo } from 'react';
-import { X, Download, FileText, CheckSquare, Square, Printer, FileSpreadsheet, User, Building2, MapPin, CreditCard, DollarSign, History, Calculator, HelpCircle, Link as LinkIcon } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, Download, FileText, CheckSquare, Square, Printer, FileSpreadsheet, User, Building2, MapPin, CreditCard, DollarSign, History, Calculator, HelpCircle, Link as LinkIcon, Users, ShieldCheck, Sparkles, AlertCircle } from 'lucide-react';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel } from '@/types/loans';
 import { formatCurrency } from '@/services/loans.service';
 import { formatCompanyTime, calculateCombinedCompanyTime } from './PeopleBadges';
+
+export const formatCostOrigem = (origem?: string) => {
+  if (!origem) return 'Lançamento Base';
+  const o = origem.toLowerCase();
+  if (o.includes('dianna_batch_clt')) return 'Folha Mensal Dianna (CLT)';
+  if (o.includes('dianna_import')) return 'Planilha Dianna (Importação)';
+  if (o.includes('manual')) return 'Lançamento Manual';
+  if (o.includes('holerite_pdf') || o.includes('pdf')) return 'Holerite PDF (OCR)';
+  if (o.includes('csv')) return 'Planilha CSV';
+  return origem;
+};
+
+export const getCostOrigemBadgeStyle = (origem?: string) => {
+  if (!origem) return { bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' };
+  const o = origem.toLowerCase();
+  if (o.includes('dianna_batch_clt')) return { bg: '#eef2ff', color: '#3730a3', border: '#c7d2fe' };
+  if (o.includes('dianna_import')) return { bg: '#f0f9ff', color: '#0369a1', border: '#bae6fd' };
+  if (o.includes('manual')) return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' };
+  if (o.includes('holerite_pdf') || o.includes('pdf')) return { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' };
+  if (o.includes('csv')) return { bg: '#f8fafc', color: '#334155', border: '#cbd5e1' };
+  return { bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' };
+};
 
 interface HistoryItem {
   id: string;
@@ -15,7 +37,7 @@ interface HistoryItem {
   created_at?: string;
 }
 
-interface ProfileExportModalProps {
+export interface ProfileExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   profile: Partial<Employee>;
@@ -26,6 +48,8 @@ interface ProfileExportModalProps {
   previousProfile?: Partial<Employee> | null;
   previousCosts?: MonthlyCost[];
   previousHistory?: HistoryItem[];
+  initialOnlyCosts?: boolean;
+  onOpenBatchAudit?: () => void;
 }
 
 export function ProfileExportModal({
@@ -38,10 +62,28 @@ export function ProfileExportModal({
   loanSummary = null,
   previousProfile = null,
   previousCosts = [],
-  previousHistory = []
+  previousHistory = [],
+  initialOnlyCosts = false,
+  onOpenBatchAudit
 }: ProfileExportModalProps) {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'csv'>('pdf');
   const [isUnifiedExport, setIsUnifiedExport] = useState(profile.is_unified_history !== false);
+  const [reportMode, setReportMode] = useState<'audit' | 'full'>(initialOnlyCosts ? 'audit' : 'full');
+
+  // Sincronizar modo quando initialOnlyCosts mudar
+  useEffect(() => {
+    if (initialOnlyCosts) {
+      setReportMode('audit');
+      setIncludePersonal(false);
+      setIncludeContractual(false);
+      setIncludeAddressContact(false);
+      setIncludeBanking(false);
+      setIncludeRemuneration(false);
+      setIncludeTrajectory(false);
+      setIncludeCostsHistory(true);
+      setIncludeCostsChart(true);
+    }
+  }, [initialOnlyCosts]);
 
   // Filtrar custos e histórico se o usuário optar por NÃO unificar
   const effectiveCosts = useMemo(() => {
@@ -59,12 +101,12 @@ export function ProfileExportModal({
   }, [history, isUnifiedExport, previousProfile, profile.id]);
 
   // Seleção Módulos/Abas do Cadastro
-  const [includePersonal, setIncludePersonal] = useState(true);
-  const [includeContractual, setIncludeContractual] = useState(true);
-  const [includeAddressContact, setIncludeAddressContact] = useState(true);
-  const [includeBanking, setIncludeBanking] = useState(true);
-  const [includeRemuneration, setIncludeRemuneration] = useState(true);
-  const [includeTrajectory, setIncludeTrajectory] = useState(true);
+  const [includePersonal, setIncludePersonal] = useState(!initialOnlyCosts);
+  const [includeContractual, setIncludeContractual] = useState(!initialOnlyCosts);
+  const [includeAddressContact, setIncludeAddressContact] = useState(!initialOnlyCosts);
+  const [includeBanking, setIncludeBanking] = useState(!initialOnlyCosts);
+  const [includeRemuneration, setIncludeRemuneration] = useState(!initialOnlyCosts);
+  const [includeTrajectory, setIncludeTrajectory] = useState(!initialOnlyCosts);
   const [includeCostsHistory, setIncludeCostsHistory] = useState(true);
   const [includeCostsChart, setIncludeCostsChart] = useState(true);
 
@@ -160,11 +202,57 @@ export function ProfileExportModal({
   const photoUrl = profile.avatar || (profile as any).photo_url || (profile.metadata as any)?.photo_url || null;
   const companyLogoUrl = getCompanyLogoUrl(profile.company);
 
-  // GERADOR CSV ESTRUTURADO
+  // GERADOR CSV ESTRUTURADO (AUDITORIA OU FICHA COMPLETA)
   const handleExportCSV = () => {
     let csv = '';
     const sanitize = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+    const prevContrato = profile.remuneration_fixed || profile.remuneration || 0;
+    const sortedCostsCSV = [...effectiveCosts].sort((a, b) => a.competencia.localeCompare(b.competencia));
 
+    if (reportMode === 'audit') {
+      csv += `"RELATÓRIO DE AUDITORIA DE FATURAMENTO E CUSTOS POR COMPETÊNCIA"\n`;
+      csv += `"Contratado: ${sanitize(employeeName)}"\n`;
+      csv += `"CPF / CNPJ: ${sanitize(profile.document_id || profile.pj_type || '-')}"\n`;
+      csv += `"Empresa Contratante: ${sanitize(profile.company || 'MarBR')}"\n`;
+      csv += `"Regime Contratual: ${sanitize(profile.linkType || 'CLT')}"\n`;
+      csv += `"Escopo / Função: ${sanitize(profile.job_role || '-')}"\n`;
+      csv += `"Valor Contratual Previsto: R$ ${prevContrato.toFixed(2).replace('.', ',')}"\n`;
+      csv += `"Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}"\n\n`;
+
+      csv += `Competência;Regime;Fonte / Origem da Informação;Valor Previsto Contrato;Valor Fixo Real;Bônus;Comissão;Horas Extras;Benefícios;FGTS;13º & Férias;Glosas / Descontos;Custo Real Desembolsado;Diferença (Real - Previsto);Status Auditoria;Observações\n`;
+
+      sortedCostsCSV.forEach(c => {
+        const isCLT = c.vinculo_tipo === 'CLT';
+        const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+        const diff = cReal - prevContrato;
+        const statusAuditoria = Math.abs(diff) < 0.01 ? 'Conciliado' : (diff > 0 ? 'Acima do Previsto (+)' : 'Abaixo do Previsto (-)');
+        const origemLabel = formatCostOrigem(c.origem);
+        const ben = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0);
+        const decFer = (c.valor_decimo_terceiro || 0) + (c.valor_ferias || 0);
+
+        csv += `${sanitize(c.competencia.slice(0, 7))};${sanitize(c.vinculo_tipo)};${sanitize(origemLabel)};${prevContrato.toFixed(2).replace('.', ',')};${(c.valor_fixo || 0).toFixed(2).replace('.', ',')};${(c.valor_bonus || 0).toFixed(2).replace('.', ',')};${(c.valor_comissao || 0).toFixed(2).replace('.', ',')};${(c.valor_hora_extra || 0).toFixed(2).replace('.', ',')};${ben.toFixed(2).replace('.', ',')};${(c.valor_fgts || 0).toFixed(2).replace('.', ',')};${decFer.toFixed(2).replace('.', ',')};${(c.valor_descontos || 0).toFixed(2).replace('.', ',')};${cReal.toFixed(2).replace('.', ',')};${diff.toFixed(2).replace('.', ',')};${sanitize(statusAuditoria)};${sanitize(c.observacao || '')}\n`;
+      });
+
+      if (costTotals) {
+        const totalPrevisto = prevContrato * sortedCostsCSV.length;
+        const diffTotal = costTotals.realCost - totalPrevisto;
+        const statusTotal = Math.abs(diffTotal) < 0.01 ? 'Conciliado' : (diffTotal > 0 ? 'Acima do Previsto (+)' : 'Abaixo do Previsto (-)');
+        csv += `TOTAL ACUMULADO (${sortedCostsCSV.length} COMPETÊNCIAS);-;TOTAL;${totalPrevisto.toFixed(2).replace('.', ',')};${costTotals.fixed.toFixed(2).replace('.', ',')};${costTotals.bonus.toFixed(2).replace('.', ',')};${costTotals.comissao.toFixed(2).replace('.', ',')};${costTotals.horaExtra.toFixed(2).replace('.', ',')};${costTotals.beneficios.toFixed(2).replace('.', ',')};${costTotals.fgts.toFixed(2).replace('.', ',')};${(costTotals.decimo + costTotals.ferias).toFixed(2).replace('.', ',')};${costTotals.descontos.toFixed(2).replace('.', ',')};${costTotals.realCost.toFixed(2).replace('.', ',')};${diffTotal.toFixed(2).replace('.', ',')};${sanitize(statusTotal)};-\n`;
+      }
+
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Auditoria_Custos_${sanitizeFileName(employeeName)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      onClose();
+      return;
+    }
+
+    // Modo Ficha Completa
     csv += `"FICHA CADASTRAL DO CONTRATADO"\n`;
     csv += `"Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}"\n\n`;
 
@@ -265,10 +353,9 @@ export function ProfileExportModal({
 
     if (includeCostsHistory && costs.length > 0) {
       const isCsvPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
-      const sortedCostsCSV = [...costs].sort((a, b) => a.competencia.localeCompare(b.competencia));
-      csv += `"7. HISTÓRICO DE CUSTOS MENSAIS E TOTALIZADORES POR VALORES"\n`;
+      csv += `"7. HISTÓRICO DE CUSTOS E FATURAMENTO POR COMPETÊNCIA"\n`;
       if (costTotals) {
-        csv += `"TOTALIZADORES ACUMULADOS POR VALORES"\n`;
+        csv += `"TOTALIZADORES ACUMULADOS POR COMPETÊNCIA"\n`;
         csv += `Item / Valor;Total Acumulado (R$)\n`;
         csv += `${isCsvPJ ? 'Valor Contrato' : 'Valor Contrato (Fixo)'};${costTotals.fixed.toFixed(2).replace('.', ',')}\n`;
         csv += `Bônus;${costTotals.bonus.toFixed(2).replace('.', ',')}\n`;
@@ -280,14 +367,15 @@ export function ProfileExportModal({
           csv += `13º Salário e Férias;${(costTotals.decimo + costTotals.ferias).toFixed(2).replace('.', ',')}\n`;
           csv += `Descontos Folha;${costTotals.descontos.toFixed(2).replace('.', ',')}\n`;
         }
-        csv += `TOTAL MENSAL DESEMBOLSADO;${costTotals.realCost.toFixed(2).replace('.', ',')}\n\n`;
+        csv += `TOTAL DESEMBOLSADO;${costTotals.realCost.toFixed(2).replace('.', ',')}\n\n`;
       }
-      csv += `DETALHAMENTO MENSAL DE CUSTOS\n`;
-      csv += `Período Competência;Regime;${isCsvPJ ? 'Valor Contrato' : 'Valor Contrato (Fixo)'};Bônus;Comissão${!isCsvPJ ? ';FGTS' : ''};Custo Real Desembolsado\n`;
+      csv += `DETALHAMENTO POR COMPETÊNCIA\n`;
+      csv += `Competência;Regime;Fonte / Origem;${isCsvPJ ? 'Valor Contrato' : 'Valor Contrato (Fixo)'};Bônus;Comissão${!isCsvPJ ? ';FGTS' : ''};Custo Real Desembolsado\n`;
       sortedCostsCSV.forEach(c => {
         const isCLT = c.vinculo_tipo === 'CLT';
         const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
-        csv += `${sanitize(c.competencia)};${sanitize(c.vinculo_tipo)};${(c.valor_fixo || 0).toFixed(2).replace('.', ',')};${(c.valor_bonus || 0).toFixed(2).replace('.', ',')};${(c.valor_comissao || 0).toFixed(2).replace('.', ',')}${!isCsvPJ ? ';' + (c.valor_fgts || 0).toFixed(2).replace('.', ',') : ''};${cReal.toFixed(2).replace('.', ',')}\n`;
+        const origemLabel = formatCostOrigem(c.origem);
+        csv += `${sanitize(c.competencia.slice(0, 7))};${sanitize(c.vinculo_tipo)};${sanitize(origemLabel)};${(c.valor_fixo || 0).toFixed(2).replace('.', ',')};${(c.valor_bonus || 0).toFixed(2).replace('.', ',')};${(c.valor_comissao || 0).toFixed(2).replace('.', ',')}${!isCsvPJ ? ';' + (c.valor_fgts || 0).toFixed(2).replace('.', ',') : ''};${cReal.toFixed(2).replace('.', ',')}\n`;
       });
       csv += `\n`;
     }
@@ -312,6 +400,223 @@ export function ProfileExportModal({
     }
 
     const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
+    const sortedCosts = [...effectiveCosts].sort((a, b) => a.competencia.localeCompare(b.competencia));
+    const prevContrato = profile.remuneration_fixed || profile.remuneration || 0;
+
+    // Se estiver no MODO AUDITORIA DEDICADO
+    if (reportMode === 'audit') {
+      const totalPrevisto = prevContrato * sortedCosts.length;
+      const totalReal = costTotals ? costTotals.realCost : 0;
+      const diffTotal = totalReal - totalPrevisto;
+      const avgMonthlyCost = costTotals && sortedCosts.length > 0 ? costTotals.realCost / sortedCosts.length : 0;
+      const maxCost = Math.max(...sortedCosts.map(c => (c.valor_liquido || 0) + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0)), 1);
+
+      let auditHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Relatório de Auditoria — ${employeeName}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 25px; line-height: 1.5; font-size: 11.5px; }
+            .header { border-bottom: 2px solid #f59e0b; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end; }
+            .badge-source { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; border: 1px solid transparent; }
+            .badge-status { display: inline-block; padding: 2px 6px; border-radius: 9999px; font-size: 9px; font-weight: 800; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+            th { background: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; font-size: 9px; text-align: left; padding: 7px 5px; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 7px 5px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+            @media print { body { margin: 12px; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              ${photoUrl ? `<img src="${photoUrl}" style="width: 58px; height: 58px; border-radius: 50%; object-fit: cover; border: 2px solid #f59e0b;" />` : ''}
+              <div>
+                <span style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 2px 7px; border-radius: 6px; font-size: 9px; font-weight: 800; text-transform: uppercase; display: inline-block; margin-bottom: 3px;">
+                  Auditoria de Faturamento &amp; Custos por Competência
+                </span>
+                <h1 style="font-size: 20px; margin: 0; color: #0f172a; font-weight: 800;">${employeeName}</h1>
+                <p style="margin: 2px 0 0 0; color: #64748b; font-size: 11px; font-weight: 600;">
+                  Escopo: <strong>${profile.job_role || 'Não especificado'}</strong> &nbsp;|&nbsp; Regime: <strong>${profile.linkType || 'CLT'}</strong> &nbsp;|&nbsp; Empresa: <strong>${profile.company || 'MarBR'}</strong>
+                </p>
+                ${profile.corporate_name ? `<p style="margin: 2px 0 0 0; color: #475569; font-size: 10px;">PJ: <strong>${profile.corporate_name}</strong> • CNPJ: <strong>${profile.pj_type || '-'}</strong></p>` : ''}
+              </div>
+            </div>
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px;">
+              ${companyLogoUrl ? `<img src="${companyLogoUrl}" style="max-height: 42px; max-width: 150px; object-fit: contain;" />` : ''}
+              <p style="font-size: 9.5px; color: #94a3b8; margin: 0;">Emitido em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+            </div>
+          </div>
+
+          <!-- Cards de Resumo Executivo da Auditoria -->
+          <div style="margin-bottom: 16px; background: #fffdf5; border: 1.5px solid #fde68a; padding: 12px; border-radius: 8px;">
+            <div style="font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: #92400e; margin-bottom: 8px; border-bottom: 1px solid #fef3c7; padding-bottom: 4px; display: flex; justify-content: space-between;">
+              <span>Painel de Conciliação e Auditoria Financeira</span>
+              <span>${sortedCosts.length} Competência(s) Auditada(s)</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+              <div style="background: #ffffff; padding: 8px 10px; border-radius: 6px; border-left: 3px solid #f59e0b;">
+                <span style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block;">Previsto Mensal (Contrato)</span>
+                <span style="font-size: 13px; font-weight: 800; color: #0f172a; display: block; margin-top: 2px;">${formatCurrency(prevContrato)}</span>
+              </div>
+              <div style="background: #ffffff; padding: 8px 10px; border-radius: 6px; border-left: 3px solid #10b981;">
+                <span style="font-size: 9px; font-weight: 700; color: #047857; text-transform: uppercase; display: block;">Média Real Desembolsada</span>
+                <span style="font-size: 13px; font-weight: 800; color: #047857; display: block; margin-top: 2px;">${formatCurrency(avgMonthlyCost)}</span>
+              </div>
+              <div style="background: #ffffff; padding: 8px 10px; border-radius: 6px; border-left: 3px solid #b45309;">
+                <span style="font-size: 9px; font-weight: 700; color: #92400e; text-transform: uppercase; display: block;">Total Desembolsado</span>
+                <span style="font-size: 13px; font-weight: 800; color: #b45309; display: block; margin-top: 2px;">${formatCurrency(totalReal)}</span>
+              </div>
+              <div style="background: ${Math.abs(diffTotal) < 0.01 ? '#ecfdf5' : (diffTotal > 0 ? '#fff1f2' : '#f0f9ff')}; padding: 8px 10px; border-radius: 6px; border-left: 3px solid ${Math.abs(diffTotal) < 0.01 ? '#10b981' : (diffTotal > 0 ? '#f43f5e' : '#0284c7')};">
+                <span style="font-size: 9px; font-weight: 700; color: ${Math.abs(diffTotal) < 0.01 ? '#047857' : (diffTotal > 0 ? '#be123c' : '#0369a1')}; text-transform: uppercase; display: block;">Divergência Acumulada</span>
+                <span style="font-size: 13px; font-weight: 800; color: ${Math.abs(diffTotal) < 0.01 ? '#047857' : (diffTotal > 0 ? '#be123c' : '#0369a1')}; display: block; margin-top: 2px;">
+                  ${diffTotal > 0 ? '+' : ''}${formatCurrency(diffTotal)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          ${includeCostsChart && sortedCosts.length > 0 ? `
+            <!-- Gráfico SVG Vetorial de Evolução do Custo por Competência -->
+            <div style="margin-top: 10px; margin-bottom: 14px; background: #ffffff; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+              <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 8px; font-family: sans-serif;">
+                Evolução do Custo Histórico por Competência (Rótulos de Valor R$)
+              </div>
+              ${(() => {
+                const chartCosts = sortedCosts;
+                const count = chartCosts.length;
+                const svgW = Math.max(540, count * 22);
+                const chartW = svgW - 50;
+                const slotWidth = chartW / count;
+                const barMaxH = 85;
+                const baseY = 145;
+                const svgH = 220;
+
+                return `
+                <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                  <line x1="30" y1="20" x2="${svgW}" y2="20" stroke="#f1f5f9" stroke-width="1" />
+                  <line x1="30" y1="60" x2="${svgW}" y2="60" stroke="#f1f5f9" stroke-width="1" />
+                  <line x1="30" y1="100" x2="${svgW}" y2="100" stroke="#f1f5f9" stroke-width="1" />
+                  <line x1="30" y1="${baseY}" x2="${svgW}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1.5" />
+                  ${chartCosts.map((c, idx) => {
+                    const barWidth = Math.max(3, Math.min(slotWidth * 0.65, 22));
+                    const xCenter = 35 + idx * slotWidth + slotWidth / 2;
+                    const xBar = xCenter - barWidth / 2;
+                    const isCLT = c.vinculo_tipo === 'CLT';
+                    const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                    const hasCost = realCost >= 0.01;
+                    const barH = hasCost ? Math.max(6, Math.round((realCost / maxCost) * barMaxH)) : 2;
+                    const yBar = baseY - barH;
+                    const yValLabel = yBar - 5;
+                    const compParts = c.competencia.split('-');
+                    const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                    const mLabel = `${monthsShort[parseInt(compParts[1] || '1', 10) - 1]}/${(compParts[0] || '').slice(2)}`;
+                    const valLabel = realCost >= 1000 ? `R$ ${(realCost / 1000).toFixed(1)}k` : `R$ ${realCost.toFixed(0)}`;
+                    const fontSize = Math.min(8, Math.max(6, slotWidth * 0.45));
+                    let elements = '';
+                    if (hasCost) {
+                      elements += `<text x="${xCenter}" y="${yValLabel}" text-anchor="start" font-size="${fontSize}" font-weight="800" fill="#047857" font-family="sans-serif" transform="rotate(-90 ${xCenter} ${yValLabel})">${valLabel}</text>`;
+                      elements += `<rect x="${xBar}" y="${yBar}" width="${barWidth}" height="${barH}" rx="2" fill="#10b981" stroke="#059669" stroke-width="0.5" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />`;
+                    } else {
+                      elements += `<rect x="${xBar}" y="${baseY - 2}" width="${barWidth}" height="2" fill="#e2e8f0" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />`;
+                    }
+                    elements += `<text x="${xCenter}" y="${baseY + 8}" text-anchor="end" font-size="${fontSize}" font-weight="${hasCost ? '700' : '500'}" fill="${hasCost ? '#334155' : '#94a3b8'}" font-family="sans-serif" transform="rotate(-90 ${xCenter} ${baseY + 8})">${mLabel}</text>`;
+                    return elements;
+                  }).join('')}
+                </svg>
+                `;
+              })()}
+            </div>
+          ` : ''}
+
+          <!-- Tabela de Conciliação e Auditoria por Competência -->
+          <table>
+            <thead>
+              <tr>
+                <th>Competência</th>
+                <th>Regime</th>
+                <th>Fonte / Origem</th>
+                <th>Previsto</th>
+                <th>Fixo Real</th>
+                <th>Bônus/Comissão</th>
+                <th>Benef./Encargos</th>
+                <th>Descontos</th>
+                <th style="text-align: right;">Custo Real</th>
+                <th style="text-align: right;">Diferença</th>
+                <th style="text-align: center;">Status</th>
+                <th>Observação</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sortedCosts.map(c => {
+                const isCLT = c.vinculo_tipo === 'CLT';
+                const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                const diff = cReal - prevContrato;
+                const isMatch = Math.abs(diff) < 0.01;
+                const badgeOrigem = getCostOrigemBadgeStyle(c.origem);
+                const benEnc = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0) + (c.valor_fgts || 0);
+                const varTotal = (c.valor_bonus || 0) + (c.valor_comissao || 0);
+                return `
+                <tr>
+                  <td><strong>${c.competencia.slice(0, 7)}</strong></td>
+                  <td>${c.vinculo_tipo}</td>
+                  <td>
+                    <span class="badge-source" style="background: ${badgeOrigem.bg}; color: ${badgeOrigem.color}; border-color: ${badgeOrigem.border};">
+                      ${formatCostOrigem(c.origem)}
+                    </span>
+                  </td>
+                  <td>${formatCurrency(prevContrato)}</td>
+                  <td>${formatCurrency(c.valor_fixo || 0)}</td>
+                  <td>${formatCurrency(varTotal)}</td>
+                  <td>${formatCurrency(benEnc)}</td>
+                  <td>${formatCurrency(c.valor_descontos || 0)}</td>
+                  <td style="text-align: right; font-weight: 700; color: #b45309;">${formatCurrency(cReal)}</td>
+                  <td style="text-align: right; font-weight: 700; color: ${isMatch ? '#047857' : (diff > 0 ? '#b91c1c' : '#0369a1')};">
+                    ${diff > 0 ? '+' : ''}${formatCurrency(diff)}
+                  </td>
+                  <td style="text-align: center;">
+                    <span class="badge-status" style="background: ${isMatch ? '#ecfdf5' : (diff > 0 ? '#fff1f2' : '#f0f9ff')}; color: ${isMatch ? '#047857' : (diff > 0 ? '#be123c' : '#0369a1')}; border: 1px solid ${isMatch ? '#a7f3d0' : (diff > 0 ? '#fecdd3' : '#bae6fd')};">
+                      ${isMatch ? 'Conciliado' : (diff > 0 ? 'Acima (+)' : 'Abaixo (-)')}
+                    </span>
+                  </td>
+                  <td style="font-size: 10px; color: #64748b;">${c.observacao || '-'}</td>
+                </tr>
+                `;
+              }).join('')}
+            </tbody>
+            ${costTotals ? `
+              <tfoot>
+                <tr style="background: #fffbeb; font-weight: 800; color: #92400e; border-top: 2px solid #fde68a;">
+                  <td colspan="3">TOTAL ACUMULADO (${sortedCosts.length} COMPETÊNCIAS)</td>
+                  <td>${formatCurrency(totalPrevisto)}</td>
+                  <td>${formatCurrency(costTotals.fixed)}</td>
+                  <td>${formatCurrency(costTotals.bonus + costTotals.comissao)}</td>
+                  <td>${formatCurrency(costTotals.beneficios + costTotals.fgts)}</td>
+                  <td>${formatCurrency(costTotals.descontos)}</td>
+                  <td style="text-align: right; font-size: 12px; color: #b45309;">${formatCurrency(costTotals.realCost)}</td>
+                  <td style="text-align: right; font-size: 12px; color: ${Math.abs(diffTotal) < 0.01 ? '#047857' : (diffTotal > 0 ? '#be123c' : '#0369a1')};">
+                    ${diffTotal > 0 ? '+' : ''}${formatCurrency(diffTotal)}
+                  </td>
+                  <td style="text-align: center;">${Math.abs(diffTotal) < 0.01 ? '100% OK' : 'Divergente'}</td>
+                  <td>-</td>
+                </tr>
+              </tfoot>
+            ` : ''}
+          </table>
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(auditHtml);
+      printWindow.document.close();
+      onClose();
+      return;
+    }
+
+    // Modo Ficha Completa
     let html = `
       <!DOCTYPE html>
       <html>
@@ -490,27 +795,25 @@ export function ProfileExportModal({
       `;
     }
 
-    // 7. HISTÓRICO DE CUSTOS MENSAIS E TOTALIZADORES
+    // 7. HISTÓRICO DE CUSTOS POR COMPETÊNCIA E TOTALIZADORES
     if (includeCostsHistory && costs.length > 0) {
       const avgMonthlyCost = costTotals && costs.length > 0 ? costTotals.realCost / costs.length : 0;
-      const sortedCosts = [...costs].sort((a, b) => a.competencia.localeCompare(b.competencia));
       const maxCost = Math.max(...sortedCosts.map(c => (c.valor_liquido || 0) + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0)), 1);
       const effectiveLoan = loanSummary || (profile.totalTaken || (profile as any).loan_amount ? {
         totalTaken: profile.totalTaken || (profile as any).loan_amount || 0,
         totalReceived: profile.totalReceived || 0,
         balance: profile.balance || 0
       } : null);
-      const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
 
       html += `
         <div class="section">
-          <div class="section-title">7. Histórico de Custos Mensais, Gráfico e Totalizadores por Valores</div>
+          <div class="section-title">7. Histórico de Custos por Competência, Gráfico e Totalizadores</div>
           
           ${costTotals ? `
             <!-- Quadro de Totalizadores por Valores Recebidos -->
             <div style="margin-bottom: 18px; background: #fffdf5; border: 1.5px solid #fef3c7; padding: 14px; border-radius: 8px;">
               <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #92400e; margin-bottom: 10px; border-bottom: 1px solid #fde68a; padding-bottom: 4px;">
-                Totalizadores Acumulados de Valores ${isPJ ? 'Contratuais' : 'Recebidos'} do Custo Histórico
+                Totalizadores Acumulados de Valores ${isPJ ? 'Contratuais' : 'Recebidos'} por Competência
               </div>
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
                 <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
@@ -543,7 +846,7 @@ export function ProfileExportModal({
                   <span class="field-value">${formatCurrency(costTotals.decimo + costTotals.ferias)}</span>
                 </div>` : ''}
                 <div style="background: #ecfdf5; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #10b981; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
-                  <span class="field-label" style="color: #047857;">Média Mensal Desembolsada</span>
+                  <span class="field-label" style="color: #047857;">Média por Competência Desembolsada</span>
                   <span class="field-value" style="color: #047857; font-weight: 800;">${formatCurrency(avgMonthlyCost)}</span>
                 </div>
                 <div style="background: #fef3c7; padding: 8px 12px; border-radius: 6px; border-left: 4px solid #b45309; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
@@ -578,17 +881,17 @@ export function ProfileExportModal({
           ` : ''}
 
           ${includeCostsChart ? `
-            <!-- Gráfico SVG Vetorial de Custo Mês a Mês (Garantido em Impressões PDF - 100% Anti-sobreposição) -->
+            <!-- Gráfico SVG Vetorial de Custo por Competência -->
             <div style="margin-top: 15px; margin-bottom: 16px; background: #ffffff; border: 1px solid #cbd5e1; padding: 14px; border-radius: 8px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
               <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 12px; font-family: sans-serif;">
-                Gráfico de Evolução do Custo Histórico Mês a Mês (Valores e Meses em Orientação Vertical)
+                Gráfico de Evolução do Custo Histórico por Competência (Valores e Competências em Orientação Vertical)
               </div>
               
               ${(() => {
                 const chartCosts = sortedCosts;
                 const count = chartCosts.length;
                 const svgW = Math.max(560, count * 22);
-                const chartW = svgW - 50; // margem esquerda 40, direita 10
+                const chartW = svgW - 50;
                 const slotWidth = chartW / count;
                 const barMaxH = 95;
                 const baseY = 160;
@@ -596,7 +899,6 @@ export function ProfileExportModal({
 
                 return `
                 <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display: block; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                  <!-- Linhas de grade horizontais -->
                   <line x1="35" y1="25" x2="${svgW}" y2="25" stroke="#f1f5f9" stroke-width="1" />
                   <line x1="35" y1="70" x2="${svgW}" y2="70" stroke="#f1f5f9" stroke-width="1" />
                   <line x1="35" y1="115" x2="${svgW}" y2="115" stroke="#f1f5f9" stroke-width="1" />
@@ -621,20 +923,12 @@ export function ProfileExportModal({
                     const fontSize = Math.min(8.5, Math.max(6.5, slotWidth * 0.48));
 
                     let elements = '';
-
-                    // 1. Rótulo de Valor no topo: apenas se houver custo (> 0), rotacionado a -90° (vertical para cima)
                     if (hasCost) {
                       elements += `<text x="${xCenter}" y="${yValLabel}" text-anchor="start" font-size="${fontSize}" font-weight="800" fill="#047857" font-family="sans-serif" transform="rotate(-90 ${xCenter} ${yValLabel})">${valLabel}</text>`;
-                    }
-
-                    // 2. Barra
-                    if (hasCost) {
                       elements += `<rect x="${xBar}" y="${yBar}" width="${barWidth}" height="${barH}" rx="2" fill="#10b981" stroke="#059669" stroke-width="0.5" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />`;
                     } else {
                       elements += `<rect x="${xBar}" y="${baseY - 2}" width="${barWidth}" height="2" fill="#e2e8f0" style="-webkit-print-color-adjust: exact; print-color-adjust: exact;" />`;
                     }
-
-                    // 3. Rótulo do Mês na base: rotacionado a -90° (vertical para baixo)
                     elements += `<text x="${xCenter}" y="${baseY + 8}" text-anchor="end" font-size="${fontSize}" font-weight="${hasCost ? '700' : '500'}" fill="${hasCost ? '#334155' : '#94a3b8'}" font-family="sans-serif" transform="rotate(-90 ${xCenter} ${baseY + 8})">${mLabel}</text>`;
 
                     return elements;
@@ -645,12 +939,13 @@ export function ProfileExportModal({
             </div>
           ` : ''}
 
-          <!-- Tabela Detalhada por Mês (ordenada cronologicamente) -->
+          <!-- Tabela Detalhada por Competência -->
           <table>
             <thead>
               <tr>
                 <th>Competência</th>
                 <th>Regime</th>
+                <th>Fonte / Origem</th>
                 <th>Valor Contrato</th>
                 <th>Bônus</th>
                 <th>Comissão</th>
@@ -662,10 +957,16 @@ export function ProfileExportModal({
               ${sortedCosts.map(c => {
                 const isCLT = c.vinculo_tipo === 'CLT';
                 const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                const badgeOrigem = getCostOrigemBadgeStyle(c.origem);
                 return `
                 <tr>
-                  <td><strong>${c.competencia}</strong></td>
+                  <td><strong>${c.competencia.slice(0, 7)}</strong></td>
                   <td>${c.vinculo_tipo}</td>
+                  <td>
+                    <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; background: ${badgeOrigem.bg}; color: ${badgeOrigem.color}; border: 1px solid ${badgeOrigem.border};">
+                      ${formatCostOrigem(c.origem)}
+                    </span>
+                  </td>
                   <td>${formatCurrency(c.valor_fixo || 0)}</td>
                   <td>${formatCurrency(c.valor_bonus || 0)}</td>
                   <td>${formatCurrency(c.valor_comissao || 0)}</td>
@@ -678,7 +979,7 @@ export function ProfileExportModal({
             ${costTotals ? `
               <tfoot>
                 <tr style="background: #fffbeb; font-weight: 800; color: #92400e; border-top: 2px solid #fde68a;">
-                  <td colspan="2">TOTAL ACUMULADO (${costs.length} MÊSES)</td>
+                  <td colspan="3">TOTAL ACUMULADO (${sortedCosts.length} COMPETÊNCIAS)</td>
                   <td>${formatCurrency(costTotals.fixed)}</td>
                   <td>${formatCurrency(costTotals.bonus)}</td>
                   <td>${formatCurrency(costTotals.comissao)}</td>
@@ -715,14 +1016,23 @@ export function ProfileExportModal({
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-slate-50 to-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-600 shadow-xs">
-              <Download size={20} />
+              {reportMode === 'audit' ? <Calculator size={20} /> : <Download size={20} />}
             </div>
             <div>
-              <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                Exportar Ficha do Contratado
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                  {reportMode === 'audit' ? 'Relatório de Auditoria de Faturamento & Custos' : 'Exportar Ficha do Contratado'}
+                </h2>
+                {reportMode === 'audit' && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                    Auditoria
+                  </span>
+                )}
+              </div>
               <p className="text-xs font-medium text-slate-500 mt-0.5">
-                {employeeName} • Escolha quais seções deseja incluir no documento
+                {reportMode === 'audit'
+                  ? `${employeeName} • Auditoria por competência e batimento com fontes originais`
+                  : `${employeeName} • Escolha quais seções deseja incluir no documento`}
               </p>
             </div>
           </div>
@@ -736,8 +1046,56 @@ export function ProfileExportModal({
           </button>
         </div>
 
+        {/* Alternador de Modo do Relatório */}
+        <div className="px-6 pt-3.5 pb-2 bg-slate-50/70 border-b border-slate-100 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setReportMode('audit');
+              setIncludePersonal(false);
+              setIncludeContractual(false);
+              setIncludeAddressContact(false);
+              setIncludeBanking(false);
+              setIncludeRemuneration(false);
+              setIncludeTrajectory(false);
+              setIncludeCostsHistory(true);
+              setIncludeCostsChart(true);
+            }}
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              reportMode === 'audit'
+                ? 'bg-amber-500 text-white shadow-sm'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Calculator size={15} />
+            <span>Auditoria de Faturamento &amp; Custos</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setReportMode('full');
+              setIncludePersonal(true);
+              setIncludeContractual(true);
+              setIncludeAddressContact(true);
+              setIncludeBanking(true);
+              setIncludeRemuneration(true);
+              setIncludeTrajectory(true);
+              setIncludeCostsHistory(true);
+              setIncludeCostsChart(true);
+            }}
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              reportMode === 'full'
+                ? 'bg-amber-500 text-white shadow-sm'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <FileText size={15} />
+            <span>Ficha Cadastral Completa</span>
+          </button>
+        </div>
+
         {/* Seleção de Formato */}
-        <div className="px-6 pt-5 pb-3 bg-slate-50/60 border-b border-slate-100">
+        <div className="px-6 pt-4 pb-3 bg-slate-50/50 border-b border-slate-100">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
             Formato de Exportação
           </label>
@@ -767,8 +1125,49 @@ export function ProfileExportModal({
           </div>
         </div>
 
-        {/* Seleção de Módulos (Abas do Cadastro) */}
+        {/* Conteúdo Central */}
         <div className="flex-1 p-6 overflow-y-auto space-y-4">
+          
+          {/* BANNER DO MODO AUDITORIA */}
+          {reportMode === 'audit' && (
+            <div className="p-4 bg-amber-50/80 border border-amber-300 rounded-2xl shadow-xs space-y-3">
+              <div className="flex items-start gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-700 mt-0.5">
+                  <ShieldCheck size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    Relatório de Auditoria por Competência Ativo
+                  </h4>
+                  <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+                    Exporta a conciliação completa de todas as competências lançadas ({effectiveCosts.length}), permitindo auditar o valor previsto em contrato contra o custo real desembolsado e rastrear cada lançamento com sua fonte original (Planilha Dianna, Lançamento Manual, Folha CLT, Holerites OCR).
+                  </p>
+                </div>
+              </div>
+
+              {/* Sugestão de Auditoria em Lote se disponível */}
+              {onOpenBatchAudit && (
+                <div className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between gap-3">
+                  <div className="text-[11px] text-slate-700">
+                    <span className="font-bold text-slate-900 block">Precisa auditar múltiplos colaboradores?</span>
+                    Gere o relatório consolidado para toda a equipe ou por empresa/setor.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenBatchAudit();
+                    }}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 shrink-0 transition-all cursor-pointer"
+                  >
+                    <Users size={14} className="text-amber-400" />
+                    Auditoria em Lote
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* BANNER INTERATIVO DE UNIFICAÇÃO DE VÍNCULOS (CLT + PJ) */}
           {previousProfile && (
             <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50/40 to-slate-50 border border-emerald-300 rounded-2xl shadow-xs">
@@ -806,163 +1205,216 @@ export function ProfileExportModal({
             </div>
           )}
 
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-            <span>Selecione as Seções da Ficha para Incluir</span>
-            <span className="text-[10px] text-slate-400 font-normal">Marque/desmarque o que deseja exportar</span>
-          </label>
+          {/* Seletor de Seções (apenas no modo completo ou simplificado no modo auditoria) */}
+          {reportMode === 'full' ? (
+            <>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                <span>Selecione as Seções da Ficha para Incluir</span>
+                <span className="text-[10px] text-slate-400 font-normal">Marque/desmarque o que deseja exportar</span>
+              </label>
 
-          <div className="grid grid-cols-1 gap-2.5">
-            
-            {/* 1. Identificação & Dados Pessoais */}
-            <div
-              onClick={() => setIncludePersonal(!includePersonal)}
-              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
-                includePersonal ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className={includePersonal ? 'text-amber-600' : 'text-slate-400'}>
-                {includePersonal ? <CheckSquare size={18} /> : <Square size={18} />}
+              <div className="grid grid-cols-1 gap-2.5">
+                
+                {/* 1. Identificação & Dados Pessoais */}
+                <div
+                  onClick={() => setIncludePersonal(!includePersonal)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                    includePersonal ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className={includePersonal ? 'text-amber-600' : 'text-slate-400'}>
+                    {includePersonal ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-slate-800">1. Identificação e Dados Pessoais</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 ml-auto font-medium">CPF, RG, Gênero, Nível, Grau</span>
+                </div>
+
+                {/* 2. Dados Contratuais e Empresa */}
+                <div
+                  onClick={() => setIncludeContractual(!includeContractual)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                    includeContractual ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className={includeContractual ? 'text-amber-600' : 'text-slate-400'}>
+                    {includeContractual ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Building2 size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-slate-800">2. Dados Contratuais e Empresa</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 ml-auto font-medium">Escopo, Setor, Empresa, Regime, Início Contrato</span>
+                </div>
+
+                {/* 3. Endereço e Contatos */}
+                <div
+                  onClick={() => setIncludeAddressContact(!includeAddressContact)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                    includeAddressContact ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className={includeAddressContact ? 'text-amber-600' : 'text-slate-400'}>
+                    {includeAddressContact ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-slate-800">3. Endereço e Contatos</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 ml-auto font-medium">CEP, Logradouro, Telefones, E-mails</span>
+                </div>
+
+                {/* 4. Dados Bancários */}
+                <div
+                  onClick={() => setIncludeBanking(!includeBanking)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                    includeBanking ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className={includeBanking ? 'text-amber-600' : 'text-slate-400'}>
+                    {includeBanking ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CreditCard size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-slate-800">4. Dados Bancários e Pagamento</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 ml-auto font-medium">Chave PIX, Plano de Comissão</span>
+                </div>
+
+                {/* 5. Remuneração e Ficha Executiva */}
+                <div
+                  onClick={() => setIncludeRemuneration(!includeRemuneration)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                    includeRemuneration ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className={includeRemuneration ? 'text-amber-600' : 'text-slate-400'}>
+                    {includeRemuneration ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-slate-800">5. Honorários e Ficha Executiva</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 ml-auto font-medium">Fixo, Bônus, Comissão, Conectividade, Custo Total</span>
+                </div>
+
+                {/* 6. Trajetória e Histórico */}
+                <div
+                  onClick={() => setIncludeTrajectory(!includeTrajectory)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
+                    includeTrajectory ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="mt-0.5" style={{ color: includeTrajectory ? '#d97706' : '#94a3b8' }}>
+                    {includeTrajectory ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <History size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-slate-800">6. Tempo de Serviços e Histórico de Alterações</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 ml-auto font-medium">{history.length} registro(s)</span>
+                </div>
+
+                {/* 7. Histórico de Custos por Competência */}
+                <div
+                  onClick={() => setIncludeCostsHistory(!includeCostsHistory)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                    includeCostsHistory ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className={includeCostsHistory ? 'text-amber-600' : 'text-slate-400'}>
+                    {includeCostsHistory ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calculator size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-slate-800">7. Histórico de Custos por Competência</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 ml-auto font-medium">{effectiveCosts.length} competência(s)</span>
+                </div>
+
+                {/* 8. Gráfico de Custos por Competência */}
+                <div
+                  onClick={() => setIncludeCostsChart(!includeCostsChart)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                    includeCostsChart ? 'bg-emerald-50/50 border-emerald-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className={includeCostsChart ? 'text-emerald-600' : 'text-slate-400'}>
+                    {includeCostsChart ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calculator size={15} className="text-emerald-600" />
+                    <span className="text-xs font-bold text-slate-800">8. Gráfico de Custos por Competência (com Rótulos R$)</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 ml-auto font-medium">Gráfico de barras em PDF</span>
+                </div>
+
               </div>
-              <div className="flex items-center gap-2">
-                <User size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">1. Identificação e Dados Pessoais</span>
+            </>
+          ) : (
+            /* Modo Auditoria: Seções Específicas de Auditoria */
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Módulos de Auditoria Selecionados
+              </label>
+              
+              <div
+                onClick={() => setIncludeCostsHistory(!includeCostsHistory)}
+                className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                  includeCostsHistory ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={includeCostsHistory ? 'text-amber-600' : 'text-slate-400'}>
+                  {includeCostsHistory ? <CheckSquare size={18} /> : <Square size={18} />}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Calculator size={15} className="text-amber-600" />
+                  <span className="text-xs font-bold text-slate-800">
+                    Histórico de Faturamento e Custos por Competência com Fontes
+                  </span>
+                </div>
+                <span className="text-[10px] text-amber-700 font-bold ml-auto">{effectiveCosts.length} competência(s)</span>
               </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">CPF, RG, Gênero, Nível, Grau</span>
+
+              <div
+                onClick={() => setIncludeCostsChart(!includeCostsChart)}
+                className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                  includeCostsChart ? 'bg-emerald-50/70 border-emerald-300' : 'bg-white border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={includeCostsChart ? 'text-emerald-600' : 'text-slate-400'}>
+                  {includeCostsChart ? <CheckSquare size={18} /> : <Square size={18} />}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Calculator size={15} className="text-emerald-600" />
+                  <span className="text-xs font-bold text-slate-800">
+                    Gráfico SVG de Evolução das Competências (Inclusão no PDF)
+                  </span>
+                </div>
+                <span className="text-[10px] text-emerald-700 font-bold ml-auto">Orientação Vertical R$</span>
+              </div>
             </div>
+          )}
 
-            {/* 2. Dados Contratuais e Empresa */}
-            <div
-              onClick={() => setIncludeContractual(!includeContractual)}
-              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
-                includeContractual ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className={includeContractual ? 'text-amber-600' : 'text-slate-400'}>
-                {includeContractual ? <CheckSquare size={18} /> : <Square size={18} />}
-              </div>
-              <div className="flex items-center gap-2">
-                <Building2 size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">2. Dados Contratuais e Empresa</span>
-              </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">Escopo, Setor, Empresa, Regime, Início Contrato</span>
-            </div>
-
-            {/* 3. Endereço e Contatos */}
-            <div
-              onClick={() => setIncludeAddressContact(!includeAddressContact)}
-              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
-                includeAddressContact ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className={includeAddressContact ? 'text-amber-600' : 'text-slate-400'}>
-                {includeAddressContact ? <CheckSquare size={18} /> : <Square size={18} />}
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">3. Endereço e Contatos</span>
-              </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">CEP, Logradouro, Telefones, E-mails</span>
-            </div>
-
-            {/* 4. Dados Bancários */}
-            <div
-              onClick={() => setIncludeBanking(!includeBanking)}
-              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
-                includeBanking ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className={includeBanking ? 'text-amber-600' : 'text-slate-400'}>
-                {includeBanking ? <CheckSquare size={18} /> : <Square size={18} />}
-              </div>
-              <div className="flex items-center gap-2">
-                <CreditCard size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">4. Dados Bancários e Pagamento</span>
-              </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">Chave PIX, Plano de Comissão</span>
-            </div>
-
-            {/* 5. Remuneração e Ficha Executiva */}
-            <div
-              onClick={() => setIncludeRemuneration(!includeRemuneration)}
-              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
-                includeRemuneration ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className={includeRemuneration ? 'text-amber-600' : 'text-slate-400'}>
-                {includeRemuneration ? <CheckSquare size={18} /> : <Square size={18} />}
-              </div>
-              <div className="flex items-center gap-2">
-                <DollarSign size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">5. Honorários e Ficha Executiva</span>
-              </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">Fixo, Bônus, Comissão, Conectividade, Custo Total</span>
-            </div>
-
-            {/* 6. Trajetória e Histórico */}
-            <div
-              onClick={() => setIncludeTrajectory(!includeTrajectory)}
-              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
-                includeTrajectory ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="mt-0.5" style={{ color: includeTrajectory ? '#d97706' : '#94a3b8' }}>
-                {includeTrajectory ? <CheckSquare size={18} /> : <Square size={18} />}
-              </div>
-              <div className="flex items-center gap-2">
-                <History size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">6. Tempo de Serviços e Histórico de Alterações</span>
-              </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">{history.length} registro(s)</span>
-            </div>
-
-            {/* 7. Histórico de Custos Mensais */}
-            <div
-              onClick={() => setIncludeCostsHistory(!includeCostsHistory)}
-              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
-                includeCostsHistory ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className={includeCostsHistory ? 'text-amber-600' : 'text-slate-400'}>
-                {includeCostsHistory ? <CheckSquare size={18} /> : <Square size={18} />}
-              </div>
-              <div className="flex items-center gap-2">
-                <Calculator size={15} className="text-amber-600" />
-                <span className="text-xs font-bold text-slate-800">7. Histórico de Custos Mensais</span>
-              </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">{costs.length} mês(es)</span>
-            </div>
-
-            {/* 8. Gráfico de Custos Mês a Mês */}
-            <div
-              onClick={() => setIncludeCostsChart(!includeCostsChart)}
-              className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
-                includeCostsChart ? 'bg-emerald-50/50 border-emerald-300' : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className={includeCostsChart ? 'text-emerald-600' : 'text-slate-400'}>
-                {includeCostsChart ? <CheckSquare size={18} /> : <Square size={18} />}
-              </div>
-              <div className="flex items-center gap-2">
-                <Calculator size={15} className="text-emerald-600" />
-                <span className="text-xs font-bold text-slate-800">8. Gráfico de Custos Mês a Mês (com Rótulos R$)</span>
-              </div>
-              <span className="text-[10px] text-slate-400 ml-auto font-medium">Gráfico de barras em PDF</span>
-            </div>
-
-          </div>
         </div>
 
         {/* Footer do Modal */}
         <div className="p-6 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-4">
           <div className="text-xs text-slate-500 flex items-center gap-1.5">
             <HelpCircle size={14} className="text-amber-600 shrink-0" />
-            <span>Apenas os itens marcados constarão no arquivo exportado.</span>
+            <span>
+              {reportMode === 'audit'
+                ? 'Relatório com colunas de auditoria (fonte, previsto, realizado, divergência e status).'
+                : 'Apenas os itens marcados constarão no arquivo exportado.'}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-all"
+              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-all cursor-pointer"
             >
               Cancelar
             </button>
@@ -971,7 +1423,9 @@ export function ProfileExportModal({
               className="flex items-center gap-2 px-6 py-2.5 text-xs font-black text-amber-950 bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-500 rounded-xl shadow-md transition-all cursor-pointer active:scale-95"
             >
               <Download size={15} />
-              <span>Exportar {exportFormat === 'pdf' ? 'PDF Executivo' : 'Planilha CSV'}</span>
+              <span>
+                Exportar {exportFormat === 'pdf' ? (reportMode === 'audit' ? 'PDF de Auditoria' : 'PDF Executivo') : (reportMode === 'audit' ? 'Planilha de Auditoria (CSV)' : 'Planilha CSV')}
+              </span>
             </button>
           </div>
         </div>
@@ -980,3 +1434,4 @@ export function ProfileExportModal({
     </div>
   );
 }
+
