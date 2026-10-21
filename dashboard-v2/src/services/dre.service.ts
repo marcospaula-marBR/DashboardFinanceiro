@@ -649,6 +649,61 @@ export class DreService {
   }
 
   /**
+   * Mescla lançamentos manuais adicionais (ex: MarBR, DZM) cirurgicamente sobre as linhas existentes,
+   * SEM apagar períodos ou empresas. Se a linha existir na mesma combinação dimensional, soma o valor no período;
+   * se não existir, adiciona como nova linha individual.
+   */
+  static mergeManualRows(baseRows: DreRow[], manualRows: DreRow[]): DreRow[] {
+    const pivotMap = new Map<string, any>();
+
+    const getGroupKey = (r: any) => {
+      const emp = normalizeEmpresa(r.Empresa);
+      const dep = fixMojibake(r.Departamento || 'Sem Departamento');
+      const cDre = fixMojibake(r.ContaDRE || 'Sem Conta DRE').replace(/^[\d.]+\s*/, '');
+      const proj = fixMojibake(r.Projeto || 'Sem Projeto');
+      const cat = fixMojibake(r.Categoria || 'Sem Categoria');
+      const forn = fixMojibake(r.Fornecedor || 'Sem Fornecedor');
+      const cCorr = fixMojibake(r.ContaCorrente || 'Sem Conta Corrente');
+      return `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
+    };
+
+    // 1. Inserir todas as linhas base existentes (100% intactas)
+    baseRows.forEach(r => {
+      const k = getGroupKey(r);
+      if (!pivotMap.has(k)) {
+        pivotMap.set(k, { ...r });
+      } else {
+        const item = pivotMap.get(k);
+        Object.keys(r).forEach(col => {
+          if (col.includes('/') && r[col] !== undefined && r[col] !== null) {
+            item[col] = (Number(item[col]) || 0) + (Number(r[col]) || 0);
+          }
+        });
+      }
+    });
+
+    // 2. Sobrepor cirurgicamente os lançamentos manuais: somar os valores nos períodos correspondentes
+    manualRows.forEach(m => {
+      const k = getGroupKey(m);
+      if (pivotMap.has(k)) {
+        const item = pivotMap.get(k);
+        Object.keys(m).forEach(col => {
+          if (col.includes('/') && m[col] !== undefined && m[col] !== null) {
+            const manualVal = Number(m[col]) || 0;
+            if (manualVal !== 0) {
+              item[col] = Math.round(((Number(item[col]) || 0) + manualVal) * 100) / 100;
+            }
+          }
+        });
+      } else {
+        pivotMap.set(k, { ...m });
+      }
+    });
+
+    return Array.from(pivotMap.values());
+  }
+
+  /**
    * Gera metadados completos combinados a partir de um conjunto de linhas
    */
   static generateCombinedMetadata(rows: DreRow[]): DreMetadata {

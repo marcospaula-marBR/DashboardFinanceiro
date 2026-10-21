@@ -269,11 +269,11 @@ export default function DrePage() {
               // 3. Mesclar as linhas do snapshot com as linhas autoritativas de dre_lancamentos
               finalRows = [...filteredSnapRows, ...manualOnlyRows];
 
-              // 4. Se houver lançamentos manuais adicionais para outras empresas (ex: MarBR, DZM), mesclar garantindo precedência manual
+              // 4. Se houver lançamentos manuais adicionais para outras empresas (ex: MarBR, DZM), mesclar garantindo precedência manual e soma cumulativa
               if (manualRows && manualRows.length > 0) {
                 const otherManualRows = manualRows.filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
                 if (otherManualRows.length > 0) {
-                  finalRows = DreService.mergeWithHistoricalRows(finalRows, otherManualRows);
+                  finalRows = DreService.mergeManualRows(finalRows, otherManualRows);
                 }
               }
 
@@ -309,6 +309,32 @@ export default function DrePage() {
       await loadFallbackSnapshot();
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  /**
+   * Chamado após salvar um lançamento no DreManualEntryModal.
+   * Se o usuário estiver trabalhando com um CSV recém-carregado que ainda não foi publicado na nuvem,
+   * mescla os dados manuais na base em memória sem descartar o CSV nem ocultar o botão de Salvar na Nuvem.
+   */
+  const handleManualEntrySaved = async () => {
+    const isLocalFileLoaded = rawData.length > 0 && fileName && !fileName.includes('Banco de Dados Nuvem');
+    if (isLocalFileLoaded) {
+      const { manualRows } = await DreLancamentosService.fetchAllForDashboard();
+      if (manualRows && manualRows.length > 0) {
+        const otherManual = manualRows.filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+        const manualOnly = manualRows.filter(r => EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+        let updated = DreService.mergeManualRows(rawData, otherManual);
+        if (manualOnly.length > 0) {
+          const baseNonManualOnly = updated.filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+          updated = [...baseNonManualOnly, ...manualOnly];
+        }
+        setRawData(updated);
+        setMetadata(DreLancamentosService.generateMetadataFromRows(updated));
+        setLastUpdate(new Date().toLocaleTimeString() + ' (Lançamento manual aplicado)');
+      }
+    } else {
+      await loadLatestSnapshotFromDb();
     }
   };
 
@@ -1298,7 +1324,7 @@ export default function DrePage() {
       <DreManualEntryModal
         isOpen={isManualEntryOpen}
         onClose={() => setIsManualEntryOpen(false)}
-        onSaved={loadLatestSnapshotFromDb}
+        onSaved={handleManualEntrySaved}
         dbContasDre={metadata?.contasDre}
         dbCategorias={metadata?.categorias}
         dbDepartamentos={metadata?.departamentos}
