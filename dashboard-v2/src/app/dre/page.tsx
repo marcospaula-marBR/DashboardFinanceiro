@@ -15,7 +15,7 @@ import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
 import { DreIndicatorsModal } from '@/components/dre/DreIndicatorsModal';
 import { DreReportBuilderModal } from '@/components/dre/DreReportBuilderModal';
 import { DreLancamentosService, EMPRESAS_MANUAL_ONLY } from '@/services/dre-lancamentos.service';
-import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa } from '@/services/dre.service';
+import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa, PRE_JUN25_PERIODS } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
 import { supabase } from '@/lib/supabase';
@@ -269,9 +269,23 @@ export default function DrePage() {
               // 3. Mesclar as linhas do snapshot com as linhas autoritativas de dre_lancamentos
               finalRows = [...filteredSnapRows, ...manualOnlyRows];
 
-              // 4. Se houver lançamentos manuais adicionais para outras empresas (ex: MarBR, DZM), mesclar garantindo precedência manual e soma cumulativa
+              // 4. Se houver lançamentos manuais adicionais para outras empresas (ex: MarBR, DZM), mesclar garantindo precedência manual e soma cumulativa.
+              // NOTA CRÍTICA: Os dados históricos de MarBR e DZM de Jan/24 a Mai/25 já estão consolidados em filteredSnapRows.
+              // Portanto, limpamos colunas de PRE_JUN25_PERIODS de otherManualRows para impedir duplicidade de receitas/despesas históricas (~R$ 10M).
               if (manualRows && manualRows.length > 0) {
-                const otherManualRows = manualRows.filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+                const otherManualRows = manualRows
+                  .filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)))
+                  .map(r => {
+                    const cleaned: DreRow = { ...r };
+                    Object.keys(cleaned).forEach(col => {
+                      if (PRE_JUN25_PERIODS.has(col)) {
+                        delete cleaned[col];
+                      }
+                    });
+                    return cleaned;
+                  })
+                  .filter(r => Object.keys(r).some(k => k.includes('/') && r[k] !== undefined && r[k] !== 0));
+
                 if (otherManualRows.length > 0) {
                   finalRows = DreService.mergeManualRows(finalRows, otherManualRows);
                 }
@@ -322,7 +336,18 @@ export default function DrePage() {
     if (isLocalFileLoaded) {
       const { manualRows } = await DreLancamentosService.fetchAllForDashboard();
       if (manualRows && manualRows.length > 0) {
-        const otherManual = manualRows.filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+        const otherManual = manualRows
+          .filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)))
+          .map(r => {
+            const cleaned: DreRow = { ...r };
+            Object.keys(cleaned).forEach(col => {
+              if (PRE_JUN25_PERIODS.has(col)) {
+                delete cleaned[col];
+              }
+            });
+            return cleaned;
+          })
+          .filter(r => Object.keys(r).some(k => k.includes('/') && r[k] !== undefined && r[k] !== 0));
         const manualOnly = manualRows.filter(r => EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
         let updated = DreService.mergeManualRows(rawData, otherManual);
         if (manualOnly.length > 0) {

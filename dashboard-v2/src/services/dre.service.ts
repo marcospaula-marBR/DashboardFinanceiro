@@ -10,6 +10,13 @@ import {
 
 const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+/** Períodos anteriores à integração com o Omie (jan/24 a mai/25) já consolidados no snapshot mestre */
+export const PRE_JUN25_PERIODS = new Set([
+  'Jan/24', 'Fev/24', 'Mar/24', 'Abr/24', 'Mai/24', 'Jun/24',
+  'Jul/24', 'Ago/24', 'Set/24', 'Out/24', 'Nov/24', 'Dez/24',
+  'Jan/25', 'Fev/25', 'Mar/25', 'Abr/25', 'Mai/25'
+]);
+
 // Estrutura DRE inlinada — elimina dependência de fetch em produção
 export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Receita Bruta de Vendas', tipo: 'linha', categorias: ['Receita Bruta de Vendas'] },
