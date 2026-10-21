@@ -17,6 +17,13 @@ export const PRE_JUN25_PERIODS = new Set([
   'Jan/25', 'Fev/25', 'Mar/25', 'Abr/25', 'Mai/25'
 ]);
 
+/** Períodos históricos de Conectius já consolidados na base mestre (Jan/24 a Jun/26) */
+export const CONECTIUS_HISTORICAL_PERIODS = new Set([
+  ...PRE_JUN25_PERIODS,
+  'Jun/25', 'Jul/25', 'Ago/25', 'Set/25', 'Out/25', 'Nov/25', 'Dez/25',
+  'Jan/26', 'Fev/26', 'Mar/26', 'Abr/26', 'Mai/26', 'Jun/26'
+]);
+
 // Estrutura DRE inlinada — elimina dependência de fetch em produção
 export const DEFAULT_DRE_ESTRUTURA: DreStructureItem[] = [
   { titulo: 'Receita Bruta de Vendas', tipo: 'linha', categorias: ['Receita Bruta de Vendas'] },

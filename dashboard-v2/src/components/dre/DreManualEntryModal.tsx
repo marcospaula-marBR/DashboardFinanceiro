@@ -626,8 +626,10 @@ export function DreManualEntryModal({
                   {EMPRESAS_MANUAL_ONLY.map(e => (
                     <option key={e} value={e}>{e}</option>
                   ))}
+                  <option value="Conectius">Conectius</option>
                   <option value="MarBR">MarBR (histórico)</option>
                   <option value="DZM">DZM (histórico)</option>
+                  <option value="G2">G2</option>
                 </select>
               </div>
 

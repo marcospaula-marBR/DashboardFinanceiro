@@ -15,7 +15,7 @@ import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
 import { DreIndicatorsModal } from '@/components/dre/DreIndicatorsModal';
 import { DreReportBuilderModal } from '@/components/dre/DreReportBuilderModal';
 import { DreLancamentosService, EMPRESAS_MANUAL_ONLY } from '@/services/dre-lancamentos.service';
-import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa, PRE_JUN25_PERIODS } from '@/services/dre.service';
+import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa, PRE_JUN25_PERIODS, CONECTIUS_HISTORICAL_PERIODS } from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
 import { supabase } from '@/lib/supabase';
@@ -269,16 +269,21 @@ export default function DrePage() {
               // 3. Mesclar as linhas do snapshot com as linhas autoritativas de dre_lancamentos
               finalRows = [...filteredSnapRows, ...manualOnlyRows];
 
-              // 4. Se houver lançamentos manuais adicionais para outras empresas (ex: MarBR, DZM), mesclar garantindo precedência manual e soma cumulativa.
-              // NOTA CRÍTICA: Os dados históricos de MarBR e DZM de Jan/24 a Mai/25 já estão consolidados em filteredSnapRows.
-              // Portanto, limpamos colunas de PRE_JUN25_PERIODS de otherManualRows para impedir duplicidade de receitas/despesas históricas (~R$ 10M).
+              // 4. Se houver lançamentos manuais adicionais para outras empresas (ex: MarBR, DZM, G2, Conectius), mesclar garantindo precedência manual e soma cumulativa.
+              // NOTA CRÍTICA: Os dados históricos de MarBR e DZM (Jan/24 a Mai/25) e Conectius (Jan/24 a Jun/26) já estão consolidados em filteredSnapRows.
+              // Portanto, limpamos colunas de períodos históricos pré-consolidados de otherManualRows para impedir duplicidade de receitas/despesas.
               if (manualRows && manualRows.length > 0) {
                 const otherManualRows = manualRows
                   .filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)))
                   .map(r => {
                     const cleaned: DreRow = { ...r };
+                    const emp = normalizeEmpresa(cleaned.Empresa);
                     Object.keys(cleaned).forEach(col => {
-                      if (PRE_JUN25_PERIODS.has(col)) {
+                      if (emp === 'Conectius') {
+                        if (CONECTIUS_HISTORICAL_PERIODS.has(col)) {
+                          delete cleaned[col];
+                        }
+                      } else if (PRE_JUN25_PERIODS.has(col)) {
                         delete cleaned[col];
                       }
                     });
@@ -340,8 +345,13 @@ export default function DrePage() {
           .filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)))
           .map(r => {
             const cleaned: DreRow = { ...r };
+            const emp = normalizeEmpresa(cleaned.Empresa);
             Object.keys(cleaned).forEach(col => {
-              if (PRE_JUN25_PERIODS.has(col)) {
+              if (emp === 'Conectius') {
+                if (CONECTIUS_HISTORICAL_PERIODS.has(col)) {
+                  delete cleaned[col];
+                }
+              } else if (PRE_JUN25_PERIODS.has(col)) {
                 delete cleaned[col];
               }
             });

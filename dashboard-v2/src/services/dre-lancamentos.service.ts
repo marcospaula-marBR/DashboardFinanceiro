@@ -43,8 +43,8 @@ export interface DreManualEntryForm {
 
 const TABLE = 'dre_lancamentos';
 
-/** Empresas que só podem ter dados inseridos manualmente */
-export const EMPRESAS_MANUAL_ONLY = ['Conectius', 'Ybox'];
+/** Empresas que só podem ter dados inseridos manualmente (sem integração Omie) */
+export const EMPRESAS_MANUAL_ONLY = ['Ybox'];
 
 /** Todos os períodos suportados (Jan/24 → mai/26), em ordem cronológica */
 export const PERIODOS_DISPONIVEIS: string[] = (() => {
