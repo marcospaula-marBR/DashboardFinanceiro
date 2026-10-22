@@ -4923,7 +4923,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                                   )}
                                                   {!!c.valor_cesta && (
                                                     <div className="flex justify-between items-center py-0.5">
-                                                      <span className="text-slate-500 font-semibold">Cesta Básica:</span>
+                                                      <span className="text-slate-500 font-semibold">VR / Cesta:</span>
                                                       <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_cesta)}</span>
                                                     </div>
                                                   )}

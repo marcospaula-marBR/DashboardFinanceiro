@@ -37,8 +37,12 @@ export function CompetenciasCostsListModal({
   showValues = true,
 }: CompetenciasCostsListModalProps) {
   // Filtros
-  const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [selectedYears, setSelectedYears] = useState<string[]>([]);
+  const [compFilterMode, setCompFilterMode] = useState<'single' | 'range' | 'multi'>('single');
   const [selectedCompetencia, setSelectedCompetencia] = useState<string>('all');
+  const [periodStart, setPeriodStart] = useState<string>('');
+  const [periodEnd, setPeriodEnd] = useState<string>('');
+  const [selectedCompetencias, setSelectedCompetencias] = useState<string[]>([]);
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>('all');
   const [selectedVinculo, setSelectedVinculo] = useState<'all' | 'CLT' | 'PJ' | 'ESTAGIO'>('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'Ativo' | 'Inativo'>('all');
@@ -86,14 +90,14 @@ export function CompetenciasCostsListModal({
     return sets.sort();
   }, [employees]);
 
-  // Lista de competências disponíveis (filtradas pelo ano selecionado se houver)
+  // Lista de competências disponíveis (filtradas pelos anos selecionados se houver)
   const availableCompetencias = useMemo(() => {
     let comps = Array.from(new Set(monthlyCosts.map(c => c.competencia))).filter(Boolean);
-    if (selectedYear !== 'all') {
-      comps = comps.filter(c => c.startsWith(selectedYear));
+    if (selectedYears.length > 0) {
+      comps = comps.filter(c => selectedYears.some(y => c.startsWith(y)));
     }
     return comps.sort().reverse();
-  }, [monthlyCosts, selectedYear]);
+  }, [monthlyCosts, selectedYears]);
 
   // Formatação de competência para rótulo legível (ex: "Setembro/2026")
   const formatCompetenciaLabel = (compStr: string): string => {
@@ -131,14 +135,27 @@ export function CompetenciasCostsListModal({
       rows = rows.filter(r => pageFilteredEmpIds.has(r.cost.employee_id));
     }
 
-    // 2. Filtro de Ano
-    if (selectedYear !== 'all') {
-      rows = rows.filter(r => r.cost.competencia?.startsWith(selectedYear));
+    // 2. Filtro de Múltiplos Anos
+    if (selectedYears.length > 0) {
+      rows = rows.filter(r => selectedYears.some(y => r.cost.competencia?.startsWith(y)));
     }
 
-    // 3. Filtro de Competência específica
-    if (selectedCompetencia !== 'all') {
-      rows = rows.filter(r => r.cost.competencia?.slice(0, 7) === selectedCompetencia.slice(0, 7));
+    // 3. Filtro de Competência (Única, Período De/Até ou Múltiplos Meses)
+    if (compFilterMode === 'single') {
+      if (selectedCompetencia !== 'all') {
+        rows = rows.filter(r => r.cost.competencia?.slice(0, 7) === selectedCompetencia.slice(0, 7));
+      }
+    } else if (compFilterMode === 'range') {
+      if (periodStart) {
+        rows = rows.filter(r => (r.cost.competencia?.slice(0, 7) || '') >= periodStart.slice(0, 7));
+      }
+      if (periodEnd) {
+        rows = rows.filter(r => (r.cost.competencia?.slice(0, 7) || '') <= periodEnd.slice(0, 7));
+      }
+    } else if (compFilterMode === 'multi') {
+      if (selectedCompetencias.length > 0) {
+        rows = rows.filter(r => selectedCompetencias.includes(r.cost.competencia?.slice(0, 7) || ''));
+      }
     }
 
     // 4. Filtro de Empresa
@@ -201,7 +218,8 @@ export function CompetenciasCostsListModal({
     return rows;
   }, [
     monthlyCosts, employeesMap, usePageScope, pageFilteredEmpIds, 
-    selectedYear, selectedCompetencia, selectedEmpresa, selectedVinculo, 
+    selectedYears, compFilterMode, selectedCompetencia, periodStart, periodEnd, selectedCompetencias,
+    selectedEmpresa, selectedVinculo, 
     selectedStatus, selectedSetor, searchTerm, sortField, sortOrder
   ]);
 
@@ -220,8 +238,11 @@ export function CompetenciasCostsListModal({
 
   // Verifica se há qualquer filtro ativo
   const hasActiveModalFilters = (
-    selectedYear !== 'all' ||
+    selectedYears.length > 0 ||
     selectedCompetencia !== 'all' ||
+    periodStart !== '' ||
+    periodEnd !== '' ||
+    selectedCompetencias.length > 0 ||
     selectedEmpresa !== 'all' ||
     selectedVinculo !== 'all' ||
     selectedStatus !== 'all' ||
@@ -231,8 +252,12 @@ export function CompetenciasCostsListModal({
   );
 
   const handleResetFilters = () => {
-    setSelectedYear('all');
+    setSelectedYears([]);
+    setCompFilterMode('single');
     setSelectedCompetencia('all');
+    setPeriodStart('');
+    setPeriodEnd('');
+    setSelectedCompetencias([]);
     setSelectedEmpresa('all');
     setSelectedVinculo('all');
     setSelectedStatus('all');
@@ -295,7 +320,7 @@ export function CompetenciasCostsListModal({
       'Adicional Noturno (R$)',
       'Vale Refeição (R$)',
       'Vale Transporte (R$)',
-      'Cesta Alimentação (R$)',
+      'VR / Cesta Básica (R$)',
       'Ajuda Custo / Conectividade (R$)',
       'Total Benefícios (R$)',
       '13º Salário (R$)',
@@ -467,42 +492,43 @@ export function CompetenciasCostsListModal({
           
           {/* Linha 1: Pílulas de Ano + Escopo da Página */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            {/* Pílulas de Ano */}
+            {/* Pílulas de Múltiplos Anos */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1">
-                Ano:
+                Anos:
               </span>
               <button
                 type="button"
-                onClick={() => { setSelectedYear('all'); setSelectedCompetencia('all'); }}
+                onClick={() => setSelectedYears([])}
                 className={`px-2.5 py-1 text-xs font-extrabold rounded-lg transition-all ${
-                  selectedYear === 'all'
+                  selectedYears.length === 0
                     ? 'bg-emerald-600 text-white shadow-2xs'
                     : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
                 }`}
               >
                 Todos os Anos
               </button>
-              {availableYears.map(year => (
-                <button
-                  type="button"
-                  key={year}
-                  onClick={() => {
-                    setSelectedYear(year);
-                    // Se a competência selecionada não for daquele ano, reseta para 'all'
-                    if (selectedCompetencia !== 'all' && !selectedCompetencia.startsWith(year)) {
-                      setSelectedCompetencia('all');
-                    }
-                  }}
-                  className={`px-2.5 py-1 text-xs font-extrabold rounded-lg transition-all ${
-                    selectedYear === year
-                      ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
-                  }`}
-                >
-                  {year}
-                </button>
-              ))}
+              {availableYears.map(year => {
+                const isYearActive = selectedYears.includes(year);
+                return (
+                  <button
+                    type="button"
+                    key={year}
+                    onClick={() => {
+                      setSelectedYears(prev =>
+                        prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year]
+                      );
+                    }}
+                    className={`px-2.5 py-1 text-xs font-extrabold rounded-lg transition-all ${
+                      isYearActive
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {year}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Alternador de Escopo da Página */}
@@ -530,28 +556,143 @@ export function CompetenciasCostsListModal({
           {/* Linha 2: Controles de Filtros em Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-2.5 items-center">
             
-            {/* Seletor de Mês / Competência */}
-            <div className="lg:col-span-3">
-              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
-                Competência (Mês)
-              </label>
-              <div className="relative">
-                <Calendar size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <select
-                  value={selectedCompetencia}
-                  onChange={e => setSelectedCompetencia(e.target.value)}
-                  className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
-                >
-                  <option value="all">
-                    {selectedYear !== 'all' ? `Todos os meses de ${selectedYear}` : 'Todas as Competências'} ({availableCompetencias.length})
-                  </option>
-                  {availableCompetencias.map(comp => (
-                    <option key={comp} value={comp}>
-                      {formatCompetenciaLabel(comp)}
-                    </option>
-                  ))}
-                </select>
+            {/* Seletor Avançado de Competência (Única, Período De/Até ou Múltiplos) */}
+            <div className="lg:col-span-5">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  Filtro de Competências
+                </label>
+                {/* Alternador de Modo de Filtro */}
+                <div className="flex items-center gap-1 text-[9px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setCompFilterMode('single')}
+                    className={`px-1.5 py-0.5 rounded ${
+                      compFilterMode === 'single'
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Mês
+                  </button>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={() => setCompFilterMode('range')}
+                    className={`px-1.5 py-0.5 rounded ${
+                      compFilterMode === 'range'
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Período De/Até
+                  </button>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={() => setCompFilterMode('multi')}
+                    className={`px-1.5 py-0.5 rounded ${
+                      compFilterMode === 'multi'
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Vários Meses
+                  </button>
+                </div>
               </div>
+
+              {compFilterMode === 'single' && (
+                <div className="relative">
+                  <Calendar size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <select
+                    value={selectedCompetencia}
+                    onChange={e => setSelectedCompetencia(e.target.value)}
+                    className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                  >
+                    <option value="all">
+                      {selectedYears.length > 0 ? `Todos os meses (${selectedYears.join(', ')})` : 'Todas as Competências'} ({availableCompetencias.length})
+                    </option>
+                    {availableCompetencias.map(comp => (
+                      <option key={comp} value={comp}>
+                        {formatCompetenciaLabel(comp)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {compFilterMode === 'range' && (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 relative">
+                    <span className="text-[9px] font-bold text-slate-400 block mb-0.5">De:</span>
+                    <select
+                      value={periodStart}
+                      onChange={e => setPeriodStart(e.target.value)}
+                      className="w-full px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                      <option value="">Início (Todos)</option>
+                      {availableCompetencias.slice().reverse().map(comp => (
+                        <option key={comp} value={comp}>
+                          {formatCompetenciaLabel(comp)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 relative">
+                    <span className="text-[9px] font-bold text-slate-400 block mb-0.5">Até:</span>
+                    <select
+                      value={periodEnd}
+                      onChange={e => setPeriodEnd(e.target.value)}
+                      className="w-full px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                      <option value="">Fim (Todos)</option>
+                      {availableCompetencias.map(comp => (
+                        <option key={comp} value={comp}>
+                          {formatCompetenciaLabel(comp)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {compFilterMode === 'multi' && (
+                <div className="flex items-center gap-1 overflow-x-auto py-1 max-w-full">
+                  {availableCompetencias.map(comp => {
+                    const isCompActive = selectedCompetencias.includes(comp.slice(0, 7));
+                    const label = formatCompetenciaLabel(comp).split('/')[0].slice(0, 3) + '/' + comp.slice(2, 4);
+                    return (
+                      <button
+                        type="button"
+                        key={comp}
+                        onClick={() => {
+                          const key = comp.slice(0, 7);
+                          setSelectedCompetencias(prev =>
+                            prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+                          );
+                        }}
+                        className={`px-2 py-0.5 text-[10px] font-extrabold rounded whitespace-nowrap transition-all ${
+                          isCompActive
+                            ? 'bg-emerald-600 text-white shadow-2xs'
+                            : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                  {selectedCompetencias.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCompetencias([])}
+                      className="text-[9px] text-rose-500 underline ml-1 shrink-0"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Seletor de Empresa */}

@@ -14,10 +14,13 @@ export async function POST(req: Request) {
 
     let mimeType = 'application/pdf';
     let base64Data = '';
+    let importType = 'payroll';
     const contentType = req.headers.get('content-type') || '';
     
     if (contentType.includes('application/json')) {
-      const { fileUrl } = await req.json();
+      const body = await req.json();
+      const { fileUrl, type } = body;
+      if (type) importType = type;
       if (!fileUrl) {
         return NextResponse.json({ error: 'Nenhum fileUrl informado.' }, { status: 400 });
       }
@@ -39,6 +42,8 @@ export async function POST(req: Request) {
     } else {
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
+      const typeParam = formData.get('type') as string | null;
+      if (typeParam) importType = typeParam;
 
       if (!file) {
         return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
@@ -58,7 +63,50 @@ export async function POST(req: Request) {
       generationConfig: { responseMimeType: "application/json" }
     });
 
-    const prompt = `
+    const isBenefitsMode = importType === 'benefits';
+
+    const prompt = isBenefitsMode
+      ? `
+Analise este documento (PDF ou imagem) contendo um Relatório, Demonstrativo ou Planilha de Benefícios (Vale Transporte / VT, Vale Refeição / Alimentação / Cesta, Flash, Sodexo, Alelo, VR, Bonificação, Premiação, Bônus, Ajuda de Custo).
+
+Instruções de Extração:
+1. **Competência**: Identifique a competência (mês/ano) de referência no cabeçalho ou datas do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho/2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01'). Se não encontrar, retorne string vazia "".
+2. **Colaboradores**: Extraia cada linha ou registro individual de colaborador contido no relatório.
+3. **Valores dos Benefícios**:
+   - "name": Nome completo do colaborador.
+   - "cpf": CPF do colaborador (formatado 000.000.000-00 ou números puros).
+   - "matricula": Matrícula ou código se houver.
+   - "cargo": Cargo se houver.
+   - "valor_vt": Valor de Vale Transporte (crédito recebido, recarga no cartão, Sodexo VT, Top, etc.).
+   - "valor_vr": Valor de Vale Refeição / Alimentação creditado ao colaborador.
+   - "valor_cesta": Valor de Cesta Básica ou VR/Cesta creditado.
+   - "valor_bonus": Valor de Bonificação, Premiação, Bônus ou Incentivo concedido.
+   - "valor_ajuda_custo": Ajuda de custo, home-office ou conectividade.
+   - "observacao": Descrição ou categoria do benefício (ex: 'Recarga VT Sodexo', 'Premiação', 'VR / Cesta').
+
+Retorne obrigatoriamente um objeto JSON com o seguinte formato:
+{
+  "competencia": "YYYY-MM-01",
+  "records": [
+    {
+      "matricula": "1",
+      "name": "Nome Completo do Colaborador",
+      "cpf": "000.000.000-00",
+      "cargo": "Cargo",
+      "valor_vt": 0.00,
+      "valor_vr": 0.00,
+      "valor_cesta": 0.00,
+      "valor_bonus": 0.00,
+      "valor_ajuda_custo": 0.00,
+      "observacao": "Recarga Benefícios"
+    }
+  ]
+}
+
+Valores monetários devem ser estritamente numéricos decimais (ex: 273.00, 500.00).
+Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
+`
+      : `
 Analise este documento (PDF ou imagem) contendo o Extrato Mensal da folha de pagamento de múltiplos colaboradores (listagem celetista ou múltiplos recibos).
 
 Instruções de Extração:
