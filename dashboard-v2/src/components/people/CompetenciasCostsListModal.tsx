@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
   X, Calendar, Filter, Search, Trash2, Edit3, Loader2, 
-  CheckCircle2, AlertTriangle, ArrowUpDown, DollarSign, Wallet, Users, ChevronRight, FileSpreadsheet
+  CheckCircle2, AlertTriangle, ArrowUpDown, DollarSign, Wallet, 
+  Users, ChevronRight, FileSpreadsheet, RotateCcw, Building2, Briefcase
 } from 'lucide-react';
 import { Employee, MonthlyCost } from '@/types/loans';
 import { PeopleHRService } from '@/services/people-hr.service';
@@ -11,43 +12,88 @@ interface CompetenciasCostsListModalProps {
   isOpen: boolean;
   onClose: () => void;
   employees: Employee[];
+  filteredEmployees?: Employee[];
   monthlyCosts: MonthlyCost[];
   onCostDeleted: () => void;
   onEditCost: (cost: MonthlyCost, employee?: Employee) => void;
   showValues?: boolean;
 }
 
+// Normalizador de texto para busca sem diferenciar acentos ou maiúsculas
+function normalizeText(text: string | null | undefined): string {
+  if (!text) return '';
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 export function CompetenciasCostsListModal({
   isOpen,
   onClose,
   employees,
+  filteredEmployees,
   monthlyCosts,
   onCostDeleted,
   onEditCost,
   showValues = true,
 }: CompetenciasCostsListModalProps) {
+  // Filtros
+  const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedCompetencia, setSelectedCompetencia] = useState<string>('all');
-  const [selectedVinculo, setSelectedVinculo] = useState<'all' | 'CLT' | 'PJ'>('all');
+  const [selectedEmpresa, setSelectedEmpresa] = useState<string>('all');
+  const [selectedVinculo, setSelectedVinculo] = useState<'all' | 'CLT' | 'PJ' | 'ESTAGIO'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'Ativo' | 'Inativo'>('all');
+  const [selectedSetor, setSelectedSetor] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [usePageScope, setUsePageScope] = useState<boolean>(() => {
+    return Boolean(filteredEmployees && filteredEmployees.length > 0 && filteredEmployees.length < employees.length);
+  });
+
+  // Ações e ordenação
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [sortField, setSortField] = useState<'competencia' | 'name' | 'total'>('competencia');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Mapeamento rápido de colaboradores por ID
+  // Mapeamento de colaboradores por ID
   const employeesMap = useMemo(() => {
     const map = new Map<string, Employee>();
     employees.forEach(emp => map.set(emp.id, emp));
     return map;
   }, [employees]);
 
-  // Lista de competências disponíveis ordenadas decrescente
-  const availableCompetencias = useMemo(() => {
-    const comps = Array.from(new Set(monthlyCosts.map(c => c.competencia))).filter(Boolean);
-    return comps.sort().reverse();
+  // Set de IDs filtrados da página
+  const pageFilteredEmpIds = useMemo(() => {
+    if (!filteredEmployees || filteredEmployees.length === 0) return null;
+    return new Set(filteredEmployees.map(e => e.id));
+  }, [filteredEmployees]);
+
+  // Anos disponíveis extraídos de monthlyCosts
+  const availableYears = useMemo(() => {
+    const years = Array.from(new Set(monthlyCosts.map(c => c.competencia?.split('-')[0]))).filter(Boolean);
+    return years.sort().reverse();
   }, [monthlyCosts]);
 
-  // Formatação de competência para rótulo legível
+  // Empresas disponíveis
+  const availableCompanies = useMemo(() => {
+    const comps = Array.from(new Set(employees.map(e => e.company))).filter(Boolean);
+    return comps.sort();
+  }, [employees]);
+
+  // Setores disponíveis
+  const availableSetores = useMemo(() => {
+    const sets = Array.from(new Set(employees.map(e => e.department))).filter(Boolean);
+    return sets.sort();
+  }, [employees]);
+
+  // Lista de competências disponíveis (filtradas pelo ano selecionado se houver)
+  const availableCompetencias = useMemo(() => {
+    let comps = Array.from(new Set(monthlyCosts.map(c => c.competencia))).filter(Boolean);
+    if (selectedYear !== 'all') {
+      comps = comps.filter(c => c.startsWith(selectedYear));
+    }
+    return comps.sort().reverse();
+  }, [monthlyCosts, selectedYear]);
+
+  // Formatação de competência para rótulo legível (ex: "Setembro/2026")
   const formatCompetenciaLabel = (compStr: string): string => {
     if (!compStr) return '—';
     const parts = compStr.split('-');
@@ -58,11 +104,13 @@ export function CompetenciasCostsListModal({
     return `${monthName}/${parts[0]}`;
   };
 
-  // Filtragem dos custos
+  // Filtragem dos custos com todos os critérios
   const filteredRows = useMemo(() => {
     let rows = monthlyCosts.map(cost => {
       const emp = employeesMap.get(cost.employee_id);
       const isCLT = cost.vinculo_tipo === 'CLT' || emp?.linkType === 'CLT';
+      const isEstagio = emp?.linkType === 'Estagiário' || (emp?.linkType || '').toLowerCase().includes('estag');
+      const isPJ = !isCLT && !isEstagio;
       const realTotal = (cost.valor_liquido || 0) + (isCLT ? (cost.valor_adiantamento || 0) : 0);
       const name = emp?.name || (cost as any).nome_colaborador || 'Colaborador';
       return {
@@ -71,31 +119,67 @@ export function CompetenciasCostsListModal({
         name,
         realTotal,
         isCLT,
+        isPJ,
+        isEstagio,
       };
     });
 
-    if (selectedCompetencia !== 'all') {
-      rows = rows.filter(r => r.cost.competencia === selectedCompetencia);
+    // 1. Escopo de página ativa
+    if (usePageScope && pageFilteredEmpIds) {
+      rows = rows.filter(r => pageFilteredEmpIds.has(r.cost.employee_id));
     }
 
+    // 2. Filtro de Ano
+    if (selectedYear !== 'all') {
+      rows = rows.filter(r => r.cost.competencia?.startsWith(selectedYear));
+    }
+
+    // 3. Filtro de Competência específica
+    if (selectedCompetencia !== 'all') {
+      rows = rows.filter(r => r.cost.competencia?.slice(0, 7) === selectedCompetencia.slice(0, 7));
+    }
+
+    // 4. Filtro de Empresa
+    if (selectedEmpresa !== 'all') {
+      rows = rows.filter(r => r.emp?.company === selectedEmpresa);
+    }
+
+    // 5. Filtro de Regime / Vínculo
     if (selectedVinculo !== 'all') {
       if (selectedVinculo === 'CLT') {
-        rows = rows.filter(r => r.isCLT);
-      } else {
-        rows = rows.filter(r => !r.isCLT);
+        rows = rows.filter(r => r.isCLT && !r.isEstagio);
+      } else if (selectedVinculo === 'PJ') {
+        rows = rows.filter(r => r.isPJ);
+      } else if (selectedVinculo === 'ESTAGIO') {
+        rows = rows.filter(r => r.isEstagio);
       }
     }
 
+    // 6. Filtro de Status
+    if (selectedStatus !== 'all') {
+      rows = rows.filter(r => (r.emp?.status || 'Ativo') === selectedStatus);
+    }
+
+    // 7. Filtro de Setor / Departamento
+    if (selectedSetor !== 'all') {
+      rows = rows.filter(r => r.emp?.department === selectedSetor);
+    }
+
+    // 8. Busca Inteligente (Sem acento, multi-campos)
     if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
+      const term = normalizeText(searchTerm);
       rows = rows.filter(r => 
-        r.name.toLowerCase().includes(term) ||
-        (r.emp?.job_role || '').toLowerCase().includes(term) ||
-        (r.emp?.department || '').toLowerCase().includes(term)
+        normalizeText(r.name).includes(term) ||
+        normalizeText(r.emp?.corporate_name).includes(term) ||
+        normalizeText(r.emp?.job_role).includes(term) ||
+        normalizeText(r.emp?.department).includes(term) ||
+        normalizeText(r.emp?.document_id).includes(term) ||
+        normalizeText(r.emp?.responsible_cpf).includes(term) ||
+        normalizeText(r.cost.observacao).includes(term)
       );
     }
 
-    // Ordenação
+    // 9. Ordenação
     rows.sort((a, b) => {
       if (sortField === 'competencia') {
         const diff = a.cost.competencia.localeCompare(b.cost.competencia);
@@ -113,7 +197,11 @@ export function CompetenciasCostsListModal({
     });
 
     return rows;
-  }, [monthlyCosts, employeesMap, selectedCompetencia, selectedVinculo, searchTerm, sortField, sortOrder]);
+  }, [
+    monthlyCosts, employeesMap, usePageScope, pageFilteredEmpIds, 
+    selectedYear, selectedCompetencia, selectedEmpresa, selectedVinculo, 
+    selectedStatus, selectedSetor, searchTerm, sortField, sortOrder
+  ]);
 
   // Totais do filtro ativo
   const summaryTotals = useMemo(() => {
@@ -127,6 +215,29 @@ export function CompetenciasCostsListModal({
       avgPerEmployee,
     };
   }, [filteredRows]);
+
+  // Verifica se há qualquer filtro ativo
+  const hasActiveModalFilters = (
+    selectedYear !== 'all' ||
+    selectedCompetencia !== 'all' ||
+    selectedEmpresa !== 'all' ||
+    selectedVinculo !== 'all' ||
+    selectedStatus !== 'all' ||
+    selectedSetor !== 'all' ||
+    searchTerm.trim() !== '' ||
+    usePageScope
+  );
+
+  const handleResetFilters = () => {
+    setSelectedYear('all');
+    setSelectedCompetencia('all');
+    setSelectedEmpresa('all');
+    setSelectedVinculo('all');
+    setSelectedStatus('all');
+    setSelectedSetor('all');
+    setSearchTerm('');
+    setUsePageScope(false);
+  };
 
   if (!isOpen) return null;
 
@@ -161,36 +272,55 @@ export function CompetenciasCostsListModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-7xl h-[94vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
         {/* HEADER */}
-        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-emerald-500/10 via-slate-50 dark:via-slate-900 to-white dark:to-slate-900 shrink-0">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-emerald-500/10 via-slate-50 dark:via-slate-900 to-white dark:to-slate-900 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm shrink-0">
               <FileSpreadsheet size={22} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
                   Lançamentos de Custos por Competência
                 </h3>
                 <span className="text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                   {filteredRows.length} Lançamento{filteredRows.length !== 1 ? 's' : ''}
                 </span>
+                {hasActiveModalFilters && (
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                    <Filter size={10} /> Filtros Ativos
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Visualização detalhada em lista com ações diretas de edição e exclusão por competência
+                Visualização analítica consolidada com filtros multi-critérios, edição ágil e exclusão segura
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-xs"
-            title="Fechar janela"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {hasActiveModalFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5"
+                title="Limpar todos os filtros aplicados"
+              >
+                <RotateCcw size={13} />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-xs"
+              title="Fechar janela"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* FEEDBACK TOAST */}
@@ -201,95 +331,219 @@ export function CompetenciasCostsListModal({
           </div>
         )}
 
-        {/* FILTROS E PESQUISA */}
-        <div className="px-6 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center shrink-0">
-          {/* Seletor de Competência */}
-          <div className="sm:col-span-4">
-            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
-              Competência
-            </label>
-            <div className="relative">
-              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <select
-                value={selectedCompetencia}
-                onChange={e => setSelectedCompetencia(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
-              >
-                <option value="all">Todas as Competências ({availableCompetencias.length})</option>
-                {availableCompetencias.map(comp => (
-                  <option key={comp} value={comp}>
-                    {formatCompetenciaLabel(comp)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Seletor de Vínculo */}
-          <div className="sm:col-span-3">
-            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
-              Regime / Vínculo
-            </label>
-            <div className="flex bg-slate-200/60 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+        {/* BARRA DE FILTROS AVANÇADOS */}
+        <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-2.5 shrink-0">
+          
+          {/* Linha 1: Pílulas de Ano + Escopo da Página */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* Pílulas de Ano */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1">
+                Ano:
+              </span>
               <button
-                onClick={() => setSelectedVinculo('all')}
-                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                  selectedVinculo === 'all'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Todos
-              </button>
-              <button
-                onClick={() => setSelectedVinculo('CLT')}
-                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                  selectedVinculo === 'CLT'
-                    ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                CLT
-              </button>
-              <button
-                onClick={() => setSelectedVinculo('PJ')}
-                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                  selectedVinculo === 'PJ'
+                type="button"
+                onClick={() => { setSelectedYear('all'); setSelectedCompetencia('all'); }}
+                className={`px-2.5 py-1 text-xs font-extrabold rounded-lg transition-all ${
+                  selectedYear === 'all'
                     ? 'bg-emerald-600 text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
                 }`}
               >
-                PJ / MEI
+                Todos os Anos
               </button>
+              {availableYears.map(year => (
+                <button
+                  type="button"
+                  key={year}
+                  onClick={() => {
+                    setSelectedYear(year);
+                    // Se a competência selecionada não for daquele ano, reseta para 'all'
+                    if (selectedCompetencia !== 'all' && !selectedCompetencia.startsWith(year)) {
+                      setSelectedCompetencia('all');
+                    }
+                  }}
+                  className={`px-2.5 py-1 text-xs font-extrabold rounded-lg transition-all ${
+                    selectedYear === year
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
+                  }`}
+                >
+                  {year}
+                </button>
+              ))}
             </div>
+
+            {/* Alternador de Escopo da Página */}
+            {filteredEmployees && filteredEmployees.length > 0 && filteredEmployees.length < employees.length && (
+              <button
+                type="button"
+                onClick={() => setUsePageScope(v => !v)}
+                className={`px-3 py-1 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 ${
+                  usePageScope
+                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-300'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-800'
+                }`}
+                title="Alternar entre ver somente os colaboradores filtrados na página principal ou toda a base"
+              >
+                <Filter size={12} className={usePageScope ? 'text-amber-600' : 'text-slate-400'} />
+                <span>
+                  {usePageScope 
+                    ? `Base Filtrada na Página (${filteredEmployees.length})` 
+                    : `Toda a Base (${employees.length})`}
+                </span>
+              </button>
+            )}
           </div>
 
-          {/* Busca por Nome */}
-          <div className="sm:col-span-5">
-            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
-              Buscar Colaborador
-            </label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Filtrar por nome, cargo ou departamento..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
-              />
+          {/* Linha 2: Controles de Filtros em Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-2.5 items-center">
+            
+            {/* Seletor de Mês / Competência */}
+            <div className="lg:col-span-3">
+              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                Competência (Mês)
+              </label>
+              <div className="relative">
+                <Calendar size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <select
+                  value={selectedCompetencia}
+                  onChange={e => setSelectedCompetencia(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                >
+                  <option value="all">
+                    {selectedYear !== 'all' ? `Todos os meses de ${selectedYear}` : 'Todas as Competências'} ({availableCompetencias.length})
+                  </option>
+                  {availableCompetencias.map(comp => (
+                    <option key={comp} value={comp}>
+                      {formatCompetenciaLabel(comp)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {/* Seletor de Empresa */}
+            <div className="lg:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                Empresa
+              </label>
+              <div className="relative">
+                <Building2 size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <select
+                  value={selectedEmpresa}
+                  onChange={e => setSelectedEmpresa(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                >
+                  <option value="all">Todas as Empresas</option>
+                  {availableCompanies.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Seletor de Regime / Vínculo */}
+            <div className="lg:col-span-3">
+              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                Regime / Vínculo
+              </label>
+              <div className="flex bg-slate-200/60 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setSelectedVinculo('all')}
+                  className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all ${
+                    selectedVinculo === 'all'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedVinculo('CLT')}
+                  className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all ${
+                    selectedVinculo === 'CLT'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  CLT
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedVinculo('PJ')}
+                  className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all ${
+                    selectedVinculo === 'PJ'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  PJ / MEI
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedVinculo('ESTAGIO')}
+                  className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all ${
+                    selectedVinculo === 'ESTAGIO'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Estágio
+                </button>
+              </div>
+            </div>
+
+            {/* Seletor de Setor / Departamento */}
+            <div className="lg:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                Setor / Área
+              </label>
+              <div className="relative">
+                <Briefcase size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <select
+                  value={selectedSetor}
+                  onChange={e => setSelectedSetor(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                >
+                  <option value="all">Todos os Setores</option>
+                  {availableSetores.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Busca por Colaborador */}
+            <div className="lg:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                Buscar
+              </label>
+              <div className="relative">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Nome, cargo, CPF..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                />
+              </div>
+            </div>
+
           </div>
         </div>
 
         {/* SUMMARY KPI CARDS */}
-        <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+        <div className="px-6 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
           <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800 flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
               <Users size={18} />
             </div>
             <div>
-              <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Contratados</span>
+              <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Contratados Únicos</span>
               <span className="text-sm font-black text-slate-800 dark:text-slate-200">
                 {summaryTotals.uniqueEmployeesCount}
               </span>
@@ -313,7 +567,7 @@ export function CompetenciasCostsListModal({
               <Wallet size={18} />
             </div>
             <div>
-              <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Total Desembolsado</span>
+              <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Total Real Desembolsado</span>
               <span className="text-sm font-black text-emerald-800 dark:text-emerald-300 tabular-nums">
                 {showValues ? formatCurrency(summaryTotals.totalGeral) : '••••••'}
               </span>
@@ -339,7 +593,17 @@ export function CompetenciasCostsListModal({
             <div className="flex flex-col items-center justify-center h-full py-16 text-slate-400">
               <Calendar size={48} className="opacity-30 mb-3" />
               <p className="text-sm font-bold uppercase tracking-wider">Nenhum lançamento encontrado</p>
-              <p className="text-xs text-slate-500 mt-1">Tente ajustar a competência, regime ou termo de busca.</p>
+              <p className="text-xs text-slate-500 mt-1">Tente ajustar o ano, a competência, o regime ou termo de busca.</p>
+              {hasActiveModalFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="mt-3 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all flex items-center gap-1.5"
+                >
+                  <RotateCcw size={13} />
+                  <span>Limpar Filtros</span>
+                </button>
+              )}
             </div>
           ) : (
             <table className="w-full text-left text-xs border-collapse">
@@ -347,7 +611,7 @@ export function CompetenciasCostsListModal({
                 <tr>
                   <th 
                     onClick={() => toggleSort('competencia')}
-                    className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer hover:text-emerald-600 select-none"
+                    className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer hover:text-emerald-600 select-none whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1.5">
                       Competência
@@ -365,33 +629,33 @@ export function CompetenciasCostsListModal({
                     </div>
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
                     Salário / Fixo
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
                     Adiantamento
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
                     HE & Noturno
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
                     Benefícios
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
                     13º & Férias
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
                     Descontos
                   </th>
 
                   <th 
                     onClick={() => toggleSort('total')}
-                    className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 text-right cursor-pointer select-none"
+                    className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 text-right cursor-pointer select-none whitespace-nowrap"
                   >
                     <div className="flex items-center justify-end gap-1.5">
                       Total Real
@@ -399,18 +663,18 @@ export function CompetenciasCostsListModal({
                     </div>
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center">
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center whitespace-nowrap">
                     Origem
                   </th>
 
-                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-900 shadow-2xs">
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-900 shadow-2xs whitespace-nowrap">
                     Ações
                   </th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900/60 font-medium">
-                {filteredRows.map(({ cost, emp, name, realTotal, isCLT }) => {
+                {filteredRows.map(({ cost, emp, name, realTotal, isCLT, isEstagio }) => {
                   const beneficios = (cost.valor_vr || 0) + (cost.valor_vt || 0) + (cost.valor_cesta || 0) + (cost.valor_ajuda_custo || 0);
                   const heNoturno = (cost.valor_hora_extra || 0) + (cost.valor_adicional_not || 0);
                   const decimoFerias = (cost.valor_decimo_terceiro || 0) + (cost.valor_ferias || 0) + (cost.valor_rescisao || 0);
@@ -436,33 +700,39 @@ export function CompetenciasCostsListModal({
                       <td className="px-4 py-3 align-middle">
                         <div className="flex items-center gap-2">
                           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
-                            isCLT 
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-900' 
-                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900'
+                            isEstagio
+                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900'
+                              : isCLT 
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-900' 
+                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900'
                           }`}>
-                            {isCLT ? 'CLT' : 'PJ'}
+                            {isEstagio ? 'Estágio' : (isCLT ? 'CLT' : 'PJ')}
                           </span>
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-black text-slate-900 dark:text-slate-100 text-xs truncate max-w-[200px] sm:max-w-[260px]">
                               {name}
                             </p>
-                            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">
-                              {emp?.job_role || emp?.department || '—'}
-                            </p>
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate max-w-[240px]">
+                              {emp?.company && (
+                                <span className="font-bold text-slate-500 uppercase">{emp.company}</span>
+                              )}
+                              {emp?.company && <span>&bull;</span>}
+                              <span className="truncate">{emp?.job_role || emp?.department || '—'}</span>
+                            </div>
                           </div>
                         </div>
                       </td>
 
                       {/* Salário / Fixo */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums text-slate-700 dark:text-slate-300 font-semibold">
-                        {showValues ? formatCurrency(fixo) : '••••'}
+                      <td className="px-3 py-3 align-middle text-right tabular-nums font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                        {showValues ? formatCurrency(fixo) : '••••••'}
                       </td>
 
                       {/* Adiantamento */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums">
+                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
                         {cost.valor_adiantamento && cost.valor_adiantamento > 0 ? (
-                          <span className="text-blue-600 dark:text-blue-400 font-bold">
-                            {showValues ? `+${formatCurrency(cost.valor_adiantamento)}` : '••••'}
+                          <span className="font-bold text-blue-600 dark:text-blue-400">
+                            +{showValues ? formatCurrency(cost.valor_adiantamento) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
@@ -470,10 +740,10 @@ export function CompetenciasCostsListModal({
                       </td>
 
                       {/* HE & Noturno */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums">
+                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
                         {heNoturno > 0 ? (
-                          <span className="text-amber-600 dark:text-amber-400 font-bold">
-                            {showValues ? `+${formatCurrency(heNoturno)}` : '••••'}
+                          <span className="font-bold text-amber-600 dark:text-amber-400">
+                            +{showValues ? formatCurrency(heNoturno) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
@@ -481,10 +751,10 @@ export function CompetenciasCostsListModal({
                       </td>
 
                       {/* Benefícios */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums">
+                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
                         {beneficios > 0 ? (
-                          <span className="text-cyan-700 dark:text-cyan-400 font-bold">
-                            {showValues ? `+${formatCurrency(beneficios)}` : '••••'}
+                          <span className="font-bold text-cyan-700 dark:text-cyan-400">
+                            +{showValues ? formatCurrency(beneficios) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
@@ -492,10 +762,10 @@ export function CompetenciasCostsListModal({
                       </td>
 
                       {/* 13º & Férias */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums">
+                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
                         {decimoFerias > 0 ? (
-                          <span className="text-indigo-600 dark:text-indigo-400 font-bold">
-                            {showValues ? `+${formatCurrency(decimoFerias)}` : '••••'}
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                            +{showValues ? formatCurrency(decimoFerias) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
@@ -503,10 +773,10 @@ export function CompetenciasCostsListModal({
                       </td>
 
                       {/* Descontos */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums">
+                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
                         {cost.valor_descontos && cost.valor_descontos > 0 ? (
-                          <span className="text-rose-600 dark:text-rose-400 font-bold">
-                            {showValues ? `-${formatCurrency(cost.valor_descontos)}` : '••••'}
+                          <span className="font-bold text-rose-600 dark:text-rose-400">
+                            -{showValues ? formatCurrency(cost.valor_descontos) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
@@ -515,41 +785,49 @@ export function CompetenciasCostsListModal({
 
                       {/* Total Real Desembolsado */}
                       <td className="px-4 py-3 align-middle text-right tabular-nums whitespace-nowrap">
-                        <span className="inline-block px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-black text-xs">
+                        <span className="inline-block px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-black text-xs shadow-2xs">
                           {showValues ? formatCurrency(realTotal) : '••••••'}
                         </span>
                       </td>
 
                       {/* Origem */}
                       <td className="px-3 py-3 align-middle text-center whitespace-nowrap">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                          {cost.origem === 'dianna_import' ? 'Dianna' : (cost.origem || 'Manual')}
+                        <span className="text-[10px] font-bold text-slate-500 uppercase bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200/50 dark:border-slate-700">
+                          {cost.origem === 'dianna_import' 
+                            ? 'Dianna' 
+                            : (cost.origem === 'dianna_batch_clt' 
+                              ? 'Folha CLT' 
+                              : (cost.origem || 'Manual'))}
                         </span>
                       </td>
 
                       {/* Ações */}
-                      <td className="px-4 py-3 align-middle text-center sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50/80 dark:group-hover:bg-slate-800/40 transition-colors whitespace-nowrap shadow-2xs">
+                      <td className="px-4 py-3 align-middle text-center sticky right-0 bg-white dark:bg-slate-900 shadow-2xs whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
-                          {/* Botão Editar */}
                           <button
+                            type="button"
                             onClick={() => {
+                              onClose(); // fecha o modal primeiro para não ficar sobreposto
                               onEditCost(cost, emp);
-                              onClose();
                             }}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
                             title="Editar lançamento desta competência"
                           >
                             <Edit3 size={15} />
                           </button>
 
-                          {/* Botão Excluir */}
                           <button
-                            onClick={() => handleDeleteCost(cost.id, name, cost.competencia)}
+                            type="button"
                             disabled={isDeletingThis}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors disabled:opacity-40"
+                            onClick={() => handleDeleteCost(cost.id, name, cost.competencia)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors disabled:opacity-50"
                             title="Excluir lançamento permanentemente"
                           >
-                            {isDeletingThis ? <Loader2 size={15} className="animate-spin text-rose-600" /> : <Trash2 size={15} />}
+                            {isDeletingThis ? (
+                              <Loader2 size={15} className="animate-spin text-rose-500" />
+                            ) : (
+                              <Trash2 size={15} />
+                            )}
                           </button>
                         </div>
                       </td>
@@ -562,17 +840,17 @@ export function CompetenciasCostsListModal({
         </div>
 
         {/* FOOTER */}
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <p className="text-xs text-slate-500 font-medium">
+        <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between text-xs text-slate-500 shrink-0">
+          <div>
             Exibindo <strong className="text-slate-800 dark:text-slate-200">{filteredRows.length}</strong> de <strong className="text-slate-800 dark:text-slate-200">{monthlyCosts.length}</strong> lançamentos no total.
-          </p>
-
-          <div className="flex items-center gap-2">
+          </div>
+          <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={onClose}
-              className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
             >
-              Fechar
+              Fechar Painel
             </button>
           </div>
         </div>

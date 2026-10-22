@@ -4037,17 +4037,17 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           return true;
                         });
 
-                        // Ordena cronologicamente do mais antigo para o mais recente
-                        baseList.sort((a, b) => a.competencia.localeCompare(b.competencia));
+                        // Ordena cronologicamente do mais recente para o mais antigo para visualização executiva imediata
+                        baseList.sort((a, b) => b.competencia.localeCompare(a.competencia));
 
                         // Aplica o filtro de período rápido trazendo os últimos N lançamentos existentes
                         let filteredCosts = baseList;
                         if (costPeriodFilter === '3m') {
-                          filteredCosts = baseList.slice(-3);
+                          filteredCosts = baseList.slice(0, 3);
                         } else if (costPeriodFilter === '6m') {
-                          filteredCosts = baseList.slice(-6);
+                          filteredCosts = baseList.slice(0, 6);
                         } else if (costPeriodFilter === '12m') {
-                          filteredCosts = baseList.slice(-12);
+                          filteredCosts = baseList.slice(0, 12);
                         }
 
                         const stats = PeopleHRService.computeCostStats(filteredCosts);
@@ -4064,6 +4064,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   </div>
                                   {(costPeriodFilter !== 'all' || costSelectedYears.length > 0 || costSelectedMonths.length > 0) && (
                                     <button
+                                      type="button"
                                       onClick={() => {
                                         setCostPeriodFilter('all');
                                         setCostSelectedYears([]);
@@ -4096,6 +4097,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         const selected = costSelectedYears.includes(year);
                                         return (
                                           <button
+                                            type="button"
                                             key={year}
                                             onClick={() => {
                                               setCostSelectedYears(prev =>
@@ -4121,6 +4123,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                         const selected = costSelectedMonths.includes(m.val);
                                         return (
                                           <button
+                                            type="button"
                                             key={m.val}
                                             onClick={() => {
                                               setCostSelectedMonths(prev =>
@@ -4162,6 +4165,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 </div>
                                 {(costPeriodFilter !== 'all' || costSelectedYears.length > 0 || costSelectedMonths.length > 0) && (
                                   <button
+                                    type="button"
                                     onClick={() => {
                                       setCostPeriodFilter('all');
                                       setCostSelectedYears([]);
@@ -4194,6 +4198,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       const selected = costSelectedYears.includes(year);
                                       return (
                                         <button
+                                          type="button"
                                           key={year}
                                           onClick={() => {
                                             setCostSelectedYears(prev =>
@@ -4219,6 +4224,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       const selected = costSelectedMonths.includes(m.val);
                                       return (
                                         <button
+                                          type="button"
                                           key={m.val}
                                           onClick={() => {
                                             setCostSelectedMonths(prev =>

@@ -2446,6 +2446,7 @@ export default function PeoplePage() {
         isOpen={isCompetenciasCostsModalOpen}
         onClose={() => setIsCompetenciasCostsModalOpen(false)}
         employees={employees}
+        filteredEmployees={filteredEmployees}
         monthlyCosts={monthlyCosts}
         showValues={showValues}
         onCostDeleted={fetchData}
