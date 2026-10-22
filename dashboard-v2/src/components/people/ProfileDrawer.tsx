@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield, Users } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield, Users, LayoutGrid, List } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature, EmployeeSystemAccess, SystemItem, inferEntityType } from "@/types/loans";
@@ -148,6 +148,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [costPeriodFilter, setCostPeriodFilter] = useState<'all' | '3m' | '6m' | '12m' | 'custom'>('all');
   const [costSelectedYears, setCostSelectedYears] = useState<string[]>([]);
   const [costSelectedMonths, setCostSelectedMonths] = useState<string[]>([]);
+  const [costViewMode, setCostViewMode] = useState<'table' | 'cards'>('table');
   const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
   const [isSearchingCEP, setIsSearchingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
@@ -4555,259 +4556,426 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               </div>
                             </div>
  
-                            <div className="space-y-2">
-                              <h5 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Competências Lançadas ({stats.count})</h5>
-                              <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-950 max-h-[250px] overflow-y-auto shadow-sm">
-                                {filteredCosts.map((c, i) => {
-                                  const fixedVal = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
-                                    ? c.valor_fixo 
-                                    : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
-                                  return (
-                                    <div key={i} className="p-3 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 flex flex-col gap-2">
-                                      <div className="flex justify-between items-center">
-                                        <div>
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            <p className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase">
-                                              <span className="text-emerald-700 dark:text-emerald-400 font-extrabold mr-1">Competência:</span>
-                                              {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                                            </p>
-                                            {(() => {
-                                              const glosaVal = Number(c.valor_glosa_base || 0) + Number(c.valor_glosa_bonus || 0) + Number((c as any).glosa || (c as any).desconto_glosa || 0);
-                                              if (glosaVal <= 0) return null;
-                                              return (
-                                                <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-800 rounded-md text-[10px] font-black uppercase flex items-center gap-1">
-                                                  <AlertCircle size={10} />
-                                                  Glosa: {formatCurrency(glosaVal)}
-                                                </span>
-                                              );
-                                            })()}
-                                          </div>
-                                          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">Total:</span>
-                                            <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                                              {formatCurrency(c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))}
-                                            </span>
-                                          </div>
-                                          <button
-                                            onClick={() => {
-                                              setEditingCost(c);
-                                              setEditingCostCompetencia(c.competencia);
-                                              setEditingCostType(c.vinculo_tipo);
-                                              setEditingCostFixo(fixedVal || 0);
-                                              setEditingCostBonus(c.valor_bonus || 0);
-                                              setEditingCostComissao(c.valor_comissao || 0);
-                                              setEditingCostIncentivos(c.valor_incentivos || 0);
-                                              setEditingCostConectividade(c.valor_ajuda_custo || 0);
-                                              setEditingCostGlosaBase(c.valor_glosa_base || 0);
-                                              setEditingCostGlosaBonus(c.valor_glosa_bonus || 0);
-                                              setEditingCostDeducoes(c.valor_deducoes || 0);
-                                              
-                                              // Inicializa campos específicos CLT do registro existente
-                                              setEditingCostHolerite(c.valor_holerite || 0);
-                                              setEditingCostAdiantamento(c.valor_adiantamento || 0);
-                                              setEditingCostHoraExtra(c.valor_hora_extra || 0);
-                                              setEditingCostAdicionalNot(c.valor_adicional_not || 0);
-                                              setEditingCostVR(c.valor_vr || 0);
-                                              setEditingCostVT(c.valor_vt || 0);
-                                              setEditingCostCesta(c.valor_cesta || 0);
-                                              setEditingCostFerias(c.valor_ferias || 0);
-                                              setEditingCostRescisao(c.valor_rescisao || 0);
-                                              setEditingCostDecimoTerceiro(c.valor_decimo_terceiro || 0);
-                                              setEditingCostDescontos(c.valor_descontos || 0);
-                                              setEditingCostFaltas(c.valor_faltas || 0);
-                                              setEditingCostDiasFaltas(c.dias_faltas || 0);
-                                              setEditingCostConsignado(c.valor_consignado || 0);
-                                              setEditingCostBancoHoras(c.banco_horas || 0);
-                                              setEditingCostVerbasAdicionais(c.verbas_adicionais ? Object.entries(c.verbas_adicionais).map(([name, value]) => ({ name, value })) : []);
-                                              setEditingCostObservacao(c.observacao || '');
-                                              setSaveCostError(null);
-                                            }}
-                                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                                            title="Editar lançamento"
-                                          >
-                                            <PenBox size={13} />
-                                          </button>
-                                        </div>
-                                      </div>
-                                      
-                                      {profile?.linkType === 'CLT' ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800/60 text-[11px] text-left">
-                                          {/* Coluna de Ganhos */}
-                                          <div className="space-y-1 bg-emerald-50/10 dark:bg-emerald-950/5 p-2 rounded-lg border border-emerald-100/20 text-left">
-                                            <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block border-b border-emerald-100/20 pb-0.5 mb-1.5 font-sans">Ganhos / Proventos</span>
-                                            
-                                            <div className="flex justify-between items-center py-0.5">
-                                              <span className="text-slate-500 font-semibold">Valor Contrato:</span>
-                                              <span className="text-slate-800 dark:text-slate-200 font-extrabold tabular-nums">{formatCurrency(c.valor_fixo || 0)}</span>
-                                            </div>
-                                            {!!c.valor_adiantamento && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Adiantamento (Vale):</span>
-                                                <span className="text-blue-600 dark:text-blue-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_adiantamento)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_hora_extra && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Horas Extras:</span>
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_hora_extra)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_adicional_not && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Adicional Noturno:</span>
-                                                <span className="text-emerald-650 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_adicional_not)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_vr && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Vale Refeição:</span>
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_vr)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_vt && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Vale Transporte:</span>
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_vt)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_cesta && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Cesta Básica:</span>
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_cesta)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_ajuda_custo && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Ajuda Custo / Conect.:</span>
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_ajuda_custo)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_ferias && (
-                                              <div className="flex justify-between items-center py-0.5 bg-yellow-500/5 px-1 rounded">
-                                                <span className="text-amber-700 dark:text-amber-400 font-semibold">Férias + 1/3:</span>
-                                                <span className="text-amber-600 dark:text-amber-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_ferias)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_decimo_terceiro && (
-                                              <div className="flex justify-between items-center py-0.5 bg-yellow-500/5 px-1 rounded">
-                                                <span className="text-amber-700 dark:text-amber-400 font-semibold">13º Salário:</span>
-                                                <span className="text-amber-600 dark:text-amber-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_decimo_terceiro)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_rescisao && (
-                                              <div className="flex justify-between items-center py-0.5 bg-rose-500/5 px-1 rounded border border-rose-200/20">
-                                                <span className="text-rose-700 dark:text-rose-455 font-black uppercase text-[8px]">Verba Rescisória:</span>
-                                                <span className="text-rose-650 dark:text-rose-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_rescisao)}</span>
-                                              </div>
-                                            )}
-                                            {/* Verbas adicionais customizadas (Ganhos) */}
-                                            {c.verbas_adicionais && Object.entries(c.verbas_adicionais).map(([name, val]) => val >= 0 ? (
-                                              <div key={name} className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50">
-                                                <span className="text-indigo-650 dark:text-indigo-400 font-semibold">{name}:</span>
-                                                <span className="text-indigo-650 dark:text-indigo-400 font-extrabold tabular-nums">+{formatCurrency(val)}</span>
-                                              </div>
-                                            ) : null)}
-                                          </div>
+                            {/* Toggle e Lista / Tabela de Competências Lançadas */}
+                            {(() => {
+                              const populateCostForm = (c: MonthlyCost) => {
+                                const fixedVal = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
+                                  ? c.valor_fixo 
+                                  : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
+                                setEditingCost(c);
+                                setEditingCostCompetencia(c.competencia);
+                                setEditingCostType(c.vinculo_tipo);
+                                setEditingCostFixo(fixedVal || 0);
+                                setEditingCostBonus(c.valor_bonus || 0);
+                                setEditingCostComissao(c.valor_comissao || 0);
+                                setEditingCostIncentivos(c.valor_incentivos || 0);
+                                setEditingCostConectividade(c.valor_ajuda_custo || 0);
+                                setEditingCostGlosaBase(c.valor_glosa_base || 0);
+                                setEditingCostGlosaBonus(c.valor_glosa_bonus || 0);
+                                setEditingCostDeducoes(c.valor_deducoes || 0);
+                                
+                                setEditingCostHolerite(c.valor_holerite || 0);
+                                setEditingCostAdiantamento(c.valor_adiantamento || 0);
+                                setEditingCostHoraExtra(c.valor_hora_extra || 0);
+                                setEditingCostAdicionalNot(c.valor_adicional_not || 0);
+                                setEditingCostVR(c.valor_vr || 0);
+                                setEditingCostVT(c.valor_vt || 0);
+                                setEditingCostCesta(c.valor_cesta || 0);
+                                setEditingCostFerias(c.valor_ferias || 0);
+                                setEditingCostRescisao(c.valor_rescisao || 0);
+                                setEditingCostDecimoTerceiro(c.valor_decimo_terceiro || 0);
+                                setEditingCostDescontos(c.valor_descontos || 0);
+                                setEditingCostFaltas(c.valor_faltas || 0);
+                                setEditingCostDiasFaltas(c.dias_faltas || 0);
+                                setEditingCostConsignado(c.valor_consignado || 0);
+                                setEditingCostBancoHoras(c.banco_horas || 0);
+                                setEditingCostVerbasAdicionais(c.verbas_adicionais ? Object.entries(c.verbas_adicionais).map(([name, value]) => ({ name, value })) : []);
+                                setEditingCostObservacao(c.observacao || '');
+                                setSaveCostError(null);
+                              };
 
-                                          {/* Coluna de Descontos */}
-                                          <div className="space-y-1 bg-red-50/10 dark:bg-red-950/5 p-2 rounded-lg border border-red-100/20 text-left">
-                                            <span className="text-[9px] font-black text-red-700 dark:text-red-400 uppercase tracking-wider block border-b border-red-100/20 pb-0.5 mb-1.5 font-sans">Descontos / Retenções</span>
-                                            
-                                            {!!c.valor_faltas && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Faltas {c.dias_faltas ? `(${c.dias_faltas.toFixed(1)}d)` : ''}:</span>
-                                                <span className="text-red-650 dark:text-red-405 font-extrabold tabular-nums">-{formatCurrency(c.valor_faltas)}</span>
-                                              </div>
-                                            )}
-                                            {!!c.valor_consignado && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">Consignados / Emprést.:</span>
-                                                <span className="text-red-655 dark:text-red-405 font-extrabold tabular-nums">-{formatCurrency(c.valor_consignado)}</span>
-                                              </div>
-                                            )}
-                                            {/* Impostos / Outros Descontos da folha */}
-                                            {!!((c.valor_descontos || 0) - (c.valor_faltas || 0) - (c.valor_consignado || 0)) && (
-                                              <div className="flex justify-between items-center py-0.5">
-                                                <span className="text-slate-500 font-semibold">INSS, IRRF & Outros:</span>
-                                                <span className="text-red-650 dark:text-red-405 font-extrabold tabular-nums">
-                                                  -{formatCurrency((c.valor_descontos || 0) - (c.valor_faltas || 0) - (c.valor_consignado || 0))}
-                                                </span>
-                                              </div>
-                                            )}
-                                            {/* Verbas adicionais customizadas (Descontos) */}
-                                            {c.verbas_adicionais && Object.entries(c.verbas_adicionais).map(([name, val]) => val < 0 ? (
-                                              <div key={name} className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50">
-                                                <span className="text-red-650 dark:text-red-450 font-semibold">{name}:</span>
-                                                <span className="text-red-650 dark:text-red-450 font-extrabold tabular-nums">-{formatCurrency(Math.abs(val))}</span>
-                                              </div>
-                                            ) : null)}
-                                            
-                                            {/* Banco de horas informativo */}
-                                            {!!c.banco_horas && (
-                                              <div className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50 mt-1.5 pt-1">
-                                                <span className="text-sky-600 dark:text-sky-400 font-semibold">Banco de Horas:</span>
-                                                <span className="text-sky-650 dark:text-sky-400 font-extrabold tabular-nums">{c.banco_horas > 0 ? `+` : ''}{c.banco_horas}h</span>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1.5 border-t border-slate-100/50 dark:border-slate-800/50 text-[10px]">
-                                          <div>
-                                            <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Fixo</span>
-                                            <span className="text-slate-700 dark:text-slate-300 font-bold tabular-nums">{formatCurrency(fixedVal || 0)}</span>
-                                          </div>
-                                          <div>
-                                            <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Bônus</span>
-                                            <span className={`font-bold tabular-nums ${c.valor_bonus ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                                              {formatCurrency(c.valor_bonus || 0)}
-                                            </span>
-                                          </div>
-                                          <div>
-                                            <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Comissão</span>
-                                            <span className={`font-bold tabular-nums ${c.valor_comissao ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                                              {formatCurrency(c.valor_comissao || 0)}
-                                            </span>
-                                          </div>
-                                          {!!c.valor_incentivos && (
-                                            <div>
-                                              <span className="text-emerald-500 font-bold block uppercase text-[8px]">Incentivos</span>
-                                              <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(c.valor_incentivos)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_ajuda_custo && (
-                                            <div>
-                                              <span className="text-emerald-500 font-bold block uppercase text-[8px]">Conectividade</span>
-                                              <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(c.valor_ajuda_custo)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_glosa_base && (
-                                            <div>
-                                              <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Glosa Base</span>
-                                              <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_glosa_base)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_glosa_bonus && (
-                                            <div>
-                                              <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Glosa Bônus</span>
-                                              <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_glosa_bonus)}</span>
-                                            </div>
-                                          )}
-                                          {!!c.valor_deducoes && (
-                                            <div>
-                                              <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Deduções</span>
-                                              <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_deducoes)}</span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
+                              return (
+                                <div className="space-y-2.5">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                                    <div className="flex items-center gap-2">
+                                      <h5 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                        Competências Lançadas
+                                      </h5>
+                                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                        {stats.count}
+                                      </span>
                                     </div>
-                                  );
-                                })}
-                              </div>
+
+                                    {/* Alternador de Modo de Visualização */}
+                                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                                      <button
+                                        type="button"
+                                        onClick={() => setCostViewMode('table')}
+                                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all ${
+                                          costViewMode === 'table'
+                                            ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                        }`}
+                                      >
+                                        <List size={13} />
+                                        Lista / Tabela
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCostViewMode('cards')}
+                                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all ${
+                                          costViewMode === 'cards'
+                                            ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                        }`}
+                                      >
+                                        <LayoutGrid size={13} />
+                                        Cards
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {costViewMode === 'table' ? (
+                                    /* VISÃO EM TABELA / LISTA DETALHADA */
+                                    <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-950 shadow-sm">
+                                      <div className="overflow-x-auto max-h-[360px] overflow-y-auto">
+                                        <table className="w-full text-left text-xs border-collapse">
+                                          <thead className="sticky top-0 bg-slate-100 dark:bg-slate-900 z-10 border-b border-slate-200 dark:border-slate-800 shadow-2xs">
+                                            <tr>
+                                              <th className="px-3.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500">Competência</th>
+                                              <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Fixo / Base</th>
+                                              {profile?.linkType === 'CLT' && (
+                                                <>
+                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Adiantamento</th>
+                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">HE & Noturno</th>
+                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Benefícios</th>
+                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">13º & Férias</th>
+                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Descontos</th>
+                                                </>
+                                              )}
+                                              <th className="px-3.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 text-right">Total Real</th>
+                                              <th className="px-2.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center">Origem</th>
+                                              <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-900 shadow-2xs">Ações</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-medium">
+                                            {filteredCosts.map((c, i) => {
+                                              const fixedVal = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
+                                                ? c.valor_fixo 
+                                                : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
+                                              const isCLT = c.vinculo_tipo === 'CLT';
+                                              const realTotal = c.valor_liquido + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                                              const beneficios = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0);
+                                              const heNoturno = (c.valor_hora_extra || 0) + (c.valor_adicional_not || 0);
+                                              const decimoFerias = (c.valor_decimo_terceiro || 0) + (c.valor_ferias || 0) + (c.valor_rescisao || 0);
+
+                                              return (
+                                                <tr key={c.id || i} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/50 transition-colors">
+                                                  <td className="px-3.5 py-2.5 align-middle whitespace-nowrap">
+                                                    <span className="font-extrabold text-slate-900 dark:text-white block">
+                                                      {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400 font-mono">{c.competencia}</span>
+                                                  </td>
+                                                  <td className="px-3 py-2.5 align-middle text-right tabular-nums text-slate-700 dark:text-slate-300 font-semibold">
+                                                    {formatCurrency(fixedVal || 0)}
+                                                  </td>
+                                                  {profile?.linkType === 'CLT' && (
+                                                    <>
+                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                        {c.valor_adiantamento && c.valor_adiantamento > 0 ? (
+                                                          <span className="text-blue-600 dark:text-blue-400 font-bold">+{formatCurrency(c.valor_adiantamento)}</span>
+                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      </td>
+                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                        {heNoturno > 0 ? (
+                                                          <span className="text-amber-600 dark:text-amber-400 font-bold">+{formatCurrency(heNoturno)}</span>
+                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      </td>
+                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                        {beneficios > 0 ? (
+                                                          <span className="text-cyan-700 dark:text-cyan-400 font-bold">+{formatCurrency(beneficios)}</span>
+                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      </td>
+                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                        {decimoFerias > 0 ? (
+                                                          <span className="text-indigo-600 dark:text-indigo-400 font-bold">+{formatCurrency(decimoFerias)}</span>
+                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      </td>
+                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                        {c.valor_descontos && c.valor_descontos > 0 ? (
+                                                          <span className="text-rose-600 dark:text-rose-400 font-bold">-{formatCurrency(c.valor_descontos)}</span>
+                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      </td>
+                                                    </>
+                                                  )}
+                                                  <td className="px-3.5 py-2.5 align-middle text-right tabular-nums whitespace-nowrap">
+                                                    <span className="inline-block px-2.5 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-black text-xs">
+                                                      {formatCurrency(realTotal)}
+                                                    </span>
+                                                  </td>
+                                                  <td className="px-2.5 py-2.5 align-middle text-center whitespace-nowrap">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                                      {c.origem === 'dianna_import' ? 'Dianna' : (c.origem || 'Manual')}
+                                                    </span>
+                                                  </td>
+                                                  <td className="px-3 py-2.5 align-middle text-center sticky right-0 bg-white dark:bg-slate-950 shadow-2xs whitespace-nowrap">
+                                                    <div className="flex items-center justify-center gap-1">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => populateCostForm(c)}
+                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
+                                                        title="Editar lançamento desta competência"
+                                                      >
+                                                        <PenBox size={14} />
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteCost(c.id)}
+                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                                                        title="Excluir lançamento desta competência"
+                                                      >
+                                                        <Trash2 size={14} />
+                                                      </button>
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    /* VISÃO EM CARDS RESUMIDOS */
+                                    <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-950 max-h-[350px] overflow-y-auto shadow-sm">
+                                      {filteredCosts.map((c, i) => {
+                                        const fixedVal = (c.valor_fixo !== undefined && c.valor_fixo !== null) 
+                                          ? c.valor_fixo 
+                                          : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
+                                        return (
+                                          <div key={c.id || i} className="p-3 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 flex flex-col gap-2">
+                                            <div className="flex justify-between items-center">
+                                              <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                  <p className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase">
+                                                    <span className="text-emerald-700 dark:text-emerald-400 font-extrabold mr-1">Competência:</span>
+                                                    {new Date(c.competencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                  </p>
+                                                  {(() => {
+                                                    const glosaVal = Number(c.valor_glosa_base || 0) + Number(c.valor_glosa_bonus || 0) + Number((c as any).glosa || (c as any).desconto_glosa || 0);
+                                                    if (glosaVal <= 0) return null;
+                                                    return (
+                                                      <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-800 rounded-md text-[10px] font-black uppercase flex items-center gap-1">
+                                                        <AlertCircle size={10} />
+                                                        Glosa: {formatCurrency(glosaVal)}
+                                                      </span>
+                                                    );
+                                                  })()}
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase mt-0.5">{c.origem === 'dianna_import' ? 'Planilha Dianna' : c.origem}</p>
+                                              </div>
+                                              <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">Total:</span>
+                                                  <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                                    {formatCurrency(c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))}
+                                                  </span>
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => populateCostForm(c)}
+                                                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                                                  title="Editar lançamento"
+                                                >
+                                                  <PenBox size={13} />
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleDeleteCost(c.id)}
+                                                  className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                                                  title="Excluir lançamento"
+                                                >
+                                                  <Trash2 size={13} />
+                                                </button>
+                                              </div>
+                                            </div>
+                                            
+                                            {profile?.linkType === 'CLT' ? (
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800/60 text-[11px] text-left">
+                                                {/* Coluna de Ganhos */}
+                                                <div className="space-y-1 bg-emerald-50/10 dark:bg-emerald-950/5 p-2 rounded-lg border border-emerald-100/20 text-left">
+                                                  <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block border-b border-emerald-100/20 pb-0.5 mb-1.5 font-sans">Ganhos / Proventos</span>
+                                                  
+                                                  <div className="flex justify-between items-center py-0.5">
+                                                    <span className="text-slate-500 font-semibold">Valor Contrato:</span>
+                                                    <span className="text-slate-800 dark:text-slate-200 font-extrabold tabular-nums">{formatCurrency(c.valor_fixo || 0)}</span>
+                                                  </div>
+                                                  {!!c.valor_adiantamento && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Adiantamento (Vale):</span>
+                                                      <span className="text-blue-600 dark:text-blue-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_adiantamento)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_hora_extra && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Horas Extras:</span>
+                                                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_hora_extra)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_adicional_not && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Adicional Noturno:</span>
+                                                      <span className="text-emerald-650 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_adicional_not)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_vr && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Vale Refeição:</span>
+                                                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_vr)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_vt && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Vale Transporte:</span>
+                                                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_vt)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_cesta && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Cesta Básica:</span>
+                                                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_cesta)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_ajuda_custo && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Ajuda Custo / Conect.:</span>
+                                                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_ajuda_custo)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_ferias && (
+                                                    <div className="flex justify-between items-center py-0.5 bg-yellow-500/5 px-1 rounded">
+                                                      <span className="text-amber-700 dark:text-amber-400 font-semibold">Férias + 1/3:</span>
+                                                      <span className="text-amber-600 dark:text-amber-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_ferias)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_decimo_terceiro && (
+                                                    <div className="flex justify-between items-center py-0.5 bg-yellow-500/5 px-1 rounded">
+                                                      <span className="text-amber-700 dark:text-amber-400 font-semibold">13º Salário:</span>
+                                                      <span className="text-amber-600 dark:text-amber-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_decimo_terceiro)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_rescisao && (
+                                                    <div className="flex justify-between items-center py-0.5 bg-rose-500/5 px-1 rounded border border-rose-200/20">
+                                                      <span className="text-rose-700 dark:text-rose-455 font-black uppercase text-[8px]">Verba Rescisória:</span>
+                                                      <span className="text-rose-650 dark:text-rose-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_rescisao)}</span>
+                                                    </div>
+                                                  )}
+                                                  {c.verbas_adicionais && Object.entries(c.verbas_adicionais).map(([name, val]) => val >= 0 ? (
+                                                    <div key={name} className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50">
+                                                      <span className="text-indigo-650 dark:text-indigo-400 font-semibold">{name}:</span>
+                                                      <span className="text-indigo-650 dark:text-indigo-400 font-extrabold tabular-nums">+{formatCurrency(val)}</span>
+                                                    </div>
+                                                  ) : null)}
+                                                </div>
+
+                                                {/* Coluna de Descontos */}
+                                                <div className="space-y-1 bg-red-50/10 dark:bg-red-950/5 p-2 rounded-lg border border-red-100/20 text-left">
+                                                  <span className="text-[9px] font-black text-red-700 dark:text-red-400 uppercase tracking-wider block border-b border-red-100/20 pb-0.5 mb-1.5 font-sans">Descontos / Retenções</span>
+                                                  
+                                                  {!!c.valor_faltas && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Faltas {c.dias_faltas ? `(${c.dias_faltas.toFixed(1)}d)` : ''}:</span>
+                                                      <span className="text-red-650 dark:text-red-405 font-extrabold tabular-nums">-{formatCurrency(c.valor_faltas)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.valor_consignado && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Consignados / Emprést.:</span>
+                                                      <span className="text-red-655 dark:text-red-405 font-extrabold tabular-nums">-{formatCurrency(c.valor_consignado)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!((c.valor_descontos || 0) - (c.valor_faltas || 0) - (c.valor_consignado || 0)) && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">INSS, IRRF & Outros:</span>
+                                                      <span className="text-red-650 dark:text-red-405 font-extrabold tabular-nums">
+                                                        -{formatCurrency((c.valor_descontos || 0) - (c.valor_faltas || 0) - (c.valor_consignado || 0))}
+                                                      </span>
+                                                    </div>
+                                                  )}
+                                                  {c.verbas_adicionais && Object.entries(c.verbas_adicionais).map(([name, val]) => val < 0 ? (
+                                                    <div key={name} className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50">
+                                                      <span className="text-red-650 dark:text-red-450 font-semibold">{name}:</span>
+                                                      <span className="text-red-650 dark:text-red-450 font-extrabold tabular-nums">-{formatCurrency(Math.abs(val))}</span>
+                                                    </div>
+                                                  ) : null)}
+                                                  
+                                                  {!!c.banco_horas && (
+                                                    <div className="flex justify-between items-center py-0.5 border-t border-dashed border-slate-200/50 mt-1.5 pt-1">
+                                                      <span className="text-sky-600 dark:text-sky-400 font-semibold">Banco de Horas:</span>
+                                                      <span className="text-sky-650 dark:text-sky-400 font-extrabold tabular-nums">{c.banco_horas > 0 ? `+` : ''}{c.banco_horas}h</span>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1.5 border-t border-slate-100/50 dark:border-slate-800/50 text-[10px]">
+                                                <div>
+                                                  <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Fixo</span>
+                                                  <span className="text-slate-700 dark:text-slate-300 font-bold tabular-nums">{formatCurrency(fixedVal || 0)}</span>
+                                                </div>
+                                                <div>
+                                                  <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Bônus</span>
+                                                  <span className={`font-bold tabular-nums ${c.valor_bonus ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                    {formatCurrency(c.valor_bonus || 0)}
+                                                  </span>
+                                                </div>
+                                                <div>
+                                                  <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase text-[8px]">Comissão</span>
+                                                  <span className={`font-bold tabular-nums ${c.valor_comissao ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                    {formatCurrency(c.valor_comissao || 0)}
+                                                  </span>
+                                                </div>
+                                                {!!c.valor_incentivos && (
+                                                  <div>
+                                                    <span className="text-emerald-500 font-bold block uppercase text-[8px]">Incentivos</span>
+                                                    <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(c.valor_incentivos)}</span>
+                                                  </div>
+                                                )}
+                                                {!!c.valor_ajuda_custo && (
+                                                  <div>
+                                                    <span className="text-emerald-500 font-bold block uppercase text-[8px]">Conectividade</span>
+                                                    <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(c.valor_ajuda_custo)}</span>
+                                                  </div>
+                                                )}
+                                                {!!c.valor_glosa_base && (
+                                                  <div>
+                                                    <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Glosa Base</span>
+                                                    <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_glosa_base)}</span>
+                                                  </div>
+                                                )}
+                                                {!!c.valor_glosa_bonus && (
+                                                  <div>
+                                                    <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Glosa Bônus</span>
+                                                    <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_glosa_bonus)}</span>
+                                                  </div>
+                                                )}
+                                                {!!c.valor_deducoes && (
+                                                  <div>
+                                                    <span className="text-red-400 dark:text-red-500 font-bold block uppercase text-[8px]">Deduções</span>
+                                                    <span className="font-bold tabular-nums text-red-600 dark:text-red-400">{formatCurrency(c.valor_deducoes)}</span>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
 
                               {/* Gráfico de Barras de Custo Histórico Mês a Mês com Rótulos de Valor nas Barras */}
                               {filteredCosts && filteredCosts.length > 0 && (
@@ -4869,9 +5037,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 </div>
                               )}
                             </div>
-                          </div>
-                        );
-                      })()}
+                          );
+                        })()}
                     </motion.div>
                   )}
 

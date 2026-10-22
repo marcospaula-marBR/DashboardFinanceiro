@@ -17,6 +17,7 @@ import { PjImportAuditModal } from "@/components/people/PjImportAuditModal";
 import { BatchReplicateCostsModal } from "@/components/people/BatchReplicateCostsModal";
 import { OutsourcingCockpitModal } from "@/components/people/OutsourcingCockpitModal";
 import { BprCockpitModal } from "@/components/people/BprCockpitModal";
+import { CompetenciasCostsListModal } from "@/components/people/CompetenciasCostsListModal";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { BprService } from "@/services/bpr.service";
 import { Employee, MonthlyCost, AuditIssue, LoanStats, normalizeCompanyName } from "@/types/loans";
@@ -29,7 +30,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy, MapPin
+  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy, MapPin, Table
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -111,6 +112,7 @@ export default function PeoplePage() {
   const [isBatchReplicateModalOpen, setIsBatchReplicateModalOpen] = useState(false);
   const [isOutsourcingModalOpen, setIsOutsourcingModalOpen] = useState(false);
   const [isBprModalOpen, setIsBprModalOpen] = useState(false);
+  const [isCompetenciasCostsModalOpen, setIsCompetenciasCostsModalOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
@@ -1494,6 +1496,21 @@ export default function PeoplePage() {
                       Manutenção de Dados
                     </div>
 
+                    {/* Option: Competências em Lista */}
+                    <button
+                      onClick={() => {
+                        setIsImportMenuOpen(false);
+                        setIsCompetenciasCostsModalOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors"
+                    >
+                      <Table className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <div className="font-extrabold">Competências em Lista</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Visualizar, editar ou excluir histórico</div>
+                      </div>
+                    </button>
+
                     {/* Option: Limpar Histórico */}
                     <button
                       onClick={() => {
@@ -1660,34 +1677,45 @@ export default function PeoplePage() {
 
           {/* 💰 Custos Históricos — Expansível */}
           <div className="mt-6">
-            {/* Banner Toggle */}
-            <button
-              onClick={() => setIsCostSectionOpen(v => !v)}
-              className="w-full flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-md transition-all shadow-sm group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-100 text-emerald-600 shrink-0">
-                  <BarChart3 size={18} />
+            {/* Banner Toggle + Ação Lista */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <button
+                onClick={() => setIsCostSectionOpen(v => !v)}
+                className="flex-1 flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-md transition-all shadow-sm group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-100 text-emerald-600 shrink-0">
+                    <BarChart3 size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Custos Históricos</p>
+                    <p className="text-sm font-bold text-slate-700">
+                      {historicalCostsSummary.count} contratado{historicalCostsSummary.count !== 1 ? 's' : ''} filtrado{historicalCostsSummary.count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  {!isCostSectionOpen && showValues && (
+                    <span className="ml-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+                      Total: {formatCurrency(historicalCostsSummary.totalGeral)}
+                    </span>
+                  )}
                 </div>
-                <div className="text-left">
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Custos Históricos</p>
-                  <p className="text-sm font-bold text-slate-700">
-                    {historicalCostsSummary.count} contratado{historicalCostsSummary.count !== 1 ? 's' : ''} filtrado{historicalCostsSummary.count !== 1 ? 's' : ''}
-                  </p>
-                </div>
-                {!isCostSectionOpen && showValues && (
-                  <span className="ml-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-                    Total: {formatCurrency(historicalCostsSummary.totalGeral)}
-                  </span>
-                )}
-              </div>
-              <ChevronDown
-                size={18}
-                className={`text-slate-400 transition-transform duration-300 group-hover:text-emerald-600 ${
-                  isCostSectionOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
+                <ChevronDown
+                  size={18}
+                  className={`text-slate-400 transition-transform duration-300 group-hover:text-emerald-600 ${
+                    isCostSectionOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              <button
+                onClick={() => setIsCompetenciasCostsModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 hover:border-slate-700 shadow-sm transition-all text-xs font-black uppercase tracking-wider shrink-0 active:scale-98"
+                title="Visualizar histórico de competências em lista com opções de editar e excluir"
+              >
+                <Table size={16} className="text-emerald-400" />
+                <span>Ver Competências em Lista</span>
+              </button>
+            </div>
 
             {isCostSectionOpen && (
               <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -2412,6 +2440,20 @@ export default function PeoplePage() {
         onClose={() => setIsBprModalOpen(false)}
         employees={employees}
         monthlyCosts={monthlyCosts}
+      />
+
+      <CompetenciasCostsListModal
+        isOpen={isCompetenciasCostsModalOpen}
+        onClose={() => setIsCompetenciasCostsModalOpen(false)}
+        employees={employees}
+        monthlyCosts={monthlyCosts}
+        showValues={showValues}
+        onCostDeleted={fetchData}
+        onEditCost={(_cost, emp) => {
+          if (emp) {
+            handleEmployeeClick(emp.id, 'custo');
+          }
+        }}
       />
     </div>
   );

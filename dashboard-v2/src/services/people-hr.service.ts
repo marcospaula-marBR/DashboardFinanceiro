@@ -665,6 +665,16 @@ export const PeopleHRService = {
     return result;
   },
 
+  normalizeCompetenciaDate(comp?: string): string {
+    if (!comp) return '';
+    const clean = String(comp).trim().split('T')[0];
+    const parts = clean.split('-');
+    if (parts.length >= 2) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-01`;
+    }
+    return clean;
+  },
+
   sanitizeMonthlyCostPayload(payload: Partial<MonthlyCost>): Record<string, any> {
     const knownColumns = new Set([
       'id', 'employee_id', 'competencia', 'vinculo_tipo',
@@ -690,6 +700,10 @@ export const PeopleHRService = {
       }
     });
 
+    if (sanitized.competencia) {
+      sanitized.competencia = this.normalizeCompetenciaDate(sanitized.competencia);
+    }
+
     if (Object.keys(verbasAdicionaisObj).length > 0) {
       sanitized.verbas_adicionais = verbasAdicionaisObj;
     }
@@ -698,22 +712,50 @@ export const PeopleHRService = {
   },
 
   async insertMonthlyCost(payload: Partial<MonthlyCost>): Promise<MonthlyCost> {
+    // Redireciona sempre para upsertMonthlyCost garantindo a trava de unicidade absoluta
+    return this.upsertMonthlyCost(payload);
+  },
+
+  async upsertMonthlyCost(payload: Partial<MonthlyCost>): Promise<MonthlyCost> {
     const cleanPayload = this.sanitizeMonthlyCostPayload(payload);
 
     if (cleanPayload.employee_id && cleanPayload.competencia) {
-      const { data: existing } = await supabase
+      // Trava contra duplicações: busca TODOS os registros existentes para a competência
+      const { data: existing, error: searchErr } = await supabase
         .from('people_monthly_costs')
-        .select('id')
+        .select('*')
         .eq('employee_id', cleanPayload.employee_id)
         .eq('competencia', cleanPayload.competencia)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
-      if (existing?.id) {
-        await this.updateMonthlyCost(existing.id, cleanPayload);
-        return { ...cleanPayload, id: existing.id } as MonthlyCost;
+      if (searchErr) {
+        console.warn('[PeopleHRService] Erro ao consultar lançamentos existentes:', searchErr);
+      }
+
+      if (existing && existing.length > 0) {
+        const primaryRecord = existing[0];
+        
+        // Atualiza o registro titular
+        const { data, error } = await supabase
+          .from('people_monthly_costs')
+          .update(cleanPayload)
+          .eq('id', primaryRecord.id)
+          .select()
+          .single();
+        if (error) throw error;
+
+        // Se houver mais de 1 registro no banco, purga imediatamente os excedentes
+        if (existing.length > 1) {
+          const duplicateIds = existing.slice(1).map(r => r.id);
+          console.warn(`[PeopleHRService] Trava ativa: eliminando ${duplicateIds.length} duplicatas para ${cleanPayload.employee_id} em ${cleanPayload.competencia}`);
+          await supabase.from('people_monthly_costs').delete().in('id', duplicateIds);
+        }
+
+        return data;
       }
     }
 
+    // Se ainda não existe, insere o registro único
     const { data, error } = await supabase
       .from('people_monthly_costs')
       .insert([cleanPayload])
@@ -723,42 +765,28 @@ export const PeopleHRService = {
     return data;
   },
 
-  async upsertMonthlyCost(payload: Partial<MonthlyCost>): Promise<MonthlyCost> {
-    const cleanPayload = this.sanitizeMonthlyCostPayload(payload);
-
-    if (cleanPayload.employee_id && cleanPayload.competencia) {
-      const { data: existing } = await supabase
-        .from('people_monthly_costs')
-        .select('id')
-        .eq('employee_id', cleanPayload.employee_id)
-        .eq('competencia', cleanPayload.competencia)
-        .maybeSingle();
-
-      if (existing?.id) {
-        const { data, error } = await supabase
-          .from('people_monthly_costs')
-          .update(cleanPayload)
-          .eq('id', existing.id)
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
+  async saveMonthlyCostsBatch(batch: Partial<MonthlyCost>[]): Promise<void> {
+    // 1. Desduplica o lote em memória (mantém apenas uma ocorrência por employee_id + competencia)
+    const uniqueMap = new Map<string, Partial<MonthlyCost>>();
+    for (const item of batch) {
+      const clean = this.sanitizeMonthlyCostPayload(item);
+      if (clean.employee_id && clean.competencia) {
+        const key = `${clean.employee_id}__${clean.competencia}`;
+        uniqueMap.set(key, { ...(uniqueMap.get(key) || {}), ...clean });
       }
     }
 
-    return this.insertMonthlyCost(payload);
-  },
-
-  async saveMonthlyCostsBatch(batch: Partial<MonthlyCost>[]): Promise<void> {
-    for (const item of batch) {
+    // 2. Salva sequencialmente com trava de unicidade
+    for (const item of uniqueMap.values()) {
       await this.upsertMonthlyCost(item);
     }
   },
 
   async updateMonthlyCost(costId: string, payload: Partial<MonthlyCost>): Promise<void> {
+    const cleanPayload = this.sanitizeMonthlyCostPayload(payload);
     const { error } = await supabase
       .from('people_monthly_costs')
-      .update(payload)
+      .update(cleanPayload)
       .eq('id', costId);
     if (error) throw error;
   },
@@ -778,7 +806,7 @@ export const PeopleHRService = {
       query = query.eq('employee_id', employeeId);
     }
     if (startComp) {
-      query = query.gte('competencia', startComp);
+      query = query.gte('competencia', this.normalizeCompetenciaDate(startComp));
     }
     if (endComp) {
       query = query.lte('competencia', endComp);
@@ -790,7 +818,8 @@ export const PeopleHRService = {
   },
 
   async getMonthlyCostsByCompetencia(competencia: string, vinculoFilter?: 'ALL' | 'CLT' | 'MEI'): Promise<MonthlyCost[]> {
-    let query = supabase.from('people_monthly_costs').select('*').eq('competencia', competencia);
+    const normalizedComp = this.normalizeCompetenciaDate(competencia);
+    let query = supabase.from('people_monthly_costs').select('*').eq('competencia', normalizedComp);
     if (vinculoFilter && vinculoFilter !== 'ALL') {
       query = query.eq('vinculo_tipo', vinculoFilter);
     }
@@ -800,7 +829,10 @@ export const PeopleHRService = {
   },
 
   async replicateCompetenciaBatch(originCompetencia: string, targetCompetencia: string, vinculoFilter?: 'ALL' | 'CLT' | 'MEI'): Promise<{ count: number }> {
-    const originCosts = await this.getMonthlyCostsByCompetencia(originCompetencia, vinculoFilter);
+    const normOrigin = this.normalizeCompetenciaDate(originCompetencia);
+    const normTarget = this.normalizeCompetenciaDate(targetCompetencia);
+
+    const originCosts = await this.getMonthlyCostsByCompetencia(normOrigin, vinculoFilter);
     if (!originCosts || originCosts.length === 0) {
       return { count: 0 };
     }
@@ -809,12 +841,54 @@ export const PeopleHRService = {
       const { id, created_at, ...rest } = item;
       return {
         ...rest,
-        competencia: targetCompetencia,
+        competencia: normTarget,
         created_at: new Date().toISOString()
       };
     });
 
     await this.saveMonthlyCostsBatch(newCosts);
     return { count: newCosts.length };
+  },
+
+  /**
+   * Varredura e higienização global de duplicidades em people_monthly_costs.
+   */
+  async deduplicateAllCosts(targetCompetencia?: string): Promise<{ cleanedCount: number }> {
+    let query = supabase.from('people_monthly_costs').select('*');
+    if (targetCompetencia) {
+      query = query.eq('competencia', this.normalizeCompetenciaDate(targetCompetencia));
+    }
+    const { data: allRows, error } = await query;
+    if (error || !allRows) return { cleanedCount: 0 };
+
+    const groups: Record<string, any[]> = {};
+    for (const r of allRows) {
+      const key = `${r.employee_id}__${r.competencia}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    }
+
+    const idsToDelete: string[] = [];
+    for (const list of Object.values(groups)) {
+      if (list.length > 1) {
+        list.sort((a, b) => {
+          const scoreA = (a.valor_holerite ? 50 : 0) + (a.valor_adiantamento ? 30 : 0) + (a.valor_liquido ? 10 : 0);
+          const scoreB = (b.valor_holerite ? 50 : 0) + (b.valor_adiantamento ? 30 : 0) + (b.valor_liquido ? 10 : 0);
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        const dupes = list.slice(1);
+        dupes.forEach(d => idsToDelete.push(d.id));
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      for (let i = 0; i < idsToDelete.length; i += 50) {
+        const chunk = idsToDelete.slice(i, i + 50);
+        await supabase.from('people_monthly_costs').delete().in('id', chunk);
+      }
+    }
+
+    return { cleanedCount: idsToDelete.length };
   }
 };
