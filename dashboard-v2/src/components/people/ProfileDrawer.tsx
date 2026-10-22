@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield, Users, LayoutGrid, List } from "lucide-react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield, Users, LayoutGrid, List, SlidersHorizontal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature, EmployeeSystemAccess, SystemItem, inferEntityType } from "@/types/loans";
@@ -168,6 +168,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [costSelectedYears, setCostSelectedYears] = useState<string[]>([]);
   const [costSelectedMonths, setCostSelectedMonths] = useState<string[]>([]);
   const [costViewMode, setCostViewMode] = useState<'table' | 'cards'>('table');
+  const [showDetailedVerbas, setShowDetailedVerbas] = useState<boolean>(false);
   const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
   const [isSearchingCEP, setIsSearchingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
@@ -4312,280 +4313,271 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                               </div>
                             )}
 
-                            {/* Dashboard de Totais e Médias */}
+                            {/* Dashboard de Totais e Médias — 3 PILARES EXECUTIVOS PRIMÁRIOS */}
                             <div className="space-y-4 text-left">
-                              {profile?.linkType === 'CLT' ? (
-                                <div>
-                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Ganhos CLT (Média por Competência)</h5>
-                                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Valor Contrato</p>
-                                        <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.fixedTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média: {formatCurrency(stats.fixedAverage || 0)}
-                                      </p>
-                                    </div>
+                              {(() => {
+                                const totalRecebidoExec = (stats.total || 0) + (stats.descontosTotal || 0);
+                                const totalDescontadoExec = stats.descontosTotal || 0;
+                                const totalLiquidoExec = stats.total || 0;
 
-                                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Horas Extras</p>
-                                        <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.horaExtraTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média: {formatCurrency(stats.horaExtraAverage || 0)}
-                                      </p>
-                                    </div>
-
-                                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Adic. Noturno</p>
-                                        <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.adicionalNotTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média: {formatCurrency(stats.adicionalNotAverage || 0)}
-                                      </p>
-                                    </div>
-
-                                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Adiantamento</p>
-                                        <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.adiantamentoTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média: {formatCurrency(stats.adiantamentoAverage || 0)}
-                                      </p>
-                                    </div>
-
-                                    <div 
-                                      onClick={() => setVerbaDetailModal({
-                                        title: 'Detalhamento de Benefícios',
-                                        items: [
-                                          { label: 'Vale Refeição (VR)', total: stats.vrTotal, average: stats.vrTotal / stats.count },
-                                          { label: 'Vale Transporte (VT)', total: stats.vtTotal, average: stats.vtTotal / stats.count },
-                                          { label: 'Cesta Básica / Aux. Alimentação', total: stats.cestaTotal, average: stats.cestaTotal / stats.count },
-                                          { label: 'Ajuda de Custo / Reembolso', total: stats.ajudaCustoTotal, average: stats.ajudaCustoTotal / stats.count },
-                                        ],
-                                        total: stats.beneficiosTotal,
-                                        average: stats.beneficiosAverage
-                                      })}
-                                      className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 rounded-xl p-3 flex flex-col justify-between shadow-sm cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-all group"
-                                      title="Clique para ver o detalhamento por valores de benefícios"
-                                    >
-                                      <div>
-                                        <div className="flex justify-between items-center">
-                                          <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Benefícios</p>
-                                          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
+                                return (
+                                  <div className="space-y-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                      {/* 1. Total Recebido */}
+                                      <div className="bg-gradient-to-br from-emerald-500/10 via-slate-50 dark:via-slate-900 to-transparent border border-emerald-500/30 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                                        <div>
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
+                                              Total Recebido
+                                            </span>
+                                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                              Proventos + Benefícios
+                                            </span>
+                                          </div>
+                                          <p className="text-xl sm:text-2xl font-black text-emerald-900 dark:text-emerald-200 mt-1 tabular-nums">
+                                            {formatCurrency(totalRecebidoExec)}
+                                          </p>
                                         </div>
-                                        <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.beneficiosTotal || 0)}
-                                        </p>
+                                        <div className="pt-2 border-t border-emerald-500/20 flex justify-between items-center text-[10px] text-emerald-700 dark:text-emerald-400">
+                                          <span>Média: {formatCurrency(totalRecebidoExec / (stats.count || 1))}</span>
+                                          <span className="font-semibold text-slate-400">{stats.count} comp{stats.count !== 1 ? 's' : ''}</span>
+                                        </div>
                                       </div>
-                                      <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-200/50 uppercase truncate">
-                                        Média: {formatCurrency(stats.beneficiosAverage || 0)}
-                                      </p>
+
+                                      {/* 2. Total Descontado */}
+                                      <div className="bg-gradient-to-br from-rose-500/10 via-slate-50 dark:via-slate-900 to-transparent border border-rose-500/30 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                                        <div>
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 dark:text-rose-400">
+                                              Total Descontado
+                                            </span>
+                                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                              Deduções em Folha
+                                            </span>
+                                          </div>
+                                          <p className="text-xl sm:text-2xl font-black text-rose-900 dark:text-rose-200 mt-1 tabular-nums">
+                                            {formatCurrency(totalDescontadoExec)}
+                                          </p>
+                                        </div>
+                                        <div className="pt-2 border-t border-rose-500/20 flex justify-between items-center text-[10px] text-rose-700 dark:text-rose-400">
+                                          <span>Média: {formatCurrency(totalDescontadoExec / (stats.count || 1))}</span>
+                                          <span className="font-semibold text-slate-400">INSS, IRRF, Faltas</span>
+                                        </div>
+                                      </div>
+
+                                      {/* 3. Valor Líquido Real */}
+                                      <div className="bg-gradient-to-br from-teal-600 to-emerald-700 text-white rounded-2xl p-4 shadow-md flex flex-col justify-between">
+                                        <div>
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-100">
+                                              Valor Líquido
+                                            </span>
+                                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-white/20 text-white">
+                                              Efetivamente Pago
+                                            </span>
+                                          </div>
+                                          <p className="text-xl sm:text-2xl font-black text-white mt-1 tabular-nums">
+                                            {formatCurrency(totalLiquidoExec)}
+                                          </p>
+                                        </div>
+                                        <div className="pt-2 border-t border-white/20 flex justify-between items-center text-[10px] text-emerald-100">
+                                          <span>Média: {formatCurrency(stats.totalAverage || 0)}</span>
+                                          <span className="font-bold">Total Desembolsado</span>
+                                        </div>
+                                      </div>
                                     </div>
 
-                                    <div 
-                                      onClick={() => setVerbaDetailModal({
-                                        title: 'Detalhamento de 13º Salário e Férias',
-                                        items: [
-                                          { label: '13º Salário (Gratificação Natalina)', total: stats.decimoTerceiroTotal, average: stats.decimoTerceiroTotal / stats.count },
-                                          { label: 'Férias + 1/3 Constitucional', total: stats.feriasTotal, average: stats.feriasTotal / stats.count },
-                                          { label: 'Rescisão Contratual', total: stats.rescisaoTotal, average: stats.rescisaoTotal / stats.count },
-                                        ],
-                                        total: stats.decimoTerceiroTotal + stats.feriasTotal + stats.rescisaoTotal,
-                                        average: (stats.decimoTerceiroTotal + stats.feriasTotal + stats.rescisaoTotal) / stats.count
-                                      })}
-                                      className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 rounded-xl p-3 flex flex-col justify-between shadow-sm cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-all group"
-                                      title="Clique para ver o detalhamento de 13º e Férias"
-                                    >
-                                      <div>
-                                        <div className="flex justify-between items-center">
-                                          <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">13º & Férias</p>
-                                          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
-                                        </div>
-                                        <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
-                                          {formatCurrency((stats.decimoTerceiroTotal || 0) + (stats.feriasTotal || 0))}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-200/50 uppercase truncate">
-                                        Média: {formatCurrency(((stats.decimoTerceiroTotal || 0) + (stats.feriasTotal || 0)) / stats.count || 0)}
-                                      </p>
+                                    {/* Botão de Alternância para Detalhamento Analítico de Rubricas */}
+                                    <div className="flex items-center justify-between pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowDetailedVerbas(prev => !prev)}
+                                        className="text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-1.5 transition-colors bg-slate-100 dark:bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700"
+                                      >
+                                        <SlidersHorizontal size={13} />
+                                        <span>{showDetailedVerbas ? 'Ocultar Detalhamento de Rubricas' : 'Exibir Detalhamento de Rubricas (HE, VT, Cesta, 13º, Férias, Descontos)'}</span>
+                                      </button>
                                     </div>
                                   </div>
-                                </div>
-                               ) : (
-                                <div>
-                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Valores por Competência</h5>
-                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Fixo</p>
-                                        <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.fixedTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média: {formatCurrency(stats.fixedAverage || 0)}
-                                      </p>
-                                    </div>
+                                );
+                              })()}
 
-                                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Bônus</p>
-                                        <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.bonusTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média: {formatCurrency(stats.bonusAverage || 0)}
-                                      </p>
-                                    </div>
+                              {/* Detalhamento Analítico Secundário (Exibido apenas quando expandido) */}
+                              {showDetailedVerbas && (
+                                <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800 animate-in fade-in duration-150">
+                                  {profile?.linkType === 'CLT' ? (
+                                    <div>
+                                      <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resumo de Ganhos CLT (Média por Competência)</h5>
+                                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                                        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                          <div>
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Valor Contrato</p>
+                                            <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                                              {formatCurrency(stats.fixedTotal || 0)}
+                                            </p>
+                                          </div>
+                                          <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
+                                            Média: {formatCurrency(stats.fixedAverage || 0)}
+                                          </p>
+                                        </div>
 
-                                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Comissões</p>
-                                        <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.commissionTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
-                                        Média: {formatCurrency(stats.commissionAverage || 0)}
-                                      </p>
-                                    </div>
+                                        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                          <div>
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Horas Extras</p>
+                                            <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                                              {formatCurrency(stats.horaExtraTotal || 0)}
+                                            </p>
+                                          </div>
+                                          <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
+                                            Média: {formatCurrency(stats.horaExtraAverage || 0)}
+                                          </p>
+                                        </div>
 
-                                    <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Incentivos</p>
-                                        <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.incentivosTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase">
-                                        Média: {formatCurrency(stats.incentivosAverage || 0)}
-                                      </p>
-                                    </div>
+                                        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                          <div>
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Adic. Noturno</p>
+                                            <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                                              {formatCurrency(stats.adicionalNotTotal || 0)}
+                                            </p>
+                                          </div>
+                                          <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
+                                            Média: {formatCurrency(stats.adicionalNotAverage || 0)}
+                                          </p>
+                                        </div>
 
-                                    <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                                      <div>
-                                        <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Conectividade</p>
-                                        <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.conectividadeTotal || 0)}
-                                        </p>
+                                        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                                          <div>
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Adiantamento</p>
+                                            <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                                              {formatCurrency(stats.adiantamentoTotal || 0)}
+                                            </p>
+                                          </div>
+                                          <p className="text-[9px] font-bold text-slate-400 mt-1.5 pt-1 border-t border-slate-200/50 uppercase">
+                                            Média: {formatCurrency(stats.adiantamentoAverage || 0)}
+                                          </p>
+                                        </div>
+
+                                        <div 
+                                          onClick={() => setVerbaDetailModal({
+                                            title: 'Detalhamento de Benefícios',
+                                            items: [
+                                              { label: 'Vale Refeição (VR)', total: stats.vrTotal, average: stats.vrTotal / stats.count },
+                                              { label: 'Vale Transporte (VT)', total: stats.vtTotal, average: stats.vtTotal / stats.count },
+                                              { label: 'Cesta Básica / Aux. Alimentação', total: stats.cestaTotal, average: stats.cestaTotal / stats.count },
+                                              { label: 'Ajuda de Custo / Reembolso', total: stats.ajudaCustoTotal, average: stats.ajudaCustoTotal / stats.count },
+                                            ],
+                                            total: stats.beneficiosTotal,
+                                            average: stats.beneficiosAverage
+                                          })}
+                                          className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 rounded-xl p-3 flex flex-col justify-between shadow-sm cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-all group"
+                                          title="Clique para ver o detalhamento por valores de benefícios"
+                                        >
+                                          <div>
+                                            <div className="flex justify-between items-center">
+                                              <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">Benefícios</p>
+                                              <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
+                                            </div>
+                                            <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
+                                              {formatCurrency(stats.beneficiosTotal || 0)}
+                                            </p>
+                                          </div>
+                                          <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-200/50 uppercase truncate">
+                                            Média: {formatCurrency(stats.beneficiosAverage || 0)}
+                                          </p>
+                                        </div>
+
+                                        <div 
+                                          onClick={() => setVerbaDetailModal({
+                                            title: 'Detalhamento de 13º Salário e Férias',
+                                            items: [
+                                              { label: '13º Salário (Gratificação Natalina)', total: stats.decimoTerceiroTotal, average: stats.decimoTerceiroTotal / stats.count },
+                                              { label: 'Férias + 1/3 Constitucional', total: stats.feriasTotal, average: stats.feriasTotal / stats.count },
+                                              { label: 'Rescisão Contratual', total: stats.rescisaoTotal, average: stats.rescisaoTotal / stats.count },
+                                            ],
+                                            total: stats.decimoTerceiroTotal + stats.feriasTotal + stats.rescisaoTotal,
+                                            average: (stats.decimoTerceiroTotal + stats.feriasTotal + stats.rescisaoTotal) / stats.count
+                                          })}
+                                          className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 rounded-xl p-3 flex flex-col justify-between shadow-sm cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-all group"
+                                          title="Clique para ver o detalhamento de 13º e Férias"
+                                        >
+                                          <div>
+                                            <div className="flex justify-between items-center">
+                                              <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-500 uppercase tracking-wider">13º & Férias</p>
+                                              <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
+                                            </div>
+                                            <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
+                                              {formatCurrency((stats.decimoTerceiroTotal || 0) + (stats.feriasTotal || 0))}
+                                            </p>
+                                          </div>
+                                          <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-200/50 uppercase truncate">
+                                            Média: {formatCurrency(((stats.decimoTerceiroTotal || 0) + (stats.feriasTotal || 0)) / stats.count || 0)}
+                                          </p>
+                                        </div>
                                       </div>
-                                      <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-500 mt-1.5 pt-1 border-t border-emerald-100/50 uppercase">
-                                        Média: {formatCurrency(stats.conectividadeAverage || 0)}
-                                      </p>
+                                    </div>
+                                   ) : null}
+
+                                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="md:col-span-4">
+                                      <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Descontos e Retenções Auditadas</h5>
+                                      {profile?.linkType === 'CLT' ? (
+                                        <div className="grid grid-cols-3 gap-3">
+                                          <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                            <div>
+                                              <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Faltas</p>
+                                              <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
+                                                {formatCurrency(stats.faltasTotal || 0)}
+                                              </p>
+                                            </div>
+                                            <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase">
+                                              Média: {formatCurrency(stats.faltasAverage || 0)} {stats.diasFaltasTotal > 0 ? `(${stats.diasFaltasTotal.toFixed(1)}d)` : ''}
+                                            </p>
+                                          </div>
+                                          <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                            <div>
+                                              <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Consignado</p>
+                                              <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
+                                                {formatCurrency(stats.consignadoTotal || 0)}
+                                              </p>
+                                            </div>
+                                            <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase">
+                                              Média: {formatCurrency(stats.consignadoAverage || 0)}
+                                            </p>
+                                          </div>
+                                          <div 
+                                            onClick={() => setVerbaDetailModal({
+                                              title: 'Detalhamento de Descontos e Deduções',
+                                              items: [
+                                                { label: 'INSS (Previdência Social)', total: stats.inssEmpregadoTotal || 0, average: stats.inssEmpregadoAverage || 0 },
+                                                { label: 'IRRF (Imposto de Renda)', total: stats.irrfEmpregadoTotal || 0, average: stats.irrfEmpregadoAverage || 0 },
+                                                { label: 'Pensão Alimentícia', total: stats.pensaoAlimenticiaTotal || 0, average: stats.pensaoAlimenticiaAverage || 0 },
+                                                { label: 'Outros Descontos Diversos', total: Math.max(0, (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0) - (stats.pensaoAlimenticiaTotal || 0) - (stats.inssEmpregadoTotal || 0) - (stats.irrfEmpregadoTotal || 0)), average: Math.max(0, (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0) - (stats.pensaoAlimenticiaTotal || 0) - (stats.inssEmpregadoTotal || 0) - (stats.irrfEmpregadoTotal || 0)) / stats.count },
+                                              ],
+                                              total: (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0),
+                                              average: ((stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0)) / stats.count
+                                            })}
+                                            className="bg-red-50/40 dark:bg-red-950/20 border border-red-200/80 dark:border-red-900/40 rounded-xl p-3 shadow-sm flex flex-col justify-between cursor-pointer hover:border-red-400 hover:bg-red-50/80 dark:hover:bg-red-950/40 transition-all group"
+                                            title="Clique para ver o detalhamento dos descontos de INSS, IRRF, Pensão e outros"
+                                          >
+                                            <div>
+                                              <div className="flex justify-between items-center">
+                                                <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Outros Descontos</p>
+                                                <span className="text-[8px] font-black text-red-600 bg-red-100 dark:bg-red-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
+                                              </div>
+                                              <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
+                                                {formatCurrency(stats.descontosTotal - stats.faltasTotal - stats.consignadoTotal || 0)}
+                                              </p>
+                                            </div>
+                                            <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase truncate">
+                                              Média: {formatCurrency(((stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0)) / stats.count || 0)}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   </div>
                                 </div>
                               )}
-
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="md:col-span-3">
-                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Descontos e Ajustes</h5>
-                                  {profile?.linkType === 'CLT' ? (
-                                    <div className="grid grid-cols-3 gap-3">
-                                      <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm flex flex-col justify-between">
-                                        <div>
-                                          <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Faltas</p>
-                                          <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
-                                            {formatCurrency(stats.faltasTotal || 0)}
-                                          </p>
-                                        </div>
-                                        <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase">
-                                          Média: {formatCurrency(stats.faltasAverage || 0)} {stats.diasFaltasTotal > 0 ? `(${stats.diasFaltasTotal.toFixed(1)}d)` : ''}
-                                        </p>
-                                      </div>
-                                      <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm flex flex-col justify-between">
-                                        <div>
-                                          <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Consignado</p>
-                                          <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
-                                            {formatCurrency(stats.consignadoTotal || 0)}
-                                          </p>
-                                        </div>
-                                        <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase">
-                                          Média: {formatCurrency(stats.consignadoAverage || 0)}
-                                        </p>
-                                      </div>
-                                      <div 
-                                        onClick={() => setVerbaDetailModal({
-                                          title: 'Detalhamento de Descontos e Deduções',
-                                          items: [
-                                            { label: 'INSS (Previdência Social)', total: stats.inssEmpregadoTotal || 0, average: stats.inssEmpregadoAverage || 0 },
-                                            { label: 'IRRF (Imposto de Renda)', total: stats.irrfEmpregadoTotal || 0, average: stats.irrfEmpregadoAverage || 0 },
-                                            { label: 'Pensão Alimentícia', total: stats.pensaoAlimenticiaTotal || 0, average: stats.pensaoAlimenticiaAverage || 0 },
-                                            { label: 'Outros Descontos Diversos', total: Math.max(0, (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0) - (stats.pensaoAlimenticiaTotal || 0) - (stats.inssEmpregadoTotal || 0) - (stats.irrfEmpregadoTotal || 0)), average: Math.max(0, (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0) - (stats.pensaoAlimenticiaTotal || 0) - (stats.inssEmpregadoTotal || 0) - (stats.irrfEmpregadoTotal || 0)) / stats.count },
-                                          ],
-                                          total: (stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0),
-                                          average: ((stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0)) / stats.count
-                                        })}
-                                        className="bg-red-50/40 dark:bg-red-950/20 border border-red-200/80 dark:border-red-900/40 rounded-xl p-3 shadow-sm flex flex-col justify-between cursor-pointer hover:border-red-400 hover:bg-red-50/80 dark:hover:bg-red-950/40 transition-all group"
-                                        title="Clique para ver o detalhamento dos descontos de INSS, IRRF, Pensão e outros"
-                                      >
-                                        <div>
-                                          <div className="flex justify-between items-center">
-                                            <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Outros Descontos</p>
-                                            <span className="text-[8px] font-black text-red-600 bg-red-100 dark:bg-red-900/60 px-1 py-0.5 rounded uppercase group-hover:scale-105 transition-transform">Ver valores</span>
-                                          </div>
-                                          <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
-                                            {formatCurrency(stats.descontosTotal - stats.faltasTotal - stats.consignadoTotal || 0)}
-                                          </p>
-                                        </div>
-                                        <p className="text-[9px] font-bold text-red-400 mt-1 border-t border-red-200/20 pt-1 uppercase truncate">
-                                          Média: {formatCurrency(((stats.descontosTotal || 0) - (stats.faltasTotal || 0) - (stats.consignadoTotal || 0)) / stats.count || 0)}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="grid grid-cols-3 gap-3">
-                                      <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm">
-                                        <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Glosa Base</p>
-                                        <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.glosaBaseTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm">
-                                        <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Glosa Bônus</p>
-                                        <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.glosaBonusTotal || 0)}
-                                        </p>
-                                      </div>
-                                      <div className="bg-red-50/30 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-3 shadow-sm">
-                                        <p className="text-[10px] font-black text-red-800 dark:text-red-500 uppercase tracking-wider">Deduções</p>
-                                        <p className="text-sm font-black text-red-700 dark:text-red-400 mt-0.5 tabular-nums">
-                                          {formatCurrency(stats.deducoesTotal || 0)}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="flex flex-col justify-end">
-                                  <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Resultado Final</h5>
-                                  <div className="bg-emerald-100 dark:bg-emerald-950 border border-emerald-300 dark:border-emerald-900 rounded-xl p-3 flex flex-col justify-between shadow-sm h-[66px]">
-                                    <div className="flex justify-between items-baseline">
-                                      <p className="text-[10px] font-black text-emerald-950 dark:text-emerald-400 uppercase tracking-wider">Total Real</p>
-                                      <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-500 uppercase">
-                                        Média: {formatCurrency(stats.totalAverage || 0)}
-                                      </span>
-                                    </div>
-                                    <p className="text-sm font-black text-emerald-900 dark:text-emerald-200 mt-0.5 tabular-nums">
-                                      {formatCurrency(stats.total)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
                             </div>
  
                             {/* Toggle e Lista / Tabela de Competências Lançadas */}
@@ -4638,32 +4630,48 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       </span>
                                     </div>
 
-                                    {/* Alternador de Modo de Visualização */}
-                                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                                    {/* Alternador de Modo de Visualização e Detalhamento */}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
                                       <button
                                         type="button"
-                                        onClick={() => setCostViewMode('table')}
-                                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all ${
-                                          costViewMode === 'table'
-                                            ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
-                                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                        onClick={() => setShowDetailedVerbas(prev => !prev)}
+                                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all border ${
+                                          showDetailedVerbas
+                                            ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-black'
+                                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                                         }`}
+                                        title="Alternar entre visualização executiva (Recebido, Descontado, Líquido) e detalhamento completo de rubricas"
                                       >
-                                        <List size={13} />
-                                        Lista / Tabela
+                                        <SlidersHorizontal size={12} />
+                                        <span>{showDetailedVerbas ? 'Ocultar Rubricas' : 'Ver Rubricas Detalhadas'}</span>
                                       </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setCostViewMode('cards')}
-                                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all ${
-                                          costViewMode === 'cards'
-                                            ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
-                                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                        }`}
-                                      >
-                                        <LayoutGrid size={13} />
-                                        Cards
-                                      </button>
+
+                                      <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <button
+                                          type="button"
+                                          onClick={() => setCostViewMode('table')}
+                                          className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all ${
+                                            costViewMode === 'table'
+                                              ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                                              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                          }`}
+                                        >
+                                          <List size={13} />
+                                          Lista / Tabela
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setCostViewMode('cards')}
+                                          className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all ${
+                                            costViewMode === 'cards'
+                                              ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                                              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                          }`}
+                                        >
+                                          <LayoutGrid size={13} />
+                                          Cards
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
 
@@ -4675,17 +4683,36 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                           <thead className="sticky top-0 bg-slate-100 dark:bg-slate-900 z-10 border-b border-slate-200 dark:border-slate-800 shadow-2xs">
                                             <tr>
                                               <th className="px-3.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500">Competência</th>
-                                              <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Fixo / Base</th>
-                                              {profile?.linkType === 'CLT' && (
+                                              
+                                              {showDetailedVerbas ? (
                                                 <>
-                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Adiantamento</th>
-                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">HE & Noturno</th>
-                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Benefícios</th>
-                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">13º & Férias</th>
-                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Descontos</th>
+                                                  <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Fixo / Base</th>
+                                                  {profile?.linkType === 'CLT' && (
+                                                    <>
+                                                      <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Adiantamento</th>
+                                                      <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">HE & Noturno</th>
+                                                      <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Benefícios</th>
+                                                      <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">13º & Férias</th>
+                                                      <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right">Descontos</th>
+                                                    </>
+                                                  )}
+                                                  <th className="px-3.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 text-right">Total Real</th>
+                                                </>
+                                              ) : (
+                                                /* VISÃO EXECUTIVA DOS 3 PILARES */
+                                                <>
+                                                  <th className="px-3.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 text-right">
+                                                    1. Total Recebido
+                                                  </th>
+                                                  <th className="px-3.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 text-right">
+                                                    2. Total Descontado
+                                                  </th>
+                                                  <th className="px-3.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300 text-right">
+                                                    3. Valor Líquido Real
+                                                  </th>
                                                 </>
                                               )}
-                                              <th className="px-3.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 text-right">Total Real</th>
+
                                               <th className="px-2.5 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center">Origem</th>
                                               <th className="px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-900 shadow-2xs">Ações</th>
                                             </tr>
@@ -4700,6 +4727,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                               const beneficios = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0);
                                               const heNoturno = (c.valor_hora_extra || 0) + (c.valor_adicional_not || 0);
                                               const decimoFerias = (c.valor_decimo_terceiro || 0) + (c.valor_ferias || 0) + (c.valor_rescisao || 0);
+                                              const totalRecebidoRow = realTotal + (c.valor_descontos || 0);
 
                                               return (
                                                 <tr key={c.id || i} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/50 transition-colors">
@@ -4709,43 +4737,63 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                                     </span>
                                                     <span className="text-[10px] text-slate-400 font-mono">{c.competencia}</span>
                                                   </td>
-                                                  <td className="px-3 py-2.5 align-middle text-right tabular-nums text-slate-700 dark:text-slate-300 font-semibold">
-                                                    {formatCurrency(fixedVal || 0)}
-                                                  </td>
-                                                  {profile?.linkType === 'CLT' && (
+
+                                                  {showDetailedVerbas ? (
                                                     <>
-                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
-                                                        {c.valor_adiantamento && c.valor_adiantamento > 0 ? (
-                                                          <span className="text-blue-600 dark:text-blue-400 font-bold">+{formatCurrency(c.valor_adiantamento)}</span>
-                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums text-slate-700 dark:text-slate-300 font-semibold">
+                                                        {formatCurrency(fixedVal || 0)}
                                                       </td>
-                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
-                                                        {heNoturno > 0 ? (
-                                                          <span className="text-amber-600 dark:text-amber-400 font-bold">+{formatCurrency(heNoturno)}</span>
-                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      {profile?.linkType === 'CLT' && (
+                                                        <>
+                                                          <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                            {c.valor_adiantamento && c.valor_adiantamento > 0 ? (
+                                                              <span className="text-blue-600 dark:text-blue-400 font-bold">+{formatCurrency(c.valor_adiantamento)}</span>
+                                                            ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                          </td>
+                                                          <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                            {heNoturno > 0 ? (
+                                                              <span className="text-amber-600 dark:text-amber-400 font-bold">+{formatCurrency(heNoturno)}</span>
+                                                            ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                          </td>
+                                                          <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                            {beneficios > 0 ? (
+                                                              <span className="text-cyan-700 dark:text-cyan-400 font-bold">+{formatCurrency(beneficios)}</span>
+                                                            ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                          </td>
+                                                          <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                            {decimoFerias > 0 ? (
+                                                              <span className="text-indigo-600 dark:text-indigo-400 font-bold">+{formatCurrency(decimoFerias)}</span>
+                                                            ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                          </td>
+                                                          <td className="px-3 py-2.5 align-middle text-right tabular-nums">
+                                                            {c.valor_descontos && c.valor_descontos > 0 ? (
+                                                              <span className="text-rose-600 dark:text-rose-400 font-bold">-{formatCurrency(c.valor_descontos)}</span>
+                                                            ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                          </td>
+                                                        </>
+                                                      )}
+                                                      <td className="px-3.5 py-2.5 align-middle text-right tabular-nums whitespace-nowrap">
+                                                        <span className="inline-block px-2.5 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-black text-xs">
+                                                          {formatCurrency(realTotal)}
+                                                        </span>
                                                       </td>
-                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
-                                                        {beneficios > 0 ? (
-                                                          <span className="text-cyan-700 dark:text-cyan-400 font-bold">+{formatCurrency(beneficios)}</span>
-                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                    </>
+                                                  ) : (
+                                                    /* LINHA EXECUTIVA COM OS 3 VALORES */
+                                                    <>
+                                                      <td className="px-3.5 py-2.5 align-middle text-right tabular-nums font-black text-emerald-700 dark:text-emerald-400">
+                                                        {formatCurrency(totalRecebidoRow)}
                                                       </td>
-                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
-                                                        {decimoFerias > 0 ? (
-                                                          <span className="text-indigo-600 dark:text-indigo-400 font-bold">+{formatCurrency(decimoFerias)}</span>
-                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      <td className="px-3.5 py-2.5 align-middle text-right tabular-nums font-bold text-rose-600 dark:text-rose-400">
+                                                        -{formatCurrency(c.valor_descontos || 0)}
                                                       </td>
-                                                      <td className="px-3 py-2.5 align-middle text-right tabular-nums">
-                                                        {c.valor_descontos && c.valor_descontos > 0 ? (
-                                                          <span className="text-rose-600 dark:text-rose-400 font-bold">-{formatCurrency(c.valor_descontos)}</span>
-                                                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                                                      <td className="px-3.5 py-2.5 align-middle text-right tabular-nums whitespace-nowrap">
+                                                        <span className="inline-block px-2.5 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 font-black text-xs">
+                                                          {formatCurrency(realTotal)}
+                                                        </span>
                                                       </td>
                                                     </>
                                                   )}
-                                                  <td className="px-3.5 py-2.5 align-middle text-right tabular-nums whitespace-nowrap">
-                                                    <span className="inline-block px-2.5 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-black text-xs">
-                                                      {formatCurrency(realTotal)}
-                                                    </span>
-                                                  </td>
                                                   <td className="px-2.5 py-2.5 align-middle text-center whitespace-nowrap">
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
                                                       {c.origem === 'dianna_import' ? 'Dianna' : (c.origem || 'Manual')}

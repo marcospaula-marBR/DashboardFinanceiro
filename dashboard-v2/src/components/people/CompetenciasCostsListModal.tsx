@@ -2,11 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { 
   X, Calendar, Filter, Search, Trash2, Edit3, Loader2, 
   CheckCircle2, AlertTriangle, ArrowUpDown, DollarSign, Wallet, 
-  Users, ChevronRight, FileSpreadsheet, RotateCcw, Building2, Briefcase, Download
+  Users, ChevronRight, FileSpreadsheet, RotateCcw, Building2, Briefcase, Download, Upload
 } from 'lucide-react';
 import { Employee, MonthlyCost } from '@/types/loans';
 import { PeopleHRService } from '@/services/people-hr.service';
 import { formatCurrency } from '@/services/loans.service';
+import { CostImportStagingModal } from '@/components/people/CostImportStagingModal';
 
 interface CompetenciasCostsListModalProps {
   isOpen: boolean;
@@ -52,6 +53,7 @@ export function CompetenciasCostsListModal({
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [sortField, setSortField] = useState<'competencia' | 'name' | 'total'>('competencia');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Mapeamento de colaboradores por ID
   const employeesMap = useMemo(() => {
@@ -414,8 +416,17 @@ export function CompetenciasCostsListModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleExportCsv}
+              onClick={() => setIsImportModalOpen(true)}
               className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Importar Folha Oficial (PDF/IA) ou Planilha Histórica (Excel) com Staging de Benefícios"
+            >
+              <Upload size={14} />
+              <span>Importar Folha / Planilha</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-all flex items-center gap-1.5 shadow-xs active:scale-95"
               title="Exportar dados filtrados para planilha Excel / CSV"
             >
               <Download size={14} />
@@ -974,6 +985,21 @@ export function CompetenciasCostsListModal({
             </button>
           </div>
         </div>
+
+        {/* MODAL DE INGESTÃO E AUDITORIA DUAL (FOLHA DE PAGAMENTO / PLANILHA EXCEL) */}
+        {isImportModalOpen && (
+          <CostImportStagingModal
+            isOpen={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            onSuccess={() => {
+              onCostDeleted(); // Dispara recarregamento no componente pai
+              setSuccessToast("Lançamentos de custos sincronizados com sucesso!");
+              setTimeout(() => setSuccessToast(null), 3500);
+            }}
+            existingEmployees={employees}
+            defaultCompetencia={selectedCompetencia !== 'all' ? selectedCompetencia : undefined}
+          />
+        )}
 
       </div>
     </div>

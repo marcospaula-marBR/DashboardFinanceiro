@@ -102,57 +102,85 @@ export async function parseCltFile(fileOrBuffer: File | ArrayBuffer, fileName = 
   }
 
   const workbook = XLSX.read(arrayBuffer, { type: "array", cellDates: true });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-
-  if (!rows || rows.length < 2) {
-    throw new Error("Arquivo vazio ou com estrutura inválida.");
+  if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+    throw new Error("Arquivo Excel não contém nenhuma planilha.");
   }
 
   const parsedEmployees: CltParsedEmployee[] = [];
-  let currentEmpHeader: {
-    rawName: string;
-    statusRaw: string;
-    setor?: string;
-    cargoInicial?: string;
-    ultimoCargo?: string;
-    dataInicial?: string;
-    desligamento?: string;
-  } | null = null;
-  let currentBlockRows: any[][] = [];
   let empCounter = 0;
 
-  for (let r = 1; r < rows.length; r++) {
-    const row = rows[r];
-    if (!row || row.length === 0) continue;
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    if (!rows || rows.length < 2) continue;
 
-    const rawNameCell = row[1];
-    if (rawNameCell && String(rawNameCell).trim() !== "" && String(rawNameCell).trim().toLowerCase() !== "funcionários") {
-      if (currentEmpHeader) {
-        empCounter++;
-        parsedEmployees.push(processEmployeeBlock(currentEmpHeader, currentBlockRows, rows, empCounter));
+    // 1. Verifica se esta aba possui blocos consolidados com múltiplos colaboradores
+    let currentEmpHeader: {
+      rawName: string;
+      statusRaw: string;
+      setor?: string;
+      cargoInicial?: string;
+      ultimoCargo?: string;
+      dataInicial?: string;
+      desligamento?: string;
+    } | null = null;
+    let currentBlockRows: any[][] = [];
+    const sheetEmployees: CltParsedEmployee[] = [];
+
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || row.length === 0) continue;
+
+      const rawNameCell = row[1];
+      if (rawNameCell && String(rawNameCell).trim() !== "" && String(rawNameCell).trim().toLowerCase() !== "funcionários" && String(rawNameCell).trim().toLowerCase() !== "funcionarios") {
+        if (currentEmpHeader) {
+          empCounter++;
+          sheetEmployees.push(processEmployeeBlock(currentEmpHeader, currentBlockRows, rows, empCounter));
+        }
+
+        const rawName = String(rawNameCell).trim();
+        currentEmpHeader = {
+          rawName,
+          statusRaw: row[2] ? String(row[2]).trim() : "Ativo",
+          setor: row[3] ? String(row[3]).trim() : undefined,
+          cargoInicial: row[4] ? String(row[4]).trim() : undefined,
+          ultimoCargo: row[5] ? String(row[5]).trim() : undefined,
+          dataInicial: formatDateISO(row[6]),
+          desligamento: formatDateISO(row[7]),
+        };
+        currentBlockRows = [row];
+      } else if (currentEmpHeader) {
+        currentBlockRows.push(row);
       }
-
-      const rawName = String(rawNameCell).trim();
-      currentEmpHeader = {
-        rawName,
-        statusRaw: row[2] ? String(row[2]).trim() : "Ativo",
-        setor: row[3] ? String(row[3]).trim() : undefined,
-        cargoInicial: row[4] ? String(row[4]).trim() : undefined,
-        ultimoCargo: row[5] ? String(row[5]).trim() : undefined,
-        dataInicial: formatDateISO(row[6]),
-        desligamento: formatDateISO(row[7]),
-      };
-      currentBlockRows = [row];
-    } else if (currentEmpHeader) {
-      currentBlockRows.push(row);
     }
+
+    if (currentEmpHeader) {
+      empCounter++;
+      sheetEmployees.push(processEmployeeBlock(currentEmpHeader, currentBlockRows, rows, empCounter));
+    }
+
+    // 2. Se não detectou blocos em coluna B, mas a aba possui 'Ciclo do mês' e linhas de verbas, trata a aba como um colaborador individual (cujo nome é o nome da aba)
+    if (sheetEmployees.length === 0) {
+      const hasCiclo = rows.some(r => r && r.some(c => c && String(c).trim().toLowerCase().includes("ciclo do m")));
+      if (hasCiclo && sheetName.toLowerCase() !== "resumo" && sheetName.toLowerCase() !== "config" && sheetName.toLowerCase() !== "geral") {
+        empCounter++;
+        const singleHeader = {
+          rawName: sheetName.trim(),
+          statusRaw: "Ativo"
+        };
+        const singleEmp = processEmployeeBlock(singleHeader, rows, rows, empCounter);
+        if (Object.keys(singleEmp.costsByCompetencia).length > 0) {
+          sheetEmployees.push(singleEmp);
+        }
+      }
+    }
+
+    parsedEmployees.push(...sheetEmployees);
   }
 
-  if (currentEmpHeader) {
-    empCounter++;
-    parsedEmployees.push(processEmployeeBlock(currentEmpHeader, currentBlockRows, rows, empCounter));
+  if (parsedEmployees.length === 0) {
+    throw new Error("Nenhum dado financeiro ou colaborador identificado na planilha.");
   }
 
   const allCompetenciasSet = new Set<string>();
@@ -174,6 +202,50 @@ export async function parseCltFile(fileOrBuffer: File | ArrayBuffer, fileName = 
   };
 }
 
+const PT_MONTHS: Record<string, string> = {
+  jan: "01", fev: "02", mar: "03", abr: "04", mai: "05", jun: "06",
+  jul: "07", ago: "08", set: "09", out: "10", nov: "11", dez: "12"
+};
+
+function parseCompetenciaHeader(val: any): string | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    const y = val.getUTCFullYear();
+    const m = String(val.getUTCMonth() + 1).padStart(2, "0");
+    if (y > 1900) return `${y}-${m}-01`;
+  }
+  const str = String(val).trim().toLowerCase();
+  if (str === "total" || str.includes("total")) return null;
+
+  // Formato YYYY-MM ou YYYY-MM-DD
+  const ymd = str.match(/^(\d{4})[-/](\d{1,2})/);
+  if (ymd) {
+    const y = parseInt(ymd[1], 10);
+    const m = String(parseInt(ymd[2], 10)).padStart(2, "0");
+    if (y > 1900) return `${y}-${m}-01`;
+  }
+
+  // Formato MM/YYYY ou M/YYYY
+  const my = str.match(/^(\d{1,2})[-/](\d{4})/);
+  if (my) {
+    const m = String(parseInt(my[1], 10)).padStart(2, "0");
+    const y = parseInt(my[2], 10);
+    if (y > 1900) return `${y}-${m}-01`;
+  }
+
+  // Formato mês abreviado tipo "abr/26", "jul/26", "mai/2026", "set/26"
+  const ptMatch = str.match(/^([a-z]{3})[-/](\d{2,4})/);
+  if (ptMatch) {
+    const mName = ptMatch[1];
+    let y = parseInt(ptMatch[2], 10);
+    if (y < 100) y += 2000;
+    const m = PT_MONTHS[mName];
+    if (m && y > 1900) return `${y}-${m}-01`;
+  }
+
+  return null;
+}
+
 function processEmployeeBlock(
   header: {
     rawName: string;
@@ -189,28 +261,25 @@ function processEmployeeBlock(
   empCounter: number
 ): CltParsedEmployee {
   // Procura a linha 'Ciclo do mês' que contém as datas das colunas neste bloco
-  let cicloRow = blockRows.find((r) => r && r[8] && String(r[8]).trim().toLowerCase() === "ciclo do mês");
+  let cicloRow = blockRows.find((r) => r && r.some((c: any) => c && String(c).trim().toLowerCase().includes("ciclo do m")));
   if (!cicloRow) {
-    cicloRow = globalRows[0];
+    cicloRow = globalRows.find((r) => r && r.some((c: any) => c && String(c).trim().toLowerCase().includes("ciclo do m"))) || globalRows[0];
   }
 
+  // Identifica onde está o cabeçalho 'Ciclo do mês' e onde começam as colunas de dados
+  let cicloColIdx = 8;
+  if (cicloRow) {
+    const foundIdx = cicloRow.findIndex((c: any) => c && String(c).trim().toLowerCase().includes("ciclo do m"));
+    if (foundIdx >= 0) cicloColIdx = foundIdx;
+  }
+
+  const startCol = cicloColIdx + 1;
   const compCols: { colIndex: number; compStr: string }[] = [];
-  for (let c = 8; c < cicloRow.length; c++) {
+  for (let c = startCol; c < (cicloRow?.length || 0); c++) {
     const val = cicloRow[c];
-    if (val) {
-      let compStr: string | null = null;
-      if (val instanceof Date) {
-        const y = val.getUTCFullYear();
-        const m = String(val.getUTCMonth() + 1).padStart(2, "0");
-        compStr = `${y}-${m}-01`;
-      } else {
-        const str = String(val).trim();
-        const ymd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-        if (ymd) compStr = `${ymd[1]}-${String(ymd[2]).padStart(2, "0")}-01`;
-      }
-      if (compStr) {
-        compCols.push({ colIndex: c, compStr });
-      }
+    const compStr = parseCompetenciaHeader(val);
+    if (compStr) {
+      compCols.push({ colIndex: c, compStr });
     }
   }
 
@@ -234,9 +303,11 @@ function processEmployeeBlock(
       totalRowVal = 0;
 
     for (const r of blockRows) {
-      const verba = r[8] ? String(r[8]).trim().toLowerCase() : "";
+      // Procura a descrição da verba na coluna do ciclo ou na primeira coluna com texto
+      const verbaCell = r[cicloColIdx] !== undefined && r[cicloColIdx] !== null ? r[cicloColIdx] : r[0];
+      const verba = verbaCell ? String(verbaCell).trim().toLowerCase() : "";
       const val = parseNumber(r[cc.colIndex]);
-      if (val === 0) continue;
+      if (val === 0 && !verba.includes("total")) continue;
 
       if (verba.includes("holerite") && !verba.includes("sem holerite")) fixo = val;
       else if (verba.includes("adiantamento")) adiantamento = val;
@@ -252,7 +323,7 @@ function processEmployeeBlock(
       else if (verba.includes("13º") || verba.includes("13")) decimo3 = val;
       else if (verba.includes("desconto")) descontos = val;
       else if (verba.includes("sem holerite") || verba.includes("pagamento sem")) outros = val;
-      else if (verba === "" || !r[8]) totalRowVal = val;
+      else if (verba === "total" || verba === "" || !verbaCell) totalRowVal = val;
     }
 
     const proventos =

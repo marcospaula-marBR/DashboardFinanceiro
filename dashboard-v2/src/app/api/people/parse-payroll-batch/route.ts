@@ -12,6 +12,7 @@ export async function POST(req: Request) {
       );
     }
 
+    let mimeType = 'application/pdf';
     let base64Data = '';
     const contentType = req.headers.get('content-type') || '';
     
@@ -29,6 +30,9 @@ export async function POST(req: Request) {
         );
       }
       
+      const resType = fileRes.headers.get('content-type');
+      if (resType) mimeType = resType;
+
       const bytes = await fileRes.arrayBuffer();
       const buffer = Buffer.from(bytes);
       base64Data = buffer.toString('base64');
@@ -38,6 +42,10 @@ export async function POST(req: Request) {
 
       if (!file) {
         return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
+      }
+
+      if (file.type) {
+        mimeType = file.type;
       }
 
       const bytes = await file.arrayBuffer();
@@ -51,26 +59,31 @@ export async function POST(req: Request) {
     });
 
     const prompt = `
-Analise este documento PDF contendo o Extrato Mensal da folha de pagamento de múltiplos colaboradores (vários holerites ou listagem).
+Analise este documento (PDF ou imagem) contendo o Extrato Mensal da folha de pagamento de múltiplos colaboradores (listagem celetista ou múltiplos recibos).
 
 Instruções de Extração:
-1. **Competência**: Identifique a competência (mês/ano) da folha no cabeçalho do documento (ex: '06/2026' ou 'Junho de 2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-06-01').
-2. **Colaboradores**: Extraia os dados individuais de cada colaborador CLT celetista identificado no documento.
+1. **Competência**: Identifique a competência (mês/ano) da folha no cabeçalho do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho de 2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01').
+2. **Colaboradores**: Extraia os dados individuais de cada colaborador CLT celetista identificado no documento (identificado por 'Empr.:', 'Nome', 'CPF', etc.).
 3. **Verbas Financeiras & Informativos Patronais**:
    - Salário base contratual no campo "valor_fixo".
-   - Total de Proventos/Vencimentos Brutos no campo "valor_holerite" (consta no campo 'Proventos:' do resumo do colaborador, ex: '1.849,81' ou '1.917,35').
-   - Total de Descontos no campo "valor_descontos" (consta no campo 'Descontos:', ex: '993,07').
+   - Matrícula/Código do colaborador no campo "matricula" (ex: '1', '11').
+   - Cargo/Função no campo "cargo" (ex: 'AUXILIAR DE SERVICOS GERAIS').
+   - Total de Proventos/Vencimentos Brutos no campo "valor_holerite" (consta no campo 'Proventos:' do resumo do colaborador, ex: '3.037,67' ou '2.022,91').
+   - Total de Descontos no campo "valor_descontos" (consta no campo 'Descontos:', ex: '1.104,01' ou '1.002,57').
+   - Total Líquido da Folha no campo "valor_liquido" (consta no campo 'Líquido:', ex: '1.933,66' ou '1.020,34').
    - **Desconto de Adiantamento Salarial (CRUCIAL!)**: Procure por rubricas como '981 DESC.ADIANT.SALARIAL', 'DESC.ADIANT.SALARIAL', 'ADIANTAMENTO' ou similares nos descontos. Capture o valor monetário descontado (ex: '739,92') e COLOQUE NO CAMPO "valor_adiantamento".
-   - **Salário Família (CRUCIAL!)**: Procure por rubricas como '995 SALARIO FAMILIA' ou 'SALARIO FAMILIA' nos proventos. Capture o valor em R$ (ex: '67,54' ou '58,53') e COLOQUE NO CAMPO "salario_familia".
-   - **Informativo FGTS da Empresa (CRUCIAL!)**: Extraia o valor do FGTS mensal pago pela empresa no campo "valor_fgts" (localizado nas linhas informativas, ex: 'Valor FGTS: 147,98').
-   - **Encargos Descontados**: Extraia o INSS descontado ("inss_empregado", rubrica 998 I.N.S.S.) e o IRRF descontado ("irrf_empregado").
+   - **Desconto de Vale Transporte 6% (CRUCIAL!)**: Procure por rubricas como '48 VALE TRANSPORTE' ou 'VALE TRANSPORTE' nos descontos (geralmente com percentual 6,00%). Capture esse valor descontado no campo "desconto_vt_6" (ex: '110,99'). O campo "valor_vt" deve conter apenas proventos reais de recarga se creditados na folha, senão 0.00.
+   - **Salário Família (CRUCIAL!)**: Procure por rubricas como '995 SALARIO FAMILIA' ou 'SALARIO FAMILIA' nos proventos. Capture o valor em R$ (ex: '67,54') e COLOQUE NO CAMPO "salario_familia".
+   - **Informativo FGTS da Empresa (CRUCIAL!)**: Extraia o valor do FGTS mensal pago pela empresa no campo "valor_fgts" (localizado nas linhas informativas, ex: 'Valor FGTS: 243,01').
+   - **Encargos Descontados**: Extraia o INSS descontado ("inss_empregado", rubrica 998 I.N.S.S., ex: '253,10') e o IRRF descontado ("irrf_empregado").
+   - **Horas Extras e Adicional Noturno**: Extraia Horas Extras ('150 HORAS EXTRAS 50%' etc.) somando com reflexo DSR ('8125 REFLEXO HORAS EXTRAS DSR') no campo "valor_hora_extra". Capture Adicional Noturno em "valor_adicional_not".
    - **REGRA DE EXCLUSÃO DE BASES (CRUCIAL!)**: IGNORE E NÃO EXTRAIA valores de bases informativas (como 'Base FGTS', 'Base INSS', 'Base IRRF', 'Base Salário Família' ou rubricas de base). Elas NÃO são proventos nem descontos e NUNCA devem ser computadas no total de proventos, descontos ou custo real.
    - **Empréstimo Consignado**: Se houver descontos com termos como "DESC. EMP. CRED. TRAB N..." ou "Consignado", some os respectivos valores e adicione no campo "valor_consignado".
    - **Pensão Alimentícia (CRUCIAL!)**: Se houver descontos com termos como "PENSÃO ALIMENTÍCIA", "PENSAO ALIMENTICIA", "DESC. PENSAO" ou similares, capture o valor e adicione no campo "valor_pensao_alimenticia".
    - **Folha de 13º Salário**: Se o documento for referente a 13º Salário (1ª Parcela, 2ª Parcela ou Integral), capture os proventos do 13º no campo "valor_decimo_terceiro" e marque "is_decimo_terceiro": true.
    - Faltas/Atrasos: Some todos os descontos de faltas ou faltas DSR (ex: "DIAS FALTAS", "DIAS FALTAS DSR") e coloque no campo "valor_faltas". Extraia também o quantitativo total de dias de falta acumulados no campo "dias_faltas".
    - Banco de Horas: Se houver desconto de banco de horas (ex: "Desconto Banco de Horas 15:22"), converta as horas/minutos para formato decimal e coloque no campo "banco_horas".
-   - Demais proventos e descontos mapeados nos respectivos campos (hora extra, adicional noturno, férias, décimo terceiro, VR, VT, cesta básica, bônus, comissão, ajuda de custo).
+   - Demais proventos mapeados: Férias em "valor_ferias", Rescisão em "valor_rescisao", Cesta Básica em "valor_cesta" (se constar na folha), Vale Refeição em "valor_vr", Ajuda de Custo em "valor_ajuda_custo".
 
 Retorne obrigatoriamente um objeto JSON com o seguinte formato:
 
@@ -78,10 +91,12 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
   "competencia": "YYYY-MM-01",
   "records": [
     {
+      "matricula": "1",
       "name": "Nome Completo do Colaborador",
       "cpf": "CPF no formato 000.000.000-00",
+      "cargo": "Cargo do colaborador",
       "situation": "Trabalhando" ou "Demitido" (conforme consta no campo Situação/Situaçao do extrato),
-      "admission_date": "Data de admissão no formato YYYY-MM-DD (ex: se '13/04/2026' retorne '2026-04-13')",
+      "admission_date": "Data de admissão no formato YYYY-MM-DD (ex: se '30/11/2023' retorne '2023-11-30')",
       "valor_fixo": 0.00,
       "valor_holerite": 0.00,
       "valor_adiantamento": 0.00,
@@ -89,6 +104,7 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
       "valor_adicional_not": 0.00,
       "valor_vr": 0.00,
       "valor_vt": 0.00,
+      "desconto_vt_6": 0.00,
       "valor_cesta": 0.00,
       "valor_ferias": 0.00,
       "valor_rescisao": 0.00,
@@ -109,7 +125,7 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
       "irrf_empregado": 0.00,
       "salario_familia": 0.00,
       "valor_liquido": 0.00,
-      "observacao": "Breve observacao se for demitido ou tiver faltas"
+      "observacao": "Breve observacao se houver"
     }
   ]
 }
@@ -122,7 +138,7 @@ Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos
       {
         inlineData: {
           data: base64Data,
-          mimeType: 'application/pdf'
+          mimeType: mimeType.includes('image') ? mimeType : 'application/pdf'
         }
       },
       prompt
