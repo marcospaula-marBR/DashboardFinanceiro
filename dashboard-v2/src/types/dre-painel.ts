@@ -65,6 +65,8 @@ export interface DrePainelFilters {
   fornecedores: string[];
   contasCorrentes: string[];
   
+  ano: string; // 'TODOS' | '2024' | '2025' | '2026'
+  
   // Filtros granulares executivos
   filtroParcelamento: 'TODOS' | 'A_VISTA' | 'PARCELADO_GERAL' | 'PARCELA_ANTERIOR' | 'LONGO_PRAZO';
   filtroStatusVencimento: 'TODOS' | 'EM_ATRASO' | 'A_VENCER' | 'PAGO';

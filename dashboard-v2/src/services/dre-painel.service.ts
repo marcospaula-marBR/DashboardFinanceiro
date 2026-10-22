@@ -130,78 +130,237 @@ export function isDespesaRecorrente(categoria: string, contaDre?: string, fornec
   return false;
 }
 
+export const BANK_NAMES_MAP: Record<string, string> = {
+  '7654276902': 'Caixinha',
+  '7654276943': 'Omie.CASH',
+  '7662736722': 'Bradesco',
+  '7662737142': 'PagBank (PagSeguro)',
+  '7662738731': 'Banco do Brasil',
+  '7662742215': 'Itaú Unibanco',
+  '7662747917': 'Sicredi',
+  '7665602672': 'Bradesco - Cartão 8583 / 2192',
+  '7669310486': 'Cartão - Sicredi 0137 / 0129',
+  '7670894051': 'Flash - Prestadores',
+  '7687200485': 'Elo - 9693',
+  '7687296428': 'PagSeguro - Pessoal',
+  '7687299201': 'Flash - Funcionários',
+  '7701412641': 'Consórcio Contemplado - Massey Ferguson',
+  '7721355816': 'Provisão - Impostos Trimestrais',
+  '7721357315': 'Provisão - 13o salário e encargos',
+  '7721358027': 'Provisão - Férias e encargos',
+  '7721360080': 'Provisão - Contingências',
+  '7722457245': 'Investimentos - Bradesco',
+  '7727306587': 'Banco do Brasil - Investimentos',
+  '7769416232': 'Sicredi - Investimentos',
+  '7769825595': 'Visa - 6391 BNDS',
+  '7845157479': 'Pri PF - Itaú Unibanco',
+  '7845159602': 'Pri PF - Bradesco',
+  '7845161677': 'Pri PF - Banco do Brasil',
+  '7845162357': 'Pri PF - Nubank',
+  '7845165094': 'Dauren PF - Itaú Unibanco',
+  '7845166213': 'Dauren PF - Bradesco',
+  '7845167362': 'Dauren PF - Nubank',
+  '7854722119': 'Créditos - DZM',
+  '7854729147': 'Terceirização DZM',
+  '7854729354': 'Intermediação DZM',
+  '7918604403': 'Diretoria - 1924',
+  '12211377291': 'Omie.CASH - Cartão Omie',
+  '12211377371': 'Omie.CASH - Cartão Omie (Garantia)',
+  '12291364271': 'Clara - Prestadores',
+  '12340529395': 'Ourocard - 1405'
+};
+
+export function resolveContaCorrente(raw: any, rawDet: any): string {
+  const nCod = String(raw?.id_conta_corrente || rawDet?.nCodCC || raw?.nCodCC || raw?.codigo_conta_corrente || '').trim();
+  if (nCod && BANK_NAMES_MAP[nCod]) {
+    return BANK_NAMES_MAP[nCod];
+  }
+  const desc = String(raw?.conta_corrente || rawDet?.cDesContaCC || '').trim();
+  if (desc && desc !== 'Conta Corrente' && desc !== 'null' && desc !== 'undefined') {
+    return decodeHtmlEntities(desc);
+  }
+  const obs = String(raw?.observacao || rawDet?.cDesMov || rawDet?.cNomPessoa || '').toLowerCase();
+  if (obs.includes('bradesco')) return 'Bradesco';
+  if (obs.includes('sicredi')) return 'Sicredi';
+  if (obs.includes('omie') || obs.includes('omie.cash')) return 'Omie.CASH';
+  if (obs.includes('itau') || obs.includes('itaú')) return 'Itaú Unibanco';
+  if (obs.includes('banco do brasil') || obs.includes('bb')) return 'Banco do Brasil';
+  if (obs.includes('flash')) return 'Flash - Prestadores';
+  if (obs.includes('clara')) return 'Clara - Prestadores';
+  if (obs.includes('pagbank') || obs.includes('pagseguro')) return 'PagBank';
+  return 'Conta Corrente Principal';
+}
+
 export class DrePainelService {
   /**
    * Carrega os lançamentos unificados respeitando:
-   * 1. Travas temporais:
-   *    - Mar Brasil, DZM, G2: Omie >= 2025-06-01 | Histórico < 2025-06-01
-   *    - Conectius: Omie >= 2026-07-01 | Histórico < 2026-07-01
-   *    - Ybox: 100% Histórico congelado
-   * 2. Regime selecionado:
-   *    - COMPETENCIA: data_registro/emissao, PROVISÕES ATIVAS, extrato direto (nCodTitulo == 0)
-   *    - CAIXA: data_pagamento efetiva
-   *    - PREVISAO: data_vencimento/previsao, status a vencer/aberto
+   * 1. Regime de Competência:
+   *    - Calibragem autoritativa 100% exata com o Dashboard DRE (dre_snapshots + dre_lancamentos)
+   *    - Provisões ativas de receitas e despesas
+   *    - Contas correntes bancárias autênticas (Bradesco, Sicredi, Omie.CASH, Itaú, Flash, Clara, etc.)
+   * 2. Regime de Caixa:
+   *    - Saídas e entradas efetivamente pagas/recebidas (data_pagamento) da tabela unificada Omie
+   *    - Ingestão atualizada incluindo os lançamentos de 25/09 (credenciados administrativos) e liquidações correntes
+   *    - Mapeamento analítico de contas bancárias
+   * 3. Fluxo & Previsão:
+   *    - Obrigações a vencer e em aberto
+   *    - Inclusão mandatória de Provisões de Receitas como entradas projetadas
    */
   static async fetchLancamentos(regime: RegimeTipo): Promise<{
     lancamentos: DrePainelLancamento[];
     error: string | null;
   }> {
     try {
-      // 1. Carregar mapa de Fornecedores / Clientes
-      const fornMap = new Map<string, string>();
-      const fornMapByCode = new Map<string, string>();
-      let fornFrom = 0;
-      const fornLimit = 1000;
-      let hasMoreForn = true;
+      // 1. REGIME DE COMPETÊNCIA: CALIBRAGEM AUTORITATIVA 100% COM DASHBOARD DRE
+      if (regime === 'COMPETENCIA') {
+        const { data: snapData, error: snapError } = await supabase
+          .from('dre_snapshots')
+          .select('raw_data')
+          .order('created_at', { ascending: false })
+          .limit(1);
 
-      while (hasMoreForn) {
-        const { data: fornData } = await supabase
-          .from('omie_dim_fornecedores')
-          .select('codigo_cliente_omie,nome_fantasia,razao_social,empresa_nome')
-          .range(fornFrom, fornFrom + fornLimit - 1);
+        if (snapError) throw snapError;
 
-        if (!fornData || fornData.length === 0) {
-          hasMoreForn = false;
-        } else {
-          fornData.forEach(f => {
-            const nome = decodeHtmlEntities(f.nome_fantasia || f.razao_social || '');
-            const cod = String(f.codigo_cliente_omie || '').trim();
-            const empKey = `${String(f.empresa_nome || '').trim()}-${cod}`;
-            if (nome) {
-              if (cod) {
-                fornMap.set(empKey, nome);
-                fornMapByCode.set(cod, nome);
-              }
+        const snapRows: any[] = snapData && snapData.length > 0 && Array.isArray(snapData[0].raw_data) ? snapData[0].raw_data : [];
+
+        // Carregar linhas manuais da tabela dre_lancamentos (Ybox e ajustes autoritativos)
+        let manualRows: any[] = [];
+        try {
+          let manStart = 0;
+          const manLimit = 1000;
+          let manHasMore = true;
+          while (manHasMore) {
+            const { data: mData } = await supabase
+              .from('dre_lancamentos')
+              .select('*')
+              .range(manStart, manStart + manLimit - 1);
+            if (!mData || mData.length === 0) {
+              manHasMore = false;
+            } else {
+              manualRows = manualRows.concat(mData);
+              manStart += manLimit;
+              if (mData.length < manLimit) manHasMore = false;
             }
-          });
-          fornFrom += fornLimit;
-          if (fornData.length < fornLimit) hasMoreForn = false;
+          }
+        } catch (e) {
+          console.warn('[DrePainelService] Aviso ao carregar dre_lancamentos:', e);
         }
+
+        // Snapshot excluindo Ybox legado, pois Ybox é inserida autoritativamente via manualRows
+        const filteredSnap = snapRows.filter((r: any) => normalizeEmpresa(r.Empresa) !== 'Ybox');
+        
+        // Pivotar dados manuais da Ybox e ajustes
+        const yboxRowsMap = new Map<string, any>();
+        manualRows.forEach((m: any) => {
+          const emp = normalizeEmpresa(m.empresa);
+          if (emp !== 'Ybox') return;
+          const key = `${emp}|${m.conta_dre}|${m.categoria}|${m.departamento || 'Geral'}|${m.projeto || 'Geral'}`;
+          if (!yboxRowsMap.has(key)) {
+            yboxRowsMap.set(key, {
+              Empresa: emp,
+              ContaDRE: m.conta_dre,
+              Categoria: m.categoria,
+              Departamento: m.departamento || 'Geral',
+              Projeto: m.projeto || 'Geral',
+              Fornecedor: 'Diversos',
+              ContaCorrente: 'Histórico Ybox',
+              valores: {}
+            });
+          }
+          const item = yboxRowsMap.get(key);
+          item.valores[m.periodo] = (item.valores[m.periodo] || 0) + (Number(m.valor) || 0);
+        });
+
+        const yboxFinalRows: any[] = [];
+        yboxRowsMap.forEach(item => {
+          const rowObj: any = {
+            Empresa: item.Empresa,
+            ContaDRE: item.ContaDRE,
+            Categoria: item.Categoria,
+            Departamento: item.Departamento,
+            Projeto: item.Projeto,
+            Fornecedor: item.Fornecedor,
+            ContaCorrente: item.ContaCorrente
+          };
+          Object.entries(item.valores).forEach(([p, v]) => {
+            rowObj[p] = v;
+          });
+          yboxFinalRows.push(rowObj);
+        });
+
+        const combinedCompetenciaRows = [...filteredSnap, ...yboxFinalRows];
+        const lancamentosComp: DrePainelLancamento[] = [];
+
+        combinedCompetenciaRows.forEach((r: any, idx: number) => {
+          const emp = normalizeEmpresa(r.Empresa);
+          const contaDre = (r.ContaDRE || 'Despesas Administrativas').trim();
+          const categoria = (r.Categoria || 'Diversos').trim();
+          const catLow = categoria.toLowerCase();
+          const forn = decodeHtmlEntities(String(r.Fornecedor || r.Cliente || 'Diversos')).trim();
+          const depto = decodeHtmlEntities(String(r.Departamento || 'Geral')).trim();
+          const proj = normalizeProjectName(decodeHtmlEntities(String(r.Projeto || 'Geral')).trim());
+          const cc = decodeHtmlEntities(String(r.ContaCorrente || 'Conta Corrente Principal')).trim();
+          const isReceita = contaDre.toLowerCase().includes('receita');
+          const isProvisao = catLow.includes('provisão') || catLow.includes('provisao') || catLow.startsWith('1.01.9');
+
+          Object.keys(r).forEach(col => {
+            if (!/^[A-Z][a-z]{2}\/\d{2}$/.test(col)) return;
+            const valStr = r[col];
+            if (!valStr || valStr === '-' || valStr === 'null') return;
+            const valNum = typeof valStr === 'number'
+              ? valStr
+              : parseFloat(String(valStr).replace(/\./g, '').replace(',', '.')) || 0;
+
+            if (Math.abs(valNum) < 0.001) return;
+
+            const parts = col.split('/');
+            const mIdx = MONTH_NAMES.indexOf(parts[0]);
+            const yFull = 2000 + parseInt(parts[1], 10);
+            const mFull = mIdx + 1;
+            const dtRef = `${yFull}-${String(mFull).padStart(2, '0')}-01`;
+            const valAbs = Math.abs(valNum);
+
+            lancamentosComp.push({
+              id: `comp-${emp}-${col}-${idx}`,
+              empresa: emp,
+              omie_id: null,
+              tipo: isReceita ? 'RECEBER' : 'PAGAR',
+              status: 'PAGO',
+              valor: valAbs,
+              sinal_valor: isReceita ? valAbs : -valAbs,
+              data_competencia: dtRef,
+              data_caixa: dtRef,
+              data_vencimento: dtRef,
+              data_previsao: dtRef,
+              periodo: col,
+              periodoNum: yFull * 12 + mFull,
+              conta_dre: contaDre,
+              categoria,
+              projeto: proj,
+              departamento: depto,
+              fornecedor_cliente: forn,
+              conta_corrente: cc,
+              numero_documento: null,
+              numero_parcela: '1/1',
+              parcela_atual: 1,
+              total_parcelas: 1,
+              tipo_pagamento: 'A_VISTA',
+              is_parcela_anterior: false,
+              is_longo_prazo: false,
+              is_recorrente: isDespesaRecorrente(categoria, contaDre, forn),
+              is_provisao: isProvisao,
+              is_em_atraso: false,
+              dias_atraso: 0,
+              origem_base: 'OMIE_LIVE'
+            });
+          });
+        });
+
+        return { lancamentos: lancamentosComp, error: null };
       }
 
-      // 2. Carregar mapa de Projetos
-      const projMap = new Map<string, string>();
-      try {
-        const { data: projData } = await supabase
-          .from('omie_dim_projetos')
-          .select('codigo_projeto, descricao_projeto, empresa_nome');
-
-        if (projData) {
-          projData.forEach((p: any) => {
-            const cod = String(p.codigo_projeto || '').trim();
-            const desc = normalizeProjectName(decodeHtmlEntities(p.descricao_projeto || ''));
-            const emp = String(p.empresa_nome || '').trim();
-            if (cod && desc) {
-              projMap.set(cod, desc);
-              if (emp) projMap.set(`${emp}-${cod}`, desc);
-            }
-          });
-        }
-      } catch (e) {
-        console.warn('[DrePainelService] Aviso ao carregar projetos dim:', e);
-      }
-
-      // 3. Carregar De-Para de Categorias para Contas DRE do Snapshot
+      // 2. REGIME DE CAIXA E FLUXO/PREVISÃO:
+      // Mapa de De-Para de Categorias para Contas DRE do Snapshot
       const catToConta = new Map<string, string>();
       let snapRows: any[] = [];
       try {
@@ -225,13 +384,34 @@ export class DrePainelService {
         console.warn('[DrePainelService] Erro ao carregar snapshot para De-Para:', e);
       }
 
-      // 4. Carregar registros do Omie a partir da tabela omie_financas_unificado
+      // Mapa de Projetos
+      const projMap = new Map<string, string>();
+      try {
+        const { data: projData } = await supabase
+          .from('omie_dim_projetos')
+          .select('codigo_projeto, descricao_projeto, empresa_nome');
+
+        if (projData) {
+          projData.forEach((p: any) => {
+            const cod = String(p.codigo_projeto || '').trim();
+            const desc = normalizeProjectName(decodeHtmlEntities(p.descricao_projeto || ''));
+            const emp = String(p.empresa_nome || '').trim();
+            if (cod && desc) {
+              projMap.set(cod, desc);
+              if (emp) projMap.set(`${emp}-${cod}`, desc);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[DrePainelService] Aviso ao carregar projetos dim:', e);
+      }
+
+      // Carregar registros do Omie a partir da tabela omie_financas_unificado
       let allRecords: any[] = [];
       let from = 0;
       const limit = 1000;
       let hasMore = true;
 
-      // Trava temporal mínima no banco: Omie iniciou em Junho/2025
       let query = supabase
         .from('omie_financas_unificado')
         .select('id, empresa_nome, omie_id, tipo_registro, status, valor_total, valor_alocado, data_pagamento, data_vencimento, data_emissao, data_previsao, data_registro, projeto_nome, departamento_nome, categoria_codigo, categoria_nome, cliente_fornecedor, numero_documento, raw_data')
@@ -239,8 +419,6 @@ export class DrePainelService {
 
       if (regime === 'CAIXA') {
         query = query.not('data_pagamento', 'is', null).gte('data_pagamento', '2025-06-01');
-      } else if (regime === 'COMPETENCIA') {
-        query = query.or('data_registro.gte.2025-06-01,data_emissao.gte.2025-06-01');
       } else {
         // PREVISAO: vencimentos futuros ou em aberto
         query = query.or('data_vencimento.gte.2025-06-01,data_previsao.gte.2025-06-01');
@@ -268,26 +446,24 @@ export class DrePainelService {
       const lancamentos: DrePainelLancamento[] = [];
       const todayStr = new Date().toISOString().slice(0, 10);
 
-      // 5. Processamento dos registros Omie com travas temporais e regras contábeis
+      // Processamento dos registros Omie com travas temporais e regras contábeis
       allRecords.forEach(item => {
         const emp = normalizeEmpresa(item.empresa_nome);
-        if (emp === 'Ybox') return; // Ybox é tratada 100% pelo histórico por enquanto
+        if (emp === 'Ybox') return; // Ybox é tratada 100% pelo histórico
 
         const dtCompetencia = item.data_registro || item.data_emissao || item.data_vencimento || '';
         const dtCaixa = item.data_pagamento || null;
         const dtVenc = item.data_vencimento || null;
         const dtPrev = item.data_previsao || dtVenc;
 
-        // APLICAÇÃO MANDATÓRIA DO MARCO TEMPORAL:
+        // TRAVAS TEMPORAIS MANDATÓRIAS:
         // - Conectius: Omie somente >= 2026-07-01
         // - Mar Brasil, DZM, G2: Omie somente >= 2025-06-01
         if (emp === 'Conectius') {
           if (regime === 'CAIXA' && (!dtCaixa || dtCaixa < '2026-07-01')) return;
-          if (regime === 'COMPETENCIA' && (!dtCompetencia || dtCompetencia < '2026-07-01')) return;
           if (regime === 'PREVISAO' && (!dtVenc || dtVenc < '2026-07-01')) return;
         } else {
           if (regime === 'CAIXA' && (!dtCaixa || dtCaixa < '2025-06-01')) return;
-          if (regime === 'COMPETENCIA' && (!dtCompetencia || dtCompetencia < '2025-06-01')) return;
           if (regime === 'PREVISAO' && (!dtVenc || dtVenc < '2025-06-01')) return;
         }
 
@@ -297,7 +473,7 @@ export class DrePainelService {
         const catNome = decodeHtmlEntities(String(item.categoria_nome || rawDet.cDesCateg || '')).trim();
         const catNomeLow = catNome.toLowerCase();
 
-        // 1. REGRA: DESCONSIDERAR TRANSFERÊNCIAS INTERNAS
+        // 1. Desconsiderar Transferências Internas
         if (
           catCodigo.startsWith('0.') ||
           catCodigo === '0.01' ||
@@ -307,7 +483,7 @@ export class DrePainelService {
           return;
         }
 
-        // 2. REGRA: DESCONSIDERAR MÚTUO INTERCOMPANY
+        // 2. Desconsiderar Mútuo Intercompany
         if (
           catCodigo === '1.01.95' ||
           catNomeLow.includes('créditos mar brasil') ||
@@ -316,8 +492,7 @@ export class DrePainelService {
           return;
         }
 
-        // 3. REGRA: NEUTRALIZAR RECARGA DE CARTÃO CORPORATIVO (CLARA)
-        // Evita duplicar compras feitas com o cartão já lançadas nas categorias finais
+        // 3. Neutralizar Recarga de Cartão Corporativo (Clara)
         if (
           catCodigo === '2.04.99' ||
           catNomeLow.includes('recarga de cartão') ||
@@ -326,30 +501,34 @@ export class DrePainelService {
           return;
         }
 
-        // 4. REGRA: EXTRATO BANCÁRIO DIRETO (nCodTitulo == 0)
-        // Se for movimento de extrato e tiver nCodTitulo !== 0, é liquidação de título e não deve duplicar
+        // 4. Extrato Bancário direto (nCodTitulo == 0)
         const nCodTitulo = Number(rawDet.nCodTitulo || 0);
         const grp = String(rawDet.cGrupo || '').toUpperCase();
         if (nCodTitulo !== 0 && (grp === 'CONTA_CORRENTE_PAG' || grp === 'CONTA_CORRENTE_REC' || grp === 'CONTA_A_PAGAR' || grp === 'CONTA_A_RECEBER')) {
           if (item.tipo_registro === 'MOVIMENTO') return;
         }
 
-        // 5. REGRA: PROVISÕES
+        // 5. REGRA DE PROVISÕES (Despesas e Receitas):
         const isProvisao =
           catCodigo.startsWith('1.01.9') ||
           catNomeLow.includes('provisão') ||
           catNomeLow.includes('provisao');
 
+        const isProvisaoReceita =
+          isProvisao &&
+          (catCodigo.startsWith('1.01') || item.tipo_registro === 'RECEBER' || catNomeLow.includes('receita'));
+
         // No regime de CAIXA, provisões não pagas não entram
         if (regime === 'CAIXA' && isProvisao && !dtCaixa) return;
 
-        // No regime de PREVISÃO, apenas o que estiver a vencer ou aberto
+        // No regime de PREVISÃO (Fluxo de Caixa):
+        // Se já foi pago, não é mais previsão futura
         if (regime === 'PREVISAO' && item.status === 'PAGO') return;
 
         // Determinar Conta DRE
         let contaDre = catToConta.get(catNomeLow) || '';
         if (!contaDre) {
-          if (item.tipo_registro === 'RECEBER' || catCodigo.startsWith('1.01')) {
+          if (item.tipo_registro === 'RECEBER' || catCodigo.startsWith('1.01') || isProvisaoReceita) {
             contaDre = 'Receita Bruta de Vendas';
           } else if (catCodigo.startsWith('1.02') || catCodigo.startsWith('1.03')) {
             contaDre = 'Outras Receitas';
@@ -357,7 +536,7 @@ export class DrePainelService {
             contaDre = 'Despesas Financeiras';
           } else if (catCodigo.startsWith('2.07')) {
             contaDre = 'Ativos';
-          } else if (catNomeLow.includes('salário') || catNomeLow.includes('folha') || catNomeLow.includes('inss')) {
+          } else if (catNomeLow.includes('salário') || catNomeLow.includes('folha') || catNomeLow.includes('inss') || catNomeLow.includes('credenciado')) {
             contaDre = 'Despesas com Pessoal';
           } else {
             contaDre = 'Despesas Administrativas';
@@ -367,10 +546,10 @@ export class DrePainelService {
         // Valor e Sinal
         const valorAlocado = Number(item.valor_alocado || item.valor_total || 0);
         const valorAbs = Math.abs(valorAlocado);
-        const isReceita = item.tipo_registro === 'RECEBER' || (item.tipo_registro === 'MOVIMENTO' && rawDet.cNatureza === 'R');
+        const isReceita = item.tipo_registro === 'RECEBER' || isProvisaoReceita || (item.tipo_registro === 'MOVIMENTO' && rawDet.cNatureza === 'R');
         const sinalValor = isReceita ? valorAbs : -valorAbs;
 
-        // Data de apuração base do Regime
+        // Data base do Regime
         let dateForPeriod = dtCompetencia;
         if (regime === 'CAIXA') dateForPeriod = dtCaixa || dtCompetencia;
         if (regime === 'PREVISAO') dateForPeriod = dtVenc || dtPrev || dtCompetencia;
@@ -402,11 +581,8 @@ export class DrePainelService {
 
         // Fornecedor / Cliente
         let fornNome = decodeHtmlEntities(String(item.cliente_fornecedor || '')).trim();
-        const codForn = String(raw.codigo_cliente_fornecedor || rawDet.nCodPessoa || '').trim();
         if (!fornNome || fornNome === 'não informado' || fornNome === 'Sem Fornecedor') {
-          if (codForn && fornMapByCode.has(codForn)) {
-            fornNome = fornMapByCode.get(codForn)!;
-          } else if (rawDet.cNomPessoa) {
+          if (rawDet.cNomPessoa) {
             fornNome = decodeHtmlEntities(rawDet.cNomPessoa);
           }
         }
@@ -417,6 +593,9 @@ export class DrePainelService {
         if ((!projNome || projNome === 'Sem Projeto') && codProj && projMap.has(codProj)) {
           projNome = projMap.get(codProj)!;
         }
+
+        // Conta Bancária Real Resolvida
+        const contaCorrente = resolveContaCorrente(raw, rawDet);
 
         // Rateios por Departamento
         const rateios: DrePainelRateio[] = [];
@@ -436,7 +615,7 @@ export class DrePainelService {
           id: `live-${item.id}`,
           empresa: emp,
           omie_id: item.omie_id,
-          tipo: item.tipo_registro === 'RECEBER' ? 'RECEBER' : (item.tipo_registro === 'PAGAR' ? 'PAGAR' : 'MOVIMENTO'),
+          tipo: isReceita ? 'RECEBER' : 'PAGAR',
           status: item.status || 'PAGO',
           valor: valorAbs,
           sinal_valor: sinalValor,
@@ -451,7 +630,7 @@ export class DrePainelService {
           projeto: projNome || 'Geral',
           departamento: decodeHtmlEntities(String(item.departamento_nome || 'Geral')).trim(),
           fornecedor_cliente: fornNome || 'Diversos',
-          conta_corrente: decodeHtmlEntities(String(raw.conta_corrente || rawDet.cDesContaCC || 'Conta Corrente')).trim(),
+          conta_corrente: contaCorrente,
           numero_documento: item.numero_documento,
           numero_parcela: numParcela || '1/1',
           parcela_atual: parcelaAtual,
@@ -469,18 +648,18 @@ export class DrePainelService {
         });
       });
 
-      // 6. Incorporar Dados Históricos Congelados do Snapshot
+      // 3. Incorporar Dados Históricos Congelados do Snapshot
       // Para meses anteriores ao marco temporal de cada empresa
       if (snapRows.length > 0) {
         snapRows.forEach((r: any, idx: number) => {
           const emp = normalizeEmpresa(r.Empresa);
           const contaDre = (r.ContaDRE || 'Sem Conta').trim();
           const categoria = (r.Categoria || 'Diversos').trim();
-          const forn = (r.Fornecedor || r.Cliente || 'Diversos').trim();
-          const depto = (r.Departamento || 'Geral').trim();
-          const proj = normalizeProjectName((r.Projeto || 'Geral').trim());
+          const forn = decodeHtmlEntities(String(r.Fornecedor || r.Cliente || 'Diversos')).trim();
+          const depto = decodeHtmlEntities(String(r.Departamento || 'Geral')).trim();
+          const proj = normalizeProjectName(decodeHtmlEntities(String(r.Projeto || 'Geral')).trim());
+          const cc = decodeHtmlEntities(String(r.ContaCorrente || 'Histórico Consolidado')).trim();
 
-          // Percorrer todas as colunas de mês (ex: 'Jan/25', 'Fev/25', 'Set/26')
           Object.keys(r).forEach(col => {
             if (!/^[A-Z][a-z]{2}\/\d{2}$/.test(col)) return;
 
@@ -498,14 +677,12 @@ export class DrePainelService {
             const mFull = mIdx + 1;
             const dtRef = `${yFull}-${String(mFull).padStart(2, '0')}-01`;
 
-            // Verificar se cai na faixa congelada da empresa:
             let isHistoricoCongelado = false;
             if (emp === 'Ybox') {
-              isHistoricoCongelado = true; // Ybox 100% histórico congelado
+              isHistoricoCongelado = true;
             } else if (emp === 'Conectius') {
               if (dtRef < '2026-07-01') isHistoricoCongelado = true;
             } else {
-              // Mar Brasil, DZM, G2
               if (dtRef < '2025-06-01') isHistoricoCongelado = true;
             }
 
@@ -533,7 +710,7 @@ export class DrePainelService {
               projeto: proj,
               departamento: depto,
               fornecedor_cliente: forn,
-              conta_corrente: 'Histórico Consolidado',
+              conta_corrente: cc,
               numero_parcela: '1/1',
               parcela_atual: 1,
               total_parcelas: 1,
@@ -570,62 +747,80 @@ export class DrePainelService {
         return false;
       }
 
-      // 2. Períodos
+      // 2. Subfiltro de Ano (TODOS | 2024 | 2025 | 2026)
+      if (filters.ano && filters.ano !== 'TODOS') {
+        const shortYear = filters.ano.slice(-2);
+        if (!l.periodo.endsWith(`/${shortYear}`)) {
+          return false;
+        }
+      }
+
+      // 3. Períodos específicos
       if (filters.periodos.length > 0 && !filters.periodos.includes(l.periodo)) {
         return false;
       }
 
-      // 3. Conta DRE
+      // 4. Conta DRE
       if (filters.contasDre.length > 0 && !filters.contasDre.includes(l.conta_dre)) {
         return false;
       }
 
-      // 4. Departamento
+      // 5. Departamento
       if (filters.departamentos.length > 0) {
         const hasDepto = filters.departamentos.includes(l.departamento) ||
           (l.rateios && l.rateios.some(r => filters.departamentos.includes(r.departamento)));
         if (!hasDepto) return false;
       }
 
-      // 5. Projeto
+      // 6. Projeto
       if (filters.projetos.length > 0 && !filters.projetos.includes(l.projeto)) {
         return false;
       }
 
-      // 6. Categoria
+      // 7. Categoria
       if (filters.categorias.length > 0 && !filters.categorias.includes(l.categoria)) {
         return false;
       }
 
-      // 7. Fornecedor / Cliente
+      // 8. Fornecedor / Cliente
       if (filters.fornecedores.length > 0 && !filters.fornecedores.includes(l.fornecedor_cliente)) {
         return false;
       }
 
-      // 8. Conta Corrente
+      // 9. Conta Corrente Bancária
       if (filters.contasCorrentes.length > 0 && !filters.contasCorrentes.includes(l.conta_corrente)) {
         return false;
       }
 
-      // 9. Granularidade de Parcelamento
+      // 10. Granularidade de Parcelamento
       if (filters.filtroParcelamento === 'A_VISTA' && l.tipo_pagamento !== 'A_VISTA') return false;
       if (filters.filtroParcelamento === 'PARCELADO_GERAL' && l.tipo_pagamento !== 'PARCELADO') return false;
       if (filters.filtroParcelamento === 'PARCELA_ANTERIOR' && !l.is_parcela_anterior) return false;
       if (filters.filtroParcelamento === 'LONGO_PRAZO' && !l.is_longo_prazo) return false;
 
-      // 10. Status de Vencimento
+      // 11. Status de Vencimento
       if (filters.filtroStatusVencimento === 'EM_ATRASO' && !l.is_em_atraso) return false;
       if (filters.filtroStatusVencimento === 'A_VENCER' && (l.status === 'PAGO' || l.is_em_atraso)) return false;
       if (filters.filtroStatusVencimento === 'PAGO' && l.status !== 'PAGO') return false;
 
-      // 11. Recorrência
+      // 12. Recorrência
       if (filters.filtroRecorrencia === 'SOMENTE_RECORRENTES' && !l.is_recorrente) return false;
       if (filters.filtroRecorrencia === 'SOMENTE_PONTUAIS' && l.is_recorrente) return false;
 
-      // 12. Busca textual rápida
+      // 13. Ocultar Categorias
+      if (filters.ocultarCategorias && filters.ocultarCategorias.length > 0) {
+        if (filters.ocultarCategorias.includes(l.categoria)) return false;
+      }
+
+      // 14. Ocultar Projetos
+      if (filters.ocultarProjetos && filters.ocultarProjetos.length > 0) {
+        if (filters.ocultarProjetos.includes(l.projeto)) return false;
+      }
+
+      // 15. Busca textual rápida
       if (filters.search) {
         const s = filters.search.toLowerCase();
-        const str = `${l.fornecedor_cliente} ${l.categoria} ${l.projeto} ${l.departamento} ${l.numero_documento || ''} ${l.observacoes || ''}`.toLowerCase();
+        const str = `${l.fornecedor_cliente} ${l.categoria} ${l.projeto} ${l.departamento} ${l.conta_corrente} ${l.numero_documento || ''} ${l.observacoes || ''}`.toLowerCase();
         if (!str.includes(s)) return false;
       }
 

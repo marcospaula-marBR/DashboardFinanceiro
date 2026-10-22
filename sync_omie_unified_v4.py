@@ -47,7 +47,6 @@ def format_date_iso_to_iso(date_str):
         return None
 
 EXCLUSION_KEYWORDS = [
-    'provis',         # provisões (rescisões, férias, 13o, tributos, clientes)
     'mutuo',          # mútuo entradas/saídas
     'mútuo',
     'rendimento',     # rendimentos de aplicações

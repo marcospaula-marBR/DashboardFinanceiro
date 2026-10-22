@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Filter,
   X,
@@ -52,9 +52,11 @@ function DropdownMultiSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(opt =>
-    opt.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOptions = useMemo(() => {
+    return options.filter(opt =>
+      opt.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [options, searchTerm]);
 
   const toggleOption = (opt: string) => {
     if (selected.includes(opt)) {
@@ -105,7 +107,7 @@ function DropdownMultiSelect({
 
           <div className="flex justify-between items-center px-1 mb-2 text-[10px] text-slate-500 border-b border-slate-100 pb-1">
             <button type="button" onClick={selectAll} className="text-emerald-600 hover:underline font-bold cursor-pointer">
-              Marcar todos
+              Marcar todos ({options.length})
             </button>
             <button type="button" onClick={clearAll} className="text-slate-500 hover:underline cursor-pointer">
               Limpar
@@ -173,6 +175,13 @@ export function DrePainelFiltersBar({
 }: DrePainelFiltersBarProps) {
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
+  // Filtrar as opções de período de acordo com o subfiltro de ano ativo
+  const filteredPeriodoOptions = useMemo(() => {
+    if (!filters.ano || filters.ano === 'TODOS') return periodoOptions;
+    const shortYear = filters.ano.slice(-2);
+    return periodoOptions.filter(p => p.endsWith(`/${shortYear}`));
+  }, [periodoOptions, filters.ano]);
+
   const activeFiltersCount =
     filters.empresas.length +
     filters.periodos.length +
@@ -182,6 +191,7 @@ export function DrePainelFiltersBar({
     filters.categorias.length +
     filters.fornecedores.length +
     filters.contasCorrentes.length +
+    (filters.ano && filters.ano !== 'TODOS' ? 1 : 0) +
     (filters.filtroParcelamento !== 'TODOS' ? 1 : 0) +
     (filters.filtroStatusVencimento !== 'TODOS' ? 1 : 0) +
     (filters.filtroRecorrencia !== 'TODOS' ? 1 : 0) +
@@ -198,6 +208,7 @@ export function DrePainelFiltersBar({
       categorias: [],
       fornecedores: [],
       contasCorrentes: [],
+      ano: 'TODOS',
       filtroParcelamento: 'TODOS',
       filtroStatusVencimento: 'TODOS',
       filtroRecorrencia: 'TODOS',
@@ -207,14 +218,14 @@ export function DrePainelFiltersBar({
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs space-y-3">
-      {/* Linha Superior: Busca Rápida + Pills Principais + Ações */}
+      {/* Linha Superior: Busca Rápida + Subfiltro de Ano + MultiSelects + Ações */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Campo de Busca Rápida */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Buscar fornecedor, categoria, doc..."
+            placeholder="Buscar fornecedor, doc..."
             value={filters.search}
             onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
             className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
@@ -230,6 +241,33 @@ export function DrePainelFiltersBar({
           )}
         </div>
 
+        {/* 1. Subfiltro Obrigatório no Período para Seleção do Ano */}
+        <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+          <span className="text-[10px] font-bold text-slate-500 px-1.5 uppercase">Ano:</span>
+          {[
+            { id: 'TODOS', label: 'Todos' },
+            { id: '2024', label: '2024' },
+            { id: '2025', label: '2025' },
+            { id: '2026', label: '2026' }
+          ].map(anoOption => {
+            const isSelected = (filters.ano || 'TODOS') === anoOption.id;
+            return (
+              <button
+                key={anoOption.id}
+                type="button"
+                onClick={() => onFilterChange({ ...filters, ano: anoOption.id })}
+                className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                }`}
+              >
+                {anoOption.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* MultiSelects Principais */}
         <DropdownMultiSelect
           label="Empresa"
@@ -240,9 +278,9 @@ export function DrePainelFiltersBar({
         />
 
         <DropdownMultiSelect
-          label="Período"
+          label={filters.ano && filters.ano !== 'TODOS' ? `Período (${filters.ano})` : "Período"}
           icon={<Calendar size={13} />}
-          options={periodoOptions}
+          options={filteredPeriodoOptions}
           selected={filters.periodos}
           onChange={(periodos) => onFilterChange({ ...filters, periodos })}
         />
@@ -253,6 +291,14 @@ export function DrePainelFiltersBar({
           options={contaDreOptions}
           selected={filters.contasDre}
           onChange={(contasDre) => onFilterChange({ ...filters, contasDre })}
+        />
+
+        <DropdownMultiSelect
+          label="Conta Bancária"
+          icon={<CreditCard size={13} />}
+          options={contaCorrenteOptions}
+          selected={filters.contasCorrentes}
+          onChange={(contasCorrentes) => onFilterChange({ ...filters, contasCorrentes })}
         />
 
         {/* Botão de Toggle Filtros Avançados */}
@@ -281,7 +327,7 @@ export function DrePainelFiltersBar({
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
           >
             <RotateCcw size={12} />
-            <span>Limpar filtros</span>
+            <span>Limpar</span>
           </button>
         )}
       </div>
@@ -323,15 +369,6 @@ export function DrePainelFiltersBar({
             options={fornecedorOptions}
             selected={filters.fornecedores}
             onChange={(fornecedores) => onFilterChange({ ...filters, fornecedores })}
-          />
-
-          {/* Conta Corrente */}
-          <DropdownMultiSelect
-            label="Conta Bancária"
-            icon={<CreditCard size={13} />}
-            options={contaCorrenteOptions}
-            selected={filters.contasCorrentes}
-            onChange={(contasCorrentes) => onFilterChange({ ...filters, contasCorrentes })}
           />
 
           {/* Seletor Granular de Parcelamento */}

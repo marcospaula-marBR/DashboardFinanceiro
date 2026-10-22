@@ -5,25 +5,26 @@ import {
   TrendingUp,
   TrendingDown,
   DollarSign,
-  AlertTriangle,
-  Clock,
   Layers,
-  Sparkles,
-  PieChart
+  PieChart,
+  ArrowUpRight
 } from 'lucide-react';
 import { DrePainelKpis, RegimeTipo } from '@/types/dre-painel';
 import { formatCurrencyBRL } from '@/services/dre-painel.service';
+import { DrilldownCardType } from './DrePainelKpiDrilldownModal';
 
 interface DrePainelKpisProps {
   kpis: DrePainelKpis;
   regime: RegimeTipo;
   isMeetingMode: boolean;
+  onCardClick?: (cardType: DrilldownCardType) => void;
 }
 
 export function DrePainelKpisCards({
   kpis,
   regime,
-  isMeetingMode
+  isMeetingMode,
+  onCardClick
 }: DrePainelKpisProps) {
   const mask = (valStr: string) => (isMeetingMode ? 'R$ ••••••' : valStr);
 
@@ -32,47 +33,66 @@ export function DrePainelKpisCards({
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
       {/* 1. Receitas */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden">
+      <div
+        onClick={() => onCardClick && onCardClick('RECEITAS')}
+        className="bg-white border border-slate-200 hover:border-emerald-400 hover:ring-2 hover:ring-emerald-400/20 rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden transition-all duration-200 cursor-pointer group"
+      >
         <div className="flex items-center justify-between text-slate-500 mb-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider">
+          <span className="text-[11px] font-bold uppercase tracking-wider group-hover:text-emerald-700 transition-colors">
             {regime === 'PREVISAO' ? 'Receitas Previstas' : 'Receita Bruta'}
           </span>
-          <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+          <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100 transition-colors">
             <TrendingUp size={15} />
           </div>
         </div>
         <div className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
           {mask(formatCurrencyBRL(kpis.totalReceitas))}
         </div>
-        <p className="text-[11px] text-slate-400 mt-0.5">
-          {regime === 'COMPETENCIA' ? 'Faturamento faturado / apurado' : 'Entradas de caixa registradas'}
-        </p>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-[11px] text-slate-400 truncate">
+            {regime === 'COMPETENCIA' ? 'Faturamento faturado / apurado' : 'Entradas registradas'}
+          </p>
+          <span className="text-[10px] font-semibold text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0">
+            Detalhes <ArrowUpRight size={11} className="ml-0.5" />
+          </span>
+        </div>
       </div>
 
       {/* 2. Despesas & Custos */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden">
+      <div
+        onClick={() => onCardClick && onCardClick('DESPESAS')}
+        className="bg-white border border-slate-200 hover:border-rose-400 hover:ring-2 hover:ring-rose-400/20 rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden transition-all duration-200 cursor-pointer group"
+      >
         <div className="flex items-center justify-between text-slate-500 mb-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider">
+          <span className="text-[11px] font-bold uppercase tracking-wider group-hover:text-rose-700 transition-colors">
             {regime === 'PREVISAO' ? 'Despesas Previstas' : 'Total Despesas & Custos'}
           </span>
-          <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+          <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg group-hover:bg-rose-100 transition-colors">
             <TrendingDown size={15} />
           </div>
         </div>
         <div className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
           {mask(formatCurrencyBRL(kpis.totalDespesas))}
         </div>
-        <p className="text-[11px] text-slate-400 mt-0.5">
-          {regime === 'COMPETENCIA' ? 'Custos, despesas e provisões' : 'Saídas liquidadas'}
-        </p>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-[11px] text-slate-400 truncate">
+            {regime === 'COMPETENCIA' ? 'Custos, despesas e provisões' : 'Saídas liquidadas'}
+          </p>
+          <span className="text-[10px] font-semibold text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0">
+            Detalhes <ArrowUpRight size={11} className="ml-0.5" />
+          </span>
+        </div>
       </div>
 
       {/* 3. Resultado Líquido & Margem */}
-      <div className={`border rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden ${
-        isPositivo
-          ? 'bg-emerald-50/40 border-emerald-200'
-          : 'bg-rose-50/40 border-rose-200'
-      }`}>
+      <div
+        onClick={() => onCardClick && onCardClick('RESULTADO')}
+        className={`border rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden transition-all duration-200 cursor-pointer group ${
+          isPositivo
+            ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-400 hover:ring-2 hover:ring-emerald-400/20'
+            : 'bg-rose-50/40 border-rose-200 hover:border-rose-400 hover:ring-2 hover:ring-rose-400/20'
+        }`}
+      >
         <div className="flex items-center justify-between text-slate-600 mb-1">
           <span className="text-[11px] font-bold uppercase tracking-wider">
             Resultado Líquido
@@ -90,53 +110,48 @@ export function DrePainelKpisCards({
         }`}>
           {mask(formatCurrencyBRL(kpis.resultadoLiquido))}
         </div>
-        <p className={`text-[11px] mt-0.5 ${isPositivo ? 'text-emerald-700' : 'text-rose-700'}`}>
-          {isPositivo ? 'Superávit operacional apurado' : 'Déficit no período'}
-        </p>
+        <div className="flex items-center justify-between mt-1">
+          <p className={`text-[11px] truncate ${isPositivo ? 'text-emerald-700' : 'text-rose-700'}`}>
+            {isPositivo ? 'Superávit operacional apurado' : 'Déficit no período'}
+          </p>
+          <span className={`text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0 ${
+            isPositivo ? 'text-emerald-800' : 'text-rose-800'
+          }`}>
+            Detalhes <ArrowUpRight size={11} className="ml-0.5" />
+          </span>
+        </div>
       </div>
 
-      {/* 4. Atrasados / Alerta de Inadimplência ou Provisões */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden">
-        {kpis.totalAtrasado > 0 ? (
-          <>
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wider flex items-center gap-1">
-                <AlertTriangle size={13} />
-                Em Atraso ({kpis.qtdAtrasados})
-              </span>
-              <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
-                <Clock size={15} />
-              </div>
-            </div>
-            <div className="text-lg sm:text-2xl font-black text-rose-600 tracking-tight">
-              {mask(formatCurrencyBRL(kpis.totalAtrasado))}
-            </div>
-            <p className="text-[11px] text-rose-500 mt-0.5 font-medium">
-              Atenção: títulos vencidos não liquidados
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider">
-                {regime === 'COMPETENCIA' ? 'Provisões do Exercício' : 'Compromissos Parcelados'}
-              </span>
-              <div className="p-1.5 bg-slate-100 text-slate-600 rounded-lg">
-                <PieChart size={15} />
-              </div>
-            </div>
-            <div className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight">
-              {mask(
-                formatCurrencyBRL(
-                  regime === 'COMPETENCIA' ? kpis.totalProvisoes : kpis.totalParceladoComprometido
-                )
-              )}
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              {regime === 'COMPETENCIA' ? 'Provisões para encargos/13º' : 'Total parcelado em aberto'}
-            </p>
-          </>
-        )}
+      {/* 4. Provisões Operacionais do Exercício (Card de Atrasados Ocultado por solicitação executiva) */}
+      <div
+        onClick={() => onCardClick && onCardClick('PROVISOES')}
+        className="bg-white border border-slate-200 hover:border-amber-400 hover:ring-2 hover:ring-amber-400/20 rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden transition-all duration-200 cursor-pointer group"
+      >
+        <div className="flex items-center justify-between text-slate-500 mb-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider group-hover:text-amber-700 transition-colors">
+            {regime === 'COMPETENCIA' ? 'Provisões do Exercício' : 'Provisões & Parcelados'}
+          </span>
+          <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-100 transition-colors">
+            <Layers size={15} />
+          </div>
+        </div>
+        <div className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight">
+          {mask(
+            formatCurrencyBRL(
+              regime === 'COMPETENCIA'
+                ? kpis.totalProvisoes
+                : (kpis.totalProvisoes > 0 ? kpis.totalProvisoes : kpis.totalParceladoComprometido)
+            )
+          )}
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-[11px] text-slate-400 truncate">
+            {regime === 'COMPETENCIA' ? '13º, férias, encargos e tributos' : 'Previsões e parcelas compromissadas'}
+          </p>
+          <span className="text-[10px] font-semibold text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0">
+            Detalhes <ArrowUpRight size={11} className="ml-0.5" />
+          </span>
+        </div>
       </div>
     </div>
   );

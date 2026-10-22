@@ -13,7 +13,19 @@ import { DrePainelFiltersBar } from '@/components/dre-painel/DrePainelFiltersBar
 import { DrePainelKpisCards } from '@/components/dre-painel/DrePainelKpis';
 import { DrePainelTable } from '@/components/dre-painel/DrePainelTable';
 import { DrePainelDrawer } from '@/components/dre-painel/DrePainelDrawer';
-import { Loader2, AlertCircle } from 'lucide-react';
+import {
+  DrePainelKpiDrilldownModal,
+  DrilldownCardType
+} from '@/components/dre-painel/DrePainelKpiDrilldownModal';
+import { DrePainelLateralCharts } from '@/components/dre-painel/DrePainelLateralCharts';
+import {
+  Loader2,
+  AlertCircle,
+  BarChart2,
+  PanelRightClose,
+  PanelRightOpen,
+  LayoutGrid
+} from 'lucide-react';
 
 export default function DrePainelPage() {
   const [regime, setRegime] = useState<RegimeTipo>('COMPETENCIA');
@@ -27,6 +39,12 @@ export default function DrePainelPage() {
   const [selectedLancamento, setSelectedLancamento] = useState<DrePainelLancamento | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  // Modal de Drilldown dos Cards de KPI
+  const [drilldownCard, setDrilldownCard] = useState<DrilldownCardType | null>(null);
+
+  // Exibição dos Gráficos Laterais no Desktop
+  const [showLateralCharts, setShowLateralCharts] = useState(true);
+
   // Filtros
   const [filters, setFilters] = useState<DrePainelFilters>({
     regime: 'COMPETENCIA',
@@ -38,6 +56,7 @@ export default function DrePainelPage() {
     categorias: [],
     fornecedores: [],
     contasCorrentes: [],
+    ano: 'TODOS',
     filtroParcelamento: 'TODOS',
     filtroStatusVencimento: 'TODOS',
     filtroRecorrencia: 'TODOS',
@@ -136,9 +155,14 @@ export default function DrePainelPage() {
     if (filters.periodos.length > 0) {
       return options.periodos.filter(p => filters.periodos.includes(p));
     }
+    // Se o subfiltro de ano estiver ativo, mostrar todos os meses daquele ano
+    if (filters.ano && filters.ano !== 'TODOS') {
+      const shortYear = filters.ano.slice(-2);
+      return options.periodos.filter(p => p.endsWith(`/${shortYear}`));
+    }
     // Por padrão mostrar os últimos 12 meses disponíveis
     return options.periodos.slice(-12);
-  }, [filters.periodos, options.periodos]);
+  }, [filters.periodos, filters.ano, options.periodos]);
 
   // Seções da Tabela DRE
   const tableSections = useMemo(() => {
@@ -148,6 +172,20 @@ export default function DrePainelPage() {
   const handleSelectLancamento = (l: DrePainelLancamento) => {
     setSelectedLancamento(l);
     setIsDrawerOpen(true);
+  };
+
+  const handleFilterConta = (conta: string) => {
+    setFilters(prev => ({
+      ...prev,
+      contasDre: prev.contasDre.includes(conta) ? [] : [conta]
+    }));
+  };
+
+  const handleFilterDepto = (depto: string) => {
+    setFilters(prev => ({
+      ...prev,
+      departamentos: prev.departamentos.includes(depto) ? [] : [depto]
+    }));
   };
 
   return (
@@ -163,13 +201,39 @@ export default function DrePainelPage() {
         totalLancamentos={filteredLancamentos.length}
       />
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6 space-y-4">
+      <main className="max-w-[1600px] mx-auto px-3 sm:px-6 pt-4 sm:pt-6 space-y-4">
         {/* 2. Seletor Triplo de Regime (Competência, Caixa, Previsão) */}
-        <DrePainelRegimeSelector
-          currentRegime={regime}
-          onSelectRegime={setRegime}
-          isLoading={isLoading}
-        />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <DrePainelRegimeSelector
+            currentRegime={regime}
+            onSelectRegime={setRegime}
+            isLoading={isLoading}
+          />
+
+          {/* Toggle de Gráficos Laterais para Desktop */}
+          <div className="hidden xl:flex items-center gap-2">
+            <button
+              onClick={() => setShowLateralCharts(!showLateralCharts)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-xs cursor-pointer ${
+                showLateralCharts
+                  ? 'bg-white text-emerald-900 border-emerald-300 ring-1 ring-emerald-400/20'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {showLateralCharts ? (
+                <>
+                  <PanelRightClose size={14} className="text-emerald-600" />
+                  <span>Ocultar Painel Lateral</span>
+                </>
+              ) : (
+                <>
+                  <PanelRightOpen size={14} className="text-slate-500" />
+                  <span>Exibir Gráficos Laterais</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
 
         {/* Mensagem de Erro (se houver) */}
         {errorMsg && (
@@ -179,14 +243,15 @@ export default function DrePainelPage() {
           </div>
         )}
 
-        {/* 3. Cards de KPIs Executivos */}
+        {/* 3. Cards de KPIs Executivos com Ação de Drilldown */}
         <DrePainelKpisCards
           kpis={kpis}
           regime={regime}
           isMeetingMode={isMeetingMode}
+          onCardClick={(type) => setDrilldownCard(type)}
         />
 
-        {/* 4. Barra de Filtros Minimalista & Granular */}
+        {/* 4. Barra de Filtros Minimalista & Granular com Subfiltro de Ano */}
         <DrePainelFiltersBar
           filters={filters}
           onFilterChange={setFilters}
@@ -201,32 +266,66 @@ export default function DrePainelPage() {
           totalAtrasadosCount={options.atrasadosCount}
         />
 
-        {/* 5. Tabela DRE Tree Multivisão */}
+        {/* 5. Área de Conteúdo: Tabela DRE + Gráficos Laterais em Desktop */}
         {isLoading ? (
           <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-xs">
             <Loader2 size={32} className="mx-auto text-emerald-600 animate-spin mb-3" />
             <p className="text-sm font-bold text-slate-800">Carregando dados do painel...</p>
             <p className="text-xs text-slate-400 mt-1">
-              Processando registros do Omie e base histórica congelada
+              Processando registros do Omie e base histórica calibrada
             </p>
           </div>
         ) : (
-          <DrePainelTable
-            sections={tableSections}
-            periodos={activePeriods}
-            isMeetingMode={isMeetingMode}
-            onSelectLancamento={handleSelectLancamento}
-          />
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+            {/* Coluna Principal da Tabela Tree */}
+            <div className={showLateralCharts ? 'xl:col-span-8 2xl:col-span-9' : 'xl:col-span-12'}>
+              <DrePainelTable
+                sections={tableSections}
+                periodos={activePeriods}
+                isMeetingMode={isMeetingMode}
+                onSelectLancamento={handleSelectLancamento}
+              />
+            </div>
+
+            {/* Coluna Lateral de Gráficos Analíticos no Desktop */}
+            {showLateralCharts && (
+              <div className="xl:col-span-4 2xl:col-span-3">
+                <DrePainelLateralCharts
+                  lancamentos={filteredLancamentos}
+                  sections={tableSections}
+                  periodos={activePeriods}
+                  isMeetingMode={isMeetingMode}
+                  onFilterConta={handleFilterConta}
+                  onFilterDepto={handleFilterDepto}
+                />
+              </div>
+            )}
+          </div>
         )}
       </main>
 
-      {/* 6. Gaveta 360° de Detalhes do Lançamento */}
+      {/* 6. Gaveta 360° de Detalhes do Lançamento Individual */}
       <DrePainelDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         lancamento={selectedLancamento}
         isMeetingMode={isMeetingMode}
       />
+
+      {/* 7. Modal de Drilldown Analítico dos Cards de KPI */}
+      {drilldownCard && (
+        <DrePainelKpiDrilldownModal
+          isOpen={drilldownCard !== null}
+          onClose={() => setDrilldownCard(null)}
+          cardType={drilldownCard}
+          lancamentos={filteredLancamentos}
+          regime={regime}
+          onSelectLancamento={(l) => {
+            setSelectedLancamento(l);
+            setIsDrawerOpen(true);
+          }}
+        />
+      )}
     </div>
   );
 }
