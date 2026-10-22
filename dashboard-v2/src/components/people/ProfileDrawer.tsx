@@ -4893,8 +4893,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                                   </div>
                                                   {!!c.valor_adiantamento && (
                                                     <div className="flex justify-between items-center py-0.5">
-                                                      <span className="text-slate-500 font-semibold">Adiantamento (Vale):</span>
+                                                      <span className="text-slate-500 font-semibold">Adiantamento (Folha):</span>
                                                       <span className="text-blue-600 dark:text-blue-400 font-extrabold tabular-nums">+{formatCurrency(c.valor_adiantamento)}</span>
+                                                    </div>
+                                                  )}
+                                                  {!!c.outros_ajustes && (
+                                                    <div className="flex justify-between items-center py-0.5">
+                                                      <span className="text-slate-500 font-semibold">Outros Recebidos:</span>
+                                                      <span className="text-blue-600 dark:text-blue-400 font-extrabold tabular-nums">+{formatCurrency(c.outros_ajustes)}</span>
                                                     </div>
                                                   )}
                                                   {!!c.valor_hora_extra && (

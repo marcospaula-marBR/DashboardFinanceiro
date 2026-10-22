@@ -26,10 +26,12 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Eye,
+  Edit3,
   Check,
   RotateCcw,
   Gift,
-  AlertCircle
+  AlertCircle,
+  Banknote
 } from "lucide-react";
 import { parseCltFile, CltParseResult, CltParsedEmployee } from "@/utils/cltFileParser";
 import { findBestNameMatch } from "@/utils/nameSimilarity";
@@ -46,20 +48,31 @@ export interface StagingCostRow {
   matchType: "EXACT" | "SIMILAR" | "NEW";
   cargo?: string;
   competencia: string; // YYYY-MM-01
-  sourceType: "PAYROLL_EXTRATO" | "EXCEL_RETROATIVO" | "BENEFICIOS_PDF";
+  sourceType: "PAYROLL_EXTRATO" | "EXCEL_RETROATIVO" | "BENEFICIOS_PDF" | "ADVANCE_PDF";
   
-  // Proventos e Bases da Folha
-  valor_fixo: number;
-  valor_holerite: number;
-  valor_adiantamento: number;
+  // 1. Proventos e Bases da Folha Mensal
+  valor_fixo: number; // Salário Fixo
+  valor_holerite: number; // Proventos Brutos da Folha Mensal
+  valor_outros_recebidos: number; // Outros Valores Recebidos (que não o especificado)
   valor_hora_extra: number;
   valor_adicional_not: number;
   
-  // Benefícios Recebidos (Editáveis)
-  valor_vt: number; // VT RECEBIDO / RECARGA EFETIVA
+  // 2. Descontos da Folha
+  valor_descontos: number;
+  inss_empregado: number;
+  irrf_empregado: number;
   desconto_vt_6: number; // Desconto legal de 6% da folha
+  valor_faltas: number;
+  dias_faltas: number;
+  valor_consignado: number;
+  valor_pensao_alimenticia: number;
+  valor_fgts: number;
+
+  // 3. Benefícios e Pagamentos Extras da Competência (Última Parte)
+  valor_vt: number; // VT RECEBIDO / RECARGA EFETIVA
   valor_cesta: number; // VR / CESTA BÁSICA CONCEDIDA
   valor_vr: number; // VALE REFEIÇÃO
+  valor_adiantamento: number; // ADIANTAMENTO FOLHA (importado da folha de adiantamento)
   valor_bonus: number; // BONIFICAÇÃO / PREMIAÇÃO
   valor_ajuda_custo: number; // AJUDA DE CUSTO
   
@@ -67,16 +80,6 @@ export interface StagingCostRow {
   valor_ferias: number;
   valor_rescisao: number;
   valor_decimo_terceiro: number;
-  
-  // Descontos da Folha
-  valor_descontos: number;
-  inss_empregado: number;
-  irrf_empregado: number;
-  valor_faltas: number;
-  dias_faltas: number;
-  valor_consignado: number;
-  valor_pensao_alimenticia: number;
-  valor_fgts: number;
   
   // Folha Líquida
   folha_liquido: number;
@@ -103,8 +106,8 @@ export function CostImportStagingModal({
   existingEmployees,
   defaultCompetencia,
 }: CostImportStagingModalProps) {
-  // Controle de Fonte: 'FOLHA', 'BENEFICIOS' ou 'EXCEL'
-  const [sourceMode, setSourceMode] = useState<"FOLHA" | "BENEFICIOS" | "EXCEL">("FOLHA");
+  // Controle de Fonte: 'FOLHA', 'ADVANCE', 'BENEFICIOS' ou 'EXCEL'
+  const [sourceMode, setSourceMode] = useState<"FOLHA" | "ADVANCE" | "BENEFICIOS" | "EXCEL">("FOLHA");
 
   // Estados de Upload e Parsing
   const [isProcessing, setIsProcessing] = useState(false);
@@ -112,41 +115,48 @@ export function CostImportStagingModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mergeSuccessMessage, setMergeSuccessMessage] = useState<string | null>(null);
 
-  // Staging Rows
-  const [stagingRows, setStagingRows] = useState<StagingCostRow[]>([]);
-  const [selectedCompetencia, setSelectedCompetencia] = useState<string>(
-    defaultCompetencia || new Date().toISOString().slice(0, 7) + "-01"
-  );
+  // Competência selecionada
+  const [selectedCompetencia, setSelectedCompetencia] = useState<string>(() => {
+    if (defaultCompetencia) return defaultCompetencia;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}-01`;
+  });
 
-  // Validação com banco de dados (Já cadastrados / Auditoria de conflito)
+  // Linhas do staging
+  const [stagingRows, setStagingRows] = useState<StagingCostRow[]>([]);
+
+  // Filtros de busca e visualização no staging
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterMatchType, setFilterMatchType] = useState<"ALL" | "MATCHED" | "NEW" | "EXISTING">("ALL");
+
+  // Valores em massa para VT, VR/Cesta e Adiantamento
+  const [bulkVtValue, setBulkVtValue] = useState<string>("");
+  const [bulkCestaValue, setBulkCestaValue] = useState<string>("");
+
+  // Estado para linha inspecionada/editada em modal detalhado
+  const [inspectRow, setInspectRow] = useState<StagingCostRow | null>(null);
+
+  // Estados de detecção preventiva de conflitos
   const [existingCostsInDb, setExistingCostsInDb] = useState<Map<string, MonthlyCost>>(new Map());
   const [isLoadingExistingCosts, setIsLoadingExistingCosts] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [conflictingRows, setConflictingRows] = useState<{ row: StagingCostRow; existingCost: MonthlyCost }[]>([]);
 
-  // Filtro de Busca no Staging
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterMatchType, setFilterMatchType] = useState<"ALL" | "MATCHED" | "NEW" | "EXISTING">("ALL");
-
-  // Preenchimento em Massa
-  const [bulkVtValue, setBulkVtValue] = useState<string>("");
-  const [bulkCestaValue, setBulkCestaValue] = useState<string>("");
-  const [isLoadingPreviousBenefits, setIsLoadingPreviousBenefits] = useState(false);
-
-  // Commit / Salvar
+  // Estados de gravação
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitProgress, setCommitProgress] = useState(0);
+  const [isLoadingPreviousBenefits, setIsLoadingPreviousBenefits] = useState(false);
 
-  // Modal de Detalhes da Linha
-  const [inspectRow, setInspectRow] = useState<StagingCostRow | null>(null);
-
-  // Reseta ao fechar/abrir
+  // Reset ao abrir modal
   useEffect(() => {
-    if (!isOpen) {
-      setStagingRows([]);
+    if (isOpen) {
+      if (defaultCompetencia) {
+        setSelectedCompetencia(defaultCompetencia);
+      }
       setErrorMessage(null);
       setMergeSuccessMessage(null);
-      setIsProcessing(false);
       setIsCommitting(false);
       setShowCorrectionModal(false);
       setConflictingRows([]);
@@ -204,7 +214,6 @@ export function CostImportStagingModal({
         (r.cargo && r.cargo.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchComp = r.competencia.slice(0, 7) === selectedCompetencia.slice(0, 7);
-
       const alreadyExists = r.targetEmployeeId !== "NEW" && existingCostsInDb.has(r.targetEmployeeId);
 
       const matchTypeOk =
@@ -233,7 +242,9 @@ export function CostImportStagingModal({
     const selected = stagingRows.filter((r) => r.isSelected && r.competencia.slice(0, 7) === selectedCompetencia.slice(0, 7));
     const count = selected.length;
     let totalHolerite = 0;
+    let totalOutrosRecebidos = 0;
     let totalDescontos = 0;
+    let totalAdiantamento = 0;
     let totalVtRecebido = 0;
     let totalCesta = 0;
     let totalOutrosBeneficios = 0;
@@ -241,14 +252,16 @@ export function CostImportStagingModal({
     let totalLiquidoReal = 0;
 
     selected.forEach((r) => {
-      const proventos = r.valor_holerite || (r.valor_fixo + r.valor_hora_extra + r.valor_adicional_not);
-      const beneficios = (r.valor_vt || 0) + (r.valor_cesta || 0) + (r.valor_vr || 0) + (r.valor_bonus || 0) + (r.valor_ajuda_custo || 0);
+      const proventos = (r.valor_holerite || (r.valor_fixo + r.valor_hora_extra + r.valor_adicional_not)) + (r.valor_outros_recebidos || 0);
+      const beneficios = (r.valor_vt || 0) + (r.valor_cesta || 0) + (r.valor_vr || 0) + (r.valor_adiantamento || 0) + (r.valor_bonus || 0) + (r.valor_ajuda_custo || 0);
       const desc = r.valor_descontos || 0;
       const rec = proventos + beneficios;
       const liq = rec - desc;
 
       totalHolerite += proventos;
+      totalOutrosRecebidos += r.valor_outros_recebidos || 0;
       totalDescontos += desc;
+      totalAdiantamento += r.valor_adiantamento || 0;
       totalVtRecebido += r.valor_vt || 0;
       totalCesta += r.valor_cesta || 0;
       totalOutrosBeneficios += (r.valor_vr || 0) + (r.valor_bonus || 0) + (r.valor_ajuda_custo || 0);
@@ -259,7 +272,9 @@ export function CostImportStagingModal({
     return {
       count,
       totalHolerite,
+      totalOutrosRecebidos,
       totalDescontos,
+      totalAdiantamento,
       totalVtRecebido,
       totalCesta,
       totalOutrosBeneficios,
@@ -277,7 +292,7 @@ export function CostImportStagingModal({
       setIsProcessing(true);
       setErrorMessage(null);
       setMergeSuccessMessage(null);
-      setProcessingStatusText("Enviando arquivo e extraindo colaboradores via IA...");
+      setProcessingStatusText("Enviando arquivo e extraindo colaboradores da folha via IA...");
 
       const formData = new FormData();
       formData.append("file", file);
@@ -306,7 +321,6 @@ export function CostImportStagingModal({
         const cleanName = (rec.name || "").trim();
         const cleanCpf = (rec.cpf || "").replace(/\D/g, "");
 
-        // Tenta achar por CPF exato primeiro
         let matchedEmp = cleanCpf
           ? existingEmployees.find((e) => (e.document_id || "").replace(/\D/g, "") === cleanCpf || (e.responsible_cpf || "").replace(/\D/g, "") === cleanCpf)
           : undefined;
@@ -320,7 +334,6 @@ export function CostImportStagingModal({
           matchScore = 1.0;
           targetEmployeeId = matchedEmp.id;
         } else {
-          // Busca por similaridade de nome
           const best = findBestNameMatch(cleanName, existingEmployees);
           if (best && best.matchedEmployeeId && (best.status === "EXACT" || best.status === "SIMILAR")) {
             matchType = best.status === "EXACT" ? "EXACT" : "SIMILAR";
@@ -346,10 +359,11 @@ export function CostImportStagingModal({
           sourceType: "PAYROLL_EXTRATO",
           valor_fixo: rec.valor_fixo || holeriteBruto,
           valor_holerite: holeriteBruto,
+          valor_outros_recebidos: rec.outros_ajustes || 0,
           valor_adiantamento: rec.valor_adiantamento || 0,
           valor_hora_extra: rec.valor_hora_extra || 0,
           valor_adicional_not: rec.valor_adicional_not || 0,
-          valor_vt: rec.valor_vt || 0, // VT benefício recebido
+          valor_vt: rec.valor_vt || 0,
           desconto_vt_6: rec.desconto_vt_6 || 0,
           valor_cesta: rec.valor_cesta || 0,
           valor_vr: rec.valor_vr || 0,
@@ -373,7 +387,6 @@ export function CostImportStagingModal({
       });
 
       setStagingRows(newRows);
-      setMergeSuccessMessage(`✨ ${newRows.length} colaboradores carregados da Folha Oficial.`);
     } catch (err: any) {
       console.error("Erro ao importar folha por IA:", err);
       setErrorMessage(err.message || "Falha ao processar o arquivo da folha.");
@@ -383,7 +396,144 @@ export function CostImportStagingModal({
     }
   };
 
-  // 2. Processamento de Relatório de Benefícios (VT, VR/Cesta, Bonificação - PDF ou Imagem)
+  // 2. Processamento de Folha de Adiantamento Salarial (PDF / Imagem via IA)
+  const handleUploadAdvanceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsProcessing(true);
+      setErrorMessage(null);
+      setMergeSuccessMessage(null);
+      setProcessingStatusText("Extraindo adiantamentos salariais via IA...");
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "advance");
+
+      const response = await fetch("/api/people/parse-payroll-batch", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || `Erro no servidor (${response.status})`);
+      }
+
+      const result = await response.json();
+      if (!result.records || !Array.isArray(result.records) || result.records.length === 0) {
+        throw new Error("A IA não identificou colaboradores no documento de adiantamento.");
+      }
+
+      const comp = result.competencia || selectedCompetencia;
+      if (comp) setSelectedCompetencia(comp);
+
+      // Se JÁ houver registros no staging, executa a mesclagem inteligente!
+      if (stagingRows.length > 0) {
+        let matchedCount = 0;
+        setStagingRows((prev) =>
+          prev.map((r) => {
+            const cleanCpfRow = (r.documentId || "").replace(/\D/g, "");
+            const matchRec = result.records.find((rec: any) => {
+              const recCpf = (rec.cpf || "").replace(/\D/g, "");
+              if (recCpf && cleanCpfRow && recCpf === cleanCpfRow) return true;
+              return findBestNameMatch(rec.name || "", [{ id: r.targetEmployeeId, name: r.employeeName } as any])?.similarity > 0.82;
+            });
+
+            if (matchRec && (matchRec.valor_adiantamento !== undefined && matchRec.valor_adiantamento !== null)) {
+              matchedCount++;
+              return {
+                ...r,
+                valor_adiantamento: matchRec.valor_adiantamento || r.valor_adiantamento,
+              };
+            }
+            return r;
+          })
+        );
+        setMergeSuccessMessage(`✨ Adiantamentos mesclados com sucesso para ${matchedCount} colaboradores no grid.`);
+      } else {
+        // Se o grid estiver vazio, cria linhas no staging com os adiantamentos
+        const newRows: StagingCostRow[] = result.records.map((rec: any, idx: number) => {
+          const cleanName = (rec.name || "").trim();
+          const cleanCpf = (rec.cpf || "").replace(/\D/g, "");
+
+          let matchedEmp = cleanCpf
+            ? existingEmployees.find((e) => (e.document_id || "").replace(/\D/g, "") === cleanCpf || (e.responsible_cpf || "").replace(/\D/g, "") === cleanCpf)
+            : undefined;
+
+          let matchType: "EXACT" | "SIMILAR" | "NEW" = "NEW";
+          let matchScore = 0;
+          let targetEmployeeId = "NEW";
+
+          if (matchedEmp) {
+            matchType = "EXACT";
+            matchScore = 1.0;
+            targetEmployeeId = matchedEmp.id;
+          } else {
+            const best = findBestNameMatch(cleanName, existingEmployees);
+            if (best && best.matchedEmployeeId && (best.status === "EXACT" || best.status === "SIMILAR")) {
+              matchType = best.status === "EXACT" ? "EXACT" : "SIMILAR";
+              matchScore = best.similarity;
+              targetEmployeeId = best.matchedEmployeeId;
+              matchedEmp = existingEmployees.find((e) => e.id === best.matchedEmployeeId);
+            }
+          }
+
+          const fixoBase = matchedEmp?.remuneration_fixed || matchedEmp?.remuneration || 0;
+
+          return {
+            id: `advance-${Date.now()}-${idx}`,
+            targetEmployeeId,
+            employeeName: cleanName || matchedEmp?.name || "Colaborador",
+            documentId: rec.cpf || matchedEmp?.document_id || "",
+            matchScore,
+            matchType,
+            cargo: rec.cargo || matchedEmp?.job_role || "",
+            competencia: comp || selectedCompetencia,
+            sourceType: "ADVANCE_PDF",
+            valor_fixo: fixoBase,
+            valor_holerite: fixoBase,
+            valor_outros_recebidos: 0,
+            valor_adiantamento: rec.valor_adiantamento || 0,
+            valor_hora_extra: 0,
+            valor_adicional_not: 0,
+            valor_vt: 0,
+            desconto_vt_6: 0,
+            valor_cesta: 0,
+            valor_vr: 0,
+            valor_bonus: 0,
+            valor_ajuda_custo: 0,
+            valor_ferias: 0,
+            valor_rescisao: 0,
+            valor_decimo_terceiro: 0,
+            valor_descontos: 0,
+            inss_empregado: 0,
+            irrf_empregado: 0,
+            valor_faltas: 0,
+            dias_faltas: 0,
+            valor_consignado: 0,
+            valor_pensao_alimenticia: 0,
+            valor_fgts: 0,
+            folha_liquido: fixoBase + (rec.valor_adiantamento || 0),
+            observacao: rec.observacao || "Importado de Folha de Adiantamento Salarial",
+            isSelected: true,
+          };
+        });
+
+        setStagingRows(newRows);
+        setMergeSuccessMessage(`✨ Sucesso! ${newRows.length} colaboradores carregados a partir da Folha de Adiantamento.`);
+      }
+    } catch (err: any) {
+      console.error("Erro ao importar adiantamento por IA:", err);
+      setErrorMessage(err.message || "Falha ao processar arquivo de adiantamento.");
+    } finally {
+      setIsProcessing(false);
+      setProcessingStatusText("");
+    }
+  };
+
+  // 3. Processamento de Relatório de Benefícios (PDF / Imagem via IA)
   const handleUploadBenefitsFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -392,7 +542,7 @@ export function CostImportStagingModal({
       setIsProcessing(true);
       setErrorMessage(null);
       setMergeSuccessMessage(null);
-      setProcessingStatusText("Extraindo dados do relatório de benefícios (VT, VR/Cesta, Bônus) via IA...");
+      setProcessingStatusText("Extraindo relatório de benefícios via IA...");
 
       const formData = new FormData();
       formData.append("file", file);
@@ -410,51 +560,43 @@ export function CostImportStagingModal({
 
       const result = await response.json();
       if (!result.records || !Array.isArray(result.records) || result.records.length === 0) {
-        throw new Error("A IA não identificou lançamentos de benefícios no documento.");
+        throw new Error("A IA não identificou colaboradores no documento de benefícios.");
       }
 
       const comp = result.competencia || selectedCompetencia;
-      if (result.competencia) {
-        setSelectedCompetencia(result.competencia);
-      }
+      if (comp) setSelectedCompetencia(comp);
 
-      // Se já temos linhas no staging (ex: folha já carregada), fazemos MERGE com os colaboradores existentes!
       if (stagingRows.length > 0) {
-        let mergedCount = 0;
-        const updatedRows = stagingRows.map((r) => {
-          const cleanCpf = (r.documentId || "").replace(/\D/g, "");
-          const match = result.records.find((rec: any) => {
-            const recCpf = (rec.cpf || "").replace(/\D/g, "");
-            if (cleanCpf && recCpf && cleanCpf === recCpf) return true;
-            if (rec.name && r.employeeName) {
-              const sim = findBestNameMatch(rec.name, [{ id: r.id, name: r.employeeName } as any]);
-              return sim && (sim.status === "EXACT" || sim.similarity >= 0.85);
+        let matchedCount = 0;
+        setStagingRows((prev) =>
+          prev.map((r) => {
+            const cleanCpfRow = (r.documentId || "").replace(/\D/g, "");
+            const matchRec = result.records.find((rec: any) => {
+              const recCpf = (rec.cpf || "").replace(/\D/g, "");
+              if (recCpf && cleanCpfRow && recCpf === cleanCpfRow) return true;
+              return findBestNameMatch(rec.name || "", [{ id: r.targetEmployeeId, name: r.employeeName } as any])?.similarity > 0.82;
+            });
+
+            if (matchRec) {
+              matchedCount++;
+              return {
+                ...r,
+                valor_vt: matchRec.valor_vt !== undefined && matchRec.valor_vt > 0 ? matchRec.valor_vt : r.valor_vt,
+                valor_cesta: matchRec.valor_cesta !== undefined && matchRec.valor_cesta > 0 ? matchRec.valor_cesta : r.valor_cesta,
+                valor_vr: matchRec.valor_vr !== undefined && matchRec.valor_vr > 0 ? matchRec.valor_vr : r.valor_vr,
+                valor_bonus: matchRec.valor_bonus !== undefined && matchRec.valor_bonus > 0 ? matchRec.valor_bonus : r.valor_bonus,
+                valor_ajuda_custo: matchRec.valor_ajuda_custo !== undefined && matchRec.valor_ajuda_custo > 0 ? matchRec.valor_ajuda_custo : r.valor_ajuda_custo,
+              };
             }
-            return false;
-          });
-
-          if (match) {
-            mergedCount++;
-            return {
-              ...r,
-              valor_vt: match.valor_vt > 0 ? match.valor_vt : r.valor_vt,
-              valor_cesta: match.valor_cesta > 0 ? match.valor_cesta : (match.valor_vr > 0 ? match.valor_vr : r.valor_cesta),
-              valor_vr: match.valor_vr > 0 ? match.valor_vr : r.valor_vr,
-              valor_bonus: match.valor_bonus > 0 ? match.valor_bonus : r.valor_bonus || 0,
-              valor_ajuda_custo: match.valor_ajuda_custo > 0 ? match.valor_ajuda_custo : r.valor_ajuda_custo,
-              observacao: match.observacao ? `${r.observacao || ""} | ${match.observacao}`.trim() : r.observacao,
-            };
-          }
-          return r;
-        });
-
-        setStagingRows(updatedRows);
-        setMergeSuccessMessage(`✨ Sucesso! Benefícios de VT, VR/Cesta e Bonificações mesclados para ${mergedCount} colaboradores presentes no grid.`);
+            return r;
+          })
+        );
+        setMergeSuccessMessage(`✨ Benefícios mesclados com sucesso para ${matchedCount} colaboradores no grid.`);
       } else {
-        // Grid estava vazio: cria novas linhas de staging a partir do relatório de benefícios
         const newRows: StagingCostRow[] = result.records.map((rec: any, idx: number) => {
           const cleanName = (rec.name || "").trim();
           const cleanCpf = (rec.cpf || "").replace(/\D/g, "");
+
           let matchedEmp = cleanCpf
             ? existingEmployees.find((e) => (e.document_id || "").replace(/\D/g, "") === cleanCpf || (e.responsible_cpf || "").replace(/\D/g, "") === cleanCpf)
             : undefined;
@@ -487,16 +629,17 @@ export function CostImportStagingModal({
             matchScore,
             matchType,
             cargo: rec.cargo || matchedEmp?.job_role || "",
-            competencia: comp,
+            competencia: comp || selectedCompetencia,
             sourceType: "BENEFICIOS_PDF",
             valor_fixo: fixoBase,
             valor_holerite: fixoBase,
+            valor_outros_recebidos: 0,
             valor_adiantamento: 0,
             valor_hora_extra: 0,
             valor_adicional_not: 0,
             valor_vt: rec.valor_vt || 0,
             desconto_vt_6: 0,
-            valor_cesta: rec.valor_cesta || rec.valor_vr || 0,
+            valor_cesta: rec.valor_cesta || 0,
             valor_vr: rec.valor_vr || 0,
             valor_bonus: rec.valor_bonus || 0,
             valor_ajuda_custo: rec.valor_ajuda_custo || 0,
@@ -529,7 +672,7 @@ export function CostImportStagingModal({
     }
   };
 
-  // 3. Processamento de Planilha Histórica Excel (.xlsx / .csv)
+  // 4. Processamento de Planilha Histórica Excel (.xlsx / .csv)
   const handleUploadExcelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -603,7 +746,8 @@ export function CostImportStagingModal({
           sourceType: "EXCEL_RETROATIVO",
           valor_fixo: c.valor_fixo,
           valor_holerite: c.valor_fixo,
-          valor_adiantamento: c.valor_adiantamento,
+          valor_outros_recebidos: c.outros_ajustes || 0,
+          valor_adiantamento: c.valor_adiantamento || 0,
           valor_hora_extra: c.valor_hora_extra,
           valor_adicional_not: c.valor_adicional_not,
           valor_vt: c.valor_vt,
@@ -711,7 +855,6 @@ export function CostImportStagingModal({
         return;
       }
 
-      // Mapeia custos anteriores por employee_id
       const prevMap = new Map<string, MonthlyCost>();
       prevCosts.forEach((c) => prevMap.set(c.employee_id, c));
 
@@ -744,7 +887,7 @@ export function CostImportStagingModal({
     }
   };
 
-  // 4. Gravação Final no Custo Histórico (Supabase) com trava e verificação de correção
+  // 5. Gravação Final no Custo Histórico (Supabase) com trava e verificação de correção
   const handleCommitBatch = async (forceOverwrite: boolean = false, skipExisting: boolean = false) => {
     let selected = stagingRows.filter((r) => r.isSelected);
     if (selected.length === 0) {
@@ -752,7 +895,6 @@ export function CostImportStagingModal({
       return;
     }
 
-    // Se não for forçado nem ignorado, checa se há colaboradores que já possuem dados no banco
     if (!forceOverwrite && !skipExisting) {
       const conflicts = selected
         .filter((r) => r.targetEmployeeId !== "NEW" && existingCostsInDb.has(r.targetEmployeeId))
@@ -764,7 +906,7 @@ export function CostImportStagingModal({
       if (conflicts.length > 0) {
         setConflictingRows(conflicts);
         setShowCorrectionModal(true);
-        return; // Pausa a gravação e solicita confirmação explícita do usuário!
+        return;
       }
     }
 
@@ -793,7 +935,6 @@ export function CostImportStagingModal({
 
         let finalEmployeeId = row.targetEmployeeId;
 
-        // Se for NOVO colaborador, cria ficha preliminar
         if (finalEmployeeId === "NEW") {
           const created = await PeopleHRService.insertEmployee({
             name: row.employeeName,
@@ -813,9 +954,9 @@ export function CostImportStagingModal({
 
         if (finalEmployeeId && finalEmployeeId !== "NEW") {
           // Cálculo financeiro dos 3 Pilares Executivos:
-          const proventos = row.valor_holerite || (row.valor_fixo + row.valor_hora_extra + row.valor_adicional_not);
-          const beneficios = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
-          const totalRecebido = proventos + beneficios;
+          const proventos = (row.valor_holerite || (row.valor_fixo + row.valor_hora_extra + row.valor_adicional_not)) + (row.valor_outros_recebidos || 0);
+          const beneficiosExtras = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_adiantamento || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
+          const totalRecebido = proventos + beneficiosExtras;
           const totalDescontos = row.valor_descontos || 0;
           const liquidoReal = totalRecebido - totalDescontos;
 
@@ -825,11 +966,12 @@ export function CostImportStagingModal({
             vinculo_tipo: "CLT",
             valor_fixo: row.valor_fixo,
             valor_holerite: proventos,
-            valor_adiantamento: row.valor_adiantamento,
+            valor_adiantamento: row.valor_adiantamento, // Adiantamento Folha
+            outros_ajustes: row.valor_outros_recebidos, // Outros Valores Recebidos (antigo adiantamento da folha mensal)
             valor_hora_extra: row.valor_hora_extra,
             valor_adicional_not: row.valor_adicional_not,
-            valor_vt: row.valor_vt, // VT recebido efetivo
-            valor_cesta: row.valor_cesta, // VR / Cesta
+            valor_vt: row.valor_vt,
+            valor_cesta: row.valor_cesta,
             valor_vr: row.valor_vr,
             valor_bonus: row.valor_bonus,
             valor_ajuda_custo: row.valor_ajuda_custo,
@@ -845,7 +987,7 @@ export function CostImportStagingModal({
             valor_pensao_alimenticia: row.valor_pensao_alimenticia,
             valor_fgts: row.valor_fgts,
             valor_liquido: liquidoReal,
-            origem: row.sourceType === "PAYROLL_EXTRATO" ? "manual" : (row.sourceType === "BENEFICIOS_PDF" ? "manual" : "csv"),
+            origem: row.sourceType === "PAYROLL_EXTRATO" ? "manual" : (row.sourceType === "EXCEL_RETROATIVO" ? "csv" : "manual"),
             observacao: row.observacao || "Importado via Central de Ingestão de Custos",
           });
         }
@@ -858,7 +1000,7 @@ export function CostImportStagingModal({
       onClose();
     } catch (err: any) {
       console.error("Erro ao gravar custos mensais:", err);
-      alert("Falha ao salvar no banco de dados: " + (err.message || err));
+      alert("Erro ao gravar lançamentos: " + (err.message || err));
     } finally {
       setIsCommitting(false);
       setCommitProgress(0);
@@ -868,32 +1010,24 @@ export function CostImportStagingModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-7xl h-[95vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-7xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
         
-        {/* HEADER */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-emerald-500/10 via-slate-50 dark:via-slate-900 to-white dark:to-slate-900 shrink-0">
+        {/* CABEÇALHO DO MODAL */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm shrink-0">
-              <Sparkles size={22} />
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+              <Sparkles size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
-                  Central de Ingestão, Auditoria & Benefícios de Custos Mensais
-                </h3>
-                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                  {stagingRows.length > 0 ? `${stagingRows.length} Carregados` : "Aguardando Arquivo"}
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                Central de Ingestão e Conciliação de Custos
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                  Dual Source + Adiantamento & Benefícios
                 </span>
-                {activeConflictsCount > 0 && (
-                  <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-800 flex items-center gap-1">
-                    <AlertTriangle size={11} />
-                    ${activeConflictsCount} Já Cadastrado(s)
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Importação equilibrada de Folha Oficial, Benefícios em PDF (VT, VR/Cesta, Bonificações) e Planilha Histórica
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Alimente a competência a partir da Folha Oficial, Folha de Adiantamento, Relatórios de Benefícios ou Planilha Excel com auditoria e edição antes de gravar.
               </p>
             </div>
           </div>
@@ -901,783 +1035,1067 @@ export function CostImportStagingModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-xs"
-            title="Fechar janela"
+            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
-        {/* FEEDBACK DE ERRO OU SUCESSO */}
-        {errorMessage && (
-          <div className="mx-6 mt-3 px-4 py-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-2xl text-xs font-bold text-rose-700 dark:text-rose-300 flex items-center gap-2">
-            <AlertTriangle size={16} className="text-rose-600 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
+        {/* FEEDBACK DE MENSAGENS E SUCESSO DE MESCLAGEM */}
         {mergeSuccessMessage && (
-          <div className="mx-6 mt-3 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-2">
+          <div className="mx-4 sm:mx-6 mt-3 p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
             <div className="flex items-center gap-2">
               <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-              <span>{mergeSuccessMessage}</span>
+              <span className="font-bold">{mergeSuccessMessage}</span>
             </div>
             <button
-              type="button"
               onClick={() => setMergeSuccessMessage(null)}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+              className="text-emerald-600 hover:text-emerald-800 text-[10px] font-black uppercase"
             >
-              ×
+              OK
             </button>
           </div>
         )}
 
-        {/* ÁREA PRINCIPAL */}
-        {stagingRows.length === 0 ? (
-          /* ESTADO 1: SELETOR DE FONTE DE DADOS */
-          <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center">
-            {isProcessing ? (
-              <div className="flex flex-col items-center justify-center p-12 text-center max-w-md">
-                <Loader2 size={44} className="text-emerald-500 animate-spin mb-4" />
-                <h4 className="text-base font-black text-slate-900 dark:text-white">
-                  Processando Dados Financeiros...
+        {errorMessage && (
+          <div className="mx-4 sm:mx-6 mt-3 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-2xl flex items-center justify-between text-xs text-rose-800 dark:text-rose-300">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="text-rose-600 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              onClick={() => setErrorMessage(null)}
+              className="text-rose-600 hover:text-rose-800 text-[10px] font-black uppercase"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
+
+        {/* ÁREA CENTRAL */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {stagingRows.length === 0 ? (
+            /* VISÃO INICIAL: 4 CARDS DE ESCOLHA DA FONTE */
+            <div className="p-6 sm:p-8 flex-1 overflow-y-auto">
+              <div className="text-center max-w-xl mx-auto mb-6">
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  Passo 1 • Escolha a Fonte de Alimentação
+                </span>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-2">
+                  De onde você deseja importar os dados desta competência?
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                  {processingStatusText || "Aguarde enquanto o documento é estruturado e auditado."}
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Você pode iniciar por qualquer fonte e depois mesclar as demais com 1 clique.
                 </p>
               </div>
-            ) : (
-              <div className="w-full max-w-5xl space-y-6">
-                <div className="text-center space-y-1">
-                  <h4 className="text-lg font-black text-slate-900 dark:text-white">
-                    Escolha a Fonte de Dados para Alimentar o Custo Histórico
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    O sistema integra folha oficial, demonstrativos de benefícios em PDF e planilhas retroativas.
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
+                {/* CARD 1: FOLHA MENSAL */}
+                <div className="bg-gradient-to-b from-emerald-500/5 to-transparent border-2 border-emerald-500/30 dark:border-emerald-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-emerald-500 transition-all shadow-sm group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <FileText size={22} />
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        Recomendado • Recente
+                      </span>
+                    </div>
+
+                    <h5 className="text-sm font-black text-slate-900 dark:text-white">
+                      Folha Mensal (PDF/Foto)
+                    </h5>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Envie o extrato mensal da folha de pagamento. A IA extrai salários, proventos, INSS, IRRF e descontos com precisão centavo a centavo.
+                    </p>
+                  </div>
+
+                  <div className="pt-5">
+                    <label className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
+                      <Upload size={14} />
+                      <span>Carregar Folha Mensal</span>
+                      <input
+                        type="file"
+                        accept=".pdf,image/png,image/jpeg"
+                        onChange={handleUploadPayrollFile}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* CARD 2: FOLHA DE ADIANTAMENTO (NOVO!) */}
+                <div className="bg-gradient-to-b from-blue-500/5 to-transparent border-2 border-blue-500/30 dark:border-blue-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-blue-500 transition-all shadow-sm group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-11 h-11 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                        <Banknote size={22} />
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        Vales Quinzenais
+                      </span>
+                    </div>
+
+                    <h5 className="text-sm font-black text-slate-900 dark:text-white">
+                      Folha de Adiantamento (PDF/Foto)
+                    </h5>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Envie a folha de adiantamento salarial quinzenal. Lê os valores líquidos concedidos a cada colaborador para alimentar a coluna de adiantamento.
+                    </p>
+                  </div>
+
+                  <div className="pt-5">
+                    <label className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
+                      <Upload size={14} />
+                      <span>Carregar Adiantamentos</span>
+                      <input
+                        type="file"
+                        accept=".pdf,image/png,image/jpeg"
+                        onChange={handleUploadAdvanceFile}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* CARD 3: PLANILHA DE BENEFÍCIOS */}
+                <div className="bg-gradient-to-b from-amber-500/5 to-transparent border-2 border-amber-500/30 dark:border-amber-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-amber-500 transition-all shadow-sm group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <Gift size={22} />
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        VT, VR/Cesta & Bônus
+                      </span>
+                    </div>
+
+                    <h5 className="text-sm font-black text-slate-900 dark:text-white">
+                      Benefícios & Bônus (PDF)
+                    </h5>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Importe relatórios de recarga de VT (Sodexo, Top), VR, Cesta ou Bonificação. Lê valores concedidos e permite complementar ou mesclar com o grid.
+                    </p>
+                  </div>
+
+                  <div className="pt-5">
+                    <label className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
+                      <Upload size={14} />
+                      <span>Carregar Benefícios</span>
+                      <input
+                        type="file"
+                        accept=".pdf,image/png,image/jpeg"
+                        onChange={handleUploadBenefitsFile}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* CARD 4: PLANILHA EXCEL RETROATIVA */}
+                <div className="bg-gradient-to-b from-slate-500/5 to-transparent border-2 border-slate-300 dark:border-slate-800 rounded-3xl p-5 flex flex-col justify-between hover:border-slate-400 transition-all shadow-sm group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-11 h-11 rounded-2xl bg-slate-500/15 text-slate-600 dark:text-slate-400 flex items-center justify-center">
+                        <FileSpreadsheet size={22} />
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-850 text-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                        Retroativos • Excel
+                      </span>
+                    </div>
+
+                    <h5 className="text-sm font-black text-slate-900 dark:text-white">
+                      Planilha Excel (.xlsx)
+                    </h5>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Importe histórico dos anos anteriores com meses em colunas e verbas em linhas (Holerite, VT recebido, VR/Cesta, Descontos, Total).
+                    </p>
+                  </div>
+
+                  <div className="pt-5 space-y-2">
+                    <label className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
+                      <Upload size={14} />
+                      <span>Carregar Excel</span>
+                      <input
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        onChange={handleUploadExcelFile}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={handleLoadDefaultClt}
+                      className="w-full py-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-600 transition-all text-center block"
+                    >
+                      Usar CLT.xlsx do Sistema
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD DE ORIENTAÇÃO PEDAGÓGICA */}
+              <div className="max-w-4xl mx-auto mt-8 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex items-start gap-3">
+                <Info size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                  <span className="font-black text-emerald-800 dark:text-emerald-300 block">
+                    Equilíbrio Perfeito entre as Fontes & Regras de Negócio:
+                  </span>
+                  <p>
+                    • <strong>Folha Mensal:</strong> Traz o Salário Fixo, Proventos, Desconto legal dos 6% de VT (rubrica 48) e deduções oficiais.<br />
+                    • <strong>Folha de Adiantamento:</strong> Traz os adiantamentos concedidos quinzenalmente para alimentar a coluna Adiantamento Folha.<br />
+                    • <strong>Benefícios / Bonificação:</strong> Traz o valor do VT real recarregado e VR/Cesta concedida.<br />
+                    • <strong>Edição Total:</strong> Você pode ajustar qualquer valor diretamente nas células da tabela ou no botão de lápis (✏️).
                   </p>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-2">
-                  
-                  {/* CARD FONTE 1: FOLHA OFICIAL */}
-                  <div className="bg-gradient-to-b from-emerald-500/5 to-transparent border-2 border-emerald-500/30 dark:border-emerald-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-emerald-500 transition-all shadow-sm group">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                          <FileText size={22} />
-                        </div>
-                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          Folha Mensal
-                        </span>
-                      </div>
-
-                      <h5 className="text-sm font-black text-slate-900 dark:text-white">
-                        Extrato da Folha (PDF/Imagem)
-                      </h5>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Importe o extrato oficial celetista. A IA extrai múltiplos colaboradores, salários, horas extras, adiantamento e desconto legal de 6% de VT.
-                      </p>
-                    </div>
-
-                    <div className="pt-5">
-                      <label className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
-                        <Upload size={14} />
-                        <span>Carregar Folha (PDF/Foto)</span>
-                        <input
-                          type="file"
-                          accept=".pdf,image/png,image/jpeg"
-                          onChange={handleUploadPayrollFile}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* CARD FONTE 2: PLANILHA DE BENEFÍCIOS (NOVO!) */}
-                  <div className="bg-gradient-to-b from-amber-500/5 to-transparent border-2 border-amber-500/30 dark:border-amber-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-amber-500 transition-all shadow-sm group">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                          <Gift size={22} />
-                        </div>
-                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          VT, VR/Cesta & Bônus
-                        </span>
-                      </div>
-
-                      <h5 className="text-sm font-black text-slate-900 dark:text-white">
-                        Planilha de Benefícios (PDF/Imagem)
-                      </h5>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Importe relatórios de recarga de VT (Sodexo, Top), VR, Cesta ou Bonificação. Lê valores concedidos e permite complementar ou mesclar com o grid.
-                      </p>
-                    </div>
-
-                    <div className="pt-5">
-                      <label className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
-                        <Upload size={14} />
-                        <span>Carregar Benefícios (PDF)</span>
-                        <input
-                          type="file"
-                          accept=".pdf,image/png,image/jpeg"
-                          onChange={handleUploadBenefitsFile}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* CARD FONTE 3: PLANILHA EXCEL RETROATIVA */}
-                  <div className="bg-gradient-to-b from-blue-500/5 to-transparent border-2 border-blue-500/30 dark:border-blue-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-blue-500 transition-all shadow-sm group">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="w-11 h-11 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                          <FileSpreadsheet size={22} />
-                        </div>
-                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                          Retroativos • Excel
-                        </span>
-                      </div>
-
-                      <h5 className="text-sm font-black text-slate-900 dark:text-white">
-                        Planilha Histórica Excel (.xlsx / .csv)
-                      </h5>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Importe histórico dos anos anteriores com meses em colunas e verbas em linhas (Holerite, VT recebido, VR/Cesta, Descontos, Total).
-                      </p>
-                    </div>
-
-                    <div className="pt-5 space-y-2">
-                      <label className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
-                        <Upload size={14} />
-                        <span>Enviar Planilha (.xlsx)</span>
-                        <input
-                          type="file"
-                          accept=".xlsx,.xls,.csv"
-                          onChange={handleUploadExcelFile}
-                          className="hidden"
-                        />
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={handleLoadDefaultClt}
-                        className="w-full py-1.5 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <RefreshCw size={12} className="text-blue-500" />
-                        <span>Carregar public/CLT.xlsx</span>
-                      </button>
-                    </div>
-                  </div>
-
-                </div>
               </div>
-            )}
-          </div>
-        ) : (
-          /* ESTADO 2: STAGING GRID (AUDITORIA, COMPLEMENTAÇÃO DE VT/CESTA E EDIÇÃO) */
-          <div className="flex-1 flex flex-col overflow-hidden">
-            
-            {/* BARRA SUPERIOR DE FILTROS & AÇÕES EM MASSA */}
-            <div className="px-6 py-3 bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+            </div>
+          ) : (
+            /* VISÃO DO GRID DE STAGING E AUDITORIA */
+            <div className="flex-1 flex flex-col overflow-hidden">
               
-              {/* Seletor de Competência & Busca */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-xl shadow-2xs">
-                  <Calendar size={14} className="text-emerald-500 shrink-0" />
-                  <span className="text-[10px] font-black text-slate-500 uppercase">Competência:</span>
-                  <select
-                    value={selectedCompetencia}
-                    onChange={(e) => setSelectedCompetencia(e.target.value)}
-                    className="text-xs font-black text-slate-900 dark:text-white bg-transparent outline-none cursor-pointer"
-                  >
-                    {availableStagingCompetencias.map((comp) => (
-                      <option key={comp} value={comp} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                        {comp}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar colaborador no lote..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 w-52 text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleToggleSelectAll}
-                  className="px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all flex items-center gap-1.5"
-                >
-                  {visibleRows.every((r) => r.isSelected) ? (
-                    <CheckSquare size={14} className="text-emerald-600" />
-                  ) : (
-                    <Square size={14} className="text-slate-400" />
-                  )}
-                  <span>Marcar Todos</span>
-                </button>
-              </div>
-
-              {/* Ferramentas em Massa para VT, VR/Cesta e Mesclagem de Benefícios */}
-              <div className="flex items-center gap-2 flex-wrap">
+              {/* BARRA SUPERIOR DE FILTROS E AÇÕES EM MASSA */}
+              <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 flex flex-wrap items-center justify-between gap-3">
                 
-                {/* Botão de Mesclagem de Benefícios PDF */}
-                <label className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs font-black rounded-xl hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
-                  <Gift size={13} className="text-amber-600" />
-                  <span>Mesclar PDF de Benefícios</span>
-                  <input
-                    type="file"
-                    accept=".pdf,image/png,image/jpeg"
-                    onChange={handleUploadBenefitsFile}
-                    className="hidden"
-                  />
-                </label>
-
-                {/* Preenchimento Rápido de VT */}
-                <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800/60 rounded-xl px-2 py-1 shadow-2xs">
-                  <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase">VT Padrão R$:</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="273.00"
-                    value={bulkVtValue}
-                    onChange={(e) => setBulkVtValue(e.target.value)}
-                    className="w-16 px-1.5 py-0.5 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-right outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyBulkVt}
-                    className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black rounded uppercase transition-all"
-                  >
-                    Aplicar
-                  </button>
-                </div>
-
-                {/* Preenchimento Rápido de VR / Cesta */}
-                <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 rounded-xl px-2 py-1 shadow-2xs">
-                  <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase">VR / Cesta R$:</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="500.00"
-                    value={bulkCestaValue}
-                    onChange={(e) => setBulkCestaValue(e.target.value)}
-                    className="w-16 px-1.5 py-0.5 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-right outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyBulkCesta}
-                    className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black rounded uppercase transition-all"
-                  >
-                    Aplicar
-                  </button>
-                </div>
-
-                {/* Copiar Benefícios do Mês Anterior */}
-                <button
-                  type="button"
-                  onClick={handleCopyPreviousBenefits}
-                  disabled={isLoadingPreviousBenefits}
-                  className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-xl hover:bg-blue-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
-                  title="Busca os valores de VT e VR/Cesta da competência anterior cadastrada e preenche automaticamente"
-                >
-                  {isLoadingPreviousBenefits ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
-                  <span>Repetir Mês Anterior</span>
-                </button>
-
-                {/* Limpar Staging / Voltar */}
-                <button
-                  type="button"
-                  onClick={() => setStagingRows([])}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-                  title="Voltar e carregar outro arquivo"
-                >
-                  <RotateCcw size={15} />
-                </button>
-              </div>
-            </div>
-
-            {/* ALERTA DE DADOS JÁ CADASTRADOS SE HOUVER CONFLITO */}
-            {activeConflictsCount > 0 && (
-              <div className="px-6 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-xs text-amber-800 dark:text-amber-300 font-bold shrink-0">
+                {/* SELETOR DE COMPETÊNCIA */}
                 <div className="flex items-center gap-2">
-                  <AlertCircle size={15} className="text-amber-600 shrink-0" />
-                  <span>
-                    Atenção: <strong>{activeConflictsCount} colaborador(es)</strong> já possuem custos lançados para esta competência ({selectedCompetencia}).
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 shadow-2xs">
+                    <Calendar size={14} className="text-emerald-600" />
+                    <span className="text-[10px] font-black uppercase text-slate-400">Competência:</span>
+                    <input
+                      type="month"
+                      value={selectedCompetencia.slice(0, 7)}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setSelectedCompetencia(`${e.target.value}-01`);
+                        }
+                      }}
+                      className="text-xs font-black bg-transparent text-slate-900 dark:text-white outline-none cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar colaborador no lote..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 w-48 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAll}
+                    className="px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all flex items-center gap-1.5"
+                  >
+                    {visibleRows.every((r) => r.isSelected) ? (
+                      <CheckSquare size={14} className="text-emerald-600" />
+                    ) : (
+                      <Square size={14} className="text-slate-400" />
+                    )}
+                    <span>Marcar Todos</span>
+                  </button>
+                </div>
+
+                {/* FERRAMENTAS DE MESCLAGEM E PREENCHIMENTO EM MASSA */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  
+                  {/* MESCLAR FOLHA DE ADIANTAMENTO (NOVO!) */}
+                  <label className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs font-black rounded-xl hover:bg-blue-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                    <Banknote size={13} className="text-blue-600" />
+                    <span>Mesclar Folha de Adiantamento</span>
+                    <input
+                      type="file"
+                      accept=".pdf,image/png,image/jpeg"
+                      onChange={handleUploadAdvanceFile}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {/* MESCLAR BENEFÍCIOS PDF */}
+                  <label className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs font-black rounded-xl hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                    <Gift size={13} className="text-amber-600" />
+                    <span>Mesclar PDF de Benefícios</span>
+                    <input
+                      type="file"
+                      accept=".pdf,image/png,image/jpeg"
+                      onChange={handleUploadBenefitsFile}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {/* VT Padrão */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800/60 rounded-xl px-2 py-1 shadow-2xs">
+                    <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase">VT R$:</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="273.00"
+                      value={bulkVtValue}
+                      onChange={(e) => setBulkVtValue(e.target.value)}
+                      className="w-14 px-1.5 py-0.5 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-right outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyBulkVt}
+                      className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black rounded uppercase transition-all"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+
+                  {/* VR / Cesta Padrão */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 rounded-xl px-2 py-1 shadow-2xs">
+                    <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase">VR/Cesta R$:</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="500.00"
+                      value={bulkCestaValue}
+                      onChange={(e) => setBulkCestaValue(e.target.value)}
+                      className="w-14 px-1.5 py-0.5 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-right outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyBulkCesta}
+                      className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black rounded uppercase transition-all"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+
+                  {/* Copiar do Mês Anterior */}
+                  <button
+                    type="button"
+                    onClick={handleCopyPreviousBenefits}
+                    disabled={isLoadingPreviousBenefits}
+                    className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1 shadow-2xs"
+                    title="Copiar VT e VR/Cesta do mês anterior do Supabase"
+                  >
+                    <Copy size={13} />
+                    <span>{isLoadingPreviousBenefits ? "Copiando..." : "Copiar Mês Anterior"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CARDS COM OS 3 PILARES EXECUTIVOS DO LOTE */}
+              <div className="p-3 bg-slate-100/70 dark:bg-slate-850/50 border-b border-slate-200 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className="text-[9px] font-black text-slate-400 uppercase block">Colaboradores</span>
+                  <span className="text-sm font-black text-slate-800 dark:text-slate-200">{selectedStats.count}</span>
+                </div>
+                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className="text-[9px] font-black text-slate-500 uppercase block">Salários / Proventos</span>
+                  <span className="text-sm font-black text-slate-700 dark:text-slate-300 tabular-nums">
+                    {formatCurrency(selectedStats.totalHolerite)}
                   </span>
                 </div>
+                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/50">
+                  <span className="text-[9px] font-black text-blue-600 uppercase block">Adiantamento Folha</span>
+                  <span className="text-sm font-black text-blue-700 dark:text-blue-300 tabular-nums">
+                    +{formatCurrency(selectedStats.totalAdiantamento)}
+                  </span>
+                </div>
+                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-rose-200 dark:border-rose-900/50">
+                  <span className="text-[9px] font-black text-rose-600 uppercase block">Total Descontos</span>
+                  <span className="text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums">
+                    -{formatCurrency(selectedStats.totalDescontos)}
+                  </span>
+                </div>
+                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                  <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase block">
+                    1. Total Recebido
+                  </span>
+                  <span className="text-sm font-black text-emerald-800 dark:text-emerald-300 tabular-nums">
+                    {formatCurrency(selectedStats.totalRecebido)}
+                  </span>
+                </div>
+                <div className="p-2 bg-teal-50 dark:bg-teal-950/40 rounded-xl border border-teal-200 dark:border-teal-800">
+                  <span className="text-[9px] font-black text-teal-700 dark:text-teal-400 uppercase block">
+                    3. Valor Líquido Real
+                  </span>
+                  <span className="text-sm font-black text-teal-800 dark:text-teal-300 tabular-nums">
+                    {formatCurrency(selectedStats.totalLiquidoReal)}
+                  </span>
+                </div>
+              </div>
+
+              {/* TABELA DE STAGING / AUDITORIA COM INPUTS DIRETOS */}
+              <div className="flex-1 overflow-y-auto overflow-x-auto p-3">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="sticky top-0 bg-slate-100 dark:bg-slate-850 z-10 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="px-2 py-2 w-7 text-center">
+                        <button onClick={handleToggleSelectAll}>
+                          {visibleRows.every((r) => r.isSelected) ? (
+                            <CheckSquare size={15} className="text-emerald-600" />
+                          ) : (
+                            <Square size={15} className="text-slate-400" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-[10px] font-black uppercase text-slate-500">Colaborador</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-600 text-right">Salário Fixo (R$) ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-blue-600 text-right">Outros Recebidos ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-rose-600 text-right">Desc. Folha ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-blue-700 dark:text-blue-300 text-right bg-blue-500/10 rounded-t">
+                        Adiantamento Folha ✏️
+                      </th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 text-right bg-emerald-500/10 rounded-t">
+                        VT Recebido (R$) ✏️
+                      </th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 text-right bg-amber-500/10 rounded-t">
+                        VR / Cesta (R$) ✏️
+                      </th>
+                      <th className="px-3 py-2 text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 text-right">Total Recebido</th>
+                      <th className="px-3 py-2 text-[10px] font-black uppercase text-teal-700 dark:text-teal-300 text-right">Líquido Real</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-500 text-center">Vínculo</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-850">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {visibleRows.map((row) => {
+                      const proventos = (row.valor_holerite || (row.valor_fixo + row.valor_hora_extra + row.valor_adicional_not)) + (row.valor_outros_recebidos || 0);
+                      const beneficiosExtras = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_adiantamento || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
+                      const totalRecebidoRow = proventos + beneficiosExtras;
+                      const totalDescRow = row.valor_descontos || 0;
+                      const liquidoRealRow = totalRecebidoRow - totalDescRow;
+
+                      const existingDbRecord = row.targetEmployeeId !== "NEW" ? existingCostsInDb.get(row.targetEmployeeId) : undefined;
+
+                      return (
+                        <tr
+                          key={row.id}
+                          className={`hover:bg-slate-50/70 dark:hover:bg-slate-850/50 transition-colors ${
+                            !row.isSelected ? "opacity-40" : ""
+                          } ${existingDbRecord ? "bg-amber-500/5 dark:bg-amber-950/10" : ""}`}
+                        >
+                          {/* Checkbox */}
+                          <td className="px-2 py-2 text-center align-middle">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateRowField(row.id, "isSelected", !row.isSelected)}
+                            >
+                              {row.isSelected ? (
+                                <CheckSquare size={15} className="text-emerald-600" />
+                              ) : (
+                                <Square size={15} className="text-slate-400" />
+                              )}
+                            </button>
+                          </td>
+
+                          {/* Colaborador */}
+                          <td className="px-3 py-2 align-middle">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-extrabold text-slate-900 dark:text-white text-xs">
+                                {row.employeeName}
+                              </span>
+                              {existingDbRecord && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                  <AlertTriangle size={10} className="shrink-0" />
+                                  Já Cadastrado ({formatCurrency(existingDbRecord.valor_liquido)})
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {row.documentId && (
+                                <span className="text-[10px] text-slate-400 font-mono">{row.documentId}</span>
+                              )}
+                              {row.cargo && (
+                                <span className="text-[10px] text-slate-500 truncate max-w-[130px]">
+                                  • {row.cargo}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* SALÁRIO FIXO (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-slate-400 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_fixo === 0 ? "" : row.valor_fixo}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_fixo", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-bold text-right text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg outline-none focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                          </td>
+
+                          {/* OUTROS VALORES RECEBIDOS (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-blue-500 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_outros_recebidos === 0 ? "" : row.valor_outros_recebidos}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_outros_recebidos", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-bold text-right text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-950 border border-blue-200 dark:border-blue-800 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                          </td>
+
+                          {/* DESCONTOS FOLHA (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle bg-rose-500/5">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-rose-500 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_descontos === 0 ? "" : row.valor_descontos}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_descontos", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-bold text-right text-rose-700 dark:text-rose-400 bg-white dark:bg-slate-950 border border-rose-300 dark:border-rose-700 rounded-lg outline-none focus:ring-1 focus:ring-rose-500"
+                              />
+                            </div>
+                            {row.desconto_vt_6 > 0 && (
+                              <span className="text-[9px] text-rose-400 block font-normal text-right mt-0.5">
+                                Desc 6% VT: {formatCurrency(row.desconto_vt_6)}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* ADIANTAMENTO FOLHA (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle bg-blue-500/5">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_adiantamento === 0 ? "" : row.valor_adiantamento}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_adiantamento", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-black text-right text-blue-800 dark:text-blue-300 bg-white dark:bg-slate-950 border border-blue-400 dark:border-blue-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
+                              />
+                            </div>
+                          </td>
+
+                          {/* VT RECEBIDO EFETIVO (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle bg-emerald-500/5">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_vt === 0 ? "" : row.valor_vt}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_vt", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-black text-right text-emerald-800 dark:text-emerald-300 bg-white dark:bg-slate-950 border border-emerald-300 dark:border-emerald-700 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20"
+                              />
+                            </div>
+                          </td>
+
+                          {/* VR / CESTA (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle bg-amber-500/5">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_cesta === 0 ? "" : row.valor_cesta}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_cesta", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-black text-right text-amber-800 dark:text-amber-300 bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-700 rounded-lg outline-none focus:ring-2 focus:ring-amber-500/20"
+                              />
+                            </div>
+                          </td>
+
+                          {/* TOTAL RECEBIDO REAL */}
+                          <td className="px-3 py-2 text-right tabular-nums font-black text-emerald-700 dark:text-emerald-400 align-middle">
+                            {formatCurrency(totalRecebidoRow)}
+                          </td>
+
+                          {/* LÍQUIDO REAL PAGO */}
+                          <td className="px-3 py-2 text-right tabular-nums font-black text-slate-900 dark:text-white align-middle">
+                            <span className="inline-block px-2 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300">
+                              {formatCurrency(liquidoRealRow)}
+                            </span>
+                          </td>
+
+                          {/* STATUS DO VÍNCULO */}
+                          <td className="px-2 py-2 text-center align-middle whitespace-nowrap">
+                            {row.matchType === "EXACT" ? (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 rounded-md border border-emerald-200 dark:border-emerald-800">
+                                Exato
+                              </span>
+                            ) : row.matchType === "SIMILAR" ? (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 rounded-md border border-blue-200 dark:border-blue-800">
+                                Similar
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-md border border-amber-200 dark:border-amber-800">
+                                Novo
+                              </span>
+                            )}
+                          </td>
+
+                          {/* AÇÕES (EDITAR VERBAS DETALHADAS / EXCLUIR LINHA) */}
+                          <td className="px-2 py-2 text-center align-middle whitespace-nowrap sticky right-0 bg-white dark:bg-slate-900">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setInspectRow({ ...row })}
+                                className="p-1 text-slate-500 hover:text-emerald-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                                title="Editar todas as verbas detalhadas deste colaborador"
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRow(row.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all"
+                                title="Remover este colaborador do lote"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* BARRA INFERIOR DE FINALIZAÇÃO */}
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("Deseja realmente limpar todos os colaboradores carregados no lote?")) {
+                        setStagingRows([]);
+                      }
+                    }}
+                    className="px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-all flex items-center gap-1.5"
+                  >
+                    <RotateCcw size={14} />
+                    <span>Descartar Lote</span>
+                  </button>
+
+                  <span className="text-xs text-slate-400">
+                    {stagingRows.filter((r) => r.isSelected).length} de {stagingRows.length} selecionados para gravação
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCommitBatch(false, false)}
+                    disabled={isCommitting || stagingRows.filter((r) => r.isSelected).length === 0}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50 transition-all"
+                  >
+                    {isCommitting ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Gravando ({commitProgress}%)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Database size={16} />
+                        <span>Gravar e Alimentar Custo Histórico</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* FEEDBACK DE LOADING GERAL */}
+        {isProcessing && (
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl flex flex-col items-center max-w-sm text-center space-y-3 border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+              <Loader2 size={32} className="animate-spin text-emerald-600" />
+              <h5 className="font-black text-sm text-slate-900 dark:text-white">Processando Documento via IA</h5>
+              <p className="text-xs text-slate-500">{processingStatusText || "Por favor, aguarde..."}</p>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE CONFIRMAÇÃO E TRAVA DE SEGURANÇA CONTRA SOBRESCRITA SILENCIOSA */}
+        {showCorrectionModal && (
+          <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-amber-300 dark:border-amber-700 p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-slate-900 dark:text-white">
+                    Competência Já Contém Dados Cadastrados
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    A competência {selectedCompetencia.slice(0, 7)} já possui lançamentos no banco de dados.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl text-xs text-slate-700 dark:text-slate-300 space-y-2">
+                <p>
+                  Foram identificados <strong>{conflictingRows.length} colaborador(es)</strong> selecionados que já possuem histórico registrado nesta competência.
+                </p>
+                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 font-mono text-[11px]">
+                  {conflictingRows.map(({ row, existingCost }) => (
+                    <div key={row.id} className="flex justify-between items-center py-0.5 border-b border-amber-200/50 dark:border-amber-800/40">
+                      <span className="font-bold truncate max-w-[200px]">{row.employeeName}</span>
+                      <span className="text-amber-800 dark:text-amber-300">
+                        Atual: {formatCurrency(existingCost.valor_liquido)} → Novo: {formatCurrency(row.folha_liquido || row.valor_fixo)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-semibold pt-1">
+                  Deseja aplicar uma <strong>correção</strong> atualizando esses dados, ou salvar apenas novos colaboradores?
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setFilterMatchType((prev) => (prev === "EXISTING" ? "ALL" : "EXISTING"))}
-                  className="text-[11px] underline hover:text-amber-900 dark:hover:text-amber-200 uppercase tracking-wider"
+                  onClick={() => handleCommitBatch(true, false)}
+                  className="w-full sm:flex-1 py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md"
                 >
-                  {filterMatchType === "EXISTING" ? "Ver Todos do Grid" : "Filtrar Somente os Conflitantes"}
+                  Sim, Aplicar Correção
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCommitBatch(false, true)}
+                  className="w-full sm:flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md"
+                >
+                  Salvar Apenas Novos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCorrectionModal(false)}
+                  className="w-full sm:w-auto py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all"
+                >
+                  Cancelar e Revisar no Grid
                 </button>
               </div>
-            )}
-
-            {/* BARRA DE KPIS CONSOLIDADOS DO LOTE (3 PILARES EXECUTIVOS) */}
-            <div className="px-6 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 overflow-x-auto shrink-0 text-xs">
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase block">Colaboradores</span>
-                <span className="text-sm font-black text-slate-800 dark:text-white tabular-nums">
-                  {selectedStats.count} selecionado{selectedStats.count !== 1 ? "s" : ""}
-                </span>
-              </div>
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase block">Proventos Folha</span>
-                <span className="text-sm font-black text-slate-800 dark:text-white tabular-nums">
-                  {formatCurrency(selectedStats.totalHolerite)}
-                </span>
-              </div>
-              <div>
-                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase block">VT Recarga Concedido</span>
-                <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 tabular-nums">
-                  {formatCurrency(selectedStats.totalVtRecebido)}
-                </span>
-              </div>
-              <div>
-                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase block">VR / Cesta</span>
-                <span className="text-sm font-black text-amber-700 dark:text-amber-400 tabular-nums">
-                  {formatCurrency(selectedStats.totalCesta)}
-                </span>
-              </div>
-              <div className="bg-emerald-50/50 dark:bg-emerald-950/20 px-3 py-1 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase block">1. Total Recebido</span>
-                <span className="text-sm font-black text-emerald-800 dark:text-emerald-200 tabular-nums">
-                  {formatCurrency(selectedStats.totalRecebido)}
-                </span>
-              </div>
-              <div className="bg-rose-50/50 dark:bg-rose-950/20 px-3 py-1 rounded-xl border border-rose-200 dark:border-rose-800">
-                <span className="text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase block">2. Total Descontado</span>
-                <span className="text-sm font-black text-rose-800 dark:text-rose-200 tabular-nums">
-                  {formatCurrency(selectedStats.totalDescontos)}
-                </span>
-              </div>
-              <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-3 py-1 rounded-xl shadow-xs">
-                <span className="text-[9px] font-black uppercase block text-emerald-100">3. Valor Líquido Real</span>
-                <span className="text-sm font-black tabular-nums">
-                  {formatCurrency(selectedStats.totalLiquidoReal)}
-                </span>
-              </div>
             </div>
+          </div>
+        )}
 
-            {/* TABELA DE STAGING / AUDITORIA */}
-            <div className="flex-1 overflow-y-auto overflow-x-auto p-4">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="sticky top-0 bg-slate-100 dark:bg-slate-850 z-10 border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="px-3 py-2 w-8 text-center">
-                      <button onClick={handleToggleSelectAll}>
-                        {visibleRows.every((r) => r.isSelected) ? (
-                          <CheckSquare size={15} className="text-emerald-600" />
-                        ) : (
-                          <Square size={15} className="text-slate-400" />
-                        )}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase text-slate-500">Colaborador</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase text-slate-500 text-right">Proventos Folha</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase text-rose-600 dark:text-rose-400 text-right">Desc. Folha (c/ 6% VT)</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 text-right bg-emerald-500/10 rounded-t">
-                      VT Recebido (R$) ★
-                    </th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 text-right bg-amber-500/10 rounded-t">
-                      VR / Cesta (R$) ★
-                    </th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 text-right">Total Recebido</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase text-teal-700 dark:text-teal-300 text-right">Líquido Real</th>
-                    <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-500 text-center">Vínculo</th>
-                    <th className="px-3 py-2 text-[10px] font-black uppercase text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-850">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {visibleRows.map((row) => {
-                    const proventos = row.valor_holerite || (row.valor_fixo + row.valor_hora_extra + row.valor_adicional_not);
-                    const beneficios = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
-                    const totalRecebidoRow = proventos + beneficios;
-                    const totalDescRow = row.valor_descontos || 0;
-                    const liquidoRealRow = totalRecebidoRow - totalDescRow;
+        {/* MODAL DE EDIÇÃO E DETALHAMENTO DE TODAS AS VERBAS DA FOLHA */}
+        {inspectRow && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 max-w-xl w-full shadow-2xl space-y-4 animate-in zoom-in-95 max-h-[92vh] flex flex-col">
+              
+              <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800 shrink-0">
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Detalhamento e Edição de Verbas da Folha</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold uppercase">
+                      Editável
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-400">{inspectRow.employeeName} ({inspectRow.competencia})</p>
+                </div>
+                <button onClick={() => setInspectRow(null)} className="text-slate-400 hover:text-slate-700">
+                  <X size={18} />
+                </button>
+              </div>
 
-                    const existingDbRecord = row.targetEmployeeId !== "NEW" ? existingCostsInDb.get(row.targetEmployeeId) : undefined;
-
-                    return (
-                      <tr
-                        key={row.id}
-                        className={`hover:bg-slate-50/70 dark:hover:bg-slate-850/50 transition-colors ${
-                          !row.isSelected ? "opacity-40" : ""
-                        } ${existingDbRecord ? "bg-amber-500/5 dark:bg-amber-950/10" : ""}`}
-                      >
-                        {/* Checkbox */}
-                        <td className="px-3 py-2 text-center align-middle">
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateRowField(row.id, "isSelected", !row.isSelected)}
-                          >
-                            {row.isSelected ? (
-                              <CheckSquare size={15} className="text-emerald-600" />
-                            ) : (
-                              <Square size={15} className="text-slate-400" />
-                            )}
-                          </button>
-                        </td>
-
-                        {/* Colaborador */}
-                        <td className="px-3 py-2 align-middle">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-extrabold text-slate-900 dark:text-white text-xs">
-                              {row.employeeName}
-                            </span>
-                            {existingDbRecord && (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                                <AlertTriangle size={10} className="shrink-0" />
-                                Já Cadastrado ({formatCurrency(existingDbRecord.valor_liquido)})
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            {row.documentId && (
-                              <span className="text-[10px] text-slate-400 font-mono">{row.documentId}</span>
-                            )}
-                            {row.cargo && (
-                              <span className="text-[10px] text-slate-500 truncate max-w-[150px]">
-                                • {row.cargo}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Proventos Folha */}
-                        <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300 font-semibold align-middle">
-                          {formatCurrency(proventos)}
-                          {row.valor_adiantamento > 0 && (
-                            <span className="text-[9px] text-blue-500 block">
-                              Vale: {formatCurrency(row.valor_adiantamento)}
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Descontos Folha */}
-                        <td className="px-3 py-2 text-right tabular-nums text-rose-600 dark:text-rose-400 font-bold align-middle">
-                          -{formatCurrency(totalDescRow)}
-                          {row.desconto_vt_6 > 0 && (
-                            <span className="text-[9px] text-rose-400 block font-normal">
-                              Desc 6% VT: {formatCurrency(row.desconto_vt_6)}
-                            </span>
-                          )}
-                        </td>
-
-                        {/* VT RECEBIDO EFETIVO (INPUT EDITÁVEL INLINE) */}
-                        <td className="px-3 py-2 text-right align-middle bg-emerald-500/5">
-                          <div className="flex items-center justify-end gap-1">
-                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">R$</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={row.valor_vt === 0 ? "" : row.valor_vt}
-                              onChange={(e) =>
-                                handleUpdateRowField(row.id, "valor_vt", parseFloat(e.target.value) || 0)
-                              }
-                              placeholder="0,00"
-                              className="w-24 px-2 py-1 text-xs font-black text-right text-emerald-800 dark:text-emerald-300 bg-white dark:bg-slate-950 border border-emerald-300 dark:border-emerald-700 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20"
-                            />
-                          </div>
-                        </td>
-
-                        {/* VR / CESTA BÁSICA (INPUT EDITÁVEL INLINE) */}
-                        <td className="px-3 py-2 text-right align-middle bg-amber-500/5">
-                          <div className="flex items-center justify-end gap-1">
-                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">R$</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={row.valor_cesta === 0 ? "" : row.valor_cesta}
-                              onChange={(e) =>
-                                handleUpdateRowField(row.id, "valor_cesta", parseFloat(e.target.value) || 0)
-                              }
-                              placeholder="0,00"
-                              className="w-24 px-2 py-1 text-xs font-black text-right text-amber-800 dark:text-amber-300 bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-700 rounded-lg outline-none focus:ring-2 focus:ring-amber-500/20"
-                            />
-                          </div>
-                        </td>
-
-                        {/* TOTAL RECEBIDO REAL */}
-                        <td className="px-3 py-2 text-right tabular-nums font-black text-emerald-700 dark:text-emerald-400 align-middle">
-                          {formatCurrency(totalRecebidoRow)}
-                        </td>
-
-                        {/* LÍQUIDO REAL PAGO */}
-                        <td className="px-3 py-2 text-right tabular-nums font-black text-slate-900 dark:text-white align-middle">
-                          <span className="inline-block px-2 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300">
-                            {formatCurrency(liquidoRealRow)}
-                          </span>
-                        </td>
-
-                        {/* STATUS DO VÍNCULO */}
-                        <td className="px-2 py-2 text-center align-middle whitespace-nowrap">
-                          {row.matchType === "EXACT" ? (
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 rounded-md border border-emerald-200 dark:border-emerald-800">
-                              Exato
-                            </span>
-                          ) : row.matchType === "SIMILAR" ? (
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 rounded-md border border-blue-200 dark:border-blue-800">
-                              Similar
-                            </span>
-                          ) : (
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-md border border-amber-200 dark:border-amber-800">
-                              Novo
-                            </span>
-                          )}
-                        </td>
-
-                        {/* AÇÕES (EXCLUIR LINHA / DETALHES) */}
-                        <td className="px-3 py-2 text-center align-middle whitespace-nowrap sticky right-0 bg-white dark:bg-slate-900">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setInspectRow(row)}
-                              className="p-1 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-                              title="Ver todas as rubricas detalhadas"
-                            >
-                              <Eye size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteRow(row.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all"
-                              title="Remover este colaborador do lote"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* RODAPÉ DE CONFIRMAÇÃO E GRAVAÇÃO */}
-            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                  Competência: <strong>{selectedCompetencia}</strong> • Total a gravar:{" "}
-                  <strong>{selectedStats.count}</strong> colaboradores
-                </span>
-                {activeConflictsCount > 0 && (
-                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
-                    ({activeConflictsCount} já existem no banco e serão revisados)
+              <div className="space-y-3 text-xs overflow-y-auto pr-1 flex-1">
+                {/* SEÇÃO 1: PROVENTOS DA FOLHA MENSAL */}
+                <div className="bg-slate-50 dark:bg-slate-850 p-3.5 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 block">
+                    1. Proventos da Folha Mensal
                   </span>
-                )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase block font-bold mb-1">Salário Fixo / Base:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-slate-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_fixo || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_fixo: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase block font-bold mb-1">Horas Extras + DSR:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-slate-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_hora_extra || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_hora_extra: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-blue-600 dark:text-blue-400 uppercase block font-bold mb-1">
+                        Outros Valores Recebidos:
+                      </label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-blue-500 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_outros_recebidos || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_outros_recebidos: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-blue-700 dark:text-blue-300"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase block font-bold mb-1">Adicional Noturno:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-slate-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_adicional_not || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_adicional_not: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SEÇÃO 2: DESCONTOS DA FOLHA */}
+                <div className="bg-rose-50/40 dark:bg-rose-950/20 p-3.5 rounded-2xl border border-rose-100 dark:border-rose-900/40 space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 dark:text-rose-400 block">
+                    2. Descontos e Deduções da Folha
+                  </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-rose-600 uppercase block font-bold mb-1">INSS Descontado:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-rose-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.inss_empregado || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, inss_empregado: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-rose-700 dark:text-rose-300"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-rose-600 uppercase block font-bold mb-1">Desc. VT 6%:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-rose-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.desconto_vt_6 || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, desconto_vt_6: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-rose-700 dark:text-rose-300"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-rose-600 uppercase block font-bold mb-1">IRRF Descontado:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-rose-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.irrf_empregado || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, irrf_empregado: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-rose-700 dark:text-rose-300"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-rose-700 uppercase block font-black mb-1">Total Descontos:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-700 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-rose-500 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_descontos || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_descontos: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-rose-800 dark:text-rose-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SEÇÃO 3: BENEFÍCIOS E PAGAMENTOS EXTRAS DA COMPETÊNCIA (ÚLTIMA PARTE) */}
+                <div className="bg-emerald-50/40 dark:bg-emerald-950/20 p-3.5 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">
+                    3. Benefícios e Pagamentos Extras da Competência
+                  </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-emerald-700 uppercase block font-bold mb-1">VT Recebido:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-emerald-500 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_vt || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_vt: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-emerald-800 dark:text-emerald-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-amber-700 uppercase block font-bold mb-1">VR / Cesta:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-amber-500 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_cesta || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_cesta: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-amber-800 dark:text-amber-200"
+                        />
+                      </div>
+                    </div>
+
+                    {/* ADIANTAMENTO FOLHA NA ÚLTIMA PARTE COM BENEFÍCIOS */}
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="text-[10px] text-blue-700 dark:text-blue-300 uppercase block font-black mb-1">
+                        Adiantamento Folha:
+                      </label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-blue-400 dark:border-blue-600 rounded-lg px-2 py-1 shadow-2xs">
+                        <span className="text-[10px] text-blue-600 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_adiantamento || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_adiantamento: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-blue-800 dark:text-blue-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-indigo-700 uppercase block font-bold mb-1">Bonificação / Bônus:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-indigo-500 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_bonus || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_bonus: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-indigo-800 dark:text-indigo-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-teal-700 uppercase block font-bold mb-1">Ajuda de Custo:</label>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-teal-200 dark:border-teal-800 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-teal-500 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inspectRow.valor_ajuda_custo || ""}
+                          onChange={(e) => setInspectRow({ ...inspectRow, valor_ajuda_custo: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className="w-full text-xs font-black text-right bg-transparent outline-none text-teal-800 dark:text-teal-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* TOTALIZADORES RECALCULADOS AO VIVO */}
+                {(() => {
+                  const prov = (inspectRow.valor_fixo || 0) + (inspectRow.valor_hora_extra || 0) + (inspectRow.valor_outros_recebidos || 0) + (inspectRow.valor_adicional_not || 0);
+                  const ben = (inspectRow.valor_vt || 0) + (inspectRow.valor_cesta || 0) + (inspectRow.valor_adiantamento || 0) + (inspectRow.valor_bonus || 0) + (inspectRow.valor_ajuda_custo || 0);
+                  const rec = prov + ben;
+                  const desc = inspectRow.valor_descontos || 0;
+                  const liq = rec - desc;
+
+                  return (
+                    <div className="grid grid-cols-3 gap-2 p-3 bg-slate-900 text-white rounded-2xl">
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase block font-bold">Total Recebido</span>
+                        <span className="text-xs font-black text-emerald-400 tabular-nums">{formatCurrency(rec)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase block font-bold">Total Descontado</span>
+                        <span className="text-xs font-black text-rose-400 tabular-nums">-{formatCurrency(desc)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase block font-bold">Líquido Real</span>
+                        <span className="text-xs font-black text-teal-300 tabular-nums">{formatCurrency(liq)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* BOTÕES DE AÇÃO */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 shrink-0">
                 <button
                   type="button"
-                  onClick={onClose}
-                  disabled={isCommitting}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                  onClick={() => {
+                    if (inspectRow) {
+                      setStagingRows((prev) => prev.map((r) => (r.id === inspectRow.id ? inspectRow : r)));
+                    }
+                    setInspectRow(null);
+                  }}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md transition-all"
+                >
+                  <Check size={14} />
+                  <span>Salvar Alterações do Colaborador</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectRow(null)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all"
                 >
                   Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleCommitBatch(false, false)}
-                  disabled={isCommitting || selectedStats.count === 0}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all disabled:opacity-50"
-                >
-                  {isCommitting ? (
-                    <>
-                      <Loader2 size={15} className="animate-spin" />
-                      <span>Gravando ({commitProgress}%)...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Database size={15} />
-                      <span>Confirmar e Gravar no Custo Histórico</span>
-                    </>
-                  )}
                 </button>
               </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* MODAL DE CONFIRMAÇÃO DE CORREÇÃO (QUANDO JÁ EXISTEM DADOS GRAVADOS) */}
-      {showCorrectionModal && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-amber-300 dark:border-amber-800/80 p-6 max-w-xl w-full shadow-2xl space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center gap-3 border-b pb-3 border-slate-100 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0">
-                <AlertTriangle size={22} />
-              </div>
-              <div>
-                <h4 className="text-base font-black text-slate-900 dark:text-white">
-                  Competência com Dados Já Cadastrados
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Foram identificados <strong>{conflictingRows.length} colaborador(es)</strong> que já possuem lançamentos em <strong>{selectedCompetencia}</strong>.
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              Você deseja realizar uma <strong>correção / atualização</strong> dos dados gravados com as informações atuais do grid ou prefere salvar somente os novos colaboradores?
-            </p>
-
-            {/* Lista dos colaboradores em conflito */}
-            <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 p-2 text-xs">
-              {conflictingRows.map(({ row, existingCost }) => {
-                const proventos = row.valor_holerite || (row.valor_fixo + row.valor_hora_extra + row.valor_adicional_not);
-                const beneficios = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
-                const liqNovo = proventos + beneficios - (row.valor_descontos || 0);
-
-                return (
-                  <div key={row.id} className="py-2 px-2 flex justify-between items-center">
-                    <div>
-                      <span className="font-extrabold text-slate-800 dark:text-slate-200 block">
-                        {row.employeeName}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        No banco: Líquido {formatCurrency(existingCost.valor_liquido)} (Origem: {existingCost.origem || "manual"})
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Novo Valor:</span>
-                      <span className="font-black text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(liqNovo)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Ações de Decisão */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowCorrectionModal(false)}
-                className="w-full sm:w-auto px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-              >
-                Cancelar e Revisar no Grid
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleCommitBatch(false, true)}
-                className="w-full sm:w-auto px-4 py-2 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-xl hover:bg-blue-100 transition-all"
-              >
-                Salvar Apenas Novos
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleCommitBatch(true, false)}
-                className="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-              >
-                <Check size={14} />
-                <span>Sim, Aplicar Correção</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE INSPEÇÃO DETALHADA DE RUBRICAS */}
-      {inspectRow && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
-              <div>
-                <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                  Detalhamento de Verbas da Folha
-                </h4>
-                <p className="text-xs text-slate-400">{inspectRow.employeeName} ({inspectRow.competencia})</p>
-              </div>
-              <button onClick={() => setInspectRow(null)} className="text-slate-400 hover:text-slate-700">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-850 p-3 rounded-2xl">
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Salário Fixo:</span>
-                  <span className="font-extrabold">{formatCurrency(inspectRow.valor_fixo)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Horas Extras + DSR:</span>
-                  <span className="font-extrabold">{formatCurrency(inspectRow.valor_hora_extra)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Adiantamento:</span>
-                  <span className="font-extrabold">{formatCurrency(inspectRow.valor_adiantamento)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Adic. Noturno:</span>
-                  <span className="font-extrabold">{formatCurrency(inspectRow.valor_adicional_not)}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 bg-rose-50/40 dark:bg-rose-950/20 p-3 rounded-2xl border border-rose-100 dark:border-rose-900/40">
-                <div>
-                  <span className="text-[10px] text-rose-500 uppercase block font-bold">INSS Descontado:</span>
-                  <span className="font-extrabold text-rose-700 dark:text-rose-400">{formatCurrency(inspectRow.inss_empregado)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-rose-500 uppercase block font-bold">Desc. VT 6%:</span>
-                  <span className="font-extrabold text-rose-700 dark:text-rose-400">{formatCurrency(inspectRow.desconto_vt_6)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-rose-500 uppercase block font-bold">IRRF Descontado:</span>
-                  <span className="font-extrabold text-rose-700 dark:text-rose-400">{formatCurrency(inspectRow.irrf_empregado)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-rose-500 uppercase block font-bold">Total Descontos:</span>
-                  <span className="font-extrabold text-rose-800 dark:text-rose-300">{formatCurrency(inspectRow.valor_descontos)}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 bg-emerald-50/40 dark:bg-emerald-950/20 p-3 rounded-2xl border border-emerald-100 dark:border-emerald-900/40">
-                <div>
-                  <span className="text-[10px] text-emerald-600 uppercase block font-bold">VT Recebido:</span>
-                  <span className="font-extrabold text-emerald-700 dark:text-emerald-400">{formatCurrency(inspectRow.valor_vt)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-amber-600 uppercase block font-bold">VR / Cesta:</span>
-                  <span className="font-extrabold text-amber-700 dark:text-amber-400">{formatCurrency(inspectRow.valor_cesta)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-indigo-600 uppercase block font-bold">Bonificação / Bônus:</span>
-                  <span className="font-extrabold text-indigo-700 dark:text-indigo-400">{formatCurrency(inspectRow.valor_bonus)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-teal-600 uppercase block font-bold">Ajuda de Custo:</span>
-                  <span className="font-extrabold text-teal-700 dark:text-teal-400">{formatCurrency(inspectRow.valor_ajuda_custo)}</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setInspectRow(null)}
-              className="w-full py-2 bg-slate-900 dark:bg-slate-800 text-white rounded-xl text-xs font-bold"
-            >
-              Fechar Detalhes
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

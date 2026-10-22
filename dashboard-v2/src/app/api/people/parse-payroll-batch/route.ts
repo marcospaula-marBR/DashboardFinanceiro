@@ -63,10 +63,46 @@ export async function POST(req: Request) {
       generationConfig: { responseMimeType: "application/json" }
     });
 
+    const isAdvanceMode = importType === 'advance';
     const isBenefitsMode = importType === 'benefits';
 
-    const prompt = isBenefitsMode
-      ? `
+    let prompt = "";
+
+    if (isAdvanceMode) {
+      prompt = `
+Analise este documento (PDF ou imagem) contendo a Folha de Adiantamento Salarial (Relação de Adiantamento Quinzenal, Folha de Vales ou Recibos de Adiantamento Salarial de colaboradores).
+
+Instruções de Extração:
+1. **Competência**: Identifique a competência (mês/ano) de referência no cabeçalho ou datas do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho/2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01'). Se não encontrar, retorne string vazia "".
+2. **Colaboradores**: Extraia cada linha ou recibo individual de colaborador contido na relação de adiantamento salarial.
+3. **Valores do Adiantamento**:
+   - "name": Nome completo do colaborador.
+   - "cpf": CPF do colaborador (formatado 000.000.000-00 ou números puros).
+   - "matricula": Matrícula ou código se houver.
+   - "cargo": Cargo se houver.
+   - "valor_adiantamento": Valor nominal do adiantamento salarial a receber / crédito pago ao colaborador (ex: 1767.26, 800.00). Caso haja valor bruto e líquido do adiantamento, priorize o valor efetivo a receber.
+   - "observacao": Descrição ou identificador (ex: 'Folha de Adiantamento Quinzenal').
+
+Retorne obrigatoriamente um objeto JSON com o seguinte formato:
+{
+  "competencia": "YYYY-MM-01",
+  "records": [
+    {
+      "matricula": "1",
+      "name": "Nome Completo do Colaborador",
+      "cpf": "000.000.000-00",
+      "cargo": "Cargo",
+      "valor_adiantamento": 0.00,
+      "observacao": "Adiantamento Salarial"
+    }
+  ]
+}
+
+Valores monetários devem ser estritamente numéricos decimais (ex: 1767.26, 500.00).
+Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
+`;
+    } else if (isBenefitsMode) {
+      prompt = `
 Analise este documento (PDF ou imagem) contendo um Relatório, Demonstrativo ou Planilha de Benefícios (Vale Transporte / VT, Vale Refeição / Alimentação / Cesta, Flash, Sodexo, Alelo, VR, Bonificação, Premiação, Bônus, Ajuda de Custo).
 
 Instruções de Extração:
@@ -105,8 +141,9 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
 
 Valores monetários devem ser estritamente numéricos decimais (ex: 273.00, 500.00).
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
-`
-      : `
+`;
+    } else {
+      prompt = `
 Analise este documento (PDF ou imagem) contendo o Extrato Mensal da folha de pagamento de múltiplos colaboradores (listagem celetista ou múltiplos recibos).
 
 Instruções de Extração:
@@ -181,6 +218,7 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
 Trabalhe com máxima precisão. Valores monetários e banco de horas devem ser estritamente numéricos decimais.
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
 `;
+    }
 
     const result = await model.generateContent([
       {

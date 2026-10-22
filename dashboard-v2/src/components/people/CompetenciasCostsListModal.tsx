@@ -315,6 +315,7 @@ export function CompetenciasCostsListModal({
       'Cargo',
       'Documento / CPF / CNPJ',
       'Salário Fixo / Base (R$)',
+      'Outros Valores Recebidos (R$)',
       'Adiantamento (R$)',
       'Horas Extras (R$)',
       'Adicional Noturno (R$)',
@@ -370,6 +371,7 @@ export function CompetenciasCostsListModal({
         escapeCsv(emp?.job_role || ''),
         escapeCsv(emp?.document_id || emp?.responsible_cpf || ''),
         formatNum(fixo),
+        formatNum(cost.outros_ajustes || 0),
         formatNum(cost.valor_adiantamento),
         formatNum(cost.valor_hora_extra),
         formatNum(cost.valor_adicional_not),
@@ -1003,12 +1005,17 @@ export function CompetenciasCostsListModal({
                       {/* Adiantamento */}
                       <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
                         {cost.valor_adiantamento && cost.valor_adiantamento > 0 ? (
-                          <span className="font-bold text-blue-600 dark:text-blue-400">
+                          <span className="font-bold text-blue-600 dark:text-blue-400 block">
                             +{showValues ? formatCurrency(cost.valor_adiantamento) : '••••'}
                           </span>
                         ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
+                          <span className="text-slate-300 dark:text-slate-700 block">—</span>
                         )}
+                        {cost.outros_ajustes && cost.outros_ajustes > 0 ? (
+                          <span className="block text-[9px] text-slate-400 font-normal">
+                            Outros: +{showValues ? formatCurrency(cost.outros_ajustes) : '••••'}
+                          </span>
+                        ) : null}
                       </td>
 
                       {/* HE & Noturno */}
