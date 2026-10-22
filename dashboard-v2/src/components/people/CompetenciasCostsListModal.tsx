@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   X, Calendar, Filter, Search, Trash2, Edit3, Loader2, 
   CheckCircle2, AlertTriangle, ArrowUpDown, DollarSign, Wallet, 
-  Users, ChevronRight, FileSpreadsheet, RotateCcw, Building2, Briefcase
+  Users, ChevronRight, FileSpreadsheet, RotateCcw, Building2, Briefcase, Download
 } from 'lucide-react';
 import { Employee, MonthlyCost } from '@/types/loans';
 import { PeopleHRService } from '@/services/people-hr.service';
@@ -270,6 +270,117 @@ export function CompetenciasCostsListModal({
     }
   };
 
+  const handleExportCsv = () => {
+    if (filteredRows.length === 0) {
+      alert('Nenhum dado para exportar com os filtros atuais.');
+      return;
+    }
+
+    const headers = [
+      'Competência (ISO)',
+      'Competência (Mês/Ano)',
+      'Colaborador',
+      'Razão Social',
+      'Regime',
+      'Status Cadastral',
+      'Empresa',
+      'Departamento / Setor',
+      'Cargo',
+      'Documento / CPF / CNPJ',
+      'Salário Fixo / Base (R$)',
+      'Adiantamento (R$)',
+      'Horas Extras (R$)',
+      'Adicional Noturno (R$)',
+      'Vale Refeição (R$)',
+      'Vale Transporte (R$)',
+      'Cesta Alimentação (R$)',
+      'Ajuda Custo / Conectividade (R$)',
+      'Total Benefícios (R$)',
+      '13º Salário (R$)',
+      'Férias (R$)',
+      'Rescisão (R$)',
+      'Descontos Holerite (R$)',
+      'Faltas (R$)',
+      'Consignado (R$)',
+      'Total Real Desembolsado (R$)',
+      'Origem',
+      'Observação'
+    ];
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const formatNum = (val: number | null | undefined): string => {
+      if (val === null || val === undefined || isNaN(val)) return '0,00';
+      return val.toFixed(2).replace('.', ',');
+    };
+
+    const csvRows: string[] = [];
+    csvRows.push(headers.join(';'));
+
+    filteredRows.forEach(({ cost, emp, name, isCLT, isEstagio, realTotal }) => {
+      const fixo = cost.valor_fixo !== undefined && cost.valor_fixo !== null ? cost.valor_fixo : (cost.valor_liquido || 0);
+      const vr = cost.valor_vr || 0;
+      const vt = cost.valor_vt || 0;
+      const cesta = cost.valor_cesta || 0;
+      const ajudaCusto = cost.valor_ajuda_custo || 0;
+      const totalBeneficios = vr + vt + cesta + ajudaCusto;
+      const regime = isEstagio ? 'Estágio' : (isCLT ? 'CLT' : 'PJ');
+      const compLabel = formatCompetenciaLabel(cost.competencia);
+
+      const row = [
+        escapeCsv(cost.competencia),
+        escapeCsv(compLabel),
+        escapeCsv(name),
+        escapeCsv(emp?.corporate_name || ''),
+        escapeCsv(regime),
+        escapeCsv(emp?.status || 'Ativo'),
+        escapeCsv(emp?.company || ''),
+        escapeCsv(emp?.department || ''),
+        escapeCsv(emp?.job_role || ''),
+        escapeCsv(emp?.document_id || emp?.responsible_cpf || ''),
+        formatNum(fixo),
+        formatNum(cost.valor_adiantamento),
+        formatNum(cost.valor_hora_extra),
+        formatNum(cost.valor_adicional_not),
+        formatNum(vr),
+        formatNum(vt),
+        formatNum(cesta),
+        formatNum(ajudaCusto),
+        formatNum(totalBeneficios),
+        formatNum(cost.valor_decimo_terceiro),
+        formatNum(cost.valor_ferias),
+        formatNum(cost.valor_rescisao),
+        formatNum(cost.valor_descontos),
+        formatNum(cost.valor_faltas),
+        formatNum(cost.valor_consignado),
+        formatNum(realTotal),
+        escapeCsv(cost.origem || 'manual'),
+        escapeCsv(cost.observacao || '')
+      ];
+
+      csvRows.push(row.join(';'));
+    });
+
+    const csvContent = '\uFEFF' + csvRows.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `relatorio_custos_competencias_${today}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setSuccessToast(`Relatório exportado com sucesso (${filteredRows.length} lançamentos)!`);
+    setTimeout(() => setSuccessToast(null), 3500);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-7xl h-[94vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -301,6 +412,15 @@ export function CompetenciasCostsListModal({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Exportar dados filtrados para planilha Excel / CSV"
+            >
+              <Download size={14} />
+              <span className="hidden sm:inline">Exportar CSV</span>
+            </button>
             {hasActiveModalFilters && (
               <button
                 type="button"

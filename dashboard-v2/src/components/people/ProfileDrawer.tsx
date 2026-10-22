@@ -64,6 +64,25 @@ const MERGE_FIELDS = [
   { key: 'degree', label: 'Grau de Instrução' },
 ];
 
+const parseVerbasAdicionaisList = (rawVerbas: any): { name: string; value: number }[] => {
+  if (!rawVerbas || typeof rawVerbas !== 'object') return [];
+  const internalMetaKeys = new Set([
+    'valor_vr', 'valor_vt', 'valor_cesta', 'valor_ajuda_custo', 'valor_gps',
+    'valor_fgts', 'valor_bruto', 'valor_liquido', 'valor_desconto', 'valor_ferias',
+    'valor_dec_terceiro', 'valor_seguro', 'custom_values', 'inss_empregado',
+    'irrf_empregado', 'salario_familia', 'inss', 'irrf', 'fgts'
+  ]);
+  const list: { name: string; value: number }[] = [];
+  Object.entries(rawVerbas).forEach(([name, val]) => {
+    if (internalMetaKeys.has(name.toLowerCase())) return;
+    const num = typeof val === 'number' ? val : parseFloat(String(val));
+    if (!isNaN(num) && Number.isFinite(num) && typeof val !== 'object') {
+      list.push({ name, value: num });
+    }
+  });
+  return list;
+};
+
 interface ProfileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -1871,23 +1890,30 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       
       const isCLT = editingCostType === 'CLT';
       
-      // Converte a lista de verbas adicionais temporária para record
+      // Converte a lista de verbas adicionais temporária para record com estrita validação numérica
       const verbasObj: Record<string, number> = {};
+      let verbasAdicionaisSoma = 0;
       editingCostVerbasAdicionais.forEach(v => {
-        if (v.name.trim() && v.value !== 0) {
-          verbasObj[v.name.trim()] = v.value;
+        const name = String(v.name || '').trim();
+        const num = typeof v.value === 'number' ? v.value : parseFloat(String(v.value));
+        if (name && !isNaN(num) && Number.isFinite(num) && num !== 0) {
+          verbasObj[name] = num;
+          verbasAdicionaisSoma += num;
         }
       });
 
-      const verbasAdicionaisSoma = Object.values(verbasObj).reduce((sum, val) => sum + val, 0);
+      // Benefícios totais (VR, VT, Cesta Alimentação, Ajuda Custo / Conectividade)
+      const totalBeneficiosCLT = (editingCostVR || 0) + (editingCostVT || 0) + (editingCostCesta || 0) + (editingCostConectividade || 0);
 
       const computedLiquido = isCLT
-        ? (editingCostFixo + editingCostHoraExtra + editingCostAdicionalNot + editingCostFerias + editingCostDecimoTerceiro + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade)
-          - (editingCostDescontos + editingCostFaltas + editingCostConsignado + editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes)
-          + verbasAdicionaisSoma
-        : (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade)
-          - (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes)
-          + verbasAdicionaisSoma;
+        ? Math.round((
+            ((editingCostFixo || 0) + (editingCostHoraExtra || 0) + (editingCostAdicionalNot || 0) + (editingCostFerias || 0) + (editingCostDecimoTerceiro || 0) + (editingCostBonus || 0) + (editingCostComissao || 0) + (editingCostIncentivos || 0) + (editingCostRescisao || 0) + totalBeneficiosCLT + verbasAdicionaisSoma)
+            - ((editingCostDescontos || 0) + (editingCostFaltas || 0) + (editingCostConsignado || 0) + (editingCostGlosaBase || 0) + (editingCostGlosaBonus || 0) + (editingCostDeducoes || 0))
+          ) * 100) / 100
+        : Math.round((
+            ((editingCostFixo || 0) + (editingCostBonus || 0) + (editingCostComissao || 0) + (editingCostIncentivos || 0) + (editingCostConectividade || 0) + verbasAdicionaisSoma)
+            - ((editingCostGlosaBase || 0) + (editingCostGlosaBonus || 0) + (editingCostDeducoes || 0))
+          ) * 100) / 100;
 
       const payload = {
         competencia: editingCostCompetencia,
@@ -3962,7 +3988,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 setEditingCostDiasFaltas(lastCost.dias_faltas || 0);
                                 setEditingCostConsignado(lastCost.valor_consignado || 0);
                                 setEditingCostBancoHoras(lastCost.banco_horas || 0);
-                                setEditingCostVerbasAdicionais(lastCost.verbas_adicionais ? Object.entries(lastCost.verbas_adicionais).map(([name, value]) => ({ name, value })) : []);
+                                setEditingCostVerbasAdicionais(parseVerbasAdicionaisList(lastCost.verbas_adicionais));
                                 setEditingCostObservacao(lastCost.observacao || '');
                                 setSaveCostError(null);
                               }}
@@ -4595,7 +4621,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                 setEditingCostDiasFaltas(c.dias_faltas || 0);
                                 setEditingCostConsignado(c.valor_consignado || 0);
                                 setEditingCostBancoHoras(c.banco_horas || 0);
-                                setEditingCostVerbasAdicionais(c.verbas_adicionais ? Object.entries(c.verbas_adicionais).map(([name, value]) => ({ name, value })) : []);
+                                setEditingCostVerbasAdicionais(parseVerbasAdicionaisList(c.verbas_adicionais));
                                 setEditingCostObservacao(c.observacao || '');
                                 setSaveCostError(null);
                               };
@@ -5137,7 +5163,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                             setEditingCostDiasFaltas(cost.dias_faltas || 0);
                                             setEditingCostConsignado(cost.valor_consignado || 0);
                                             setEditingCostBancoHoras(cost.banco_horas || 0);
-                                            setEditingCostVerbasAdicionais(cost.verbas_adicionais ? Object.entries(cost.verbas_adicionais).map(([name, value]) => ({ name, value })) : []);
+                                            setEditingCostVerbasAdicionais(parseVerbasAdicionaisList(cost.verbas_adicionais));
                                             setEditingCostObservacao(cost.observacao || '');
                                             setSaveCostError(null);
                                           }
@@ -6533,6 +6559,13 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
               )}
               {/* Resumo do Total Líquido */}
               {(() => {
+                const verbasAdicionaisSoma = editingCostVerbasAdicionais.reduce((sum, v) => {
+                  const num = typeof v.value === 'number' ? v.value : parseFloat(String(v.value));
+                  return sum + (isNaN(num) ? 0 : num);
+                }, 0);
+
+                const totalBeneficiosCLT = (editingCostVR || 0) + (editingCostVT || 0) + (editingCostCesta || 0) + (editingCostConectividade || 0);
+
                 const previstoTotal = (profile?.remuneration_fixed || profile?.remuneration || 0) + 
                                       (profile?.remuneration_bonus || 0) + 
                                       (profile?.remuneration_commission || 0) + 
@@ -6540,10 +6573,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       (profile?.remuneration_connectivity || 0);
                 
                 const pagoTotal = editingCostType === 'CLT'
-                  ? (editingCostFixo + editingCostHoraExtra + editingCostAdicionalNot + editingCostFerias + editingCostDecimoTerceiro + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade) - 
-                    (editingCostDescontos + editingCostFaltas + editingCostConsignado + editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes)
-                  : (editingCostFixo + editingCostBonus + editingCostComissao + editingCostIncentivos + editingCostConectividade) - 
-                    (editingCostGlosaBase + editingCostGlosaBonus + editingCostDeducoes);
+                  ? (((editingCostFixo || 0) + (editingCostHoraExtra || 0) + (editingCostAdicionalNot || 0) + (editingCostFerias || 0) + (editingCostDecimoTerceiro || 0) + (editingCostBonus || 0) + (editingCostComissao || 0) + (editingCostIncentivos || 0) + (editingCostRescisao || 0) + totalBeneficiosCLT + verbasAdicionaisSoma) - 
+                    ((editingCostDescontos || 0) + (editingCostFaltas || 0) + (editingCostConsignado || 0) + (editingCostGlosaBase || 0) + (editingCostGlosaBonus || 0) + (editingCostDeducoes || 0)))
+                  : (((editingCostFixo || 0) + (editingCostBonus || 0) + (editingCostComissao || 0) + (editingCostIncentivos || 0) + (editingCostConectividade || 0) + verbasAdicionaisSoma) - 
+                    ((editingCostGlosaBase || 0) + (editingCostGlosaBonus || 0) + (editingCostDeducoes || 0)));
                 
                 const diffTotal = pagoTotal - previstoTotal;
                 
