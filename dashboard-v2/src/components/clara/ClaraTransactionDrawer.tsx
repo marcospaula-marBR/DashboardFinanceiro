@@ -87,6 +87,8 @@ export function ClaraTransactionDrawer({
   );
   const [supplierSearch, setSupplierSearch] = useState('');
   const [isSupplierOpen, setIsSupplierOpen] = useState(false);
+  const [remoteSuppliers, setRemoteSuppliers] = useState<OmieSupplierOption[]>([]);
+  const [searchingRemote, setSearchingRemote] = useState(false);
   const supplierDropdownRef = useRef<HTMLDivElement>(null);
 
   const [selectedIssueDate, setSelectedIssueDate] = useState(transaction?.invoice_issue_date || '');
@@ -106,20 +108,80 @@ export function ClaraTransactionDrawer({
     };
   }, []);
 
-  // Filtro performático dos fornecedores do Omie
+  // Busca em tempo real na API Omie (endpoint /api/clara/suppliers) quando o usuário digita
+  useEffect(() => {
+    const q = supplierSearch.trim();
+    if (q.length < 2) {
+      setRemoteSuppliers([]);
+      setSearchingRemote(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingRemote(true);
+      try {
+        const res = await fetch(
+          `/api/clara/suppliers?company=${encodeURIComponent(activeCompanyName)}&q=${encodeURIComponent(q)}`
+        );
+        const data = await res.json().catch(() => ({}));
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          setRemoteSuppliers(data.data);
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar fornecedores na API:', err);
+      } finally {
+        setSearchingRemote(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [supplierSearch, activeCompanyName]);
+
+  // Filtro performático dos fornecedores do Omie:
+  // Combina a lista completa (em cache/prop) com a busca remota sob demanda e desduplica por codigo_cliente_omie
   const filteredSuppliers = useMemo(() => {
-    if (!suppliers || suppliers.length === 0) return [];
-    if (!supplierSearch.trim()) return suppliers.slice(0, 50);
-    const q = supplierSearch.toLowerCase();
+    const q = supplierSearch.toLowerCase().trim();
     const cleanDigits = q.replace(/\D/g, '');
-    return suppliers.filter(s => {
-      const matchName = (s.nome_fantasia || '').toLowerCase().includes(q) ||
-                        (s.razao_social || '').toLowerCase().includes(q) ||
-                        String(s.codigo_cliente_omie).includes(q);
-      const matchCnpj = cleanDigits && s.cnpj_cpf ? s.cnpj_cpf.replace(/\D/g, '').includes(cleanDigits) : false;
-      return matchName || matchCnpj;
-    }).slice(0, 50);
-  }, [suppliers, supplierSearch]);
+    const map = new Map<number, OmieSupplierOption>();
+
+    // 1. Prioriza correspondências da busca remota direta
+    if (remoteSuppliers && remoteSuppliers.length > 0) {
+      remoteSuppliers.forEach(s => map.set(s.codigo_cliente_omie, s));
+    }
+
+    // 2. Filtra da lista local de fornecedores
+    if (suppliers && suppliers.length > 0) {
+      if (!q) {
+        suppliers.slice(0, 60).forEach(s => {
+          if (!map.has(s.codigo_cliente_omie)) {
+            map.set(s.codigo_cliente_omie, s);
+          }
+        });
+      } else {
+        const words = q.split(/\s+/).filter(Boolean);
+        for (const s of suppliers) {
+          const nome = (s.nome_fantasia || '').toLowerCase();
+          const razao = (s.razao_social || '').toLowerCase();
+          const cod = String(s.codigo_cliente_omie);
+          const cnpj = s.cnpj_cpf ? s.cnpj_cpf.replace(/\D/g, '') : '';
+
+          // Correspondência direta
+          const matchDirect = nome.includes(q) || razao.includes(q) || cod.includes(q);
+          const matchCnpj = cleanDigits && cnpj.includes(cleanDigits);
+
+          // Correspondência por todas as palavras (ex: "consultoria paula" ou "uber brasil")
+          const matchAllWords = words.length > 1 && words.every(w => nome.includes(w) || razao.includes(w));
+
+          if (matchDirect || matchCnpj || matchAllWords) {
+            map.set(s.codigo_cliente_omie, s);
+            if (map.size >= 80) break;
+          }
+        }
+      }
+    }
+
+    return Array.from(map.values()).slice(0, 80);
+  }, [suppliers, remoteSuppliers, supplierSearch]);
 
   // Estado para OCR
   const [runningOcr, setRunningOcr] = useState(false);
@@ -638,7 +700,7 @@ export function ClaraTransactionDrawer({
                   </span>
                 </div>
 
-                {selectedSupplierCode ? (
+                {selectedSupplierCode && !isSupplierOpen ? (
                   <div className="p-2.5 bg-emerald-50/80 border border-emerald-300 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -659,7 +721,7 @@ export function ClaraTransactionDrawer({
                       <button
                         type="button"
                         onClick={() => {
-                          setIsSupplierOpen(!isSupplierOpen);
+                          setIsSupplierOpen(true);
                           setSupplierSearch('');
                         }}
                         className="px-2 py-1 text-[10px] font-bold text-emerald-700 bg-white hover:bg-emerald-100/60 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
@@ -691,23 +753,33 @@ export function ClaraTransactionDrawer({
                           if (!isSupplierOpen) setIsSupplierOpen(true);
                         }}
                         onFocus={() => setIsSupplierOpen(true)}
-                        placeholder={`Buscar fornecedor na base Omie (${suppliers.length} cadastrados)...`}
-                        className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800 placeholder:text-slate-400"
+                        placeholder={`Buscar no Omie (ex: Uber, Solucione, Paula, CNPJ)...`}
+                        className="w-full pl-8 pr-16 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800 placeholder:text-slate-400"
+                        autoFocus={isSupplierOpen && !!selectedSupplierCode}
                       />
                       <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      {supplierSearch && (
-                        <button
-                          type="button"
-                          onClick={() => setSupplierSearch('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
-                        >
-                          <X size={12} />
-                        </button>
-                      )}
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {searchingRemote && (
+                          <Loader2 size={13} className="animate-spin text-emerald-600" />
+                        )}
+                        {supplierSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setSupplierSearch('')}
+                            className="text-slate-400 hover:text-slate-600 p-0.5"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="text-[10px] text-slate-500 mt-1 flex items-center justify-between">
                       <span className="truncate">
-                        Padrão: <strong className="text-slate-700">{transaction.merchant_name || 'Estabelecimento Clara'}</strong>
+                        {selectedSupplierCode ? (
+                          <>Selecionado: <strong className="text-emerald-800">{selectedSupplierName} (#{selectedSupplierCode})</strong></>
+                        ) : (
+                          <>Padrão: <strong className="text-slate-700">{transaction.merchant_name || 'Estabelecimento Clara'}</strong></>
+                        )}
                       </span>
                       <button
                         type="button"
@@ -724,7 +796,14 @@ export function ClaraTransactionDrawer({
                 {isSupplierOpen && (
                   <div className="mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto z-50 divide-y divide-slate-100">
                     <div className="p-2 bg-slate-50 text-[11px] font-bold text-slate-600 flex items-center justify-between sticky top-0 border-b border-slate-100">
-                      <span>Fornecedores Omie — {activeCompanyName}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span>Fornecedores Omie — {activeCompanyName}</span>
+                        {searchingRemote && (
+                          <span className="text-[10px] font-normal text-emerald-600 flex items-center gap-1">
+                            <Loader2 size={10} className="animate-spin" /> buscando...
+                          </span>
+                        )}
+                      </span>
                       <span className="text-[10px] font-normal text-slate-400">
                         {filteredSuppliers.length} exibidos de {suppliers.length}
                       </span>

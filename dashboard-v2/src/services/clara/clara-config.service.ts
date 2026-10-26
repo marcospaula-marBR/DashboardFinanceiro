@@ -702,19 +702,31 @@ export class ClaraConfigService {
       .replace(/&#39;/g, "'")
       .trim();
 
-    // 1. Consulta omie_dim_fornecedores no Supabase filtrando pela empresa
+    // 1. Consulta omie_dim_fornecedores no Supabase filtrando pela empresa com paginação em chunks de 1000
     try {
       const empresaFiltro = isDZM ? 'DZM' : 'Mar Brasil';
-      const { data, error } = await supabase
-        .from('omie_dim_fornecedores')
-        .select('codigo_cliente_omie, nome_fantasia, razao_social, cnpj_cpf, empresa_nome')
-        .ilike('empresa_nome', `%${empresaFiltro}%`)
-        .order('razao_social', { ascending: true })
-        .limit(4000);
+      const allRows: any[] = [];
+      const CHUNK_SIZE = 1000;
+      let from = 0;
 
-      if (!error && data && data.length > 0) {
+      while (true) {
+        const { data, error } = await supabase
+          .from('omie_dim_fornecedores')
+          .select('codigo_cliente_omie, nome_fantasia, razao_social, cnpj_cpf, empresa_nome')
+          .ilike('empresa_nome', `%${empresaFiltro}%`)
+          .order('codigo_cliente_omie', { ascending: true })
+          .range(from, from + CHUNK_SIZE - 1);
+
+        if (error || !data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < CHUNK_SIZE) break;
+        from += CHUNK_SIZE;
+        if (from >= 10000) break; // Trava de segurança
+      }
+
+      if (allRows.length > 0) {
         const uniqueMap = new Map<number, OmieSupplierOption>();
-        data.forEach(item => {
+        allRows.forEach(item => {
           const cod = Number(item.codigo_cliente_omie);
           if (!cod || uniqueMap.has(cod)) return;
           const razao = decodeHtml(item.razao_social || item.nome_fantasia || '');
@@ -779,6 +791,77 @@ export class ClaraConfigService {
     }
 
     return cached?.data || [];
+  }
+
+  /**
+   * Busca em tempo real fornecedores no Omie (tabela omie_dim_fornecedores e fallback na API Omie).
+   * Suporta busca por Razão Social, Nome Fantasia ou CNPJ/CPF com correspondência flexível.
+   */
+  public static async searchOmieSuppliers(query: string, company = 'Mar Brasil'): Promise<OmieSupplierOption[]> {
+    if (!query || !query.trim()) return [];
+    const q = query.trim();
+    const isDZM = this.isDZMCompany(company);
+    const empresaFiltro = isDZM ? 'DZM' : 'Mar Brasil';
+    const cleanDigits = q.replace(/\D/g, '');
+
+    const decodeHtml = (str: string) => (str || '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+
+    try {
+      const words = q.split(/\s+/).filter(Boolean);
+      const wildcardQ = words.join('%');
+
+      const filterParts = [
+        `nome_fantasia.ilike.%${q}%`,
+        `razao_social.ilike.%${q}%`,
+      ];
+
+      if (words.length > 1) {
+        filterParts.push(`nome_fantasia.ilike.%${wildcardQ}%`);
+        filterParts.push(`razao_social.ilike.%${wildcardQ}%`);
+        const reversedWildcard = [...words].reverse().join('%');
+        filterParts.push(`nome_fantasia.ilike.%${reversedWildcard}%`);
+        filterParts.push(`razao_social.ilike.%${reversedWildcard}%`);
+      }
+
+      if (cleanDigits.length >= 3) {
+        filterParts.push(`cnpj_cpf.ilike.%${cleanDigits}%`);
+      }
+      if (!isNaN(Number(q))) {
+        filterParts.push(`codigo_cliente_omie.eq.${q}`);
+      }
+
+      const { data, error } = await supabase
+        .from('omie_dim_fornecedores')
+        .select('codigo_cliente_omie, nome_fantasia, razao_social, cnpj_cpf, empresa_nome')
+        .ilike('empresa_nome', `%${empresaFiltro}%`)
+        .or(filterParts.join(','))
+        .limit(60);
+
+      if (!error && data && data.length > 0) {
+        const uniqueMap = new Map<number, OmieSupplierOption>();
+        data.forEach(item => {
+          const cod = Number(item.codigo_cliente_omie);
+          if (!cod || uniqueMap.has(cod)) return;
+          uniqueMap.set(cod, {
+            codigo_cliente_omie: cod,
+            razao_social: decodeHtml(item.razao_social || item.nome_fantasia || ''),
+            nome_fantasia: decodeHtml(item.nome_fantasia || item.razao_social || ''),
+            cnpj_cpf: item.cnpj_cpf?.trim() || undefined,
+          });
+        });
+        return Array.from(uniqueMap.values());
+      }
+    } catch (e: any) {
+      console.warn(`[ClaraConfigService.searchOmieSuppliers] Erro na busca direta:`, e.message);
+    }
+
+    return [];
   }
 }
 
