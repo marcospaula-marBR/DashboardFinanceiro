@@ -494,7 +494,10 @@ export class ClaraSyncService {
 
           // PRODUÇÃO: dispara IncluirContaPagar no Omie
           try {
-            const merchantSupplierCode = await this.ensureSupplier(tx.merchant_name, omieCreds, supplierCode);
+            const selectedSupplierCode = tx.omie_supplier_code || tx.accounting_fields?.omie_supplier_code;
+            const merchantSupplierCode = selectedSupplierCode
+              ? Number(selectedSupplierCode)
+              : await this.ensureSupplier(tx.merchant_name, omieCreds, supplierCode);
             const contaPagarPayload = ClaraOmieMapper.buildOmieContaPagarPayload(
               tx,
               merchantSupplierCode,
@@ -648,6 +651,21 @@ export class ClaraSyncService {
   }
 
   /**
+   * Remove campos que não são colunas nativas da tabela clara_transactions,
+   * garantindo que fiquem preservados dentro do JSONB accounting_fields sem quebrar o PostgREST.
+   */
+  private static sanitizeTxForSupabase(tx: ClaraTransactionRecord): any {
+    const { omie_supplier_code, omie_supplier_name, omie_supplier_cnpj, ...clean } = tx;
+    clean.accounting_fields = {
+      ...(clean.accounting_fields || {}),
+      ...(omie_supplier_code ? { omie_supplier_code } : {}),
+      ...(omie_supplier_name ? { omie_supplier_name } : {}),
+      ...(omie_supplier_cnpj ? { omie_supplier_cnpj } : {}),
+    };
+    return clean;
+  }
+
+  /**
    * Salva lista de transações em lote com persistência de alta performance
    */
   public static async saveLocalTransactionsBatch(txList: ClaraTransactionRecord[]): Promise<void> {
@@ -662,7 +680,7 @@ export class ClaraSyncService {
     try {
       const CHUNK_SIZE = 100;
       for (let i = 0; i < txList.length; i += CHUNK_SIZE) {
-        const chunk = txList.slice(i, i + CHUNK_SIZE);
+        const chunk = txList.slice(i, i + CHUNK_SIZE).map(t => this.sanitizeTxForSupabase(t));
         const { error } = await supabase
           .from('clara_transactions')
           .upsert(chunk, { onConflict: 'clara_uuid' });
@@ -689,9 +707,10 @@ export class ClaraSyncService {
     await ClaraStorageService.saveTransaction(tx, DEFAULT_CLARA_CONFIG).catch(() => {});
 
     try {
+      const sanitized = this.sanitizeTxForSupabase(tx);
       await supabase
         .from('clara_transactions')
-        .upsert(tx, { onConflict: 'clara_uuid' });
+        .upsert(sanitized, { onConflict: 'clara_uuid' });
     } catch (e: any) {
       console.warn('[ClaraSyncService] Aviso ao salvar clara_transactions no Supabase:', e.message);
     }
@@ -760,6 +779,17 @@ export class ClaraSyncService {
       const { data, count, error } = await query;
 
       if (!error && data) {
+        data.forEach((item: any) => {
+          if (item.accounting_fields?.omie_supplier_code && !item.omie_supplier_code) {
+            item.omie_supplier_code = Number(item.accounting_fields.omie_supplier_code);
+          }
+          if (item.accounting_fields?.omie_supplier_name && !item.omie_supplier_name) {
+            item.omie_supplier_name = String(item.accounting_fields.omie_supplier_name);
+          }
+          if (item.accounting_fields?.omie_supplier_cnpj && !item.omie_supplier_cnpj) {
+            item.omie_supplier_cnpj = String(item.accounting_fields.omie_supplier_cnpj);
+          }
+        });
         return { transactions: data, total: count ?? data.length };
       }
     } catch {
@@ -808,6 +838,18 @@ export class ClaraSyncService {
         t.clara_uuid.toLowerCase().includes(s)
       );
     }
+
+    items.forEach((item: any) => {
+      if (item.accounting_fields?.omie_supplier_code && !item.omie_supplier_code) {
+        item.omie_supplier_code = Number(item.accounting_fields.omie_supplier_code);
+      }
+      if (item.accounting_fields?.omie_supplier_name && !item.omie_supplier_name) {
+        item.omie_supplier_name = String(item.accounting_fields.omie_supplier_name);
+      }
+      if (item.accounting_fields?.omie_supplier_cnpj && !item.omie_supplier_cnpj) {
+        item.omie_supplier_cnpj = String(item.accounting_fields.omie_supplier_cnpj);
+      }
+    });
 
     items.sort((a, b) => new Date(b.operation_date).getTime() - new Date(a.operation_date).getTime());
     const total = items.length;
@@ -981,7 +1023,10 @@ export class ClaraSyncService {
     const shouldSend = forceSend || !config.safe_mode;
 
     if (!nCodLanc && shouldSend) {
-      const merchantSupplierCode = await this.ensureSupplier(tx.merchant_name, omieCreds, supplierCode);
+      const selectedSupplierCode = tx.omie_supplier_code || tx.accounting_fields?.omie_supplier_code;
+      const merchantSupplierCode = selectedSupplierCode
+        ? Number(selectedSupplierCode)
+        : await this.ensureSupplier(tx.merchant_name, omieCreds, supplierCode);
       const contaPagarPayload = ClaraOmieMapper.buildOmieContaPagarPayload(
         tx,
         merchantSupplierCode,
@@ -1065,6 +1110,9 @@ export class ClaraSyncService {
       omie_category_code?: string | null;
       omie_department_code?: string | null;
       omie_project_code?: string | null;
+      omie_supplier_code?: number | null;
+      omie_supplier_name?: string | null;
+      omie_supplier_cnpj?: string | null;
       invoice_issue_date?: string | null;
       registration_date?: string | null;
       due_date?: string | null;
@@ -1116,11 +1164,22 @@ export class ClaraSyncService {
     if (fields.omie_category_code !== undefined) tx.omie_category_code = fields.omie_category_code;
     if (fields.omie_department_code !== undefined) tx.omie_department_code = fields.omie_department_code;
     if (fields.omie_project_code !== undefined) tx.omie_project_code = fields.omie_project_code;
+    if (fields.omie_supplier_code !== undefined) tx.omie_supplier_code = fields.omie_supplier_code;
+    if (fields.omie_supplier_name !== undefined) tx.omie_supplier_name = fields.omie_supplier_name;
+    if (fields.omie_supplier_cnpj !== undefined) tx.omie_supplier_cnpj = fields.omie_supplier_cnpj;
     if (fields.invoice_issue_date !== undefined) tx.invoice_issue_date = fields.invoice_issue_date;
     if (fields.registration_date !== undefined) tx.registration_date = fields.registration_date;
     if (fields.due_date !== undefined) tx.due_date = fields.due_date;
     if (fields.invoice_cnpj_tomador !== undefined) tx.invoice_cnpj_tomador = fields.invoice_cnpj_tomador;
     if (fields.cnpj_match_status !== undefined) tx.cnpj_match_status = fields.cnpj_match_status;
+
+    // Preserva dados no JSONB accounting_fields
+    tx.accounting_fields = {
+      ...(tx.accounting_fields || {}),
+      ...(tx.omie_supplier_code ? { omie_supplier_code: tx.omie_supplier_code } : {}),
+      ...(tx.omie_supplier_name ? { omie_supplier_name: tx.omie_supplier_name } : {}),
+      ...(tx.omie_supplier_cnpj ? { omie_supplier_cnpj: tx.omie_supplier_cnpj } : {}),
+    };
 
     // Se categoria foi preenchida e status era MAPPING_REQUIRED, atualiza para READY
     if (tx.omie_category_code && tx.sync_status === 'MAPPING_REQUIRED') {

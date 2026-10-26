@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { 
   X, 
   ExternalLink, 
@@ -24,9 +24,11 @@ import {
   Sparkles,
   AlertTriangle,
   Layers,
-  CalendarDays
+  CalendarDays,
+  Search,
+  ChevronDown
 } from "lucide-react";
-import { ClaraTransactionRecord, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption } from "@/types/clara.types";
+import { ClaraTransactionRecord, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption, OmieSupplierOption } from "@/types/clara.types";
 
 interface ClaraTransactionDrawerProps {
   transaction: ClaraTransactionRecord | null;
@@ -36,6 +38,7 @@ interface ClaraTransactionDrawerProps {
   categories?: OmieCategoryOption[];
   departments?: OmieDepartmentOption[];
   projects?: OmieProjectOption[];
+  suppliers?: OmieSupplierOption[];
   activeCompanyId?: string;
   activeCompanyCnpj?: string;
   activeCompanyName?: string;
@@ -49,6 +52,7 @@ export function ClaraTransactionDrawer({
   categories = [],
   departments = [],
   projects = [],
+  suppliers = [],
   activeCompanyId = 'mar-brasil',
   activeCompanyCnpj = '02.233.923/0001-19',
   activeCompanyName = 'Mar Brasil',
@@ -72,9 +76,50 @@ export function ClaraTransactionDrawer({
   const [selectedCat, setSelectedCat] = useState(transaction?.omie_category_code || '');
   const [selectedDepto, setSelectedDepto] = useState(transaction?.omie_department_code || '');
   const [selectedProj, setSelectedProj] = useState(transaction?.omie_project_code || '');
+  const [selectedSupplierCode, setSelectedSupplierCode] = useState<number | null>(
+    transaction?.omie_supplier_code || (transaction?.accounting_fields?.omie_supplier_code ? Number(transaction.accounting_fields.omie_supplier_code) : null)
+  );
+  const [selectedSupplierName, setSelectedSupplierName] = useState<string>(
+    transaction?.omie_supplier_name || transaction?.accounting_fields?.omie_supplier_name || ''
+  );
+  const [selectedSupplierCnpj, setSelectedSupplierCnpj] = useState<string>(
+    transaction?.omie_supplier_cnpj || transaction?.accounting_fields?.omie_supplier_cnpj || ''
+  );
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [isSupplierOpen, setIsSupplierOpen] = useState(false);
+  const supplierDropdownRef = useRef<HTMLDivElement>(null);
+
   const [selectedIssueDate, setSelectedIssueDate] = useState(transaction?.invoice_issue_date || '');
   const [selectedRegDate, setSelectedRegDate] = useState(transaction?.registration_date || '');
   const [selectedDueDate, setSelectedDueDate] = useState(transaction?.due_date || '');
+
+  // Fecha dropdown de fornecedores ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target as Node)) {
+        setIsSupplierOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Filtro performático dos fornecedores do Omie
+  const filteredSuppliers = useMemo(() => {
+    if (!suppliers || suppliers.length === 0) return [];
+    if (!supplierSearch.trim()) return suppliers.slice(0, 50);
+    const q = supplierSearch.toLowerCase();
+    const cleanDigits = q.replace(/\D/g, '');
+    return suppliers.filter(s => {
+      const matchName = (s.nome_fantasia || '').toLowerCase().includes(q) ||
+                        (s.razao_social || '').toLowerCase().includes(q) ||
+                        String(s.codigo_cliente_omie).includes(q);
+      const matchCnpj = cleanDigits && s.cnpj_cpf ? s.cnpj_cpf.replace(/\D/g, '').includes(cleanDigits) : false;
+      return matchName || matchCnpj;
+    }).slice(0, 50);
+  }, [suppliers, supplierSearch]);
 
   // Estado para OCR
   const [runningOcr, setRunningOcr] = useState(false);
@@ -89,6 +134,17 @@ export function ClaraTransactionDrawer({
       setSelectedCat(transaction.omie_category_code || '');
       setSelectedDepto(transaction.omie_department_code || '');
       setSelectedProj(transaction.omie_project_code || '');
+      setSelectedSupplierCode(
+        transaction.omie_supplier_code || (transaction.accounting_fields?.omie_supplier_code ? Number(transaction.accounting_fields.omie_supplier_code) : null)
+      );
+      setSelectedSupplierName(
+        transaction.omie_supplier_name || transaction.accounting_fields?.omie_supplier_name || ''
+      );
+      setSelectedSupplierCnpj(
+        transaction.omie_supplier_cnpj || transaction.accounting_fields?.omie_supplier_cnpj || ''
+      );
+      setSupplierSearch('');
+      setIsSupplierOpen(false);
       setSelectedIssueDate(transaction.invoice_issue_date || '');
       setSelectedRegDate(transaction.registration_date || '');
       setSelectedDueDate(transaction.due_date || '');
@@ -130,6 +186,9 @@ export function ClaraTransactionDrawer({
           omie_category_code: selectedCat || null,
           omie_department_code: selectedDepto || null,
           omie_project_code: selectedProj || null,
+          omie_supplier_code: selectedSupplierCode || null,
+          omie_supplier_name: selectedSupplierName || null,
+          omie_supplier_cnpj: selectedSupplierCnpj || null,
           invoice_issue_date: selectedIssueDate || null,
           registration_date: selectedRegDate || null,
           due_date: selectedDueDate || null,
@@ -138,7 +197,7 @@ export function ClaraTransactionDrawer({
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.status === 'success' && data.data) {
         onTransactionUpdated(data.data);
-        alert('Classificação contábil e datas salvas com sucesso!');
+        alert('Classificação contábil, fornecedor e datas salvas com sucesso!');
       } else {
         alert(`Erro ao salvar campos: ${data.message || `Status HTTP ${res.status}`}`);
       }
@@ -565,6 +624,177 @@ export function ClaraTransactionDrawer({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Fornecedor Omie (Credor Contas a Pagar) */}
+              <div className="pt-2 border-t border-emerald-100" ref={supplierDropdownRef}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                    <Building2 size={13} className="text-emerald-700" />
+                    Fornecedor Omie (Credor Contas a Pagar):
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Base: {activeCompanyName} ({suppliers.length} cadastrados)
+                  </span>
+                </div>
+
+                {selectedSupplierCode ? (
+                  <div className="p-2.5 bg-emerald-50/80 border border-emerald-300 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-1.5 py-0.5 bg-emerald-200/80 text-emerald-900 rounded font-mono font-bold text-[10px]">
+                          Omie #{selectedSupplierCode}
+                        </span>
+                        {selectedSupplierCnpj && (
+                          <span className="text-[10px] text-emerald-800 font-mono">
+                            CNPJ: {selectedSupplierCnpj}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs font-bold text-emerald-950 truncate mt-0.5" title={selectedSupplierName}>
+                        {selectedSupplierName}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSupplierOpen(!isSupplierOpen);
+                          setSupplierSearch('');
+                        }}
+                        className="px-2 py-1 text-[10px] font-bold text-emerald-700 bg-white hover:bg-emerald-100/60 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Alterar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSupplierCode(null);
+                          setSelectedSupplierName('');
+                          setSelectedSupplierCnpj('');
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Remover seleção e usar vínculo automático pelo estabelecimento Clara"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={supplierSearch}
+                        onChange={e => {
+                          setSupplierSearch(e.target.value);
+                          if (!isSupplierOpen) setIsSupplierOpen(true);
+                        }}
+                        onFocus={() => setIsSupplierOpen(true)}
+                        placeholder={`Buscar fornecedor na base Omie (${suppliers.length} cadastrados)...`}
+                        className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800 placeholder:text-slate-400"
+                      />
+                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      {supplierSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setSupplierSearch('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-1 flex items-center justify-between">
+                      <span className="truncate">
+                        Padrão: <strong className="text-slate-700">{transaction.merchant_name || 'Estabelecimento Clara'}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsSupplierOpen(!isSupplierOpen)}
+                        className="text-emerald-700 font-bold hover:underline shrink-0 ml-1 cursor-pointer"
+                      >
+                        {isSupplierOpen ? 'Fechar' : 'Listar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dropdown Flutuante de Seleção de Fornecedores */}
+                {isSupplierOpen && (
+                  <div className="mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto z-50 divide-y divide-slate-100">
+                    <div className="p-2 bg-slate-50 text-[11px] font-bold text-slate-600 flex items-center justify-between sticky top-0 border-b border-slate-100">
+                      <span>Fornecedores Omie — {activeCompanyName}</span>
+                      <span className="text-[10px] font-normal text-slate-400">
+                        {filteredSuppliers.length} exibidos de {suppliers.length}
+                      </span>
+                    </div>
+
+                    {/* Opção de Reset para Automático */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSupplierCode(null);
+                        setSelectedSupplierName('');
+                        setSelectedSupplierCnpj('');
+                        setIsSupplierOpen(false);
+                      }}
+                      className="w-full text-left p-2.5 hover:bg-emerald-50/60 transition-colors flex items-center gap-2 text-xs group cursor-pointer"
+                    >
+                      <div className="w-5 h-5 rounded-full bg-slate-100 group-hover:bg-emerald-100 text-slate-500 group-hover:text-emerald-700 flex items-center justify-center shrink-0">
+                        <Sparkles size={11} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-slate-800 group-hover:text-emerald-950">
+                          Automático: Estabelecimento Clara
+                        </div>
+                        <div className="text-[10px] text-slate-500 truncate">
+                          Usa &quot;{transaction.merchant_name || 'Estabelecimento Desconhecido'}&quot; para cadastro ou busca automática no Omie
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Lista de Fornecedores Filtrados */}
+                    {filteredSuppliers.length > 0 ? (
+                      filteredSuppliers.map(sup => (
+                        <button
+                          key={sup.codigo_cliente_omie}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSupplierCode(sup.codigo_cliente_omie);
+                            setSelectedSupplierName(sup.nome_fantasia || sup.razao_social);
+                            setSelectedSupplierCnpj(sup.cnpj_cpf || '');
+                            setIsSupplierOpen(false);
+                          }}
+                          className={`w-full text-left p-2 hover:bg-emerald-50/70 transition-colors flex items-start gap-2 text-xs cursor-pointer ${
+                            selectedSupplierCode === sup.codigo_cliente_omie ? 'bg-emerald-50/90 font-bold' : ''
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-900 truncate">
+                                {sup.nome_fantasia || sup.razao_social}
+                              </span>
+                              <span className="text-[10px] font-mono px-1 bg-slate-100 text-slate-600 rounded">
+                                #{sup.codigo_cliente_omie}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {sup.razao_social} {sup.cnpj_cpf ? `• CNPJ/CPF: ${sup.cnpj_cpf}` : ''}
+                            </div>
+                          </div>
+                          {selectedSupplierCode === sup.codigo_cliente_omie && (
+                            <Check size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center text-xs text-slate-400">
+                        Nenhum fornecedor encontrado no Omie para &quot;{supplierSearch}&quot;.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Datas Fiscais e Financeiras (Emissão, Competência/Registro e Vencimento) */}

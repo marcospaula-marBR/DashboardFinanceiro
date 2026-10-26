@@ -11,12 +11,14 @@ export async function GET(req: Request) {
       ClaraConfigService.getOmieDepartments(company),
       ClaraConfigService.getOmieCategories(company),
       ClaraConfigService.getOmieProjects(company),
+      ClaraConfigService.getOmieSuppliers(company),
     ]);
 
     const accounts = results[0].status === 'fulfilled' ? results[0].value : [];
     const departments = results[1].status === 'fulfilled' ? results[1].value : [];
     const categories = results[2].status === 'fulfilled' ? results[2].value : [];
     const projects = results[3].status === 'fulfilled' ? results[3].value : [];
+    const suppliers = results[4].status === 'fulfilled' ? results[4].value : [];
 
     // Separa contas tipo CR (Cartão de Crédito) com prioridade
     const creditCardAccounts = accounts.filter(a => a.tipo === 'CR');
@@ -30,6 +32,7 @@ export async function GET(req: Request) {
         departments,
         categories,
         projects,
+        suppliers,
       },
     }, {
       headers: {

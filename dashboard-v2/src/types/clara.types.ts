@@ -173,6 +173,9 @@ export interface ClaraTransactionRecord {
   omie_category_code?: string | null;
   omie_department_code?: string | null;
   omie_project_code?: string | null;
+  omie_supplier_code?: number | null;
+  omie_supplier_name?: string | null;
+  omie_supplier_cnpj?: string | null;
   
   // Anexos
   has_attachments: boolean;
@@ -332,4 +335,11 @@ export interface OmieCategoryOption {
 export interface OmieProjectOption {
   codigo: string;
   descricao: string;
+}
+
+export interface OmieSupplierOption {
+  codigo_cliente_omie: number;
+  nome_fantasia: string;
+  razao_social: string;
+  cnpj_cpf?: string;
 }

@@ -7,7 +7,8 @@ import {
   OmieAccountOption, 
   OmieDepartmentOption, 
   OmieCategoryOption,
-  OmieProjectOption 
+  OmieProjectOption,
+  OmieSupplierOption 
 } from '@/types/clara.types';
 
 import { ClaraStorageService } from './clara-storage.service';
@@ -335,6 +336,7 @@ export class ClaraConfigService {
   private static accountsCache: Record<string, { timestamp: number; data: OmieAccountOption[] }> = {};
   private static departmentsCache: Record<string, { timestamp: number; data: OmieDepartmentOption[] }> = {};
   private static categoriesCache: Record<string, { timestamp: number; data: OmieCategoryOption[] }> = {};
+  private static suppliersCache: Record<string, { timestamp: number; data: OmieSupplierOption[] }> = {};
 
   // Seeds de contas correntes reais obtidas diretamente do Omie ERP
   private static SEED_ACCOUNTS_MARBRASIL: OmieAccountOption[] = [
@@ -675,6 +677,108 @@ export class ClaraConfigService {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Busca a lista oficial de fornecedores cadastrados no Omie para a empresa selecionada.
+   * Prioridade 1: Tabela 'omie_dim_fornecedores' do Supabase (com isolamento estrito por empresa).
+   * Prioridade 2: API direta do Omie (ListarClientes com filtro de fornecedores) para o tenant.
+   */
+  public static async getOmieSuppliers(company = 'Mar Brasil'): Promise<OmieSupplierOption[]> {
+    const isDZM = this.isDZMCompany(company);
+    const companyKey = isDZM ? 'dzm' : 'marbrasil';
+
+    // Retorna cache em memória (TTL 30 min) se disponível
+    const cached = this.suppliersCache[companyKey];
+    if (cached && Date.now() - cached.timestamp < 1800000 && cached.data.length > 0) {
+      return cached.data;
+    }
+
+    const decodeHtml = (str: string) => (str || '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+
+    // 1. Consulta omie_dim_fornecedores no Supabase filtrando pela empresa
+    try {
+      const empresaFiltro = isDZM ? 'DZM' : 'Mar Brasil';
+      const { data, error } = await supabase
+        .from('omie_dim_fornecedores')
+        .select('codigo_cliente_omie, nome_fantasia, razao_social, cnpj_cpf, empresa_nome')
+        .ilike('empresa_nome', `%${empresaFiltro}%`)
+        .order('razao_social', { ascending: true })
+        .limit(4000);
+
+      if (!error && data && data.length > 0) {
+        const uniqueMap = new Map<number, OmieSupplierOption>();
+        data.forEach(item => {
+          const cod = Number(item.codigo_cliente_omie);
+          if (!cod || uniqueMap.has(cod)) return;
+          const razao = decodeHtml(item.razao_social || item.nome_fantasia || '');
+          const fantasia = decodeHtml(item.nome_fantasia || item.razao_social || '');
+          if (!razao && !fantasia) return;
+          uniqueMap.set(cod, {
+            codigo_cliente_omie: cod,
+            razao_social: razao,
+            nome_fantasia: fantasia,
+            cnpj_cpf: item.cnpj_cpf?.trim() || undefined,
+          });
+        });
+
+        const list = Array.from(uniqueMap.values()).sort((a, b) => 
+          (a.nome_fantasia || a.razao_social).localeCompare(b.nome_fantasia || b.razao_social, 'pt-BR')
+        );
+
+        if (list.length > 0) {
+          this.suppliersCache[companyKey] = { timestamp: Date.now(), data: list };
+          return list;
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[ClaraConfigService] Erro ao consultar omie_dim_fornecedores (${company}):`, e.message);
+    }
+
+    // 2. Fallback: Consulta direta à API Omie (ListarClientes) para o tenant
+    const { appKey, appSecret } = this.getOmieCredentials(company);
+    if (!appKey || !appSecret) return cached?.data || [];
+
+    try {
+      const allClients: OmieSupplierOption[] = [];
+      const response = await axios.post('https://app.omie.com.br/api/v1/geral/clientes/', {
+        call: 'ListarClientes',
+        app_key: appKey,
+        app_secret: appSecret,
+        param: [{
+          pagina: 1,
+          registros_por_pagina: 100,
+          apenas_importado_api: 'N',
+        }],
+      }, { timeout: 15000 });
+
+      const list = response.data?.clientes_cadastro || [];
+      list.forEach((c: any) => {
+        const cod = Number(c.codigo_cliente_omie);
+        if (!cod) return;
+        allClients.push({
+          codigo_cliente_omie: cod,
+          razao_social: decodeHtml(c.razao_social || c.nome_fantasia || ''),
+          nome_fantasia: decodeHtml(c.nome_fantasia || c.razao_social || ''),
+          cnpj_cpf: c.cnpj_cpf?.trim() || undefined,
+        });
+      });
+
+      if (allClients.length > 0) {
+        this.suppliersCache[companyKey] = { timestamp: Date.now(), data: allClients };
+        return allClients;
+      }
+    } catch (e: any) {
+      console.warn(`[ClaraConfigService] Falha ao consultar ListarClientes Omie (${company}):`, e.message);
+    }
+
+    return cached?.data || [];
   }
 }
 

@@ -8,7 +8,7 @@ import { ClaraCategoryMappingModal } from "@/components/clara/ClaraCategoryMappi
 import { ClaraDepartmentMappingModal } from "@/components/clara/ClaraDepartmentMappingModal";
 import { ClaraTransactionDrawer } from "@/components/clara/ClaraTransactionDrawer";
 import { ClaraSyncHistoryModal } from "@/components/clara/ClaraSyncHistoryModal";
-import { ClaraTransactionRecord, ClaraSyncStatus, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption } from "@/types/clara.types";
+import { ClaraTransactionRecord, ClaraSyncStatus, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption, OmieSupplierOption } from "@/types/clara.types";
 import { 
   CreditCard, 
   RefreshCw, 
@@ -127,6 +127,7 @@ export default function ClaraIntegrationPage() {
   const [categories, setCategories] = useState<OmieCategoryOption[]>([]);
   const [departments, setDepartments] = useState<OmieDepartmentOption[]>([]);
   const [projects, setProjects] = useState<OmieProjectOption[]>([]);
+  const [suppliers, setSuppliers] = useState<OmieSupplierOption[]>([]);
 
   // Seleção Múltipla
   const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
@@ -148,6 +149,7 @@ export default function ClaraIntegrationPage() {
         setCategories(json.data.categories || []);
         setDepartments(json.data.departments || []);
         setProjects(json.data.projects || []);
+        setSuppliers(json.data.suppliers || []);
       }
     } catch (e) {
       console.warn('Erro ao carregar recursos Omie na página Clara:', e);
@@ -1405,6 +1407,7 @@ export default function ClaraIntegrationPage() {
         categories={categories}
         departments={departments}
         projects={projects}
+        suppliers={suppliers}
         activeCompanyId={selectedCompanyId}
         activeCompanyCnpj={activeCompany.cnpj}
         activeCompanyName={activeCompany.name}
