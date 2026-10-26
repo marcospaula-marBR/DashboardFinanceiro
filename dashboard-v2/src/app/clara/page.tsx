@@ -42,24 +42,25 @@ import {
   calculateCardDueDate, 
   getCurrentBillingCycle, 
   getRecentBillingCycles, 
+  getActiveReconciliationCycle,
   BillingCycleInfo 
 } from "@/utils/clara-billing-cycle";
 
 const COMPANIES_LIST = [
-  { id: 'mar-brasil', name: 'Mar Brasil', cnpj: '02.233.923/0001-19', fullName: 'Mar Brasil Serviços e Locações Ltda' },
+  { id: 'marbrasil', name: 'Mar Brasil', cnpj: '02.233.923/0001-19', fullName: 'Mar Brasil Serviços e Locações Ltda' },
   { id: 'dzm', name: 'DZM', cnpj: '46.394.311/0001-83', fullName: 'D.Z.M Ltda' },
   { id: 'g2', name: 'G2', cnpj: '62.763.387/0001-95', fullName: 'G2 Tecnologia e Inovação Sustentável Ltda' },
 ];
 
 export default function ClaraIntegrationPage() {
   // Empresa Ativa para Sincronização e Auditoria Fiscal de CNPJ
-  const [selectedCompanyId, setSelectedCompanyId] = useState('mar-brasil');
-  const activeCompany = COMPANIES_LIST.find(c => c.id === selectedCompanyId) || COMPANIES_LIST[0];
+  const [selectedCompanyId, setSelectedCompanyId] = useState('marbrasil');
+  const activeCompany = COMPANIES_LIST.find(c => c.id === selectedCompanyId || (selectedCompanyId === 'mar-brasil' && c.id === 'marbrasil')) || COMPANIES_LIST[0];
 
   // Ciclos de Faturamento Clara (Corte no dia 23, Vencimento no dia 30)
   const [billingCycles] = useState<BillingCycleInfo[]>(() => getRecentBillingCycles(12));
-  const currentCycle = billingCycles[0] || getCurrentBillingCycle();
-  const [selectedCycleId, setSelectedCycleId] = useState<string>(currentCycle.cycleId);
+  const initialCycle = getActiveReconciliationCycle() || billingCycles[0] || getCurrentBillingCycle();
+  const [selectedCycleId, setSelectedCycleId] = useState<string>(initialCycle.cycleId);
   const activeCycle = billingCycles.find(c => c.cycleId === selectedCycleId) || null;
 
   // Dados
@@ -82,8 +83,8 @@ export default function ClaraIntegrationPage() {
   const [search, setSearch] = useState("");
   const [syncStatus, setSyncStatus] = useState("PENDING_SYNC");
   const [claraStatus, setClaraStatus] = useState("ALL");
-  const [startDate, setStartDate] = useState<string>(currentCycle.startDate);
-  const [endDate, setEndDate] = useState<string>(currentCycle.closingDate);
+  const [startDate, setStartDate] = useState<string>(initialCycle.startDate);
+  const [endDate, setEndDate] = useState<string>(initialCycle.closingDate);
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
@@ -799,13 +800,13 @@ export default function ClaraIntegrationPage() {
 
             {/* Botão de Limpar Filtros */}
             <div className="flex items-center gap-2">
-              {(search || syncStatus !== 'PENDING_SYNC' || claraStatus !== 'ALL' || selectedCycleId !== currentCycle.cycleId) && (
+              {(search || syncStatus !== 'PENDING_SYNC' || claraStatus !== 'ALL' || selectedCycleId !== initialCycle.cycleId) && (
                 <button
                   onClick={() => {
                     setSearch('');
                     handleTabChange('PENDING');
                     setClaraStatus('ALL');
-                    handleCycleChange(currentCycle.cycleId);
+                    handleCycleChange(initialCycle.cycleId);
                   }}
                   className="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer w-full text-center"
                 >
@@ -972,9 +973,9 @@ export default function ClaraIntegrationPage() {
                     <CheckCircle2 size={32} />
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-slate-800">Fila Limpa! Nenhuma transação pendente</div>
+                    <div className="text-sm font-bold text-slate-800">Fila Limpa! Nenhuma transação pendente nesta fatura</div>
                     <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
-                      Todas as transações do cartão foram conciliadas e enviadas ao Omie com sucesso.
+                      Todas as transações deste ciclo foram conciliadas e enviadas ao Omie com sucesso.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-center gap-3">
@@ -985,14 +986,51 @@ export default function ClaraIntegrationPage() {
                       <CheckCircle2 size={14} />
                       <span>Ver transações no Omie ({metrics.syncedCount})</span>
                     </button>
+                    {selectedCycleId !== 'ALL' && (
+                      <button
+                        onClick={() => handleCycleChange('ALL')}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                      >
+                        <Calendar size={14} />
+                        <span>Ver Todas as Faturas</span>
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleSyncNow(false)}
+                      onClick={() => handleSyncNow(true)}
                       disabled={syncing}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
                     >
                       <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-                      <span>{syncing ? 'Buscando na Clara...' : 'Buscar novas da Clara'}</span>
+                      <span>{syncing ? 'Buscando na Clara...' : 'Buscar da Clara (Histórico Completo)'}</span>
                     </button>
+                  </div>
+                </>
+              ) : viewTab === 'SYNCED' ? (
+                <>
+                  <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-2xs">
+                    <CheckCircle2 size={28} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">Nenhum lançamento enviado ao Omie nesta fatura</div>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                      As transações são criadas no Omie ERP quando você clica em &quot;Enviar ao Omie&quot; no detalhe do lançamento ou via ações em lote.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={() => handleTabChange('PENDING')}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                    >
+                      <span>Ir para &quot;A Conciliar&quot; ({metrics.pendingCount || total})</span>
+                    </button>
+                    {selectedCycleId !== 'ALL' && (
+                      <button
+                        onClick={() => handleCycleChange('ALL')}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                      >
+                        <span>Ver Histórico Completo de Faturas</span>
+                      </button>
+                    )}
                   </div>
                 </>
               ) : (
@@ -1006,12 +1044,23 @@ export default function ClaraIntegrationPage() {
                       Nenhuma transação corresponde aos filtros selecionados.
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleTabChange('ALL')}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
-                  >
-                    <span>Ver todas as transações</span>
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    {selectedCycleId !== 'ALL' && (
+                      <button
+                        onClick={() => handleCycleChange('ALL')}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                      >
+                        <Calendar size={14} />
+                        <span>Ver Todas as Faturas</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleTabChange('ALL')}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                    >
+                      <span>Ver todas as transações</span>
+                    </button>
+                  </div>
                 </>
               )}
             </div>

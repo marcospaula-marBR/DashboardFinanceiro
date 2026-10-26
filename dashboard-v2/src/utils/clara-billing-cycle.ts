@@ -116,6 +116,46 @@ export function getCurrentBillingCycle(
 }
 
 /**
+ * Retorna o ciclo de fatura prioritário para conciliação e liquidação financeira.
+ * 
+ * Regra executiva:
+ * - Entre o dia de corte (23) e o dia de vencimento (30), a fatura prioritária
+ *   a conciliar e liquidar no Omie é a fatura que acabou de fechar no dia 23!
+ * - Após o vencimento (dia 31 em diante), o foco migra para o novo ciclo.
+ */
+export function getActiveReconciliationCycle(
+  referenceDate: Date | string = new Date(),
+  closingDay = 23,
+  dueDay = 30
+): BillingCycleInfo {
+  let d: Date;
+  if (typeof referenceDate === 'string') {
+    const parts = referenceDate.split('T')[0].split('-').map(Number);
+    d = new Date(parts[0], parts[1] - 1, parts[2]);
+  } else {
+    d = referenceDate;
+  }
+
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1; // 1-12
+  const day = d.getDate();
+
+  let closingYear = year;
+  let closingMonth = month;
+
+  // Só avança para a fatura seguinte se já passou do dia de vencimento (dia 30)
+  if (day > dueDay) {
+    closingMonth += 1;
+    if (closingMonth > 12) {
+      closingMonth = 1;
+      closingYear += 1;
+    }
+  }
+
+  return getBillingCycleForMonth(closingYear, closingMonth, closingDay, dueDay, true);
+}
+
+/**
  * Retorna uma lista dos últimos N ciclos de faturamento para preencher seletores de interface.
  */
 export function getRecentBillingCycles(
@@ -124,16 +164,49 @@ export function getRecentBillingCycles(
   closingDay = 23,
   dueDay = 30
 ): BillingCycleInfo[] {
-  const current = getCurrentBillingCycle(referenceDate, closingDay, dueDay);
-  const parts = current.cycleId.split('-').map(Number);
-  let curYear = parts[0];
-  let curMonth = parts[1];
+  let d: Date;
+  if (typeof referenceDate === 'string') {
+    const parts = referenceDate.split('T')[0].split('-').map(Number);
+    d = new Date(parts[0], parts[1] - 1, parts[2]);
+  } else {
+    d = referenceDate;
+  }
 
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+
+  let curYear = year;
+  let curMonth = month;
+  if (day > closingDay) {
+    curMonth += 1;
+    if (curMonth > 12) {
+      curMonth = 1;
+      curYear += 1;
+    }
+  }
+
+  const activeRec = getActiveReconciliationCycle(referenceDate, closingDay, dueDay);
   const cycles: BillingCycleInfo[] = [];
 
   for (let i = 0; i < count; i++) {
-    const isCur = i === 0;
-    cycles.push(getBillingCycleForMonth(curYear, curMonth, closingDay, dueDay, isCur));
+    const base = getBillingCycleForMonth(curYear, curMonth, closingDay, dueDay, false);
+    const isUnderSettlement = base.cycleId === activeRec.cycleId;
+    const isOpen = (day > closingDay && i === 0);
+
+    let displayLabel = base.label;
+    if (isOpen) {
+      displayLabel = `${base.label} [Em Aberto]`;
+    } else if (isUnderSettlement) {
+      const dueDayFormatted = base.dueDate.split('-').reverse().slice(0, 2).join('/');
+      displayLabel = `${base.label} ⭐ [Fechada • Vence ${dueDayFormatted}]`;
+    }
+
+    cycles.push({
+      ...base,
+      label: displayLabel,
+      isCurrent: isUnderSettlement || (i === 0 && !isOpen),
+    });
 
     curMonth -= 1;
     if (curMonth < 1) {

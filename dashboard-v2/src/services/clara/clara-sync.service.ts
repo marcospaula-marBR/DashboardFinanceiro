@@ -50,6 +50,18 @@ export interface SyncResultSummary {
   autoOcr?: any;
 }
 
+/**
+ * Normaliza o ID da empresa tratando variações (marbrasil, mar-brasil, Mar Brasil, dzm, DZM, etc.)
+ */
+export function normalizeClaraCompanyId(raw?: string | null): string {
+  if (!raw) return 'marbrasil';
+  const clean = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (clean.includes('dzm')) return 'dzm';
+  if (clean.includes('mar')) return 'marbrasil';
+  if (clean.includes('g2')) return 'g2';
+  return raw.toLowerCase();
+}
+
 export class ClaraSyncService {
   /**
    * Garante que o estabelecimento comercial exista como Fornecedor no Omie.
@@ -247,7 +259,7 @@ export class ClaraSyncService {
       omie_department_code: null,
       registration_date: initialRegDate,
       due_date: computedDueDate,
-      company_id: config?.active_company_id || 'marbrasil',
+      company_id: normalizeClaraCompanyId(config?.active_company_id || 'marbrasil'),
       company_name: config?.active_company_name || config?.company_name || 'Mar Brasil',
       has_attachments: hasAttachments,
       attachments_count: docs.length,
@@ -291,7 +303,7 @@ export class ClaraSyncService {
     }
 
     const run = await this.createSyncRun(trigger);
-    const targetCompany = options.companyId || options.companyName || 'marbrasil';
+    const targetCompany = normalizeClaraCompanyId(options.companyId || options.companyName || 'marbrasil');
     const config = await ClaraConfigService.getConfig(targetCompany);
     const isSafeMode = options.forceSafeMode !== undefined ? options.forceSafeMode : config.safe_mode;
 
@@ -708,7 +720,16 @@ export class ClaraSyncService {
       let query = supabase.from('clara_transactions').select('*', { count: 'exact' });
 
       if (params.companyId && params.companyId !== 'all') {
-        query = query.ilike('company_id', `%${params.companyId}%`);
+        const comp = normalizeClaraCompanyId(params.companyId);
+        if (comp === 'marbrasil') {
+          query = query.or('company_id.ilike.%marbrasil%,company_id.ilike.%mar-brasil%,company_id.ilike.%mar brasil%');
+        } else if (comp === 'dzm') {
+          query = query.ilike('company_id', '%dzm%');
+        } else if (comp === 'g2') {
+          query = query.ilike('company_id', '%g2%');
+        } else {
+          query = query.ilike('company_id', `%${params.companyId}%`);
+        }
       }
       if (params.syncStatus && params.syncStatus !== 'ALL') {
         if (params.syncStatus === 'PENDING_SYNC') {
@@ -738,8 +759,8 @@ export class ClaraSyncService {
 
       const { data, count, error } = await query;
 
-      if (!error && data && data.length > 0) {
-        return { transactions: data, total: count || data.length };
+      if (!error && data) {
+        return { transactions: data, total: count ?? data.length };
       }
     } catch {
       // Fallback para ClaraStorageService
@@ -755,13 +776,8 @@ export class ClaraSyncService {
 
     let items = Array.from(memoryTransactions.values());
     if (params.companyId && params.companyId !== 'all') {
-      const cId = params.companyId.toLowerCase();
-      items = items.filter(t => {
-        if (t.company_id) {
-          return t.company_id.toLowerCase().includes(cId) || cId.includes(t.company_id.toLowerCase());
-        }
-        return cId.includes('mar');
-      });
+      const comp = normalizeClaraCompanyId(params.companyId);
+      items = items.filter(t => normalizeClaraCompanyId(t.company_id) === comp);
     }
     if (params.startDate) {
       items = items.filter(t => t.operation_date >= params.startDate!);
@@ -814,7 +830,8 @@ export class ClaraSyncService {
     lastSyncDate: string | null;
     safeMode: boolean;
   }> {
-    const config = await ClaraConfigService.getConfig(companyId || 'marbrasil');
+    const comp = normalizeClaraCompanyId(companyId);
+    const config = await ClaraConfigService.getConfig(comp);
     let rows: ClaraTransactionRecord[] = [];
 
     try {
@@ -822,7 +839,15 @@ export class ClaraSyncService {
         .from('clara_transactions')
         .select('sync_status, amount, omie_launch_id, updated_at, company_id, operation_date');
       if (companyId && companyId !== 'all') {
-        q = q.ilike('company_id', `%${companyId}%`);
+        if (comp === 'marbrasil') {
+          q = q.or('company_id.ilike.%marbrasil%,company_id.ilike.%mar-brasil%,company_id.ilike.%mar brasil%');
+        } else if (comp === 'dzm') {
+          q = q.ilike('company_id', '%dzm%');
+        } else if (comp === 'g2') {
+          q = q.ilike('company_id', '%g2%');
+        } else {
+          q = q.ilike('company_id', `%${companyId}%`);
+        }
       }
       if (startDate) {
         q = q.gte('operation_date', startDate);
@@ -831,8 +856,8 @@ export class ClaraSyncService {
         const endIso = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`;
         q = q.lte('operation_date', endIso);
       }
-      const { data } = await q;
-      if (data && data.length > 0) rows = data as any;
+      const { data, error } = await q;
+      if (!error && data) rows = data as any;
     } catch {
       // Fallback
     }
@@ -848,13 +873,7 @@ export class ClaraSyncService {
     }
 
     if (companyId && companyId !== 'all') {
-      const cId = companyId.toLowerCase();
-      rows = rows.filter(t => {
-        if (t.company_id) {
-          return t.company_id.toLowerCase().includes(cId) || cId.includes(t.company_id.toLowerCase());
-        }
-        return cId.includes('mar');
-      });
+      rows = rows.filter(t => normalizeClaraCompanyId(t.company_id) === comp);
     }
 
     if (startDate) {
