@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor, getTopTasksPerMember, inferDefaultResponsaveis } from '@/services/war-room.service';
-import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn, WeekdayKey } from '@/types/war-room';
+import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn, WeekdayKey, WhiteboardDepartment } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
 
@@ -20,7 +20,7 @@ import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDem
 import { WhiteboardMemberModal } from '@/components/war-room/WhiteboardMemberModal';
 import { WhiteboardAdminNotificationsModal } from '@/components/war-room/WhiteboardAdminNotificationsModal';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
-import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell, Edit3, Trophy } from 'lucide-react';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell, Edit3, Trophy, Building2 } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -61,6 +61,11 @@ export default function LousaOperacionalPage() {
   const [editingMemberName, setEditingMemberName] = useState<string | null>(null);
   const [memberModalInitialTab, setMemberModalInitialTab] = useState<'list' | 'ranking' | 'form'>('list');
 
+  // Estados Multissetores e Departamentos da Lousa
+  const [departments, setDepartments] = useState<WhiteboardDepartment[]>([]);
+  const [activeDepartment, setActiveDepartment] = useState<string>('financeiro');
+  const [departmentMembers, setDepartmentMembers] = useState<string[]>([]);
+
   // Estados da Central de Notificações Administrativa e Ofertas de Ajuda
   const [isAdminNotificationsModalOpen, setIsAdminNotificationsModalOpen] = useState<boolean>(false);
   const [pendingHelpOffersCount, setPendingHelpOffersCount] = useState<number>(0);
@@ -98,11 +103,78 @@ export default function LousaOperacionalPage() {
     }
   }, [isTvMode]);
 
-  // Carregar dados salvos no localStorage (com detecção automática de virada de mês e hidratação)
+  // Carregar dados salvos no localStorage e Supabase (com detecção de setor, virada de mês e hidratação)
   useEffect(() => {
-    const loaded = WarRoomService.getWhiteboardData();
+    let initialDept = 'financeiro';
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlDept = params.get('setor');
+      if (urlDept) {
+        initialDept = urlDept.toLowerCase();
+      } else {
+        initialDept = WarRoomService.getActiveDepartmentSlug();
+      }
+    }
+    setActiveDepartment(initialDept);
+    WarRoomService.setActiveDepartmentSlug(initialDept);
+
+    // Carregar departamentos disponíveis
+    CollaborativePortalService.getDepartments().then(depts => {
+      if (depts && depts.length > 0) setDepartments(depts);
+    });
+
+    // Carregar estado do setor ativo
+    const loaded = WarRoomService.getWhiteboardData(initialDept);
     setData(loaded);
+
+    // Sincronizar com versão remota do Supabase
+    WarRoomService.loadWhiteboardDataFromSupabase(initialDept).then(remote => {
+      if (remote) setData(remote);
+    });
+
+    // Carregar membros oficiais vinculados ao setor
+    CollaborativePortalService.getDepartmentMembers(initialDept).then(members => {
+      if (members && members.length > 0) {
+        setDepartmentMembers(members);
+      } else if (initialDept === 'financeiro') {
+        setDepartmentMembers(['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI']);
+      }
+    });
   }, []);
+
+  const handleDepartmentChange = async (newDept: string) => {
+    setActiveDepartment(newDept);
+    WarRoomService.setActiveDepartmentSlug(newDept);
+    setSelectedResponsible(null);
+    setOnlyOverdueFilter(false);
+
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('setor', newDept);
+      window.history.replaceState({}, '', url.toString());
+    }
+
+    const localState = WarRoomService.getWhiteboardData(newDept);
+    setData(localState);
+
+    const members = await CollaborativePortalService.getDepartmentMembers(newDept);
+    setDepartmentMembers(members);
+
+    const remoteState = await WarRoomService.loadWhiteboardDataFromSupabase(newDept);
+    if (remoteState) {
+      setData(remoteState);
+    }
+  };
+
+  const activeDepartmentObj = useMemo(() => {
+    return departments.find(d => d.slug === activeDepartment) || {
+      slug: activeDepartment,
+      name: activeDepartment === 'financeiro' ? 'Financeiro & Controladoria' : activeDepartment.toUpperCase(),
+      badge_label: activeDepartment === 'financeiro' ? 'FINANCEIRO' : activeDepartment.toUpperCase(),
+      color_hex: '#10b981',
+      is_active: true
+    };
+  }, [departments, activeDepartment]);
 
   // Carregar apólices de seguro do banco para o Radar de Seguros
   useEffect(() => {
@@ -141,20 +213,20 @@ export default function LousaOperacionalPage() {
     return count;
   }, [data, todayDay]);
 
-  // Lista de responsáveis únicos presentes na lousa (suporte a múltiplos por atividade)
+  // Lista de responsáveis únicos presentes na lousa (estritamente vinculados ao setor ativo)
   const distinctResponsibles = useMemo(() => {
-    const set = new Set<string>();
-    data.cronograma.forEach(blk => blk.itens.forEach(it => {
+    const set = new Set<string>(departmentMembers);
+    data.cronograma?.forEach(blk => blk.itens?.forEach(it => {
       extractResponsaveisList(it).forEach(r => set.add(r));
     }));
-    data.colunas.forEach(col => col.itens.forEach(it => {
+    data.colunas?.forEach(col => col.itens?.forEach(it => {
       extractResponsaveisList(it).forEach(r => set.add(r));
     }));
-    data.gradeSemanal?.forEach(blk => blk.itens.forEach(it => {
+    data.gradeSemanal?.forEach(blk => blk.itens?.forEach(it => {
       extractResponsaveisList(it.responsaveis || it.responsavel).forEach(r => set.add(r));
     }));
     return Array.from(set).sort();
-  }, [data]);
+  }, [data, departmentMembers]);
 
   // Mapa de contadores por responsável para a legenda visual memorizável
   const responsibleCountsMap = useMemo(() => {
@@ -634,12 +706,14 @@ export default function LousaOperacionalPage() {
     setIsMemberModalOpen(true);
   };
 
-  const handleSaveMember = (
+  const handleSaveMember = async (
     oldName: string | null,
     newName: string,
     selectedColorHex?: string,
-    linkedEmployeeId?: string
+    linkedEmployeeId?: string,
+    departmentSlug?: string
   ) => {
+    const targetDept = departmentSlug || activeDepartment;
     if (oldName && oldName.toUpperCase() !== newName.toUpperCase()) {
       const updated = WarRoomService.renameMember(data, oldName, newName);
       setData(updated);
@@ -647,6 +721,12 @@ export default function LousaOperacionalPage() {
         setSelectedResponsible(newName);
       }
     }
+
+    // Salvar vínculo com departamento no Supabase
+    await CollaborativePortalService.saveMemberLink(newName, targetDept, selectedColorHex, linkedEmployeeId);
+    const members = await CollaborativePortalService.getDepartmentMembers(activeDepartment);
+    setDepartmentMembers(members);
+
     setIsMemberModalOpen(false);
     setEditingMemberName(null);
   };
@@ -659,14 +739,16 @@ export default function LousaOperacionalPage() {
     }
     // Remove do Supabase (whiteboard_member_links)
     await CollaborativePortalService.deleteMemberFromDatabase(memberName);
+    const members = await CollaborativePortalService.getDepartmentMembers(activeDepartment);
+    setDepartmentMembers(members);
     setIsMemberModalOpen(false);
     setEditingMemberName(null);
   };
 
-  // ── RESTAURAR LOUSA ORIGINAL (DA FOTO) ──
+  // ── RESTAURAR LOUSA ORIGINAL (DO DEPARTAMENTO ATIVO) ──
   const handleResetDefault = () => {
-    if (window.confirm('Deseja restaurar a lousa para o estado original fotografado? Todas as alterações manuais serão resetadas.')) {
-      const reset = WarRoomService.resetToDefault();
+    if (window.confirm(`Deseja restaurar a lousa do setor ${activeDepartmentObj.name} para o estado original? Todas as alterações manuais serão resetadas.`)) {
+      const reset = WarRoomService.resetToDefault(activeDepartment);
       setData(reset);
       setSelectedResponsible(null);
       setOnlyOverdueFilter(false);
@@ -679,7 +761,7 @@ export default function LousaOperacionalPage() {
         isCursorHidden ? 'cursor-none select-none' : ''
       }`}
     >
-      {/* ── CABEÇALHO DA LOUSA OPERACIONAL ── */}
+      {/* ── CABEÇALHO DA LOUSA OPERACIONAL COM SELETOR DE SETOR ── */}
       <WhiteboardHeader
         isTvMode={isTvMode}
         onToggleTvMode={toggleTvMode}
@@ -695,6 +777,9 @@ export default function LousaOperacionalPage() {
         totalAtrasados={totalAtrasados}
         isZeroScrollMode={isZeroScrollMode}
         onToggleZeroScrollMode={() => setIsZeroScrollMode(prev => !prev)}
+        departments={departments}
+        activeDepartment={activeDepartment}
+        onDepartmentChange={handleDepartmentChange}
       />
 
       {/* ── CORPO PRINCIPAL DA LOUSA (COM SUPORTE A ZERO-SCROLL PARA TV) ── */}
@@ -707,6 +792,12 @@ export default function LousaOperacionalPage() {
         {/* ── BARRA EXECUTIVA DE FILTROS POR RESPONSÁVEL & ATRASOS ── */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 p-2 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm">
           <div className="flex items-center flex-wrap gap-1.5">
+            {/* BADGE DO SETOR ATIVO */}
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 font-mono text-xs font-black shadow-sm mr-1">
+              <Building2 size={12} className="text-emerald-400" />
+              <span>SETOR: {activeDepartmentObj.badge_label || activeDepartment.toUpperCase()}</span>
+            </div>
+
             <span className="text-[11px] font-black uppercase text-slate-400 font-mono flex items-center gap-1.5 mr-1">
               <Filter size={12} className="text-cyan-400" />
               Filtrar por Responsável:
@@ -922,12 +1013,14 @@ export default function LousaOperacionalPage() {
           />
         )}
 
-        {/* SEÇÃO 1: AS COLUNAS OPERACIONAIS DA LOUSA COM MODO SÓ TÍTULOS (HOVER) E LINHAS */}
+        {/* SEÇÃO 1: AS COLUNAS DA LOUSA (DEMANDAS EM FOCO DO SETOR ATIVO) */}
         <WhiteboardColumns
           colunas={data.colunas}
           filterResponsible={selectedResponsible}
           layoutMode={demandLayoutMode}
           onLayoutModeChange={(mode) => setDemandLayoutMode(mode)}
+          departmentLabel={activeDepartmentObj.name || activeDepartmentObj.badge_label}
+          availableMembers={departmentMembers}
           onHoverDemand={(colId, colTitulo, corMarcador, itens) => {
             if (!colId) {
               setHoveredDemand(null);
@@ -971,6 +1064,7 @@ export default function LousaOperacionalPage() {
           onlyOverdue={onlyOverdueFilter}
           layoutMode={timelineLayoutMode}
           onLayoutModeChange={(mode) => setTimelineLayoutMode(mode)}
+          availableMembers={departmentMembers}
           hoveredDemand={hoveredDemand}
           newsTickerSlot={
             <WhiteboardNewsTicker
@@ -1015,6 +1109,7 @@ export default function LousaOperacionalPage() {
         defaultTab={modalTab}
         colunas={data.colunas}
         cronograma={data.cronograma}
+        availableMembers={departmentMembers}
         onAddDemanda={handleAddColumnItem}
         onAddCambio={handleAddCambioRow}
         onAddCronograma={handleAddTimelineItem}
@@ -1027,6 +1122,7 @@ export default function LousaOperacionalPage() {
         columnId={editingDemand?.colId || ''}
         item={editingDemand?.item || null}
         colunas={data.colunas}
+        availableMembers={departmentMembers}
         onSave={handleSaveFullDemand}
         onDelete={(colId, itemId) => {
           handleDeleteColumnItem(colId, itemId);
@@ -1080,6 +1176,8 @@ export default function LousaOperacionalPage() {
         totalTasksCount={editingMemberName ? responsibleCountsMap[editingMemberName.toUpperCase()]?.total || 0 : 0}
         initialTab={memberModalInitialTab}
         responsibleCountsMap={responsibleCountsMap}
+        activeDepartment={activeDepartment}
+        departments={departments}
         onSaveMember={handleSaveMember}
         onDeleteMember={handleDeleteMember}
       />

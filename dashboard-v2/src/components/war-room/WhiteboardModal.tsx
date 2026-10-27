@@ -14,6 +14,7 @@ interface WhiteboardModalProps {
   onAddDemanda: (columnId: string, texto: string, responsavel?: string, dataLimite?: string, responsaveis?: string[]) => void;
   onAddCambio: (row: Omit<FollowTheMoneyRow, 'id'>) => void;
   onAddCronograma: (blockId: string, dia: number, descricao: string, responsavel?: string, responsaveis?: string[]) => void;
+  availableMembers?: string[];
 }
 
 export function WhiteboardModal({
@@ -25,7 +26,11 @@ export function WhiteboardModal({
   onAddDemanda,
   onAddCambio,
   onAddCronograma,
+  availableMembers,
 }: WhiteboardModalProps) {
+  const effectiveMembers = availableMembers && availableMembers.length > 0
+    ? availableMembers
+    : ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
   const [activeTab, setActiveTab] = useState<'demanda' | 'cambio' | 'cronograma'>(defaultTab);
 
   // Estados Demanda
@@ -198,7 +203,7 @@ export function WhiteboardModal({
                   </span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'].map(memberName => {
+                  {effectiveMembers.map(memberName => {
                     const currentList = extractResponsaveisList(demandaResp);
                     const isSelected = currentList.includes(memberName);
                     const colorConfig = getResponsibleColor(memberName);
@@ -427,7 +432,7 @@ export function WhiteboardModal({
                   </span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'].map(memberName => {
+                  {effectiveMembers.map(memberName => {
                     const currentList = extractResponsaveisList(cronogramaResp);
                     const isSelected = currentList.includes(memberName);
                     const colorConfig = getResponsibleColor(memberName);

@@ -767,6 +767,25 @@ export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
 
 export const DEFAULT_WEEKDAY_BLOCKS: WhiteboardWeekdayBlock[] = DEFAULT_WHITEBOARD_DATA.gradeSemanal || [];
 
+export function createEmptyWhiteboardData(departmentSlug: string = 'operacional'): WhiteboardDataState {
+  const hoje = new Date();
+  const currentMonthKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  return {
+    mesReferencia: currentMonthKey,
+    colunas: [],
+    followTheMoney: { cotacaoUsdGs: '', linhas: [] },
+    cronograma: [
+      { id: 'blk-1', intervalo: '01 a 05', diaInicio: 1, diaFim: 5, itens: [] },
+      { id: 'blk-2', intervalo: '06 a 10', diaInicio: 6, diaFim: 10, itens: [] },
+      { id: 'blk-3', intervalo: '11 a 15', diaInicio: 11, diaFim: 15, itens: [] },
+      { id: 'blk-4', intervalo: '16 a 20', diaInicio: 16, diaFim: 20, itens: [] },
+      { id: 'blk-5', intervalo: '21 a 25', diaInicio: 21, diaFim: 25, itens: [] },
+      { id: 'blk-6', intervalo: '26 a 30/31', diaInicio: 26, diaFim: 31, itens: [] },
+    ],
+    gradeSemanal: DEFAULT_WEEKDAY_BLOCKS.map(b => ({ ...b, itens: [] })),
+  };
+}
+
 export class WarRoomService {
   /**
    * Retorna o ID do bloco do cronograma mensal correspondente a um dia do mês (1 a 31)
@@ -842,23 +861,53 @@ export class WarRoomService {
     return inferDefaultResponsaveis(text);
   }
 
+  static createEmptyWhiteboardData(departmentSlug: string = 'operacional'): WhiteboardDataState {
+    return createEmptyWhiteboardData(departmentSlug);
+  }
+
+  static getActiveDepartmentSlug(): string {
+    if (typeof window === 'undefined') return 'financeiro';
+    try {
+      return localStorage.getItem('mb_whiteboard_active_dept') || 'financeiro';
+    } catch {
+      return 'financeiro';
+    }
+  }
+
+  static setActiveDepartmentSlug(slug: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('mb_whiteboard_active_dept', slug);
+    } catch {
+      // offline safe
+    }
+  }
+
+  static getStorageKey(departmentSlug: string = 'financeiro'): string {
+    if (departmentSlug === 'financeiro') return STORAGE_KEY;
+    return `marbrasil_whiteboard_${departmentSlug}`;
+  }
+
   /**
-   * Obtém os dados da lousa com suporte a LocalStorage, sanitização e renovação automática mensal
+   * Obtém os dados da lousa com suporte a LocalStorage, multissetores, sanitização e renovação automática mensal
    */
-  static getWhiteboardData(): WhiteboardDataState {
+  static getWhiteboardData(departmentSlug?: string): WhiteboardDataState {
+    const activeDept = departmentSlug || this.getActiveDepartmentSlug();
     const hoje = new Date();
     const currentMonthKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+    const storageKey = this.getStorageKey(activeDept);
+    const defaultData = activeDept === 'financeiro' ? DEFAULT_WHITEBOARD_DATA : createEmptyWhiteboardData(activeDept);
 
     if (typeof window === 'undefined') {
       return {
-        ...DEFAULT_WHITEBOARD_DATA,
+        ...defaultData,
         mesReferencia: currentMonthKey,
-        cronograma: this.sanitizeCronograma(DEFAULT_WHITEBOARD_DATA.cronograma),
+        cronograma: this.sanitizeCronograma(defaultData.cronograma),
       };
     }
 
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(storageKey);
       if (stored) {
         const parsed: WhiteboardDataState = JSON.parse(stored);
 
@@ -879,7 +928,7 @@ export class WarRoomService {
         // Hidratação/inferência de múltiplos responsáveis e prazos se faltarem
         if (parsed.colunas) {
           parsed.colunas = parsed.colunas.map(col => {
-            const defaultCol = DEFAULT_WHITEBOARD_DATA.colunas.find(c => c.id === col.id);
+            const defaultCol = defaultData.colunas.find(c => c.id === col.id);
             return {
               ...col,
               dataLimite: col.dataLimite || defaultCol?.dataLimite,
@@ -912,11 +961,11 @@ export class WarRoomService {
             }),
           }));
           // Persiste a versão sanitizada se houve correção ou virada de mês
-          this.saveWhiteboardData(parsed);
+          this.saveWhiteboardData(parsed, activeDept);
         }
 
         if (!parsed.gradeSemanal || !Array.isArray(parsed.gradeSemanal) || parsed.gradeSemanal.length !== 5) {
-          parsed.gradeSemanal = DEFAULT_WEEKDAY_BLOCKS;
+          parsed.gradeSemanal = defaultData.gradeSemanal || DEFAULT_WEEKDAY_BLOCKS;
         }
 
         return parsed;
@@ -926,37 +975,101 @@ export class WarRoomService {
     }
 
     return {
-      ...DEFAULT_WHITEBOARD_DATA,
+      ...defaultData,
       mesReferencia: currentMonthKey,
-      cronograma: this.sanitizeCronograma(DEFAULT_WHITEBOARD_DATA.cronograma),
-      gradeSemanal: DEFAULT_WEEKDAY_BLOCKS,
+      cronograma: this.sanitizeCronograma(defaultData.cronograma),
+      gradeSemanal: defaultData.gradeSemanal || DEFAULT_WEEKDAY_BLOCKS,
     };
+  }
+
+  /**
+   * Carrega os dados mais recentes do Supabase para o departamento indicado
+   */
+  static async loadWhiteboardDataFromSupabase(departmentSlug?: string): Promise<WhiteboardDataState | null> {
+    const activeDept = departmentSlug || this.getActiveDepartmentSlug();
+    try {
+      const { data, error } = await supabase
+        .from('whiteboard_state')
+        .select('data')
+        .eq('id', activeDept)
+        .maybeSingle();
+
+      if (data && data.data && !error) {
+        const parsed = data.data as WhiteboardDataState;
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(this.getStorageKey(activeDept), JSON.stringify(parsed));
+          } catch {}
+        }
+        return parsed;
+      }
+
+      // Fallback para financeiro se id='financeiro' não existir mas 'current_state' sim
+      if (activeDept === 'financeiro') {
+        const { data: fallbackData } = await supabase
+          .from('whiteboard_state')
+          .select('data')
+          .eq('id', 'current_state')
+          .maybeSingle();
+        if (fallbackData && fallbackData.data) {
+          const parsed = fallbackData.data as WhiteboardDataState;
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(this.getStorageKey('financeiro'), JSON.stringify(parsed));
+            } catch {}
+          }
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.warn('[WarRoomService] Erro ao carregar do Supabase:', err);
+    }
+    return null;
   }
 
   /**
    * Grava os dados da lousa no LocalStorage e sincroniza com o banco de produção Supabase
    */
-  static saveWhiteboardData(data: WhiteboardDataState): void {
+  static saveWhiteboardData(data: WhiteboardDataState, departmentSlug?: string): void {
+    const activeDept = departmentSlug || this.getActiveDepartmentSlug();
+    const storageKey = this.getStorageKey(activeDept);
+
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(storageKey, JSON.stringify(data));
       } catch (e) {
         console.error('Erro ao salvar dados da lousa:', e);
       }
     }
 
     try {
-      Promise.resolve(
+      const promises = [
         supabase
           .from('whiteboard_state')
           .upsert({
-            id: 'current_state',
+            id: activeDept,
             data,
             updated_at: new Date().toISOString(),
           })
-      )
-        .then(({ error }) => {
-          if (error) console.warn('[WarRoomService] Aviso na sincronização com Supabase:', error.message);
+      ];
+
+      if (activeDept === 'financeiro') {
+        promises.push(
+          supabase
+            .from('whiteboard_state')
+            .upsert({
+              id: 'current_state',
+              data,
+              updated_at: new Date().toISOString(),
+            })
+        );
+      }
+
+      Promise.all(promises)
+        .then(results => {
+          results.forEach(res => {
+            if (res.error) console.warn('[WarRoomService] Aviso na sincronização com Supabase:', res.error.message);
+          });
         })
         .catch(err => console.warn('[WarRoomService] Erro ao sincronizar com Supabase:', err));
     } catch {
@@ -967,15 +1080,17 @@ export class WarRoomService {
   /**
    * Restaura para o padrão original da lousa fotografada
    */
-  static resetToDefault(): WhiteboardDataState {
+  static resetToDefault(departmentSlug?: string): WhiteboardDataState {
+    const activeDept = departmentSlug || this.getActiveDepartmentSlug();
+    const storageKey = this.getStorageKey(activeDept);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(storageKey);
       } catch (e) {
         console.error('Erro ao resetar dados da lousa:', e);
       }
     }
-    return DEFAULT_WHITEBOARD_DATA;
+    return activeDept === 'financeiro' ? DEFAULT_WHITEBOARD_DATA : createEmptyWhiteboardData(activeDept);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════

@@ -23,8 +23,10 @@ import {
   BarChart3,
   Flame,
   Clock,
-  Sparkles
+  Sparkles,
+  Building2
 } from 'lucide-react';
+import { WhiteboardDepartment } from '@/types/war-room';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
 import { WarRoomService, getResponsibleColor } from '@/services/war-room.service';
 
@@ -59,7 +61,9 @@ interface WhiteboardMemberModalProps {
   totalTasksCount?: number;
   initialTab?: 'list' | 'form' | 'ranking';
   responsibleCountsMap?: Record<string, { total: number; concluidos: number; pendentes: number; atrasados: number }>;
-  onSaveMember: (oldName: string | null, newName: string, selectedColorHex?: string, linkedEmployeeId?: string) => void;
+  activeDepartment?: string;
+  departments?: WhiteboardDepartment[];
+  onSaveMember: (oldName: string | null, newName: string, selectedColorHex?: string, linkedEmployeeId?: string, departmentSlug?: string) => void;
   onDeleteMember?: (memberName: string, reassignedTo?: string | null) => void;
 }
 
@@ -71,6 +75,8 @@ export function WhiteboardMemberModal({
   totalTasksCount = 0,
   initialTab = 'list',
   responsibleCountsMap,
+  activeDepartment = 'financeiro',
+  departments,
   onSaveMember,
   onDeleteMember,
 }: WhiteboardMemberModalProps) {
@@ -81,6 +87,7 @@ export function WhiteboardMemberModal({
   const [nome, setNome] = useState('');
   const [selectedColorHex, setSelectedColorHex] = useState(APPROVED_MEMBER_COLORS[0].hex);
   const [linkedEmployeeId, setLinkedEmployeeId] = useState<string>('');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>(activeDepartment || 'financeiro');
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
@@ -100,10 +107,13 @@ export function WhiteboardMemberModal({
 
     async function loadEmployees() {
       try {
+        // FILTRO ESTRITO: Apenas colaboradores ATIVOS (status = 'Ativo' e active = true)
+        // Elimina ex-colaboradores e preserva lista limpa e executiva
         const { data, error } = await supabase
           .from('employees')
-          .select('id, full_name, job_role, department, email, phone_professional')
+          .select('id, full_name, job_role, department, email, phone_professional, status, active')
           .eq('active', true)
+          .ilike('status', 'ativo')
           .order('full_name');
 
         if (isMounted && data && !error) {
@@ -274,6 +284,7 @@ export function WhiteboardMemberModal({
     setNome('');
     setSelectedColorHex(APPROVED_MEMBER_COLORS[0].hex);
     setLinkedEmployeeId('');
+    setSelectedDepartment(activeDepartment || 'financeiro');
     setIsDeletingStep(false);
     setActiveTab('form');
   };
@@ -284,6 +295,19 @@ export function WhiteboardMemberModal({
     setNome(targetName);
     setIsDeletingStep(false);
     setActiveTab('form');
+    // Carregar vínculo e departamento salvos no Supabase
+    supabase
+      .from('whiteboard_member_links')
+      .select('department_slug, employee_id, color_hex')
+      .eq('member_name', targetName.toUpperCase())
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          if (data.department_slug) setSelectedDepartment(data.department_slug);
+          if (data.employee_id) setLinkedEmployeeId(data.employee_id);
+          if (data.color_hex) setSelectedColorHex(data.color_hex);
+        }
+      });
   };
 
   // Iniciar exclusão de um membro
@@ -298,7 +322,7 @@ export function WhiteboardMemberModal({
     const cleanNome = nome.trim().toUpperCase();
     if (!cleanNome) return;
 
-    onSaveMember(selectedTargetMember, cleanNome, selectedColorHex, linkedEmployeeId || undefined);
+    onSaveMember(selectedTargetMember, cleanNome, selectedColorHex, linkedEmployeeId || undefined, selectedDepartment);
     onClose();
   };
 
@@ -919,15 +943,51 @@ export function WhiteboardMemberModal({
                 </div>
               </div>
 
-              {/* VÍNCULO COM COLABORADOR REAL (TABELA EMPLOYEES DO SUPABASE) */}
+              {/* SELETOR DE DEPARTAMENTO DA LOUSA (MULTISSETORES) */}
+              <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Building2 size={13} className="text-cyan-400" />
+                    Departamento da Lousa *
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-mono">
+                    Isolamento Multissetores
+                  </span>
+                </label>
+
+                <select
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-cyan-500 min-h-[42px]"
+                >
+                  {(departments && departments.length > 0 ? departments : [
+                    { slug: 'financeiro', name: 'Financeiro & Controladoria' },
+                    { slug: 'operacional', name: 'Operações & Logística' },
+                    { slug: 'comercial', name: 'Comercial & Vendas' },
+                    { slug: 'recursos_humanos', name: 'Gente & Gestão (RH)' },
+                    { slug: 'ti', name: 'Tecnologia da Informação (TI)' },
+                    { slug: 'juridico', name: 'Jurídico & Compliance' }
+                  ]).map(dept => (
+                    <option key={dept.slug} value={dept.slug}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  Define a qual departamento este colaborador pertence. Ele só poderá ser marcado nas tarefas deste departamento, evitando atribuições cruzadas indevidas.
+                </p>
+              </div>
+
+              {/* VÍNCULO COM COLABORADOR REAL (TABELA EMPLOYEES DO SUPABASE — APENAS ATIVOS) */}
               <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <Link2 size={13} className="text-cyan-400" />
-                    Vínculo com Colaborador (Supabase)
+                    Vínculo com Colaborador Ativo (Supabase)
                   </span>
                   <span className="text-[10px] text-cyan-400 font-mono">
-                    Central de Notificações
+                    {employees.length} ativos disponíveis
                   </span>
                 </label>
 
@@ -945,7 +1005,7 @@ export function WhiteboardMemberModal({
                 </select>
 
                 <p className="text-[10px] text-slate-400 leading-tight">
-                  Vincula este responsável ao cadastro oficial da equipe, permitindo o envio de notificações Web Push personalizadas para seus computadores e celulares Motorola Android.
+                  Mostrando exclusivamente colaboradores com status ativo (ex-colaboradores foram filtrados). Vincula este responsável ao envio de Web Push no celular Motorola Android e Desktop.
                 </p>
               </div>
 

@@ -13,8 +13,10 @@ import {
   Clock, 
   CheckCircle2, 
   AlertTriangle,
-  Users
+  Users,
+  Building2
 } from 'lucide-react';
+import { WhiteboardDepartment } from '@/types/war-room';
 
 interface WhiteboardHeaderProps {
   isTvMode: boolean;
@@ -28,6 +30,9 @@ interface WhiteboardHeaderProps {
   totalAtrasados?: number;
   isZeroScrollMode?: boolean;
   onToggleZeroScrollMode?: () => void;
+  departments?: WhiteboardDepartment[];
+  activeDepartment?: string;
+  onDepartmentChange?: (slug: string) => void;
 }
 
 export function WhiteboardHeader({
@@ -42,6 +47,9 @@ export function WhiteboardHeader({
   totalAtrasados = 0,
   isZeroScrollMode = false,
   onToggleZeroScrollMode,
+  departments,
+  activeDepartment,
+  onDepartmentChange,
 }: WhiteboardHeaderProps) {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -145,6 +153,28 @@ export function WhiteboardHeader({
             <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform text-cyan-400" />
             <span>Voltar ao Início</span>
           </Link>
+
+          {/* SELETOR EXECUTIVO DE DEPARTAMENTOS (ADMIN MASTER VIEW) */}
+          {departments && departments.length > 0 && onDepartmentChange && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700/80 shadow-inner">
+              <span className="text-[10px] uppercase font-mono font-black text-slate-400 flex items-center gap-1">
+                <Building2 size={12} className="text-cyan-400" />
+                <span className="hidden md:inline">Setor:</span>
+              </span>
+              <select
+                value={activeDepartment || 'financeiro'}
+                onChange={(e) => onDepartmentChange(e.target.value)}
+                className="bg-slate-950 text-white font-mono font-bold text-xs rounded border border-slate-700 px-2 py-1 focus:outline-none focus:border-cyan-400 cursor-pointer min-h-[36px]"
+                title="Alternar visão de departamento (Administrador Master)"
+              >
+                {departments.map((dept) => (
+                  <option key={dept.slug} value={dept.slug}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* PROGRESSO DE TAREFAS DA LOUSA */}
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs">

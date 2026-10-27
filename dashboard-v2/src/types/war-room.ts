@@ -107,3 +107,22 @@ export interface WhiteboardDataState {
   cronograma: WhiteboardTimelineBlock[];
   gradeSemanal?: WhiteboardWeekdayBlock[];
 }
+
+export interface WhiteboardDepartment {
+  slug: string;
+  name: string;
+  badge_label: string;
+  color_hex: string;
+  icon_name?: string;
+  is_active?: boolean;
+}
+
+export interface WhiteboardMemberLink {
+  id?: string;
+  member_name: string;
+  department_slug: string;
+  employee_id?: string | null;
+  color_hex?: string;
+  created_at?: string;
+  updated_at?: string;
+}

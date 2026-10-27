@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { HeaderFinanceiro } from "@/components/layout/HeaderFinanceiro";
 import { StatCard } from "@/components/loans/StatCard";
 import { ClaraConfigModal } from "@/components/clara/ClaraConfigModal";
@@ -37,6 +37,7 @@ import {
   Sparkles,
   Zap,
   Inbox,
+  X,
 } from "lucide-react";
 import { 
   calculateCardDueDate, 
@@ -140,6 +141,99 @@ export default function ClaraIntegrationPage() {
   const [batchDueDate, setBatchDueDate] = useState("");
   const [batchOcrLoading, setBatchOcrLoading] = useState(false);
   const [autoOcrNotice, setAutoOcrNotice] = useState<string | null>(null);
+
+  // Estados de Fornecedor para Edição em Lote
+  const [batchSupplierMode, setBatchSupplierMode] = useState<'KEEP' | 'SET' | 'RESET'>('KEEP');
+  const [batchSupplierCode, setBatchSupplierCode] = useState<number | null>(null);
+  const [batchSupplierName, setBatchSupplierName] = useState("");
+  const [batchSupplierCnpj, setBatchSupplierCnpj] = useState("");
+  const [batchSupplierSearch, setBatchSupplierSearch] = useState("");
+  const [isBatchSupplierOpen, setIsBatchSupplierOpen] = useState(false);
+  const [batchRemoteSuppliers, setBatchRemoteSuppliers] = useState<OmieSupplierOption[]>([]);
+  const [batchSearchingRemote, setBatchSearchingRemote] = useState(false);
+  const batchSupplierDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fecha dropdown do fornecedor em lote ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (batchSupplierDropdownRef.current && !batchSupplierDropdownRef.current.contains(event.target as Node)) {
+        setIsBatchSupplierOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Busca remota de fornecedores no Omie para o modal em lote
+  useEffect(() => {
+    const q = batchSupplierSearch.trim();
+    if (q.length < 2) {
+      setBatchRemoteSuppliers([]);
+      setBatchSearchingRemote(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setBatchSearchingRemote(true);
+      try {
+        const res = await fetch(
+          `/api/clara/suppliers?company=${encodeURIComponent(activeCompany.name)}&q=${encodeURIComponent(q)}`
+        );
+        const data = await res.json().catch(() => ({}));
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          setBatchRemoteSuppliers(data.data);
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar fornecedores na API em lote:', err);
+      } finally {
+        setBatchSearchingRemote(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [batchSupplierSearch, activeCompany.name]);
+
+  // Lista combinada de fornecedores do Omie para seleção em lote
+  const filteredBatchSuppliers = useMemo(() => {
+    const q = batchSupplierSearch.toLowerCase().trim();
+    const cleanDigits = q.replace(/\D/g, '');
+    const map = new Map<number, OmieSupplierOption>();
+
+    if (batchRemoteSuppliers && batchRemoteSuppliers.length > 0) {
+      batchRemoteSuppliers.forEach(s => map.set(s.codigo_cliente_omie, s));
+    }
+
+    if (suppliers && suppliers.length > 0) {
+      if (!q) {
+        suppliers.slice(0, 50).forEach(s => {
+          if (!map.has(s.codigo_cliente_omie)) {
+            map.set(s.codigo_cliente_omie, s);
+          }
+        });
+      } else {
+        const words = q.split(/\s+/).filter(Boolean);
+        for (const s of suppliers) {
+          const nome = (s.nome_fantasia || '').toLowerCase();
+          const razao = (s.razao_social || '').toLowerCase();
+          const cod = String(s.codigo_cliente_omie);
+          const cnpj = s.cnpj_cpf ? s.cnpj_cpf.replace(/\D/g, '') : '';
+
+          const matchDirect = nome.includes(q) || razao.includes(q) || cod.includes(q);
+          const matchCnpj = cleanDigits && cnpj.includes(cleanDigits);
+          const matchAllWords = words.length > 1 && words.every(w => nome.includes(w) || razao.includes(w));
+
+          if (matchDirect || matchCnpj || matchAllWords) {
+            map.set(s.codigo_cliente_omie, s);
+            if (map.size >= 60) break;
+          }
+        }
+      }
+    }
+
+    return Array.from(map.values()).slice(0, 60);
+  }, [suppliers, batchRemoteSuppliers, batchSupplierSearch]);
 
   const loadOmieResources = useCallback(async (companyName = 'Mar Brasil') => {
     try {
@@ -405,28 +499,71 @@ export default function ClaraIntegrationPage() {
     }
   };
 
-  // Aplica categoria, departamento e/ou projeto em lote
+  const handleCloseBatchModal = () => {
+    setBatchModalOpen(false);
+    setBatchCategory("");
+    setBatchDepartment("");
+    setBatchProject("");
+    setBatchRegistrationDate("");
+    setBatchDueDate("");
+    setBatchSupplierMode('KEEP');
+    setBatchSupplierCode(null);
+    setBatchSupplierName("");
+    setBatchSupplierCnpj("");
+    setBatchSupplierSearch("");
+    setIsBatchSupplierOpen(false);
+  };
+
+  // Aplica categoria, departamento, projeto e/ou fornecedor em lote
   const handleBatchUpdateFields = async () => {
     if (selectedUuids.length === 0) return;
-    if (!batchCategory && !batchDepartment && !batchProject) {
-      alert('Selecione ao menos um campo (Categoria, Departamento ou Projeto) para aplicar em lote.');
+
+    const hasSupplierChange = batchSupplierMode !== 'KEEP';
+    const hasAnyField = Boolean(
+      batchCategory ||
+      batchDepartment ||
+      batchProject ||
+      batchRegistrationDate ||
+      batchDueDate ||
+      hasSupplierChange
+    );
+
+    if (!hasAnyField) {
+      alert('Selecione ao menos um campo (Categoria, Projeto, Fornecedor ou Departamento) para aplicar em lote.');
+      return;
+    }
+
+    if (batchSupplierMode === 'SET' && !batchSupplierCode) {
+      alert('Selecione um fornecedor na lista ou altere a opção para "Manter atual".');
       return;
     }
 
     setBatchActionLoading(true);
     try {
+      const payload: any = {
+        action: 'update_fields',
+        uuids: selectedUuids,
+        omie_category_code: batchCategory || undefined,
+        omie_department_code: batchDepartment || undefined,
+        omie_project_code: batchProject || undefined,
+        registration_date: batchRegistrationDate || undefined,
+        due_date: batchDueDate || undefined,
+      };
+
+      if (batchSupplierMode === 'SET' && batchSupplierCode) {
+        payload.omie_supplier_code = batchSupplierCode;
+        payload.omie_supplier_name = batchSupplierName;
+        payload.omie_supplier_cnpj = batchSupplierCnpj || null;
+      } else if (batchSupplierMode === 'RESET') {
+        payload.omie_supplier_code = null;
+        payload.omie_supplier_name = null;
+        payload.omie_supplier_cnpj = null;
+      }
+
       const res = await fetch('/api/clara/transactions/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update_fields',
-          uuids: selectedUuids,
-          omie_category_code: batchCategory || undefined,
-          omie_department_code: batchDepartment || undefined,
-          omie_project_code: batchProject || undefined,
-          registration_date: batchRegistrationDate || undefined,
-          due_date: batchDueDate || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -443,12 +580,8 @@ export default function ClaraIntegrationPage() {
       const data = await res.json();
       if (data.status === 'success') {
         alert(data.message);
-        setBatchModalOpen(false);
-        setBatchCategory("");
-        setBatchDepartment("");
-        setBatchProject("");
-        setBatchRegistrationDate("");
-        setBatchDueDate("");
+        handleCloseBatchModal();
+        setSelectedUuids([]);
         await fetchTransactions();
       } else {
         alert(`Erro: ${data.message || 'Erro desconhecido'}`);
@@ -1142,6 +1275,15 @@ export default function ClaraIntegrationPage() {
                                 {tx.merchant_category}
                               </span>
                             )}
+                            {(tx.omie_supplier_name || tx.accounting_fields?.omie_supplier_name) && (
+                              <span 
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded mt-0.5 max-w-[160px] truncate" 
+                                title={`Fornecedor Omie: ${tx.omie_supplier_name || tx.accounting_fields?.omie_supplier_name} (#${tx.omie_supplier_code || tx.accounting_fields?.omie_supplier_code})`}
+                              >
+                                <Building2 size={10} className="text-emerald-700 shrink-0" />
+                                <span className="truncate">{tx.omie_supplier_name || tx.accounting_fields?.omie_supplier_name}</span>
+                              </span>
+                            )}
                           </td>
 
                           <td className="py-2.5 px-2 text-right font-black text-slate-900 tabular-nums whitespace-nowrap">
@@ -1282,7 +1424,16 @@ export default function ClaraIntegrationPage() {
                             <h4 className="text-xs font-bold text-slate-900 truncate max-w-[190px]">
                               {tx.merchant_name || 'Estabelecimento Desconhecido'}
                             </h4>
-                            <span className="text-[11px] text-slate-500">
+                            {(tx.omie_supplier_name || tx.accounting_fields?.omie_supplier_name) && (
+                              <span 
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded mt-0.5 max-w-[190px] truncate" 
+                                title={`Fornecedor Omie: ${tx.omie_supplier_name || tx.accounting_fields?.omie_supplier_name} (#${tx.omie_supplier_code || tx.accounting_fields?.omie_supplier_code})`}
+                              >
+                                <Building2 size={10} className="text-emerald-700 shrink-0" />
+                                <span className="truncate">{tx.omie_supplier_name || tx.accounting_fields?.omie_supplier_name}</span>
+                              </span>
+                            )}
+                            <span className="text-[11px] text-slate-500 block">
                               {tx.user_name || 'Portador'} {tx.card_last_digits ? `(**** ${tx.card_last_digits})` : ''}
                             </span>
                           </div>
@@ -1417,38 +1568,108 @@ export default function ClaraIntegrationPage() {
         }}
       />
 
-      {/* Modal de Edição em Lote */}
+      {/* Barra Flutuante Fixa de Ações em Lote (Mobile & Desktop) */}
+      {selectedUuids.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-4xl p-3 bg-slate-900/95 backdrop-blur-md text-white rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-2xl border border-slate-700/80 animate-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-3">
+            <span className="w-8 h-8 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl flex items-center justify-center font-bold text-xs">
+              {selectedUuids.length}
+            </span>
+            <div>
+              <span className="text-xs font-bold text-white block">
+                {selectedUuids.length === 1 ? '1 transação marcada' : `${selectedUuids.length} transações marcadas`}
+              </span>
+              <span className="text-[10px] text-slate-400 block">
+                Altere categoria, projeto ou fornecedor de uma só vez
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBatchModalOpen(true)}
+              disabled={batchActionLoading}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              <Layers size={14} className="text-emerald-200" />
+              <span>Alterar em Lote</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBatchOcr}
+              disabled={batchActionLoading || batchOcrLoading}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50 border border-slate-700"
+              title="Executar leitura OCR com IA em todos os comprovantes selecionados para validar CNPJ do Tomador"
+            >
+              {batchOcrLoading ? (
+                <Loader2 size={14} className="animate-spin text-emerald-400" />
+              ) : (
+                <Sparkles size={14} className="text-emerald-400" />
+              )}
+              <span className="hidden sm:inline">{batchOcrLoading ? 'Auditando...' : 'Auditar CNPJs IA'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBatchSync}
+              disabled={batchActionLoading}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-900 text-xs font-black rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              {batchActionLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Send size={14} />
+              )}
+              <span>Enviar {selectedUuids.length} ao Omie</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedUuids([])}
+              className="px-2.5 py-2 text-slate-400 hover:text-white text-xs font-semibold hover:bg-white/10 rounded-xl cursor-pointer transition-colors"
+            >
+              Desmarcar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição em Lote (Categoria, Projeto, Fornecedor e Datas) */}
       {batchModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[20000] p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[20000] p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-150 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
-                  <Layers size={18} />
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl">
+                  <Layers size={20} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Classificação em Lote</h3>
+                  <h3 className="text-sm font-bold text-slate-900">Alterações em Lote</h3>
                   <p className="text-[11px] text-slate-500">
-                    Aplicar em {selectedUuids.length} lançamentos selecionados
+                    Aplicando em {selectedUuids.length} lançamentos da empresa <strong>{activeCompany.name}</strong>
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setBatchModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                onClick={handleCloseBatchModal}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                ✕
+                <X size={16} />
               </button>
             </div>
 
-            <p className="text-xs text-slate-600">
-              Selecione os campos contábeis que deseja aplicar a todas as transações marcadas. Os campos deixados em branco não serão alterados.
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Defina os campos que deseja aplicar a todas as transações marcadas. Os campos mantidos sem alteração permanecerão com seus valores originais.
             </p>
 
-            <div className="space-y-3 pt-1">
+            <div className="space-y-3.5 pt-1">
+              {/* Categoria Omie */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <Tag size={13} className="text-emerald-700" />
                   Categoria Omie:
                 </label>
                 <select
@@ -1465,26 +1686,10 @@ export default function ClaraIntegrationPage() {
                 </select>
               </div>
 
+              {/* Projeto Omie */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Centro de Custo (Departamento):
-                </label>
-                <select
-                  value={batchDepartment}
-                  onChange={e => setBatchDepartment(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
-                >
-                  <option value="">Não alterar centro de custo</option>
-                  {departments.map(d => (
-                    <option key={d.codigo} value={d.codigo}>
-                      {d.descricao}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <FolderKanban size={13} className="text-emerald-700" />
                   Projeto Omie:
                 </label>
                 <select
@@ -1501,7 +1706,242 @@ export default function ClaraIntegrationPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+              {/* Fornecedor Omie (Credor Contas a Pagar) */}
+              <div className="pt-2 border-t border-slate-100" ref={batchSupplierDropdownRef}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                    <Building2 size={13} className="text-emerald-700" />
+                    Fornecedor Omie (Credor Contas a Pagar):
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Base: {activeCompany.name} ({suppliers.length} fornecedores)
+                  </span>
+                </div>
+
+                {/* Seletor de Modo de Ação no Fornecedor */}
+                <div className="flex items-center gap-1.5 mb-2 p-1 bg-slate-100 rounded-xl text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBatchSupplierMode('KEEP');
+                      setBatchSupplierCode(null);
+                      setBatchSupplierName('');
+                      setBatchSupplierCnpj('');
+                      setIsBatchSupplierOpen(false);
+                    }}
+                    className={`flex-1 py-1 px-2 rounded-lg font-bold text-center transition-colors cursor-pointer ${
+                      batchSupplierMode === 'KEEP' 
+                        ? 'bg-white text-slate-900 shadow-2xs' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Manter atual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBatchSupplierMode('SET');
+                      setIsBatchSupplierOpen(true);
+                    }}
+                    className={`flex-1 py-1 px-2 rounded-lg font-bold text-center transition-colors cursor-pointer ${
+                      batchSupplierMode === 'SET' 
+                        ? 'bg-white text-emerald-800 shadow-2xs' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Definir fornecedor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBatchSupplierMode('RESET');
+                      setBatchSupplierCode(null);
+                      setBatchSupplierName('');
+                      setBatchSupplierCnpj('');
+                      setIsBatchSupplierOpen(false);
+                    }}
+                    className={`flex-1 py-1 px-2 rounded-lg font-bold text-center transition-colors cursor-pointer ${
+                      batchSupplierMode === 'RESET' 
+                        ? 'bg-white text-blue-800 shadow-2xs' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                    title="Usa o nome do estabelecimento Clara de cada transação como fornecedor automático"
+                  >
+                    Resetar Automático
+                  </button>
+                </div>
+
+                {/* Modo SET: Busca e Seleção do Fornecedor */}
+                {batchSupplierMode === 'SET' && (
+                  <div className="space-y-1.5">
+                    {batchSupplierCode && !isBatchSupplierOpen ? (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-1.5 py-0.5 bg-emerald-200/80 text-emerald-950 rounded font-mono font-bold text-[10px]">
+                              Omie #{batchSupplierCode}
+                            </span>
+                            {batchSupplierCnpj && (
+                              <span className="text-[10px] text-emerald-800 font-mono">
+                                CNPJ: {batchSupplierCnpj}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-bold text-emerald-950 truncate mt-0.5">
+                            {batchSupplierName}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsBatchSupplierOpen(true);
+                              setBatchSupplierSearch('');
+                            }}
+                            className="px-2 py-1 text-[10px] font-bold text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Alterar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBatchSupplierCode(null);
+                              setBatchSupplierName('');
+                              setBatchSupplierCnpj('');
+                              setIsBatchSupplierOpen(true);
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-600 rounded-lg cursor-pointer"
+                            title="Remover seleção"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={batchSupplierSearch}
+                            onChange={e => {
+                              setBatchSupplierSearch(e.target.value);
+                              if (!isBatchSupplierOpen) setIsBatchSupplierOpen(true);
+                            }}
+                            onFocus={() => setIsBatchSupplierOpen(true)}
+                            placeholder={`Buscar fornecedor no Omie (ex: Uber, Solucione, Paula, CNPJ)...`}
+                            className="w-full pl-8 pr-16 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800 placeholder:text-slate-400"
+                            autoFocus
+                          />
+                          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                            {batchSearchingRemote && (
+                              <Loader2 size={13} className="animate-spin text-emerald-600" />
+                            )}
+                            {batchSupplierSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setBatchSupplierSearch('')}
+                                className="text-slate-400 hover:text-slate-600 p-0.5"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Dropdown Flutuante de Fornecedores */}
+                        {isBatchSupplierOpen && (
+                          <div className="mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto z-50 divide-y divide-slate-100">
+                            <div className="p-2 bg-slate-50 text-[10px] font-bold text-slate-600 flex items-center justify-between sticky top-0 border-b border-slate-100">
+                              <span className="flex items-center gap-1.5">
+                                <span>Fornecedores Omie — {activeCompany.name}</span>
+                                {batchSearchingRemote && (
+                                  <span className="text-[10px] font-normal text-emerald-600 flex items-center gap-1">
+                                    <Loader2 size={10} className="animate-spin" /> buscando...
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-[10px] font-normal text-slate-400">
+                                {filteredBatchSuppliers.length} exibidos
+                              </span>
+                            </div>
+
+                            {filteredBatchSuppliers.length > 0 ? (
+                              filteredBatchSuppliers.map(sup => (
+                                <button
+                                  key={sup.codigo_cliente_omie}
+                                  type="button"
+                                  onClick={() => {
+                                    setBatchSupplierCode(sup.codigo_cliente_omie);
+                                    setBatchSupplierName(sup.nome_fantasia || sup.razao_social);
+                                    setBatchSupplierCnpj(sup.cnpj_cpf || '');
+                                    setIsBatchSupplierOpen(false);
+                                  }}
+                                  className={`w-full text-left p-2 hover:bg-emerald-50/70 transition-colors flex items-start gap-2 text-xs cursor-pointer ${
+                                    batchSupplierCode === sup.codigo_cliente_omie ? 'bg-emerald-50 font-bold' : ''
+                                  }`}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-slate-900 truncate">
+                                        {sup.nome_fantasia || sup.razao_social}
+                                      </span>
+                                      <span className="text-[10px] font-mono px-1 bg-slate-100 text-slate-600 rounded">
+                                        #{sup.codigo_cliente_omie}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 truncate">
+                                      {sup.razao_social} {sup.cnpj_cpf ? `• CNPJ: ${sup.cnpj_cpf}` : ''}
+                                    </div>
+                                  </div>
+                                  {batchSupplierCode === sup.codigo_cliente_omie && (
+                                    <Check size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                                  )}
+                                </button>
+                              ))
+                            ) : (
+                              <div className="p-3 text-center text-xs text-slate-400">
+                                Nenhum fornecedor encontrado no Omie para &quot;{batchSupplierSearch}&quot;.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Modo RESET: Informativo */}
+                {batchSupplierMode === 'RESET' && (
+                  <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center gap-2">
+                    <Sparkles size={14} className="text-blue-600 shrink-0" />
+                    <span>Cada transação usará seu próprio estabelecimento da Clara para cadastro ou identificação automática no Omie.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Centro de Custo (Departamento) */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <Building2 size={13} className="text-slate-500" />
+                  Centro de Custo (Departamento):
+                </label>
+                <select
+                  value={batchDepartment}
+                  onChange={e => setBatchDepartment(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                >
+                  <option value="">Não alterar centro de custo</option>
+                  {departments.map(d => (
+                    <option key={d.codigo} value={d.codigo}>
+                      {d.descricao}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Datas Financeiras (Competência e Vencimento) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Data Registro (Competência):
@@ -1543,7 +1983,7 @@ export default function ClaraIntegrationPage() {
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setBatchModalOpen(false)}
+                onClick={handleCloseBatchModal}
                 className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
               >
                 Cancelar
@@ -1551,10 +1991,10 @@ export default function ClaraIntegrationPage() {
               <button
                 type="button"
                 onClick={handleBatchUpdateFields}
-                disabled={batchActionLoading || (!batchCategory && !batchDepartment && !batchProject && !batchRegistrationDate && !batchDueDate)}
+                disabled={batchActionLoading || (!batchCategory && !batchDepartment && !batchProject && !batchRegistrationDate && !batchDueDate && batchSupplierMode === 'KEEP')}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-40"
               >
-                {batchActionLoading ? 'Aplicando...' : 'Aplicar em Lote'}
+                {batchActionLoading ? 'Aplicando...' : `Aplicar em ${selectedUuids.length} Lançamentos`}
               </button>
             </div>
           </div>

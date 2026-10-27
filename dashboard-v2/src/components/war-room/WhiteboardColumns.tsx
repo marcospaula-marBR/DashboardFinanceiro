@@ -47,6 +47,8 @@ interface WhiteboardColumnsProps {
   onOpenArchivedModal?: () => void;
   totalArchivedCount?: number;
   totalArchivedDemandsCount?: number;
+  departmentLabel?: string;
+  availableMembers?: string[];
 }
 
 export function WhiteboardColumns({
@@ -54,6 +56,8 @@ export function WhiteboardColumns({
   filterResponsible,
   layoutMode: initialLayoutMode = 'compact',
   onLayoutModeChange,
+  departmentLabel,
+  availableMembers,
   onHoverDemand,
   onToggleItem,
   onAddItem,
@@ -226,16 +230,14 @@ export function WhiteboardColumns({
 
   return (
     <section className="w-full bg-[#070c18]/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl relative">
-      {/* DATALIST DE SUGESTÕES */}
+      {/* DATALIST DE SUGESTÕES DE RESPONSÁVEIS (FILTRADOS POR DEPARTAMENTO) */}
       <datalist id="col-responsavel-suggestions">
-        <option value="MARCOS" />
-        <option value="MATHEUS" />
-        <option value="MELISSA" />
-        <option value="GUILHERME" />
-        <option value="FINANCEIRO" />
-        <option value="JURÍDICO" />
-        <option value="CONTÁBIL" />
-        <option value="TI" />
+        {(availableMembers && availableMembers.length > 0
+          ? availableMembers
+          : ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI']
+        ).map(member => (
+          <option key={member} value={member} />
+        ))}
       </datalist>
 
       {/* CABEÇALHO DA SEÇÃO DE COLUNAS */}
@@ -243,7 +245,7 @@ export function WhiteboardColumns({
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
           <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white font-mono flex items-center gap-2">
-            <span>DEMANDAS OPERACIONAIS EM FOCO</span>
+            <span>DEMANDAS EM FOCO — {departmentLabel ? departmentLabel.toUpperCase() : 'FINANCEIRO'}</span>
             <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold border border-slate-700">
               {activeColunas.length} Ativas
             </span>

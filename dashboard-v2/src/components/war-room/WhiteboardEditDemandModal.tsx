@@ -27,6 +27,7 @@ interface WhiteboardEditDemandModalProps {
   ) => void;
   onDelete: (columnId: string, itemId: string) => void;
   onArchive: (columnId: string, itemId: string) => void;
+  availableMembers?: string[];
 }
 
 export function WhiteboardEditDemandModal({
@@ -38,6 +39,7 @@ export function WhiteboardEditDemandModal({
   onSave,
   onDelete,
   onArchive,
+  availableMembers,
 }: WhiteboardEditDemandModalProps) {
   const [texto, setTexto] = useState('');
   const [selectedResponsaveis, setSelectedResponsaveis] = useState<string[]>([]);
@@ -133,7 +135,9 @@ export function WhiteboardEditDemandModal({
     onClose();
   };
 
-  const quickResponsibles = ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
+  const quickResponsibles = availableMembers && availableMembers.length > 0 
+    ? availableMembers 
+    : ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">

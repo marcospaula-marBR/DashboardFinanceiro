@@ -46,6 +46,7 @@ interface WhiteboardTimelineProps {
   onlyOverdue?: boolean;
   layoutMode?: TimelineLayoutMode;
   onLayoutModeChange?: (mode: TimelineLayoutMode) => void;
+  availableMembers?: string[];
   hoveredDemand?: {
     colId: string;
     titulo: string;
@@ -76,6 +77,7 @@ export function WhiteboardTimeline({
   onlyOverdue,
   layoutMode: initialLayoutMode = 'rows',
   onLayoutModeChange,
+  availableMembers,
   hoveredDemand,
   newsTickerSlot,
   onToggleDemandItem,
@@ -111,12 +113,15 @@ export function WhiteboardTimeline({
   const [inputResp, setInputResp] = useState<string>('');
 
   // Estados da Grade Semanal Recorrente
-  const CANONICAL_MEMBERS = ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'] as const;
+  const effectiveMembers = availableMembers && availableMembers.length > 0
+    ? availableMembers
+    : ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
+  const CANONICAL_MEMBERS = effectiveMembers;
   const weekdayBlocks = (gradeSemanal && gradeSemanal.length === 5) ? gradeSemanal : DEFAULT_WEEKDAY_BLOCKS;
 
   const [activeInputWeekday, setActiveInputWeekday] = useState<WeekdayKey | null>(null);
   const [inputWeekdayDesc, setInputWeekdayDesc] = useState<string>('');
-  const [inputWeekdayResps, setInputWeekdayResps] = useState<string[]>(['MARCOS']);
+  const [inputWeekdayResps, setInputWeekdayResps] = useState<string[]>([effectiveMembers[0] || 'MARCOS']);
 
   const [editingWeekdayState, setEditingWeekdayState] = useState<{
     diaSemana: WeekdayKey;
@@ -369,14 +374,9 @@ export function WhiteboardTimeline({
     <section className="w-full bg-[#070c18]/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl relative">
       {/* DATALIST DE SUGESTÃO DE RESPONSÁVEIS */}
       <datalist id="responsavel-suggestions">
-        <option value="MARCOS" />
-        <option value="MATHEUS" />
-        <option value="MELISSA" />
-        <option value="GUILHERME" />
-        <option value="FINANCEIRO" />
-        <option value="JURÍDICO" />
-        <option value="CONTÁBIL" />
-        <option value="TI" />
+        {effectiveMembers.map(member => (
+          <option key={member} value={member} />
+        ))}
       </datalist>
 
       {/* ── CABEÇALHO DO CRONOGRAMA ── */}
@@ -1444,7 +1444,7 @@ export function WhiteboardTimeline({
 
                 {/* BOTÕES DE CLIQUE RÁPIDO PARA MEMBROS REAIS CADASTRADOS */}
                 <div className="flex flex-wrap gap-1.5">
-                  {['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'].map(memberName => {
+                  {effectiveMembers.map(memberName => {
                     const isSelected = editResponsaveis.includes(memberName);
                     const colorConfig = getResponsibleColor(memberName);
 

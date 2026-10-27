@@ -22,6 +22,9 @@ export async function POST(req: Request) {
         omie_category_code, 
         omie_department_code, 
         omie_project_code,
+        omie_supplier_code,
+        omie_supplier_name,
+        omie_supplier_cnpj,
         registration_date,
         due_date 
       } = body;
@@ -33,6 +36,9 @@ export async function POST(req: Request) {
             omie_category_code,
             omie_department_code,
             omie_project_code,
+            omie_supplier_code,
+            omie_supplier_name,
+            omie_supplier_cnpj,
             registration_date,
             due_date,
           });

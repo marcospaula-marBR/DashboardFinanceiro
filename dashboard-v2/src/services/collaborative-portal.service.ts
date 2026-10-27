@@ -21,7 +21,7 @@ import {
   extractResponsaveisList,
   inferDefaultResponsaveis
 } from '@/services/war-room.service';
-import { WhiteboardDataState, PrazoVisualInfo, WeekdayKey } from '@/types/war-room';
+import { WhiteboardDataState, PrazoVisualInfo, WeekdayKey, WhiteboardDepartment } from '@/types/war-room';
 import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array } from '@/lib/web-push.config';
 
 const LOCAL_HELP_OFFERS_KEY = 'marbrasil_help_offers_v1';
@@ -1374,6 +1374,81 @@ export class CollaborativePortalService {
         .eq('member_name', clean);
     } catch (err) {
       console.warn('[CollaborativePortalService] Erro ao excluir vínculo do membro no Supabase:', err);
+    }
+  }
+
+  /**
+   * Obtém a lista de departamentos ativos da lousa (Multissetores)
+   */
+  static async getDepartments(): Promise<WhiteboardDepartment[]> {
+    try {
+      const { data, error } = await supabase
+        .from('whiteboard_departments')
+        .select('slug, name, badge_label, color_hex, icon_name, is_active')
+        .eq('is_active', true)
+        .order('slug');
+      if (data && data.length > 0 && !error) {
+        return data as WhiteboardDepartment[];
+      }
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Erro ao buscar departamentos:', err);
+    }
+    return [
+      { slug: 'financeiro', name: 'Financeiro & Controladoria', badge_label: 'FINANCEIRO', color_hex: '#10b981', icon_name: 'Landmark', is_active: true },
+      { slug: 'operacional', name: 'Operações & Logística', badge_label: 'OPERACIONAL', color_hex: '#0ea5e9', icon_name: 'Truck', is_active: true },
+      { slug: 'comercial', name: 'Comercial & Vendas', badge_label: 'COMERCIAL', color_hex: '#f59e0b', icon_name: 'TrendingUp', is_active: true },
+      { slug: 'recursos_humanos', name: 'Gente & Gestão (RH)', badge_label: 'RECURSOS HUMANOS', color_hex: '#f43f5e', icon_name: 'Users', is_active: true },
+      { slug: 'ti', name: 'Tecnologia da Informação (TI)', badge_label: 'TI', color_hex: '#06b6d4', icon_name: 'Terminal', is_active: true },
+      { slug: 'juridico', name: 'Jurídico & Compliance', badge_label: 'JURÍDICO', color_hex: '#84cc16', icon_name: 'Scale', is_active: true },
+    ];
+  }
+
+  /**
+   * Obtém os membros vinculados estritamente ao departamento informado
+   * Garante o bloqueio de marcações/atribuições cruzadas interdepartamentais
+   */
+  static async getDepartmentMembers(departmentSlug: string = 'financeiro'): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('whiteboard_member_links')
+        .select('member_name')
+        .eq('department_slug', departmentSlug)
+        .order('member_name');
+      if (data && data.length > 0 && !error) {
+        return data.map(d => d.member_name.toUpperCase());
+      }
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Erro ao buscar membros do departamento:', err);
+    }
+    if (departmentSlug === 'financeiro') {
+      return ['MARCOS', 'MATHEUS', 'MELISSA', 'GUILHERME', 'FINANCEIRO', 'JURÍDICO', 'CONTÁBIL', 'TI'];
+    }
+    return [];
+  }
+
+  /**
+   * Salva ou atualiza o vínculo de um membro no Supabase com seu departamento
+   */
+  static async saveMemberLink(
+    memberName: string,
+    departmentSlug: string = 'financeiro',
+    colorHex?: string,
+    employeeId?: string | null
+  ): Promise<void> {
+    const clean = memberName.trim().toUpperCase();
+    if (!clean) return;
+    try {
+      await supabase
+        .from('whiteboard_member_links')
+        .upsert({
+          member_name: clean,
+          department_slug: departmentSlug,
+          color_hex: colorHex || '#10b981',
+          employee_id: employeeId || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'member_name' });
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Erro ao salvar vínculo do membro:', err);
     }
   }
 
