@@ -1384,7 +1384,7 @@ export class CollaborativePortalService {
     try {
       const { data, error } = await supabase
         .from('whiteboard_departments')
-        .select('slug, name, badge_label, color_hex, icon_name, is_active')
+        .select('slug, name, badge_label, color_hex, icon_name, is_active, institutional_phrase, institutional_tag, culture_phrase, culture_tag')
         .eq('is_active', true)
         .order('slug');
       if (data && data.length > 0 && !error) {
@@ -1394,13 +1394,43 @@ export class CollaborativePortalService {
       console.warn('[CollaborativePortalService] Erro ao buscar departamentos:', err);
     }
     return [
-      { slug: 'financeiro', name: 'Financeiro & Controladoria', badge_label: 'FINANCEIRO', color_hex: '#10b981', icon_name: 'Landmark', is_active: true },
-      { slug: 'operacional', name: 'Operações & Logística', badge_label: 'OPERACIONAL', color_hex: '#0ea5e9', icon_name: 'Truck', is_active: true },
-      { slug: 'comercial', name: 'Comercial & Vendas', badge_label: 'COMERCIAL', color_hex: '#f59e0b', icon_name: 'TrendingUp', is_active: true },
-      { slug: 'recursos_humanos', name: 'Gente & Gestão (RH)', badge_label: 'RECURSOS HUMANOS', color_hex: '#f43f5e', icon_name: 'Users', is_active: true },
-      { slug: 'ti', name: 'Tecnologia da Informação (TI)', badge_label: 'TI', color_hex: '#06b6d4', icon_name: 'Terminal', is_active: true },
-      { slug: 'juridico', name: 'Jurídico & Compliance', badge_label: 'JURÍDICO', color_hex: '#84cc16', icon_name: 'Scale', is_active: true },
+      { slug: 'financeiro', name: 'Financeiro & Controladoria', badge_label: 'FINANCEIRO', color_hex: '#10b981', icon_name: 'Landmark', is_active: true, institutional_phrase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!', institutional_tag: 'MANUAL CULTURA MAR BRASIL', culture_phrase: 'PAGAR CERTO, FATURAR CERTO, FECHAR CERTO!', culture_tag: 'MANUAL DE CULTURA FINANCEIRA' },
+      { slug: 'operacional', name: 'Operações & Logística', badge_label: 'OPERACIONAL', color_hex: '#0ea5e9', icon_name: 'Truck', is_active: true, institutional_phrase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!', institutional_tag: 'MANUAL CULTURA MAR BRASIL', culture_phrase: 'AGILIDADE, SEGURANÇA E PONTUALIDADE EM CADA OPERAÇÃO!', culture_tag: 'MANUAL DE CULTURA OPERACIONAL' },
+      { slug: 'comercial', name: 'Comercial & Vendas', badge_label: 'COMERCIAL', color_hex: '#f59e0b', icon_name: 'TrendingUp', is_active: true, institutional_phrase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!', institutional_tag: 'MANUAL CULTURA MAR BRASIL', culture_phrase: 'RELACIONAMENTO, FOCO NO CLIENTE E RESULTADO COM EXCELÊNCIA!', culture_tag: 'MANUAL DE CULTURA COMERCIAL' },
+      { slug: 'recursos_humanos', name: 'Gente & Gestão (RH)', badge_label: 'RECURSOS HUMANOS', color_hex: '#f43f5e', icon_name: 'Users', is_active: true, institutional_phrase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!', institutional_tag: 'MANUAL CULTURA MAR BRASIL', culture_phrase: 'DESENVOLVIMENTO, CUIDADO E ENGAJAMENTO DE PESSOAS!', culture_tag: 'MANUAL DE CULTURA GENTE & GESTÃO' },
+      { slug: 'ti', name: 'Tecnologia da Informação (TI)', badge_label: 'TI', color_hex: '#06b6d4', icon_name: 'Terminal', is_active: true, institutional_phrase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!', institutional_tag: 'MANUAL CULTURA MAR BRASIL', culture_phrase: 'ESTABILIDADE, INOVAÇÃO E SEGURANÇA TECNOLÓGICA!', culture_tag: 'MANUAL DE CULTURA TI' },
+      { slug: 'juridico', name: 'Jurídico & Compliance', badge_label: 'JURÍDICO', color_hex: '#84cc16', icon_name: 'Scale', is_active: true, institutional_phrase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!', institutional_tag: 'MANUAL CULTURA MAR BRASIL', culture_phrase: 'CONFORMIDADE, SEGURANÇA JURÍDICA E INTEGRIDADE!', culture_tag: 'MANUAL DE CULTURA JURÍDICA' },
     ];
+  }
+
+  /**
+   * Atualiza as mensagens de cultura de um departamento no Supabase
+   */
+  static async updateDepartmentCulture(
+    departmentSlug: string,
+    culture: {
+      institutional_phrase?: string;
+      institutional_tag?: string;
+      culture_phrase?: string;
+      culture_tag?: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('whiteboard_departments')
+        .update({
+          institutional_phrase: culture.institutional_phrase,
+          institutional_tag: culture.institutional_tag,
+          culture_phrase: culture.culture_phrase,
+          culture_tag: culture.culture_tag,
+        })
+        .eq('slug', departmentSlug);
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.warn('[CollaborativePortalService] Erro ao atualizar cultura do departamento no Supabase:', err);
+      return false;
+    }
   }
 
   /**

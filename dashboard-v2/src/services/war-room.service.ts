@@ -17,6 +17,8 @@ import {
   WhiteboardWeekdayBlock,
   WhiteboardWeekdayItem,
   WeekdayKey,
+  WhiteboardCultureMessages,
+  WhiteboardCultureSlogan,
 } from '@/types/war-room';
 import { supabase } from '@/lib/supabase';
 
@@ -523,9 +525,97 @@ export function inferDefaultResponsible(text: string): string | undefined {
 }
 
 /**
+ * Retorna as mensagens de cultura padrão para o departamento indicado
+ */
+export function getDefaultCultureMessages(departmentSlug: string = 'financeiro', departmentName?: string): WhiteboardCultureMessages {
+  const slug = (departmentSlug || 'financeiro').toLowerCase();
+  switch (slug) {
+    case 'financeiro':
+      return {
+        sloganEsquerdo: {
+          frase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!',
+          tag: 'MANUAL CULTURA MAR BRASIL',
+        },
+        sloganDireito: {
+          frase: 'PAGAR CERTO, FATURAR CERTO, FECHAR CERTO!',
+          tag: 'MANUAL DE CULTURA FINANCEIRA',
+        },
+      };
+    case 'operacional':
+      return {
+        sloganEsquerdo: {
+          frase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!',
+          tag: 'MANUAL CULTURA MAR BRASIL',
+        },
+        sloganDireito: {
+          frase: 'AGILIDADE, SEGURANÇA E PONTUALIDADE EM CADA OPERAÇÃO!',
+          tag: 'MANUAL DE CULTURA OPERACIONAL',
+        },
+      };
+    case 'comercial':
+      return {
+        sloganEsquerdo: {
+          frase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!',
+          tag: 'MANUAL CULTURA MAR BRASIL',
+        },
+        sloganDireito: {
+          frase: 'RELACIONAMENTO, FOCO NO CLIENTE E RESULTADO COM EXCELÊNCIA!',
+          tag: 'MANUAL DE CULTURA COMERCIAL',
+        },
+      };
+    case 'recursos_humanos':
+      return {
+        sloganEsquerdo: {
+          frase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!',
+          tag: 'MANUAL CULTURA MAR BRASIL',
+        },
+        sloganDireito: {
+          frase: 'DESENVOLVIMENTO, CUIDADO E ENGAJAMENTO DE PESSOAS!',
+          tag: 'MANUAL DE CULTURA GENTE & GESTÃO',
+        },
+      };
+    case 'ti':
+      return {
+        sloganEsquerdo: {
+          frase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!',
+          tag: 'MANUAL CULTURA MAR BRASIL',
+        },
+        sloganDireito: {
+          frase: 'ESTABILIDADE, INOVAÇÃO E SEGURANÇA TECNOLÓGICA!',
+          tag: 'MANUAL DE CULTURA TI',
+        },
+      };
+    case 'juridico':
+      return {
+        sloganEsquerdo: {
+          frase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!',
+          tag: 'MANUAL CULTURA MAR BRASIL',
+        },
+        sloganDireito: {
+          frase: 'CONFORMIDADE, SEGURANÇA JURÍDICA E INTEGRIDADE!',
+          tag: 'MANUAL DE CULTURA JURÍDICA',
+        },
+      };
+    default:
+      const label = (departmentName || slug).toUpperCase();
+      return {
+        sloganEsquerdo: {
+          frase: 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!',
+          tag: 'MANUAL CULTURA MAR BRASIL',
+        },
+        sloganDireito: {
+          frase: 'FOCO, COMPROMISSO E EXCELÊNCIA EM CADA ENTREGA!',
+          tag: `MANUAL DE CULTURA ${label}`,
+        },
+      };
+  }
+}
+
+/**
  * Dados autênticos da Lousa Operacional da Equipe Mar Brasil
  */
 export const DEFAULT_WHITEBOARD_DATA: WhiteboardDataState = {
+  mensagensCultura: getDefaultCultureMessages('financeiro'),
   colunas: [
     {
       id: 'col-1',
@@ -772,6 +862,7 @@ export function createEmptyWhiteboardData(departmentSlug: string = 'operacional'
   const currentMonthKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
   return {
     mesReferencia: currentMonthKey,
+    mensagensCultura: getDefaultCultureMessages(departmentSlug),
     colunas: [],
     followTheMoney: { cotacaoUsdGs: '', linhas: [] },
     cronograma: [
@@ -863,6 +954,27 @@ export class WarRoomService {
 
   static createEmptyWhiteboardData(departmentSlug: string = 'operacional'): WhiteboardDataState {
     return createEmptyWhiteboardData(departmentSlug);
+  }
+
+  static getDefaultCultureMessages(departmentSlug?: string, departmentName?: string): WhiteboardCultureMessages {
+    return getDefaultCultureMessages(departmentSlug, departmentName);
+  }
+
+  /**
+   * Atualiza as mensagens de cultura da lousa do departamento
+   */
+  static updateCultureMessages(
+    currentState: WhiteboardDataState,
+    cultureMessages: WhiteboardCultureMessages,
+    departmentSlug?: string
+  ): WhiteboardDataState {
+    const activeDept = departmentSlug || this.getActiveDepartmentSlug();
+    const newState: WhiteboardDataState = {
+      ...currentState,
+      mensagensCultura: cultureMessages,
+    };
+    this.saveWhiteboardData(newState, activeDept);
+    return newState;
   }
 
   static getActiveDepartmentSlug(): string {
@@ -968,6 +1080,10 @@ export class WarRoomService {
           parsed.gradeSemanal = defaultData.gradeSemanal || DEFAULT_WEEKDAY_BLOCKS;
         }
 
+        if (!parsed.mensagensCultura) {
+          parsed.mensagensCultura = defaultData.mensagensCultura || getDefaultCultureMessages(activeDept);
+        }
+
         return parsed;
       }
     } catch (e) {
@@ -979,6 +1095,7 @@ export class WarRoomService {
       mesReferencia: currentMonthKey,
       cronograma: this.sanitizeCronograma(defaultData.cronograma),
       gradeSemanal: defaultData.gradeSemanal || DEFAULT_WEEKDAY_BLOCKS,
+      mensagensCultura: defaultData.mensagensCultura || getDefaultCultureMessages(activeDept),
     };
   }
 

@@ -100,12 +100,23 @@ export interface WhiteboardWeekdayBlock {
   itens: WhiteboardWeekdayItem[];
 }
 
+export interface WhiteboardCultureSlogan {
+  frase: string;
+  tag: string;
+}
+
+export interface WhiteboardCultureMessages {
+  sloganEsquerdo?: WhiteboardCultureSlogan;
+  sloganDireito?: WhiteboardCultureSlogan;
+}
+
 export interface WhiteboardDataState {
   mesReferencia?: string; // YYYY-MM para controle de renovação automática mensal
   colunas: WhiteboardColumn[];
   followTheMoney: FollowTheMoneyState;
   cronograma: WhiteboardTimelineBlock[];
   gradeSemanal?: WhiteboardWeekdayBlock[];
+  mensagensCultura?: WhiteboardCultureMessages;
 }
 
 export interface WhiteboardDepartment {
@@ -115,6 +126,10 @@ export interface WhiteboardDepartment {
   color_hex: string;
   icon_name?: string;
   is_active?: boolean;
+  institutional_phrase?: string;
+  institutional_tag?: string;
+  culture_phrase?: string;
+  culture_tag?: string;
 }
 
 export interface WhiteboardMemberLink {
@@ -126,3 +141,4 @@ export interface WhiteboardMemberLink {
   created_at?: string;
   updated_at?: string;
 }
+

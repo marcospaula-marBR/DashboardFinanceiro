@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor, getTopTasksPerMember, inferDefaultResponsaveis } from '@/services/war-room.service';
-import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn, WeekdayKey, WhiteboardDepartment } from '@/types/war-room';
+import { WarRoomService, DEFAULT_WHITEBOARD_DATA, extractResponsaveisList, getResponsibleColor, getTopTasksPerMember, inferDefaultResponsaveis, getDefaultCultureMessages } from '@/services/war-room.service';
+import { WhiteboardDataState, FollowTheMoneyRow, WhiteboardItem, WhiteboardColumn, WeekdayKey, WhiteboardDepartment, WhiteboardCultureMessages } from '@/types/war-room';
 import { fetchInsurancePolicies } from '@/services/insurance.service';
 import { InsurancePolicy } from '@/types/insurance';
 
@@ -19,8 +19,9 @@ import { WhiteboardArchivedModal } from '@/components/war-room/WhiteboardArchive
 import { WhiteboardDemandColumnModal } from '@/components/war-room/WhiteboardDemandColumnModal';
 import { WhiteboardMemberModal } from '@/components/war-room/WhiteboardMemberModal';
 import { WhiteboardAdminNotificationsModal } from '@/components/war-room/WhiteboardAdminNotificationsModal';
+import { WhiteboardCultureModal } from '@/components/war-room/WhiteboardCultureModal';
 import { CollaborativePortalService } from '@/services/collaborative-portal.service';
-import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell, Edit3, Trophy, Building2 } from 'lucide-react';
+import { Users, Filter, AlertTriangle, User, CheckCircle2, Archive, Tv, Zap, Palette, Plus, Bell, Edit3, Trophy, Building2, Quote } from 'lucide-react';
 
 export default function LousaOperacionalPage() {
   const [data, setData] = useState<WhiteboardDataState>(DEFAULT_WHITEBOARD_DATA);
@@ -69,6 +70,9 @@ export default function LousaOperacionalPage() {
   // Estados da Central de Notificações Administrativa e Ofertas de Ajuda
   const [isAdminNotificationsModalOpen, setIsAdminNotificationsModalOpen] = useState<boolean>(false);
   const [pendingHelpOffersCount, setPendingHelpOffersCount] = useState<number>(0);
+
+  // Estado do Modal de Edição Livre de Mensagens de Cultura por Setor
+  const [isCultureModalOpen, setIsCultureModalOpen] = useState<boolean>(false);
 
   const refreshHelpOffers = useCallback(() => {
     CollaborativePortalService.getHelpOffers().then(offers => {
@@ -175,6 +179,26 @@ export default function LousaOperacionalPage() {
       is_active: true
     };
   }, [departments, activeDepartment]);
+
+  // Mensagens de cultura ativas do setor (com fallback para metadados ou padrões recomendados)
+  const effectiveCultureMessages = useMemo<WhiteboardCultureMessages>(() => {
+    if (data?.mensagensCultura?.sloganEsquerdo?.frase && data?.mensagensCultura?.sloganDireito?.frase) {
+      return data.mensagensCultura;
+    }
+    if (activeDepartmentObj?.culture_phrase) {
+      return {
+        sloganEsquerdo: {
+          frase: activeDepartmentObj.institutional_phrase || 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!',
+          tag: activeDepartmentObj.institutional_tag || 'MANUAL CULTURA MAR BRASIL',
+        },
+        sloganDireito: {
+          frase: activeDepartmentObj.culture_phrase,
+          tag: activeDepartmentObj.culture_tag || `MANUAL DE CULTURA ${activeDepartmentObj.badge_label || activeDepartment.toUpperCase()}`,
+        },
+      };
+    }
+    return getDefaultCultureMessages(activeDepartment, activeDepartmentObj?.name);
+  }, [data?.mensagensCultura, activeDepartment, activeDepartmentObj]);
 
   // Carregar apólices de seguro do banco para o Radar de Seguros
   useEffect(() => {
@@ -745,6 +769,32 @@ export default function LousaOperacionalPage() {
     setEditingMemberName(null);
   };
 
+  // ── SALVAR MENSAGENS DE CULTURA LIVRES DO SETOR ──
+  const handleSaveCultureMessages = async (newMessages: WhiteboardCultureMessages) => {
+    const updated = WarRoomService.updateCultureMessages(data, newMessages, activeDepartment);
+    setData(updated);
+
+    // Atualiza no banco Supabase (tabela whiteboard_departments)
+    await CollaborativePortalService.updateDepartmentCulture(activeDepartment, {
+      institutional_phrase: newMessages.sloganEsquerdo?.frase,
+      institutional_tag: newMessages.sloganEsquerdo?.tag,
+      culture_phrase: newMessages.sloganDireito?.frase,
+      culture_tag: newMessages.sloganDireito?.tag,
+    });
+
+    // Atualiza lista de departamentos localmente
+    setDepartments(prev => prev.map(d => {
+      if (d.slug !== activeDepartment) return d;
+      return {
+        ...d,
+        institutional_phrase: newMessages.sloganEsquerdo?.frase,
+        institutional_tag: newMessages.sloganEsquerdo?.tag,
+        culture_phrase: newMessages.sloganDireito?.frase,
+        culture_tag: newMessages.sloganDireito?.tag,
+      };
+    }));
+  };
+
   // ── RESTAURAR LOUSA ORIGINAL (DO DEPARTAMENTO ATIVO) ──
   const handleResetDefault = () => {
     if (window.confirm(`Deseja restaurar a lousa do setor ${activeDepartmentObj.name} para o estado original? Todas as alterações manuais serão resetadas.`)) {
@@ -780,6 +830,8 @@ export default function LousaOperacionalPage() {
         departments={departments}
         activeDepartment={activeDepartment}
         onDepartmentChange={handleDepartmentChange}
+        cultureMessages={effectiveCultureMessages}
+        onOpenCultureModal={() => setIsCultureModalOpen(true)}
       />
 
       {/* ── CORPO PRINCIPAL DA LOUSA (COM SUPORTE A ZERO-SCROLL PARA TV) ── */}
@@ -1189,6 +1241,15 @@ export default function LousaOperacionalPage() {
         allMembers={distinctResponsibles}
         pendingHelpOffersCount={pendingHelpOffersCount}
         onOfferDecided={refreshHelpOffers}
+      />
+
+      {/* ── MODAL DE MENSAGENS DE CULTURA LIVRES POR DEPARTAMENTO ── */}
+      <WhiteboardCultureModal
+        isOpen={isCultureModalOpen}
+        onClose={() => setIsCultureModalOpen(false)}
+        department={activeDepartmentObj}
+        currentMessages={effectiveCultureMessages}
+        onSave={handleSaveCultureMessages}
       />
     </div>
   );

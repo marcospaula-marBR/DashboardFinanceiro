@@ -14,9 +14,11 @@ import {
   CheckCircle2, 
   AlertTriangle,
   Users,
-  Building2
+  Building2,
+  Quote,
+  Edit3
 } from 'lucide-react';
-import { WhiteboardDepartment } from '@/types/war-room';
+import { WhiteboardDepartment, WhiteboardCultureMessages } from '@/types/war-room';
 
 interface WhiteboardHeaderProps {
   isTvMode: boolean;
@@ -33,6 +35,8 @@ interface WhiteboardHeaderProps {
   departments?: WhiteboardDepartment[];
   activeDepartment?: string;
   onDepartmentChange?: (slug: string) => void;
+  cultureMessages?: WhiteboardCultureMessages;
+  onOpenCultureModal?: () => void;
 }
 
 export function WhiteboardHeader({
@@ -50,6 +54,8 @@ export function WhiteboardHeader({
   departments,
   activeDepartment,
   onDepartmentChange,
+  cultureMessages,
+  onOpenCultureModal,
 }: WhiteboardHeaderProps) {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -83,15 +89,26 @@ export function WhiteboardHeader({
     <header className="w-full bg-[#070c18]/95 border-b border-slate-800/80 backdrop-blur-md px-3 sm:px-6 py-3 transition-all duration-300">
       {/* ── TOP SLOGANS INSTITUCIONAIS (FIÉIS À LOUSA) ── */}
       <div className="flex flex-col lg:flex-row items-center justify-between gap-3 pb-3 border-b border-slate-800/60">
-        {/* SLOGAN ESQUERDO: MANUAL DE CULTURA MAR BRASIL */}
-        <div className="flex items-center gap-2.5 text-center lg:text-left">
-          <div className="w-2 h-8 bg-cyan-500 rounded-full hidden sm:block flex-shrink-0" />
+        {/* SLOGAN ESQUERDO: MANUAL DE CULTURA (PERSONALIZÁVEL POR SETOR) */}
+        <div 
+          onClick={onOpenCultureModal}
+          role={onOpenCultureModal ? 'button' : undefined}
+          tabIndex={onOpenCultureModal ? 0 : undefined}
+          title={onOpenCultureModal ? 'Clique para personalizar as mensagens de cultura deste setor' : undefined}
+          className={`flex items-center gap-2.5 text-center lg:text-left transition-all ${
+            onOpenCultureModal ? 'cursor-pointer group hover:opacity-95' : ''
+          }`}
+        >
+          <div className="w-2 h-8 bg-cyan-500 rounded-full hidden sm:block flex-shrink-0 group-hover:scale-110 transition-transform" />
           <div>
             <h1 className="text-xs sm:text-sm md:text-base font-black tracking-wide text-white uppercase flex flex-wrap items-center gap-2 justify-center lg:justify-start">
-              <span>PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!</span>
+              <span>{cultureMessages?.sloganEsquerdo?.frase || 'PESSOAS, TÉCNICA E PROPÓSITO EM CADA ENTREGA!'}</span>
               <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 font-bold border border-rose-500/30">
-                MANUAL CULTURA MAR BRASIL
+                {cultureMessages?.sloganEsquerdo?.tag || 'MANUAL CULTURA MAR BRASIL'}
               </span>
+              {onOpenCultureModal && (
+                <Edit3 size={12} className="opacity-0 group-hover:opacity-80 text-cyan-400 transition-opacity hidden sm:inline" />
+              )}
             </h1>
           </div>
         </div>
@@ -127,17 +144,28 @@ export function WhiteboardHeader({
           </span>
         </div>
 
-        {/* SLOGAN DIREITO: MANUAL DE CULTURA FINANCEIRA */}
-        <div className="flex items-center gap-2.5 text-center lg:text-right">
+        {/* SLOGAN DIREITO: MANUAL DE CULTURA ESPECÍFICA DO SETOR */}
+        <div 
+          onClick={onOpenCultureModal}
+          role={onOpenCultureModal ? 'button' : undefined}
+          tabIndex={onOpenCultureModal ? 0 : undefined}
+          title={onOpenCultureModal ? 'Clique para personalizar as mensagens de cultura deste setor' : undefined}
+          className={`flex items-center gap-2.5 text-center lg:text-right transition-all ${
+            onOpenCultureModal ? 'cursor-pointer group hover:opacity-95' : ''
+          }`}
+        >
           <div>
             <h2 className="text-xs sm:text-sm md:text-base font-black tracking-wide text-white uppercase flex flex-wrap items-center gap-2 justify-center lg:justify-end">
-              <span>PAGAR CERTO, FATURAR CERTO, FECHAR CERTO!</span>
+              {onOpenCultureModal && (
+                <Edit3 size={12} className="opacity-0 group-hover:opacity-80 text-amber-400 transition-opacity hidden sm:inline" />
+              )}
+              <span>{cultureMessages?.sloganDireito?.frase || 'PAGAR CERTO, FATURAR CERTO, FECHAR CERTO!'}</span>
               <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                MANUAL DE CULTURA FINANCEIRA
+                {cultureMessages?.sloganDireito?.tag || 'MANUAL DE CULTURA FINANCEIRA'}
               </span>
             </h2>
           </div>
-          <div className="w-2 h-8 bg-amber-500 rounded-full hidden sm:block flex-shrink-0" />
+          <div className="w-2 h-8 bg-amber-500 rounded-full hidden sm:block flex-shrink-0 group-hover:scale-110 transition-transform" />
         </div>
       </div>
 
@@ -205,6 +233,19 @@ export function WhiteboardHeader({
             <Plus size={13} />
             <span>Linha Câmbio</span>
           </button>
+
+          {/* BOTÃO PARA EDITAR MENSAGENS DE CULTURA DO SETOR */}
+          {onOpenCultureModal && (
+            <button
+              type="button"
+              onClick={onOpenCultureModal}
+              title="Personalizar mensagens e slogans de cultura deste setor"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-amber-500/60 text-slate-300 hover:text-amber-300 text-xs font-bold transition-all shadow-sm"
+            >
+              <Quote size={13} className="text-amber-400" />
+              <span>Cultura</span>
+            </button>
+          )}
 
           {/* QUADRO DE RESPONSÁVEIS */}
           {onToggleResponsibleView && (
