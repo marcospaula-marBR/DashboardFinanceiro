@@ -1,5 +1,5 @@
 name: Supabase Daily Backup to Google Drive
-# Versao 1.0.2 - Conexão via Pooler IPv4 Supabase (6543) e Upload Google Drive API v3
+# Versao 1.0.3 - Backup completo resiliente via Supabase API (HTTPS 443) e Google Drive API v3
 
 on:
   schedule:
@@ -21,61 +21,37 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install PostgreSQL Client & Dependencies
+    - name: Install Dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y postgresql-client
         python -m pip install --upgrade pip
         pip install google-api-python-client google-auth
 
-    - name: Run pg_dump from Supabase
+    - name: Run Supabase Full Backup
       env:
-        PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-        SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
-        SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
-        SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       run: |
-        # Extrai o project ref do Supabase da URL (ex: ngtjhwswbbivqajtpjvg)
-        PROJECT_REF=$(echo "$SUPABASE_URL" | sed -E 's|https?://([^.]+).*|\1|')
-        
-        # O Supabase utiliza o pooler (Supavisor) em modo Session (6543) com suporte nativo a IPv4
-        # Região padrão: sa-east-1 (São Paulo)
-        HOST="${SUPABASE_DB_HOST:-aws-0-sa-east-1.pooler.supabase.com}"
-        PORT="${SUPABASE_DB_PORT:-6543}"
-        USER="${SUPABASE_DB_USER:-postgres.${PROJECT_REF}}"
-        DB="postgres"
+        python .github/scripts/backup_supabase.py --output-dir . --workers 6
 
-        echo "📡 Conectando ao Supabase Pooler IPv4 em: $HOST:$PORT"
-        echo "👤 Usuário: $USER"
-        echo "🗄️  Banco: $DB"
-
-        pg_dump -h "$HOST" -p "$PORT" -U "$USER" -d "$DB" -F c -b -v -f supabase_backup.sql
-
-        # Valida se o arquivo gerado existe e possui conteúdo
-        if [ ! -s supabase_backup.sql ]; then
-          echo "❌ Erro: supabase_backup.sql foi gerado vazio ou não encontrado!"
-          exit 1
-        fi
-        echo "✅ Dump PostgreSQL gerado com sucesso! Tamanho: $(du -h supabase_backup.sql | cut -f1)"
-
-    - name: Encrypt and Timestamp Backup
+    - name: Encrypt Backup File with GPG
       env:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
-        TIMESTAMP=$(date +'%Y-%m-%d_%H%M%S')
-        
+        # Localiza o arquivo .tar.gz gerado
+        ARCHIVE_FILE=$(ls -t supabase_backup_*.tar.gz | head -n 1)
+        echo "Arquivo original: $ARCHIVE_FILE"
+
         if [ -n "$GPG_PASSPHRASE" ]; then
-          FINAL_NAME="supabase_backup_${TIMESTAMP}.sql.gpg"
+          FINAL_NAME="${ARCHIVE_FILE}.gpg"
           echo "🔐 Criptografando backup com GPG -> $FINAL_NAME"
-          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" -c -o "$FINAL_NAME" supabase_backup.sql
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" -c -o "$FINAL_NAME" "$ARCHIVE_FILE"
+          rm -f "$ARCHIVE_FILE"
         else
-          FINAL_NAME="supabase_backup_${TIMESTAMP}.sql.gz"
-          echo "⚠️  GPG_PASSPHRASE não definida. Compactando com gzip -> $FINAL_NAME"
-          gzip -c supabase_backup.sql > "$FINAL_NAME"
+          FINAL_NAME="$ARCHIVE_FILE"
+          echo "ℹ️  GPG_PASSPHRASE não definida. Mantendo arquivo compactado -> $FINAL_NAME"
         fi
 
-        echo "BACKUP_FILE=$FINAL_NAME" >> $GITHUB_ENV
+        echo "FINAL_BACKUP_FILE=$FINAL_NAME" >> $GITHUB_ENV
         echo "✅ Arquivo final pronto para envio: $FINAL_NAME ($(du -h "$FINAL_NAME" | cut -f1))"
 
     - name: Upload Backup to Google Drive
@@ -83,10 +59,10 @@ jobs:
         GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}
         GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
       run: |
-        python .github/scripts/upload_to_drive.py --file "$BACKUP_FILE" --folder-id "$GOOGLE_DRIVE_FOLDER_ID"
+        python .github/scripts/upload_to_drive.py --file "$FINAL_BACKUP_FILE" --folder-id "$GOOGLE_DRIVE_FOLDER_ID"
 
     - name: Clean Up Artifacts
       if: always()
       run: |
-        rm -f supabase_backup.sql *.sql.gpg *.sql.gz
+        rm -f supabase_backup_*.tar.gz*
         echo "🧹 Limpeza dos arquivos temporários concluída."
