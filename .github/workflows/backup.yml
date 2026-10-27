@@ -1,5 +1,5 @@
-name: Supabase Daily Backup to Google Drive
-# Versao 1.0.3 - Backup completo resiliente via Supabase API (HTTPS 443) e Google Drive API v3
+name: Supabase Daily Backup
+# Versao 1.0.4 - Armazenamento seguro de Backup em GitHub Artifacts (90 dias) e Google Drive opcional
 
 on:
   schedule:
@@ -51,15 +51,31 @@ jobs:
           echo "ℹ️  GPG_PASSPHRASE não definida. Mantendo arquivo compactado -> $FINAL_NAME"
         fi
 
+        ARTIFACT_NAME=$(echo "$FINAL_NAME" | sed 's/\.tar\.gz.*//')
         echo "FINAL_BACKUP_FILE=$FINAL_NAME" >> $GITHUB_ENV
-        echo "✅ Arquivo final pronto para envio: $FINAL_NAME ($(du -h "$FINAL_NAME" | cut -f1))"
+        echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
+        echo "✅ Arquivo final pronto para armazenamento: $FINAL_NAME ($(du -h "$FINAL_NAME" | cut -f1))"
 
-    - name: Upload Backup to Google Drive
+    - name: Upload Backup to GitHub Artifacts (Download Direto)
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.ARTIFACT_NAME }}
+        path: ${{ env.FINAL_BACKUP_FILE }}
+        retention-days: 90
+        if-no-files-found: error
+
+    - name: Upload Backup to Google Drive (Opcional)
+      continue-on-error: true
       env:
         GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS || secrets.GDRIVE_CREDENTIALS || secrets.GOOGLE_APPLICATION_CREDENTIALS || secrets.GCP_SA_KEY || secrets.GOOGLE_CREDENTIALS }}
         GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID || secrets.GDRIVE_FOLDER_ID }}
       run: |
-        python .github/scripts/upload_to_drive.py --file "$FINAL_BACKUP_FILE" --folder-id "$GOOGLE_DRIVE_FOLDER_ID"
+        if [ -n "$GOOGLE_DRIVE_FOLDER_ID" ] && [ -n "$GOOGLE_DRIVE_CREDENTIALS" ]; then
+          echo "📤 Tentando sincronização com o Google Drive..."
+          python .github/scripts/upload_to_drive.py --file "$FINAL_BACKUP_FILE" --folder-id "$GOOGLE_DRIVE_FOLDER_ID" || true
+        else
+          echo "ℹ️  Google Drive não configurado. Backup salvo com sucesso no GitHub Artifacts."
+        fi
 
     - name: Clean Up Artifacts
       if: always()
