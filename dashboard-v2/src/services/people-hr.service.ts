@@ -147,6 +147,7 @@ export const PeopleHRService = {
         .from('people_monthly_costs')
         .select('*')
         .order('competencia', { ascending: true })
+        .order('id', { ascending: true })
         .range(from, from + step - 1);
 
       if (error) throw error;
@@ -162,7 +163,21 @@ export const PeopleHRService = {
       }
     }
 
-    return allRows.map(row => ({
+    // Deduplicação defensiva por id em memória para garantir integridade e unicidade de chaves no React
+    const seenIds = new Set<string>();
+    const uniqueRows: any[] = [];
+    for (const row of allRows) {
+      if (row.id) {
+        if (!seenIds.has(row.id)) {
+          seenIds.add(row.id);
+          uniqueRows.push(row);
+        }
+      } else {
+        uniqueRows.push(row);
+      }
+    }
+
+    return uniqueRows.map(row => ({
       ...row,
       ...(row.verbas_adicionais || {})
     }));

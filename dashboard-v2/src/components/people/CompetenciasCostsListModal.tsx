@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   X, Calendar, Filter, Search, Trash2, Edit3, Loader2, 
   CheckCircle2, AlertTriangle, ArrowUpDown, DollarSign, Wallet, 
@@ -98,6 +98,16 @@ export function CompetenciasCostsListModal({
     }
     return comps.sort().reverse();
   }, [monthlyCosts, selectedYears]);
+
+  // Se o ano filtrado mudar e a competência selecionada não pertencer aos anos ativos, reseta para 'all'
+  useEffect(() => {
+    if (selectedCompetencia !== 'all' && selectedYears.length > 0) {
+      const compYear = selectedCompetencia.split('-')[0];
+      if (!selectedYears.includes(compYear)) {
+        setSelectedCompetencia('all');
+      }
+    }
+  }, [selectedYears, selectedCompetencia]);
 
   // Formatação de competência para rótulo legível (ex: "Setembro/2026")
   const formatCompetenciaLabel = (compStr: string): string => {
@@ -947,8 +957,11 @@ export function CompetenciasCostsListModal({
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900/60 font-medium">
-                {filteredRows.map(({ cost, emp, name, realTotal, isCLT, isEstagio }) => {
+              <tbody 
+                key={`tbody-${selectedYears.join('-')}-${compFilterMode}-${selectedCompetencia}-${selectedVinculo}-${selectedEmpresa}-${selectedSetor}-${searchTerm}-${usePageScope}`}
+                className="divide-y divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900/60 font-medium"
+              >
+                {filteredRows.map(({ cost, emp, name, realTotal, isCLT, isEstagio }, idx) => {
                   const beneficios = (cost.valor_vr || 0) + (cost.valor_vt || 0) + (cost.valor_cesta || 0) + (cost.valor_ajuda_custo || 0);
                   const heNoturno = (cost.valor_hora_extra || 0) + (cost.valor_adicional_not || 0);
                   const decimoFerias = (cost.valor_decimo_terceiro || 0) + (cost.valor_ferias || 0) + (cost.valor_rescisao || 0);
@@ -957,7 +970,7 @@ export function CompetenciasCostsListModal({
 
                   return (
                     <tr 
-                      key={cost.id} 
+                      key={`${cost.id || 'cost'}-${cost.competencia || 'comp'}-${idx}`} 
                       className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group"
                     >
                       {/* Competência */}
