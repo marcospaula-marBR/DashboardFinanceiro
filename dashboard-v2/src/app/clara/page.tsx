@@ -38,6 +38,7 @@ import {
   Zap,
   Inbox,
   X,
+  MessageSquareText,
 } from "lucide-react";
 import { 
   calculateCardDueDate, 
@@ -1204,9 +1205,41 @@ export default function ClaraIntegrationPage() {
                           </td>
 
                           <td className="py-2.5 px-2">
-                            <span className="font-semibold text-slate-800 block truncate max-w-[160px]" title={tx.merchant_name || ''}>
-                              {tx.merchant_name || 'Estabelecimento Desconhecido'}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-slate-800 block truncate max-w-[150px]" title={tx.merchant_name || ''}>
+                                {tx.merchant_name || 'Estabelecimento Desconhecido'}
+                              </span>
+
+                              {/* Sinalizador Interativo de Observação com Tooltip Flutuante */}
+                              {tx.comment && (
+                                <div 
+                                  className="group/obs relative inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100/90 text-amber-900 border border-amber-200/90 rounded-md text-[10px] font-bold transition-all shadow-2xs cursor-help"
+                                  title={`Observação Clara: "${tx.comment}" (exportada ao Omie)`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedTx(tx);
+                                  }}
+                                >
+                                  <MessageSquareText size={11} className="text-amber-600 shrink-0" />
+                                  <span className="max-w-[100px] truncate italic font-medium">&quot;{tx.comment}&quot;</span>
+
+                                  {/* Tooltip Executivo Flutuante no Hover */}
+                                  <div className="pointer-events-none absolute bottom-full left-0 mb-2 hidden group-hover/obs:flex flex-col z-50 min-w-[240px] max-w-xs bg-slate-900 text-white rounded-xl p-3 shadow-2xl border border-slate-700/80 animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="flex items-center gap-1.5 text-amber-400 font-bold text-[10px] mb-1">
+                                      <MessageSquareText size={12} />
+                                      <span>Observação Registrada no Lançamento</span>
+                                    </div>
+                                    <p className="text-[11px] font-medium leading-relaxed text-slate-100 whitespace-normal break-words">
+                                      &quot;{tx.comment}&quot;
+                                    </p>
+                                    <div className="mt-2 pt-1.5 border-t border-slate-800 flex items-center justify-between text-[9px] text-slate-400">
+                                      <span>Portador: {tx.user_name || 'Portador'}</span>
+                                      <span className="text-emerald-400 font-semibold">✓ Exporta p/ Omie</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                             {tx.merchant_category && (
                               <span className="text-[10px] text-slate-400 block truncate max-w-[160px]">
                                 {tx.merchant_category}
@@ -1373,6 +1406,15 @@ export default function ClaraIntegrationPage() {
                             <span className="text-[11px] text-slate-500 block">
                               {tx.user_name || 'Portador'} {tx.card_last_digits ? `(**** ${tx.card_last_digits})` : ''}
                             </span>
+                            {tx.comment && (
+                              <div 
+                                className="inline-flex items-center gap-1 text-[10px] text-amber-900 bg-amber-50/90 border border-amber-200/80 px-2 py-0.5 rounded-lg mt-1 max-w-[190px] truncate"
+                                title={`Observação Clara: "${tx.comment}" (exportada ao Omie)`}
+                              >
+                                <MessageSquareText size={11} className="text-amber-600 shrink-0" />
+                                <span className="truncate italic font-medium">&quot;{tx.comment}&quot;</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 

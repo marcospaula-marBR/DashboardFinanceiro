@@ -166,11 +166,21 @@ export class ClaraOmieMapper {
     const auth = tx.authorization_number ? `Auth ${tx.authorization_number}` : '';
     const uuid = tx.clara_uuid;
 
-    const base = `CLARA | ${merchant} | Cartão ${last4} | ${user}`;
-    const withAuth = auth ? `${base} | ${auth}` : base;
-    const full = `${withAuth} | UUID: ${uuid}`;
+    const obsPart = tx.comment?.trim() ? `Obs: "${tx.comment.trim()}"` : '';
 
-    // Limita a 500 caracteres para garantir compatibilidade com o campo cObs do Omie
+    const parts = [
+      'CLARA',
+      merchant,
+      user,
+      obsPart,
+      `Cartão ${last4}`,
+      auth,
+      `UUID: ${uuid}`,
+    ].filter(Boolean);
+
+    const full = parts.join(' | ');
+
+    // Limita a 500 caracteres para garantir compatibilidade com o campo cObs / observacao do Omie
     return full.length > 500 ? full.substring(0, 497) + '...' : full;
   }
 

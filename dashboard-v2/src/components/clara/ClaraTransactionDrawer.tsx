@@ -26,7 +26,8 @@ import {
   Layers,
   CalendarDays,
   Search,
-  ChevronDown
+  ChevronDown,
+  MessageSquareText
 } from "lucide-react";
 import { ClaraTransactionRecord, OmieCategoryOption, OmieDepartmentOption, OmieProjectOption, OmieSupplierOption } from "@/types/clara.types";
 
@@ -94,6 +95,7 @@ export function ClaraTransactionDrawer({
   const [selectedIssueDate, setSelectedIssueDate] = useState(transaction?.invoice_issue_date || '');
   const [selectedRegDate, setSelectedRegDate] = useState(transaction?.registration_date || '');
   const [selectedDueDate, setSelectedDueDate] = useState(transaction?.due_date || '');
+  const [selectedComment, setSelectedComment] = useState(transaction?.comment || '');
 
   // Fecha dropdown de fornecedores ao clicar fora
   useEffect(() => {
@@ -210,6 +212,7 @@ export function ClaraTransactionDrawer({
       setSelectedIssueDate(transaction.invoice_issue_date || '');
       setSelectedRegDate(transaction.registration_date || '');
       setSelectedDueDate(transaction.due_date || '');
+      setSelectedComment(transaction.comment || '');
       setFetchedDocs(null);
       setSyncResult(null);
       setSyncStep(null);
@@ -254,6 +257,7 @@ export function ClaraTransactionDrawer({
           invoice_issue_date: selectedIssueDate || null,
           registration_date: selectedRegDate || null,
           due_date: selectedDueDate || null,
+          comment: selectedComment.trim() || null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -913,6 +917,33 @@ export function ClaraTransactionDrawer({
                     className="w-full px-2 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
                   />
                 </div>
+              </div>
+
+              {/* Observação do Lançamento (Clara & Omie) */}
+              <div className="pt-2 border-t border-emerald-100">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                    <MessageSquareText size={13} className="text-amber-600" />
+                    <span>Observação do Lançamento (Omie cObs):</span>
+                  </label>
+                  {transaction.comment ? (
+                    <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded">
+                      Registrada na Clara
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-slate-400">Opcional</span>
+                  )}
+                </div>
+                <textarea
+                  rows={2}
+                  value={selectedComment}
+                  onChange={e => setSelectedComment(e.target.value)}
+                  placeholder="Observação da despesa (ex: Retorno atendimento cliente, reunião rancho, material...)"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800 placeholder:text-slate-400 leading-relaxed"
+                />
+                <span className="text-[10px] text-slate-500 mt-0.5 block">
+                  Exportada no campo de observações do Omie no formato: <em>CLARA | ... | Obs: &quot;{selectedComment || '...'}&quot;</em>
+                </span>
               </div>
 
               <div className="flex justify-end pt-1">

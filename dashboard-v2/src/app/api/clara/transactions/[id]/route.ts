@@ -37,6 +37,7 @@ export async function POST(
         invoice_issue_date: body.invoice_issue_date,
         registration_date: body.registration_date,
         due_date: body.due_date,
+        comment: body.comment,
       });
       return NextResponse.json({
         status: 'success',

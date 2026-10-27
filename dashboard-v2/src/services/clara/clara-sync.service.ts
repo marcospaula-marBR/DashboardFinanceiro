@@ -1119,6 +1119,7 @@ export class ClaraSyncService {
       invoice_cnpj_tomador?: string | null;
       cnpj_match_status?: any;
       sync_status?: any;
+      comment?: string | null;
     }
   ): Promise<ClaraTransactionRecord> {
     let tx: ClaraTransactionRecord | null = await ClaraStorageService.getTransaction(idOrUuid, DEFAULT_CLARA_CONFIG);
@@ -1172,6 +1173,7 @@ export class ClaraSyncService {
     if (fields.due_date !== undefined) tx.due_date = fields.due_date;
     if (fields.invoice_cnpj_tomador !== undefined) tx.invoice_cnpj_tomador = fields.invoice_cnpj_tomador;
     if (fields.cnpj_match_status !== undefined) tx.cnpj_match_status = fields.cnpj_match_status;
+    if (fields.comment !== undefined) tx.comment = fields.comment;
 
     // Preserva dados no JSONB accounting_fields (remove chaves de fornecedor quando explicitamente limpas)
     const {
