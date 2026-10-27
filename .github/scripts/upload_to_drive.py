@@ -14,25 +14,40 @@ def get_credentials(credentials_input=None):
     """Obtém credenciais da Service Account a partir de string JSON ou arquivo."""
     from google.oauth2 import service_account
 
-    creds_raw = credentials_input or os.environ.get("GOOGLE_DRIVE_CREDENTIALS") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    creds_raw = (
+        credentials_input
+        or os.environ.get("GOOGLE_DRIVE_CREDENTIALS")
+        or os.environ.get("GDRIVE_CREDENTIALS")
+        or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        or os.environ.get("GCP_SA_KEY")
+        or os.environ.get("GOOGLE_CREDENTIALS")
+    )
 
-    if not creds_raw:
+    if not creds_raw or not creds_raw.strip():
         raise ValueError(
-            "Credenciais do Google Drive não encontradas. "
-            "Configure o secret GOOGLE_DRIVE_CREDENTIALS ou a variável GOOGLE_APPLICATION_CREDENTIALS."
+            "Credenciais do Google Drive não encontradas no GitHub Secrets. "
+            "Configure o secret GOOGLE_DRIVE_CREDENTIALS com o JSON da sua Service Account do Google Cloud."
         )
 
     creds_dict = None
-    # Verifica se é JSON em string
+    creds_str = creds_raw.strip()
+
+    # 1. Tenta carregar como JSON direto
     try:
-        creds_dict = json.loads(creds_raw)
+        creds_dict = json.loads(creds_str)
     except (json.JSONDecodeError, TypeError):
-        # Se não for JSON direto, tenta abrir como caminho de arquivo
-        if os.path.exists(creds_raw):
-            with open(creds_raw, "r", encoding="utf-8") as f:
-                creds_dict = json.load(f)
-        else:
-            raise ValueError("As credenciais fornecidas não são um JSON válido nem um arquivo existente.")
+        # 2. Tenta decodificar se for string base64
+        try:
+            import base64
+            decoded = base64.b64decode(creds_str).decode("utf-8")
+            creds_dict = json.loads(decoded)
+        except Exception:
+            # 3. Tenta abrir como caminho de arquivo se existir
+            if os.path.exists(creds_str):
+                with open(creds_str, "r", encoding="utf-8") as f:
+                    creds_dict = json.load(f)
+            else:
+                raise ValueError("O secret GOOGLE_DRIVE_CREDENTIALS não contém um JSON válido nem base64 decodificável.")
 
     scopes = ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
     return service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes), creds_dict.get("client_email", "desconhecido")
@@ -63,8 +78,13 @@ def upload_file_to_drive(file_path: str, folder_id: str, custom_name: str = None
     }
 
     if folder_id and folder_id.strip():
-        # Limpa possíveis prefixos como 'drive://' ou espaços
+        # Limpa possíveis prefixos como 'drive://', espaços ou URLs inteiras
         clean_folder_id = folder_id.replace("drive://", "").strip()
+        if "drive.google.com" in clean_folder_id:
+            import re
+            m = re.search(r"folders/([a-zA-Z0-9_-]+)", clean_folder_id)
+            if m:
+                clean_folder_id = m.group(1)
         file_metadata["parents"] = [clean_folder_id]
         print(f"📁 Pasta de destino no Google Drive ID: {clean_folder_id}")
     else:

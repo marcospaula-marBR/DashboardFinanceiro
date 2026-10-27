@@ -19,7 +19,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.12'
 
     - name: Install Dependencies
       run: |
@@ -56,8 +56,8 @@ jobs:
 
     - name: Upload Backup to Google Drive
       env:
-        GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}
-        GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+        GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS || secrets.GDRIVE_CREDENTIALS || secrets.GOOGLE_APPLICATION_CREDENTIALS || secrets.GCP_SA_KEY || secrets.GOOGLE_CREDENTIALS }}
+        GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID || secrets.GDRIVE_FOLDER_ID }}
       run: |
         python .github/scripts/upload_to_drive.py --file "$FINAL_BACKUP_FILE" --folder-id "$GOOGLE_DRIVE_FOLDER_ID"
 
