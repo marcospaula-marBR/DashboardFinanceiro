@@ -1173,12 +1173,25 @@ export class ClaraSyncService {
     if (fields.invoice_cnpj_tomador !== undefined) tx.invoice_cnpj_tomador = fields.invoice_cnpj_tomador;
     if (fields.cnpj_match_status !== undefined) tx.cnpj_match_status = fields.cnpj_match_status;
 
-    // Preserva dados no JSONB accounting_fields
+    // Preserva dados no JSONB accounting_fields (remove chaves de fornecedor quando explicitamente limpas)
+    const {
+      omie_supplier_code: _prevCode,
+      omie_supplier_name: _prevName,
+      omie_supplier_cnpj: _prevCnpj,
+      ...otherAccountingFields
+    } = (tx.accounting_fields || {}) as Record<string, any>;
+    const keepCode = fields.omie_supplier_code === undefined ? _prevCode : null;
+    const keepName = fields.omie_supplier_name === undefined ? _prevName : null;
+    const keepCnpj = fields.omie_supplier_cnpj === undefined ? _prevCnpj : null;
+    const finalCode = tx.omie_supplier_code ?? keepCode;
+    const finalName = tx.omie_supplier_name ?? keepName;
+    const finalCnpj = tx.omie_supplier_cnpj ?? keepCnpj;
+
     tx.accounting_fields = {
-      ...(tx.accounting_fields || {}),
-      ...(tx.omie_supplier_code ? { omie_supplier_code: tx.omie_supplier_code } : {}),
-      ...(tx.omie_supplier_name ? { omie_supplier_name: tx.omie_supplier_name } : {}),
-      ...(tx.omie_supplier_cnpj ? { omie_supplier_cnpj: tx.omie_supplier_cnpj } : {}),
+      ...otherAccountingFields,
+      ...(finalCode ? { omie_supplier_code: finalCode } : {}),
+      ...(finalName ? { omie_supplier_name: finalName } : {}),
+      ...(finalCnpj ? { omie_supplier_cnpj: finalCnpj } : {}),
     };
 
     // Se categoria foi preenchida e status era MAPPING_REQUIRED, atualiza para READY

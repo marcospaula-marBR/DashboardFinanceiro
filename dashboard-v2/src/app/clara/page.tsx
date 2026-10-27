@@ -612,7 +612,7 @@ export default function ClaraIntegrationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
+    <div className={`min-h-screen bg-slate-50 text-slate-900 ${selectedUuids.length > 0 ? 'pb-48 sm:pb-32' : 'pb-20'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         
         {/* Header Corporativo Oficial */}
@@ -951,69 +951,6 @@ export default function ClaraIntegrationPage() {
             </div>
           </div>
         </div>
-
-        {/* Barra de Ações em Lote (Flutuante quando selecionado) */}
-        {selectedUuids.length > 0 && (
-          <div className="mb-4 p-3.5 bg-emerald-950 text-white rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg border border-emerald-800 animate-in fade-in duration-200">
-            <div className="flex items-center gap-3">
-              <span className="w-7 h-7 bg-emerald-500/20 text-emerald-300 rounded-lg flex items-center justify-center font-bold text-xs">
-                {selectedUuids.length}
-              </span>
-              <span className="text-xs font-semibold text-emerald-100">
-                {selectedUuids.length === 1 ? '1 transação selecionada' : `${selectedUuids.length} transações selecionadas`}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setBatchModalOpen(true)}
-                disabled={batchActionLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl transition-all cursor-pointer disabled:opacity-50"
-              >
-                <Layers size={14} className="text-emerald-400" />
-                <span>Classificar em Lote</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleBatchOcr}
-                disabled={batchActionLoading || batchOcrLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50 border border-indigo-400/40"
-                title="Executar leitura OCR com IA em todos os comprovantes selecionados para validar CNPJ do Tomador"
-              >
-                {batchOcrLoading ? (
-                  <Loader2 size={14} className="animate-spin text-indigo-200" />
-                ) : (
-                  <Sparkles size={14} className="text-indigo-200" />
-                )}
-                <span>{batchOcrLoading ? 'Auditando...' : 'Auditar CNPJs com IA'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleBatchSync}
-                disabled={batchActionLoading}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-black rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
-              >
-                {batchActionLoading ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Send size={14} />
-                )}
-                <span>Enviar {selectedUuids.length} ao Omie</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedUuids([])}
-                className="px-2 py-1 text-slate-400 hover:text-white text-xs font-medium cursor-pointer"
-              >
-                Limpar
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Abas de Navegação da Fila Operacional (Fila Limpa / Inbox Zero) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
