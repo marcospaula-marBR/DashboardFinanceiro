@@ -113,6 +113,8 @@ export default function PeoplePage() {
   const [isOutsourcingModalOpen, setIsOutsourcingModalOpen] = useState(false);
   const [isBprModalOpen, setIsBprModalOpen] = useState(false);
   const [isCompetenciasCostsModalOpen, setIsCompetenciasCostsModalOpen] = useState(false);
+  const [compListSearch, setCompListSearch] = useState<string>('');
+  const [compListCompetencia, setCompListCompetencia] = useState<string>('all');
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
@@ -2334,6 +2336,12 @@ export default function PeoplePage() {
         setores={setores}
         initialTab={drawerInitialTab}
         onOpenBatchAudit={() => setIsBatchPdfModalOpen(true)}
+        onOpenCompetenciasList={(empName, comp) => {
+          setCompListSearch(empName || '');
+          setCompListCompetencia(comp || 'all');
+          setIsProfileDrawerOpen(false);
+          setIsCompetenciasCostsModalOpen(true);
+        }}
         onClose={() => {
           setIsProfileDrawerOpen(false);
           setSelectedEmployee(undefined);
@@ -2449,6 +2457,8 @@ export default function PeoplePage() {
         filteredEmployees={filteredEmployees}
         monthlyCosts={monthlyCosts}
         showValues={showValues}
+        initialSearch={compListSearch}
+        initialCompetencia={compListCompetencia}
         onCostDeleted={fetchData}
         onEditCost={(_cost, emp) => {
           if (emp) {

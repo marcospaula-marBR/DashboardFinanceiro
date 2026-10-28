@@ -92,9 +92,10 @@ interface ProfileDrawerProps {
   setores?: string[];
   initialTab?: 'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos' | 'bpr';
   onOpenBatchAudit?: () => void;
+  onOpenCompetenciasList?: (employeeName?: string, competencia?: string) => void;
 }
 
-export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [], initialTab = 'pessoal', onOpenBatchAudit }: ProfileDrawerProps) {
+export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [], initialTab = 'pessoal', onOpenBatchAudit, onOpenCompetenciasList }: ProfileDrawerProps) {
   const { isTestMode: contextIsTestMode } = useDataMode();
   const isTestMode = propIsTestMode ?? contextIsTestMode;
   
@@ -3911,6 +3912,38 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                   {/* ------------- ABA CUSTO HISTÓRICO ------------- */}
                   {activeTab === 'custo' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                      {/* Banner Executivo: Custo Histórico é demonstrativo / Central de Competências é a fonte única */}
+                      <div className="bg-gradient-to-r from-blue-50/90 to-indigo-50/70 dark:from-blue-950/40 dark:to-indigo-950/30 border border-blue-200/80 dark:border-blue-900/40 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center shrink-0 shadow-2xs">
+                            <SlidersHorizontal size={18} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h5 className="text-xs font-black uppercase tracking-wider text-blue-950 dark:text-blue-200">
+                                Demonstrativo Executivo de Custos
+                              </h5>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100/80 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                Visão Sintética
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80 mt-0.5 leading-snug">
+                              Esta ficha é exclusiva para consulta e auditoria. Todas as inserções, edições de proventos/descontos e extra-folha ocorrem na <strong>Lista por Competências</strong>.
+                            </p>
+                          </div>
+                        </div>
+                        {onOpenCompetenciasList && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenCompetenciasList(profile?.name, costs[0]?.competencia || 'all')}
+                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95"
+                            title="Abrir Central de Competências com filtros deste colaborador"
+                          >
+                            <ExternalLink size={13} />
+                            Ir para Central
+                          </button>
+                        )}
+                      </div>
                       <div className="flex justify-between items-center border-b pb-2">
                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                           <Coins size={16} className="text-emerald-600" /> {isPJ ? 'Histórico de Faturamento e Custos por Competência' : 'Histórico de Custos por Competência'}
@@ -4801,22 +4834,36 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                                   </td>
                                                   <td className="px-3 py-2.5 align-middle text-center sticky right-0 bg-white dark:bg-slate-950 shadow-2xs whitespace-nowrap">
                                                     <div className="flex items-center justify-center gap-1">
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => populateCostForm(c)}
-                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
-                                                        title="Editar lançamento desta competência"
-                                                      >
-                                                        <PenBox size={14} />
-                                                      </button>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteCost(c.id)}
-                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
-                                                        title="Excluir lançamento desta competência"
-                                                      >
-                                                        <Trash2 size={14} />
-                                                      </button>
+                                                      {onOpenCompetenciasList ? (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => onOpenCompetenciasList(profile?.name, c.competencia)}
+                                                          className="p-1.5 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors flex items-center gap-1 text-[11px] font-bold"
+                                                          title="Ver e editar na Central de Competências"
+                                                        >
+                                                          <ExternalLink size={14} />
+                                                          <span className="hidden sm:inline">Detalhar</span>
+                                                        </button>
+                                                      ) : (
+                                                        <>
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => populateCostForm(c)}
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
+                                                            title="Editar lançamento desta competência"
+                                                          >
+                                                            <PenBox size={14} />
+                                                          </button>
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteCost(c.id)}
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                                                            title="Excluir lançamento desta competência"
+                                                          >
+                                                            <Trash2 size={14} />
+                                                          </button>
+                                                        </>
+                                                      )}
                                                     </div>
                                                   </td>
                                                 </tr>
@@ -4862,22 +4909,36 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                                     {formatCurrency(c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))}
                                                   </span>
                                                 </div>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => populateCostForm(c)}
-                                                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                                                  title="Editar lançamento"
-                                                >
-                                                  <PenBox size={13} />
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleDeleteCost(c.id)}
-                                                  className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
-                                                  title="Excluir lançamento"
-                                                >
-                                                  <Trash2 size={13} />
-                                                </button>
+                                                {onOpenCompetenciasList ? (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => onOpenCompetenciasList(profile?.name, c.competencia)}
+                                                    className="px-2.5 py-1 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors flex items-center gap-1 text-[11px] font-bold border border-blue-200 dark:border-blue-900"
+                                                    title="Ver e editar na Central de Competências"
+                                                  >
+                                                    <ExternalLink size={13} />
+                                                    <span>Detalhes</span>
+                                                  </button>
+                                                ) : (
+                                                  <>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => populateCostForm(c)}
+                                                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                                                      title="Editar lançamento"
+                                                    >
+                                                      <PenBox size={13} />
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleDeleteCost(c.id)}
+                                                      className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                                                      title="Excluir lançamento"
+                                                    >
+                                                      <Trash2 size={13} />
+                                                    </button>
+                                                  </>
+                                                )}
                                               </div>
                                             </div>
                                             

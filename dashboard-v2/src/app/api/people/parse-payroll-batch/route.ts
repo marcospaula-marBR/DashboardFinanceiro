@@ -149,26 +149,39 @@ Analise este documento (PDF ou imagem) contendo o Extrato Mensal da folha de pag
 Instruções de Extração:
 1. **Competência**: Identifique a competência (mês/ano) da folha no cabeçalho do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho de 2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01').
 2. **Colaboradores**: Extraia os dados individuais de cada colaborador CLT celetista identificado no documento (identificado por 'Empr.:', 'Nome', 'CPF', etc.).
-3. **Verbas Financeiras & Informativos Patronais**:
+3. **Verbas de Provento (Receita Bruta do Colaborador - uma por uma)**:
    - Salário base contratual no campo "valor_fixo".
-   - Matrícula/Código do colaborador no campo "matricula" (ex: '1', '11').
-   - Cargo/Função no campo "cargo" (ex: 'AUXILIAR DE SERVICOS GERAIS').
-   - Total de Proventos/Vencimentos Brutos no campo "valor_holerite" (consta no campo 'Proventos:' do resumo do colaborador, ex: '3.037,67' ou '2.022,91').
-   - Total de Descontos no campo "valor_descontos" (consta no campo 'Descontos:', ex: '1.104,01' ou '1.002,57').
-   - Total Líquido da Folha no campo "valor_liquido" (consta no campo 'Líquido:', ex: '1.933,66' ou '1.020,34').
-   - **Desconto de Adiantamento Salarial (CRUCIAL!)**: Procure por rubricas como '981 DESC.ADIANT.SALARIAL', 'DESC.ADIANT.SALARIAL', 'ADIANTAMENTO' ou similares nos descontos. Capture o valor monetário descontado (ex: '739,92') e COLOQUE NO CAMPO "valor_adiantamento".
-   - **Desconto de Vale Transporte 6% (CRUCIAL!)**: Procure por rubricas como '48 VALE TRANSPORTE' ou 'VALE TRANSPORTE' nos descontos (geralmente com percentual 6,00%). Capture esse valor descontado no campo "desconto_vt_6" (ex: '110,99'). O campo "valor_vt" deve conter apenas proventos reais de recarga se creditados na folha, senão 0.00.
-   - **Salário Família (CRUCIAL!)**: Procure por rubricas como '995 SALARIO FAMILIA' ou 'SALARIO FAMILIA' nos proventos. Capture o valor em R$ (ex: '67,54') e COLOQUE NO CAMPO "salario_familia".
-   - **Informativo FGTS da Empresa (CRUCIAL!)**: Extraia o valor do FGTS mensal pago pela empresa no campo "valor_fgts" (localizado nas linhas informativas, ex: 'Valor FGTS: 243,01').
-   - **Encargos Descontados**: Extraia o INSS descontado ("inss_empregado", rubrica 998 I.N.S.S., ex: '253,10') e o IRRF descontado ("irrf_empregado").
-   - **Horas Extras e Adicional Noturno**: Extraia Horas Extras ('150 HORAS EXTRAS 50%' etc.) somando com reflexo DSR ('8125 REFLEXO HORAS EXTRAS DSR') no campo "valor_hora_extra". Capture Adicional Noturno em "valor_adicional_not".
-   - **REGRA DE EXCLUSÃO DE BASES (CRUCIAL!)**: IGNORE E NÃO EXTRAIA valores de bases informativas (como 'Base FGTS', 'Base INSS', 'Base IRRF', 'Base Salário Família' ou rubricas de base). Elas NÃO são proventos nem descontos e NUNCA devem ser computadas no total de proventos, descontos ou custo real.
-   - **Empréstimo Consignado**: Se houver descontos com termos como "DESC. EMP. CRED. TRAB N..." ou "Consignado", some os respectivos valores e adicione no campo "valor_consignado".
-   - **Pensão Alimentícia (CRUCIAL!)**: Se houver descontos com termos como "PENSÃO ALIMENTÍCIA", "PENSAO ALIMENTICIA", "DESC. PENSAO" ou similares, capture o valor e adicione no campo "valor_pensao_alimenticia".
-   - **Folha de 13º Salário**: Se o documento for referente a 13º Salário (1ª Parcela, 2ª Parcela ou Integral), capture os proventos do 13º no campo "valor_decimo_terceiro" e marque "is_decimo_terceiro": true.
-   - Faltas/Atrasos: Some todos os descontos de faltas ou faltas DSR (ex: "DIAS FALTAS", "DIAS FALTAS DSR") e coloque no campo "valor_faltas". Extraia também o quantitativo total de dias de falta acumulados no campo "dias_faltas".
-   - Banco de Horas: Se houver desconto de banco de horas (ex: "Desconto Banco de Horas 15:22"), converta as horas/minutos para formato decimal e coloque no campo "banco_horas".
-   - Demais proventos mapeados: Férias em "valor_ferias", Rescisão em "valor_rescisao", Cesta Básica em "valor_cesta" (se constar na folha), Vale Refeição em "valor_vr", Ajuda de Custo em "valor_ajuda_custo".
+   - Horas Extras ('150 HORAS EXTRAS 50%', 100%, etc.) somando com reflexo DSR ('8125 REFLEXO HORAS EXTRAS DSR') no campo "valor_hora_extra".
+   - Adicional Noturno e reflexos no campo "valor_adicional_not".
+   - Salário Família no campo "salario_familia" (ex: rubrica 995 SALARIO FAMILIA).
+   - Férias gozadas / proporcionais + 1/3 Constitucional no campo "valor_ferias".
+   - 13º Salário (1ª/2ª parcela ou integral) no campo "valor_decimo_terceiro".
+   - Verbas Rescisórias no campo "valor_rescisao".
+   - Demais proventos no campo "valor_outros_recebidos".
+   - **Total de Proventos (Receita Bruta)** no campo "valor_holerite" (soma exata de todos os proventos da folha, ex: '3.037,67').
+   - Extraia a lista detalhada de cada provento em "rubricas_proventos": [{"codigo": "1", "descricao": "SALARIO BASE", "valor": 2211.68}, ...].
+
+4. **Verbas de Desconto da Folha (uma por uma)**:
+   - INSS descontado no campo "inss_empregado" (rubrica 998 I.N.S.S.).
+   - IRRF descontado no campo "irrf_empregado".
+   - Desconto de Vale Transporte 6% no campo "desconto_vt_6" (rubrica 48 VALE TRANSPORTE).
+   - Desconto de Faltas e DSR no campo "valor_faltas", com quantitativo em "dias_faltas".
+   - Empréstimo Consignado no campo "valor_consignado".
+   - Pensão Alimentícia no campo "valor_pensao_alimenticia".
+   - Desconto de Banco de Horas em "banco_horas" (em horas decimais).
+   - **Desconto de Adiantamento Salarial em Folha (CRUCIAL)**: Procure por rubricas de desconto de adiantamento ordinário da quinzena (como '981 DESC.ADIANT.SALARIAL', 'DESC. ADIANTAMENTO SALARIAL'). Capture no campo "desconto_adiantamento_folha" e no campo "valor_adiantamento".
+     *ATENÇÃO RIGOROSA*: NUNCA capture adiantamento de férias como adiantamento salarial. Férias têm tratamento rescisório/gozo próprio em valor_ferias.
+   - **Total de Descontos da Folha** no campo "valor_descontos" (soma exata de todos os descontos da folha, ex: '1.104,01').
+   - Extraia a lista detalhada de cada desconto em "rubricas_descontos": [{"codigo": "998", "descricao": "INSS", "valor": 253.10}, ...].
+
+5. **Salário Líquido da Folha**:
+   - Salário líquido a receber da folha oficial no campo "valor_folha_liquido" (Total Proventos - Total Descontos).
+
+6. **Informativo FGTS da Empresa**:
+   - Valor do FGTS pago pela empresa em "valor_fgts" (das linhas informativas, ex: 'Valor FGTS: 243,01').
+
+7. **REGRA DE EXCLUSÃO DE BASES (CRUCIAL!)**:
+   - IGNORE E NÃO EXTRAIA bases informativas ('Base FGTS', 'Base INSS', 'Base IRRF'). Elas NÃO são proventos nem descontos.
 
 Retorne obrigatoriamente um objeto JSON com o seguinte formato:
 
@@ -178,44 +191,49 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
     {
       "matricula": "1",
       "name": "Nome Completo do Colaborador",
-      "cpf": "CPF no formato 000.000.000-00",
+      "cpf": "000.000.000-00",
       "cargo": "Cargo do colaborador",
-      "situation": "Trabalhando" ou "Demitido" (conforme consta no campo Situação/Situaçao do extrato),
-      "admission_date": "Data de admissão no formato YYYY-MM-DD (ex: se '30/11/2023' retorne '2023-11-30')",
+      "situation": "Trabalhando" ou "Demitido",
+      "admission_date": "YYYY-MM-DD",
       "valor_fixo": 0.00,
-      "valor_holerite": 0.00,
-      "valor_adiantamento": 0.00,
       "valor_hora_extra": 0.00,
       "valor_adicional_not": 0.00,
-      "valor_vr": 0.00,
-      "valor_vt": 0.00,
-      "desconto_vt_6": 0.00,
-      "valor_cesta": 0.00,
+      "salario_familia": 0.00,
       "valor_ferias": 0.00,
-      "valor_rescisao": 0.00,
       "valor_decimo_terceiro": 0.00,
-      "is_decimo_terceiro": false,
-      "valor_descontos": 0.00,
+      "valor_rescisao": 0.00,
+      "valor_outros_recebidos": 0.00,
+      "valor_holerite": 0.00,
+      "inss_empregado": 0.00,
+      "irrf_empregado": 0.00,
+      "desconto_vt_6": 0.00,
+      "desconto_adiantamento_folha": 0.00,
+      "valor_adiantamento": 0.00,
       "valor_faltas": 0.00,
       "dias_faltas": 0.00,
       "valor_consignado": 0.00,
       "valor_pensao_alimenticia": 0.00,
       "banco_horas": 0.00,
-      "valor_incentivos": 0.00,
-      "valor_bonus": 0.00,
-      "valor_comissao": 0.00,
-      "valor_ajuda_custo": 0.00,
+      "valor_descontos": 0.00,
+      "valor_folha_liquido": 0.00,
       "valor_fgts": 0.00,
-      "inss_empregado": 0.00,
-      "irrf_empregado": 0.00,
-      "salario_familia": 0.00,
-      "valor_liquido": 0.00,
-      "observacao": "Breve observacao se houver"
+      "valor_vt": 0.00,
+      "valor_vr": 0.00,
+      "valor_cesta": 0.00,
+      "valor_bonus": 0.00,
+      "valor_ajuda_custo": 0.00,
+      "rubricas_proventos": [
+        {"codigo": "1", "descricao": "SALARIO BASE", "valor": 0.00}
+      ],
+      "rubricas_descontos": [
+        {"codigo": "998", "descricao": "INSS", "valor": 0.00}
+      ],
+      "observacao": "Folha Oficial CLT"
     }
   ]
 }
 
-Trabalhe com máxima precisão. Valores monetários e banco de horas devem ser estritamente numéricos decimais.
+Trabalhe com máxima precisão. Valores monetários devem ser estritamente numéricos decimais.
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
 `;
     }

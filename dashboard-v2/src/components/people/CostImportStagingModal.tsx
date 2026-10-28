@@ -143,6 +143,7 @@ export function CostImportStagingModal({
   const [isLoadingExistingCosts, setIsLoadingExistingCosts] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [conflictingRows, setConflictingRows] = useState<{ row: StagingCostRow; existingCost: MonthlyCost }[]>([]);
+  const [conflictDecisions, setConflictDecisions] = useState<Record<string, "ACCEPT_NEW" | "KEEP_DB">>({});
 
   // Estados de gravação
   const [isCommitting, setIsCommitting] = useState(false);
@@ -895,6 +896,14 @@ export function CostImportStagingModal({
       return;
     }
 
+    // REGRA DE SEGURANÇA ABSOLUTA (RISCO ZERO):
+    // Nunca permitir alteração de lançamentos CLT anteriores a Junho/2026
+    const invalidHistoricalClt = selected.filter((r) => r.competencia < "2026-06-01");
+    if (invalidHistoricalClt.length > 0) {
+      alert("BLOQUEIO DE SEGURANÇA (Risco Zero Ativado):\nLançamentos CLT anteriores a Junho/2026 são registros históricos consolidados e não podem ser alterados ou sobrescritos.");
+      return;
+    }
+
     if (!forceOverwrite && !skipExisting) {
       const conflicts = selected
         .filter((r) => r.targetEmployeeId !== "NEW" && existingCostsInDb.has(r.targetEmployeeId))
@@ -904,6 +913,12 @@ export function CostImportStagingModal({
         }));
 
       if (conflicts.length > 0) {
+        // Inicializa todas as decisões como 'ACCEPT_NEW' por padrão
+        const initialDecisions: Record<string, "ACCEPT_NEW" | "KEEP_DB"> = {};
+        conflicts.forEach((c) => {
+          initialDecisions[c.row.id] = "ACCEPT_NEW";
+        });
+        setConflictDecisions(initialDecisions);
         setConflictingRows(conflicts);
         setShowCorrectionModal(true);
         return;
@@ -920,16 +935,42 @@ export function CostImportStagingModal({
     }
 
     setShowCorrectionModal(false);
+    executeSaveRows(selected);
+  };
 
+  // Confirmação com base nas decisões lado a lado do usuário
+  const handleConfirmConflictDecisions = () => {
+    let selected = stagingRows.filter((r) => r.isSelected);
+
+    // Filtra: se estava em conflito e usuário escolheu KEEP_DB, remove do lote para não alterar o banco!
+    const filteredToSave = selected.filter((r) => {
+      const hasConflict = r.targetEmployeeId !== "NEW" && existingCostsInDb.has(r.targetEmployeeId);
+      if (hasConflict) {
+        return conflictDecisions[r.id] === "ACCEPT_NEW";
+      }
+      return true;
+    });
+
+    if (filteredToSave.length === 0) {
+      alert("Todos os lançamentos em conflito foram mantidos com os valores atuais do banco. Nenhum novo dado a salvar.");
+      setShowCorrectionModal(false);
+      return;
+    }
+
+    setShowCorrectionModal(false);
+    executeSaveRows(filteredToSave);
+  };
+
+  const executeSaveRows = async (rowsToSave: StagingCostRow[]) => {
     try {
       setIsCommitting(true);
       setCommitProgress(0);
 
       const batchToSave: Partial<MonthlyCost>[] = [];
-      const total = selected.length;
+      const total = rowsToSave.length;
       let count = 0;
 
-      for (const row of selected) {
+      for (const row of rowsToSave) {
         count++;
         setCommitProgress(Math.round((count / total) * 100));
 
@@ -953,12 +994,18 @@ export function CostImportStagingModal({
         }
 
         if (finalEmployeeId && finalEmployeeId !== "NEW") {
-          // Cálculo financeiro dos 3 Pilares Executivos:
+          // Cálculo financeiro dos 5 Pilares Executivos:
+          // Pilar 1: Total Proventos Brutos da Folha
           const proventos = (row.valor_holerite || (row.valor_fixo + row.valor_hora_extra + row.valor_adicional_not)) + (row.valor_outros_recebidos || 0);
-          const beneficiosExtras = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_adiantamento || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
-          const totalRecebido = proventos + beneficiosExtras;
+          // Pilar 2: Total Descontos da Folha
           const totalDescontos = row.valor_descontos || 0;
-          const liquidoReal = totalRecebido - totalDescontos;
+          // Pilar 3: Salário Líquido da Folha
+          const folhaLiquido = proventos - totalDescontos;
+          // Pilar 4: Extra-folha (Adiantamento + Benefícios)
+          const adiantamento = row.valor_adiantamento || 0;
+          const beneficiosExtras = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
+          // Pilar 5: Total Real Pago / Desembolsado
+          const liquidoReal = folhaLiquido + adiantamento + beneficiosExtras;
 
           batchToSave.push({
             employee_id: finalEmployeeId,
@@ -966,8 +1013,8 @@ export function CostImportStagingModal({
             vinculo_tipo: "CLT",
             valor_fixo: row.valor_fixo,
             valor_holerite: proventos,
-            valor_adiantamento: row.valor_adiantamento, // Adiantamento Folha
-            outros_ajustes: row.valor_outros_recebidos, // Outros Valores Recebidos (antigo adiantamento da folha mensal)
+            valor_adiantamento: adiantamento, // Adiantamento Salarial quinzenal (nunca de férias)
+            outros_ajustes: row.valor_outros_recebidos,
             valor_hora_extra: row.valor_hora_extra,
             valor_adicional_not: row.valor_adicional_not,
             valor_vt: row.valor_vt,
@@ -995,7 +1042,7 @@ export function CostImportStagingModal({
 
       await PeopleHRService.saveMonthlyCostsBatch(batchToSave);
 
-      alert(`Sucesso! ${batchToSave.length} lançamentos gravados no Custo Histórico com precisão executiva.`);
+      alert(`Sucesso! ${batchToSave.length} lançamentos gravados no Custo Histórico com conciliação executiva.`);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -1733,66 +1780,259 @@ export function CostImportStagingModal({
           </div>
         )}
 
-        {/* MODAL DE CONFIRMAÇÃO E TRAVA DE SEGURANÇA CONTRA SOBRESCRITA SILENCIOSA */}
+        {/* MODAL DE CONCILIAÇÃO E COMPARAÇÃO LADO A LADO (DB vs NOVA FOLHA) */}
         {showCorrectionModal && (
-          <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-amber-300 dark:border-amber-700 p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in zoom-in-95">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                  <AlertTriangle size={24} />
-                </div>
-                <div>
-                  <h4 className="text-base font-black text-slate-900 dark:text-white">
-                    Competência Já Contém Dados Cadastrados
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    A competência {selectedCompetencia.slice(0, 7)} já possui lançamentos no banco de dados.
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl text-xs text-slate-700 dark:text-slate-300 space-y-2">
-                <p>
-                  Foram identificados <strong>{conflictingRows.length} colaborador(es)</strong> selecionados que já possuem histórico registrado nesta competência.
-                </p>
-                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 font-mono text-[11px]">
-                  {conflictingRows.map(({ row, existingCost }) => (
-                    <div key={row.id} className="flex justify-between items-center py-0.5 border-b border-amber-200/50 dark:border-amber-800/40">
-                      <span className="font-bold truncate max-w-[200px]">{row.employeeName}</span>
-                      <span className="text-amber-800 dark:text-amber-300">
-                        Atual: {formatCurrency(existingCost.valor_liquido)} → Novo: {formatCurrency(row.folha_liquido || row.valor_fixo)}
+          <div className="fixed inset-0 z-70 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 max-w-4xl w-full shadow-2xl flex flex-col max-h-[92vh] animate-in zoom-in-95">
+              
+              {/* CABEÇALHO DO MODAL DE CONCILIAÇÃO */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <SlidersHorizontal size={22} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>Comparação Lado a Lado & Decisão de Valores</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 uppercase">
+                        {conflictingRows.length} Conflito{conflictingRows.length !== 1 ? 's' : ''}
                       </span>
-                    </div>
-                  ))}
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Competência {selectedCompetencia.slice(0, 7)}: Foram detectados registros já existentes. Escolha individualmente se acata o novo valor extraído ou se mantém o atual do banco.
+                    </p>
+                  </div>
                 </div>
-                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-semibold pt-1">
-                  Deseja aplicar uma <strong>correção</strong> atualizando esses dados, ou salvar apenas novos colaboradores?
-                </p>
-              </div>
 
-              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => handleCommitBatch(true, false)}
-                  className="w-full sm:flex-1 py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md"
-                >
-                  Sim, Aplicar Correção
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCommitBatch(false, true)}
-                  className="w-full sm:flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md"
-                >
-                  Salvar Apenas Novos
-                </button>
                 <button
                   type="button"
                   onClick={() => setShowCorrectionModal(false)}
-                  className="w-full sm:w-auto py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all"
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
                 >
-                  Cancelar e Revisar no Grid
+                  <X size={18} />
                 </button>
               </div>
+
+              {/* BARRA DE AÇÕES GLOBAIS RÁPIDAS */}
+              <div className="py-3 px-3 bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-200/80 dark:border-slate-800 my-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase">Decisão em Massa:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allNew: Record<string, "ACCEPT_NEW" | "KEEP_DB"> = {};
+                      conflictingRows.forEach((c) => {
+                        allNew[c.row.id] = "ACCEPT_NEW";
+                      });
+                      setConflictDecisions(allNew);
+                    }}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xs"
+                  >
+                    Acatar Todos os Novos da Folha
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allDb: Record<string, "ACCEPT_NEW" | "KEEP_DB"> = {};
+                      conflictingRows.forEach((c) => {
+                        allDb[c.row.id] = "KEEP_DB";
+                      });
+                      setConflictDecisions(allDb);
+                    }}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xs"
+                  >
+                    Manter Todos Atuais do DB
+                  </button>
+                </div>
+
+                <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">
+                    {Object.values(conflictDecisions).filter((d) => d === "ACCEPT_NEW").length} Novos
+                  </span>{" "}
+                  •{" "}
+                  <span className="text-amber-700 dark:text-amber-400 font-bold">
+                    {Object.values(conflictDecisions).filter((d) => d === "KEEP_DB").length} Mantidos do DB
+                  </span>
+                </div>
+              </div>
+
+              {/* LISTA COMPARATIVA LADO A LADO POR COLABORADOR */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {conflictingRows.map(({ row, existingCost }) => {
+                  const decision = conflictDecisions[row.id] || "ACCEPT_NEW";
+                  
+                  // Valores Atuais no Banco
+                  const dbFixo = existingCost.valor_fixo || 0;
+                  const dbProventos = existingCost.valor_holerite || (dbFixo + (existingCost.valor_hora_extra || 0) + (existingCost.valor_adicional_not || 0));
+                  const dbDescontos = existingCost.valor_descontos || 0;
+                  const dbLiqFolha = Math.max(0, dbProventos - dbDescontos);
+                  const dbAdiantamento = existingCost.valor_adiantamento || 0;
+                  const dbBeneficios = (existingCost.valor_vt || 0) + (existingCost.valor_cesta || 0) + (existingCost.valor_vr || 0) + (existingCost.valor_bonus || 0) + (existingCost.valor_ajuda_custo || 0);
+                  const dbTotalPago = (existingCost.valor_liquido || 0) + (existingCost.vinculo_tipo === 'CLT' && existingCost.valor_liquido === dbLiqFolha ? dbAdiantamento : 0);
+
+                  // Novos Valores Extraídos
+                  const newFixo = row.valor_fixo || 0;
+                  const newProventos = (row.valor_holerite || (newFixo + row.valor_hora_extra + row.valor_adicional_not)) + (row.valor_outros_recebidos || 0);
+                  const newDescontos = row.valor_descontos || 0;
+                  const newLiqFolha = Math.max(0, newProventos - newDescontos);
+                  const newAdiantamento = row.valor_adiantamento || 0;
+                  const newBeneficios = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
+                  const newTotalPago = newLiqFolha + newAdiantamento + newBeneficios;
+
+                  return (
+                    <div
+                      key={row.id}
+                      className={`p-4 rounded-2xl border transition-all ${
+                        decision === "ACCEPT_NEW"
+                          ? "bg-emerald-50/20 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800"
+                          : "bg-amber-50/20 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800"
+                      }`}
+                    >
+                      {/* HEADER DO CARD DO COLABORADOR */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-xs text-slate-900 dark:text-white uppercase tracking-tight">
+                              {row.employeeName}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {row.documentId ? `CPF: ${row.documentId}` : "CLT"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Cargo: {row.cargo || "Colaborador"} • Origem DB: {existingCost.origem || "Histórico"}
+                          </p>
+                        </div>
+
+                        {/* SELETOR DE DECISÃO */}
+                        <div className="flex items-center gap-1.5 self-start sm:self-auto bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConflictDecisions((prev) => ({
+                                ...prev,
+                                [row.id]: "ACCEPT_NEW",
+                              }))
+                            }
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
+                              decision === "ACCEPT_NEW"
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "text-slate-600 dark:text-slate-400 hover:text-emerald-700"
+                            }`}
+                          >
+                            <CheckCircle2 size={13} />
+                            <span>Acatar Novo da Folha</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConflictDecisions((prev) => ({
+                                ...prev,
+                                [row.id]: "KEEP_DB",
+                              }))
+                            }
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
+                              decision === "KEEP_DB"
+                                ? "bg-amber-600 text-white shadow-xs"
+                                : "text-slate-600 dark:text-slate-400 hover:text-amber-700"
+                            }`}
+                          >
+                            <Database size={13} />
+                            <span>Manter Atual do DB</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* GRADE COMPARATIVA LADO A LADO */}
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="w-full text-xs text-left">
+                          <thead>
+                            <tr className="text-[10px] font-black uppercase text-slate-400 border-b border-slate-200/50">
+                              <th className="py-1">Pilar / Rubrica</th>
+                              <th className="py-1 text-right text-slate-600 dark:text-slate-400">Atual no Banco (DB)</th>
+                              <th className="py-1 text-right text-emerald-700 dark:text-emerald-400">Novo Extraído (Folha)</th>
+                              <th className="py-1 text-right text-slate-500">Variação</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-[11px] tabular-nums font-semibold">
+                            <tr>
+                              <td className="py-1 text-slate-600 dark:text-slate-400">1. Salário Fixo / Base</td>
+                              <td className="py-1 text-right">{formatCurrency(dbFixo)}</td>
+                              <td className="py-1 text-right text-emerald-700 dark:text-emerald-400">{formatCurrency(newFixo)}</td>
+                              <td className="py-1 text-right text-slate-400">{formatCurrency(newFixo - dbFixo)}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-slate-600 dark:text-slate-400">1. Proventos Brutos da Folha</td>
+                              <td className="py-1 text-right">{formatCurrency(dbProventos)}</td>
+                              <td className="py-1 text-right text-emerald-700 dark:text-emerald-400">{formatCurrency(newProventos)}</td>
+                              <td className="py-1 text-right text-slate-400">{formatCurrency(newProventos - dbProventos)}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-rose-600 dark:text-rose-400">2. Descontos em Folha</td>
+                              <td className="py-1 text-right text-rose-600">-{formatCurrency(dbDescontos)}</td>
+                              <td className="py-1 text-right text-rose-600">-{formatCurrency(newDescontos)}</td>
+                              <td className="py-1 text-right text-slate-400">{formatCurrency(newDescontos - dbDescontos)}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-slate-800 dark:text-slate-200 font-bold">3. Salário Líquido da Folha</td>
+                              <td className="py-1 text-right font-bold">{formatCurrency(dbLiqFolha)}</td>
+                              <td className="py-1 text-right text-emerald-700 dark:text-emerald-400 font-bold">{formatCurrency(newLiqFolha)}</td>
+                              <td className="py-1 text-right text-slate-400">{formatCurrency(newLiqFolha - dbLiqFolha)}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-blue-600 dark:text-blue-400">4. Adiantamento Salarial</td>
+                              <td className="py-1 text-right text-blue-600">+{formatCurrency(dbAdiantamento)}</td>
+                              <td className="py-1 text-right text-blue-600">+{formatCurrency(newAdiantamento)}</td>
+                              <td className="py-1 text-right text-slate-400">{formatCurrency(newAdiantamento - dbAdiantamento)}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-emerald-600 dark:text-emerald-400">4. Benefícios Extras (VT, VR, Bônus)</td>
+                              <td className="py-1 text-right text-emerald-600">+{formatCurrency(dbBeneficios)}</td>
+                              <td className="py-1 text-right text-emerald-600">+{formatCurrency(newBeneficios)}</td>
+                              <td className="py-1 text-right text-slate-400">{formatCurrency(newBeneficios - dbBeneficios)}</td>
+                            </tr>
+                            <tr className="bg-slate-100/60 dark:bg-slate-800/40 font-black text-xs">
+                              <td className="py-1.5 text-slate-900 dark:text-white uppercase">5. Total Pago ao Colaborador</td>
+                              <td className="py-1.5 text-right text-slate-900 dark:text-white">{formatCurrency(dbTotalPago)}</td>
+                              <td className="py-1.5 text-right text-emerald-600 dark:text-emerald-400">{formatCurrency(newTotalPago)}</td>
+                              <td className="py-1.5 text-right text-emerald-700 dark:text-emerald-300 font-extrabold">
+                                {formatCurrency(newTotalPago - dbTotalPago)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* RODAPÉ DO MODAL DE DECISÕES */}
+              <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <span className="text-xs text-slate-500">
+                  Total de <strong>{conflictingRows.length}</strong> decisões prontas para gravação com rastreabilidade auditada.
+                </span>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowCorrectionModal(false)}
+                    className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all"
+                  >
+                    Cancelar e Revisar no Grid
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleConfirmConflictDecisions}
+                    className="flex-1 sm:flex-none px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2"
+                  >
+                    <Check size={16} />
+                    <span>Confirmar e Gravar Decisões</span>
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         )}
