@@ -311,8 +311,6 @@ export function CompetenciasCostsListModal({
     setUsePageScope(false);
   };
 
-  if (!isOpen) return null;
-
   const handleDeleteCost = async (costId: string, empName: string, competencia: string) => {
     // REGRA DE SEGURANÇA ABSOLUTA (RISCO ZERO):
     const targetRow = filteredRows.find(r => r.cost.id === costId);
@@ -974,6 +972,8 @@ export function CompetenciasCostsListModal({
     setSuccessToast(`Relatório exportado com sucesso (${filteredRows.length} lançamentos)!`);
     setTimeout(() => setSuccessToast(null), 3500);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
