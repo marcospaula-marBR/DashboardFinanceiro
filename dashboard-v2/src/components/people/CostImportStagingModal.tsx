@@ -896,13 +896,7 @@ export function CostImportStagingModal({
       return;
     }
 
-    // REGRA DE SEGURANÇA ABSOLUTA (RISCO ZERO):
-    // Nunca permitir alteração de lançamentos CLT anteriores a Junho/2026
-    const invalidHistoricalClt = selected.filter((r) => r.competencia < "2026-06-01");
-    if (invalidHistoricalClt.length > 0) {
-      alert("BLOQUEIO DE SEGURANÇA (Risco Zero Ativado):\nLançamentos CLT anteriores a Junho/2026 são registros históricos consolidados e não podem ser alterados ou sobrescritos.");
-      return;
-    }
+
 
     if (!forceOverwrite && !skipExisting) {
       const conflicts = selected

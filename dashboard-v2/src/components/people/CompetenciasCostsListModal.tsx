@@ -437,12 +437,7 @@ export function CompetenciasCostsListModal({
   };
 
   const handleDeleteCost = async (costId: string, empName: string, competencia: string) => {
-    // REGRA DE SEGURANÇA ABSOLUTA (RISCO ZERO):
-    const targetRow = filteredRows.find(r => r.cost.id === costId);
-    if (targetRow && targetRow.isCLT && targetRow.cost.competencia < '2026-06-01') {
-      alert("BLOQUEIO DE SEGURANÇA (Risco Zero Ativado):\nLançamentos CLT anteriores a Junho/2026 são históricos consolidados e não podem ser excluídos.");
-      return;
-    }
+
 
     const compLabel = formatCompetenciaLabel(competencia);
     if (!window.confirm(`Deseja realmente excluir o lançamento da competência ${compLabel} para o colaborador ${empName}? Esta ação é permanente.`)) {
@@ -543,12 +538,7 @@ export function CompetenciasCostsListModal({
   const handleSaveEditCost = async () => {
     if (!editingRowCost) return;
 
-    // REGRA DE SEGURANÇA ABSOLUTA (RISCO ZERO):
-    const isCLT = editingRowCost.cost.vinculo_tipo === 'CLT' || editingRowCost.emp?.linkType === 'CLT';
-    if (isCLT && editingRowCost.cost.competencia < '2026-06-01') {
-      alert("BLOQUEIO DE SEGURANÇA (Risco Zero Ativado):\nLançamentos CLT anteriores a Junho/2026 são históricos consolidados e não podem ser editados.");
-      return;
-    }
+
 
     try {
       setIsSavingEdit(true);
@@ -656,11 +646,7 @@ export function CompetenciasCostsListModal({
       for (const row of filteredRows) {
         if (!selectedCostIds.has(row.cost.id)) continue;
         
-        // RISCO ZERO: Bloqueio estrito de CLT < 2026-06-01
-        if (row.cost.competencia < '2026-06-01') {
-          skippedProtectedCount++;
-          continue;
-        }
+
 
         const newVt = vtNum !== null ? vtNum : (row.cost.valor_vt || 0);
         const newCesta = cestaNum !== null ? cestaNum : (row.cost.valor_cesta || 0);
@@ -686,11 +672,7 @@ export function CompetenciasCostsListModal({
       }
 
       if (toUpdate.length === 0) {
-        if (skippedProtectedCount > 0) {
-          alert(`Operação cancelada: ${skippedProtectedCount} lançamento(s) selecionado(s) são anteriores a Junho/2026 e protegidos como histórico imutável.`);
-        } else {
-          alert("Nenhum lançamento elegível para atualização.");
-        }
+        alert("Nenhum lançamento elegível para atualização.");
         return;
       }
 
@@ -2848,20 +2830,14 @@ export function CompetenciasCostsListModal({
                 </button>
               </div>
 
-              {/* Trava de Segurança Risco Zero */}
-              {(editingRowCost.cost.vinculo_tipo === 'CLT' || editingRowCost.emp?.linkType === 'CLT') && editingRowCost.cost.competencia < '2026-06-01' ? (
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 space-y-2">
-                  <div className="flex items-center gap-2 font-black text-sm">
-                    <Lock size={16} className="text-amber-600 shrink-0" />
-                    <span>Bloqueio de Segurança — Risco Zero Ativado</span>
+              {/* Formulário de Edição */}
+              <div className="space-y-4">
+                {(editingRowCost.cost.competencia < '2026-06-01') && (
+                  <div className="px-3.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300 flex items-center gap-2 text-xs">
+                    <Info size={14} className="text-blue-600 shrink-0" />
+                    <span>Competência histórica consolidada (edição habilitada). As alterações serão salvas com segurança no banco de dados.</span>
                   </div>
-                  <p className="text-xs">
-                    Os lançamentos CLT até <strong>Maio/2026</strong> representam a base histórica consolidada e auditada do sistema. Para garantir integridade total dos dados, a edição direta destes períodos é estritamente bloqueada.
-                  </p>
-                </div>
-              ) : (
-                /* Formulário de Edição */
-                <div className="space-y-4">
+                )}
                   {(editingRowCost.cost.vinculo_tipo === 'CLT' || editingRowCost.emp?.linkType === 'CLT') ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {/* Card 1: Proventos de Folha */}
@@ -3163,7 +3139,6 @@ export function CompetenciasCostsListModal({
                     />
                   </div>
                 </div>
-              )}
 
               {/* Footer do Editor */}
               <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
@@ -3175,26 +3150,24 @@ export function CompetenciasCostsListModal({
                   Cancelar
                 </button>
 
-                {(!((editingRowCost.cost.vinculo_tipo === 'CLT' || editingRowCost.emp?.linkType === 'CLT') && editingRowCost.cost.competencia < '2026-06-01')) && (
-                  <button
-                    type="button"
-                    disabled={isSavingEdit}
-                    onClick={handleSaveEditCost}
-                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isSavingEdit ? (
-                      <>
-                        <Loader2 size={14} className="animate-spin" />
-                        <span>Salvando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save size={14} />
-                        <span>Salvar Alterações</span>
-                      </>
-                    )}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={isSavingEdit}
+                  onClick={handleSaveEditCost}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Salvando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={14} />
+                      <span>Salvar Alterações</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
