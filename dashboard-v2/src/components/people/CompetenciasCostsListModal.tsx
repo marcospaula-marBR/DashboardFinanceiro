@@ -43,9 +43,18 @@ export function CompetenciasCostsListModal({
 }: CompetenciasCostsListModalProps) {
   // Estado local sincronizado de custos para atualização instantânea
   const [localCosts, setLocalCosts] = useState<MonthlyCost[]>(monthlyCosts);
+
+  // Sincroniza localCosts sempre que monthlyCosts for carregado ou atualizado pelo componente pai
   useEffect(() => {
-    setLocalCosts(monthlyCosts);
-  }, [localCosts]);
+    if (monthlyCosts && monthlyCosts.length > 0) {
+      setLocalCosts(monthlyCosts);
+    }
+  }, [monthlyCosts, isOpen]);
+
+  // Garante que, caso localCosts ainda não tenha sincronizado, activeCosts utilize monthlyCosts imediatamente
+  const activeCosts = useMemo(() => {
+    return (localCosts && localCosts.length > 0) ? localCosts : (monthlyCosts || []);
+  }, [localCosts, monthlyCosts]);
 
   // Filtros
   const [selectedYears, setSelectedYears] = useState<string[]>([]);
@@ -124,11 +133,11 @@ export function CompetenciasCostsListModal({
     return new Set(filteredEmployees.map(e => e.id));
   }, [filteredEmployees]);
 
-  // Anos disponíveis extraídos de monthlyCosts
+  // Anos disponíveis extraídos de activeCosts
   const availableYears = useMemo(() => {
-    const years = Array.from(new Set(localCosts.map(c => c.competencia?.split('-')[0]))).filter(Boolean);
+    const years = Array.from(new Set(activeCosts.map(c => c.competencia?.split('-')[0]))).filter(Boolean);
     return years.sort().reverse();
-  }, [localCosts]);
+  }, [activeCosts]);
 
   // Empresas disponíveis
   const availableCompanies = useMemo(() => {
@@ -144,12 +153,12 @@ export function CompetenciasCostsListModal({
 
   // Lista de competências disponíveis (filtradas pelos anos selecionados se houver)
   const availableCompetencias = useMemo(() => {
-    let comps = Array.from(new Set(localCosts.map(c => c.competencia))).filter(Boolean);
+    let comps = Array.from(new Set(activeCosts.map(c => c.competencia))).filter(Boolean);
     if (selectedYears.length > 0) {
       comps = comps.filter(c => selectedYears.some(y => c.startsWith(y)));
     }
     return comps.sort().reverse();
-  }, [localCosts, selectedYears]);
+  }, [activeCosts, selectedYears]);
 
   // Se o ano filtrado mudar e a competência selecionada não pertencer aos anos ativos, reseta para 'all'
   useEffect(() => {
@@ -174,7 +183,7 @@ export function CompetenciasCostsListModal({
 
   // Filtragem dos custos com todos os critérios
   const filteredRows = useMemo(() => {
-    let rows = localCosts.map(cost => {
+    let rows = activeCosts.map(cost => {
       const emp = employeesMap.get(cost.employee_id);
       const isCLT = cost.vinculo_tipo === 'CLT' || emp?.linkType === 'CLT';
       const isEstagio = emp?.linkType === 'Estagiário' || (emp?.linkType || '').toLowerCase().includes('estag');
@@ -276,7 +285,7 @@ export function CompetenciasCostsListModal({
     });
 
     return rows;
-  }, [
+  }, [activeCosts, 
     monthlyCosts, employeesMap, usePageScope, pageFilteredEmpIds, 
     selectedYears, compFilterMode, selectedCompetencia, periodStart, periodEnd, selectedCompetencias,
     selectedEmpresa, selectedVinculo, 
@@ -655,7 +664,10 @@ export function CompetenciasCostsListModal({
       await PeopleHRService.upsertMonthlyCost(payloadToSave);
 
       // Atualiza localmente o registro em localCosts
-      setLocalCosts(prev => prev.map(item => item.id === editingRowCost.cost.id ? { ...item, ...payloadToSave } as MonthlyCost : item));
+      setLocalCosts(prev => {
+        const base = prev && prev.length > 0 ? prev : monthlyCosts;
+        return base.map(item => item.id === editingRowCost.cost.id ? { ...item, ...payloadToSave } as MonthlyCost : item);
+      });
 
       setSuccessToast(`Lançamento de ${editingRowCost.cost.competencia} salvo com sucesso!`);
       setEditingRowCost(null);
