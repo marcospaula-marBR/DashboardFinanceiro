@@ -65,6 +65,163 @@ interface RawEmployeeDb {
   responsible_rg?: string;
 }
 
+export interface RowFinancials {
+  fixo: number;
+  he: number;
+  noturno: number;
+  heNoturno: number;
+  decimo: number;
+  ferias: number;
+  rescisao: number;
+  decimoFerias: number;
+  outrosProv: number;
+  proventosFolha: number;
+  inss: number;
+  irrf: number;
+  descVt: number;
+  descAdt: number;
+  faltas: number;
+  consig: number;
+  pensao: number;
+  descontosFolha: number;
+  liquidoFolha: number;
+  adiantamento: number;
+  vt: number;
+  vr: number;
+  cesta: number;
+  bonus: number;
+  ajudaCusto: number;
+  beneficios: number;
+  extraFolha: number;
+  glosaBase?: number;
+  glosaBonus?: number;
+  deducoes?: number;
+  deducoesTotal?: number;
+  realTotal: number;
+}
+
+export function calculateRowFinancials(cost: Partial<MonthlyCost>, isCLT: boolean): RowFinancials {
+  if (isCLT) {
+    const fixo = (cost.valor_fixo !== undefined && cost.valor_fixo !== null) 
+      ? Number(cost.valor_fixo) 
+      : (Number(cost.valor_holerite) || Number(cost.valor_liquido) || 0);
+    const he = Number(cost.valor_hora_extra) || 0;
+    const noturno = Number(cost.valor_adicional_not) || 0;
+    const heNoturno = he + noturno;
+    const decimo = Number(cost.valor_decimo_terceiro) || 0;
+    const ferias = Number(cost.valor_ferias) || 0;
+    const rescisao = Number(cost.valor_rescisao) || 0;
+    const decimoFerias = decimo + ferias + rescisao;
+    const outrosProv = Number(cost.outros_ajustes || (cost.verbas_adicionais as any)?.outros_ajustes) || 0;
+
+    const proventosFolha = (Number(cost.valor_holerite) || 0) > 0 
+      ? Number(cost.valor_holerite) 
+      : (fixo + heNoturno + decimoFerias + outrosProv);
+
+    const inss = Number(cost.inss_empregado || (cost as any).inss || (cost.verbas_adicionais as any)?.inss_empregado) || 0;
+    const irrf = Number(cost.irrf_empregado || (cost as any).irrf || (cost.verbas_adicionais as any)?.irrf_empregado) || 0;
+    const descVt = Number((cost as any).desconto_vt || (cost.verbas_adicionais as any)?.desconto_vt) || 0;
+    const descAdt = Number((cost as any).desconto_adiantamento || (cost.verbas_adicionais as any)?.desconto_adiantamento) || 0;
+    const faltas = Number(cost.valor_faltas || (cost.verbas_adicionais as any)?.valor_faltas) || 0;
+    const consig = Number(cost.valor_consignado || (cost.verbas_adicionais as any)?.valor_consignado) || 0;
+    const pensao = Number(cost.valor_pensao_alimenticia || (cost as any).pensao_alimenticia || (cost.verbas_adicionais as any)?.valor_pensao_alimenticia) || 0;
+
+    const descontosCalculados = inss + irrf + descVt + descAdt + faltas + consig + pensao;
+    const descontosFolha = (Number(cost.valor_descontos) || 0) > 0 
+      ? Number(cost.valor_descontos) 
+      : descontosCalculados;
+
+    const liquidoFolha = Math.max(0, proventosFolha - descontosFolha);
+
+    const adiantamento = Number(cost.valor_adiantamento) || 0;
+    const vt = Number(cost.valor_vt) || 0;
+    const vr = Number(cost.valor_vr) || 0;
+    const cesta = Number(cost.valor_cesta) || 0;
+    const bonus = Number(cost.valor_bonus) || 0;
+    const ajudaCusto = Number(cost.valor_ajuda_custo) || 0;
+    const beneficios = vt + vr + cesta + bonus + ajudaCusto;
+    const extraFolha = adiantamento + beneficios;
+
+    const realTotal = Math.round((liquidoFolha + extraFolha) * 100) / 100;
+
+    return {
+      fixo,
+      he,
+      noturno,
+      heNoturno,
+      decimo,
+      ferias,
+      rescisao,
+      decimoFerias,
+      outrosProv,
+      proventosFolha,
+      inss,
+      irrf,
+      descVt,
+      descAdt,
+      faltas,
+      consig,
+      pensao,
+      descontosFolha,
+      liquidoFolha,
+      adiantamento,
+      vt,
+      vr,
+      cesta,
+      bonus,
+      ajudaCusto,
+      beneficios,
+      extraFolha,
+      realTotal,
+    };
+  } else {
+    const fixo = Number(cost.valor_fixo) || Number(cost.valor_liquido) || 0;
+    const bonus = (Number(cost.valor_bonus) || 0) + (Number(cost.valor_comissao) || 0) + (Number(cost.valor_incentivos) || 0);
+    const ajudaCusto = Number(cost.valor_ajuda_custo) || 0;
+    const glosaBase = Number(cost.valor_glosa_base) || 0;
+    const glosaBonus = Number(cost.valor_glosa_bonus) || 0;
+    const deducoes = Number(cost.valor_deducoes) || 0;
+    const deducoesTotal = glosaBase + glosaBonus + deducoes;
+
+    const realTotal = Math.max(0, Math.round(((fixo + bonus + ajudaCusto) - deducoesTotal) * 100) / 100);
+
+    return {
+      fixo,
+      he: 0,
+      noturno: 0,
+      heNoturno: 0,
+      decimo: 0,
+      ferias: 0,
+      rescisao: 0,
+      decimoFerias: 0,
+      outrosProv: 0,
+      proventosFolha: fixo + bonus + ajudaCusto,
+      inss: 0,
+      irrf: 0,
+      descVt: 0,
+      descAdt: 0,
+      faltas: 0,
+      consig: 0,
+      pensao: 0,
+      descontosFolha: deducoesTotal,
+      liquidoFolha: realTotal,
+      adiantamento: 0,
+      vt: 0,
+      vr: 0,
+      cesta: 0,
+      bonus,
+      ajudaCusto,
+      beneficios: bonus + ajudaCusto,
+      extraFolha: 0,
+      glosaBase,
+      glosaBonus,
+      deducoes,
+      deducoesTotal,
+      realTotal,
+    };
+  }
+}
+
 export const PeopleHRService = {
   async getEmploymentContracts(employeeId: string): Promise<EmploymentContract[]> {
     const { data, error } = await supabase
@@ -225,18 +382,20 @@ export const PeopleHRService = {
 
     const count = costs.length;
 
-    // Se for CLT, somamos o líquido ao adiantamento para computar o custo real total gasto com o funcionário
+    // Computar custo real total desembolsado com o funcionário via cálculo unificado
     const totalDesembolsado = costs.reduce((sum, c) => {
       const isCLT = c.vinculo_tipo === 'CLT';
-      const liquidoReal = c.valor_liquido + (isCLT ? (c.valor_adiantamento || 0) : 0);
-      return sum + liquidoReal;
+      const f = calculateRowFinancials(c, isCLT);
+      return sum + f.realTotal;
     }, 0);
+
+    const calculatedHistory = costs.map(c => calculateRowFinancials(c, c.vinculo_tipo === 'CLT').realTotal);
 
     return {
       total: totalDesembolsado,
-      average: totalDesembolsado / count,
-      min: Math.min(...costs.map(c => c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))),
-      max: Math.max(...costs.map(c => c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))),
+      average: count > 0 ? totalDesembolsado / count : 0,
+      min: calculatedHistory.length > 0 ? Math.min(...calculatedHistory) : 0,
+      max: calculatedHistory.length > 0 ? Math.max(...calculatedHistory) : 0,
       count,
       fixedTotal,
       bonusTotal,
@@ -283,8 +442,8 @@ export const PeopleHRService = {
       inssEmpregadoAverage: inssEmpregadoTotal / count,
       irrfEmpregadoAverage: irrfEmpregadoTotal / count,
       bancoHorasAverage: bancoHorasTotal / count,
-      totalAverage: totalDesembolsado / count,
-      history: costs.map(c => c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))
+      totalAverage: count > 0 ? totalDesembolsado / count : 0,
+      history: calculatedHistory
     };
   },
 

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature, EmployeeSystemAccess, SystemItem, inferEntityType } from "@/types/loans";
 import { PeopleService } from "@/services/people.service";
-import { PeopleHRService } from "@/services/people-hr.service";
+import { PeopleHRService, calculateRowFinancials } from "@/services/people-hr.service";
 import { EmploymentBondTimeline } from "./EmploymentBondTimeline";
 import { LoansService, formatCurrency } from "@/services/loans.service";
 import { useDataMode } from "@/contexts/DataModeContext";
@@ -4756,11 +4756,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                                 ? c.valor_fixo 
                                                 : (c.valor_liquido - ((c.valor_bonus || 0) + (c.valor_comissao || 0)));
                                               const isCLT = c.vinculo_tipo === 'CLT';
-                                              const realTotal = c.valor_liquido + (isCLT ? (c.valor_adiantamento || 0) : 0);
-                                              const beneficios = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0);
-                                              const heNoturno = (c.valor_hora_extra || 0) + (c.valor_adicional_not || 0);
-                                              const decimoFerias = (c.valor_decimo_terceiro || 0) + (c.valor_ferias || 0) + (c.valor_rescisao || 0);
-                                              const totalRecebidoRow = realTotal + (c.valor_descontos || 0);
+                                              const fin = calculateRowFinancials(c, isCLT);
+                                              const realTotal = fin.realTotal;
+                                              const beneficios = fin.beneficios;
+                                              const heNoturno = fin.heNoturno;
+                                              const decimoFerias = fin.decimoFerias;
+                                              const totalRecebidoRow = realTotal + fin.descontosFolha;
 
                                               return (
                                                 <tr key={c.id || i} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/50 transition-colors">
@@ -4906,7 +4907,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                                 <div className="flex items-center gap-2">
                                                   <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">Total:</span>
                                                   <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                                                    {formatCurrency(c.valor_liquido + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0))}
+                                                    {formatCurrency(calculateRowFinancials(c, c.vinculo_tipo === 'CLT').realTotal)}
                                                   </span>
                                                 </div>
                                                 {onOpenCompetenciasList ? (
@@ -5142,7 +5143,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       <BarChart 
                                         data={[...filteredCosts].sort((a, b) => a.competencia.localeCompare(b.competencia)).map(c => {
                                           const isCLT = c.vinculo_tipo === 'CLT';
-                                          const realCost = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+                                          const realCost = calculateRowFinancials(c, isCLT).realTotal;
                                           const compParts = c.competencia.split('-');
                                           const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
                                           const mName = monthsShort[parseInt(compParts[1] || '1', 10) - 1];

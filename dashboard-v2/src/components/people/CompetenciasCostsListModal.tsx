@@ -6,7 +6,7 @@ import {
   Printer, FileText, CheckSquare, Square, Check, SlidersHorizontal, Eye, Lock, Layers, Save, Coins, Receipt, Info
 } from 'lucide-react';
 import { Employee, MonthlyCost } from '@/types/loans';
-import { PeopleHRService } from '@/services/people-hr.service';
+import { PeopleHRService, calculateRowFinancials, RowFinancials } from '@/services/people-hr.service';
 import { formatCurrency } from '@/services/loans.service';
 import { CostImportStagingModal } from '@/components/people/CostImportStagingModal';
 
@@ -188,12 +188,14 @@ export function CompetenciasCostsListModal({
       const isCLT = cost.vinculo_tipo === 'CLT' || emp?.linkType === 'CLT';
       const isEstagio = emp?.linkType === 'Estagiário' || (emp?.linkType || '').toLowerCase().includes('estag');
       const isPJ = !isCLT && !isEstagio;
-      const realTotal = (cost.valor_liquido || 0) + (isCLT ? (cost.valor_adiantamento || 0) : 0);
+      const financials = calculateRowFinancials(cost, isCLT);
+      const realTotal = financials.realTotal;
       const name = emp?.name || (cost as any).nome_colaborador || 'Colaborador';
       return {
         cost,
         emp,
         name,
+        financials,
         realTotal,
         isCLT,
         isPJ,
@@ -324,61 +326,37 @@ export function CompetenciasCostsListModal({
     let totalPjLiquido = 0;
 
     filteredRows.forEach(r => {
-      const c = r.cost;
       totalGeral += r.realTotal;
 
       if (r.isCLT) {
-        const fixo = (c.valor_fixo !== undefined && c.valor_fixo !== null) ? c.valor_fixo : (c.valor_liquido || 0);
-        const he = c.valor_hora_extra || 0;
-        const noturno = c.valor_adicional_not || 0;
-        const outros = c.outros_ajustes || 0;
-        const decFer = (c.valor_decimo_terceiro || 0) + (c.valor_ferias || 0) + (c.valor_rescisao || 0);
-        const prov = c.valor_holerite || (fixo + he + noturno + decFer + outros);
+        const f = r.financials;
+        totalSalarioFixo += f.fixo;
+        totalHorasExtras += f.he;
+        totalAdicionalNoturno += f.noturno;
+        totalOutrosProventos += f.outrosProv;
+        totalDecimoFeriasRescisao += f.decimoFerias;
+        totalProventosBrutos += f.proventosFolha;
 
-        totalSalarioFixo += fixo;
-        totalHorasExtras += he;
-        totalAdicionalNoturno += noturno;
-        totalOutrosProventos += outros;
-        totalDecimoFeriasRescisao += decFer;
-        totalProventosBrutos += prov;
+        totalInss += f.inss;
+        totalIrrf += f.irrf;
+        totalDescontoVt += f.descVt;
+        totalDescontoAdiantamento += f.descAdt;
+        totalFaltas += f.faltas;
+        totalConsignado += f.consig;
+        totalPensaoOutros += f.pensao + Math.max(0, f.descontosFolha - (f.inss + f.irrf + f.descVt + f.descAdt + f.faltas + f.consig + f.pensao));
+        totalDescontosFolha += f.descontosFolha;
 
-        const inss = c.inss_empregado || (c as any).inss || 0;
-        const irrf = c.irrf_empregado || (c as any).irrf || 0;
-        const descVt = (c as any).desconto_vt || 0;
-        const descAdt = (c as any).desconto_adiantamento || 0;
-        const faltas = c.valor_faltas || 0;
-        const consig = c.valor_consignado || 0;
-        const pensao = c.valor_pensao_alimenticia || (c as any).pensao_alimenticia || 0;
-        const descTot = c.valor_descontos || (inss + irrf + descVt + descAdt + faltas + consig + pensao);
-
-        totalInss += inss;
-        totalIrrf += irrf;
-        totalDescontoVt += descVt;
-        totalDescontoAdiantamento += descAdt;
-        totalFaltas += faltas;
-        totalConsignado += consig;
-        totalPensaoOutros += pensao + Math.max(0, descTot - (inss + irrf + descVt + descAdt + faltas + consig + pensao));
-        totalDescontosFolha += descTot;
-
-        const adt = c.valor_adiantamento || 0;
-        const vt = c.valor_vt || 0;
-        const cestaVr = (c.valor_cesta || 0) + (c.valor_vr || 0);
-        const bonus = c.valor_bonus || 0;
-        const ajuda = c.valor_ajuda_custo || 0;
-
-        totalAdiantamentoSalarial += adt;
-        totalVtRecarga += vt;
-        totalVrCesta += cestaVr;
-        totalBonus += bonus;
-        totalAjudaCusto += ajuda;
-        totalExtraFolha += (adt + vt + cestaVr + bonus + ajuda);
+        totalAdiantamentoSalarial += f.adiantamento;
+        totalVtRecarga += f.vt;
+        totalVrCesta += (f.cesta + f.vr);
+        totalBonus += f.bonus;
+        totalAjudaCusto += f.ajudaCusto;
+        totalExtraFolha += f.extraFolha;
       } else {
-        const fixo = c.valor_fixo || c.valor_liquido || 0;
-        const b = (c.valor_bonus || 0) + (c.valor_comissao || 0) + (c.valor_incentivos || 0);
-        const d = (c.valor_deducoes || 0) + (c.valor_glosa_base || 0) + (c.valor_glosa_bonus || 0);
-        totalPjFixo += fixo;
-        totalPjBonusComissao += b;
-        totalPjDeducoesGlosas += d;
+        const f = r.financials;
+        totalPjFixo += f.fixo;
+        totalPjBonusComissao += f.bonus;
+        totalPjDeducoesGlosas += (f.deducoesTotal || 0);
         totalPjLiquido += r.realTotal;
       }
     });
@@ -534,17 +512,19 @@ export function CompetenciasCostsListModal({
       valor_fixo: cost.valor_fixo !== undefined && cost.valor_fixo !== null ? cost.valor_fixo : (cost.valor_liquido || 0),
       valor_hora_extra: cost.valor_hora_extra || 0,
       valor_adicional_not: cost.valor_adicional_not || 0,
-      outros_ajustes: cost.outros_ajustes || 0,
+      outros_ajustes: cost.outros_ajustes || (cost.verbas_adicionais as any)?.outros_ajustes || 0,
       valor_ferias: cost.valor_ferias || 0,
       valor_decimo_terceiro: cost.valor_decimo_terceiro || 0,
       valor_rescisao: cost.valor_rescisao || 0,
       valor_descontos: cost.valor_descontos || 0,
-      valor_faltas: cost.valor_faltas || 0,
+      valor_faltas: cost.valor_faltas || (cost.verbas_adicionais as any)?.valor_faltas || 0,
       dias_faltas: cost.dias_faltas || 0,
-      valor_consignado: cost.valor_consignado || 0,
-      valor_pensao_alimenticia: cost.valor_pensao_alimenticia || (cost as any).pensao_alimenticia || 0,
-      inss_empregado: cost.inss_empregado || (cost as any).inss || 0,
-      irrf_empregado: cost.irrf_empregado || (cost as any).irrf || 0,
+      valor_consignado: cost.valor_consignado || (cost.verbas_adicionais as any)?.valor_consignado || 0,
+      valor_pensao_alimenticia: cost.valor_pensao_alimenticia || (cost as any).pensao_alimenticia || (cost.verbas_adicionais as any)?.valor_pensao_alimenticia || 0,
+      inss_empregado: cost.inss_empregado || (cost as any).inss || (cost.verbas_adicionais as any)?.inss_empregado || 0,
+      irrf_empregado: cost.irrf_empregado || (cost as any).irrf || (cost.verbas_adicionais as any)?.irrf_empregado || 0,
+      desconto_vt: (cost as any).desconto_vt || (cost.verbas_adicionais as any)?.desconto_vt || 0,
+      desconto_adiantamento: (cost as any).desconto_adiantamento || (cost.verbas_adicionais as any)?.desconto_adiantamento || 0,
       valor_adiantamento: cost.valor_adiantamento || 0,
       valor_vt: cost.valor_vt || 0,
       valor_cesta: cost.valor_cesta || 0,
@@ -557,7 +537,7 @@ export function CompetenciasCostsListModal({
       valor_glosa_bonus: cost.valor_glosa_bonus || 0,
       valor_deducoes: cost.valor_deducoes || 0,
       observacao: cost.observacao || ''
-    });
+    } as any);
   };
 
   const handleSaveEditCost = async () => {
@@ -583,81 +563,52 @@ export function CompetenciasCostsListModal({
       };
 
       if (isCLTType) {
-        const fixo = Number(editFormData.valor_fixo) || 0;
-        const he = Number(editFormData.valor_hora_extra) || 0;
-        const noturno = Number(editFormData.valor_adicional_not) || 0;
-        const outros = Number(editFormData.outros_ajustes) || 0;
-        const ferias = Number(editFormData.valor_ferias) || 0;
-        const decimo = Number(editFormData.valor_decimo_terceiro) || 0;
-        const rescisao = Number(editFormData.valor_rescisao) || 0;
-        const holeriteProventos = fixo + he + noturno + outros + ferias + decimo + rescisao;
-
-        const inss = Number(editFormData.inss_empregado) || 0;
-        const irrf = Number(editFormData.irrf_empregado) || 0;
-        const descVt = Number((editFormData as any).desconto_vt) || 0;
-        const descAdt = Number((editFormData as any).desconto_adiantamento) || 0;
-        const faltas = Number(editFormData.valor_faltas) || 0;
-        const consig = Number(editFormData.valor_consignado) || 0;
-        const pensao = Number(editFormData.valor_pensao_alimenticia) || 0;
-        const totalDescontos = Number(editFormData.valor_descontos) || (inss + irrf + descVt + descAdt + faltas + consig + pensao);
-
-        const adt = Number(editFormData.valor_adiantamento) || 0;
-        const vt = Number(editFormData.valor_vt) || 0;
-        const cesta = Number(editFormData.valor_cesta) || 0;
-        const vr = Number(editFormData.valor_vr) || 0;
-        const bonus = Number(editFormData.valor_bonus) || 0;
-        const ajuda = Number(editFormData.valor_ajuda_custo) || 0;
-
-        const liquidoFolha = Math.max(0, holeriteProventos - totalDescontos);
-        const extraFolha = adt + vt + cesta + vr + bonus + ajuda;
-        const totalRealDesembolsado = liquidoFolha + extraFolha;
+        const preview = calculateRowFinancials(editFormData as MonthlyCost, true);
 
         payloadToSave = {
           ...payloadToSave,
-          valor_fixo: fixo,
-          valor_holerite: holeriteProventos,
-          valor_hora_extra: he,
-          valor_adicional_not: noturno,
-          outros_ajustes: outros,
-          valor_ferias: ferias,
-          valor_decimo_terceiro: decimo,
-          valor_rescisao: rescisao,
-          valor_descontos: totalDescontos,
-          inss_empregado: inss,
-          irrf_empregado: irrf,
-          valor_faltas: faltas,
-          valor_consignado: consig,
-          valor_pensao_alimenticia: pensao,
-          valor_adiantamento: adt,
-          valor_vt: vt,
-          valor_cesta: cesta,
-          valor_vr: vr,
-          valor_bonus: bonus,
-          valor_ajuda_custo: ajuda,
-          valor_liquido: totalRealDesembolsado,
+          valor_fixo: preview.fixo,
+          valor_holerite: preview.proventosFolha,
+          valor_hora_extra: preview.he,
+          valor_adicional_not: preview.noturno,
+          outros_ajustes: preview.outrosProv,
+          valor_ferias: preview.ferias,
+          valor_decimo_terceiro: preview.decimo,
+          valor_rescisao: preview.rescisao,
+          valor_descontos: preview.descontosFolha,
+          inss_empregado: preview.inss,
+          irrf_empregado: preview.irrf,
+          valor_faltas: preview.faltas,
+          valor_consignado: preview.consig,
+          valor_pensao_alimenticia: preview.pensao,
+          valor_adiantamento: preview.adiantamento,
+          valor_vt: preview.vt,
+          valor_cesta: preview.cesta,
+          valor_vr: preview.vr,
+          valor_bonus: preview.bonus,
+          valor_ajuda_custo: preview.ajudaCusto,
+          valor_liquido: preview.liquidoFolha,
+          verbas_adicionais: {
+            ...((editingRowCost.cost.verbas_adicionais as any) || {}),
+            desconto_vt: preview.descVt,
+            desconto_adiantamento: preview.descAdt,
+            inss_empregado: preview.inss,
+            irrf_empregado: preview.irrf,
+            valor_pensao_alimenticia: preview.pensao,
+            outros_ajustes: preview.outrosProv,
+          }
         };
       } else {
-        const fixo = Number(editFormData.valor_fixo) || 0;
-        const bonus = Number(editFormData.valor_bonus) || 0;
-        const comissao = Number(editFormData.valor_comissao) || 0;
-        const incentivos = Number(editFormData.valor_incentivos) || 0;
-        const ajuda = Number(editFormData.valor_ajuda_custo) || 0;
-        const glosaBase = Number(editFormData.valor_glosa_base) || 0;
-        const glosaBonus = Number(editFormData.valor_glosa_bonus) || 0;
-        const deducoes = Number(editFormData.valor_deducoes) || 0;
-        const realPj = (fixo + bonus + comissao + incentivos + ajuda) - (glosaBase + glosaBonus + deducoes);
-
+        const preview = calculateRowFinancials(editFormData as MonthlyCost, false);
         payloadToSave = {
           ...payloadToSave,
-          valor_fixo: fixo,
-          valor_bonus: bonus,
-          valor_comissao: comissao,
-          valor_incentivos: incentivos,
-          valor_ajuda_custo: ajuda,
-          valor_glosa_base: glosaBase,
-          valor_glosa_bonus: glosaBonus,
-          valor_deducoes: deducoes,
-          valor_liquido: realPj,
+          valor_fixo: preview.fixo,
+          valor_bonus: preview.bonus,
+          valor_ajuda_custo: preview.ajudaCusto,
+          valor_glosa_base: preview.glosaBase || 0,
+          valor_glosa_bonus: preview.glosaBonus || 0,
+          valor_deducoes: preview.deducoes || 0,
+          valor_liquido: preview.realTotal,
         };
       }
 
@@ -721,8 +672,6 @@ export function CompetenciasCostsListModal({
         const descontos = row.cost.valor_descontos || 0;
         const folhaLiq = Math.max(0, proventos - descontos);
         const extraFolha = (row.cost.valor_adiantamento || 0) + newVt + newCesta + (row.cost.valor_vr || 0) + newBonus + newAjuda;
-        const newLiquidoReal = folhaLiq + extraFolha;
-
         toUpdate.push({
           id: row.cost.id,
           employee_id: row.cost.employee_id,
@@ -732,7 +681,7 @@ export function CompetenciasCostsListModal({
           valor_cesta: newCesta,
           valor_bonus: newBonus,
           valor_ajuda_custo: newAjuda,
-          valor_liquido: newLiquidoReal,
+          valor_liquido: folhaLiq,
         });
       }
 
@@ -2018,11 +1967,11 @@ export function CompetenciasCostsListModal({
                 key={`tbody-${selectedYears.join('-')}-${compFilterMode}-${selectedCompetencia}-${selectedVinculo}-${selectedEmpresa}-${selectedSetor}-${searchTerm}-${usePageScope}`}
                 className="divide-y divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900/60 font-medium"
               >
-                {filteredRows.map(({ cost, emp, name, realTotal, isCLT, isEstagio }, idx) => {
-                  const beneficios = (cost.valor_vr || 0) + (cost.valor_vt || 0) + (cost.valor_cesta || 0) + (cost.valor_ajuda_custo || 0);
-                  const heNoturno = (cost.valor_hora_extra || 0) + (cost.valor_adicional_not || 0);
-                  const decimoFerias = (cost.valor_decimo_terceiro || 0) + (cost.valor_ferias || 0) + (cost.valor_rescisao || 0);
-                  const fixo = cost.valor_fixo !== undefined && cost.valor_fixo !== null ? cost.valor_fixo : (cost.valor_liquido || 0);
+                {filteredRows.map(({ cost, emp, name, financials, realTotal, isCLT, isEstagio }, idx) => {
+                  const beneficios = financials.beneficios;
+                  const heNoturno = financials.heNoturno;
+                  const decimoFerias = financials.decimoFerias;
+                  const fixo = financials.fixo;
                   const isDeletingThis = deletingId === cost.id;
 
                   return (
@@ -2151,9 +2100,9 @@ export function CompetenciasCostsListModal({
 
                       {/* Descontos */}
                       <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
-                        {cost.valor_descontos && cost.valor_descontos > 0 ? (
+                        {financials.descontosFolha > 0 ? (
                           <span className="font-bold text-rose-600 dark:text-rose-400">
-                            -{showValues ? formatCurrency(cost.valor_descontos) : '••••'}
+                            -{showValues ? formatCurrency(financials.descontosFolha) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
@@ -2832,12 +2781,18 @@ export function CompetenciasCostsListModal({
                 </div>
 
                 {/* Total da Competência */}
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
-                  <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase">Total Desembolsado na Competência:</span>
-                  <span className="text-base font-black text-emerald-800 dark:text-emerald-300">
-                    {formatCurrency((verbasDetailRow.cost.valor_liquido || 0) + ((verbasDetailRow.cost.vinculo_tipo === 'CLT' || verbasDetailRow.emp?.linkType === 'CLT') ? (verbasDetailRow.cost.valor_adiantamento || 0) : 0))}
-                  </span>
-                </div>
+                {(() => {
+                  const isCLT = verbasDetailRow.cost.vinculo_tipo === 'CLT' || verbasDetailRow.emp?.linkType === 'CLT';
+                  const detailFin = calculateRowFinancials(verbasDetailRow.cost, isCLT);
+                  return (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
+                      <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase">Total Desembolsado na Competência:</span>
+                      <span className="text-base font-black text-emerald-800 dark:text-emerald-300">
+                        {formatCurrency(detailFin.realTotal)}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="flex items-center justify-between pt-2">
@@ -3032,6 +2987,26 @@ export function CompetenciasCostsListModal({
                           />
                         </div>
                         <div>
+                          <label className="text-[10px] font-bold text-slate-500 block">Desc. Adiantamento Folha:</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={(editFormData as any).desconto_adiantamento ?? ''}
+                            onChange={e => setEditFormData(p => ({ ...p, desconto_adiantamento: parseFloat(e.target.value) || 0 }))}
+                            className="w-full mt-0.5 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 block">Desc. Vale Transporte (6%):</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={(editFormData as any).desconto_vt ?? ''}
+                            onChange={e => setEditFormData(p => ({ ...p, desconto_vt: parseFloat(e.target.value) || 0 }))}
+                            className="w-full mt-0.5 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400"
+                          />
+                        </div>
+                        <div>
                           <label className="text-[10px] font-bold text-slate-500 block">Total de Descontos:</label>
                           <input
                             type="number"
@@ -3069,7 +3044,17 @@ export function CompetenciasCostsListModal({
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] font-bold text-slate-500 block">VR / Cesta:</label>
+                          <label className="text-[10px] font-bold text-slate-500 block">Vale Refeição (VR):</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editFormData.valor_vr ?? ''}
+                            onChange={e => setEditFormData(p => ({ ...p, valor_vr: parseFloat(e.target.value) || 0 }))}
+                            className="w-full mt-0.5 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 block">Cesta Básica / Alimentação:</label>
                           <input
                             type="number"
                             step="0.01"
@@ -3135,6 +3120,36 @@ export function CompetenciasCostsListModal({
                       </div>
                     </div>
                   )}
+
+                  {/* Banner de Conciliação Contábil em Tempo Real */}
+                  {(() => {
+                    const isCLT = editingRowCost.cost.vinculo_tipo === 'CLT' || editingRowCost.emp?.linkType === 'CLT';
+                    const preview = calculateRowFinancials(editFormData as MonthlyCost, isCLT);
+                    return (
+                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-slate-100 dark:to-slate-800 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">
+                            Conciliação Contábil em Tempo Real Desta Competência
+                          </span>
+                          {isCLT ? (
+                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                              Proventos ({formatCurrency(preview.proventosFolha)}) - Descontos ({formatCurrency(preview.descontosFolha)}) = <strong className="text-emerald-700 dark:text-emerald-400">Líq. Folha ({formatCurrency(preview.liquidoFolha)})</strong> + Adiantamento ({formatCurrency(preview.adiantamento)}) + Benefícios ({formatCurrency(preview.beneficios)})
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                              NF Base ({formatCurrency(preview.fixo)}) + Bônus ({formatCurrency(preview.bonus)}) - Deduções ({formatCurrency(preview.descontosFolha)})
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">Total Real Desembolsado</span>
+                          <span className="text-base sm:text-xl font-black text-emerald-700 dark:text-emerald-300 tabular-nums">
+                            {formatCurrency(preview.realTotal)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Observações */}
                   <div>
