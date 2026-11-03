@@ -314,7 +314,7 @@ export function ClaraTransactionDrawer({
   const handleRetry = async () => {
     setSyncResult(null);
     setRetrying(true);
-    setSyncStep('⏳ Preparando payload do lançamento...');
+    setSyncStep('⏳ Preparando payload e validando classificação contábil...');
 
     try {
       setSyncStep('📤 Enviando para Omie — Contas a Pagar...');
@@ -323,7 +323,20 @@ export function ClaraTransactionDrawer({
       const res = await fetch(`/api/clara/transactions/${transaction.clara_uuid}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'retry', companyId: compId }),
+        body: JSON.stringify({
+          action: 'retry',
+          companyId: compId,
+          omie_category_code: selectedCat || null,
+          omie_department_code: selectedDepto || null,
+          omie_project_code: selectedProj || null,
+          omie_supplier_code: selectedSupplierCode || null,
+          omie_supplier_name: selectedSupplierName || null,
+          omie_supplier_cnpj: selectedSupplierCnpj || null,
+          invoice_issue_date: selectedIssueDate || null,
+          registration_date: selectedRegDate || null,
+          due_date: selectedDueDate || null,
+          comment: selectedComment.trim() || null,
+        }),
       });
 
       const data = await res.json().catch(() => ({ status: 'error', message: 'Resposta inválida do servidor.' }));
@@ -650,12 +663,36 @@ export function ClaraTransactionDrawer({
                   className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
                 >
                   <option value="">Selecione a categoria Omie...</option>
+                  {selectedCat && categories.length > 0 && !categories.some(c => c.codigo === selectedCat) && (
+                    <option value={selectedCat} disabled className="text-amber-800 bg-amber-50 font-semibold">
+                      ⚠️ {selectedCat} — Categoria Inativa / Obsoleta no Omie
+                    </option>
+                  )}
                   {categories.map(c => (
                     <option key={c.codigo} value={c.codigo}>
                       {c.codigo} - {c.descricao}
                     </option>
                   ))}
                 </select>
+                {selectedCat && categories.length > 0 && !categories.some(c => c.codigo === selectedCat) && (
+                  <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-900 flex items-start gap-1.5">
+                    <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span>
+                        A categoria <strong>{selectedCat}</strong> está inativa no Omie ou não pertence à empresa ativa. Selecione uma categoria ativa de despesa acima para prosseguir com o envio.
+                      </span>
+                      {/ecovias|pedag|tag/i.test(`${transaction.merchant_name} ${transaction.comment || ''}`) && categories.some(c => c.codigo === '2.04.95') && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCat('2.04.95')}
+                          className="mt-1 block text-emerald-800 font-bold underline hover:text-emerald-950 cursor-pointer text-[10px]"
+                        >
+                          👉 Corrigir com 1 clique para: 2.04.95 - Pedágio / TAG
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

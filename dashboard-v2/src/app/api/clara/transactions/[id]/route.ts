@@ -80,7 +80,33 @@ export async function POST(
       });
     }
 
-    // Ação de retry / sincronização pontual
+    // Ação de retry / sincronização pontual: se campos editados vierem no payload, salva-os antes de disparar o envio
+    if (
+      body.omie_category_code !== undefined ||
+      body.omie_department_code !== undefined ||
+      body.omie_project_code !== undefined ||
+      body.omie_supplier_code !== undefined ||
+      body.omie_supplier_name !== undefined ||
+      body.omie_supplier_cnpj !== undefined ||
+      body.invoice_issue_date !== undefined ||
+      body.registration_date !== undefined ||
+      body.due_date !== undefined ||
+      body.comment !== undefined
+    ) {
+      await ClaraSyncService.updateTransactionFields(id, {
+        omie_category_code: body.omie_category_code,
+        omie_department_code: body.omie_department_code,
+        omie_project_code: body.omie_project_code,
+        omie_supplier_code: body.omie_supplier_code,
+        omie_supplier_name: body.omie_supplier_name,
+        omie_supplier_cnpj: body.omie_supplier_cnpj,
+        invoice_issue_date: body.invoice_issue_date,
+        registration_date: body.registration_date,
+        due_date: body.due_date,
+        comment: body.comment,
+      });
+    }
+
     const updated = await ClaraSyncService.retryTransaction(id);
 
     return NextResponse.json({

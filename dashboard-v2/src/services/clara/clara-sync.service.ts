@@ -967,19 +967,26 @@ export class ClaraSyncService {
    * Reprocessa manualmente uma transação específica
    */
   public static async retryTransaction(idOrUuid: string, forceSend = true): Promise<ClaraTransactionRecord> {
-    let tx: ClaraTransactionRecord | null = await ClaraStorageService.getTransaction(idOrUuid, DEFAULT_CLARA_CONFIG);
+    let tx: ClaraTransactionRecord | null = null;
 
+    // 1. Prioriza tabela mestre clara_transactions no Supabase para obter o estado mais recente
+    try {
+      const { data } = await supabase
+        .from('clara_transactions')
+        .select('*')
+        .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
+        .maybeSingle();
+      if (data) tx = data;
+    } catch (e: any) {
+      console.warn(`[retryTransaction] Falha ao consultar Supabase clara_transactions:`, e.message);
+    }
+
+    // 2. Fallback no storage remoto/memória
     if (!tx) {
-      try {
-        const { data } = await supabase
-          .from('clara_transactions')
-          .select('*')
-          .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
-          .maybeSingle();
-        if (data) tx = data;
-      } catch {
-        tx = memoryTransactions.get(idOrUuid) || null;
-      }
+      tx = await ClaraStorageService.getTransaction(idOrUuid, DEFAULT_CLARA_CONFIG);
+    }
+    if (!tx) {
+      tx = memoryTransactions.get(idOrUuid) || null;
     }
 
     if (!tx) {
@@ -1122,19 +1129,26 @@ export class ClaraSyncService {
       comment?: string | null;
     }
   ): Promise<ClaraTransactionRecord> {
-    let tx: ClaraTransactionRecord | null = await ClaraStorageService.getTransaction(idOrUuid, DEFAULT_CLARA_CONFIG);
+    let tx: ClaraTransactionRecord | null = null;
 
+    // 1. Prioriza busca na tabela mestre clara_transactions no Supabase
+    try {
+      const { data } = await supabase
+        .from('clara_transactions')
+        .select('*')
+        .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
+        .maybeSingle();
+      if (data) tx = data;
+    } catch (e: any) {
+      console.warn(`[updateTransactionFields] Falha ao consultar Supabase clara_transactions:`, e.message);
+    }
+
+    // 2. Fallback no storage remoto/memória
     if (!tx) {
-      try {
-        const { data } = await supabase
-          .from('clara_transactions')
-          .select('*')
-          .or(`id.eq.${idOrUuid},clara_uuid.eq.${idOrUuid}`)
-          .maybeSingle();
-        if (data) tx = data;
-      } catch {
-        tx = memoryTransactions.get(idOrUuid) || null;
-      }
+      tx = await ClaraStorageService.getTransaction(idOrUuid, DEFAULT_CLARA_CONFIG);
+    }
+    if (!tx) {
+      tx = memoryTransactions.get(idOrUuid) || null;
     }
 
     // Se ainda não encontrou no storage nem em memória, busca diretamente na API Clara

@@ -336,6 +336,7 @@ export class ClaraConfigService {
   private static accountsCache: Record<string, { timestamp: number; data: OmieAccountOption[] }> = {};
   private static departmentsCache: Record<string, { timestamp: number; data: OmieDepartmentOption[] }> = {};
   private static categoriesCache: Record<string, { timestamp: number; data: OmieCategoryOption[] }> = {};
+  private static projectsCache: Record<string, { timestamp: number; data: OmieProjectOption[] }> = {};
   private static suppliersCache: Record<string, { timestamp: number; data: OmieSupplierOption[] }> = {};
 
   // Seeds de contas correntes reais obtidas diretamente do Omie ERP
@@ -501,10 +502,25 @@ export class ClaraConfigService {
   }
 
   /**
-   * Busca as categorias reais do Omie (com suporte multi-empresa)
+   * Busca as categorias reais e ATIVAS de despesa do Omie (com isolamento estrito multi-empresa)
+   * 1. Consulta em memória recente (TTL 15 min por empresa)
+   * 2. Consulta direta à API Omie (ListarCategorias) filtrando:
+   *    - conta_inativa !== 'S' (apenas ativas)
+   *    - conta_despesa === 'S' (apenas despesas para Contas a Pagar / Cartão Clara)
+   *    - totalizadora !== 'S' (sem contas sintéticas)
+   *    - !isIgnored (sem <disponível>, não usar, inativo, etc.)
+   * 3. Fallback no Supabase (omie_dim_categorias) com filtro estrito de empresa e exclusão de receitas
    */
   public static async getOmieCategories(company = 'Mar Brasil'): Promise<OmieCategoryOption[]> {
     const isDZM = this.isDZMCompany(company);
+    const companyKey = isDZM ? 'dzm' : 'marbrasil';
+
+    // 1. Cache em memória por empresa (TTL de 15 minutos)
+    const cached = this.categoriesCache[companyKey];
+    if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000 && cached.data.length > 0) {
+      return cached.data;
+    }
+
     const decodeHtml = (str: string) => (str || '')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
@@ -528,67 +544,99 @@ export class ClaraConfigService {
       );
     };
 
-    // Para Mar Brasil, tenta primeiro a tabela de dimensões do Supabase
-    if (!isDZM) {
+    // 2. Consulta direta à API Omie oficial com as credenciais exclusivas da empresa selecionada
+    const { appKey, appSecret } = this.getOmieCredentials(company);
+    if (appKey && appSecret) {
       try {
-        const { data, error } = await supabase
-          .from('omie_dim_categorias')
-          .select('codigo_categoria, descricao_categoria')
-          .order('descricao_categoria', { ascending: true });
+        const allList: any[] = [];
+        let page = 1;
+        let totalPages = 1;
 
-        if (!error && data && data.length > 0) {
-          const map = new Map<string, string>();
-          data.forEach(c => {
-            if (!c.codigo_categoria) return;
-            const cleanDesc = decodeHtml(c.descricao_categoria || '');
-            if (!isIgnored(cleanDesc) && !map.has(c.codigo_categoria)) {
-              map.set(c.codigo_categoria, cleanDesc);
-            }
-          });
-          return Array.from(map.entries())
-            .map(([codigo, descricao]) => ({ codigo, descricao }))
-            .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+        do {
+          const response = await axios.post('https://app.omie.com.br/api/v1/geral/categorias/', {
+            call: 'ListarCategorias',
+            app_key: appKey,
+            app_secret: appSecret,
+            param: [{ pagina: page, registros_por_pagina: 100 }],
+          }, { timeout: 15000 });
+
+          const data = response.data;
+          const pageItems = data?.categoria_cadastro || [];
+          allList.push(...pageItems);
+
+          totalPages = data?.total_de_paginas || 1;
+          page++;
+        } while (page <= totalPages && page <= 10);
+
+        if (allList.length > 0) {
+          const filtered = allList
+            .filter((c: any) => {
+              // Regra estrita: apenas categorias ativas, de despesa, não totalizadoras e não ocultas
+              if (c.conta_inativa === 'S') return false;
+              if (c.conta_despesa !== 'S') return false;
+              if (c.totalizadora === 'S') return false;
+              if (c.nao_exibir === 'S') return false;
+              const desc = decodeHtml(c.descricao || '');
+              if (isIgnored(desc)) return false;
+              return true;
+            })
+            .map((c: any) => ({
+              codigo: String(c.codigo).trim(),
+              descricao: decodeHtml(c.descricao || String(c.codigo)),
+            }))
+            .sort((a: any, b: any) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+
+          if (filtered.length > 0) {
+            this.categoriesCache[companyKey] = {
+              timestamp: Date.now(),
+              data: filtered,
+            };
+            return filtered;
+          }
         }
-      } catch (e: any) {
-        console.warn('[ClaraConfigService] Erro ao consultar omie_dim_categorias:', e.message);
+      } catch (err: any) {
+        console.warn(`[ClaraConfigService] Falha ao consultar ListarCategorias na API Omie (${company}):`, err.message);
       }
     }
 
-    // Consulta direta à API Omie com as credenciais da empresa específica (obrigatório para DZM)
-    const { appKey, appSecret } = this.getOmieCredentials(company);
-    if (!appKey || !appSecret) return [];
-
+    // 3. Fallback Supabase: apenas se a API Omie falhar, consulta omie_dim_categorias COM FILTRO ESTRITO DE EMPRESA
     try {
-      const allList: any[] = [];
-      let page = 1;
-      let totalPages = 1;
+      const empresaFiltro = isDZM ? 'DZM' : 'Mar Brasil';
+      const { data, error } = await supabase
+        .from('omie_dim_categorias')
+        .select('codigo_categoria, descricao_categoria, empresa_nome')
+        .ilike('empresa_nome', `%${empresaFiltro}%`)
+        .order('descricao_categoria', { ascending: true });
 
-      do {
-        const response = await axios.post('https://app.omie.com.br/api/v1/geral/categorias/', {
-          call: 'ListarCategorias',
-          app_key: appKey,
-          app_secret: appSecret,
-          param: [{ pagina: page, registros_por_pagina: 100 }],
-        }, { timeout: 15000 });
+      if (!error && data && data.length > 0) {
+        const map = new Map<string, string>();
+        data.forEach(c => {
+          if (!c.codigo_categoria) return;
+          const code = String(c.codigo_categoria).trim();
+          // Ignora receitas (códigos iniciando em 1 ou 0) para Contas a Pagar
+          if (code.startsWith('1.') || code.startsWith('0.')) return;
+          const cleanDesc = decodeHtml(c.descricao_categoria || '');
+          if (!isIgnored(cleanDesc) && !map.has(code)) {
+            map.set(code, cleanDesc);
+          }
+        });
+        const fallbackList = Array.from(map.entries())
+          .map(([codigo, descricao]) => ({ codigo, descricao }))
+          .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
 
-        const data = response.data;
-        const pageItems = data?.categoria_cadastro || [];
-        allList.push(...pageItems);
-
-        totalPages = data?.total_de_paginas || 1;
-        page++;
-      } while (page <= totalPages && page <= 10);
-
-      return allList
-        .map((c: any) => ({
-          codigo: String(c.codigo),
-          descricao: decodeHtml(c.descricao || String(c.codigo)),
-        }))
-        .filter((c: any) => !isIgnored(c.descricao))
-        .sort((a: any, b: any) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
-    } catch {
-      return [];
+        if (fallbackList.length > 0) {
+          this.categoriesCache[companyKey] = {
+            timestamp: Date.now(),
+            data: fallbackList,
+          };
+          return fallbackList;
+        }
+      }
+    } catch (e: any) {
+      console.warn('[ClaraConfigService] Erro ao consultar fallback omie_dim_categorias:', e.message);
     }
+
+    return cached?.data || [];
   }
 
   /**
@@ -596,14 +644,23 @@ export class ClaraConfigService {
    */
   public static async getOmieProjects(company = 'Mar Brasil'): Promise<OmieProjectOption[]> {
     const isDZM = this.isDZMCompany(company);
+    const companyKey = isDZM ? 'dzm' : 'marbrasil';
+
+    // 1. Cache em memória por empresa (TTL de 30 min)
+    const cached = this.projectsCache[companyKey];
+    if (cached && Date.now() - cached.timestamp < 30 * 60 * 1000 && cached.data.length > 0) {
+      return cached.data;
+    }
+
     const map = new Map<string, string>();
 
     if (!isDZM) {
       try {
-        // 1. Tenta omie_dim_projetos
+        // 1. Tenta omie_dim_projetos com filtro estrito de empresa (Mar Brasil)
         const { data: dimProjs } = await supabase
           .from('omie_dim_projetos')
-          .select('codigo_projeto, descricao_projeto')
+          .select('codigo_projeto, descricao_projeto, empresa_nome')
+          .ilike('empresa_nome', '%Mar Brasil%')
           .order('descricao_projeto', { ascending: true });
 
         if (dimProjs && dimProjs.length > 0) {
@@ -633,9 +690,11 @@ export class ClaraConfigService {
         }
 
         if (map.size > 0) {
-          return Array.from(map.entries())
+          const list = Array.from(map.entries())
             .map(([codigo, descricao]) => ({ codigo, descricao }))
             .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+          this.projectsCache[companyKey] = { timestamp: Date.now(), data: list };
+          return list;
         }
       } catch (e: any) {
         console.warn('[ClaraConfigService] Erro ao consultar projetos no Supabase:', e.message);
@@ -667,15 +726,20 @@ export class ClaraConfigService {
         page++;
       } while (page <= totalPages && page <= 10);
 
-      return allProjects
+      const list = allProjects
         .map((p: any) => ({
           codigo: String(p.codigo || p.nCodProjeto || p.codigo_projeto),
           descricao: String(p.nome || p.descricao || p.descricao_projeto || p.codigo).trim(),
         }))
         .filter((p: any) => Boolean(p.codigo && p.descricao))
         .sort((a: any, b: any) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
+
+      if (list.length > 0) {
+        this.projectsCache[companyKey] = { timestamp: Date.now(), data: list };
+      }
+      return list;
     } catch {
-      return [];
+      return cached?.data || [];
     }
   }
 
