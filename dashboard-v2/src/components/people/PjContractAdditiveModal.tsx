@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { 
   X, 
   FileText, 
@@ -68,6 +68,20 @@ export function PjContractAdditiveModal({
   const [role, setRole] = useState<string>(newRole || employee.job_role || "");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCopiedZapSign, setIsCopiedZapSign] = useState(false);
+
+  // Sincroniza o estado interno sempre que o modal abre ou os dados recebidos mudam
+  useEffect(() => {
+    if (isOpen) {
+      setStep(0);
+      setAmount(newRemuneration || employee.remuneration_fixed || employee.remuneration || 0);
+      setRole(newRole || employee.job_role || "");
+      setStartDate(new Date().toISOString().split("T")[0]);
+      setVigenciaMode("indeterminado");
+      setCustomVigenciaDate("");
+      setAdditionalNotes("");
+      setIsCopiedZapSign(false);
+    }
+  }, [isOpen, newRemuneration, newRole, employee]);
 
   // Vigência calculada
   const calculatedVigencia = useMemo(() => {
@@ -289,30 +303,41 @@ Vigência: ${calculatedVigencia}`;
                         </>
                       )}
                       <span className="text-sm font-black text-slate-800 dark:text-slate-200 truncate">
-                        {formatPjRole(role) || "Prestador de Serviços"}
+                        {role || formatPjRole(role) || "Prestador de Serviços"}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Ações de Decisão */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={onSaveWithoutAdditive}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold uppercase tracking-wider transition-all"
-                >
-                  Não, Apenas Salvar Cadastro
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all"
-                >
-                  <span>Sim, Formalizar Termo Aditivo PJ</span>
-                  <ArrowRight size={14} />
-                </button>
+              {/* Explicação de Fluxo e Ações de Decisão */}
+              <div className="space-y-3 pt-2">
+                <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+                  <FileText size={16} className="text-blue-600 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong>Como funciona o fluxo:</strong> Ao clicar em <em>Avançar para Visualização da Minuta</em>, o sistema <strong>NÃO</strong> salvará o contrato imediatamente. Você definirá vigência no <strong>Passo 2</strong> e terá a <strong>visualização integral do documento timbrado no Passo 3</strong> para validar todos os dados antes de aprovar.
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={onSaveWithoutAdditive}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold uppercase tracking-wider transition-all"
+                    title="Salvar apenas os dados alterados no cadastro do colaborador sem gerar documento de aditivo"
+                  >
+                    Não, Apenas Salvar Cadastro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all"
+                    title="Avançar para definir vigência e validar a minuta timbrada antes de salvar"
+                  >
+                    <span>Sim, Avançar para Visualização da Minuta</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
               </div>
             </div>
           )}

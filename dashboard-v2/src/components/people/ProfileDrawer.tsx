@@ -7736,7 +7736,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       />
 
     {/* Modal de Termo Aditivo PJ e ZapSign com SLA */}
-      <PjContractAdditiveModal
+      {isPjAdditiveModalOpen && (
+        <PjContractAdditiveModal
+          key={`pj-additive-${profile.id || "new"}-${pjAdditiveChangeData.newRemuneration}-${pjAdditiveChangeData.newRole}`}
         isOpen={isPjAdditiveModalOpen}
         onClose={() => setIsPjAdditiveModalOpen(false)}
         employee={profile}
@@ -7746,7 +7748,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         newRole={pjAdditiveChangeData.newRole}
         onSaveWithoutAdditive={handleSaveWithoutAdditive}
         onConfirmAdditive={handleConfirmPjAdditive}
-      />
+        />
+      )}
 
     </AnimatePresence>
   );

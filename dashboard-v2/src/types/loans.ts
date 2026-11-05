@@ -621,7 +621,7 @@ export function formatPjRole(role?: string | null): string {
   if (!role) return '';
   const trimmed = role.trim();
   if (!trimmed) return '';
-  if (trimmed.toLowerCase().startsWith('terceirizado')) {
+  if (trimmed.toLowerCase().startsWith('terceiriz') || trimmed.toLowerCase().startsWith('prestador') || trimmed.toLowerCase().startsWith('prestação') || trimmed.toLowerCase().startsWith('prestacao')) {
     return trimmed;
   }
   return `Terceirizado ${trimmed}`;
