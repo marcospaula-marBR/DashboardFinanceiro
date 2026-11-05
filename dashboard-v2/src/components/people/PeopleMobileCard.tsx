@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Employee, getRemunerationLabel, inferEntityType } from "@/types/loans";
 import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar, MapPin, Coins } from "lucide-react";
 import { BprService } from "@/services/bpr.service";
+import { PjAdditiveService } from "@/services/pj-additive.service";
 import { 
   isExternalEntity, 
   formatWhatsAppLink, 
@@ -211,6 +212,22 @@ export function PeopleMobileCard({
           <span className={`text-[9px] font-black border uppercase px-2 py-0.5 rounded-full shrink-0 ${statusStyle}`}>
             {employee.status}
           </span>
+          {(() => {
+            const additiveSla = PjAdditiveService.checkPendingAdditiveSla(employee.links_aditivos);
+            if (!additiveSla.hasPending) return null;
+            return (
+              <span 
+                title={additiveSla.isOverdue ? `Atenção: Aditivo pendente de assinatura no ZapSign há ${additiveSla.daysElapsed} dias (> 5 dias)` : `Minuta em assinatura no ZapSign (${additiveSla.daysElapsed}d decorridos)`}
+                className={`text-[9px] font-black border uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                  additiveSla.isOverdue
+                    ? "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700 animate-pulse"
+                    : "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300"
+                }`}
+              >
+                {additiveSla.isOverdue ? "⚠️ Aditivo Pendente" : "ZapSign"} ({additiveSla.daysElapsed}d)
+              </span>
+            );
+          })()}
         </div>
 
         {/* Linha inferior (Embaixo do Status): Apenas o Logotipo da Empresa do Vínculo */}

@@ -19,6 +19,7 @@ import {
 
 import { MonthlyCost } from "@/types/loans";
 import { PeopleHRService } from "@/services/people-hr.service";
+import { PjAdditiveService } from "@/services/pj-additive.service";
 
 interface PeopleTableProps {
   employees: Employee[];
@@ -260,6 +261,7 @@ export function PeopleTable({
                 const displayName = isExternal && emp.corporate_name ? emp.corporate_name : emp.name;
                 const avatarSrc = emp.photo_url || emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e2e8f0&color=475569&bold=true`;
                 const waLink = formatWhatsAppLink(emp.phone_professional);
+                const additiveSla = PjAdditiveService.checkPendingAdditiveSla(emp.links_aditivos);
 
                 return (
                   <tr 
@@ -302,6 +304,18 @@ export function PeopleTable({
                             <span className={`text-[8px] px-1.5 py-0.5 rounded border font-black uppercase tracking-wider ${statusStyle}`}>
                               {emp.status}
                             </span>
+                            {additiveSla.hasPending && (
+                              <span 
+                                title={additiveSla.isOverdue ? `Atenção: Aditivo pendente de assinatura no ZapSign há ${additiveSla.daysElapsed} dias (> 5 dias)` : `Minuta em assinatura no ZapSign (${additiveSla.daysElapsed}d decorridos)`}
+                                className={`text-[8px] px-1.5 py-0.5 rounded border font-black uppercase tracking-wider inline-flex items-center gap-1 ${
+                                  additiveSla.isOverdue
+                                    ? "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700 animate-pulse"
+                                    : "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300"
+                                }`}
+                              >
+                                {additiveSla.isOverdue ? "⚠️ Aditivo Pendente" : "ZapSign"} ({additiveSla.daysElapsed}d)
+                              </span>
+                            )}
                             {isExternal ? (
                               emp.responsible_name && (
                                 <span className="text-[10px] font-semibold text-slate-400 truncate max-w-[150px] flex items-center gap-0.5">

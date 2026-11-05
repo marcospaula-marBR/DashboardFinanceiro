@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield, Users, LayoutGrid, List, SlidersHorizontal } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, UserRound, MapPin, GraduationCap, Loader2, Save, Upload, PenBox, CheckCircle2, Files, FileText, Trash2, ExternalLink, Briefcase, Coins, AlertCircle, Phone, Home, Building2, Search, Plus, Copy, Database, ArrowUpRight, ArrowDownRight, ArrowLeftRight, Network, Edit3, Filter, Download, BarChart3, Link as LinkIcon, KeyRound, ShieldAlert, CheckSquare, Square, Shield, Users, LayoutGrid, List, SlidersHorizontal, Sparkles, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, CartesianGrid } from 'recharts';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel, AuditIssue, RelationshipNature, EmployeeSystemAccess, SystemItem, inferEntityType } from "@/types/loans";
@@ -17,6 +17,8 @@ import { SystemsCatalogService } from "@/services/systems-catalog.service";
 import { OffboardingChecklistModal } from "./OffboardingChecklistModal";
 import { SystemAppIcon } from "./SystemAppIcon";
 import { GRUPO_EMPRESAS, formatPjRole } from "@/types/loans";
+import { PjContractAdditiveModal } from "./PjContractAdditiveModal";
+import { PjAdditiveService } from "@/services/pj-additive.service";
 
 interface HistoryItem {
   id: string;
@@ -121,6 +123,16 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   const [auditIssues, setAuditIssues] = useState<AuditIssue[]>([]);
   const [loanSummary, setLoanSummary] = useState<{ totalTaken: number; totalReceived: number; balance: number } | null>(null);
   const [bprYear, setBprYear] = useState<number>(new Date().getFullYear());
+
+  // PJ Contract Additive & ZapSign state
+  const [isPjAdditiveModalOpen, setIsPjAdditiveModalOpen] = useState(false);
+  const [pjAdditiveChangeData, setPjAdditiveChangeData] = useState<{
+    previousRemuneration?: number;
+    newRemuneration?: number;
+    previousRole?: string;
+    newRole?: string;
+  }>({});
+  const bypassAdditiveCheckRef = useRef(false);
 
   // Auditoria quick cost editor state
   const [editingCost, setEditingCost] = useState<MonthlyCost | null>(null);
@@ -621,6 +633,33 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       const oldProfile = employeeId ? await PeopleService.getEmployeeProfile(employeeId, isTestMode) : null;
       const oldRels = oldProfile?.relationships || [];
 
+      // Se for PJ, checar se houve alterações contratuais relevantes para perguntar sobre Termo Aditivo
+      if (isPJ && oldProfile && employeeId && !bypassAdditiveCheckRef.current) {
+        const prevAmount = oldProfile.remuneration_fixed ?? oldProfile.remuneration ?? 0;
+        const currentAmount = profile.remuneration_fixed ?? profile.remuneration ?? 0;
+        const prevRole = oldProfile.job_role || '';
+        const currentRole = profile.job_role || '';
+        const prevCompany = oldProfile.company || '';
+        const currentCompany = profile.company || '';
+
+        const hasSignificantContractChange =
+          (currentAmount > 0 && prevAmount > 0 && currentAmount !== prevAmount) ||
+          (currentRole && prevRole && currentRole !== prevRole) ||
+          (currentCompany && prevCompany && currentCompany !== prevCompany);
+
+        if (hasSignificantContractChange) {
+          setIsSaving(false);
+          setPjAdditiveChangeData({
+            previousRemuneration: prevAmount,
+            newRemuneration: currentAmount,
+            previousRole: prevRole,
+            newRole: currentRole,
+          });
+          setIsPjAdditiveModalOpen(true);
+          return;
+        }
+      }
+
       // Se for PJ, assegurar que o Escopo inicie com "Terceirizado "
       if (isPJ && profile.job_role) {
         profile.job_role = formatPjRole(profile.job_role);
@@ -664,6 +703,62 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setError(error.message || 'Erro ao salvar os dados.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+    const handleSaveWithoutAdditive = async () => {
+    setIsPjAdditiveModalOpen(false);
+    bypassAdditiveCheckRef.current = true;
+    try {
+      await handleSave();
+    } finally {
+      bypassAdditiveCheckRef.current = false;
+    }
+  };
+
+  const handleConfirmPjAdditive = async (data: {
+    startDate: string;
+    vigencia: string;
+    additionalNotes?: string;
+    newRemuneration: number;
+    newRole: string;
+  }) => {
+    try {
+      const updatedProfile = {
+        ...profile,
+        remuneration_fixed: data.newRemuneration,
+        remuneration: data.newRemuneration,
+        job_role: formatPjRole(data.newRole),
+      };
+
+      const newLinks = PjAdditiveService.appendPendingAdditiveToLinks(
+        profile.links_aditivos,
+        { date: data.startDate, amount: data.newRemuneration, role: data.newRole }
+      );
+      updatedProfile.links_aditivos = newLinks;
+
+      bypassAdditiveCheckRef.current = true;
+      const saved = await PeopleService.saveEmployeeProfile(updatedProfile, isTestMode, !employeeId);
+      bypassAdditiveCheckRef.current = false;
+
+      if (saved?.id) {
+        await PeopleService.insertHistoryItem({
+          employee_id: saved.id,
+          event_type: 'Aditivo PJ (ZapSign)',
+          change_date: data.startDate,
+          observations: `Minuta de Termo Aditivo PJ gerada para ZapSign (Pendente de Assinatura). De: R$ ${pjAdditiveChangeData.previousRemuneration || 0} -> Para: R$ ${data.newRemuneration.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, Novo Escopo: ${formatPjRole(data.newRole)}. Vigência: ${data.vigencia}.${data.additionalNotes ? ' Observações: ' + data.additionalNotes : ''} (SLA: 5 dias para anexar assinado)`,
+        }, isTestMode);
+
+        const updatedHist = await PeopleService.getEmployeeHistory(saved.id, isTestMode);
+        setHistory(updatedHist || []);
+      }
+
+      setProfile(updatedProfile);
+      setIsEditMode(false);
+      if (onDataChanged) onDataChanged(saved?.id || profile.id);
+    } catch (err: any) {
+      alert('Erro ao salvar aditivo no prontuário: ' + err.message);
+      throw err;
     }
   };
 
@@ -801,12 +896,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         setHistory(prev => prev.map(h => h.id === historyId ? { ...h, observations: newObs } : h));
       } else {
         // Vincula ao campo geral de aditivos do perfil
-        const currentText = profile.links_aditivos ? profile.links_aditivos + '\n' : '';
-        const newText = currentText + markdownLink;
+        // Vincula ao campo geral de aditivos do perfil
+        // Se houver aditivo pendente de assinatura, resolve para assinado via PjAdditiveService
+        const newText = PjAdditiveService.resolvePendingAdditiveInLinks(profile.links_aditivos, url, dateStr);
         handleChange('links_aditivos', newText);
         // Persiste apenas se o colaborador já existe no banco
         if (employeeId) {
           await PeopleService.saveEmployeeProfile({ ...profile, links_aditivos: newText }, isTestMode);
+          await PeopleService.insertHistoryItem({
+            employee_id: employeeId,
+            event_type: 'Aditivo PJ Assinado',
+            change_date: new Date().toISOString().split('T')[0],
+            observations: `Contrato/Aditivo assinado no ZapSign anexado com sucesso. [Ver Documento Assinado](${url})`,
+          }, isTestMode);
+          const updatedHist = await PeopleService.getEmployeeHistory(employeeId, isTestMode);
+          setHistory(updatedHist || []);
         }
       }
       if (employeeId && onDataChanged) onDataChanged();
@@ -3557,17 +3661,89 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                              />
                            </div>
                            <div>
-                             <div className="flex justify-between items-center mb-2">
-                               <label className="text-xs font-black text-slate-500 uppercase block">Meus Aditivos (Links ou Observações)</label>
-                               {profile.id && (
-                                 <label className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded cursor-pointer hover:bg-emerald-100 flex items-center gap-1 transition-all">
-                                   <Upload size={14} />
-                                   Anexar Arquivo
-                                   <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
-                                 </label>
-                               )}
-                             </div>
-                             <textarea 
+                              <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
+                                <label className="text-xs font-black text-slate-500 uppercase block">Meus Aditivos (Links ou Observações)</label>
+                                <div className="flex items-center gap-2">
+                                  {isPJ && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPjAdditiveChangeData({
+                                          previousRemuneration: profile.remuneration_fixed ?? profile.remuneration ?? 0,
+                                          newRemuneration: profile.remuneration_fixed ?? profile.remuneration ?? 0,
+                                          previousRole: profile.job_role || '',
+                                          newRole: profile.job_role || '',
+                                        });
+                                        setIsPjAdditiveModalOpen(true);
+                                      }}
+                                      className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all shadow-sm"
+                                      title="Gerar novo termo aditivo PJ para o ZapSign"
+                                    >
+                                      <Sparkles size={13} />
+                                      Gerar Aditivo PJ
+                                    </button>
+                                  )}
+                                  {profile.id && (
+                                    <label className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 border border-emerald-200 flex items-center gap-1 transition-all">
+                                      <Upload size={14} />
+                                      Anexar Arquivo
+                                      <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
+                                    </label>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Banner de SLA de 5 Dias (se houver pendência) */}
+                              {(() => {
+                                const sla = PjAdditiveService.checkPendingAdditiveSla(profile.links_aditivos);
+                                if (!sla.hasPending) return null;
+                                return (
+                                  <div className={`mb-3 p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                                    sla.isOverdue
+                                      ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200"
+                                      : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200"
+                                  }`}>
+                                    <div className="flex items-start gap-2.5">
+                                      {sla.isOverdue ? (
+                                        <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                      ) : (
+                                        <Clock size={16} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                                      )}
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-black uppercase tracking-wider">
+                                            {sla.isOverdue 
+                                              ? `⚠️ SLA Estourado: Aditivo em Assinatura há ${sla.daysElapsed} dias` 
+                                              : `Minuta em Assinatura no ZapSign (${sla.daysElapsed}d decorridos)`}
+                                          </span>
+                                          <span className={`px-2 py-0.2 text-[9px] font-black rounded-full uppercase ${
+                                            sla.isOverdue ? "bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100" : "bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-100"
+                                          }`}>
+                                            {sla.isOverdue ? "> 5 dias" : "SLA 5d"}
+                                          </span>
+                                        </div>
+                                        <p className="text-[11px] opacity-90">
+                                          {sla.isOverdue 
+                                            ? "A minuta foi emitida há mais de 5 dias e ainda não teve o contrato assinado anexado. Cobre o prestador ou anexe o documento final."
+                                            : "Aguardando coleta de todas as assinaturas no ZapSign para anexar a versão definitiva."}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <label className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-sm ${
+                                      sla.isOverdue 
+                                        ? "bg-amber-600 hover:bg-amber-700 text-white" 
+                                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                                    }`}>
+                                      <Upload size={13} />
+                                      Anexar Contrato Assinado
+                                      <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
+                                    </label>
+                                  </div>
+                                );
+                              })()}
+
+                              <textarea 
                                value={profile.links_aditivos || ''} 
                                onChange={e => handleChange('links_aditivos', e.target.value)} 
                                readOnly={!isEditMode} 
@@ -7526,6 +7702,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
             onDataChanged?.(profile.id);
           }
         }}
+      />
+
+    {/* Modal de Termo Aditivo PJ e ZapSign com SLA */}
+      <PjContractAdditiveModal
+        isOpen={isPjAdditiveModalOpen}
+        onClose={() => setIsPjAdditiveModalOpen(false)}
+        employee={profile}
+        previousRemuneration={pjAdditiveChangeData.previousRemuneration}
+        newRemuneration={pjAdditiveChangeData.newRemuneration}
+        previousRole={pjAdditiveChangeData.previousRole}
+        newRole={pjAdditiveChangeData.newRole}
+        onSaveWithoutAdditive={handleSaveWithoutAdditive}
+        onConfirmAdditive={handleConfirmPjAdditive}
       />
 
     </AnimatePresence>
