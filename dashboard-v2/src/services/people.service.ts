@@ -431,7 +431,9 @@ export class PeopleService {
       })(),
       company: normalizeCompanyName(raw.company),
       remuneration: parseFloat(String(raw.remuneration)) || 0,
-      remuneration_fixed: raw.remuneration_fixed ? parseFloat(String(raw.remuneration_fixed)) : 0,
+      remuneration_fixed: (raw.remuneration_fixed !== undefined && raw.remuneration_fixed !== null && Number(raw.remuneration_fixed) > 0)
+        ? parseFloat(String(raw.remuneration_fixed))
+        : (parseFloat(String(raw.remuneration)) || 0),
       remuneration_bonus: raw.remuneration_bonus ? parseFloat(String(raw.remuneration_bonus)) : 0,
       remuneration_commission: raw.remuneration_commission ? parseFloat(String(raw.remuneration_commission)) : 0,
       remuneration_connectivity: raw.remuneration_connectivity ? parseFloat(String(raw.remuneration_connectivity)) : (raw.metadata?.remuneration_connectivity ? parseFloat(String(raw.metadata.remuneration_connectivity)) : 0),

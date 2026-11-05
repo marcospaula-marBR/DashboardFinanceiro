@@ -101,6 +101,7 @@ export default function PeoplePage() {
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
   const [drawerInitialTab, setDrawerInitialTab] = useState<'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos'>('pessoal');
+  const [drawerInitialEditMode, setDrawerInitialEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isPayrollBatchModalOpen, setIsPayrollBatchModalOpen] = useState(false);

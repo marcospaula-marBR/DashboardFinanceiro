@@ -546,7 +546,9 @@ export const PeopleHRService = {
         avatar: emp.photo_url || (emp as any).avatar_url || undefined,
         responsible_cpf: emp.responsible_cpf || ((emp.document_id && emp.document_id.replace(/\D/g, '').length === 11) ? emp.document_id : undefined),
         responsible_rg: emp.responsible_rg,
-        remuneration_fixed: emp.remuneration_fixed ? parseFloat(String(emp.remuneration_fixed)) : 0,
+        remuneration_fixed: (emp.remuneration_fixed !== undefined && emp.remuneration_fixed !== null && Number(emp.remuneration_fixed) > 0)
+          ? parseFloat(String(emp.remuneration_fixed))
+          : (parseFloat(String(emp.remuneration)) || 0),
         remuneration_bonus: emp.remuneration_bonus ? parseFloat(String(emp.remuneration_bonus)) : 0,
         remuneration_commission: emp.remuneration_commission ? parseFloat(String(emp.remuneration_commission)) : 0,
         remuneration_connectivity: emp.remuneration_connectivity ? parseFloat(String(emp.remuneration_connectivity)) : (emp.metadata?.remuneration_connectivity ? parseFloat(String(emp.metadata.remuneration_connectivity)) : 0),

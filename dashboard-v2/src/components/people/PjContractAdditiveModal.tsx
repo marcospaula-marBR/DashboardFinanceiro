@@ -727,3 +727,4 @@ Vigência: ${calculatedVigencia}`;
     </div>
   );
 }
+

@@ -93,11 +93,12 @@ interface ProfileDrawerProps {
   isTestMode?: boolean;
   setores?: string[];
   initialTab?: 'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos' | 'bpr';
+  initialEditMode?: boolean;
   onOpenBatchAudit?: () => void;
   onOpenCompetenciasList?: (employeeName?: string, competencia?: string) => void;
 }
 
-export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [], initialTab = 'pessoal', onOpenBatchAudit, onOpenCompetenciasList }: ProfileDrawerProps) {
+export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTestMode: propIsTestMode, setores = [], initialTab = 'pessoal', initialEditMode = false, onOpenBatchAudit, onOpenCompetenciasList }: ProfileDrawerProps) {
   const { isTestMode: contextIsTestMode } = useDataMode();
   const isTestMode = propIsTestMode ?? contextIsTestMode;
   
@@ -342,7 +343,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
   useEffect(() => {
     if (isOpen) {
       if (employeeId) {
-        setIsEditMode(false);
+        setIsEditMode(Boolean(initialEditMode));
         fetchProfile(employeeId);
       } else {
         // Modo criação
@@ -378,7 +379,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       setProfile({});
       setError(null);
     }
-  }, [isOpen, employeeId, isTestMode, initialTab]);
+  }, [isOpen, employeeId, isTestMode, initialTab, initialEditMode]);
 
   // Fetch distinct service locations for autocomplete
   useEffect(() => {
@@ -635,8 +636,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
       // Se for PJ, checar se houve alterações contratuais relevantes para perguntar sobre Termo Aditivo
       if (isPJ && oldProfile && employeeId && !bypassAdditiveCheckRef.current) {
-        const prevAmount = oldProfile.remuneration_fixed ?? oldProfile.remuneration ?? 0;
-        const currentAmount = profile.remuneration_fixed ?? profile.remuneration ?? 0;
+        const prevAmount = (oldProfile.remuneration_fixed || oldProfile.remuneration || 0);
+        const currentAmount = (profile.remuneration_fixed || profile.remuneration || 0);
         const prevRole = oldProfile.job_role || '';
         const currentRole = profile.job_role || '';
         const prevCompany = oldProfile.company || '';
@@ -2667,15 +2668,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                           />
                         </div>
                         <div>
-                          <label className={labelClass}>Valor Contrato</label>
+                          <label className={labelClass}>{getRemunerationLabel(profile.linkType || 'CLT').full}</label>
                           <input 
                             type="number" 
                             step="0.01" 
-                            value={profile.remuneration_fixed ?? ''} 
+                            value={
+                              profile.remuneration_fixed !== undefined && profile.remuneration_fixed !== null
+                                ? (Number(profile.remuneration_fixed) === 0 && (Number(profile.remuneration) || 0) > 0 ? profile.remuneration : profile.remuneration_fixed)
+                                : ((profile.remuneration !== undefined && profile.remuneration !== null && Number(profile.remuneration) > 0) ? profile.remuneration : '')
+                            } 
                             onChange={e => {
-                              const val = parseFloat(e.target.value) || 0;
-                              handleChange('remuneration_fixed', val);
-                              const tot = val + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0);
+                              const rawVal = e.target.value;
+                              const val = rawVal === '' ? '' : parseFloat(rawVal);
+                              handleChange('remuneration_fixed', val as any);
+                              const numVal = typeof val === 'number' ? val : 0;
+                              const tot = numVal + (Number(profile.remuneration_bonus) || 0) + (Number(profile.remuneration_commission) || 0) + (Number(profile.remuneration_connectivity) || 0) + (Number(profile.remuneration_incentives) || 0);
                               handleChange('remuneration', tot);
                             }} 
                             readOnly={!isEditMode} 
@@ -2690,9 +2697,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             step="0.01" 
                             value={profile.remuneration_bonus ?? ''} 
                             onChange={e => {
-                              const val = parseFloat(e.target.value) || 0;
-                              handleChange('remuneration_bonus', val);
-                              const tot = (profile.remuneration_fixed || 0) + val + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0);
+                              const rawVal = e.target.value;
+                              const val = rawVal === '' ? '' : parseFloat(rawVal);
+                              handleChange('remuneration_bonus', val as any);
+                              const numVal = typeof val === 'number' ? val : 0;
+                              const baseVal = (Number(profile.remuneration_fixed) || Number(profile.remuneration) || 0);
+                              const tot = baseVal + numVal + (Number(profile.remuneration_commission) || 0) + (Number(profile.remuneration_connectivity) || 0) + (Number(profile.remuneration_incentives) || 0);
                               handleChange('remuneration', tot);
                             }} 
                             readOnly={!isEditMode} 
@@ -2707,9 +2717,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             step="0.01" 
                             value={profile.remuneration_connectivity ?? ''} 
                             onChange={e => {
-                              const val = parseFloat(e.target.value) || 0;
-                              handleChange('remuneration_connectivity', val);
-                              const tot = (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + val + (profile.remuneration_incentives || 0);
+                              const rawVal = e.target.value;
+                              const val = rawVal === '' ? '' : parseFloat(rawVal);
+                              handleChange('remuneration_connectivity', val as any);
+                              const numVal = typeof val === 'number' ? val : 0;
+                              const baseVal = (Number(profile.remuneration_fixed) || Number(profile.remuneration) || 0);
+                              const tot = baseVal + (Number(profile.remuneration_bonus) || 0) + (Number(profile.remuneration_commission) || 0) + numVal + (Number(profile.remuneration_incentives) || 0);
                               handleChange('remuneration', tot);
                             }} 
                             readOnly={!isEditMode} 
@@ -2724,9 +2737,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                             step="0.01" 
                             value={profile.remuneration_incentives ?? ''} 
                             onChange={e => {
-                              const val = parseFloat(e.target.value) || 0;
-                              handleChange('remuneration_incentives', val);
-                              const tot = (profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + val;
+                              const rawVal = e.target.value;
+                              const val = rawVal === '' ? '' : parseFloat(rawVal);
+                              handleChange('remuneration_incentives', val as any);
+                              const numVal = typeof val === 'number' ? val : 0;
+                              const baseVal = (Number(profile.remuneration_fixed) || Number(profile.remuneration) || 0);
+                              const tot = baseVal + (Number(profile.remuneration_bonus) || 0) + (Number(profile.remuneration_commission) || 0) + (Number(profile.remuneration_connectivity) || 0) + numVal;
                               handleChange('remuneration', tot);
                             }} 
                             readOnly={!isEditMode} 
@@ -2749,8 +2765,8 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                         </div>
                         <div>
                           <label className={labelClass}>{getRemunerationLabel(profile.linkType || 'CLT').bruto} (Total Geral)</label>
-                          <div className={`py-3 text-base text-slate-900 dark:text-white font-extrabold`}>
-                            {formatCurrency((profile.remuneration_fixed || 0) + (profile.remuneration_bonus || 0) + (profile.remuneration_commission || 0) + (profile.remuneration_connectivity || 0) + (profile.remuneration_incentives || 0))}
+                          <div className="py-3 text-base text-slate-900 dark:text-white font-extrabold">
+                            {formatCurrency((Number(profile.remuneration_fixed) || Number(profile.remuneration) || 0) + (Number(profile.remuneration_bonus) || 0) + (Number(profile.remuneration_commission) || 0) + (Number(profile.remuneration_connectivity) || 0) + (Number(profile.remuneration_incentives) || 0))}
                           </div>
                         </div>
                         <div>
@@ -3606,7 +3622,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       <CheckCircle2 size={10} /> Sincronizado
                                     </span>
                                   </div>
-                                  <input type="text" value={profile.responsible_name || ''} readOnly className={`${inputClass} bg-slate-50 dark:bg-slate-900 cursor-not-allowed`} placeholder="Auto-preenchido pelo nome pessoal"/>
+                                  <input 
+                                    type="text" 
+                                    value={profile.responsible_name || ''} 
+                                    onChange={e => handleChange('responsible_name', e.target.value)} 
+                                    readOnly={!isEditMode} 
+                                    className={inputClass} 
+                                    placeholder="Nome do representante legal"
+                                  />
                                   <p className="text-[10px] text-slate-400 mt-1">Titular que assina e responde pela prestação.</p>
                                 </div>
                                 <div>
@@ -3619,9 +3642,10 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   <input 
                                     type="text" 
                                     value={profile.responsible_cpf || (profile.document_id && profile.document_id.replace(/\D/g, '').length === 11 ? profile.document_id : '')} 
-                                    readOnly 
-                                    className={`${inputClass} bg-slate-50 dark:bg-slate-900 cursor-not-allowed font-mono text-xs`} 
-                                    placeholder="Auto-preenchido pelo CPF pessoal"
+                                    onChange={e => handleCPFChange(e.target.value)} 
+                                    readOnly={!isEditMode} 
+                                    className={`${inputClass} font-mono text-xs`} 
+                                    placeholder="000.000.000-00"
                                   />
                                   <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
                                     <UserRound size={10} className="text-blue-500 shrink-0" />
@@ -3770,13 +3794,20 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
                         <div className="grid grid-cols-2 gap-4">
                           <div className="col-span-2 md:col-span-1">
-                            <label className={labelClass}>Escopo do Contrato (Sincronizado)</label>
+                            <label className={labelClass}>Escopo do Contrato / Atuação</label>
                             <input 
                               type="text" 
                               value={profile.job_role || ''} 
-                              readOnly 
-                              className={`${inputClass} bg-slate-50 cursor-not-allowed`} 
-                              placeholder="Preencha na aba Info Pessoal" 
+                              onChange={e => handleChange('job_role', e.target.value)} 
+                              onBlur={() => {
+                                const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile));
+                                if (isPJ && profile.job_role) {
+                                  handleChange('job_role', formatPjRole(profile.job_role));
+                                }
+                              }}
+                              readOnly={!isEditMode} 
+                              className={inputClass} 
+                              placeholder={profile.linkType === 'PJ' ? "Ex: Terceirizado Consultoria em TI..." : "Ex: Analista Financeiro..."} 
                             />
                           </div>
 
