@@ -182,6 +182,14 @@ export function DrePainelFiltersBar({
     return periodoOptions.filter(p => p.endsWith(`/${shortYear}`));
   }, [periodoOptions, filters.ano]);
 
+  const regimeDateFieldLabel = useMemo(() => {
+    if (filters.regime === 'COMPETENCIA') return 'Data de Registro';
+    if (filters.regime === 'CAIXA') return 'Data da Liquidação';
+    return 'Data de Previsão';
+  }, [filters.regime]);
+
+  const hasDateRange = Boolean(filters.dataInicio || filters.dataFim);
+
   const activeFiltersCount =
     filters.empresas.length +
     filters.periodos.length +
@@ -192,6 +200,7 @@ export function DrePainelFiltersBar({
     filters.fornecedores.length +
     filters.contasCorrentes.length +
     (filters.ano && filters.ano !== 'TODOS' ? 1 : 0) +
+    (hasDateRange ? 1 : 0) +
     (filters.filtroParcelamento !== 'TODOS' ? 1 : 0) +
     (filters.filtroStatusVencimento !== 'TODOS' ? 1 : 0) +
     (filters.filtroRecorrencia !== 'TODOS' ? 1 : 0) +
@@ -209,6 +218,8 @@ export function DrePainelFiltersBar({
       fornecedores: [],
       contasCorrentes: [],
       ano: 'TODOS',
+      dataInicio: '',
+      dataFim: '',
       filtroParcelamento: 'TODOS',
       filtroStatusVencimento: 'TODOS',
       filtroRecorrencia: 'TODOS',
@@ -266,6 +277,50 @@ export function DrePainelFiltersBar({
               </button>
             );
           })}
+        </div>
+
+        {/* 2. Filtro de Período entre Dias (de dd/mm/aaaa até dd/mm/aaaa) conforme Regime */}
+        <div
+          className={`flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
+            hasDateRange
+              ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-400/20'
+              : 'bg-slate-50 border-slate-200'
+          }`}
+          title={`Filtrar entre dias pela ${regimeDateFieldLabel}`}
+        >
+          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-600 uppercase whitespace-nowrap">
+            <Calendar size={12} className={hasDateRange ? 'text-emerald-600' : 'text-slate-400'} />
+            <span>{regimeDateFieldLabel}:</span>
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-slate-500">de</span>
+            <input
+              type="date"
+              aria-label={`Data inicial (${regimeDateFieldLabel})`}
+              value={filters.dataInicio || ''}
+              onChange={(e) => onFilterChange({ ...filters, dataInicio: e.target.value })}
+              className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer min-h-[26px]"
+            />
+            <span className="text-[11px] font-semibold text-slate-500">até</span>
+            <input
+              type="date"
+              aria-label={`Data final (${regimeDateFieldLabel})`}
+              value={filters.dataFim || ''}
+              min={filters.dataInicio || undefined}
+              onChange={(e) => onFilterChange({ ...filters, dataFim: e.target.value })}
+              className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer min-h-[26px]"
+            />
+            {hasDateRange && (
+              <button
+                type="button"
+                onClick={() => onFilterChange({ ...filters, dataInicio: '', dataFim: '' })}
+                title="Limpar período entre dias"
+                className="p-0.5 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* MultiSelects Principais */}

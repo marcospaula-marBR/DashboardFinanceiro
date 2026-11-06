@@ -17,7 +17,7 @@ import {
   Download
 } from 'lucide-react';
 import { DrePainelLancamento, RegimeTipo } from '@/types/dre-painel';
-import { formatCurrencyBRL } from '@/services/dre-painel.service';
+import { formatCurrencyBRL, isCategoriaNaoOperacionalExcluida } from '@/services/dre-painel.service';
 
 export type DrilldownCardType = 'RECEITAS' | 'DESPESAS' | 'RESULTADO' | 'PROVISOES';
 
@@ -42,18 +42,23 @@ export function DrePainelKpiDrilldownModal({
   const [activeTab, setActiveTab] = useState<'contas' | 'categorias' | 'fornecedores' | 'lancamentos'>('categorias');
   const [selectedConta, setSelectedConta] = useState<string | null>(null);
 
-  // Filtrar lançamentos que pertencem ao card selecionado
+  // Filtrar lançamentos que pertencem ao card selecionado (excluindo categorias não-operacionais)
   const filteredItems = useMemo(() => {
+    const baseOperacional = lancamentos.filter(
+      l =>
+        !isCategoriaNaoOperacionalExcluida(l.categoria, '', l.empresa) &&
+        !isCategoriaNaoOperacionalExcluida(l.conta_dre, '', l.empresa)
+    );
     let items: DrePainelLancamento[] = [];
     if (cardType === 'RECEITAS') {
-      items = lancamentos.filter(l => l.sinal_valor > 0);
+      items = baseOperacional.filter(l => l.sinal_valor > 0);
     } else if (cardType === 'DESPESAS') {
-      items = lancamentos.filter(l => l.sinal_valor < 0);
+      items = baseOperacional.filter(l => l.sinal_valor < 0);
     } else if (cardType === 'PROVISOES') {
-      items = lancamentos.filter(l => l.is_provisao);
+      items = baseOperacional.filter(l => l.is_provisao);
     } else {
-      // RESULTADO: todos
-      items = [...lancamentos];
+      // RESULTADO OPERACIONAL: todos operacionais
+      items = [...baseOperacional];
     }
 
     if (selectedConta) {
@@ -129,14 +134,14 @@ export function DrePainelKpiDrilldownModal({
       icon: <TrendingUp className="text-emerald-600" size={20} />
     },
     DESPESAS: {
-      title: 'Detalhamento: Total Despesas & Custos',
-      desc: 'Composição analítica de todos os desembolsos, custos operacionais e gastos',
+      title: regime === 'PREVISAO' ? 'Detalhamento: Despesas Previstas' : 'Detalhamento: Total Despesas & Custos',
+      desc: 'Composição analítica de desembolsos e custos operacionais (sem Distribuição de dividendos e Mútuo-Saídas)',
       badgeColor: 'bg-rose-50 text-rose-800 border-rose-200',
       icon: <TrendingDown className="text-rose-600" size={20} />
     },
     RESULTADO: {
-      title: 'Detalhamento: Resultado Líquido',
-      desc: 'Confronto analítico integral entre entradas e saídas do exercício',
+      title: 'Detalhamento: Resultado Operacional',
+      desc: 'Confronto analítico operacional entre entradas e saídas do exercício',
       badgeColor: 'bg-blue-50 text-blue-800 border-blue-200',
       icon: <PieChart className="text-blue-600" size={20} />
     },

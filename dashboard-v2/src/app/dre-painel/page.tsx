@@ -6,7 +6,7 @@ import {
   DrePainelLancamento,
   DrePainelFilters
 } from '@/types/dre-painel';
-import { DrePainelService } from '@/services/dre-painel.service';
+import { DrePainelService, isValidIsoDateInput } from '@/services/dre-painel.service';
 import { DrePainelHeader } from '@/components/dre-painel/DrePainelHeader';
 import { DrePainelRegimeSelector } from '@/components/dre-painel/DrePainelRegimeSelector';
 import { DrePainelFiltersBar } from '@/components/dre-painel/DrePainelFiltersBar';
@@ -57,6 +57,8 @@ export default function DrePainelPage() {
     fornecedores: [],
     contasCorrentes: [],
     ano: 'TODOS',
+    dataInicio: '',
+    dataFim: '',
     filtroParcelamento: 'TODOS',
     filtroStatusVencimento: 'TODOS',
     filtroRecorrencia: 'TODOS',
@@ -68,12 +70,18 @@ export default function DrePainelPage() {
     setFilters(prev => ({ ...prev, regime }));
   }, [regime]);
 
+  const validDataInicio = isValidIsoDateInput(filters.dataInicio) ? filters.dataInicio!.trim() : '';
+  const validDataFim = isValidIsoDateInput(filters.dataFim) ? filters.dataFim!.trim() : '';
+
   // Carregar dados
-  const loadData = useCallback(async (currentRegime: RegimeTipo) => {
+  const loadData = useCallback(async (
+    currentRegime: RegimeTipo,
+    dateRange?: { dataInicio?: string; dataFim?: string }
+  ) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const { lancamentos, error } = await DrePainelService.fetchLancamentos(currentRegime);
+      const { lancamentos, error } = await DrePainelService.fetchLancamentos(currentRegime, dateRange);
       if (error) {
         setErrorMsg(error);
       } else {
@@ -90,9 +98,17 @@ export default function DrePainelPage() {
     }
   }, []);
 
+  // Quando o regime muda, ou quando no regime COMPETENCIA o filtro diário (dataInicio / dataFim) muda, recarrega a base apropriada
+  const competenciaDateTrigger = regime === 'COMPETENCIA' ? `${validDataInicio}|${validDataFim}` : '';
+
   useEffect(() => {
-    loadData(regime);
-  }, [regime, loadData]);
+    loadData(
+      regime,
+      regime === 'COMPETENCIA'
+        ? { dataInicio: validDataInicio, dataFim: validDataFim }
+        : undefined
+    );
+  }, [regime, competenciaDateTrigger, validDataInicio, validDataFim, loadData]);
 
   // Opções dinâmicas para filtros
   const options = useMemo(() => {
@@ -155,6 +171,21 @@ export default function DrePainelPage() {
     if (filters.periodos.length > 0) {
       return options.periodos.filter(p => filters.periodos.includes(p));
     }
+    // Se houver filtro de período entre dias (de dd/mm/aaaa até dd/mm/aaaa), exibir os meses correspondentes aos lançamentos filtrados
+    if (validDataInicio || validDataFim) {
+      const pMap = new Map<string, number>();
+      filteredLancamentos.forEach(l => {
+        if (l.periodo && l.periodo !== 'N/A') {
+          pMap.set(l.periodo, l.periodoNum);
+        }
+      });
+      const sorted = Array.from(pMap.entries())
+        .sort((a, b) => a[1] - b[1])
+        .map(([p]) => p);
+      if (sorted.length > 0) {
+        return sorted.slice(-24);
+      }
+    }
     // Se o subfiltro de ano estiver ativo, mostrar todos os meses daquele ano
     if (filters.ano && filters.ano !== 'TODOS') {
       const shortYear = filters.ano.slice(-2);
@@ -162,7 +193,7 @@ export default function DrePainelPage() {
     }
     // Por padrão mostrar os últimos 12 meses disponíveis
     return options.periodos.slice(-12);
-  }, [filters.periodos, filters.ano, options.periodos]);
+  }, [filters.periodos, filters.ano, validDataInicio, validDataFim, filteredLancamentos, options.periodos]);
 
   // Seções da Tabela DRE
   const tableSections = useMemo(() => {
@@ -193,7 +224,14 @@ export default function DrePainelPage() {
       {/* 1. Header Fixo com Botão "Voltar ao Início" */}
       <DrePainelHeader
         regime={regime}
-        onRefresh={() => loadData(regime)}
+        onRefresh={() =>
+          loadData(
+            regime,
+            regime === 'COMPETENCIA'
+              ? { dataInicio: validDataInicio, dataFim: validDataFim }
+              : undefined
+          )
+        }
         isLoading={isLoading}
         lastUpdate={lastUpdate}
         isMeetingMode={isMeetingMode}

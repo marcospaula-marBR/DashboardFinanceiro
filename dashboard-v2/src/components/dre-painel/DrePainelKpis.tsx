@@ -76,7 +76,11 @@ export function DrePainelKpisCards({
         </div>
         <div className="flex items-center justify-between mt-1">
           <p className="text-[11px] text-slate-400 truncate">
-            {regime === 'COMPETENCIA' ? 'Custos, despesas e provisões' : 'Saídas liquidadas'}
+            {regime === 'COMPETENCIA'
+              ? 'Custos, despesas e provisões operacionais'
+              : regime === 'PREVISAO'
+              ? 'Saídas operacionais previstas (s/ dividendos e mútuo)'
+              : 'Saídas operacionais liquidadas'}
           </p>
           <span className="text-[10px] font-semibold text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0">
             Detalhes <ArrowUpRight size={11} className="ml-0.5" />
@@ -84,7 +88,7 @@ export function DrePainelKpisCards({
         </div>
       </div>
 
-      {/* 3. Resultado Líquido & Margem */}
+      {/* 3. Resultado Operacional & Margem */}
       <div
         onClick={() => onCardClick && onCardClick('RESULTADO')}
         className={`border rounded-2xl p-3 sm:p-4 shadow-xs relative overflow-hidden transition-all duration-200 cursor-pointer group ${
@@ -95,7 +99,7 @@ export function DrePainelKpisCards({
       >
         <div className="flex items-center justify-between text-slate-600 mb-1">
           <span className="text-[11px] font-bold uppercase tracking-wider">
-            Resultado Líquido
+            Resultado Operacional
           </span>
           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
             isPositivo

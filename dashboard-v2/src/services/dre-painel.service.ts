@@ -191,28 +191,114 @@ export function resolveContaCorrente(raw: any, rawDet: any): string {
   return 'Conta Corrente Principal';
 }
 
+/**
+ * Identifica categorias não-operacionais que NÃO devem compor as despesas
+ * ou o Resultado Operacional do Painel Financeiro Multivisão:
+ * - "Distribuição de dividendos" / "Distribuição de Dividendos" / "Distribuição Lucro"
+ * - "Mútuo-Saídas" / "Mútuo - Saídas"
+ */
+export function isCategoriaNaoOperacionalExcluida(
+  categoria: string,
+  codigoCategoria?: string,
+  empresa?: string
+): boolean {
+  const catNorm = (categoria || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  const cod = (codigoCategoria || '').trim();
+  const empNorm = (empresa || '').trim().toLowerCase();
+
+  // Preservar "Dividendos Recebidos" (1.02.01 - receita financeira)
+  if (catNorm.includes('dividendos recebidos') || cod === '1.02.01') {
+    return false;
+  }
+
+  // Preservar "2.01.97 | Divisão de Lucro" da DZM (Custo dos Serviços Prestados operacional)
+  if (cod === '2.01.97' || catNorm.includes('2.01.97')) {
+    return false;
+  }
+
+  // 1. Distribuição de dividendos / Distribuição de Lucro
+  if (
+    catNorm.includes('distribuicao de dividendo') ||
+    catNorm.includes('distribuicao dividendo') ||
+    catNorm.includes('distribuicao de lucro') ||
+    catNorm === 'distribuicao lucro' ||
+    (cod === '2.03.90' && empNorm.includes('mar')) ||
+    ((cod === '2.03.93' || cod === '2.08.92') && empNorm.includes('dzm'))
+  ) {
+    return true;
+  }
+
+  // 2. Mútuo-Saídas / Mútuo - Saídas
+  const catCompact = catNorm.replace(/\s+/g, '');
+  if (
+    catCompact.includes('mutuo-saida') ||
+    catCompact.includes('mutuosaida') ||
+    (catNorm.includes('mutuo') && catNorm.includes('saida'))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Retorna a data de referência (YYYY-MM-DD) do lançamento de acordo com o regime selecionado:
+ * - COMPETENCIA = data de registro (data_competencia)
+ * - CAIXA = data da liquidação (data_caixa)
+ * - PREVISAO = data de previsão (data_previsao || data_vencimento)
+ */
+export function getLancamentoDateByRegime(
+  l: DrePainelLancamento,
+  regime: RegimeTipo
+): string | null {
+  if (regime === 'COMPETENCIA') {
+    return l.data_competencia || null;
+  }
+  if (regime === 'CAIXA') {
+    return l.data_caixa || l.data_competencia || null;
+  }
+  // PREVISAO
+  return l.data_previsao || l.data_vencimento || l.data_competencia || null;
+}
+
+/**
+ * Valida se uma string de data está completa e em formato ISO válido (YYYY-MM-DD, ano >= 2000)
+ */
+export function isValidIsoDateInput(dateStr?: string): boolean {
+  if (!dateStr) return false;
+  return /^(20\d{2})-\d{2}-\d{2}$/.test(dateStr.trim());
+}
+
 export class DrePainelService {
   /**
    * Carrega os lançamentos unificados respeitando:
    * 1. Regime de Competência:
    *    - Calibragem autoritativa 100% exata com o Dashboard DRE (dre_snapshots + dre_lancamentos)
-   *    - Provisões ativas de receitas e despesas
-   *    - Contas correntes bancárias autênticas (Bradesco, Sicredi, Omie.CASH, Itaú, Flash, Clara, etc.)
+   *    - Quando filtro diário (dataInicio / dataFim) estiver ativo, consulta omie_financas_unificado por data_registro
+   *    - Exclusão de categorias não-operacionais ("Distribuição de dividendos" e "Mútuo-Saídas")
    * 2. Regime de Caixa:
    *    - Saídas e entradas efetivamente pagas/recebidas (data_pagamento) da tabela unificada Omie
-   *    - Ingestão atualizada incluindo os lançamentos de 25/09 (credenciados administrativos) e liquidações correntes
-   *    - Mapeamento analítico de contas bancárias
    * 3. Fluxo & Previsão:
-   *    - Obrigações a vencer e em aberto
-   *    - Inclusão mandatória de Provisões de Receitas como entradas projetadas
+   *    - Obrigações a vencer e em aberto filtradas por data_previsao
    */
-  static async fetchLancamentos(regime: RegimeTipo): Promise<{
+  static async fetchLancamentos(
+    regime: RegimeTipo,
+    dateRange?: { dataInicio?: string; dataFim?: string }
+  ): Promise<{
     lancamentos: DrePainelLancamento[];
     error: string | null;
   }> {
     try {
-      // 1. REGIME DE COMPETÊNCIA: CALIBRAGEM AUTORITATIVA 100% COM DASHBOARD DRE
-      if (regime === 'COMPETENCIA') {
+      const dataInicioVal = isValidIsoDateInput(dateRange?.dataInicio) ? dateRange!.dataInicio!.trim() : '';
+      const dataFimVal = isValidIsoDateInput(dateRange?.dataFim) ? dateRange!.dataFim!.trim() : '';
+      const hasCustomDailyRange = Boolean(dataInicioVal || dataFimVal);
+
+      // 1. REGIME DE COMPETÊNCIA (SEM FILTRO DIÁRIO): CALIBRAGEM AUTORITATIVA 100% COM DASHBOARD DRE
+      if (regime === 'COMPETENCIA' && !hasCustomDailyRange) {
         const { data: snapData, error: snapError } = await supabase
           .from('dre_snapshots')
           .select('raw_data')
@@ -295,6 +381,15 @@ export class DrePainelService {
           const emp = normalizeEmpresa(r.Empresa);
           const contaDre = (r.ContaDRE || 'Despesas Administrativas').trim();
           const categoria = (r.Categoria || 'Diversos').trim();
+
+          // Excluir categorias não-operacionais ("Distribuição de dividendos" e "Mútuo-Saídas")
+          if (
+            isCategoriaNaoOperacionalExcluida(categoria, '', emp) ||
+            isCategoriaNaoOperacionalExcluida(contaDre, '', emp)
+          ) {
+            return;
+          }
+
           const catLow = categoria.toLowerCase();
           const forn = decodeHtmlEntities(String(r.Fornecedor || r.Cliente || 'Diversos')).trim();
           const depto = decodeHtmlEntities(String(r.Departamento || 'Geral')).trim();
@@ -359,7 +454,7 @@ export class DrePainelService {
         return { lancamentos: lancamentosComp, error: null };
       }
 
-      // 2. REGIME DE CAIXA E FLUXO/PREVISÃO:
+      // 2. REGIME DE CAIXA, FLUXO/PREVISÃO E COMPETÊNCIA COM FILTRO DIÁRIO (de dd/mm/aaaa até dd/mm/aaaa):
       // Mapa de De-Para de Categorias para Contas DRE do Snapshot
       const catToConta = new Map<string, string>();
       let snapRows: any[] = [];
@@ -412,21 +507,34 @@ export class DrePainelService {
       const limit = 1000;
       let hasMore = true;
 
-      let query = supabase
-        .from('omie_financas_unificado')
-        .select('id, empresa_nome, omie_id, tipo_registro, status, valor_total, valor_alocado, data_pagamento, data_vencimento, data_emissao, data_previsao, data_registro, projeto_nome, departamento_nome, categoria_codigo, categoria_nome, cliente_fornecedor, numero_documento, raw_data')
-        .neq('status', 'CANCELADO');
-
-      if (regime === 'CAIXA') {
-        query = query.not('data_pagamento', 'is', null).gte('data_pagamento', '2025-06-01');
-      } else {
-        // PREVISAO: vencimentos futuros ou em aberto
-        query = query.or('data_vencimento.gte.2025-06-01,data_previsao.gte.2025-06-01');
-      }
-
       while (hasMore) {
+        let query = supabase
+          .from('omie_financas_unificado')
+          .select('id, empresa_nome, omie_id, tipo_registro, status, valor_total, valor_alocado, data_pagamento, data_vencimento, data_emissao, data_previsao, data_registro, projeto_nome, departamento_nome, categoria_codigo, categoria_nome, cliente_fornecedor, numero_documento, raw_data')
+          .neq('status', 'CANCELADO');
+
+        if (regime === 'COMPETENCIA') {
+          query = query.not('data_registro', 'is', null);
+          if (dataInicioVal) {
+            query = query.gte('data_registro', dataInicioVal);
+          } else {
+            query = query.gte('data_registro', '2025-06-01');
+          }
+          if (dataFimVal) {
+            query = query.lte('data_registro', dataFimVal);
+          }
+        } else if (regime === 'CAIXA') {
+          query = query.not('data_pagamento', 'is', null).gte('data_pagamento', '2025-06-01');
+        } else {
+          // PREVISAO: somente títulos em aberto / previstos (não pagos)
+          query = query
+            .neq('status', 'PAGO')
+            .or('data_vencimento.gte.2025-06-01,data_previsao.gte.2025-06-01');
+        }
+
         const { data, error } = await query
           .order('data_registro', { ascending: false })
+          .order('id', { ascending: true })
           .range(from, from + limit - 1);
 
         if (error) {
@@ -460,11 +568,13 @@ export class DrePainelService {
         // - Conectius: Omie somente >= 2026-07-01
         // - Mar Brasil, DZM, G2: Omie somente >= 2025-06-01
         if (emp === 'Conectius') {
+          if (regime === 'COMPETENCIA' && (!dtCompetencia || dtCompetencia < '2026-07-01')) return;
           if (regime === 'CAIXA' && (!dtCaixa || dtCaixa < '2026-07-01')) return;
-          if (regime === 'PREVISAO' && (!dtVenc || dtVenc < '2026-07-01')) return;
+          if (regime === 'PREVISAO' && (!dtPrev || dtPrev < '2026-07-01')) return;
         } else {
+          if (regime === 'COMPETENCIA' && (!dtCompetencia || dtCompetencia < '2025-06-01')) return;
           if (regime === 'CAIXA' && (!dtCaixa || dtCaixa < '2025-06-01')) return;
-          if (regime === 'PREVISAO' && (!dtVenc || dtVenc < '2025-06-01')) return;
+          if (regime === 'PREVISAO' && (!dtPrev || dtPrev < '2025-06-01')) return;
         }
 
         const raw = item.raw_data || {};
@@ -472,6 +582,11 @@ export class DrePainelService {
         const catCodigo = String(item.categoria_codigo || rawDet.cCodCateg || '').trim();
         const catNome = decodeHtmlEntities(String(item.categoria_nome || rawDet.cDesCateg || '')).trim();
         const catNomeLow = catNome.toLowerCase();
+
+        // 0. Desconsiderar categorias não-operacionais ("Distribuição de dividendos" e "Mútuo-Saídas")
+        if (isCategoriaNaoOperacionalExcluida(catNome, catCodigo, emp)) {
+          return;
+        }
 
         // 1. Desconsiderar Transferências Internas
         if (
@@ -543,16 +658,23 @@ export class DrePainelService {
           }
         }
 
+        if (isCategoriaNaoOperacionalExcluida(contaDre, catCodigo, emp)) {
+          return;
+        }
+
         // Valor e Sinal
         const valorAlocado = Number(item.valor_alocado || item.valor_total || 0);
         const valorAbs = Math.abs(valorAlocado);
         const isReceita = item.tipo_registro === 'RECEBER' || isProvisaoReceita || (item.tipo_registro === 'MOVIMENTO' && rawDet.cNatureza === 'R');
         const sinalValor = isReceita ? valorAbs : -valorAbs;
 
-        // Data base do Regime
+        // Data base do Regime:
+        // - COMPETENCIA = data de registro (dtCompetencia)
+        // - CAIXA = data da liquidação (dtCaixa)
+        // - PREVISAO = data de previsão (dtPrev)
         let dateForPeriod = dtCompetencia;
         if (regime === 'CAIXA') dateForPeriod = dtCaixa || dtCompetencia;
-        if (regime === 'PREVISAO') dateForPeriod = dtVenc || dtPrev || dtCompetencia;
+        if (regime === 'PREVISAO') dateForPeriod = dtPrev || dtVenc || dtCompetencia;
 
         const { periodo, periodoNum } = parsePeriodoFromDate(dateForPeriod);
 
@@ -648,13 +770,22 @@ export class DrePainelService {
         });
       });
 
-      // 3. Incorporar Dados Históricos Congelados do Snapshot
-      // Para meses anteriores ao marco temporal de cada empresa
-      if (snapRows.length > 0) {
+      // 3. Incorporar Dados Históricos Congelados do Snapshot (somente para regimes realizados: CAIXA ou COMPETENCIA)
+      // No regime PREVISAO (Fluxo & Previsão), não injetamos histórico pago congelado.
+      if (regime !== 'PREVISAO' && snapRows.length > 0) {
         snapRows.forEach((r: any, idx: number) => {
           const emp = normalizeEmpresa(r.Empresa);
           const contaDre = (r.ContaDRE || 'Sem Conta').trim();
           const categoria = (r.Categoria || 'Diversos').trim();
+
+          // Excluir categorias não-operacionais ("Distribuição de dividendos" e "Mútuo-Saídas")
+          if (
+            isCategoriaNaoOperacionalExcluida(categoria, '', emp) ||
+            isCategoriaNaoOperacionalExcluida(contaDre, '', emp)
+          ) {
+            return;
+          }
+
           const forn = decodeHtmlEntities(String(r.Fornecedor || r.Cliente || 'Diversos')).trim();
           const depto = decodeHtmlEntities(String(r.Departamento || 'Geral')).trim();
           const proj = normalizeProjectName(decodeHtmlEntities(String(r.Projeto || 'Geral')).trim());
@@ -687,6 +818,9 @@ export class DrePainelService {
             }
 
             if (!isHistoricoCongelado) return;
+
+            if (dataInicioVal && dtRef < dataInicioVal) return;
+            if (dataFimVal && dtRef > dataFimVal) return;
 
             const isReceita = contaDre.toLowerCase().includes('receita');
             const valorAbs = Math.abs(valNum);
@@ -741,13 +875,35 @@ export class DrePainelService {
     lancamentos: DrePainelLancamento[],
     filters: DrePainelFilters
   ): DrePainelLancamento[] {
+    const dataInicioVal = isValidIsoDateInput(filters.dataInicio) ? filters.dataInicio!.trim() : '';
+    const dataFimVal = isValidIsoDateInput(filters.dataFim) ? filters.dataFim!.trim() : '';
+
     return lancamentos.filter(l => {
+      // 0. Garantia de exclusão de categorias não-operacionais ("Distribuição de dividendos" e "Mútuo-Saídas")
+      if (
+        isCategoriaNaoOperacionalExcluida(l.categoria, '', l.empresa) ||
+        isCategoriaNaoOperacionalExcluida(l.conta_dre, '', l.empresa)
+      ) {
+        return false;
+      }
+
       // 1. Empresa
       if (filters.empresas.length > 0 && !filters.empresas.includes(l.empresa)) {
         return false;
       }
 
-      // 2. Subfiltro de Ano (TODOS | 2024 | 2025 | 2026)
+      // 2. Filtro entre dias (de dd/mm/aaaa até dd/mm/aaaa) conforme a data do Regime selecionado:
+      // - COMPETENCIA = data de registro (data_competencia)
+      // - CAIXA = data da liquidação (data_caixa)
+      // - PREVISAO = data de previsão (data_previsao)
+      if (dataInicioVal || dataFimVal) {
+        const dtRef = getLancamentoDateByRegime(l, filters.regime);
+        if (!dtRef) return false;
+        if (dataInicioVal && dtRef < dataInicioVal) return false;
+        if (dataFimVal && dtRef > dataFimVal) return false;
+      }
+
+      // 3. Subfiltro de Ano (TODOS | 2024 | 2025 | 2026)
       if (filters.ano && filters.ano !== 'TODOS') {
         const shortYear = filters.ano.slice(-2);
         if (!l.periodo.endsWith(`/${shortYear}`)) {
@@ -755,69 +911,69 @@ export class DrePainelService {
         }
       }
 
-      // 3. Períodos específicos
+      // 4. Períodos específicos
       if (filters.periodos.length > 0 && !filters.periodos.includes(l.periodo)) {
         return false;
       }
 
-      // 4. Conta DRE
+      // 5. Conta DRE
       if (filters.contasDre.length > 0 && !filters.contasDre.includes(l.conta_dre)) {
         return false;
       }
 
-      // 5. Departamento
+      // 6. Departamento
       if (filters.departamentos.length > 0) {
         const hasDepto = filters.departamentos.includes(l.departamento) ||
           (l.rateios && l.rateios.some(r => filters.departamentos.includes(r.departamento)));
         if (!hasDepto) return false;
       }
 
-      // 6. Projeto
+      // 7. Projeto
       if (filters.projetos.length > 0 && !filters.projetos.includes(l.projeto)) {
         return false;
       }
 
-      // 7. Categoria
+      // 8. Categoria
       if (filters.categorias.length > 0 && !filters.categorias.includes(l.categoria)) {
         return false;
       }
 
-      // 8. Fornecedor / Cliente
+      // 9. Fornecedor / Cliente
       if (filters.fornecedores.length > 0 && !filters.fornecedores.includes(l.fornecedor_cliente)) {
         return false;
       }
 
-      // 9. Conta Corrente Bancária
+      // 10. Conta Corrente Bancária
       if (filters.contasCorrentes.length > 0 && !filters.contasCorrentes.includes(l.conta_corrente)) {
         return false;
       }
 
-      // 10. Granularidade de Parcelamento
+      // 11. Granularidade de Parcelamento
       if (filters.filtroParcelamento === 'A_VISTA' && l.tipo_pagamento !== 'A_VISTA') return false;
       if (filters.filtroParcelamento === 'PARCELADO_GERAL' && l.tipo_pagamento !== 'PARCELADO') return false;
       if (filters.filtroParcelamento === 'PARCELA_ANTERIOR' && !l.is_parcela_anterior) return false;
       if (filters.filtroParcelamento === 'LONGO_PRAZO' && !l.is_longo_prazo) return false;
 
-      // 11. Status de Vencimento
+      // 12. Status de Vencimento
       if (filters.filtroStatusVencimento === 'EM_ATRASO' && !l.is_em_atraso) return false;
       if (filters.filtroStatusVencimento === 'A_VENCER' && (l.status === 'PAGO' || l.is_em_atraso)) return false;
       if (filters.filtroStatusVencimento === 'PAGO' && l.status !== 'PAGO') return false;
 
-      // 12. Recorrência
+      // 13. Recorrência
       if (filters.filtroRecorrencia === 'SOMENTE_RECORRENTES' && !l.is_recorrente) return false;
       if (filters.filtroRecorrencia === 'SOMENTE_PONTUAIS' && l.is_recorrente) return false;
 
-      // 13. Ocultar Categorias
+      // 14. Ocultar Categorias
       if (filters.ocultarCategorias && filters.ocultarCategorias.length > 0) {
         if (filters.ocultarCategorias.includes(l.categoria)) return false;
       }
 
-      // 14. Ocultar Projetos
+      // 15. Ocultar Projetos
       if (filters.ocultarProjetos && filters.ocultarProjetos.length > 0) {
         if (filters.ocultarProjetos.includes(l.projeto)) return false;
       }
 
-      // 15. Busca textual rápida
+      // 16. Busca textual rápida
       if (filters.search) {
         const s = filters.search.toLowerCase();
         const str = `${l.fornecedor_cliente} ${l.categoria} ${l.projeto} ${l.departamento} ${l.conta_corrente} ${l.numero_documento || ''} ${l.observacoes || ''}`.toLowerCase();
@@ -829,7 +985,7 @@ export class DrePainelService {
   }
 
   /**
-   * Calcula os KPIs executivos
+   * Calcula os KPIs executivos operacionais
    */
   static calculateKpis(lancamentos: DrePainelLancamento[]): DrePainelKpis {
     let totalReceitas = 0;
@@ -840,6 +996,13 @@ export class DrePainelService {
     let totalProvisoes = 0;
 
     lancamentos.forEach(l => {
+      if (
+        isCategoriaNaoOperacionalExcluida(l.categoria, '', l.empresa) ||
+        isCategoriaNaoOperacionalExcluida(l.conta_dre, '', l.empresa)
+      ) {
+        return;
+      }
+
       if (l.sinal_valor > 0) {
         totalReceitas += l.valor;
       } else {
@@ -904,6 +1067,12 @@ export class DrePainelService {
     contasOrdem.forEach(c => map.set(c, new Map()));
 
     lancamentos.forEach(l => {
+      if (
+        isCategoriaNaoOperacionalExcluida(l.categoria, '', l.empresa) ||
+        isCategoriaNaoOperacionalExcluida(l.conta_dre, '', l.empresa)
+      ) {
+        return;
+      }
       const conta = l.conta_dre || 'Despesas Administrativas';
       if (!map.has(conta)) map.set(conta, new Map());
 

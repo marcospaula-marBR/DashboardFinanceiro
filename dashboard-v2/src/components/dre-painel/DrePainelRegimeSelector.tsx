@@ -42,7 +42,7 @@ export function DrePainelRegimeSelector({
     {
       id: 'PREVISAO',
       label: 'Fluxo & Previsão',
-      sublabel: 'Data de Vencimento • Obrigações Abertas',
+      sublabel: 'Data de Previsão • Obrigações Abertas',
       icon: <TrendingUp size={16} />,
       color: 'amber',
       activeClass: 'bg-amber-600 text-white shadow-md ring-2 ring-amber-500/20'

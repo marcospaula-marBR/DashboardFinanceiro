@@ -66,6 +66,8 @@ export interface DrePainelFilters {
   contasCorrentes: string[];
   
   ano: string; // 'TODOS' | '2024' | '2025' | '2026'
+  dataInicio?: string; // YYYY-MM-DD (filtro de dd/mm/aaaa)
+  dataFim?: string; // YYYY-MM-DD (filtro até dd/mm/aaaa)
   
   // Filtros granulares executivos
   filtroParcelamento: 'TODOS' | 'A_VISTA' | 'PARCELADO_GERAL' | 'PARCELA_ANTERIOR' | 'LONGO_PRAZO';

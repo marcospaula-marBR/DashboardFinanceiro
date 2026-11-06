@@ -53,7 +53,7 @@ export function DrePainelHeader({
         return {
           title: 'Fluxo & Previsão',
           badge: 'Contas Futuras',
-          desc: 'Data de Vencimento de compromissos abertos e a vencer',
+          desc: 'Data de Previsão de compromissos abertos e a vencer',
           badgeClass: 'bg-amber-50 text-amber-700 border-amber-200'
         };
     }

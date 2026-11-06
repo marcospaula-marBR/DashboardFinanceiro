@@ -136,19 +136,29 @@ export function DrePainelDrawer({
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <span className="text-slate-500 block text-[11px]">Competência / Registro:</span>
-                  <span className="font-semibold text-slate-800">{lancamento.data_competencia || 'N/A'}</span>
+                  <span className="font-semibold text-slate-800">
+                    {lancamento.data_competencia ? lancamento.data_competencia.split('-').reverse().join('/') : 'N/A'}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[11px]">Vencimento:</span>
-                  <span className="font-semibold text-slate-800">{lancamento.data_vencimento || 'N/A'}</span>
+                  <span className="text-slate-500 block text-[11px]">Previsão:</span>
+                  <span className="font-semibold text-slate-800">
+                    {(lancamento.data_previsao || lancamento.data_vencimento)
+                      ? (lancamento.data_previsao || lancamento.data_vencimento)!.split('-').reverse().join('/')
+                      : 'N/A'}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[11px]">Pagamento / Caixa:</span>
-                  <span className="font-semibold text-slate-800">{lancamento.data_caixa || 'Pendente'}</span>
+                  <span className="text-slate-500 block text-[11px]">Liquidação / Caixa:</span>
+                  <span className="font-semibold text-slate-800">
+                    {lancamento.data_caixa ? lancamento.data_caixa.split('-').reverse().join('/') : 'Pendente'}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[11px]">Período DRE:</span>
-                  <span className="font-semibold text-slate-800">{lancamento.periodo}</span>
+                  <span className="text-slate-500 block text-[11px]">Vencimento / Período:</span>
+                  <span className="font-semibold text-slate-800">
+                    {lancamento.data_vencimento ? lancamento.data_vencimento.split('-').reverse().join('/') : lancamento.periodo} ({lancamento.periodo})
+                  </span>
                 </div>
               </div>
             </div>
