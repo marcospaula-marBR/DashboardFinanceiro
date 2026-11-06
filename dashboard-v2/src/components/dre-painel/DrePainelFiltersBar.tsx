@@ -190,6 +190,61 @@ export function DrePainelFiltersBar({
 
   const hasDateRange = Boolean(filters.dataInicio || filters.dataFim);
 
+  const handleDateRangeChange = (nextInicio: string, nextFim: string) => {
+    // Ao filtrar por intervalo de dias específico, limpamos restrições conflitantes de mês/ano
+    // para que o período informado sempre exiba todos os lançamentos correspondentes.
+    onFilterChange({
+      ...filters,
+      dataInicio: nextInicio,
+      dataFim: nextFim,
+      ano: nextInicio || nextFim ? 'TODOS' : filters.ano,
+      periodos: nextInicio || nextFim ? [] : filters.periodos
+    });
+  };
+
+  const applyDatePreset = (preset: 'HOJE' | 'MES_ATUAL' | 'MES_ANTERIOR' | 'PROX_7D' | 'PROX_30D' | 'ANO_ATUAL') => {
+    const now = new Date();
+    const toIso = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    let start = '';
+    let end = '';
+
+    if (preset === 'HOJE') {
+      start = toIso(now);
+      end = toIso(now);
+    } else if (preset === 'MES_ATUAL') {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      start = toIso(first);
+      end = toIso(last);
+    } else if (preset === 'MES_ANTERIOR') {
+      const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const last = new Date(now.getFullYear(), now.getMonth(), 0);
+      start = toIso(first);
+      end = toIso(last);
+    } else if (preset === 'PROX_7D') {
+      const target = new Date(now);
+      target.setDate(target.getDate() + 7);
+      start = toIso(now);
+      end = toIso(target);
+    } else if (preset === 'PROX_30D') {
+      const target = new Date(now);
+      target.setDate(target.getDate() + 30);
+      start = toIso(now);
+      end = toIso(target);
+    } else if (preset === 'ANO_ATUAL') {
+      start = `${now.getFullYear()}-01-01`;
+      end = `${now.getFullYear()}-12-31`;
+    }
+
+    handleDateRangeChange(start, end);
+  };
+
   const activeFiltersCount =
     filters.empresas.length +
     filters.periodos.length +
@@ -279,7 +334,7 @@ export function DrePainelFiltersBar({
           })}
         </div>
 
-        {/* 2. Filtro de Período entre Dias (de dd/mm/aaaa até dd/mm/aaaa) conforme Regime */}
+        {/* 2. Filtro de Período entre Dias (de dd/mm/aaaa até dd/mm/aaaa) conforme Regime + Atalhos Rápidos */}
         <div
           className={`flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
             hasDateRange
@@ -298,7 +353,7 @@ export function DrePainelFiltersBar({
               type="date"
               aria-label={`Data inicial (${regimeDateFieldLabel})`}
               value={filters.dataInicio || ''}
-              onChange={(e) => onFilterChange({ ...filters, dataInicio: e.target.value })}
+              onChange={(e) => handleDateRangeChange(e.target.value, filters.dataFim || '')}
               className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer min-h-[26px]"
             />
             <span className="text-[11px] font-semibold text-slate-500">até</span>
@@ -307,7 +362,7 @@ export function DrePainelFiltersBar({
               aria-label={`Data final (${regimeDateFieldLabel})`}
               value={filters.dataFim || ''}
               min={filters.dataInicio || undefined}
-              onChange={(e) => onFilterChange({ ...filters, dataFim: e.target.value })}
+              onChange={(e) => handleDateRangeChange(filters.dataInicio || '', e.target.value)}
               className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer min-h-[26px]"
             />
             {hasDateRange && (
@@ -320,6 +375,32 @@ export function DrePainelFiltersBar({
                 <X size={13} />
               </button>
             )}
+          </div>
+
+          {/* Atalhos Rápidos de Período (Evolução Recomendada) */}
+          <div className="flex flex-wrap items-center gap-1 pl-1 sm:border-l sm:border-slate-200/80">
+            {[
+              { id: 'HOJE', label: 'Hoje' },
+              { id: 'MES_ATUAL', label: 'Mês Atual' },
+              { id: 'MES_ANTERIOR', label: 'Mês Ant.' },
+              ...(filters.regime === 'PREVISAO'
+                ? [
+                    { id: 'PROX_7D', label: 'Próx. 7d' },
+                    { id: 'PROX_30D', label: 'Próx. 30d' }
+                  ]
+                : []),
+              { id: 'ANO_ATUAL', label: 'Ano Atual' }
+            ].map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyDatePreset(preset.id as any)}
+                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/90 hover:bg-emerald-600 hover:text-white text-slate-600 border border-slate-200/90 transition-colors cursor-pointer whitespace-nowrap"
+                title={`Aplicar atalho: ${preset.label} (${regimeDateFieldLabel})`}
+              >
+                {preset.label}
+              </button>
+            ))}
           </div>
         </div>
 

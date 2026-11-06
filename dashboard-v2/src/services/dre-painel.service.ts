@@ -502,15 +502,14 @@ export class DrePainelService {
       }
 
       // Carregar registros do Omie a partir da tabela omie_financas_unificado
-      let allRecords: any[] = [];
-      let from = 0;
       const limit = 1000;
-      let hasMore = true;
+      const selectCols =
+        'id, empresa_nome, omie_id, tipo_registro, status, valor_total, valor_alocado, data_pagamento, data_vencimento, data_emissao, data_previsao, data_registro, projeto_nome, departamento_nome, categoria_codigo, categoria_nome, cliente_fornecedor, numero_documento, raw_data';
 
-      while (hasMore) {
+      const buildOmieQuery = () => {
         let query = supabase
           .from('omie_financas_unificado')
-          .select('id, empresa_nome, omie_id, tipo_registro, status, valor_total, valor_alocado, data_pagamento, data_vencimento, data_emissao, data_previsao, data_registro, projeto_nome, departamento_nome, categoria_codigo, categoria_nome, cliente_fornecedor, numero_documento, raw_data')
+          .select(selectCols)
           .neq('status', 'CANCELADO');
 
         if (regime === 'COMPETENCIA') {
@@ -523,41 +522,116 @@ export class DrePainelService {
           if (dataFimVal) {
             query = query.lte('data_registro', dataFimVal);
           }
+          query = query.order('data_registro', { ascending: false });
         } else if (regime === 'CAIXA') {
-          query = query.not('data_pagamento', 'is', null).gte('data_pagamento', '2025-06-01');
+          query = query.not('data_pagamento', 'is', null);
+          if (dataInicioVal) {
+            query = query.gte('data_pagamento', dataInicioVal);
+          } else {
+            query = query.gte('data_pagamento', '2025-06-01');
+          }
+          if (dataFimVal) {
+            query = query.lte('data_pagamento', dataFimVal);
+          }
+          query = query.order('data_pagamento', { ascending: false });
         } else {
-          // PREVISAO: somente títulos em aberto / previstos (não pagos)
-          query = query
-            .neq('status', 'PAGO')
-            .or('data_vencimento.gte.2025-06-01,data_previsao.gte.2025-06-01');
+          // PREVISAO: somente títulos em aberto / previstos (não pagos, não recebidos, não liquidados e não cancelados)
+          query = query.in('status', ['A VENCER', 'ATRASADO', 'VENCE HOJE', 'ABERTO', 'PAGTO_PARCIAL']);
+          if (dataInicioVal) {
+            query = query.gte('data_previsao', dataInicioVal);
+          }
+          if (dataFimVal) {
+            query = query.lte('data_previsao', dataFimVal);
+          }
+          if (!dataInicioVal && !dataFimVal) {
+            query = query.or('data_vencimento.gte.2025-06-01,data_previsao.gte.2025-06-01');
+          }
+          query = query.order('data_vencimento', { ascending: true });
         }
 
-        const { data, error } = await query
-          .order('data_registro', { ascending: false })
-          .order('id', { ascending: true })
-          .range(from, from + limit - 1);
+        return query;
+      };
 
-        if (error) {
-          console.error('[DrePainelService] Erro ao buscar dados do Omie:', error);
-          break;
-        }
+      const rawRecords: any[] = [];
+      let nextOffset = 0;
+      const firstPageRes = await buildOmieQuery().range(0, limit - 1);
 
-        if (data && data.length > 0) {
-          allRecords = allRecords.concat(data);
-          from += limit;
-          if (data.length < limit) hasMore = false;
-        } else {
-          hasMore = false;
+      if (firstPageRes.error) {
+        console.error('[DrePainelService] Erro ao buscar dados do Omie:', firstPageRes.error);
+      } else if (firstPageRes.data && firstPageRes.data.length > 0) {
+        rawRecords.push(...firstPageRes.data);
+        nextOffset = limit;
+
+        let hasMorePages = firstPageRes.data.length === limit;
+        const batchSize = 4;
+
+        while (hasMorePages) {
+          const batchOffsets = Array.from({ length: batchSize }, (_, idx) => nextOffset + idx * limit);
+          const batchResults = await Promise.all(
+            batchOffsets.map(offset => buildOmieQuery().range(offset, offset + limit - 1))
+          );
+
+          for (const res of batchResults) {
+            if (res.error) {
+              hasMorePages = false;
+              break;
+            }
+            const rows = res.data || [];
+            if (rows.length > 0) {
+              rawRecords.push(...rows);
+            }
+            if (rows.length < limit) {
+              hasMorePages = false;
+              break;
+            }
+          }
+
+          nextOffset += batchSize * limit;
         }
       }
 
+      const seenRowIds = new Set<string>();
+      const allRecords = rawRecords.filter(r => {
+        const rid = String(r.id || '');
+        if (!rid || seenRowIds.has(rid)) return false;
+        seenRowIds.add(rid);
+        return true;
+      });
+
       const lancamentos: DrePainelLancamento[] = [];
       const todayStr = new Date().toISOString().slice(0, 10);
+
+      // Mapear títulos oficiais (PAGAR/RECEBER) presentes no resultado para evitar duplicidade com espelhos MOVIMENTO,
+      // sem descartar movimentos bancários cujo título original não possua data_pagamento sincronizada no lote.
+      const knownTitulos = new Set<string>();
+      allRecords.forEach(item => {
+        if ((item.tipo_registro === 'PAGAR' || item.tipo_registro === 'RECEBER') && item.omie_id) {
+          const empKey = normalizeEmpresa(item.empresa_nome);
+          knownTitulos.add(`${empKey}-${String(item.omie_id)}`);
+        }
+      });
+
+      const seenSignatures = new Set<string>();
 
       // Processamento dos registros Omie com travas temporais e regras contábeis
       allRecords.forEach(item => {
         const emp = normalizeEmpresa(item.empresa_nome);
         if (emp === 'Ybox') return; // Ybox é tratada 100% pelo histórico
+
+        const statusUpper = String(item.status || '').toUpperCase().trim();
+        if (statusUpper === 'CANCELADO') return;
+
+        // No regime de PREVISÃO (Fluxo de Caixa): somente títulos em aberto (PAGAR/RECEBER)
+        if (regime === 'PREVISAO') {
+          if (
+            statusUpper === 'PAGO' ||
+            statusUpper === 'RECEBIDO' ||
+            statusUpper === 'LIQUIDADO' ||
+            item.tipo_registro === 'MOVIMENTO'
+          ) {
+            return;
+          }
+        }
 
         const dtCompetencia = item.data_registro || item.data_emissao || item.data_vencimento || '';
         const dtCaixa = item.data_pagamento || null;
@@ -616,12 +690,30 @@ export class DrePainelService {
           return;
         }
 
-        // 4. Extrato Bancário direto (nCodTitulo == 0)
+        // 4. Deduplicar Espelhos de Movimento Bancário quando o título oficial já consta no conjunto
         const nCodTitulo = Number(rawDet.nCodTitulo || 0);
         const grp = String(rawDet.cGrupo || '').toUpperCase();
-        if (nCodTitulo !== 0 && (grp === 'CONTA_CORRENTE_PAG' || grp === 'CONTA_CORRENTE_REC' || grp === 'CONTA_A_PAGAR' || grp === 'CONTA_A_RECEBER')) {
-          if (item.tipo_registro === 'MOVIMENTO') return;
+        if (item.tipo_registro === 'MOVIMENTO' && nCodTitulo !== 0) {
+          if (
+            knownTitulos.has(`${emp}-${String(nCodTitulo)}`) ||
+            grp === 'CONTA_A_PAGAR' ||
+            grp === 'CONTA_A_RECEBER'
+          ) {
+            return;
+          }
         }
+
+        // Evitar duplicatas exatas geradas por re-sincronizações legadas de rateio
+        const canonicalTituloId =
+          item.tipo_registro === 'MOVIMENTO' && nCodTitulo !== 0
+            ? String(nCodTitulo)
+            : String(item.omie_id || item.id);
+        const sigDate = regime === 'CAIXA' ? dtCaixa : regime === 'PREVISAO' ? dtPrev : dtCompetencia;
+        const signature = `${emp}|${canonicalTituloId}|${item.departamento_nome || ''}|${catCodigo}|${Number(
+          item.valor_alocado || item.valor_total || 0
+        ).toFixed(2)}|${sigDate}`;
+        if (seenSignatures.has(signature)) return;
+        seenSignatures.add(signature);
 
         // 5. REGRA DE PROVISÕES (Despesas e Receitas):
         const isProvisao =
@@ -635,10 +727,6 @@ export class DrePainelService {
 
         // No regime de CAIXA, provisões não pagas não entram
         if (regime === 'CAIXA' && isProvisao && !dtCaixa) return;
-
-        // No regime de PREVISÃO (Fluxo de Caixa):
-        // Se já foi pago, não é mais previsão futura
-        if (regime === 'PREVISAO' && item.status === 'PAGO') return;
 
         // Determinar Conta DRE
         let contaDre = catToConta.get(catNomeLow) || '';
@@ -695,7 +783,9 @@ export class DrePainelService {
         // Atraso
         let isEmAtraso = false;
         let diasAtraso = 0;
-        if (item.status !== 'PAGO' && dtVenc && dtVenc < todayStr) {
+        const isLiquidado =
+          statusUpper === 'PAGO' || statusUpper === 'RECEBIDO' || statusUpper === 'LIQUIDADO';
+        if (!isLiquidado && dtVenc && dtVenc < todayStr) {
           isEmAtraso = true;
           const diffMs = new Date(todayStr).getTime() - new Date(dtVenc).getTime();
           diasAtraso = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
@@ -955,9 +1045,11 @@ export class DrePainelService {
       if (filters.filtroParcelamento === 'LONGO_PRAZO' && !l.is_longo_prazo) return false;
 
       // 12. Status de Vencimento
+      const isPagoStatus =
+        l.status === 'PAGO' || l.status === 'RECEBIDO' || l.status === 'LIQUIDADO';
       if (filters.filtroStatusVencimento === 'EM_ATRASO' && !l.is_em_atraso) return false;
-      if (filters.filtroStatusVencimento === 'A_VENCER' && (l.status === 'PAGO' || l.is_em_atraso)) return false;
-      if (filters.filtroStatusVencimento === 'PAGO' && l.status !== 'PAGO') return false;
+      if (filters.filtroStatusVencimento === 'A_VENCER' && (isPagoStatus || l.is_em_atraso)) return false;
+      if (filters.filtroStatusVencimento === 'PAGO' && !isPagoStatus) return false;
 
       // 13. Recorrência
       if (filters.filtroRecorrencia === 'SOMENTE_RECORRENTES' && !l.is_recorrente) return false;
@@ -1063,6 +1155,7 @@ export class DrePainelService {
     ];
 
     const map = new Map<string, Map<string, { valores: Record<string, number>; detalhes: DrePainelLancamento[] }>>();
+    const periodosSet = new Set(periodos);
 
     contasOrdem.forEach(c => map.set(c, new Map()));
 
@@ -1073,6 +1166,13 @@ export class DrePainelService {
       ) {
         return;
       }
+
+      // Somente incluir lançamentos que pertencem aos períodos ativos da tabela
+      // para evitar linhas órfãs com "-" em todas as colunas mensais
+      if (periodosSet.size > 0 && !periodosSet.has(l.periodo)) {
+        return;
+      }
+
       const conta = l.conta_dre || 'Despesas Administrativas';
       if (!map.has(conta)) map.set(conta, new Map());
 
@@ -1108,13 +1208,17 @@ export class DrePainelService {
         });
         totalContaGeral += totalCat;
 
-        categoriasList.push({
-          categoria: catNome,
-          valoresPorMes: data.valores,
-          totalGeral: totalCat,
-          detalhes: data.detalhes
-        });
+        if (totalCat > 0 || data.detalhes.length > 0) {
+          categoriasList.push({
+            categoria: catNome,
+            valoresPorMes: data.valores,
+            totalGeral: totalCat,
+            detalhes: data.detalhes
+          });
+        }
       });
+
+      if (categoriasList.length === 0) return;
 
       // Ordenar categorias por maior valor
       categoriasList.sort((a, b) => b.totalGeral - a.totalGeral);

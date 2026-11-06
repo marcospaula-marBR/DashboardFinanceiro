@@ -159,23 +159,26 @@ class OmieSync:
             pagina += 1
         log(f"  [OK] {len(self.forn_map)} fornecedores/clientes memorizados.")
 
-    def fetch_records(self, url, call, list_key, start_date):
+    def fetch_records(self, url, call, list_key, start_date=None, status_filter=None):
         records = []
         pagina = 1
         while True:
             param = {
                 "pagina": pagina,
                 "registros_por_pagina": 100,
-                "filtrar_por_data_de": start_date,
                 "exibir_obs": "S"
             }
+            if start_date:
+                param["filtrar_por_data_de"] = start_date
+            if status_filter:
+                param["filtrar_por_status"] = status_filter
             data = self.call_api(url, call, param)
             items = data.get(list_key, [])
             if not items: break
             records.extend(items)
             if pagina >= data.get("total_de_paginas", 0): break
             pagina += 1
-            log(f"  {list_key}: Lendo página {pagina-1}...")
+            log(f"  {list_key} ({status_filter or start_date}): Lendo página {pagina-1}...")
         return records
 
     def build_mov_map(self, records):
@@ -424,24 +427,111 @@ def push_to_supabase(rows, extra_delete_ids=None):
                 requests.delete(del_extra_url, headers=HEADERS_SB)
             extra_delete_ids = set() # já purgado para a empresa
 
-        size = 100
-        for i in range(0, len(group_rows), size):
-            chunk = group_rows[i:i+size]
-            ids = [r["omie_id"] for r in chunk if r.get("omie_id") not in [None, "None", ""]]
-            
-            if ids:
-                # 1. Deletar os antigos correspondentes de qualquer tipo com aquele omie_id na mesma empresa
-                ids_str = ",".join(map(str, ids))
+        # Agrupar por omie_id para nunca separar rateios do mesmo título em chunks distintos
+        by_omie_id = {}
+        no_id_rows = []
+        for r in group_rows:
+            oid = r.get("omie_id")
+            if oid not in [None, "None", ""]:
+                oid_str = str(oid)
+                if oid_str not in by_omie_id:
+                    by_omie_id[oid_str] = []
+                by_omie_id[oid_str].append(r)
+            else:
+                no_id_rows.append(r)
+
+        chunk = []
+        chunk_ids = []
+        for oid_str, oid_rows in by_omie_id.items():
+            if len(chunk) + len(oid_rows) > 100 and chunk:
+                ids_str = ",".join(chunk_ids)
                 del_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?empresa_nome=eq.{empresa}&omie_id=in.({ids_str})"
-                
                 del_resp = requests.delete(del_url, headers=HEADERS_SB)
                 if del_resp.status_code not in [200, 204]:
                     log(f"Erro ao deletar registros antigos: {del_resp.text}")
-                
-            # 2. Inserir os novos registros atualizados
+                post_resp = requests.post(f"{SUPABASE_URL}/rest/v1/omie_financas_unificado", headers=HEADERS_SB, json=chunk)
+                if post_resp.status_code not in [200, 201, 204]:
+                    log(f"Erro ao inserir novos registros: {post_resp.text}")
+                chunk = []
+                chunk_ids = []
+            chunk.extend(oid_rows)
+            chunk_ids.append(oid_str)
+
+        if chunk:
+            ids_str = ",".join(chunk_ids)
+            del_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?empresa_nome=eq.{empresa}&omie_id=in.({ids_str})"
+            del_resp = requests.delete(del_url, headers=HEADERS_SB)
+            if del_resp.status_code not in [200, 204]:
+                log(f"Erro ao deletar registros antigos: {del_resp.text}")
             post_resp = requests.post(f"{SUPABASE_URL}/rest/v1/omie_financas_unificado", headers=HEADERS_SB, json=chunk)
             if post_resp.status_code not in [200, 201, 204]:
                 log(f"Erro ao inserir novos registros: {post_resp.text}")
+
+        for i in range(0, len(no_id_rows), 100):
+            sub = no_id_rows[i:i+100]
+            requests.post(f"{SUPABASE_URL}/rest/v1/omie_financas_unificado", headers=HEADERS_SB, json=sub)
+
+def reconcile_cancelled_open_titles(sync, mov_map=None):
+    """
+    Consulta todos os títulos EMABERTO no Omie (Contas a Pagar e Contas a Receber),
+    atualiza-os no Supabase e expurga do Supabase quaisquer títulos que constavam
+    como 'A VENCER' / 'ATRASADO' / 'VENCE HOJE' / 'ABERTO' mas foram cancelados/excluídos no Omie.
+    """
+    log(f"Reconciliando títulos EM ABERTO e expurgando cancelados/excluídos para {sync.empresa_nome}...")
+    open_cp = sync.fetch_records(URL_CP, "ListarContasPagar", "conta_pagar_cadastro", status_filter="EMABERTO")
+    open_cr = sync.fetch_records(URL_CR, "ListarContasReceber", "conta_receber_cadastro", status_filter="EMABERTO")
+
+    active_cp_ids = set(str(r.get("codigo_lancamento_omie")) for r in open_cp if r.get("codigo_lancamento_omie"))
+    active_cr_ids = set(str(r.get("codigo_lancamento_omie")) for r in open_cr if r.get("codigo_lancamento_omie"))
+
+    # Atualizar todos os títulos abertos vigentes
+    rows_open_cp = sync.process_cp_cr(open_cp, "PAGAR", mov_map=mov_map)
+    rows_open_cr = sync.process_cp_cr(open_cr, "RECEBER", mov_map=mov_map)
+    all_open_rows = [
+        r for r in (rows_open_cp + rows_open_cr)
+        if (r.get("data_pagamento") or r.get("data_registro") or r.get("data_vencimento") or "9999-12-31") >= "2025-06-01"
+    ]
+    if all_open_rows:
+        push_to_supabase(all_open_rows)
+
+    # Buscar no Supabase todos os registros não pagos desta empresa e remover os que não existem mais em EMABERTO
+    offset = 0
+    limit = 1000
+    zombie_row_ids = []
+    while True:
+        q_url = (
+            f"{SUPABASE_URL}/rest/v1/omie_financas_unificado"
+            f"?select=id,omie_id,tipo_registro,status"
+            f"&empresa_nome=eq.{sync.empresa_nome}"
+            f"&status=in.(%22A%20VENCER%22,%22ATRASADO%22,%22VENCE%20HOJE%22,%22ABERTO%22,%22PAGTO_PARCIAL%22)"
+            f"&order=id.asc&offset={offset}&limit={limit}"
+        )
+        resp = requests.get(q_url, headers=HEADERS_SB)
+        if resp.status_code != 200:
+            break
+        db_items = resp.json()
+        if not db_items:
+            break
+        for item in db_items:
+            oid = str(item.get("omie_id") or "")
+            t_reg = item.get("tipo_registro")
+            if t_reg == "PAGAR" and oid not in active_cp_ids:
+                zombie_row_ids.append(str(item["id"]))
+            elif t_reg == "RECEBER" and oid not in active_cr_ids:
+                zombie_row_ids.append(str(item["id"]))
+        if len(db_items) < limit:
+            break
+        offset += limit
+
+    if zombie_row_ids:
+        log(f"  [EXPURGO] Removendo {len(zombie_row_ids)} lançamentos cancelados/excluídos no Omie para {sync.empresa_nome}...")
+        for i in range(0, len(zombie_row_ids), 100):
+            batch = zombie_row_ids[i:i+100]
+            ids_str = ",".join(batch)
+            del_url = f"{SUPABASE_URL}/rest/v1/omie_financas_unificado?id=in.({ids_str})"
+            requests.delete(del_url, headers=HEADERS_SB)
+    else:
+        log(f"  [OK] Nenhum lançamento órfão/cancelado encontrado para {sync.empresa_nome}.")
 
 def main():
     import argparse
@@ -504,6 +594,7 @@ def main():
                 extra_delete_ids.add(m_info["nCodMovCC"])
                 
         push_to_supabase(all_rows, extra_delete_ids=extra_delete_ids)
+        reconcile_cancelled_open_titles(sync, mov_map=mov_map)
 
     log("\nSincronização Finalizada!")
 

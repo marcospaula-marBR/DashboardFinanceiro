@@ -13,11 +13,13 @@ import {
   Calendar
 } from 'lucide-react';
 import { RegimeTipo } from '@/types/dre-painel';
+import { APP_VERSION } from '@/version';
 
 interface DrePainelHeaderProps {
   regime: RegimeTipo;
   onRefresh: () => void;
   isLoading: boolean;
+  isSyncingOmie?: boolean;
   lastUpdate: string | null;
   isMeetingMode: boolean;
   onToggleMeetingMode: () => void;
@@ -28,6 +30,7 @@ export function DrePainelHeader({
   regime,
   onRefresh,
   isLoading,
+  isSyncingOmie = false,
   lastUpdate,
   isMeetingMode,
   onToggleMeetingMode,
@@ -78,12 +81,18 @@ export function DrePainelHeader({
           <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
                 Painel Financeiro Multivisão
               </h1>
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${badgeInfo.badgeClass}`}>
                 {badgeInfo.badge}
+              </span>
+              <span
+                className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200"
+                title="Versão atual do Painel Financeiro Multivisão"
+              >
+                {APP_VERSION}
               </span>
             </div>
             <p className="text-xs text-slate-500 hidden sm:block">
@@ -117,11 +126,17 @@ export function DrePainelHeader({
           <button
             type="button"
             onClick={onRefresh}
-            disabled={isLoading}
+            disabled={isLoading || isSyncingOmie}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
           >
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-            <span>{isLoading ? 'Atualizando...' : 'Atualizar Dados'}</span>
+            <RefreshCw size={14} className={isLoading || isSyncingOmie ? 'animate-spin' : ''} />
+            <span>
+              {isSyncingOmie
+                ? 'Sincronizando Omie...'
+                : isLoading
+                ? 'Atualizando...'
+                : 'Atualizar Dados'}
+            </span>
           </button>
         </div>
 

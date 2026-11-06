@@ -31,6 +31,7 @@ export default function DrePainelPage() {
   const [regime, setRegime] = useState<RegimeTipo>('COMPETENCIA');
   const [allLancamentos, setAllLancamentos] = useState<DrePainelLancamento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncingOmie, setIsSyncingOmie] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [isMeetingMode, setIsMeetingMode] = useState(false);
@@ -98,17 +99,42 @@ export default function DrePainelPage() {
     }
   }, []);
 
-  // Quando o regime muda, ou quando no regime COMPETENCIA o filtro diário (dataInicio / dataFim) muda, recarrega a base apropriada
-  const competenciaDateTrigger = regime === 'COMPETENCIA' ? `${validDataInicio}|${validDataFim}` : '';
-
+  // Quando o regime muda, ou quando o filtro diário (dataInicio / dataFim) muda, recarrega a base apropriada com filtro SQL otimizado
   useEffect(() => {
     loadData(
       regime,
-      regime === 'COMPETENCIA'
+      validDataInicio || validDataFim
         ? { dataInicio: validDataInicio, dataFim: validDataFim }
         : undefined
     );
-  }, [regime, competenciaDateTrigger, validDataInicio, validDataFim, loadData]);
+  }, [regime, validDataInicio, validDataFim, loadData]);
+
+  const handleManualSyncAndRefresh = useCallback(async () => {
+    setIsSyncingOmie(true);
+    setErrorMsg(null);
+    try {
+      await fetch('/api/omie/painel-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          regime,
+          dataInicio: validDataInicio || undefined,
+          dataFim: validDataFim || undefined
+        })
+      });
+    } catch (e) {
+      console.warn('[DrePainelPage] Aviso na sincronização incremental Omie:', e);
+    } finally {
+      setIsSyncingOmie(false);
+    }
+
+    await loadData(
+      regime,
+      validDataInicio || validDataFim
+        ? { dataInicio: validDataInicio, dataFim: validDataFim }
+        : undefined
+    );
+  }, [regime, validDataInicio, validDataFim, loadData]);
 
   // Opções dinâmicas para filtros
   const options = useMemo(() => {
@@ -191,9 +217,19 @@ export default function DrePainelPage() {
       const shortYear = filters.ano.slice(-2);
       return options.periodos.filter(p => p.endsWith(`/${shortYear}`));
     }
-    // Por padrão mostrar os últimos 12 meses disponíveis
-    return options.periodos.slice(-12);
-  }, [filters.periodos, filters.ano, validDataInicio, validDataFim, filteredLancamentos, options.periodos]);
+    // No regime de PREVISAO, exibir os próximos 12 meses a partir do período aberto inicial (evitando saltar para 2032/2033)
+    if (regime === 'PREVISAO') {
+      return options.periodos.slice(0, 12);
+    }
+    // Nos regimes realizados (COMPETENCIA e CAIXA), exibir os últimos 12 meses válidos (evitando datas futuras de digitação)
+    const maxShortYear = (new Date().getFullYear() % 100) + 1;
+    const validRealizedPeriods = options.periodos.filter(p => {
+      const parts = p.split('/');
+      const yy = parseInt(parts[1] || '0', 10);
+      return yy <= maxShortYear;
+    });
+    return (validRealizedPeriods.length > 0 ? validRealizedPeriods : options.periodos).slice(-12);
+  }, [regime, filters.periodos, filters.ano, validDataInicio, validDataFim, filteredLancamentos, options.periodos]);
 
   // Seções da Tabela DRE
   const tableSections = useMemo(() => {
@@ -224,15 +260,9 @@ export default function DrePainelPage() {
       {/* 1. Header Fixo com Botão "Voltar ao Início" */}
       <DrePainelHeader
         regime={regime}
-        onRefresh={() =>
-          loadData(
-            regime,
-            regime === 'COMPETENCIA'
-              ? { dataInicio: validDataInicio, dataFim: validDataFim }
-              : undefined
-          )
-        }
+        onRefresh={handleManualSyncAndRefresh}
         isLoading={isLoading}
+        isSyncingOmie={isSyncingOmie}
         lastUpdate={lastUpdate}
         isMeetingMode={isMeetingMode}
         onToggleMeetingMode={() => setIsMeetingMode(!isMeetingMode)}
