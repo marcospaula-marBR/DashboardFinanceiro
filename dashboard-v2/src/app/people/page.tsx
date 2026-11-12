@@ -18,9 +18,12 @@ import { BatchReplicateCostsModal } from "@/components/people/BatchReplicateCost
 import { OutsourcingCockpitModal } from "@/components/people/OutsourcingCockpitModal";
 import { BprCockpitModal } from "@/components/people/BprCockpitModal";
 import { CompetenciasCostsListModal } from "@/components/people/CompetenciasCostsListModal";
+import { ProfileExportModal } from "@/components/people/ProfileExportModal";
 import { PeopleHRService } from "@/services/people-hr.service";
+import { PeopleService } from "@/services/people.service";
+import { PjAdditiveService } from "@/services/pj-additive.service";
 import { BprService } from "@/services/bpr.service";
-import { Employee, MonthlyCost, AuditIssue, LoanStats, normalizeCompanyName } from "@/types/loans";
+import { Employee, EmploymentContract, MonthlyCost, AuditIssue, LoanStats, normalizeCompanyName } from "@/types/loans";
 import { useDataMode } from "@/contexts/DataModeContext";
 import { APP_VERSION } from "@/version";
 import { LoansService, formatCurrency } from "@/services/loans.service";
@@ -30,7 +33,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy, MapPin, Table
+  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy, MapPin, Table, Clock
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -106,6 +109,10 @@ export default function PeoplePage() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isPayrollBatchModalOpen, setIsPayrollBatchModalOpen] = useState(false);
   const [isBatchPdfModalOpen, setIsBatchPdfModalOpen] = useState(false);
+  const [exportTargetEmp, setExportTargetEmp] = useState<Partial<Employee> | null>(null);
+  const [exportTargetHistory, setExportTargetHistory] = useState<any[]>([]);
+  const [exportTargetBonds, setExportTargetBonds] = useState<EmploymentContract[]>([]);
+  const [exportTargetPrevProfile, setExportTargetPrevProfile] = useState<Partial<Employee> | null>(null);
   const [isDiannaBatchModalOpen, setIsDiannaBatchModalOpen] = useState(false);
   const [isClearCostHistoryModalOpen, setIsClearCostHistoryModalOpen] = useState(false);
   const [isCltImportModalOpen, setIsCltImportModalOpen] = useState(false);
@@ -574,6 +581,7 @@ export default function PeoplePage() {
       result = result.filter(e => {
         if (filterInsight === 'glosa') return !!e.has_invoice_glosa;
         if (filterInsight === 'emprestimo') return (e.balance || 0) > 0;
+        if (filterInsight === 'aditivo_pendente') return PjAdditiveService.checkPendingAdditiveSla(e.links_aditivos).hasPending;
         
         if (filterInsight === 'aumento') {
           const d = new Date((e.last_raise_date || e.start_date || '') + 'T00:00:00');
@@ -688,10 +696,17 @@ export default function PeoplePage() {
     let promocao = 0;
     let grau = 0;
     let nivel = 0;
+    let aditivoPendente = 0;
+    let aditivoOverdue = 0;
 
     baseFilteredEmployees.forEach(e => {
       if (e.has_invoice_glosa) glosa++;
       if ((e.balance || 0) > 0) emprestimo++;
+      const sla = PjAdditiveService.checkPendingAdditiveSla(e.links_aditivos);
+      if (sla.hasPending) {
+        aditivoPendente++;
+        if (sla.isOverdue) aditivoOverdue++;
+      }
       
       const dRaise = new Date((e.last_raise_date || e.start_date || '') + 'T00:00:00');
       if (!isNaN(dRaise.getTime())) {
@@ -717,8 +732,34 @@ export default function PeoplePage() {
         if (diffMonths >= noNivelMonths) nivel++;
       }
     });
-    return { glosa, emprestimo, aumento, promocao, grau, nivel };
+    return { glosa, emprestimo, aumento, promocao, grau, nivel, aditivoPendente, aditivoOverdue };
   }, [baseFilteredEmployees, noRaiseMonths, noPromoMonths, noGradeMonths, noNivelMonths]);
+
+  const handleOpenSinglePdfExport = async (emp: Employee) => {
+    setExportTargetEmp(emp);
+    setExportTargetHistory([]);
+    setExportTargetBonds([]);
+    setExportTargetPrevProfile(null);
+    try {
+      const [fullProfile, hist, bds] = await Promise.all([
+        PeopleService.getEmployeeProfile(emp.id, isTestMode),
+        PeopleService.getEmployeeHistory(emp.id, isTestMode),
+        PeopleHRService.getEmploymentContracts(emp.id),
+      ]);
+      if (fullProfile) {
+        setExportTargetEmp(fullProfile);
+        const prevId = fullProfile.linked_previous_employee_id || fullProfile.metadata?.linked_previous_employee_id;
+        if (prevId) {
+          const prevProf = await PeopleService.getEmployeeProfile(prevId, isTestMode);
+          if (prevProf) setExportTargetPrevProfile(prevProf);
+        }
+      }
+      if (hist) setExportTargetHistory(hist);
+      if (bds) setExportTargetBonds(bds);
+    } catch (err) {
+      console.error('Erro ao carregar dados complementares para exportação PDF:', err);
+    }
+  };
 
   const handleEmployeeClick = (employeeId: string, initialTab?: 'pessoal' | 'endereco' | 'complementar' | 'fichaExecutiva' | 'trajetoria' | 'custo' | 'auditoria' | 'acessos') => {
     setSelectedEmployee(employeeId);
@@ -2060,7 +2101,16 @@ export default function PeoplePage() {
                 </div>
              </div>
 
-             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mt-2">
+             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3 mt-2">
+               <PeopleKpiCard
+                 title="Aditivos ZapSign"
+                 value={insightCounts.aditivoPendente}
+                 icon={<Clock size={20} />}
+                 color={insightCounts.aditivoOverdue > 0 ? "amber" : "emerald"}
+                 onClick={() => setFilterInsight(filterInsight === 'aditivo_pendente' ? null : 'aditivo_pendente')}
+                 isActive={filterInsight === 'aditivo_pendente'}
+                 sub={insightCounts.aditivoOverdue > 0 ? `${insightCounts.aditivoOverdue} com SLA > 5d` : "Pendentes de assinatura"}
+               />
                <PeopleKpiCard
                  title="Glosa na NF"
                  value={insightCounts.glosa}
@@ -2152,6 +2202,11 @@ export default function PeoplePage() {
               onFilterSelect={handleFilterSelect}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={handleClearFilters}
+              onExportPdf={handleOpenSinglePdfExport}
+              filterPendingAdditive={filterInsight === 'aditivo_pendente'}
+              onTogglePendingAdditive={() => setFilterInsight(filterInsight === 'aditivo_pendente' ? null : 'aditivo_pendente')}
+              pendingAdditiveCount={insightCounts.aditivoPendente}
+              overdueAdditiveCount={insightCounts.aditivoOverdue}
             />
           ) : (
             <div>
@@ -2176,6 +2231,30 @@ export default function PeoplePage() {
                     title={expandAllCards ? 'Recolher detalhes de todos os cards' : 'Expandir detalhes de todos os cards'}
                   >
                     <span>{expandAllCards ? 'Recolher Cards' : 'Expandir Cards'}</span>
+                  </button>
+
+                  {/* Filtro Rápido: Aditivos PJ Pendentes no ZapSign */}
+                  <button
+                    type="button"
+                    onClick={() => setFilterInsight(filterInsight === 'aditivo_pendente' ? null : 'aditivo_pendente')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 uppercase shadow-sm ${
+                      filterInsight === 'aditivo_pendente'
+                        ? 'border-amber-400 bg-amber-100 text-amber-900 font-black ring-2 ring-amber-400/30'
+                        : insightCounts.aditivoOverdue > 0
+                        ? 'border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+                    }`}
+                    title="Filtrar apenas colaboradores PJ com Termo Aditivo pendente de assinatura no ZapSign"
+                  >
+                    <Clock size={13} className={insightCounts.aditivoOverdue > 0 || filterInsight === 'aditivo_pendente' ? 'text-amber-600' : 'text-emerald-600'} />
+                    <span>Aditivos Pendentes ZapSign</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      filterInsight === 'aditivo_pendente' || insightCounts.aditivoOverdue > 0
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {insightCounts.aditivoPendente}
+                    </span>
                   </button>
 
                   {/* Botão Limpar Filtros na barra superior de Cards */}
@@ -2281,6 +2360,7 @@ export default function PeoplePage() {
                         historicoCustoMedio={historicoCustoMedio}
                         expandAll={expandAllCards}
                         onFilterSelect={handleFilterSelect}
+                        onExportPdf={handleOpenSinglePdfExport}
                       />
                     );
                   })
@@ -2393,6 +2473,30 @@ export default function PeoplePage() {
         employees={employees}
         allMonthlyCosts={monthlyCosts}
       />
+
+      {exportTargetEmp && (
+        <ProfileExportModal
+          isOpen={Boolean(exportTargetEmp)}
+          onClose={() => {
+            setExportTargetEmp(null);
+            setExportTargetHistory([]);
+            setExportTargetBonds([]);
+            setExportTargetPrevProfile(null);
+          }}
+          profile={exportTargetEmp}
+          history={exportTargetHistory}
+          bonds={exportTargetBonds}
+          costs={monthlyCosts.filter(
+            c => c.employee_id === exportTargetEmp.id || (exportTargetPrevProfile?.id && c.employee_id === exportTargetPrevProfile.id)
+          )}
+          previousProfile={exportTargetPrevProfile}
+          previousCosts={exportTargetPrevProfile?.id ? monthlyCosts.filter(c => c.employee_id === exportTargetPrevProfile.id) : []}
+          onOpenBatchAudit={() => {
+            setExportTargetEmp(null);
+            setIsBatchPdfModalOpen(true);
+          }}
+        />
+      )}
 
       <DiannaBatchSyncModal
         isOpen={isDiannaBatchModalOpen}

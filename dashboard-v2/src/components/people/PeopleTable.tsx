@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Trash2, UserCog, AlertCircle, Phone, Copy, Check, Building2, UserRound, MapPin, X } from "lucide-react";
+import { Trash2, UserCog, AlertCircle, Phone, Copy, Check, Building2, UserRound, MapPin, X, FileText, Clock } from "lucide-react";
 import { Employee, AuditIssue, inferEntityType } from "@/types/loans";
 import { getRemunerationLabel } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
@@ -37,6 +37,11 @@ interface PeopleTableProps {
   onFilterSelect?: (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level' | 'location', value: string) => void;
   hasActiveFilters?: boolean;
   onClearFilters?: () => void;
+  onExportPdf?: (employee: Employee) => void;
+  filterPendingAdditive?: boolean;
+  onTogglePendingAdditive?: () => void;
+  pendingAdditiveCount?: number;
+  overdueAdditiveCount?: number;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -62,7 +67,12 @@ export function PeopleTable({
   itemsPerPage = 10,
   onFilterSelect,
   hasActiveFilters = false,
-  onClearFilters
+  onClearFilters,
+  onExportPdf,
+  filterPendingAdditive = false,
+  onTogglePendingAdditive,
+  pendingAdditiveCount = 0,
+  overdueAdditiveCount = 0
 }: PeopleTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -133,13 +143,38 @@ export function PeopleTable({
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-6">
       <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center flex-wrap gap-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-tight">
             Listagem de Contratados
             <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500 font-bold">
               {employees.length} REGISTROS
             </span>
           </h3>
+
+          {onTogglePendingAdditive && (
+            <button
+              type="button"
+              onClick={onTogglePendingAdditive}
+              className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 uppercase shadow-sm ${
+                filterPendingAdditive
+                  ? 'border-amber-400 bg-amber-100 text-amber-900 font-black ring-2 ring-amber-400/30'
+                  : overdueAdditiveCount > 0
+                  ? 'border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800'
+                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+              }`}
+              title="Filtrar apenas prestadores PJ com Termo Aditivo pendente de assinatura no ZapSign"
+            >
+              <Clock size={13} className={overdueAdditiveCount > 0 || filterPendingAdditive ? 'text-amber-600' : 'text-emerald-600'} />
+              <span>Aditivos Pendentes ZapSign</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                filterPendingAdditive || overdueAdditiveCount > 0
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {pendingAdditiveCount}
+              </span>
+            </button>
+          )}
 
           {hasActiveFilters && onClearFilters && (
             <button
@@ -502,6 +537,19 @@ export function PeopleTable({
                           {copiedId === emp.id ? <Check size={11} /> : <Copy size={11} />}
                           {copiedId === emp.id ? "Copiado!" : "Link"}
                         </button>
+                        {onExportPdf && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onExportPdf(emp);
+                            }}
+                            className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 transition-all flex items-center gap-0.5 text-[9px] font-black shadow-2xs"
+                            title="Exportar Ficha / Relatório em PDF"
+                          >
+                            <FileText size={11} />
+                            <span>PDF</span>
+                          </button>
+                        )}
                         <button onClick={() => onEdit(emp.id)} className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition-all" title="Editar Ficha">
                           <UserCog size={14} />
                         </button>
@@ -579,6 +627,7 @@ export function PeopleTable({
                   historicoCustoTotal={historicoCustoTotal}
                   historicoCustoMedio={historicoCustoMedio}
                   onFilterSelect={onFilterSelect}
+                  onExportPdf={onExportPdf}
                 />
                 <div className="absolute top-4 right-20 flex gap-1" onClick={e => e.stopPropagation()}>
                   <button onClick={() => onEdit(emp.id)} className="p-1.5 bg-white/95 backdrop-blur border border-slate-200 text-slate-500 hover:text-slate-800 rounded-lg shadow-sm active:scale-90 transition-transform" title="Editar Ficha">

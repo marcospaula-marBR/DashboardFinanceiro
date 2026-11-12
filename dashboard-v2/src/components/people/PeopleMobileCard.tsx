@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Employee, getRemunerationLabel, inferEntityType } from "@/types/loans";
-import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar, MapPin, Coins } from "lucide-react";
+import { Building2, Clock, AlertCircle, Phone, Copy, Check, UserRound, Calendar, MapPin, Coins, FileText } from "lucide-react";
 import { BprService } from "@/services/bpr.service";
 import { PjAdditiveService } from "@/services/pj-additive.service";
 import { 
@@ -37,6 +37,7 @@ interface PeopleMobileCardProps {
   historicoCustoMedio?: number; // Média mensal do custo histórico
   expandAll?: boolean;
   onFilterSelect?: (type: 'company' | 'department' | 'job_role' | 'responsible_name' | 'linkType' | 'nature' | 'name' | 'level', value: string) => void;
+  onExportPdf?: (employee: Employee) => void;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -73,6 +74,7 @@ export function PeopleMobileCard({
   historicoCustoMedio,
   expandAll = false,
   onFilterSelect,
+  onExportPdf,
 }: PeopleMobileCardProps) {
   const [copied, setCopied] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
@@ -622,6 +624,21 @@ export function PeopleMobileCard({
               {copied ? <Check size={13} /> : <Copy size={13} />}
               {copied ? "Copiado!" : "Link"}
             </button>
+
+            {/* Exportar PDF da Ficha */}
+            {onExportPdf && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExportPdf(employee);
+                }}
+                className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 transition-all flex items-center gap-1 text-[10px] font-black shadow-2xs"
+                title="Exportar Ficha / Relatório em PDF"
+              >
+                <FileText size={13} />
+                <span>PDF</span>
+              </button>
+            )}
 
             {/* Abrir Ficha */}
             <button
