@@ -34,7 +34,7 @@ interface PjContractAdditiveModalProps {
   newRemuneration?: number;
   previousRole?: string;
   newRole?: string;
-  onSaveWithoutAdditive: () => void;
+  onSaveWithoutAdditive: (overrides?: { newRemuneration?: number; newRole?: string }) => void;
   onConfirmAdditive: (result: {
     startDate: string;
     vigencia: string;
@@ -259,10 +259,10 @@ Vigência: ${calculatedVigencia}`;
                 </div>
                 <div className="space-y-1">
                   <h4 className="text-sm font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-wide">
-                    Alteração Cadastral PJ Detectada
+                    Alteração Cadastral PJ Detectada — Geração de Termo Opcional
                   </h4>
                   <p className="text-xs text-emerald-800 dark:text-emerald-300/90 leading-relaxed">
-                    Identificamos alterações de condições cadastrais para este prestador de serviços. Como nem toda alteração exige aditivo contratual, informe se deseja gerar formalmente um novo <strong>Termo Aditivo PJ para assinaturas no ZapSign</strong> ou apenas salvar os dados no cadastro.
+                    Identificamos alterações nas condições deste prestador de serviços. A geração de um novo termo ou contrato <strong>não é obrigatória</strong>: escolha abaixo se deseja <strong>somente salvar as alterações no cadastro</strong> ou se prefere <strong>gerar o novo Termo Aditivo PJ</strong>.
                   </p>
                 </div>
               </div>
@@ -310,31 +310,65 @@ Vigência: ${calculatedVigencia}`;
                 </div>
               </div>
 
-              {/* Explicação de Fluxo e Ações de Decisão */}
+              {/* Opções de Decisão do Usuário */}
               <div className="space-y-3 pt-2">
-                <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
-                  <FileText size={16} className="text-blue-600 shrink-0 mt-0.5" />
-                  <p className="leading-relaxed">
-                    <strong>Como funciona o fluxo:</strong> Ao clicar em <em>Avançar para Visualização da Minuta</em>, o sistema <strong>NÃO</strong> salvará o contrato imediatamente. Você definirá vigência no <strong>Passo 2</strong> e terá a <strong>visualização integral do documento timbrado no Passo 3</strong> para validar todos os dados antes de aprovar.
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-end gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={onSaveWithoutAdditive}
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold uppercase tracking-wider transition-all"
+                    onClick={() => onSaveWithoutAdditive({ newRemuneration: amount, newRole: role })}
+                    className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-slate-900 dark:hover:border-slate-400 bg-white dark:bg-slate-800/80 text-left space-y-1.5 transition-all group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                        <Save size={15} className="text-slate-700 dark:text-slate-300" />
+                        Somente Salvar Alterações
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        Sem Termo
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Atualiza imediatamente os valores e dados na ficha cadastral, sem gerar novo contrato/aditivo PDF e sem criar pendência de assinatura.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="p-4 rounded-xl border-2 border-emerald-200 dark:border-emerald-800/80 hover:border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 text-left space-y-1.5 transition-all group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                        <FileText size={15} className="text-emerald-600" />
+                        Gerar Novo Termo / Aditivo
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                        Opcional
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 leading-relaxed">
+                      Avança para definir vigência, pré-visualizar a minuta timbrada e, se desejar, baixar o PDF oficial para assinatura no ZapSign.
+                    </p>
+                  </button>
+                </div>
+
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onSaveWithoutAdditive({ newRemuneration: amount, newRole: role })}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
                     title="Salvar apenas os dados alterados no cadastro do colaborador sem gerar documento de aditivo"
                   >
-                    Não, Apenas Salvar Cadastro
+                    <Save size={14} />
+                    <span>Somente Salvar Alterações</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setStep(1)}
                     className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all"
-                    title="Avançar para definir vigência e validar a minuta timbrada antes de salvar"
+                    title="Avançar para configurar e visualizar a minuta de Termo Aditivo PJ"
                   >
-                    <span>Sim, Avançar para Visualização da Minuta</span>
+                    <span>Gerar Termo / Visualizar Minuta</span>
                     <ArrowRight size={14} />
                   </button>
                 </div>
@@ -479,38 +513,50 @@ Vigência: ${calculatedVigencia}`;
               </div>
 
               {/* Botões */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setStep(0)}
-                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1.5"
                 >
                   <ChevronLeft size={14} /> Voltar
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setStep(2)}
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition-all"
-                >
-                  <span>Avançar para Visualização Prévia</span>
-                  <ArrowRight size={14} />
-                </button>
+                <div className="w-full sm:w-auto flex flex-col sm:flex-row items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => onSaveWithoutAdditive({ newRemuneration: amount, newRole: role })}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                    title="Salvar apenas as alterações no cadastro sem gerar o documento de aditivo"
+                  >
+                    <Save size={14} />
+                    <span>Somente Salvar Alterações</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all"
+                  >
+                    <span>Avançar para Visualização Prévia</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-          {/* ===================== PASSO 2: VALIDAÇÃO PRÉVIA OBRIGATÓRIA ===================== */}
+          {/* ===================== PASSO 2: VISUALIZAÇÃO PRÉVIA E DECISÃO ===================== */}
           {step === 2 && (
             <div className="space-y-6 animate-in fade-in duration-150">
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
                 <div>
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                     <CheckCircle2 size={15} className="text-emerald-600" />
-                    Validação Prévia Completa dos Dados
+                    Visualização Prévia da Minuta (Opcional)
                   </h4>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Confira todos os dados cadastrais e as cláusulas antes de emitir a minuta oficial.
+                    Confira os dados abaixo. Você pode emitir a minuta em PDF ou optar por somente salvar as alterações no cadastro.
                   </p>
                 </div>
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
@@ -651,25 +697,38 @@ Vigência: ${calculatedVigencia}`;
               </div>
 
               {/* Botões de Ação */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
                   disabled={isGenerating}
-                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1.5"
                 >
                   <ChevronLeft size={14} /> Voltar e Ajustar
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleValidateAndConfirm}
-                  disabled={isGenerating}
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition-all disabled:opacity-50"
-                >
-                  {isGenerating ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  <span>Validar e Emitir Minuta (ZapSign / PDF)</span>
-                </button>
+                <div className="w-full sm:w-auto flex flex-col sm:flex-row items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => onSaveWithoutAdditive({ newRemuneration: amount, newRole: role })}
+                    disabled={isGenerating}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                    title="Salvar apenas as alterações no cadastro sem emitir a minuta de aditivo"
+                  >
+                    <Save size={14} />
+                    <span>Somente Salvar Alterações</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleValidateAndConfirm}
+                    disabled={isGenerating}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    {isGenerating ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
+                    <span>Gerar Termo e Salvar (ZapSign / PDF)</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

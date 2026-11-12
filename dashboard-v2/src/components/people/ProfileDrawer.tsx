@@ -634,19 +634,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       const oldProfile = employeeId ? await PeopleService.getEmployeeProfile(employeeId, isTestMode) : null;
       const oldRels = oldProfile?.relationships || [];
 
-      // Se for PJ, checar se houve alterações contratuais relevantes para perguntar sobre Termo Aditivo
+      // Se for PJ, checar se houve alterações contratuais relevantes para perguntar sobre Termo Aditivo (geração opcional)
       if (isPJ && oldProfile && employeeId && !bypassAdditiveCheckRef.current) {
         const prevAmount = (oldProfile.remuneration_fixed || oldProfile.remuneration || 0);
         const currentAmount = (profile.remuneration_fixed || profile.remuneration || 0);
-        const prevRole = oldProfile.job_role || '';
-        const currentRole = profile.job_role || '';
-        const prevCompany = oldProfile.company || '';
-        const currentCompany = profile.company || '';
+        const prevRole = (oldProfile.job_role || '').trim();
+        const currentRole = (profile.job_role || '').trim();
+        const normalizedPrevRole = formatPjRole(prevRole).trim().toLowerCase();
+        const normalizedCurrentRole = formatPjRole(currentRole).trim().toLowerCase();
+        const prevCompany = (oldProfile.company || '').trim().toLowerCase();
+        const currentCompany = (profile.company || '').trim().toLowerCase();
 
         const hasSignificantContractChange =
           (currentAmount > 0 && prevAmount > 0 && currentAmount !== prevAmount) ||
-          (currentRole && prevRole && currentRole !== prevRole) ||
-          (currentCompany && prevCompany && currentCompany !== prevCompany);
+          (Boolean(currentRole) && Boolean(prevRole) && normalizedCurrentRole !== normalizedPrevRole) ||
+          (Boolean(currentCompany) && Boolean(prevCompany) && currentCompany !== prevCompany);
 
         if (hasSignificantContractChange) {
           setIsSaving(false);
@@ -707,8 +709,23 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     }
   };
 
-    const handleSaveWithoutAdditive = async () => {
+  const handleSaveWithoutAdditive = async (overrides?: { newRemuneration?: number; newRole?: string }) => {
     setIsPjAdditiveModalOpen(false);
+    if (overrides) {
+      if (typeof overrides.newRemuneration === 'number' && !Number.isNaN(overrides.newRemuneration)) {
+        profile.remuneration_fixed = overrides.newRemuneration;
+        profile.remuneration =
+          overrides.newRemuneration +
+          (profile.remuneration_bonus || 0) +
+          (profile.remuneration_commission || 0) +
+          (profile.remuneration_connectivity || 0) +
+          (profile.remuneration_incentives || 0);
+      }
+      if (typeof overrides.newRole === 'string' && overrides.newRole.trim()) {
+        profile.job_role = overrides.newRole.trim();
+      }
+      setProfile({ ...profile });
+    }
     bypassAdditiveCheckRef.current = true;
     try {
       await handleSave();
@@ -728,7 +745,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       const updatedProfile = {
         ...profile,
         remuneration_fixed: data.newRemuneration,
-        remuneration: data.newRemuneration,
+        remuneration:
+          data.newRemuneration +
+          (profile.remuneration_bonus || 0) +
+          (profile.remuneration_commission || 0) +
+          (profile.remuneration_connectivity || 0) +
+          (profile.remuneration_incentives || 0),
         job_role: formatPjRole(data.newRole),
       };
 
