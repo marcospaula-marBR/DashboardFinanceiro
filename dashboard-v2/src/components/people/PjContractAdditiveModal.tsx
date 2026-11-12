@@ -34,6 +34,7 @@ interface PjContractAdditiveModalProps {
   newRemuneration?: number;
   previousRole?: string;
   newRole?: string;
+  isStandalone?: boolean;
   onSaveWithoutAdditive: (overrides?: { newRemuneration?: number; newRole?: string }) => void;
   onConfirmAdditive: (result: {
     startDate: string;
@@ -52,11 +53,12 @@ export function PjContractAdditiveModal({
   newRemuneration = 0,
   previousRole = "",
   newRole = "",
+  isStandalone = false,
   onSaveWithoutAdditive,
   onConfirmAdditive,
 }: PjContractAdditiveModalProps) {
   // Passos: 0 = Pergunta inicial (se quer aditivo), 1 = Coleta de Condições, 2 = Validação Prévia, 3 = Conclusão / ZapSign
-  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(isStandalone ? 1 : 0);
 
   // Campos do formulário
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
@@ -72,7 +74,7 @@ export function PjContractAdditiveModal({
   // Sincroniza o estado interno sempre que o modal abre ou os dados recebidos mudam
   useEffect(() => {
     if (isOpen) {
-      setStep(0);
+      setStep(isStandalone ? 1 : 0);
       setAmount(newRemuneration || employee.remuneration_fixed || employee.remuneration || 0);
       setRole(newRole || employee.job_role || "");
       setStartDate(new Date().toISOString().split("T")[0]);
@@ -81,7 +83,7 @@ export function PjContractAdditiveModal({
       setAdditionalNotes("");
       setIsCopiedZapSign(false);
     }
-  }, [isOpen, newRemuneration, newRole, employee]);
+  }, [isOpen, isStandalone, newRemuneration, newRole, employee]);
 
   // Vigência calculada
   const calculatedVigencia = useMemo(() => {
@@ -379,12 +381,33 @@ Vigência: ${calculatedVigencia}`;
           {/* ===================== PASSO 1: CONDIÇÕES DO ADITIVO ===================== */}
           {step === 1 && (
             <div className="space-y-5 animate-in fade-in duration-150">
+              {isStandalone && (
+                <div className="p-3.5 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-emerald-600 text-white shrink-0 mt-0.5">
+                    <Sparkles size={16} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
+                        Emissão de Termo Aditivo Avulso
+                      </span>
+                      <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded-full bg-emerald-200/80 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100">
+                        Sob Demanda
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 dark:text-emerald-300/90 leading-relaxed">
+                      Você pode emitir um novo Termo Aditivo mantendo o valor mensal e o escopo atuais (por exemplo, para prorrogar vigência ou incluir cláusulas específicas) ou ajustar os campos livremente abaixo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                   <Calendar size={15} className="text-emerald-600" />
                   Marco Temporal e Condições Específicas
                 </h4>
-                <span className="text-xs text-slate-400">Etapa 2 de 4</span>
+                <span className="text-xs text-slate-400">{isStandalone ? "Etapa 1 de 3 (Avulso)" : "Etapa 2 de 4"}</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -402,7 +425,7 @@ Vigência: ${calculatedVigencia}`;
                     required
                   />
                   <span className="text-[10px] text-slate-400 block">
-                    A partir de quando o novo valor ou escopo passa a vigorar.
+                    A partir de quando o termo aditivo passa a vigorar.
                   </span>
                 </div>
 
@@ -464,7 +487,7 @@ Vigência: ${calculatedVigencia}`;
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <Coins size={13} className="text-slate-400" />
-                    Novo Valor Mensal Líquido (R$) *
+                    Valor Mensal Líquido (R$) *
                   </label>
                   <input
                     type="number"
@@ -482,7 +505,7 @@ Vigência: ${calculatedVigencia}`;
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <Briefcase size={13} className="text-slate-400" />
-                    Novo Escopo / Atividades *
+                    Escopo / Atividades *
                   </label>
                   <input
                     type="text"
@@ -498,17 +521,57 @@ Vigência: ${calculatedVigencia}`;
               </div>
 
               {/* Houve mais alguma alteração? */}
-              <div className="space-y-1.5 pt-2">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                  <span>Houve mais alguma alteração contratual? (Opcional)</span>
-                  <span className="text-[10px] text-slate-400 font-normal">Cláusulas ou notas complementares</span>
-                </label>
+              <div className="space-y-2 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Cláusulas Complementares / Objeto Específico do Aditivo (Opcional)
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    Toque em um modelo abaixo para inserir rapidamente
+                  </span>
+                </div>
+
+                {/* Atalhos Rápidos de Cláusulas para Aditivo Avulso */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    {
+                      label: "+ Prorrogação de Prazo",
+                      text: "As Partes resolvem prorrogar o prazo de vigência do Contrato de Prestação de Serviços originário, mantendo-se inalteradas as demais condições comerciais e técnicas.",
+                    },
+                    {
+                      label: "+ Confidencialidade / Sigilo (NDA)",
+                      text: "A CONTRATADA compromete-se a manter absoluto sigilo e confidencialidade sobre dados estratégicos, financeiros, operacionais e de clientes da CONTRATANTE, em conformidade com a LGPD (Lei nº 13.709/2018).",
+                    },
+                    {
+                      label: "+ Modalidade / Local de Prestação",
+                      text: "A prestação dos serviços técnicos especializados poderá ocorrer de forma remota, híbrida ou nas dependências indicadas pela CONTRATANTE, mediante alinhamento operacional entre as Partes.",
+                    },
+                    {
+                      label: "+ Entregáveis / SLA de Atendimento",
+                      text: "Ficam pactuados novos indicadores de nível de serviço (SLA) e entregáveis técnicos mensais vinculados ao escopo contratado, sem subordinação ou controle de jornada.",
+                    },
+                  ].map((tpl) => (
+                    <button
+                      key={tpl.label}
+                      type="button"
+                      onClick={() =>
+                        setAdditionalNotes((prev) =>
+                          prev.trim() ? `${prev.trim()}\n\n${tpl.text}` : tpl.text
+                        )
+                      }
+                      className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/40 text-slate-600 hover:text-emerald-700 dark:text-slate-300 dark:hover:text-emerald-300 border border-slate-200 dark:border-slate-700 transition-all"
+                    >
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
+
                 <textarea
                   value={additionalNotes}
                   onChange={(e) => setAdditionalNotes(e.target.value)}
                   rows={3}
                   className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs leading-relaxed focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none resize-y"
-                  placeholder="Ex: Incluída cláusula de confidencialidade de código-fonte; repactuada dedicação semanal de 40 horas autônomas; acordada bonificação trimestral vinculada a metas..."
+                  placeholder="Ex: Incluída cláusula de confidencialidade de código-fonte; repactuada dedicação autônoma; acordada bonificação trimestral vinculada a entregáveis..."
                 />
               </div>
 
@@ -516,10 +579,18 @@ Vigência: ${calculatedVigencia}`;
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep(0)}
+                  onClick={() => (isStandalone ? onClose() : setStep(0))}
                   className="w-full sm:w-auto px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1.5"
                 >
-                  <ChevronLeft size={14} /> Voltar
+                  {isStandalone ? (
+                    <>
+                      <X size={14} /> Cancelar
+                    </>
+                  ) : (
+                    <>
+                      <ChevronLeft size={14} /> Voltar
+                    </>
+                  )}
                 </button>
 
                 <div className="w-full sm:w-auto flex flex-col sm:flex-row items-center gap-2.5">

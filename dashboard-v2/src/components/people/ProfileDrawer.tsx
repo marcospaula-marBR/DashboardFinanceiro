@@ -127,6 +127,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
   // PJ Contract Additive & ZapSign state
   const [isPjAdditiveModalOpen, setIsPjAdditiveModalOpen] = useState(false);
+  const [isPjAdditiveStandalone, setIsPjAdditiveStandalone] = useState(false);
   const [pjAdditiveChangeData, setPjAdditiveChangeData] = useState<{
     previousRemuneration?: number;
     newRemuneration?: number;
@@ -658,6 +659,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
             previousRole: prevRole,
             newRole: currentRole,
           });
+          setIsPjAdditiveStandalone(false);
           setIsPjAdditiveModalOpen(true);
           return;
         }
@@ -707,6 +709,19 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleOpenStandalonePjAdditive = () => {
+    const currentAmt = profile.remuneration_fixed || profile.remuneration || 0;
+    const currentJobRole = profile.job_role || '';
+    setPjAdditiveChangeData({
+      previousRemuneration: currentAmt,
+      newRemuneration: currentAmt,
+      previousRole: currentJobRole,
+      newRole: currentJobRole,
+    });
+    setIsPjAdditiveStandalone(true);
+    setIsPjAdditiveModalOpen(true);
   };
 
   const handleSaveWithoutAdditive = async (overrides?: { newRemuneration?: number; newRole?: string }) => {
@@ -3132,6 +3147,73 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                            </div>
                         </div>
 
+                        {/* Meus Aditivos Contratuais (Acesso Direto & Emissão Avulsa) */}
+                        <div className="col-span-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                           <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
+                              <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                                <FileText size={12} className="text-emerald-600" /> Meus Aditivos Contratuais
+                              </h4>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {(profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile))) && (
+                                  <button
+                                    type="button"
+                                    onClick={handleOpenStandalonePjAdditive}
+                                    className="text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all shadow-sm"
+                                    title="Gerar Termo Aditivo PJ avulso a qualquer momento (mesmo sem alteração prévia de valor ou escopo)"
+                                  >
+                                    <Sparkles size={11} /> Gerar Termo Aditivo Avulso
+                                  </button>
+                                )}
+                                {profile.id && (
+                                  <label className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg cursor-pointer hover:bg-emerald-100 border border-emerald-200 transition-all flex items-center gap-1">
+                                    <Upload size={11} /> Anexar Aditivo
+                                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
+                                  </label>
+                                )}
+                              </div>
+                           </div>
+                           <div className="space-y-1.5">
+                              {profile.links_aditivos?.split('\n').filter(l => l.trim()).map((line, idx) => {
+                                const urlMatch = line.match(/\((.*?)\)/);
+                                const labelMatch = line.match(/\[(.*?)\]/);
+                                const url = urlMatch ? urlMatch[1] : null;
+                                const label = labelMatch ? labelMatch[1] : line;
+                                const isPending = line.toLowerCase().includes('pendente assinatura') || (url && url.startsWith('#pendente:'));
+                                return (
+                                  <div key={idx} className={`flex items-center justify-between p-2 rounded-lg border group ${isPending ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' : 'bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-800'}`}>
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                      <FileText size={13} className={isPending ? 'text-amber-600 shrink-0' : 'text-emerald-600 shrink-0'} />
+                                      {url && !url.startsWith('#pendente:') ? (
+                                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline truncate">
+                                          {label}
+                                        </a>
+                                      ) : (
+                                        <span className={`text-xs font-semibold truncate ${isPending ? 'text-amber-800 dark:text-amber-200' : 'text-slate-600'}`}>{label}</span>
+                                      )}
+                                      {isPending && (
+                                        <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-amber-200/80 text-amber-900 shrink-0">
+                                          Pendente
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {isPending && profile.id && (
+                                        <label className="text-[10px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded cursor-pointer flex items-center gap-1 transition-all">
+                                          <Upload size={10} /> Assinado
+                                          <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
+                                        </label>
+                                      )}
+                                      <button type="button" onClick={() => handleDeleteLink('links_aditivos', line)} className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {!profile.links_aditivos && <p className="text-[10px] text-slate-400 italic">Nenhum termo aditivo registrado. Use &quot;Gerar Termo Aditivo Avulso&quot; para emitir uma nova minuta ou anexe um PDF.</p>}
+                           </div>
+                        </div>
+
                         <div>
                           <label className={labelClass}>Status</label>
                            {isEditMode ? (
@@ -3713,20 +3795,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                   {isPJ && (
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        setPjAdditiveChangeData({
-                                          previousRemuneration: profile.remuneration_fixed ?? profile.remuneration ?? 0,
-                                          newRemuneration: profile.remuneration_fixed ?? profile.remuneration ?? 0,
-                                          previousRole: profile.job_role || '',
-                                          newRole: profile.job_role || '',
-                                        });
-                                        setIsPjAdditiveModalOpen(true);
-                                      }}
+                                      onClick={handleOpenStandalonePjAdditive}
                                       className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all shadow-sm"
-                                      title="Gerar novo termo aditivo PJ para o ZapSign"
+                                      title="Gerar Termo Aditivo PJ avulso a qualquer momento (mesmo sem alteração prévia de valor ou escopo)"
                                     >
                                       <Sparkles size={13} />
-                                      Gerar Aditivo PJ
+                                      Gerar Termo Aditivo Avulso
                                     </button>
                                   )}
                                   {profile.id && (
@@ -3998,10 +4072,21 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                  {/* ------------- ABA TRAJETÓRIA ------------- */}
                   {activeTab === 'trajetoria' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                      <div className="flex justify-between items-center border-b pb-2">
+                      <div className="flex flex-wrap justify-between items-center border-b pb-2 gap-2">
                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                           <Briefcase size={16} className="text-emerald-600" /> Tempo de Serviços
                         </h4>
+                        {(profile.linkType === 'PJ' || profile.linkType === 'MEI' || isExternalEntity(inferEntityType(profile))) && (
+                          <button
+                            type="button"
+                            onClick={handleOpenStandalonePjAdditive}
+                            className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
+                            title="Emitir um Termo Aditivo PJ avulso sob demanda"
+                          >
+                            <Sparkles size={13} />
+                            Gerar Termo Aditivo Avulso
+                          </button>
+                        )}
                       </div>
                       
                       <EmploymentBondTimeline 
@@ -7760,10 +7845,14 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     {/* Modal de Termo Aditivo PJ e ZapSign com SLA */}
       {isPjAdditiveModalOpen && (
         <PjContractAdditiveModal
-          key={`pj-additive-${profile.id || "new"}-${pjAdditiveChangeData.newRemuneration}-${pjAdditiveChangeData.newRole}`}
-        isOpen={isPjAdditiveModalOpen}
-        onClose={() => setIsPjAdditiveModalOpen(false)}
-        employee={profile}
+          key={`pj-additive-${profile.id || "new"}-${isPjAdditiveStandalone ? "standalone" : "auto"}-${pjAdditiveChangeData.newRemuneration}-${pjAdditiveChangeData.newRole}`}
+          isOpen={isPjAdditiveModalOpen}
+          isStandalone={isPjAdditiveStandalone}
+          onClose={() => {
+            setIsPjAdditiveModalOpen(false);
+            setIsPjAdditiveStandalone(false);
+          }}
+          employee={profile}
         previousRemuneration={pjAdditiveChangeData.previousRemuneration}
         newRemuneration={pjAdditiveChangeData.newRemuneration}
         previousRole={pjAdditiveChangeData.previousRole}

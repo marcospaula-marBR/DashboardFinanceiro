@@ -193,17 +193,17 @@ export class PjAdditiveService {
 
     const pjName = employee.corporate_name || employee.name || "CONTRATADA PJ";
     const pjCnpj = employee.pj_type || "---";
-    const repName = employee.name || "---";
-    const repCpf = employee.document_id || "---";
-    const repRg = employee.document_rg || "---";
+    const repName = employee.responsible_name || employee.name || "---";
+    const repCpf = employee.responsible_cpf || employee.document_id || "---";
+    const repRg = employee.responsible_rg || employee.document_rg || "---";
 
     const pjAddress = [
-      employee.street,
-      employee.number ? `nº ${employee.number}` : "",
-      employee.complement,
-      employee.neighborhood,
-      employee.city ? `${employee.city} - ${employee.state || "SP"}` : "",
-      employee.zip_code ? `CEP ${employee.zip_code}` : "",
+      employee.street || employee.cnpj_street,
+      (employee.number || employee.cnpj_number) ? `nº ${employee.number || employee.cnpj_number}` : "",
+      employee.complement || employee.cnpj_complement,
+      employee.neighborhood || employee.cnpj_neighborhood,
+      (employee.city || employee.cnpj_city) ? `${employee.city || employee.cnpj_city} - ${employee.state || employee.cnpj_state || "SP"}` : "",
+      (employee.zip_code || employee.cnpj_zip_code) ? `CEP ${employee.zip_code || employee.cnpj_zip_code}` : "",
     ]
       .filter(Boolean)
       .join(", ") || "Endereço cadastral da CONTRATADA";
@@ -217,17 +217,19 @@ export class PjAdditiveService {
     });
 
     // Cláusula 2 - Honorários / Remuneração
-    const hasRemunerationChange = newAmount > 0 && newAmount !== prevAmount;
+    const hasRemunerationChange = newAmount > 0 && prevAmount > 0 && newAmount !== prevAmount;
     if (hasRemunerationChange || newAmount > 0) {
       const extenso = valorPorExtenso(newAmount);
       const diffText =
-        prevAmount > 0
+        hasRemunerationChange && prevAmount > 0
           ? ` (reajustando o valor anteriormente praticado de R$ ${prevAmount.toLocaleString("pt-BR", {
               minimumFractionDigits: 2,
             })})`
-          : "";
+          : " (ratificando-se o valor vigente)";
       clauses.push({
-        title: "CLÁUSULA SEGUNDA - DA REPACTUAÇÃO DOS HONORÁRIOS PROFISSIONAIS",
+        title: hasRemunerationChange
+          ? "CLÁUSULA SEGUNDA - DA REPACTUAÇÃO DOS HONORÁRIOS PROFISSIONAIS"
+          : "CLÁUSULA SEGUNDA - DA RATIFICAÇÃO DOS HONORÁRIOS PROFISSIONAIS",
         text: `Pela execução dos serviços especializados, a CONTRATANTE pagará à CONTRATADA os honorários profissionais mensais no valor líquido de R$ ${newAmount.toLocaleString(
           "pt-BR",
           { minimumFractionDigits: 2 }
@@ -236,11 +238,17 @@ export class PjAdditiveService {
     }
 
     // Cláusula 3 - Escopo de Atuação
-    const hasRoleChange = Boolean(newRole && prevRole && newRole !== prevRole);
+    const hasRoleChange = Boolean(
+      newRole &&
+        prevRole &&
+        newRole.trim().toLowerCase() !== prevRole.trim().toLowerCase()
+    );
     if (hasRoleChange || newRole) {
       clauses.push({
-        title: "CLÁUSULA TERCEIRA - DO ESCOPO DE ATUAÇÃO E ATIVIDADES",
-        text: `O objeto da prestação de serviços passa a contemplar especificamente as atividades técnicas e operacionais sob o escopo de ${newRole}, desempenhadas com total autonomia técnica, sem subordinação hierárquica, habitualidade cogente ou exclusividade, preservando a natureza cível e mercantil do contrato originário.`,
+        title: hasRoleChange
+          ? "CLÁUSULA TERCEIRA - DA ATUALIZAÇÃO DO ESCOPO DE ATUAÇÃO E ATIVIDADES"
+          : "CLÁUSULA TERCEIRA - DO ESCOPO DE ATUAÇÃO E ATIVIDADES",
+        text: `O objeto da prestação de serviços ${hasRoleChange ? "passa a contemplar" : "contempla"} especificamente as atividades técnicas e operacionais sob o escopo de ${newRole}, desempenhadas com total autonomia técnica, sem subordinação hierárquica, habitualidade cogente ou exclusividade, preservando a natureza cível e mercantil do contrato originário.`,
       });
     }
 
