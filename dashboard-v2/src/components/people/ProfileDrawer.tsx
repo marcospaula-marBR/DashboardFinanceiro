@@ -3197,6 +3197,24 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       )}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
+                                      {isPending && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const waUrl = PjAdditiveService.buildZapSignReminderWhatsAppUrl(profile);
+                                            if (waUrl) {
+                                              window.open(waUrl, '_blank', 'noopener,noreferrer');
+                                            } else {
+                                              navigator.clipboard.writeText(PjAdditiveService.buildZapSignReminderText(profile));
+                                              alert('Mensagem padronizada de lembrete copiada para a área de transferência!');
+                                            }
+                                          }}
+                                          className="text-[10px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded flex items-center gap-1 transition-all"
+                                          title="Disparar lembrete padronizado no WhatsApp do prestador"
+                                        >
+                                          <Phone size={10} /> Cobrar WhatsApp
+                                        </button>
+                                      )}
                                       {isPending && profile.id && (
                                         <label className="text-[10px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded cursor-pointer flex items-center gap-1 transition-all">
                                           <Upload size={10} /> Assinado
@@ -3850,15 +3868,34 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
                                       </div>
                                     </div>
 
-                                    <label className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-sm ${
-                                      sla.isOverdue 
-                                        ? "bg-amber-600 hover:bg-amber-700 text-white" 
-                                        : "bg-blue-600 hover:bg-blue-700 text-white"
-                                    }`}>
-                                      <Upload size={13} />
-                                      Anexar Contrato Assinado
-                                      <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
-                                    </label>
+                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const waUrl = PjAdditiveService.buildZapSignReminderWhatsAppUrl(profile, sla);
+                                          if (waUrl) {
+                                            window.open(waUrl, '_blank', 'noopener,noreferrer');
+                                          } else {
+                                            navigator.clipboard.writeText(PjAdditiveService.buildZapSignReminderText(profile, sla));
+                                            alert('Mensagem padronizada de lembrete copiada para a área de transferência!');
+                                          }
+                                        }}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center gap-1.5 shadow-sm"
+                                        title="Enviar mensagem padronizada de cobrança de assinatura via WhatsApp"
+                                      >
+                                        <Phone size={13} />
+                                        Cobrar no WhatsApp
+                                      </button>
+                                      <label className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-sm ${
+                                        sla.isOverdue 
+                                          ? "bg-amber-600 hover:bg-amber-700 text-white" 
+                                          : "bg-blue-600 hover:bg-blue-700 text-white"
+                                      }`}>
+                                        <Upload size={13} />
+                                        Anexar Contrato Assinado
+                                        <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={handleAdditiveUpload} />
+                                      </label>
+                                    </div>
                                   </div>
                                 );
                               })()}

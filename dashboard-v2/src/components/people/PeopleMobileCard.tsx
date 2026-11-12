@@ -78,7 +78,27 @@ export function PeopleMobileCard({
 }: PeopleMobileCardProps) {
   const [copied, setCopied] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
+  const [copiedReminder, setCopiedReminder] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+
+  const additiveSla = useMemo(
+    () => PjAdditiveService.checkPendingAdditiveSla(employee.links_aditivos),
+    [employee.links_aditivos]
+  );
+
+  const handleSendZapSignReminder = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const waUrl = PjAdditiveService.buildZapSignReminderWhatsAppUrl(employee, additiveSla);
+    if (waUrl) {
+      window.open(waUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const text = PjAdditiveService.buildZapSignReminderText(employee, additiveSla);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedReminder(true);
+      setTimeout(() => setCopiedReminder(false), 2500);
+    });
+  };
 
   // Detecção de vínculo unificado / anterior
   const linkedPrev = useMemo(() => {
@@ -214,22 +234,28 @@ export function PeopleMobileCard({
           <span className={`text-[9px] font-black border uppercase px-2 py-0.5 rounded-full shrink-0 ${statusStyle}`}>
             {employee.status}
           </span>
-          {(() => {
-            const additiveSla = PjAdditiveService.checkPendingAdditiveSla(employee.links_aditivos);
-            if (!additiveSla.hasPending) return null;
-            return (
-              <span 
-                title={additiveSla.isOverdue ? `Atenção: Aditivo pendente de assinatura no ZapSign há ${additiveSla.daysElapsed} dias (> 5 dias)` : `Minuta em assinatura no ZapSign (${additiveSla.daysElapsed}d decorridos)`}
-                className={`text-[9px] font-black border uppercase px-2 py-0.5 rounded-full shrink-0 ${
-                  additiveSla.isOverdue
-                    ? "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700 animate-pulse"
-                    : "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300"
-                }`}
-              >
-                {additiveSla.isOverdue ? "⚠️ Aditivo Pendente" : "ZapSign"} ({additiveSla.daysElapsed}d)
-              </span>
-            );
-          })()}
+          {additiveSla.hasPending && (
+            <button
+              type="button"
+              onClick={handleSendZapSignReminder}
+              title={
+                additiveSla.isOverdue
+                  ? `SLA Estourado (${additiveSla.daysElapsed} dias): Clique para enviar lembrete padronizado no WhatsApp`
+                  : `Minuta em assinatura no ZapSign (${additiveSla.daysElapsed}d): Clique para enviar lembrete no WhatsApp`
+              }
+              className={`text-[9px] font-black border uppercase px-2 py-0.5 rounded-full shrink-0 cursor-pointer transition-all hover:scale-105 ${
+                copiedReminder
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : additiveSla.isOverdue
+                  ? "bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700 animate-pulse"
+                  : "bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300"
+              }`}
+            >
+              {copiedReminder
+                ? "✓ Lembrete Copiado!"
+                : `${additiveSla.isOverdue ? "⚠️ Cobrar ZapSign" : "ZapSign"} (${additiveSla.daysElapsed}d)`}
+            </button>
+          )}
         </div>
 
         {/* Linha inferior (Embaixo do Status): Apenas o Logotipo da Empresa do Vínculo */}
@@ -609,6 +635,25 @@ export function PeopleMobileCard({
               >
                 <Phone size={13} />
               </span>
+            )}
+
+            {/* Lembrete Padronizado ZapSign em 1 Clique (quando houver aditivo pendente) */}
+            {additiveSla.hasPending && (
+              <button
+                type="button"
+                onClick={handleSendZapSignReminder}
+                className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[10px] font-black shadow-2xs ${
+                  copiedReminder
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : additiveSla.isOverdue
+                    ? "bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300"
+                    : "bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200"
+                }`}
+                title="Disparar mensagem padronizada de lembrete de assinatura do Termo Aditivo no WhatsApp (ou copiar texto)"
+              >
+                <Clock size={12} />
+                <span>{copiedReminder ? "Copiado!" : "Cobrar"}</span>
+              </button>
             )}
 
             {/* Copiar Link Executivo */}

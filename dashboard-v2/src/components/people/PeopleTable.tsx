@@ -77,7 +77,23 @@ export function PeopleTable({
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedPixId, setCopiedPixId] = useState<string | null>(null);
+  const [copiedReminderId, setCopiedReminderId] = useState<string | null>(null);
   const [scrollWidth, setScrollWidth] = useState(1200);
+
+  const handleSendZapSignReminder = (e: React.MouseEvent, emp: Employee) => {
+    e.stopPropagation();
+    const sla = PjAdditiveService.checkPendingAdditiveSla(emp.links_aditivos);
+    const waUrl = PjAdditiveService.buildZapSignReminderWhatsAppUrl(emp, sla);
+    if (waUrl) {
+      window.open(waUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const text = PjAdditiveService.buildZapSignReminderText(emp, sla);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedReminderId(emp.id);
+      setTimeout(() => setCopiedReminderId(null), 2500);
+    });
+  };
 
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -340,16 +356,26 @@ export function PeopleTable({
                               {emp.status}
                             </span>
                             {additiveSla.hasPending && (
-                              <span 
-                                title={additiveSla.isOverdue ? `Atenção: Aditivo pendente de assinatura no ZapSign há ${additiveSla.daysElapsed} dias (> 5 dias)` : `Minuta em assinatura no ZapSign (${additiveSla.daysElapsed}d decorridos)`}
-                                className={`text-[8px] px-1.5 py-0.5 rounded border font-black uppercase tracking-wider inline-flex items-center gap-1 ${
+                              <button
+                                type="button"
+                                onClick={(e) => handleSendZapSignReminder(e, emp)}
+                                title={
                                   additiveSla.isOverdue
-                                    ? "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700 animate-pulse"
-                                    : "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300"
+                                    ? `SLA Estourado (${additiveSla.daysElapsed} dias): Clique para enviar lembrete padronizado no WhatsApp`
+                                    : `Minuta em assinatura no ZapSign (${additiveSla.daysElapsed}d): Clique para enviar lembrete no WhatsApp`
+                                }
+                                className={`text-[8px] px-1.5 py-0.5 rounded border font-black uppercase tracking-wider inline-flex items-center gap-1 cursor-pointer transition-all hover:scale-105 ${
+                                  copiedReminderId === emp.id
+                                    ? "bg-emerald-600 text-white border-emerald-600"
+                                    : additiveSla.isOverdue
+                                    ? "bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700 animate-pulse"
+                                    : "bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300"
                                 }`}
                               >
-                                {additiveSla.isOverdue ? "⚠️ Aditivo Pendente" : "ZapSign"} ({additiveSla.daysElapsed}d)
-                              </span>
+                                {copiedReminderId === emp.id
+                                  ? "✓ Lembrete Copiado!"
+                                  : `${additiveSla.isOverdue ? "⚠️ Cobrar ZapSign" : "ZapSign"} (${additiveSla.daysElapsed}d)`}
+                              </button>
                             )}
                             {isExternal ? (
                               emp.responsible_name && (
@@ -532,6 +558,23 @@ export function PeopleTable({
                           <span className="p-1.5 bg-slate-50 text-slate-300 rounded-lg border border-slate-100 cursor-not-allowed" title="WhatsApp indisponível">
                             <Phone size={13} />
                           </span>
+                        )}
+                        {additiveSla.hasPending && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleSendZapSignReminder(e, emp)}
+                            className={`p-1.5 rounded-lg border transition-all flex items-center gap-0.5 text-[9px] font-black shadow-2xs ${
+                              copiedReminderId === emp.id
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : additiveSla.isOverdue
+                                ? "bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300"
+                                : "bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200"
+                            }`}
+                            title="Disparar mensagem padronizada de lembrete de assinatura do Termo Aditivo no WhatsApp"
+                          >
+                            <Clock size={11} />
+                            <span>{copiedReminderId === emp.id ? "Copiado!" : "Cobrar"}</span>
+                          </button>
                         )}
                         <button onClick={(e) => handleCopyLink(e, emp)} className={`p-1.5 rounded-lg border transition-all flex items-center gap-0.5 text-[9px] font-black ${copiedId === emp.id ? "bg-emerald-500 text-white border-emerald-500 shadow-sm" : "bg-white hover:bg-slate-50 text-slate-500 border-slate-200"}`} title="Copiar Link Executivo">
                           {copiedId === emp.id ? <Check size={11} /> : <Copy size={11} />}

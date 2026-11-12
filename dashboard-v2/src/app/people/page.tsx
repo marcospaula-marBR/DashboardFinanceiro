@@ -33,7 +33,7 @@ import {
   UserCog, Plus, HandCoins, Coins, Landmark, Target,
   ChevronLeft, LayoutGrid, List, HeartPulse, ShieldAlert, Award,
   ChevronDown, TrendingUp, DollarSign, Wallet, Zap, Wifi, BarChart3,
-  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy, MapPin, Table, Clock
+  FileText, Printer, Database, Trash2, FileSpreadsheet, FolderDown, Building2, Copy, MapPin, Table, Clock, Phone, Check
 } from "lucide-react";
 import { 
   isExternalEntity, 
@@ -2167,6 +2167,112 @@ export default function PeoplePage() {
                />
              </div>
           </div>
+
+          {/* ⚡ Painel Executivo de Cobrança Rápida via WhatsApp (Ativo ao filtrar Aditivos ZapSign) */}
+          {filterInsight === 'aditivo_pendente' && (
+            <div className="mt-6 p-4 sm:p-5 bg-gradient-to-r from-amber-50 via-white to-emerald-50/40 border border-amber-200 rounded-2xl shadow-sm space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/60 pb-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Clock size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900">
+                        Central de Cobrança de Assinaturas — Termos Aditivos PJ (ZapSign)
+                      </h4>
+                      <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                        SLA 5 Dias
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Dispare um lembrete padronizado no WhatsApp em 1 clique para o representante legal concluir a assinatura eletrônica ou abra o prontuário para anexar o PDF assinado.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFilterInsight(null)}
+                  className="self-start sm:self-center px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-2xs"
+                >
+                  <X size={13} /> Fechar Filtro
+                </button>
+              </div>
+
+              {filteredEmployees.length === 0 ? (
+                <div className="py-4 text-center text-xs font-semibold text-emerald-700 bg-emerald-50/60 rounded-xl border border-emerald-200">
+                  🎉 Excelente! Nenhum prestador PJ possui Termo Aditivo pendente de assinatura no ZapSign no momento.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {filteredEmployees.map((emp) => {
+                    const sla = PjAdditiveService.checkPendingAdditiveSla(emp.links_aditivos);
+                    const waUrl = PjAdditiveService.buildZapSignReminderWhatsAppUrl(emp, sla);
+                    const displayName = emp.corporate_name || emp.name;
+                    return (
+                      <div
+                        key={`pending-sla-${emp.id}`}
+                        className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                          sla.isOverdue
+                            ? 'bg-amber-50/90 border-amber-300'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black text-slate-900 truncate">{displayName}</span>
+                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full ${
+                              sla.isOverdue ? 'bg-amber-600 text-white' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {sla.isOverdue ? `⚠️ SLA Estourado (${sla.daysElapsed}d)` : `Em Assinatura (${sla.daysElapsed}d)`}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            Rep.: {emp.responsible_name || emp.name} • {emp.company || 'MarBR'} • Tel.: {emp.phone_professional || emp.phone || 'Não informado'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {waUrl ? (
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all"
+                              title="Abrir WhatsApp com mensagem padronizada de cobrança do aditivo"
+                            >
+                              <Phone size={12} />
+                              <span>Lembrete WhatsApp</span>
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(PjAdditiveService.buildZapSignReminderText(emp, sla));
+                                alert('Texto do lembrete copiado para a área de transferência!');
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all"
+                              title="Sem telefone cadastrado — clique para copiar a mensagem de lembrete"
+                            >
+                              <Copy size={12} />
+                              <span>Copiar Lembrete</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleEmployeeClick(emp.id, 'pessoal')}
+                            className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold transition-all"
+                            title="Abrir prontuário para anexar o aditivo assinado"
+                          >
+                            Ficha
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Main List/Grid rendering ── */}
           {isLoadingEmployees ? (

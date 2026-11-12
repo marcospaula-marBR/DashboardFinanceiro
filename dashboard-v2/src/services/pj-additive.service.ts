@@ -177,6 +177,45 @@ export class PjAdditiveService {
   }
 
   /**
+   * Gera a mensagem padronizada de lembrete de assinatura do Termo Aditivo no ZapSign
+   */
+  static buildZapSignReminderText(
+    employee: Partial<Employee>,
+    slaStatus?: PendingAdditiveSlaStatus
+  ): string {
+    const sla = slaStatus || this.checkPendingAdditiveSla(employee.links_aditivos);
+    const repFirstName = (employee.responsible_name || employee.name || "Parceiro(a)").trim().split(" ")[0];
+    const pjDisplay = employee.corporate_name || employee.name || "sua empresa";
+    const companyDisplay = employee.company || "Grupo Mar Brasil";
+    const genDateBr = sla.generatedDate
+      ? sla.generatedDate.split("-").reverse().join("/")
+      : new Date().toLocaleDateString("pt-BR");
+
+    if (sla.isOverdue) {
+      return `Olá, ${repFirstName}! Tudo bem?\n\nIdentificamos em nosso painel que o *Termo Aditivo de Prestação de Serviços PJ* referente à *${pjDisplay}* junto à *${companyDisplay}* (emitido em ${genDateBr}, há ${sla.daysElapsed} dias) ainda consta como *Pendente de Assinatura* no *ZapSign*.\n\nComo o prazo operacional de 5 dias já foi atingido, poderia verificar seu e-mail ou WhatsApp com o link do ZapSign para concluir a assinatura eletrônica? Caso precise que reenviemos o link ou o PDF, basta nos avisar por aqui. Muito obrigado!`;
+    }
+
+    return `Olá, ${repFirstName}! Tudo bem?\n\nPassando para lembrar que o *Termo Aditivo de Prestação de Serviços PJ* referente à *${pjDisplay}* junto à *${companyDisplay}* (emitido em ${genDateBr}) está aguardando sua assinatura eletrônica no *ZapSign*.\n\nQuando puder, por gentileza confira o link enviado pelo ZapSign em seu e-mail/WhatsApp para concluirmos a formalização dentro do prazo de 5 dias. Qualquer dúvida, estamos à disposição!`;
+  }
+
+  /**
+   * Gera a URL direta do WhatsApp (wa.me) com a mensagem padronizada de lembrete do ZapSign.
+   * Retorna null caso o colaborador não possua telefone profissional nem pessoal cadastrado.
+   */
+  static buildZapSignReminderWhatsAppUrl(
+    employee: Partial<Employee>,
+    slaStatus?: PendingAdditiveSlaStatus
+  ): string | null {
+    const rawPhone = employee.phone_professional || employee.phone || "";
+    const digits = rawPhone.replace(/\D/g, "");
+    if (digits.length < 10) return null;
+
+    const fullPhone = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
+    const message = this.buildZapSignReminderText(employee, slaStatus);
+    return `https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`;
+  }
+
+  /**
    * Gera o texto jurídico formatado e estruturado do Termo Aditivo PJ
    */
   static getAdditiveDraft(params: PjAdditiveParams) {
