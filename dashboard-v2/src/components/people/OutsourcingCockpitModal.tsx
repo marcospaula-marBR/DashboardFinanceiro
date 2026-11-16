@@ -3,7 +3,8 @@ import {
   X, Building2, Plus, Trash2, Download, Calculator, Landmark, FileText,
   CheckCircle2, AlertCircle, Calendar, DollarSign, Percent, ChevronRight,
   Sparkles, RefreshCw, Edit3, Layers, Copy, ShieldCheck, ArrowRight, Save,
-  RotateCcw, Check, MapPin, Upload, Tag, Users, FileSpreadsheet, ArrowLeftRight, ChevronDown
+  RotateCcw, Check, MapPin, Upload, Tag, Users, FileSpreadsheet, ArrowLeftRight, ChevronDown,
+  History, Clock, ShieldAlert, Database
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PeopleHRService } from '@/services/people-hr.service';
@@ -64,6 +65,216 @@ export interface RepassLine {
   bank: string;
   amount: number;
   notes: string;
+}
+
+export type OutsourcingAuditAction =
+  | 'SAVE'
+  | 'IMPORT_PDF'
+  | 'IMPORT_XLSX'
+  | 'OVERWRITE_DETECTED'
+  | 'RESTORE_SNAPSHOT'
+  | 'RESET';
+
+export interface OutsourcingAuditMetrics {
+  rowsCount: number;
+  valorBruto: number;
+  valorDesconto: number;
+  valorLiquido: number;
+  valorVR: number;
+  valorVT: number;
+  valorFGTS: number;
+  valorGPS: number;
+  subtotal: number;
+  taxRate: number;
+  calculatedTax: number;
+  calculatedAdminFee: number;
+  totalApuradoBruto: number;
+  repassCount: number;
+  totalRepassado: number;
+}
+
+export interface OutsourcingAuditLogEntry {
+  id: string;
+  timestamp: string;
+  competencia: string;
+  action: OutsourcingAuditAction;
+  summary: string;
+  details?: string;
+  metrics?: OutsourcingAuditMetrics;
+}
+
+export interface OutsourcingCompetenceConfig {
+  taxInputMode: 'rate' | 'amount';
+  taxRate: number;
+  taxFixedAmount: number;
+  adminFeeMode: 'rate' | 'amount';
+  adminFeeRate: number;
+  adminFeeFixedAmount: number;
+  repassLines: RepassLine[];
+  customColumns: CustomColumn[];
+  rows: OutsourcingRow[];
+  saved_at?: string;
+  is_test?: boolean;
+}
+
+export interface OutsourcingSnapshot {
+  id: string;
+  competencia: string;
+  created_at: string;
+  label: string;
+  reason: string;
+  metrics: OutsourcingAuditMetrics;
+  data: OutsourcingCompetenceConfig;
+}
+
+function computeOutsourcingRowTotal(r: OutsourcingRow): number {
+  const customSum = Object.values(r.customValues || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+  const liq = (r.valorLiquido !== undefined && r.valorLiquido !== null)
+    ? Number(r.valorLiquido)
+    : ((Number(r.valorBruto) || 0) - (Number(r.valorDesconto) || 0));
+
+  return liq +
+    (Number(r.valorAjudaCusto) || 0) +
+    (Number(r.valorBonus) || 0) +
+    (Number(r.valorComissao) || 0) +
+    (Number(r.valorVR) || 0) +
+    (Number(r.valorVT) || 0) +
+    (Number(r.valorSeguro) || 0) +
+    (Number(r.valorFGTS) || 0) +
+    (Number(r.valorGPS) || 0) +
+    (Number(r.valorDecTerceiro) || 0) +
+    (Number(r.valorFerias) || 0) +
+    (Number(r.valorOutros) || 0) +
+    (Number(r.valorEmprestimo) || 0) +
+    customSum;
+}
+
+function computeOutsourcingMetrics(params: {
+  rows: OutsourcingRow[];
+  repassLines: RepassLine[];
+  taxInputMode: 'rate' | 'amount';
+  taxRate: number;
+  taxFixedAmount: number;
+  adminFeeMode: 'rate' | 'amount';
+  adminFeeRate: number;
+  adminFeeFixedAmount: number;
+}): OutsourcingAuditMetrics {
+  const {
+    rows = [],
+    repassLines = [],
+    taxInputMode = 'rate',
+    taxRate = 0,
+    taxFixedAmount = 0,
+    adminFeeMode = 'rate',
+    adminFeeRate = 0,
+    adminFeeFixedAmount = 0,
+  } = params;
+
+  let subtotal = 0;
+  let valorBruto = 0;
+  let valorDesconto = 0;
+  let valorLiquido = 0;
+  let valorVR = 0;
+  let valorVT = 0;
+  let valorFGTS = 0;
+  let valorGPS = 0;
+
+  for (const r of rows) {
+    const liq = (r.valorLiquido !== undefined && r.valorLiquido !== null)
+      ? Number(r.valorLiquido)
+      : ((Number(r.valorBruto) || 0) - (Number(r.valorDesconto) || 0));
+    subtotal += computeOutsourcingRowTotal(r);
+    valorBruto += Number(r.valorBruto) || 0;
+    valorDesconto += Number(r.valorDesconto) || 0;
+    valorLiquido += liq;
+    valorVR += Number(r.valorVR) || 0;
+    valorVT += Number(r.valorVT) || 0;
+    valorFGTS += Number(r.valorFGTS) || 0;
+    valorGPS += Number(r.valorGPS) || 0;
+  }
+
+  const calculatedTax = taxInputMode === 'rate' ? subtotal * ((Number(taxRate) || 0) / 100) : (Number(taxFixedAmount) || 0);
+  const calculatedAdminFee = adminFeeMode === 'rate' ? subtotal * ((Number(adminFeeRate) || 0) / 100) : (Number(adminFeeFixedAmount) || 0);
+  const totalApuradoBruto = subtotal + calculatedTax + calculatedAdminFee;
+  const totalRepassado = repassLines.reduce((a, l) => a + (Number(l.amount) || 0), 0);
+
+  return {
+    rowsCount: rows.length,
+    valorBruto: Number(valorBruto.toFixed(2)),
+    valorDesconto: Number(valorDesconto.toFixed(2)),
+    valorLiquido: Number(valorLiquido.toFixed(2)),
+    valorVR: Number(valorVR.toFixed(2)),
+    valorVT: Number(valorVT.toFixed(2)),
+    valorFGTS: Number(valorFGTS.toFixed(2)),
+    valorGPS: Number(valorGPS.toFixed(2)),
+    subtotal: Number(subtotal.toFixed(2)),
+    taxRate: Number(taxRate) || 0,
+    calculatedTax: Number(calculatedTax.toFixed(2)),
+    calculatedAdminFee: Number(calculatedAdminFee.toFixed(2)),
+    totalApuradoBruto: Number(totalApuradoBruto.toFixed(2)),
+    repassCount: repassLines.length,
+    totalRepassado: Number(totalRepassado.toFixed(2)),
+  };
+}
+
+function computeOutsourcingMetricsFromConfig(cfg: Partial<OutsourcingCompetenceConfig>): OutsourcingAuditMetrics {
+  return computeOutsourcingMetrics({
+    rows: cfg.rows || [],
+    repassLines: cfg.repassLines || [],
+    taxInputMode: cfg.taxInputMode || 'rate',
+    taxRate: Number(cfg.taxRate) || 0,
+    taxFixedAmount: Number(cfg.taxFixedAmount) || 0,
+    adminFeeMode: cfg.adminFeeMode || 'rate',
+    adminFeeRate: Number(cfg.adminFeeRate) || 0,
+    adminFeeFixedAmount: Number(cfg.adminFeeFixedAmount) || 0,
+  });
+}
+
+function areOutsourcingConfigsEquivalent(a?: Partial<OutsourcingCompetenceConfig> | null, b?: Partial<OutsourcingCompetenceConfig> | null): boolean {
+  if (!a || !b) return false;
+  const norm = (c: Partial<OutsourcingCompetenceConfig>) => ({
+    taxInputMode: c.taxInputMode || 'rate',
+    taxRate: Number(c.taxRate) || 0,
+    taxFixedAmount: Number(c.taxFixedAmount) || 0,
+    adminFeeMode: c.adminFeeMode || 'rate',
+    adminFeeRate: Number(c.adminFeeRate) || 0,
+    adminFeeFixedAmount: Number(c.adminFeeFixedAmount) || 0,
+    repassLines: c.repassLines || [],
+    customColumns: c.customColumns || [],
+    rows: c.rows || [],
+  });
+  return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+}
+
+async function appendOutsourcingAuditLogToCloud(entry: OutsourcingAuditLogEntry): Promise<OutsourcingAuditLogEntry[] | null> {
+  try {
+    const { data: globalRec } = await supabase
+      .from('employees')
+      .select('id, metadata')
+      .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+      .maybeSingle();
+
+    if (!globalRec?.id) return null;
+    const meta = (globalRec.metadata as Record<string, any>) || {};
+    const currentLogs: OutsourcingAuditLogEntry[] = Array.isArray(meta.outsourcing_audit_logs)
+      ? meta.outsourcing_audit_logs
+      : [];
+    const updatedLogs = [entry, ...currentLogs].slice(0, 200);
+    await supabase
+      .from('employees')
+      .update({
+        metadata: {
+          ...meta,
+          outsourcing_audit_logs: updatedLogs,
+          updated_at: new Date().toISOString(),
+        }
+      })
+      .eq('id', globalRec.id);
+    return updatedLogs;
+  } catch (err) {
+    console.warn('Aviso ao gravar log de auditoria da terceirização:', err);
+    return null;
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -182,8 +393,14 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   // Timestamp do último save
   const [savedTimestamp, setSavedTimestamp] = useState<string | null>(null);
 
+  // Auditoria & Snapshots de Segurança
+  const [auditLogs, setAuditLogs] = useState<OutsourcingAuditLogEntry[]>([]);
+  const [competenceSnapshots, setCompetenceSnapshots] = useState<OutsourcingSnapshot[]>([]);
+  const [auditFilterScope, setAuditFilterScope] = useState<'current' | 'all'>('current');
+  const [pendingRestoreReview, setPendingRestoreReview] = useState<string | null>(null);
+
   // Aba ativa
-  const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement' | 'audit'>('main');
 
   // Refs para sincronização exata da barra de rolagem horizontal
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -261,6 +478,75 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const fmt = (v: number) =>
     (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const applyCompetenceConfigToState = (cfg: Partial<OutsourcingCompetenceConfig> | null, compKey: string) => {
+    if (cfg) {
+      setTaxInputMode(cfg.taxInputMode || 'rate');
+      setTaxRate(cfg.taxRate !== undefined && cfg.taxRate !== null ? parseFloat(String(cfg.taxRate)) : 5.0);
+      setTaxFixedAmount(parseFloat(String(cfg.taxFixedAmount)) || 0);
+      setAdminFeeMode(cfg.adminFeeMode || 'rate');
+      setAdminFeeRate(cfg.adminFeeRate !== undefined && cfg.adminFeeRate !== null ? parseFloat(String(cfg.adminFeeRate)) : 10.0);
+      setAdminFeeFixedAmount(parseFloat(String(cfg.adminFeeFixedAmount)) || 0);
+      setSavedTimestamp(cfg.saved_at || null);
+      setCustomColumns(Array.isArray(cfg.customColumns) ? cfg.customColumns : []);
+      if (Array.isArray(cfg.repassLines) && cfg.repassLines.length > 0) {
+        setRepassLines(cfg.repassLines);
+      } else {
+        setRepassLines([{
+          id: `rep-${Date.now()}`,
+          date: new Date().toISOString().split('T')[0],
+          bank: 'Omie.Cash',
+          amount: 0,
+          notes: ''
+        }]);
+      }
+      return;
+    }
+
+    const savedRep = localStorage.getItem(`outsourcing_repasses_${compKey}${isTestMode ? '_test' : ''}`);
+    let repLoaded: RepassLine[] = [];
+    if (savedRep) {
+      try { repLoaded = JSON.parse(savedRep); } catch {}
+    }
+    setRepassLines(repLoaded.length > 0 ? repLoaded : [{
+      id: `rep-${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      bank: 'Omie.Cash',
+      amount: 0,
+      notes: ''
+    }]);
+
+    const savedCfg = localStorage.getItem(`outsourcing_config_${compKey}${isTestMode ? '_test' : ''}`);
+    if (savedCfg) {
+      try {
+        const parsed = JSON.parse(savedCfg);
+        setTaxInputMode(parsed.taxInputMode || 'rate');
+        setTaxRate(parsed.taxRate ?? 5.0);
+        setTaxFixedAmount(parsed.taxFixedAmount || 0);
+        setAdminFeeMode(parsed.adminFeeMode || 'rate');
+        setAdminFeeRate(parsed.adminFeeRate ?? 10.0);
+        setAdminFeeFixedAmount(parsed.adminFeeFixedAmount || 0);
+        setSavedTimestamp(parsed.saved_at || null);
+      } catch {
+        setSavedTimestamp(null);
+      }
+    } else {
+      setTaxInputMode('rate');
+      setTaxRate(5.0);
+      setTaxFixedAmount(0);
+      setAdminFeeMode('rate');
+      setAdminFeeRate(10.0);
+      setAdminFeeFixedAmount(0);
+      setSavedTimestamp(null);
+    }
+
+    const savedCols = localStorage.getItem(`outsourcing_cols_${compKey}${isTestMode ? '_test' : ''}`);
+    if (savedCols) {
+      try { setCustomColumns(JSON.parse(savedCols)); } catch { setCustomColumns([]); }
+    } else {
+      setCustomColumns([]);
+    }
+  };
+
   // ── Carregar dados ao abrir ──────────────────
   useEffect(() => {
     if (isOpen) loadData(competencia);
@@ -273,6 +559,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     }
     setLoading(true);
     setError(null);
+    setPendingRestoreReview(null);
     try {
       // 1. Colaboradores cadastrados
       const allEmps = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true, isTestMode });
@@ -326,64 +613,21 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             globalConfig.metadata.outsourcing_configs[comp] ||
             globalConfig.metadata.outsourcing_configs[startDate];
         }
+
+        const rawLogs = Array.isArray(globalConfig?.metadata?.outsourcing_audit_logs)
+          ? globalConfig.metadata.outsourcing_audit_logs
+          : [];
+        setAuditLogs(rawLogs);
+
+        const allSnapshots = globalConfig?.metadata?.outsourcing_snapshots || {};
+        const compSnaps = allSnapshots[cleanComp] || allSnapshots[comp] || allSnapshots[startDate] || [];
+        setCompetenceSnapshots(Array.isArray(compSnaps) ? compSnaps : []);
       } catch (e) {
         console.warn('Aviso ao carregar configuração de terceirização do Supabase:', e);
       }
 
-      // 5. Repasses (Nuvem Supabase + Fallback LocalStorage)
-      let repLoaded: RepassLine[] = [];
-      if (cloudCompetenceData?.repassLines && Array.isArray(cloudCompetenceData.repassLines) && cloudCompetenceData.repassLines.length > 0) {
-        repLoaded = cloudCompetenceData.repassLines;
-      } else {
-        const savedRep = localStorage.getItem(`outsourcing_repasses_${comp}${isTestMode ? '_test' : ''}`);
-        if (savedRep) {
-          try { repLoaded = JSON.parse(savedRep); } catch {}
-        }
-      }
-
-      if (repLoaded.length > 0) {
-        setRepassLines(repLoaded);
-      } else {
-        setRepassLines([{
-          id: `rep-${Date.now()}`,
-          date: new Date().toISOString().split('T')[0],
-          bank: 'Omie.Cash',
-          amount: 0,
-          notes: ''
-        }]);
-      }
-
-      // 6. Configuração de taxas da competência (Nuvem Supabase + Fallback LocalStorage)
-      if (cloudCompetenceData) {
-        setTaxInputMode(cloudCompetenceData.taxInputMode || 'rate');
-        setTaxRate(parseFloat(String(cloudCompetenceData.taxRate)) || 5.0);
-        setTaxFixedAmount(parseFloat(String(cloudCompetenceData.taxFixedAmount)) || 0);
-        setAdminFeeMode(cloudCompetenceData.adminFeeMode || 'rate');
-        setAdminFeeRate(parseFloat(String(cloudCompetenceData.adminFeeRate)) || 10.0);
-        setAdminFeeFixedAmount(parseFloat(String(cloudCompetenceData.adminFeeFixedAmount)) || 0);
-        setSavedTimestamp(cloudCompetenceData.saved_at || null);
-      } else {
-        const savedCfg = localStorage.getItem(`outsourcing_config_${comp}${isTestMode ? '_test' : ''}`);
-        if (savedCfg) {
-          try {
-            const parsed = JSON.parse(savedCfg);
-            setTaxInputMode(parsed.taxInputMode || 'rate');
-            setTaxRate(parsed.taxRate || 5.0);
-            setTaxFixedAmount(parsed.taxFixedAmount || 0);
-            setAdminFeeMode(parsed.adminFeeMode || 'rate');
-            setAdminFeeRate(parsed.adminFeeRate || 10.0);
-            setAdminFeeFixedAmount(parsed.adminFeeFixedAmount || 0);
-            setSavedTimestamp(parsed.saved_at || null);
-          } catch {}
-        } else {
-          setTaxInputMode('rate');
-          setTaxRate(5.0);
-          setTaxFixedAmount(0);
-          setAdminFeeMode('rate');
-          setAdminFeeRate(10.0);
-          setAdminFeeFixedAmount(0);
-        }
-      }
+      // 5 e 6. Repasses e configuração de taxas da competência (Nuvem Supabase + Fallback LocalStorage)
+      applyCompetenceConfigToState(cloudCompetenceData || null, comp);
 
       // 7. Restaurar linhas da apuração (Prioridade: Nuvem Supabase -> LocalStorage -> Montagem automática)
       if (cloudCompetenceData?.rows && Array.isArray(cloudCompetenceData.rows) && cloudCompetenceData.rows.length > 0) {
@@ -492,13 +736,26 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       });
 
       let currentRows: OutsourcingRow[] = [...rows];
-      let lastTargetComp = competencia;
+      let activeTargetComp = competencia;
+      let activeTaxInputMode = taxInputMode;
+      let activeTaxRate = taxRate;
+      let activeTaxFixedAmount = taxFixedAmount;
+      let activeAdminFeeMode = adminFeeMode;
+      let activeAdminFeeRate = adminFeeRate;
+      let activeAdminFeeFixedAmount = adminFeeFixedAmount;
+      let activeRepassLines = repassLines;
+
       const importSummaries: string[] = [];
+      const importedFileNames: string[] = [];
+      let hasPdf = false;
+      let hasSpreadsheet = false;
 
       for (const file of sortedFiles) {
         const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+        importedFileNames.push(file.name);
 
         if (isPdf) {
+          hasPdf = true;
           // Processamento inteligente de PDF (Extrato Mensal, VA ou VT) via Robô / API
           const formData = new FormData();
           formData.append('file', file);
@@ -521,10 +778,10 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           }
 
           const docType: string = data.docType || 'extrato_mensal';
-          const targetComp = data.competencia || competencia;
-          lastTargetComp = targetComp;
+          const pdfDetectedComp: string = data.competencia || activeTargetComp;
 
           // ── VA (Vale Alimentação / Refeição) ou VT (Vale Transporte) ───────────────────
+          // Regra de blindagem: VA e VT são relatórios complementares e NUNCA trocam a competência ativa da tela.
           if (docType === 'va' || docType === 'vt') {
             const fieldKey = docType === 'va' ? 'valorVR' : 'valorVT';
             const labelDoc = docType === 'va' ? 'VA (Alimentação/Refeição)' : 'VT (Transporte)';
@@ -603,10 +860,61 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             const totalFmt = data.totalGeral
               ? ` (Total: R$ ${Number(data.totalGeral).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
               : '';
-            importSummaries.push(`${labelDoc}${totalFmt}: ${enrichedCount} atualizado(s)${newCount > 0 ? `, ${newCount} novo(s)` : ''}`);
+            const compNotice = pdfDetectedComp && pdfDetectedComp !== activeTargetComp
+              ? ` [aplicado em ${activeTargetComp}; PDF citava ${pdfDetectedComp}]`
+              : '';
+            importSummaries.push(`${labelDoc}${totalFmt}: ${enrichedCount} atualizado(s)${newCount > 0 ? `, ${newCount} novo(s)` : ''}${compNotice}`);
 
           // ── Extrato Mensal (holerites CLT — Domínio / Realcontabil) ──────────
           } else {
+            let appliedOnMismatch = false;
+            if (pdfDetectedComp && pdfDetectedComp !== activeTargetComp) {
+              const shouldSwitch = window.confirm(
+                `O Extrato Mensal "${file.name}" pertence à competência ${pdfDetectedComp}, mas a tela está aberta em ${activeTargetComp}.\n\n` +
+                `• Clique em OK para alternar para ${pdfDetectedComp} (carregando as taxas e repasses próprios de ${pdfDetectedComp}).\n` +
+                `• Clique em Cancelar para manter e importar esta folha na competência atual (${activeTargetComp}).`
+              );
+
+              if (shouldSwitch) {
+                activeTargetComp = pdfDetectedComp;
+                const cleanNewComp = activeTargetComp.slice(0, 7);
+                let targetCloudCfg: Partial<OutsourcingCompetenceConfig> | null = null;
+                try {
+                  const { data: globalCfg } = await supabase
+                    .from('employees')
+                    .select('metadata')
+                    .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+                    .maybeSingle();
+                  targetCloudCfg = globalCfg?.metadata?.outsourcing_configs?.[cleanNewComp] || null;
+                  const targetSnaps = globalCfg?.metadata?.outsourcing_snapshots?.[cleanNewComp] || [];
+                  setCompetenceSnapshots(Array.isArray(targetSnaps) ? targetSnaps : []);
+                } catch {}
+
+                applyCompetenceConfigToState(targetCloudCfg, activeTargetComp);
+                if (targetCloudCfg) {
+                  activeTaxInputMode = targetCloudCfg.taxInputMode || 'rate';
+                  activeTaxRate = targetCloudCfg.taxRate ?? 5.0;
+                  activeTaxFixedAmount = Number(targetCloudCfg.taxFixedAmount) || 0;
+                  activeAdminFeeMode = targetCloudCfg.adminFeeMode || 'rate';
+                  activeAdminFeeRate = targetCloudCfg.adminFeeRate ?? 10.0;
+                  activeAdminFeeFixedAmount = Number(targetCloudCfg.adminFeeFixedAmount) || 0;
+                  activeRepassLines = Array.isArray(targetCloudCfg.repassLines) ? targetCloudCfg.repassLines : [];
+                  currentRows = Array.isArray(targetCloudCfg.rows) ? [...targetCloudCfg.rows] : [];
+                } else {
+                  activeTaxInputMode = 'rate';
+                  activeTaxRate = 5.0;
+                  activeTaxFixedAmount = 0;
+                  activeAdminFeeMode = 'rate';
+                  activeAdminFeeRate = 10.0;
+                  activeAdminFeeFixedAmount = 0;
+                  activeRepassLines = [];
+                  currentRows = [];
+                }
+              } else {
+                appliedOnMismatch = true;
+              }
+            }
+
             const cleanCpf = (c: string) => (c || '').replace(/\D/g, '');
             const normName = (n: string) =>
               n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -703,10 +1011,12 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             });
 
             currentRows = mappedRows;
-            importSummaries.push(`Folha de Pagamento (${targetComp}): ${data.totalParsed} contratados (${matchedCount} vinculados${newCount > 0 ? `, ${newCount} novos` : ''})`);
+            const mismatchNote = appliedOnMismatch ? ` [aplicado na competência ${activeTargetComp}]` : '';
+            importSummaries.push(`Folha de Pagamento (${activeTargetComp}): ${data.totalParsed} contratados (${matchedCount} vinculados${newCount > 0 ? `, ${newCount} novos` : ''})${mismatchNote}`);
           }
 
         } else {
+          hasSpreadsheet = true;
           // Processamento de Planilha Excel / CSV
           const buffer = await file.arrayBuffer();
           const result = parseOutsourcingFile(buffer);
@@ -732,6 +1042,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           if (result.detectedTaxRate !== undefined && result.detectedTaxRate > 0) {
             setTaxInputMode('rate');
             setTaxRate(result.detectedTaxRate);
+            activeTaxInputMode = 'rate';
+            activeTaxRate = result.detectedTaxRate;
           }
 
           currentRows = mappedRows;
@@ -741,15 +1053,43 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
       // Persiste os dados consolidados no estado e localStorage
       try {
-        localStorage.setItem(`outsourcing_rows_${lastTargetComp}${isTestMode ? '_test' : ''}`, JSON.stringify(currentRows));
+        localStorage.setItem(`outsourcing_rows_${activeTargetComp}${isTestMode ? '_test' : ''}`, JSON.stringify(currentRows));
       } catch {}
 
-      if (lastTargetComp !== competencia) {
+      if (activeTargetComp !== competencia) {
         skipNextLoadRef.current = true;
-        setCompetencia(lastTargetComp);
+        setCompetencia(activeTargetComp);
       }
 
       setRows(currentRows);
+
+      const importMetrics = computeOutsourcingMetrics({
+        rows: currentRows,
+        repassLines: activeRepassLines,
+        taxInputMode: activeTaxInputMode,
+        taxRate: activeTaxRate,
+        taxFixedAmount: activeTaxFixedAmount,
+        adminFeeMode: activeAdminFeeMode,
+        adminFeeRate: activeAdminFeeRate,
+        adminFeeFixedAmount: activeAdminFeeFixedAmount,
+      });
+
+      const importEntry: OutsourcingAuditLogEntry = {
+        id: `audit-import-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        competencia: activeTargetComp.slice(0, 7),
+        action: hasPdf && !hasSpreadsheet ? 'IMPORT_PDF' : 'IMPORT_XLSX',
+        summary: `Importação para ${activeTargetComp.slice(0, 7)}: ${importSummaries.join(' | ')}`,
+        details: `Arquivos: ${importedFileNames.join(', ')} (aguardando clique em "Salvar Apuração" para efetivar no banco).`,
+        metrics: importMetrics,
+      };
+      const updatedLogs = await appendOutsourcingAuditLogToCloud(importEntry);
+      if (updatedLogs) {
+        setAuditLogs(updatedLogs);
+      } else {
+        setAuditLogs(prev => [importEntry, ...prev].slice(0, 200));
+      }
+
       setSaveSuccessMessage(
         `Robô: ${fileList.length > 1 ? `${fileList.length} relatórios importados com sucesso! ` : ''}${importSummaries.join(' | ')}.`
       );
@@ -766,7 +1106,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     }
   };
 
-  // ── SALVAR APURAÇÃO (GARANTIA HÍBRIDA: LOCALSTORAGE + SUPABASE) ──
+  // ── SALVAR APURAÇÃO (GARANTIA HÍBRIDA: LOCALSTORAGE + SUPABASE + SNAPSHOT + LOG) ──
   const handleSaveSettlement = async () => {
     setSaving(true);
     setError(null);
@@ -783,11 +1123,27 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         saved_at: nowIso
       }));
 
-      // 2. SALVAR NO SUPABASE: REGISTRO GLOBAL DE APURAÇÃO COMPARTILHADO COM TODOS OS USUÁRIOS
+      // 2. SALVAR NO SUPABASE: REGISTRO GLOBAL DE APURAÇÃO + SNAPSHOT ANTERIOR + LOG DE AUDITORIA
       const cleanComp = competencia.slice(0, 7);
       const dbComp = `${cleanComp}-01`;
       const startDate = `${cleanComp}-01`;
       const endDate = `${cleanComp}-31`;
+
+      const newConfigPayload: OutsourcingCompetenceConfig = {
+        taxInputMode,
+        taxRate,
+        taxFixedAmount,
+        adminFeeMode,
+        adminFeeRate,
+        adminFeeFixedAmount,
+        repassLines,
+        customColumns,
+        rows,
+        saved_at: nowIso,
+        is_test: isTestMode
+      };
+
+      const afterMetrics = computeOutsourcingMetricsFromConfig(newConfigPayload);
 
       try {
         const { data: globalRec } = await supabase
@@ -797,23 +1153,65 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           .maybeSingle();
 
         const meta = (globalRec?.metadata as Record<string, any>) || {};
-        const outsConfigs = meta.outsourcing_configs || {};
+        const outsConfigs: Record<string, OutsourcingCompetenceConfig> = { ...(meta.outsourcing_configs || {}) };
+        const outsSnapshots: Record<string, OutsourcingSnapshot[]> = { ...(meta.outsourcing_snapshots || {}) };
+        const currentLogs: OutsourcingAuditLogEntry[] = Array.isArray(meta.outsourcing_audit_logs)
+          ? [...meta.outsourcing_audit_logs]
+          : [];
 
-        outsConfigs[cleanComp] = {
-          taxInputMode,
-          taxRate,
-          taxFixedAmount,
-          adminFeeMode,
-          adminFeeRate,
-          adminFeeFixedAmount,
-          repassLines,
-          customColumns,
-          rows,
-          saved_at: nowIso,
-          is_test: isTestMode
+        const prevConfig = outsConfigs[cleanComp];
+        let compSnaps: OutsourcingSnapshot[] = Array.isArray(outsSnapshots[cleanComp])
+          ? [...outsSnapshots[cleanComp]]
+          : [];
+
+        let beforeMetrics: OutsourcingAuditMetrics | null = null;
+        if (prevConfig) {
+          beforeMetrics = computeOutsourcingMetricsFromConfig(prevConfig);
+          const latestSnap = compSnaps[0];
+          if (!latestSnap || !areOutsourcingConfigsEquivalent(prevConfig, latestSnap.data)) {
+            const prevDateLabel = prevConfig.saved_at
+              ? new Date(prevConfig.saved_at).toLocaleString('pt-BR')
+              : 'versão anterior';
+            compSnaps = [
+              {
+                id: `snap-${cleanComp}-${Date.now()}`,
+                competencia: cleanComp,
+                created_at: prevConfig.saved_at || nowIso,
+                label: `Pré-salvamento (${prevDateLabel})`,
+                reason: `Snapshot automático preservado antes da gravação de ${new Date(nowIso).toLocaleString('pt-BR')}`,
+                metrics: beforeMetrics,
+                data: prevConfig,
+              },
+              ...compSnaps
+            ].slice(0, 10);
+          }
+        }
+
+        const deltaInfo = beforeMetrics
+          ? `Anterior: ${beforeMetrics.rowsCount} colab., Apurado ${fmt(beforeMetrics.totalApuradoBruto)}, VA ${fmt(beforeMetrics.valorVR)}, VT ${fmt(beforeMetrics.valorVT)}, Repasses ${fmt(beforeMetrics.totalRepassado)} → Novo: ${afterMetrics.rowsCount} colab., Apurado ${fmt(afterMetrics.totalApuradoBruto)}, VA ${fmt(afterMetrics.valorVR)}, VT ${fmt(afterMetrics.valorVT)}, Repasses ${fmt(afterMetrics.totalRepassado)}.`
+          : `Primeira apuração salva para ${cleanComp}: ${afterMetrics.rowsCount} contratados, Apurado ${fmt(afterMetrics.totalApuradoBruto)}, Repasses ${fmt(afterMetrics.totalRepassado)}.`;
+
+        const saveLogEntry: OutsourcingAuditLogEntry = {
+          id: `audit-save-${Date.now()}`,
+          timestamp: nowIso,
+          competencia: cleanComp,
+          action: 'SAVE',
+          summary: `Apuração de ${cleanComp} salva (${afterMetrics.rowsCount} contratados · Apurado ${fmt(afterMetrics.totalApuradoBruto)} · Repasses ${fmt(afterMetrics.totalRepassado)}).`,
+          details: deltaInfo,
+          metrics: afterMetrics,
         };
 
-        const updatedMeta = { ...meta, outsourcing_configs: outsConfigs };
+        const updatedLogs = [saveLogEntry, ...currentLogs].slice(0, 200);
+        outsConfigs[cleanComp] = newConfigPayload;
+        outsSnapshots[cleanComp] = compSnaps;
+
+        const updatedMeta = {
+          ...meta,
+          outsourcing_configs: outsConfigs,
+          outsourcing_snapshots: outsSnapshots,
+          outsourcing_audit_logs: updatedLogs,
+          updated_at: nowIso
+        };
 
         if (globalRec?.id) {
           await supabase.from('employees').update({ metadata: updatedMeta }).eq('id', globalRec.id);
@@ -827,6 +1225,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             metadata: updatedMeta
           }]);
         }
+
+        setAuditLogs(updatedLogs);
+        setCompetenceSnapshots(compSnaps);
       } catch (errGlobal) {
         console.error('Erro ao sincronizar snapshot de apuração no Supabase:', errGlobal);
       }
@@ -890,6 +1291,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         }
       }
 
+      setPendingRestoreReview(null);
       setSavedTimestamp(nowIso);
       setSaveSuccessMessage(`Apuração de ${competencia} salva e sincronizada com a nuvem para todos os usuários!`);
       setTimeout(() => setSaveSuccessMessage(null), 5000);
@@ -901,9 +1303,57 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     }
   };
 
+  const handleRestoreSnapshot = async (snapshot: OutsourcingSnapshot) => {
+    const formattedDate = new Date(snapshot.created_at).toLocaleString('pt-BR');
+    const confirmed = window.confirm(
+      `Restaurar a versão "${snapshot.label}" (${formattedDate}) na competência ${competencia}?\n\n` +
+      `Os valores da tela serão substituídos pelos deste snapshot (${snapshot.metrics.rowsCount} contratados, Apurado ${fmt(snapshot.metrics.totalApuradoBruto)}). ` +
+      `Em seguida, clique em "Salvar Apuração" para confirmar a gravação definitiva no banco de dados.`
+    );
+    if (!confirmed) return;
+
+    const snapData = snapshot.data;
+    applyCompetenceConfigToState(snapData, competencia);
+    setRows(Array.isArray(snapData.rows) ? snapData.rows : []);
+
+    try {
+      localStorage.setItem(`outsourcing_rows_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(snapData.rows || []));
+      localStorage.setItem(`outsourcing_cols_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(snapData.customColumns || []));
+      localStorage.setItem(`outsourcing_repasses_${competencia}${isTestMode ? '_test' : ''}`, JSON.stringify(snapData.repassLines || []));
+    } catch {}
+
+    const restoreLog: OutsourcingAuditLogEntry = {
+      id: `audit-restore-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      competencia: competencia.slice(0, 7),
+      action: 'RESTORE_SNAPSHOT',
+      summary: `Versão restaurada para revisão em ${competencia.slice(0, 7)}: ${snapshot.label}`,
+      details: `Snapshot de ${formattedDate} carregado na tela (${snapshot.metrics.rowsCount} contratados · Apurado ${fmt(snapshot.metrics.totalApuradoBruto)}).`,
+      metrics: snapshot.metrics,
+    };
+    const updatedLogs = await appendOutsourcingAuditLogToCloud(restoreLog);
+    if (updatedLogs) {
+      setAuditLogs(updatedLogs);
+    } else {
+      setAuditLogs(prev => [restoreLog, ...prev].slice(0, 200));
+    }
+
+    setPendingRestoreReview(snapshot.label);
+    setActiveTab('main');
+    setSaveSuccessMessage(`Snapshot "${snapshot.label}" carregado para revisão! Clique em "Salvar Apuração" para efetivar no banco.`);
+  };
+
   const handleResetSettlement = async () => {
     if (!confirm(`Recarregar competência ${competencia}? Todas as edições não salvas serão revertidas.`)) return;
     localStorage.removeItem(`outsourcing_rows_${competencia}${isTestMode ? '_test' : ''}`);
+    const resetLog: OutsourcingAuditLogEntry = {
+      id: `audit-reset-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      competencia: competencia.slice(0, 7),
+      action: 'RESET',
+      summary: `Edições locais descartadas e dados recarregados do Supabase para ${competencia.slice(0, 7)}.`,
+    };
+    await appendOutsourcingAuditLogToCloud(resetLog);
     await loadData(competencia);
   };
 
@@ -990,27 +1440,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const rowTotalMap = useMemo(() => {
     const map = new Map<string, number>();
     rows.forEach(r => {
-      const customSum = Object.values(r.customValues || {}).reduce((a, v) => a + (v || 0), 0);
-      const liq = (r.valorLiquido !== undefined && r.valorLiquido !== null)
-        ? r.valorLiquido
-        : ((r.valorBruto || 0) - (r.valorDesconto || 0));
-
-      const total = liq +
-        (r.valorAjudaCusto || 0) +
-        (r.valorBonus || 0) +
-        (r.valorComissao || 0) +
-        (r.valorVR || 0) +
-        (r.valorVT || 0) +
-        (r.valorSeguro || 0) +
-        (r.valorFGTS || 0) +
-        (r.valorGPS || 0) +
-        (r.valorDecTerceiro || 0) +
-        (r.valorFerias || 0) +
-        (r.valorOutros || 0) +
-        (r.valorEmprestimo || 0) +
-        customSum;
-
-      map.set(r.id, total);
+      map.set(r.id, computeOutsourcingRowTotal(r));
     });
     return map;
   }, [rows]);
@@ -1123,6 +1553,22 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     navigator.clipboard.writeText(txt);
     setSaveSuccessMessage('Resumo executivo copiado para a área de transferência!');
     setTimeout(() => setSaveSuccessMessage(null), 3000);
+  };
+
+  const cleanActiveComp = competencia.slice(0, 7);
+
+  const filteredAuditLogs = useMemo(() => {
+    if (auditFilterScope === 'all') return auditLogs;
+    return auditLogs.filter(entry => (entry.competencia || '').slice(0, 7) === cleanActiveComp);
+  }, [auditLogs, auditFilterScope, cleanActiveComp]);
+
+  const AUDIT_ACTION_BADGE: Record<OutsourcingAuditAction, { label: string; cls: string }> = {
+    SAVE:               { label: 'Salvamento',         cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    IMPORT_PDF:         { label: 'Importação PDF',     cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+    IMPORT_XLSX:        { label: 'Importação Planilha', cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+    OVERWRITE_DETECTED: { label: 'Incidente Auditado', cls: 'bg-red-50 text-red-700 border-red-200' },
+    RESTORE_SNAPSHOT:   { label: 'Restauração',        cls: 'bg-amber-50 text-amber-800 border-amber-200' },
+    RESET:              { label: 'Recarga do Banco',   cls: 'bg-slate-100 text-slate-700 border-slate-200' },
   };
 
   if (!isOpen) return null;
@@ -1387,12 +1833,13 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           {([
             { key: 'main',       icon: Users,    label: `Contratados Terceirizados (${rows.length})` },
             { key: 'summary',    icon: Layers,   label: `Resumo por Localidade (${locationSummary.length})` },
-            { key: 'settlement', icon: Landmark, label: `Apuração & Repasses (${repassLines.length})` }
+            { key: 'settlement', icon: Landmark, label: `Apuração & Repasses (${repassLines.length})` },
+            { key: 'audit',      icon: History,  label: `Auditoria & Histórico (${auditLogs.length})` }
           ] as const).map(({ key, icon: Icon, label }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-4 py-3 min-h-[44px] text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
                 activeTab === key
                   ? 'border-blue-600 text-blue-700'
                   : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50'
@@ -1408,6 +1855,25 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-2.5 flex items-center gap-2 text-emerald-700 text-xs font-bold animate-in fade-in duration-150 shrink-0">
             <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
             {saveSuccessMessage}
+          </div>
+        )}
+
+        {pendingRestoreReview && (
+          <div className="bg-amber-50 border-b border-amber-200 px-5 sm:px-7 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-amber-900 text-xs shrink-0">
+            <div className="flex items-center gap-2 font-semibold">
+              <ShieldAlert size={15} className="text-amber-600 shrink-0" />
+              <span>
+                Versão restaurada em revisão na tela: <strong>{pendingRestoreReview}</strong>. Confirme o salvamento para persistir no banco.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveSettlement}
+              disabled={saving}
+              className="px-3 py-1.5 min-h-[36px] bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold uppercase text-[11px] transition-all shrink-0 disabled:opacity-60"
+            >
+              {saving ? 'Salvando...' : 'Confirmar e Salvar no Banco'}
+            </button>
           </div>
         )}
 
@@ -2175,6 +2641,257 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                         {fmt(saldoRemanescente)}
                       </span>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ══ ABA 4 — AUDITORIA DE LOG & SNAPSHOTS ══════════════ */}
+              {activeTab === 'audit' && (
+                <div className="space-y-5">
+                  {/* Resumo de Integridade & Proteção Cloud */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="bg-white border border-emerald-100 rounded-2xl p-4 shadow-sm flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <ShieldCheck size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                          Proteção Anti-Sobrescrita
+                        </span>
+                        <span className="text-sm font-black text-emerald-700 block mt-0.5">
+                          Trava de Competência Ativa
+                        </span>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Relatórios VA/VT não alternam a competência {cleanActiveComp} e todo salvamento gera snapshot prévio.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-blue-100 rounded-2xl p-4 shadow-sm flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <Database size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                          Snapshots ({cleanActiveComp})
+                        </span>
+                        <span className="text-sm font-black text-blue-700 block mt-0.5">
+                          {competenceSnapshots.length} {competenceSnapshots.length === 1 ? 'versão salva' : 'versões salvas'}
+                        </span>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {savedTimestamp
+                            ? `Último save: ${new Date(savedTimestamp).toLocaleString('pt-BR')}`
+                            : 'Nenhum salvamento registrado na nuvem ainda.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-amber-100 rounded-2xl p-4 shadow-sm flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <History size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                          Trilha de Auditoria
+                        </span>
+                        <span className="text-sm font-black text-gray-900 block mt-0.5">
+                          {auditLogs.length} {auditLogs.length === 1 ? 'evento registrado' : 'eventos registrados'}
+                        </span>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Rastreamento cronológico de importações, salvamentos, restaurações e incidentes.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Versões Salvas (Snapshots de Segurança) */}
+                  <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100">
+                      <div>
+                        <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                          <RotateCcw size={14} className="text-blue-600" />
+                          Versões Salvas — Snapshots de Segurança ({cleanActiveComp})
+                        </h3>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          Restaure em 1 clique qualquer versão anterior preservada antes de alterações ou importações.
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full self-start sm:self-auto">
+                        {competenceSnapshots.length} / 10 slots
+                      </span>
+                    </div>
+
+                    {competenceSnapshots.length === 0 ? (
+                      <div className="py-10 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                        Nenhum snapshot anterior salvo para a competência {cleanActiveComp}. Ao salvar alterações futuras, versões anteriores aparecerão aqui.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {competenceSnapshots.map((snap, idx) => (
+                          <div
+                            key={snap.id}
+                            className={`rounded-2xl border p-4 flex flex-col justify-between gap-3 transition-all ${
+                              idx === 0
+                                ? 'bg-blue-50/30 border-blue-200'
+                                : 'bg-gray-50/50 border-gray-200'
+                            }`}
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-xs font-black text-gray-900">{snap.label}</span>
+                                <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-200">
+                                  <Clock size={10} />
+                                  {new Date(snap.created_at).toLocaleString('pt-BR')}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-500">{snap.reason}</p>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                                <div className="bg-white rounded-xl p-2 border border-gray-100">
+                                  <span className="text-[9px] uppercase font-bold text-gray-400 block">Contratados</span>
+                                  <span className="text-xs font-black text-gray-800">{snap.metrics?.rowsCount ?? 0}</span>
+                                </div>
+                                <div className="bg-white rounded-xl p-2 border border-gray-100">
+                                  <span className="text-[9px] uppercase font-bold text-gray-400 block">Bruto / Líq.</span>
+                                  <span className="text-[11px] font-bold text-blue-700 block">{fmt(snap.metrics?.valorBruto ?? 0)}</span>
+                                </div>
+                                <div className="bg-white rounded-xl p-2 border border-gray-100">
+                                  <span className="text-[9px] uppercase font-bold text-gray-400 block">VA + VT</span>
+                                  <span className="text-[11px] font-bold text-emerald-700 block">
+                                    {fmt((snap.metrics?.valorVR ?? 0) + (snap.metrics?.valorVT ?? 0))}
+                                  </span>
+                                </div>
+                                <div className="bg-white rounded-xl p-2 border border-gray-100">
+                                  <span className="text-[9px] uppercase font-bold text-gray-400 block">Repassado</span>
+                                  <span className="text-[11px] font-bold text-gray-900 block">{fmt(snap.metrics?.totalRepassado ?? 0)}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                              <span className="text-[11px] text-gray-500 font-semibold">
+                                Total Apurado: <strong className="text-gray-900">{fmt(snap.metrics?.totalApuradoBruto ?? 0)}</strong>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRestoreSnapshot(snap)}
+                                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase transition-all active:scale-95"
+                              >
+                                <RotateCcw size={13} />
+                                <span>Restaurar Versão</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Trilha de Auditoria de Log */}
+                  <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                      <div>
+                        <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                          <FileText size={14} className="text-emerald-600" />
+                          Log de Auditoria & Operações
+                        </h3>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          Histórico imutável de importações, salvamentos, restaurações e detecções de inconsistência.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setAuditFilterScope('current')}
+                          className={`px-3 py-1.5 min-h-[36px] rounded-lg text-[11px] font-bold transition-all ${
+                            auditFilterScope === 'current'
+                              ? 'bg-white text-blue-700 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          Competência {cleanActiveComp}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAuditFilterScope('all')}
+                          className={`px-3 py-1.5 min-h-[36px] rounded-lg text-[11px] font-bold transition-all ${
+                            auditFilterScope === 'all'
+                              ? 'bg-white text-blue-700 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          Todas ({auditLogs.length})
+                        </button>
+                      </div>
+                    </div>
+
+                    {filteredAuditLogs.length === 0 ? (
+                      <div className="py-10 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                        Nenhum evento de auditoria registrado para este filtro.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredAuditLogs.map(entry => {
+                          const badge = AUDIT_ACTION_BADGE[entry.action] || {
+                            label: entry.action,
+                            cls: 'bg-gray-100 text-gray-700 border-gray-200'
+                          };
+                          return (
+                            <div
+                              key={entry.id}
+                              className="p-3.5 sm:p-4 rounded-2xl border border-gray-100 bg-gray-50/40 hover:bg-gray-50 transition-colors space-y-2"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${badge.cls}`}>
+                                    {badge.label}
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-700">
+                                    Comp. {entry.competencia}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] font-semibold text-gray-500 flex items-center gap-1">
+                                  <Clock size={11} />
+                                  {new Date(entry.timestamp).toLocaleString('pt-BR')}
+                                </span>
+                              </div>
+
+                              <p className="text-xs font-bold text-gray-900">{entry.summary}</p>
+                              {entry.details && (
+                                <p className="text-[11px] text-gray-600 leading-relaxed">{entry.details}</p>
+                              )}
+
+                              {entry.metrics && (
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px]">
+                                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded-md font-semibold text-gray-700">
+                                    Colab: {entry.metrics.rowsCount}
+                                  </span>
+                                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded-md font-semibold text-blue-700">
+                                    Bruto: {fmt(entry.metrics.valorBruto)}
+                                  </span>
+                                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded-md font-semibold text-gray-700">
+                                    Líq: {fmt(entry.metrics.valorLiquido)}
+                                  </span>
+                                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded-md font-semibold text-emerald-700">
+                                    VA: {fmt(entry.metrics.valorVR)}
+                                  </span>
+                                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded-md font-semibold text-emerald-700">
+                                    VT: {fmt(entry.metrics.valorVT)}
+                                  </span>
+                                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded-md font-semibold text-gray-900">
+                                    Apurado: {fmt(entry.metrics.totalApuradoBruto)}
+                                  </span>
+                                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded-md font-semibold text-amber-700">
+                                    Repasses ({entry.metrics.repassCount}): {fmt(entry.metrics.totalRepassado)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
