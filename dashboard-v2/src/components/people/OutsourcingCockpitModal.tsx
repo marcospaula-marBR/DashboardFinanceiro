@@ -4,277 +4,51 @@ import {
   CheckCircle2, AlertCircle, Calendar, DollarSign, Percent, ChevronRight,
   Sparkles, RefreshCw, Edit3, Layers, Copy, ShieldCheck, ArrowRight, Save,
   RotateCcw, Check, MapPin, Upload, Tag, Users, FileSpreadsheet, ArrowLeftRight, ChevronDown,
-  History, Clock, ShieldAlert, Database
+  History, Clock, ShieldAlert, Database, UserCheck, Search
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PeopleHRService } from '@/services/people-hr.service';
 import { Employee } from '@/types/loans';
 import { parseOutsourcingFile, exportOutsourcingTemplate } from '@/utils/outsourcingFileParser';
+import {
+  OutsourcingAuditService,
+  CustomColumn,
+  EmployeeType,
+  OutsourcingRow,
+  RepassLine,
+  OutsourcingAuditAction,
+  OutsourcingAuditActor,
+  OutsourcingAuditMetrics,
+  OutsourcingAuditLogEntry,
+  OutsourcingCompetenceConfig,
+  OutsourcingSnapshot,
+  computeOutsourcingRowTotal,
+  computeOutsourcingMetrics,
+  computeOutsourcingMetricsFromConfig,
+  areOutsourcingConfigsEquivalent,
+} from '@/services/outsourcing-audit.service';
 
 // ─────────────────────────────────────────────
-// TIPOS
+// TIPOS (re-exportados para compatibilidade)
 // ─────────────────────────────────────────────
+
+export type {
+  CustomColumn,
+  EmployeeType,
+  OutsourcingRow,
+  RepassLine,
+  OutsourcingAuditAction,
+  OutsourcingAuditActor,
+  OutsourcingAuditMetrics,
+  OutsourcingAuditLogEntry,
+  OutsourcingCompetenceConfig,
+  OutsourcingSnapshot,
+};
 
 interface OutsourcingCockpitModalProps {
   isOpen: boolean;
   onClose: () => void;
   isTestMode?: boolean;
-}
-
-export interface CustomColumn {
-  id: string;
-  label: string;
-}
-
-export type EmployeeType = 'CLT' | 'PJ' | 'Estagio' | 'Outro';
-
-export interface OutsourcingRow {
-  id: string;
-  employeeId?: string;
-  name: string;
-  location: string;
-  employeeType: EmployeeType;
-  isManual: boolean;
-  // Verbas principais de remuneração
-  valorBruto: number;       // Valor Bruto (Holerite / NF / Salário Base)
-  valorDesconto: number;    // Descontos em folha
-  valorLiquido: number;     // Valor Líquido = Valor Bruto (-) Desconto
-  valorBonus: number;
-  valorComissao: number;
-  valorAjudaCusto: number;  // Adiantamento
-  // Benefícios — campos individuais
-  valorVR: number;
-  valorVT: number;
-  valorSeguro: number;
-  // Encargos patronais — campos individuais
-  valorFGTS: number;
-  valorGPS: number;
-  // Provisões manuais
-  valorDecTerceiro: number;
-  valorFerias: number;
-  // Outros / Fora da folha
-  valorOutros: number;
-  valorEmprestimo: number;
-  // Colunas dinâmicas
-  customValues: Record<string, number>;
-}
-
-export interface RepassLine {
-  id: string;
-  date: string;
-  bank: string;
-  amount: number;
-  notes: string;
-}
-
-export type OutsourcingAuditAction =
-  | 'SAVE'
-  | 'IMPORT_PDF'
-  | 'IMPORT_XLSX'
-  | 'OVERWRITE_DETECTED'
-  | 'RESTORE_SNAPSHOT'
-  | 'RESET';
-
-export interface OutsourcingAuditMetrics {
-  rowsCount: number;
-  valorBruto: number;
-  valorDesconto: number;
-  valorLiquido: number;
-  valorVR: number;
-  valorVT: number;
-  valorFGTS: number;
-  valorGPS: number;
-  subtotal: number;
-  taxRate: number;
-  calculatedTax: number;
-  calculatedAdminFee: number;
-  totalApuradoBruto: number;
-  repassCount: number;
-  totalRepassado: number;
-}
-
-export interface OutsourcingAuditLogEntry {
-  id: string;
-  timestamp: string;
-  competencia: string;
-  action: OutsourcingAuditAction;
-  summary: string;
-  details?: string;
-  metrics?: OutsourcingAuditMetrics;
-}
-
-export interface OutsourcingCompetenceConfig {
-  taxInputMode: 'rate' | 'amount';
-  taxRate: number;
-  taxFixedAmount: number;
-  adminFeeMode: 'rate' | 'amount';
-  adminFeeRate: number;
-  adminFeeFixedAmount: number;
-  repassLines: RepassLine[];
-  customColumns: CustomColumn[];
-  rows: OutsourcingRow[];
-  saved_at?: string;
-  is_test?: boolean;
-}
-
-export interface OutsourcingSnapshot {
-  id: string;
-  competencia: string;
-  created_at: string;
-  label: string;
-  reason: string;
-  metrics: OutsourcingAuditMetrics;
-  data: OutsourcingCompetenceConfig;
-}
-
-function computeOutsourcingRowTotal(r: OutsourcingRow): number {
-  const customSum = Object.values(r.customValues || {}).reduce((a, v) => a + (Number(v) || 0), 0);
-  const liq = (r.valorLiquido !== undefined && r.valorLiquido !== null)
-    ? Number(r.valorLiquido)
-    : ((Number(r.valorBruto) || 0) - (Number(r.valorDesconto) || 0));
-
-  return liq +
-    (Number(r.valorAjudaCusto) || 0) +
-    (Number(r.valorBonus) || 0) +
-    (Number(r.valorComissao) || 0) +
-    (Number(r.valorVR) || 0) +
-    (Number(r.valorVT) || 0) +
-    (Number(r.valorSeguro) || 0) +
-    (Number(r.valorFGTS) || 0) +
-    (Number(r.valorGPS) || 0) +
-    (Number(r.valorDecTerceiro) || 0) +
-    (Number(r.valorFerias) || 0) +
-    (Number(r.valorOutros) || 0) +
-    (Number(r.valorEmprestimo) || 0) +
-    customSum;
-}
-
-function computeOutsourcingMetrics(params: {
-  rows: OutsourcingRow[];
-  repassLines: RepassLine[];
-  taxInputMode: 'rate' | 'amount';
-  taxRate: number;
-  taxFixedAmount: number;
-  adminFeeMode: 'rate' | 'amount';
-  adminFeeRate: number;
-  adminFeeFixedAmount: number;
-}): OutsourcingAuditMetrics {
-  const {
-    rows = [],
-    repassLines = [],
-    taxInputMode = 'rate',
-    taxRate = 0,
-    taxFixedAmount = 0,
-    adminFeeMode = 'rate',
-    adminFeeRate = 0,
-    adminFeeFixedAmount = 0,
-  } = params;
-
-  let subtotal = 0;
-  let valorBruto = 0;
-  let valorDesconto = 0;
-  let valorLiquido = 0;
-  let valorVR = 0;
-  let valorVT = 0;
-  let valorFGTS = 0;
-  let valorGPS = 0;
-
-  for (const r of rows) {
-    const liq = (r.valorLiquido !== undefined && r.valorLiquido !== null)
-      ? Number(r.valorLiquido)
-      : ((Number(r.valorBruto) || 0) - (Number(r.valorDesconto) || 0));
-    subtotal += computeOutsourcingRowTotal(r);
-    valorBruto += Number(r.valorBruto) || 0;
-    valorDesconto += Number(r.valorDesconto) || 0;
-    valorLiquido += liq;
-    valorVR += Number(r.valorVR) || 0;
-    valorVT += Number(r.valorVT) || 0;
-    valorFGTS += Number(r.valorFGTS) || 0;
-    valorGPS += Number(r.valorGPS) || 0;
-  }
-
-  const calculatedTax = taxInputMode === 'rate' ? subtotal * ((Number(taxRate) || 0) / 100) : (Number(taxFixedAmount) || 0);
-  const calculatedAdminFee = adminFeeMode === 'rate' ? subtotal * ((Number(adminFeeRate) || 0) / 100) : (Number(adminFeeFixedAmount) || 0);
-  const totalApuradoBruto = subtotal + calculatedTax + calculatedAdminFee;
-  const totalRepassado = repassLines.reduce((a, l) => a + (Number(l.amount) || 0), 0);
-
-  return {
-    rowsCount: rows.length,
-    valorBruto: Number(valorBruto.toFixed(2)),
-    valorDesconto: Number(valorDesconto.toFixed(2)),
-    valorLiquido: Number(valorLiquido.toFixed(2)),
-    valorVR: Number(valorVR.toFixed(2)),
-    valorVT: Number(valorVT.toFixed(2)),
-    valorFGTS: Number(valorFGTS.toFixed(2)),
-    valorGPS: Number(valorGPS.toFixed(2)),
-    subtotal: Number(subtotal.toFixed(2)),
-    taxRate: Number(taxRate) || 0,
-    calculatedTax: Number(calculatedTax.toFixed(2)),
-    calculatedAdminFee: Number(calculatedAdminFee.toFixed(2)),
-    totalApuradoBruto: Number(totalApuradoBruto.toFixed(2)),
-    repassCount: repassLines.length,
-    totalRepassado: Number(totalRepassado.toFixed(2)),
-  };
-}
-
-function computeOutsourcingMetricsFromConfig(cfg: Partial<OutsourcingCompetenceConfig>): OutsourcingAuditMetrics {
-  return computeOutsourcingMetrics({
-    rows: cfg.rows || [],
-    repassLines: cfg.repassLines || [],
-    taxInputMode: cfg.taxInputMode || 'rate',
-    taxRate: Number(cfg.taxRate) || 0,
-    taxFixedAmount: Number(cfg.taxFixedAmount) || 0,
-    adminFeeMode: cfg.adminFeeMode || 'rate',
-    adminFeeRate: Number(cfg.adminFeeRate) || 0,
-    adminFeeFixedAmount: Number(cfg.adminFeeFixedAmount) || 0,
-  });
-}
-
-function areOutsourcingConfigsEquivalent(a?: Partial<OutsourcingCompetenceConfig> | null, b?: Partial<OutsourcingCompetenceConfig> | null): boolean {
-  if (!a || !b) return false;
-  const norm = (c: Partial<OutsourcingCompetenceConfig>) => ({
-    taxInputMode: c.taxInputMode || 'rate',
-    taxRate: Number(c.taxRate) || 0,
-    taxFixedAmount: Number(c.taxFixedAmount) || 0,
-    adminFeeMode: c.adminFeeMode || 'rate',
-    adminFeeRate: Number(c.adminFeeRate) || 0,
-    adminFeeFixedAmount: Number(c.adminFeeFixedAmount) || 0,
-    repassLines: c.repassLines || [],
-    customColumns: c.customColumns || [],
-    rows: c.rows || [],
-  });
-  return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
-}
-
-async function appendOutsourcingAuditLogToCloud(entry: OutsourcingAuditLogEntry): Promise<OutsourcingAuditLogEntry[] | null> {
-  try {
-    const { data: globalRec } = await supabase
-      .from('employees')
-      .select('id, metadata')
-      .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
-      .maybeSingle();
-
-    if (!globalRec?.id) return null;
-    const meta = (globalRec.metadata as Record<string, any>) || {};
-    const currentLogs: OutsourcingAuditLogEntry[] = Array.isArray(meta.outsourcing_audit_logs)
-      ? meta.outsourcing_audit_logs
-      : [];
-    const updatedLogs = [entry, ...currentLogs].slice(0, 200);
-    await supabase
-      .from('employees')
-      .update({
-        metadata: {
-          ...meta,
-          outsourcing_audit_logs: updatedLogs,
-          updated_at: new Date().toISOString(),
-        }
-      })
-      .eq('id', globalRec.id);
-    return updatedLogs;
-  } catch (err) {
-    console.warn('Aviso ao gravar log de auditoria da terceirização:', err);
-    return null;
-  }
 }
 
 // ─────────────────────────────────────────────
@@ -397,7 +171,12 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const [auditLogs, setAuditLogs] = useState<OutsourcingAuditLogEntry[]>([]);
   const [competenceSnapshots, setCompetenceSnapshots] = useState<OutsourcingSnapshot[]>([]);
   const [auditFilterScope, setAuditFilterScope] = useState<'current' | 'all'>('current');
+  const [auditActionFilter, setAuditActionFilter] = useState<'ALL' | 'SAVE' | 'IMPORT' | 'RESTORE' | 'INCIDENT'>('ALL');
+  const [auditSearchTerm, setAuditSearchTerm] = useState('');
   const [pendingRestoreReview, setPendingRestoreReview] = useState<string | null>(null);
+  const [currentActor, setCurrentActor] = useState<OutsourcingAuditActor | null>(null);
+  const [isEditingOperator, setIsEditingOperator] = useState(false);
+  const [operatorDraft, setOperatorDraft] = useState('');
 
   // Aba ativa
   const [activeTab, setActiveTab] = useState<'main' | 'summary' | 'settlement' | 'audit'>('main');
@@ -552,6 +331,13 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     if (isOpen) loadData(competencia);
   }, [isOpen, competencia, isTestMode]);
 
+  const handleSaveOperatorName = async () => {
+    OutsourcingAuditService.setOperatorOverride(operatorDraft);
+    const refreshed = await OutsourcingAuditService.resolveCurrentActor();
+    setCurrentActor(refreshed);
+    setIsEditingOperator(false);
+  };
+
   const loadData = async (comp: string) => {
     if (skipNextLoadRef.current) {
       skipNextLoadRef.current = false;
@@ -561,6 +347,12 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
     setError(null);
     setPendingRestoreReview(null);
     try {
+      // Resolver operador autenticado (auth.uid() / profiles / override local)
+      OutsourcingAuditService.resolveCurrentActor().then(actor => {
+        setCurrentActor(actor);
+        setOperatorDraft(OutsourcingAuditService.getOperatorOverride());
+      });
+
       // 1. Colaboradores cadastrados
       const allEmps = await PeopleHRService.getEmployeesForPeople({ mostrarInativos: true, isTestMode });
       setAllEmployeesList(allEmps);
@@ -599,29 +391,28 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         loansMap.set(lp.employee_id, cur + (parseFloat(String(lp.amount)) || 0));
       });
 
-      // 4. Buscar configuração global de terceirização do Supabase (Compartilhada entre todos os usuários)
+      // 4. Buscar configuração global de terceirização + trilha relacional (public.audit_logs)
       let cloudCompetenceData: any = null;
       try {
-        const { data: globalConfig } = await supabase
-          .from('employees')
-          .select('metadata')
-          .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
-          .maybeSingle();
+        const [globalConfigRes, relationalLogs, relationalSnaps] = await Promise.all([
+          supabase
+            .from('employees')
+            .select('metadata')
+            .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+            .maybeSingle(),
+          OutsourcingAuditService.fetchAuditLogs(200),
+          OutsourcingAuditService.fetchCompetenceSnapshots(cleanComp, 10),
+        ]);
 
+        const globalConfig = globalConfigRes.data;
         if (globalConfig?.metadata?.outsourcing_configs) {
           cloudCompetenceData = globalConfig.metadata.outsourcing_configs[cleanComp] ||
             globalConfig.metadata.outsourcing_configs[comp] ||
             globalConfig.metadata.outsourcing_configs[startDate];
         }
 
-        const rawLogs = Array.isArray(globalConfig?.metadata?.outsourcing_audit_logs)
-          ? globalConfig.metadata.outsourcing_audit_logs
-          : [];
-        setAuditLogs(rawLogs);
-
-        const allSnapshots = globalConfig?.metadata?.outsourcing_snapshots || {};
-        const compSnaps = allSnapshots[cleanComp] || allSnapshots[comp] || allSnapshots[startDate] || [];
-        setCompetenceSnapshots(Array.isArray(compSnaps) ? compSnaps : []);
+        setAuditLogs(relationalLogs);
+        setCompetenceSnapshots(relationalSnaps);
       } catch (e) {
         console.warn('Aviso ao carregar configuração de terceirização do Supabase:', e);
       }
@@ -880,14 +671,16 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                 const cleanNewComp = activeTargetComp.slice(0, 7);
                 let targetCloudCfg: Partial<OutsourcingCompetenceConfig> | null = null;
                 try {
-                  const { data: globalCfg } = await supabase
-                    .from('employees')
-                    .select('metadata')
-                    .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
-                    .maybeSingle();
-                  targetCloudCfg = globalCfg?.metadata?.outsourcing_configs?.[cleanNewComp] || null;
-                  const targetSnaps = globalCfg?.metadata?.outsourcing_snapshots?.[cleanNewComp] || [];
-                  setCompetenceSnapshots(Array.isArray(targetSnaps) ? targetSnaps : []);
+                  const [globalCfgRes, targetSnaps] = await Promise.all([
+                    supabase
+                      .from('employees')
+                      .select('metadata')
+                      .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+                      .maybeSingle(),
+                    OutsourcingAuditService.fetchCompetenceSnapshots(cleanNewComp, 10),
+                  ]);
+                  targetCloudCfg = globalCfgRes.data?.metadata?.outsourcing_configs?.[cleanNewComp] || null;
+                  setCompetenceSnapshots(targetSnaps);
                 } catch {}
 
                 applyCompetenceConfigToState(targetCloudCfg, activeTargetComp);
@@ -1083,12 +876,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
         details: `Arquivos: ${importedFileNames.join(', ')} (aguardando clique em "Salvar Apuração" para efetivar no banco).`,
         metrics: importMetrics,
       };
-      const updatedLogs = await appendOutsourcingAuditLogToCloud(importEntry);
-      if (updatedLogs) {
-        setAuditLogs(updatedLogs);
-      } else {
-        setAuditLogs(prev => [importEntry, ...prev].slice(0, 200));
-      }
+      const { logs: updatedLogs } = await OutsourcingAuditService.recordAuditLog(importEntry);
+      setAuditLogs(updatedLogs);
 
       setSaveSuccessMessage(
         `Robô: ${fileList.length > 1 ? `${fileList.length} relatórios importados com sucesso! ` : ''}${importSummaries.join(' | ')}.`
@@ -1146,6 +935,9 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       const afterMetrics = computeOutsourcingMetricsFromConfig(newConfigPayload);
 
       try {
+        const actor = await OutsourcingAuditService.resolveCurrentActor();
+        setCurrentActor(actor);
+
         const { data: globalRec } = await supabase
           .from('employees')
           .select('id, metadata')
@@ -1165,6 +957,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           : [];
 
         let beforeMetrics: OutsourcingAuditMetrics | null = null;
+        let createdSnapshot: OutsourcingSnapshot | null = null;
         if (prevConfig) {
           beforeMetrics = computeOutsourcingMetricsFromConfig(prevConfig);
           const latestSnap = compSnaps[0];
@@ -1172,18 +965,17 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
             const prevDateLabel = prevConfig.saved_at
               ? new Date(prevConfig.saved_at).toLocaleString('pt-BR')
               : 'versão anterior';
-            compSnaps = [
-              {
-                id: `snap-${cleanComp}-${Date.now()}`,
-                competencia: cleanComp,
-                created_at: prevConfig.saved_at || nowIso,
-                label: `Pré-salvamento (${prevDateLabel})`,
-                reason: `Snapshot automático preservado antes da gravação de ${new Date(nowIso).toLocaleString('pt-BR')}`,
-                metrics: beforeMetrics,
-                data: prevConfig,
-              },
-              ...compSnaps
-            ].slice(0, 10);
+            createdSnapshot = {
+              id: `snap-${cleanComp}-${Date.now()}`,
+              competencia: cleanComp,
+              created_at: prevConfig.saved_at || nowIso,
+              label: `Pré-salvamento (${prevDateLabel})`,
+              reason: `Snapshot automático preservado antes da gravação de ${new Date(nowIso).toLocaleString('pt-BR')}`,
+              metrics: beforeMetrics,
+              data: prevConfig,
+              actor,
+            };
+            compSnaps = [createdSnapshot, ...compSnaps].slice(0, 10);
           }
         }
 
@@ -1199,6 +991,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           summary: `Apuração de ${cleanComp} salva (${afterMetrics.rowsCount} contratados · Apurado ${fmt(afterMetrics.totalApuradoBruto)} · Repasses ${fmt(afterMetrics.totalRepassado)}).`,
           details: deltaInfo,
           metrics: afterMetrics,
+          oldMetrics: beforeMetrics,
+          actor,
         };
 
         const updatedLogs = [saveLogEntry, ...currentLogs].slice(0, 200);
@@ -1226,8 +1020,21 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
           }]);
         }
 
-        setAuditLogs(updatedLogs);
-        setCompetenceSnapshots(compSnaps);
+        if (createdSnapshot) {
+          await OutsourcingAuditService.recordCompetenceSnapshot(createdSnapshot, actor);
+        }
+
+        const [{ logs: relationalLogs }, relationalSnaps] = await Promise.all([
+          OutsourcingAuditService.recordAuditLog(saveLogEntry, {
+            oldMetrics: beforeMetrics,
+            skipGlobalMetaWrite: true,
+            actorOverride: actor,
+          }),
+          OutsourcingAuditService.fetchCompetenceSnapshots(cleanComp, 10),
+        ]);
+
+        setAuditLogs(relationalLogs);
+        setCompetenceSnapshots(relationalSnaps);
       } catch (errGlobal) {
         console.error('Erro ao sincronizar snapshot de apuração no Supabase:', errGlobal);
       }
@@ -1331,12 +1138,8 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       details: `Snapshot de ${formattedDate} carregado na tela (${snapshot.metrics.rowsCount} contratados · Apurado ${fmt(snapshot.metrics.totalApuradoBruto)}).`,
       metrics: snapshot.metrics,
     };
-    const updatedLogs = await appendOutsourcingAuditLogToCloud(restoreLog);
-    if (updatedLogs) {
-      setAuditLogs(updatedLogs);
-    } else {
-      setAuditLogs(prev => [restoreLog, ...prev].slice(0, 200));
-    }
+    const { logs: updatedLogs } = await OutsourcingAuditService.recordAuditLog(restoreLog);
+    setAuditLogs(updatedLogs);
 
     setPendingRestoreReview(snapshot.label);
     setActiveTab('main');
@@ -1353,7 +1156,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
       action: 'RESET',
       summary: `Edições locais descartadas e dados recarregados do Supabase para ${competencia.slice(0, 7)}.`,
     };
-    await appendOutsourcingAuditLogToCloud(resetLog);
+    await OutsourcingAuditService.recordAuditLog(resetLog);
     await loadData(competencia);
   };
 
@@ -1558,9 +1361,30 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
   const cleanActiveComp = competencia.slice(0, 7);
 
   const filteredAuditLogs = useMemo(() => {
-    if (auditFilterScope === 'all') return auditLogs;
-    return auditLogs.filter(entry => (entry.competencia || '').slice(0, 7) === cleanActiveComp);
-  }, [auditLogs, auditFilterScope, cleanActiveComp]);
+    const term = auditSearchTerm.trim().toLowerCase();
+    return auditLogs.filter(entry => {
+      if (auditFilterScope === 'current' && (entry.competencia || '').slice(0, 7) !== cleanActiveComp) {
+        return false;
+      }
+      if (auditActionFilter === 'SAVE' && entry.action !== 'SAVE') return false;
+      if (auditActionFilter === 'IMPORT' && entry.action !== 'IMPORT_PDF' && entry.action !== 'IMPORT_XLSX') return false;
+      if (auditActionFilter === 'RESTORE' && entry.action !== 'RESTORE_SNAPSHOT' && entry.action !== 'RESET') return false;
+      if (auditActionFilter === 'INCIDENT' && entry.action !== 'OVERWRITE_DETECTED') return false;
+
+      if (term) {
+        const haystack = [
+          entry.summary,
+          entry.details,
+          entry.competencia,
+          entry.action,
+          entry.actor?.userName,
+          entry.actor?.userEmail,
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [auditLogs, auditFilterScope, auditActionFilter, auditSearchTerm, cleanActiveComp]);
 
   const AUDIT_ACTION_BADGE: Record<OutsourcingAuditAction, { label: string; cls: string }> = {
     SAVE:               { label: 'Salvamento',         cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -2648,6 +2472,79 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
               {/* ══ ABA 4 — AUDITORIA DE LOG & SNAPSHOTS ══════════════ */}
               {activeTab === 'audit' && (
                 <div className="space-y-5">
+                  {/* Card de Identificação do Operador & Persistência Relacional */}
+                  <div className="bg-white border border-blue-100 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <UserCheck size={19} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                            Operador da Sessão
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Tabela Relacional audit_logs Ativa
+                          </span>
+                          {currentActor?.source === 'supabase_auth' && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                              Auth Supabase (auth.uid)
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                          <span className="text-sm font-black text-gray-900 truncate">
+                            {currentActor?.userName || 'Carregando operador...'}
+                          </span>
+                          {currentActor?.userEmail && (
+                            <span className="text-xs text-gray-500 truncate">({currentActor.userEmail})</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {!isEditingOperator ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingOperator(true)}
+                          className="px-3 py-2 min-h-[40px] bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all"
+                        >
+                          Definir Operador Local
+                        </button>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                          <input
+                            type="text"
+                            value={operatorDraft}
+                            onChange={e => setOperatorDraft(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSaveOperatorName()}
+                            placeholder="Nome do operador..."
+                            aria-label="Nome do operador"
+                            className="bg-gray-50 border border-blue-300 rounded-xl px-3 py-2 min-h-[40px] text-xs text-gray-800 outline-none focus:ring-1 focus:ring-blue-200 flex-1 sm:w-48"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveOperatorName}
+                            className="px-3 py-2 min-h-[40px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold"
+                          >
+                            Aplicar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingOperator(false);
+                              setOperatorDraft(OutsourcingAuditService.getOperatorOverride());
+                            }}
+                            className="px-2.5 py-2 min-h-[40px] bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-bold"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Resumo de Integridade & Proteção Cloud */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="bg-white border border-emerald-100 rounded-2xl p-4 shadow-sm flex items-start gap-3">
@@ -2698,7 +2595,7 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                           {auditLogs.length} {auditLogs.length === 1 ? 'evento registrado' : 'eventos registrados'}
                         </span>
                         <p className="text-[11px] text-gray-500 mt-1">
-                          Rastreamento cronológico de importações, salvamentos, restaurações e incidentes.
+                          Rastreamento relacional de importações, salvamentos, restaurações e usuário responsável.
                         </p>
                       </div>
                     </div>
@@ -2745,6 +2642,12 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                 </span>
                               </div>
                               <p className="text-[11px] text-gray-500">{snap.reason}</p>
+                              {snap.actor?.userName && (
+                                <div className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
+                                  <UserCheck size={10} />
+                                  <span>{snap.actor.userName}</span>
+                                </div>
+                              )}
 
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
                                 <div className="bg-white rounded-xl p-2 border border-gray-100">
@@ -2789,40 +2692,95 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
 
                   {/* Trilha de Auditoria de Log */}
                   <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-gray-100">
                       <div>
                         <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-2">
                           <FileText size={14} className="text-emerald-600" />
                           Log de Auditoria & Operações
                         </h3>
                         <p className="text-[11px] text-gray-400 mt-0.5">
-                          Histórico imutável de importações, salvamentos, restaurações e detecções de inconsistência.
+                          Histórico relacional imutável de importações, salvamentos, restaurações e detecções de inconsistência.
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl self-start sm:self-auto">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => setAuditFilterScope('current')}
+                            className={`px-3 py-1.5 min-h-[36px] rounded-lg text-[11px] font-bold transition-all ${
+                              auditFilterScope === 'current'
+                                ? 'bg-white text-blue-700 shadow-sm'
+                                : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                          >
+                            Competência {cleanActiveComp}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAuditFilterScope('all')}
+                            className={`px-3 py-1.5 min-h-[36px] rounded-lg text-[11px] font-bold transition-all ${
+                              auditFilterScope === 'all'
+                                ? 'bg-white text-blue-700 shadow-sm'
+                                : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                          >
+                            Todas ({auditLogs.length})
+                          </button>
+                        </div>
+
                         <button
                           type="button"
-                          onClick={() => setAuditFilterScope('current')}
-                          className={`px-3 py-1.5 min-h-[36px] rounded-lg text-[11px] font-bold transition-all ${
-                            auditFilterScope === 'current'
-                              ? 'bg-white text-blue-700 shadow-sm'
-                              : 'text-gray-500 hover:text-gray-800'
-                          }`}
+                          onClick={() =>
+                            OutsourcingAuditService.exportAuditLogsToCsv(
+                              filteredAuditLogs,
+                              auditFilterScope === 'current' ? cleanActiveComp : 'todas'
+                            )
+                          }
+                          disabled={filteredAuditLogs.length === 0}
+                          className="flex items-center gap-1.5 px-3 py-2 min-h-[40px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50"
                         >
-                          Competência {cleanActiveComp}
+                          <Download size={13} />
+                          <span>Exportar CSV ({filteredAuditLogs.length})</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setAuditFilterScope('all')}
-                          className={`px-3 py-1.5 min-h-[36px] rounded-lg text-[11px] font-bold transition-all ${
-                            auditFilterScope === 'all'
-                              ? 'bg-white text-blue-700 shadow-sm'
-                              : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                        >
-                          Todas ({auditLogs.length})
-                        </button>
+                      </div>
+                    </div>
+
+                    {/* Filtros por Tipo de Operação + Busca */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {([
+                          { key: 'ALL', label: 'Todos' },
+                          { key: 'SAVE', label: 'Salvamentos' },
+                          { key: 'IMPORT', label: 'Importações' },
+                          { key: 'RESTORE', label: 'Restaurações' },
+                          { key: 'INCIDENT', label: 'Incidentes' },
+                        ] as const).map(opt => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => setAuditActionFilter(opt.key)}
+                            className={`px-3 py-1.5 min-h-[36px] rounded-xl text-[11px] font-bold border transition-all ${
+                              auditActionFilter === opt.key
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-white text-gray-500 border-gray-200 hover:text-gray-800 hover:bg-gray-50'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="relative w-full md:w-72">
+                        <Search size={14} className="text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={auditSearchTerm}
+                          onChange={e => setAuditSearchTerm(e.target.value)}
+                          placeholder="Buscar por resumo, competência ou usuário..."
+                          aria-label="Buscar nos logs de auditoria"
+                          className="w-full pl-9 pr-3 py-2 min-h-[40px] text-xs bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                        />
                       </div>
                     </div>
 
@@ -2850,6 +2808,17 @@ export const OutsourcingCockpitModal: React.FC<OutsourcingCockpitModalProps> = (
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-700">
                                     Comp. {entry.competencia}
                                   </span>
+                                  {entry.actor?.userName && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700">
+                                      <UserCheck size={10} />
+                                      <span>{entry.actor.userName}</span>
+                                      {entry.actor.userEmail && (
+                                        <span className="text-blue-500 font-medium hidden sm:inline">
+                                          · {entry.actor.userEmail}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
                                 </div>
                                 <span className="text-[11px] font-semibold text-gray-500 flex items-center gap-1">
                                   <Clock size={11} />
