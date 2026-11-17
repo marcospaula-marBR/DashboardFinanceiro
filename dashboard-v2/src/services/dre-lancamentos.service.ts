@@ -13,9 +13,14 @@
 
 import { supabase } from '@/lib/supabase';
 import { DreRow, DreMetadata } from '@/types/dre';
-import { DEPARTAMENTOS_MAP, PROJETOS_MAP, CATEGORIAS_MAP, normalizeEmpresa } from './dre.service';
-
-const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+import {
+  fixMojibake,
+  normalizeEmpresa,
+  normalizeDepartamento,
+  normalizeProjeto,
+  normalizeContaDre,
+  normalizeCategoria,
+} from './dre.service';
 
 export interface DreLancamento {
   id?: string;
@@ -181,25 +186,13 @@ export class DreLancamentosService {
         continue;
       }
       
-      const rawDept      = rec.departamento ? rec.departamento.trim() : '';
-      const mappedDept   = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
-      const departamento = toTitleCase(mappedDept);
-      
-      const conta_dre    = rec.conta_dre.trim().replace(/^[\d.]+\s*/, '');
-      
-      const rawProj      = rec.projeto ? rec.projeto.trim() : '';
-      const mappedProj   = PROJETOS_MAP[rawProj] || PROJETOS_MAP[toTitleCase(rawProj)] || rawProj;
-      const projeto      = toTitleCase(mappedProj);
-      
-      const rawCat       = rec.categoria ? rec.categoria.trim() : '';
-      let categoria      = CATEGORIAS_MAP[rawCat] || rawCat;
-      const cleanCat     = categoria.trim().toUpperCase();
-      if (!cleanCat || cleanCat === 'N/D' || cleanCat === 'ND' || cleanCat === 'SEM CATEGORIA') {
-        categoria = conta_dre;
-      }
+      const departamento = normalizeDepartamento(rec.departamento);
+      const conta_dre    = normalizeContaDre(rec.conta_dre);
+      const projeto      = normalizeProjeto(rec.projeto);
+      const categoria    = normalizeCategoria(rec.categoria, conta_dre);
 
-      const forn         = (rec as any).fornecedor ? (rec as any).fornecedor.trim() : 'Sem Fornecedor';
-      const cCorr        = (rec as any).conta_corrente ? (rec as any).conta_corrente.trim() : 'Sem Conta Corrente';
+      const forn         = (rec as any).fornecedor ? fixMojibake((rec as any).fornecedor) : 'Sem Fornecedor';
+      const cCorr        = (rec as any).conta_corrente ? fixMojibake((rec as any).conta_corrente) : 'Sem Conta Corrente';
 
       const key = `${emp}|${departamento}|${conta_dre}|${projeto}|${categoria}|${forn}|${cCorr}`;
 
@@ -346,6 +339,22 @@ export class DreLancamentosService {
     return allData;
   }
 
+  private static buildManualRecord(
+    form: DreManualEntryForm
+  ): Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'> {
+    const contaDre = normalizeContaDre(form.conta_dre);
+    return {
+      empresa:      normalizeEmpresa(form.empresa.trim()),
+      departamento: normalizeDepartamento(form.departamento, false),
+      conta_dre:    contaDre,
+      projeto:      normalizeProjeto(form.projeto, false) || 'N/D',
+      categoria:    normalizeCategoria(form.categoria, contaDre),
+      periodo:      form.periodo.trim(),
+      valor:        Math.abs(form.valor),
+      fonte:        'manual',
+    };
+  }
+
   /**
    * Insere um único lançamento manual.
    * Retorna { data, error }.
@@ -353,16 +362,7 @@ export class DreLancamentosService {
   static async insertManualRow(
     form: DreManualEntryForm
   ): Promise<{ data: DreLancamento | null; error: string | null }> {
-    const record: Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'> = {
-      empresa:      normalizeEmpresa(form.empresa.trim()),
-      departamento: form.departamento.trim(),
-      conta_dre:    form.conta_dre.trim(),
-      projeto:      form.projeto.trim() || 'N/D',
-      categoria:    form.categoria.trim(),
-      periodo:      form.periodo.trim(),
-      valor:        Math.abs(form.valor),
-      fonte:        'manual',
-    };
+    const record = DreLancamentosService.buildManualRecord(form);
 
     const { data, error } = await supabase
       .from(TABLE)
@@ -387,16 +387,7 @@ export class DreLancamentosService {
     id: string,
     form: DreManualEntryForm
   ): Promise<{ data: DreLancamento | null; error: string | null }> {
-    const record: Omit<DreLancamento, 'id' | 'created_at' | 'updated_at'> = {
-      empresa:      normalizeEmpresa(form.empresa.trim()),
-      departamento: form.departamento.trim(),
-      conta_dre:    form.conta_dre.trim(),
-      projeto:      form.projeto.trim() || 'N/D',
-      categoria:    form.categoria.trim(),
-      periodo:      form.periodo.trim(),
-      valor:        Math.abs(form.valor),
-      fonte:        'manual',
-    };
+    const record = DreLancamentosService.buildManualRecord(form);
 
     const { data, error } = await supabase
       .from(TABLE)
@@ -448,10 +439,10 @@ export class DreLancamentosService {
     for (const row of rows) {
       const rawEmp       = (row.Empresa      as string) || '';
       const empresa      = normalizeEmpresa(rawEmp);
-      const departamento = (row.Departamento as string) || '';
-      const conta_dre    = (row.ContaDRE     as string) || '';
-      const projeto      = (row.Projeto      as string) || 'N/D';
-      const categoria    = (row.Categoria    as string) || '';
+      const departamento = normalizeDepartamento(row.Departamento as string);
+      const conta_dre    = normalizeContaDre(row.ContaDRE as string);
+      const projeto      = normalizeProjeto(row.Projeto as string) || 'N/D';
+      const categoria    = normalizeCategoria(row.Categoria as string, conta_dre);
 
       if (!empresa || !categoria) continue;
       // Empresas de entrada manual (Conectius, Ybox) nunca devem receber upsert da fonte 'omie'
@@ -547,13 +538,19 @@ export class DreLancamentosService {
     const invalidContas = new Set(['', 'Sem Conta Corrente', 'N/D', 'ND']);
 
     for (const r of rows) {
-      if (r.Empresa) empresasSet.add(r.Empresa);
-      if (r.Departamento) departamentosSet.add(r.Departamento);
-      if (r.ContaDRE) contasDreSet.add(r.ContaDRE);
-      if (r.Projeto) projetosSet.add(r.Projeto);
-      if (r.Categoria) categoriasSet.add(r.Categoria);
-      if (r.Fornecedor && !invalidForn.has(r.Fornecedor)) fornecedoresSet.add(r.Fornecedor);
-      if (r.ContaCorrente && !invalidContas.has(r.ContaCorrente)) contasCorrentesSet.add(r.ContaCorrente);
+      if (r.Empresa) empresasSet.add(normalizeEmpresa(r.Empresa));
+      const dept = normalizeDepartamento(r.Departamento);
+      if (dept) departamentosSet.add(dept);
+      const contaDre = normalizeContaDre(r.ContaDRE);
+      if (contaDre) contasDreSet.add(contaDre);
+      const proj = normalizeProjeto(r.Projeto);
+      if (proj) projetosSet.add(proj);
+      const cat = normalizeCategoria(r.Categoria, contaDre);
+      if (cat) categoriasSet.add(cat);
+      const forn = fixMojibake(r.Fornecedor || '');
+      if (forn && !invalidForn.has(forn)) fornecedoresSet.add(forn);
+      const cc = fixMojibake(r.ContaCorrente || '');
+      if (cc && !invalidContas.has(cc)) contasCorrentesSet.add(cc);
 
       for (const key of Object.keys(r)) {
         if (key.includes('/')) {

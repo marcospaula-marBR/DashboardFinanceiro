@@ -1,5 +1,12 @@
 import { supabase } from '@/lib/supabase';
 import {
+  fixMojibake,
+  normalizeCategoria,
+  normalizeDepartamento,
+  normalizeProjeto,
+  normalizeContaDre
+} from './dre.service';
+import {
   DreCaixaLancamento,
   DreCaixaFilters,
   DreCaixaKpiSummary,
@@ -82,7 +89,7 @@ export function normalizeProjectName(name: string): string {
  */
 export function decodeHtmlEntities(str: string): string {
   if (!str) return '';
-  return str
+  const decoded = str
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -119,6 +126,7 @@ export function decodeHtmlEntities(str: string): string {
     })
     .replace(/&amp;/g, '&')
     .trim();
+  return fixMojibake(decoded);
 }
 
 function parsePeriodoFromDate(dateStr: string): { periodo: string; periodoNum: number } {
@@ -299,7 +307,7 @@ export class DreCaixaService {
         const rawDet = raw.detalhes || {};
         const rawCab = raw.cabecalho || {};
         const catCodigo = String(item.categoria_codigo || rawDet.cCodCateg || '').trim();
-        const catNome = String(item.categoria_nome || '').trim();
+        const catNome = normalizeCategoria(decodeHtmlEntities(String(item.categoria_nome || '')));
         const catNomeLower = catNome.toLowerCase();
         const cOrigem = String(rawDet.cOrigem || raw.id_origem || '').toUpperCase();
         const cGrupo = String(rawDet.cGrupo || '').toUpperCase();
@@ -382,7 +390,7 @@ export class DreCaixaService {
 
         const omieId = item.omie_id ? String(item.omie_id).trim() : '';
         const nCodTit = String(rawDet.nCodTitulo || '').trim();
-        const depto = normalizeProjectName(String(item.departamento_nome || '').trim());
+        const depto = normalizeDepartamento(decodeHtmlEntities(normalizeProjectName(String(item.departamento_nome || ''))), false);
         const deptoLower = depto.toLowerCase();
         const isMovimento = item.tipo_registro === 'MOVIMENTO' || !!rawDet.cOrigem || !!rawDet.nCodMovCC || (raw.resumo && !raw.codigo_lancamento_omie);
 
@@ -511,10 +519,10 @@ export class DreCaixaService {
         if (!projeto) {
           projeto = 'Operacional / Geral';
         }
-        projeto = normalizeProjectName(decodeHtmlEntities(projeto));
+        projeto = normalizeProjectName(normalizeProjeto(decodeHtmlEntities(projeto), false)) || 'Operacional / Geral';
 
         // Categoria
-        const categoria = decodeHtmlEntities((item.categoria_nome || 'Despesas Gerais').trim());
+        const categoria = normalizeCategoria(decodeHtmlEntities(item.categoria_nome || 'Despesas Gerais')) || 'Despesas Gerais';
 
         // Resolução de Parcelas e Modalidade (À Vista vs Parcelado)
         const rawParcelStr = String(
@@ -624,7 +632,7 @@ export class DreCaixaService {
         const rawRateioList = raw.distribuicao || [];
         const rateios = Array.isArray(rawRateioList) && rawRateioList.length > 0
           ? rawRateioList.map((d: any) => ({
-              departamento: normalizeProjectName(d.cDesDep || d.departamento || 'Principal'),
+              departamento: normalizeDepartamento(decodeHtmlEntities(normalizeProjectName(d.cDesDep || d.departamento || 'Principal')), false) || 'Principal',
               valor: Math.abs(Number(d.nValDep || 0)),
               percentual: Number(d.nPerDep || 0)
             }))
@@ -643,7 +651,7 @@ export class DreCaixaService {
           periodoNum,
           projeto,
           categoria,
-          conta_dre: item.dre_conta_nome || undefined,
+          conta_dre: item.dre_conta_nome ? normalizeContaDre(item.dre_conta_nome) : undefined,
           fornecedor_cliente: fornFinal,
           conta_corrente: contaCorrente,
           numero_documento: item.numero_documento || null,

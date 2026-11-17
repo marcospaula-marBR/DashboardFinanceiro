@@ -53,7 +53,7 @@ import { QuickSimulationsSection } from '@/components/dre/pricing/QuickSimulatio
 import { RubricSimulationSection } from '@/components/dre/pricing/RubricSimulationSection';
 import { PricingSimulatorGammaModal } from '@/components/dre/pricing/PricingSimulatorGammaModal';
 import { PricingSimulatorEngine, BaseContractData } from '@/services/pricing-simulator.engine';
-import { DreService, DEFAULT_DRE_ESTRUTURA } from '@/services/dre.service';
+import { DreService, DEFAULT_DRE_ESTRUTURA, sanitizeDreRow } from '@/services/dre.service';
 import { sortColList } from '@/lib/date-utils';
 
 type SimulatorTab = 'precificacao' | 'perda' | 'rapida' | 'rubricas' | 'graficos';
@@ -108,8 +108,9 @@ export default function DreSimulatorCustomPage() {
             try {
               const parsed = JSON.parse(cached);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                setRawData(parsed);
-                setMetadata(DreLancamentosService.generateMetadataFromRows(parsed));
+                const sanitized = parsed.map(sanitizeDreRow);
+                setRawData(sanitized);
+                setMetadata(DreLancamentosService.generateMetadataFromRows(sanitized));
                 setIsLoading(false);
               }
             } catch (e) {

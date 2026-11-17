@@ -15,7 +15,15 @@ import { DreManualEntryModal } from '@/components/dre/DreManualEntryModal';
 import { DreIndicatorsModal } from '@/components/dre/DreIndicatorsModal';
 import { DreReportBuilderModal } from '@/components/dre/DreReportBuilderModal';
 import { DreLancamentosService, EMPRESAS_MANUAL_ONLY } from '@/services/dre-lancamentos.service';
-import { DreService, DEFAULT_DRE_ESTRUTURA, normalizeEmpresa, PRE_JUN25_PERIODS, CONECTIUS_HISTORICAL_PERIODS } from '@/services/dre.service';
+import {
+  DreService,
+  DEFAULT_DRE_ESTRUTURA,
+  normalizeEmpresa,
+  fixMojibake,
+  sanitizeDreRow,
+  PRE_JUN25_PERIODS,
+  CONECTIUS_HISTORICAL_PERIODS
+} from '@/services/dre.service';
 import { DreAlertsService } from '@/services/dre-alerts.service';
 import { ExportPdfService } from '@/services/exportPdf.service';
 import { supabase } from '@/lib/supabase';
@@ -206,6 +214,11 @@ export default function DrePage() {
     }
   }, [rawData, filters]);
 
+  const cleanSnapshotRows = (list: DreRow[]): DreRow[] =>
+    (Array.isArray(list) ? list : [])
+      .filter(r => r && Object.keys(r).some(k => k.includes('/')))
+      .map(sanitizeDreRow);
+
   const loadFallbackSnapshot = async () => {
     try {
       const { data, error } = await supabase
@@ -218,8 +231,9 @@ export default function DrePage() {
 
       if (data && data.length > 0) {
         const snapshot = data[0];
-        setRawData(snapshot.raw_data);
-        setMetadata(snapshot.metadata);
+        const cleanRows = cleanSnapshotRows(snapshot.raw_data);
+        setRawData(cleanRows);
+        setMetadata(DreLancamentosService.generateMetadataFromRows(cleanRows));
         setFileName(snapshot.filename || 'Banco de Dados Nuvem (Legacy Snapshot)');
         
         const timestamp = new Date(snapshot.created_at);
@@ -258,13 +272,13 @@ export default function DrePage() {
               .limit(1);
             if (snapData && snapData.length > 0 && snapData[0].raw_data) {
               const snap = snapData[0];
-              const snapRows: DreRow[] = snap.raw_data;
+              const snapRows: DreRow[] = cleanSnapshotRows(snap.raw_data);
 
               // 1. Manter as linhas granulares do Omie vindas do snapshot (excluindo qualquer dado legado/incompleto de empresas manuais)
               const filteredSnapRows = snapRows.filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
 
               // 2. Extrair as linhas autoritativas das empresas manuais (Conectius e Ybox) diretamente de dre_lancamentos (rows)
-              const manualOnlyRows = rows.filter(r => EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)));
+              const manualOnlyRows = rows.filter(r => EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa))).map(sanitizeDreRow);
 
               // 3. Mesclar as linhas do snapshot com as linhas autoritativas de dre_lancamentos
               finalRows = [...filteredSnapRows, ...manualOnlyRows];
@@ -276,7 +290,7 @@ export default function DrePage() {
                 const otherManualRows = manualRows
                   .filter(r => !EMPRESAS_MANUAL_ONLY.includes(normalizeEmpresa(r.Empresa)))
                   .map(r => {
-                    const cleaned: DreRow = { ...r };
+                    const cleaned: DreRow = { ...sanitizeDreRow(r) };
                     const emp = normalizeEmpresa(cleaned.Empresa);
                     Object.keys(cleaned).forEach(col => {
                       if (emp === 'Conectius') {
@@ -298,11 +312,22 @@ export default function DrePage() {
 
               // 4. Regenerar metadados combinando os fornecedores e contas correntes enriquecidos do snapshot
               const combinedMeta = DreLancamentosService.generateMetadataFromRows(finalRows);
+              const invalidForn = new Set(['', 'Sem Fornecedor', 'N/D', 'ND', 'Não', 'Sim', 'nao', 'sim']);
+              const invalidContas = new Set(['', 'Sem Conta Corrente', 'N/D', 'ND']);
+              const cleanMetaList = (items?: string[], invalid?: Set<string>) =>
+                Array.from(
+                  new Set((items || []).map(x => fixMojibake(x)).filter(x => x && (!invalid || !invalid.has(x))))
+                ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
               if (snap.metadata) {
                 generatedMetadata = {
                   ...combinedMeta,
-                  fornecedores: (snap.metadata.fornecedores && snap.metadata.fornecedores.length > 0) ? snap.metadata.fornecedores : combinedMeta.fornecedores,
-                  contasCorrentes: (snap.metadata.contasCorrentes && snap.metadata.contasCorrentes.length > 0) ? snap.metadata.contasCorrentes : combinedMeta.contasCorrentes
+                  fornecedores: (snap.metadata.fornecedores && snap.metadata.fornecedores.length > 0)
+                    ? cleanMetaList(snap.metadata.fornecedores, invalidForn)
+                    : combinedMeta.fornecedores,
+                  contasCorrentes: (snap.metadata.contasCorrentes && snap.metadata.contasCorrentes.length > 0)
+                    ? cleanMetaList(snap.metadata.contasCorrentes, invalidContas)
+                    : combinedMeta.contasCorrentes
                 };
               } else {
                 generatedMetadata = combinedMeta;
@@ -499,7 +524,7 @@ export default function DrePage() {
             .order('created_at', { ascending: false })
             .limit(1);
           if (snapData && snapData.length > 0 && snapData[0].raw_data) {
-            existingBaseRows = snapData[0].raw_data;
+            existingBaseRows = cleanSnapshotRows(snapData[0].raw_data);
           }
         } catch (e) {
           console.warn("Erro ao buscar histórico mestre para merge:", e);

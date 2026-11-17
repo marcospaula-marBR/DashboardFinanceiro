@@ -1,5 +1,12 @@
 import { supabase } from '@/lib/supabase';
 import {
+  fixMojibake,
+  normalizeCategoria,
+  normalizeDepartamento,
+  normalizeProjeto,
+  normalizeContaDre
+} from './dre.service';
+import {
   RegimeTipo,
   DrePainelLancamento,
   DrePainelFilters,
@@ -41,7 +48,7 @@ export function normalizeProjectName(name: string): string {
 
 export function decodeHtmlEntities(str: string): string {
   if (!str) return '';
-  return str
+  const decoded = str
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -63,6 +70,7 @@ export function decodeHtmlEntities(str: string): string {
     .replace(/&ocirc;/gi, 'ô')
     .replace(/&uuml;/gi, 'ü')
     .trim();
+  return fixMojibake(decoded);
 }
 
 function parsePeriodoFromDate(dateStr: string): { periodo: string; periodoNum: number } {
@@ -340,14 +348,18 @@ export class DrePainelService {
         manualRows.forEach((m: any) => {
           const emp = normalizeEmpresa(m.empresa);
           if (emp !== 'Ybox') return;
-          const key = `${emp}|${m.conta_dre}|${m.categoria}|${m.departamento || 'Geral'}|${m.projeto || 'Geral'}`;
+          const contaDre = normalizeContaDre(m.conta_dre);
+          const categoria = normalizeCategoria(m.categoria, contaDre);
+          const depto = normalizeDepartamento(m.departamento || 'Geral', false) || 'Geral';
+          const proj = normalizeProjeto(m.projeto || 'Geral', false) || 'Geral';
+          const key = `${emp}|${contaDre}|${categoria}|${depto}|${proj}`;
           if (!yboxRowsMap.has(key)) {
             yboxRowsMap.set(key, {
               Empresa: emp,
-              ContaDRE: m.conta_dre,
-              Categoria: m.categoria,
-              Departamento: m.departamento || 'Geral',
-              Projeto: m.projeto || 'Geral',
+              ContaDRE: contaDre,
+              Categoria: categoria,
+              Departamento: depto,
+              Projeto: proj,
               Fornecedor: 'Diversos',
               ContaCorrente: 'Histórico Ybox',
               valores: {}
@@ -379,8 +391,8 @@ export class DrePainelService {
 
         combinedCompetenciaRows.forEach((r: any, idx: number) => {
           const emp = normalizeEmpresa(r.Empresa);
-          const contaDre = (r.ContaDRE || 'Despesas Administrativas').trim();
-          const categoria = (r.Categoria || 'Diversos').trim();
+          const contaDre = normalizeContaDre(r.ContaDRE || 'Despesas Administrativas') || 'Despesas Administrativas';
+          const categoria = normalizeCategoria(r.Categoria || 'Diversos', contaDre) || 'Diversos';
 
           // Excluir categorias não-operacionais ("Distribuição de dividendos" e "Mútuo-Saídas")
           if (
@@ -392,8 +404,8 @@ export class DrePainelService {
 
           const catLow = categoria.toLowerCase();
           const forn = decodeHtmlEntities(String(r.Fornecedor || r.Cliente || 'Diversos')).trim();
-          const depto = decodeHtmlEntities(String(r.Departamento || 'Geral')).trim();
-          const proj = normalizeProjectName(decodeHtmlEntities(String(r.Projeto || 'Geral')).trim());
+          const depto = normalizeDepartamento(decodeHtmlEntities(String(r.Departamento || 'Geral')), false) || 'Geral';
+          const proj = normalizeProjectName(normalizeProjeto(decodeHtmlEntities(String(r.Projeto || 'Geral')), false)) || 'Geral';
           const cc = decodeHtmlEntities(String(r.ContaCorrente || 'Conta Corrente Principal')).trim();
           const isReceita = contaDre.toLowerCase().includes('receita');
           const isProvisao = catLow.includes('provisão') || catLow.includes('provisao') || catLow.startsWith('1.01.9');
@@ -468,8 +480,8 @@ export class DrePainelService {
         if (snapData && snapData.length > 0 && Array.isArray(snapData[0].raw_data)) {
           snapRows = snapData[0].raw_data;
           snapRows.forEach((r: any) => {
-            const cat = (r.Categoria || '').trim().toLowerCase();
-            const conta = (r.ContaDRE || '').trim();
+            const conta = normalizeContaDre(r.ContaDRE || '');
+            const cat = normalizeCategoria(r.Categoria || '', conta).toLowerCase();
             if (cat && conta && !catToConta.has(cat)) {
               catToConta.set(cat, conta);
             }
@@ -654,7 +666,7 @@ export class DrePainelService {
         const raw = item.raw_data || {};
         const rawDet = raw.detalhes || {};
         const catCodigo = String(item.categoria_codigo || rawDet.cCodCateg || '').trim();
-        const catNome = decodeHtmlEntities(String(item.categoria_nome || rawDet.cDesCateg || '')).trim();
+        const catNome = normalizeCategoria(decodeHtmlEntities(String(item.categoria_nome || rawDet.cDesCateg || '')));
         const catNomeLow = catNome.toLowerCase();
 
         // 0. Desconsiderar categorias não-operacionais ("Distribuição de dividendos" e "Mútuo-Saídas")
@@ -800,7 +812,7 @@ export class DrePainelService {
         }
 
         // Projeto
-        let projNome = normalizeProjectName(decodeHtmlEntities(String(item.projeto_nome || '')).trim());
+        let projNome = normalizeProjectName(normalizeProjeto(decodeHtmlEntities(String(item.projeto_nome || '')), false));
         const codProj = String(raw.codigo_projeto || rawDet.nCodProjeto || '').trim();
         if ((!projNome || projNome === 'Sem Projeto') && codProj && projMap.has(codProj)) {
           projNome = projMap.get(codProj)!;
@@ -814,7 +826,7 @@ export class DrePainelService {
         const rawDist = raw.distribuicao || [];
         if (Array.isArray(rawDist) && rawDist.length > 0) {
           rawDist.forEach((d: any) => {
-            const dNome = decodeHtmlEntities(String(d.cDesDep || d.nome || '')).trim();
+            const dNome = normalizeDepartamento(decodeHtmlEntities(String(d.cDesDep || d.nome || '')), false);
             const dVal = Math.abs(Number(d.nValDep || d.valor || 0));
             const dPer = Number(d.nPerDep || d.percentual || 0);
             if (dNome && dVal > 0) {
@@ -840,7 +852,7 @@ export class DrePainelService {
           conta_dre: contaDre,
           categoria: catNome || 'Diversos',
           projeto: projNome || 'Geral',
-          departamento: decodeHtmlEntities(String(item.departamento_nome || 'Geral')).trim(),
+          departamento: normalizeDepartamento(decodeHtmlEntities(String(item.departamento_nome || 'Geral')), false) || 'Geral',
           fornecedor_cliente: fornNome || 'Diversos',
           conta_corrente: contaCorrente,
           numero_documento: item.numero_documento,
@@ -865,8 +877,8 @@ export class DrePainelService {
       if (regime !== 'PREVISAO' && snapRows.length > 0) {
         snapRows.forEach((r: any, idx: number) => {
           const emp = normalizeEmpresa(r.Empresa);
-          const contaDre = (r.ContaDRE || 'Sem Conta').trim();
-          const categoria = (r.Categoria || 'Diversos').trim();
+          const contaDre = normalizeContaDre(r.ContaDRE || 'Sem Conta') || 'Sem Conta';
+          const categoria = normalizeCategoria(r.Categoria || 'Diversos', contaDre) || 'Diversos';
 
           // Excluir categorias não-operacionais ("Distribuição de dividendos" e "Mútuo-Saídas")
           if (
@@ -877,8 +889,8 @@ export class DrePainelService {
           }
 
           const forn = decodeHtmlEntities(String(r.Fornecedor || r.Cliente || 'Diversos')).trim();
-          const depto = decodeHtmlEntities(String(r.Departamento || 'Geral')).trim();
-          const proj = normalizeProjectName(decodeHtmlEntities(String(r.Projeto || 'Geral')).trim());
+          const depto = normalizeDepartamento(decodeHtmlEntities(String(r.Departamento || 'Geral')), false) || 'Geral';
+          const proj = normalizeProjectName(normalizeProjeto(decodeHtmlEntities(String(r.Projeto || 'Geral')), false)) || 'Geral';
           const cc = decodeHtmlEntities(String(r.ContaCorrente || 'Histórico Consolidado')).trim();
 
           Object.keys(r).forEach(col => {

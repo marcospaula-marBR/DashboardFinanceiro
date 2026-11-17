@@ -100,13 +100,22 @@ export const DEPARTAMENTOS_MAP: Record<string, string> = {
   "Capina Eletrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
   "Capina Elétrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
   "DZM - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
+  "Dzm - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
   "DZM - Imóveis Guilhermina": "DZM - Imóveis Guilhermina",
   "DZM - Terceirizao": "DZM - Terceirização",
+  "Dzm - Terceirizao": "DZM - Terceirização",
   "DZM - Terceirização": "DZM - Terceirização",
+  "DZM - Locao 647": "DZM - Locação 647",
+  "Dzm - Locao 647": "DZM - Locação 647",
+  "DZM - Mar Brasil - Climatizao": "DZM - Mar Brasil - Climatização",
+  "Dzm - Mar Brasil - Climatizao": "DZM - Mar Brasil - Climatização",
+  "DZM - Ribeirpolis - Galpo 0643": "DZM - Ribeirópolis - Galpão 0643",
+  "Dzm - Ribeirpolis - Galpo 0643": "DZM - Ribeirópolis - Galpão 0643",
   "So Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
-  "São Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
   "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
-  "São Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
+  "São Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "São Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "So Paulo Crsn Psp 6018/2025": "São Paulo Crsn Psp 6018/2025"
 };
 
 export const PROJETOS_MAP: Record<string, string> = {
@@ -116,7 +125,11 @@ export const PROJETOS_MAP: Record<string, string> = {
   "Bertioga SEDUC 378/2024 54/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
   "Bertioga Seduc 378/2024 54/2024": "Bertioga Seduc 378/2024 54/2024",
   "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024",
-  "Bertioga Sesap 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024"
+  "Bertioga Sesap 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024",
+  "Capina Eltrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "Dzm - Imveis Guilhermina": "Dzm - Imóveis Guilhermina",
+  "Dzm - Terceirizao": "Dzm - Terceirização",
+  "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
 };
 
 export const CATEGORIAS_MAP: Record<string, string> = {
@@ -124,6 +137,7 @@ export const CATEGORIAS_MAP: Record<string, string> = {
   "Cursos e treinamentos (inativa)": "Cursos e treinamentos",
   "Cursos e Treinamentos (inativa)": "Cursos e treinamentos",
   "Cursos e Treinamentos": "Cursos e treinamentos",
+  "Custo dos Servios Prestados": "Custo dos Serviços Prestados",
   "Honorários Jurídico": "Honorários advocatícios",
   "Honorórios advocatícios": "Honorários advocatícios",
   "Manutenção de Veículos": "Manutenção de veículos",
@@ -131,23 +145,75 @@ export const CATEGORIAS_MAP: Record<string, string> = {
   "Pedágio": "Pedágio e/ou Cobrança automática (TAG)",
   "Pedágio / TAG": "Pedágio e/ou Cobrança automática (TAG)",
   "Pedágio e/ou Cobrança automática (TAG)": "Pedágio e/ou Cobrança automática (TAG)",
+  "Proviso - IRPJ e CSSL Trimestral": "Provisão - IRPJ e CSSL Trimestral",
+  "Recuperao de Despesas Variveis": "Recuperação de Despesas Variáveis",
+  "Despesas Variveis": "Despesas Variáveis",
+  "Dedues de Receita": "Deduções de Receita",
+  "Consrcios - a contemplar": "Consórcios - a contemplar",
+  "Plano de Sade": "Plano de Saúde",
   "Telefonia Móvel e/ou Fixa": "Telefonia móvel e/ou fixa",
   "Telefonia móvel e/ou fixa": "Telefonia móvel e/ou fixa",
   "Táxi e/ou Aplicativos de transporte": "Táxi e/ou aplicativos de transporte",
   "Táxi e/ou aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
 };
 
+const CORRUPTED_TEXT_PATTERNS: Array<[RegExp, string | ((substring: string) => string)]> = [
+  [/Alimenta[\uFFFDçcãa]{0,5}o\s*\/\s*Refei[\uFFFDçcãa]{0,5}o/gi, 'Alimentação/Refeição'],
+  [/\bLicen(?:\uFFFD+|c)?a\b/gi, (m) => (m[0] === 'l' ? 'licença' : 'Licença')],
+  [/Capina\s+El(?:\uFFFD+|e)?trica/gi, 'Capina Elétrica'],
+  [/\bS(?:\uFFFD+)?o\s+Paulo\b/gi, 'São Paulo'],
+  [/Im(?:\uFFFD+)?veis\s+Guilhermina/gi, 'Imóveis Guilhermina'],
+  [/Terceiriza(?:\uFFFD+)?o/gi, 'Terceirização'],
+  [/Custo\s+dos\s+Servi(?:\uFFFD+)?os\s+Prestados/gi, 'Custo dos Serviços Prestados'],
+  [/Provis(?:\uFFFD+)?o(?=\s*-\s*IRPJ)/gi, 'Provisão'],
+  [/Recupera(?:\uFFFD+)?o\s+de\s+Despesas\s+Vari(?:\uFFFD+)?veis/gi, 'Recuperação de Despesas Variáveis'],
+  [/Despesas\s+Vari(?:\uFFFD+)?veis/gi, 'Despesas Variáveis'],
+  [/Dedu(?:\uFFFD+)?es\s+de\s+Receita/gi, 'Deduções de Receita'],
+  [/Cons(?:\uFFFD+)?rcios\s*-\s*a\s+contemplar/gi, 'Consórcios - a contemplar'],
+  [/Plano\s+de\s+Sa(?:\uFFFD+)?de/gi, 'Plano de Saúde'],
+  [/Loca(?:\uFFFD+)?o\s+647/gi, 'Locação 647'],
+  [/Climatiza(?:\uFFFD+)?o/gi, 'Climatização'],
+  [/Ribeir(?:\uFFFD+)?polis/gi, 'Ribeirópolis'],
+  [/\bGalp(?:\uFFFD+)?o\b/gi, 'Galpão'],
+  [/Servi\uFFFD+os?/gi, (m) => (m.endsWith('s') || m.endsWith('S') ? 'Serviços' : 'Serviço')],
+  [/Manuten\uFFFD+o/gi, 'Manutenção'],
+  [/Inform\uFFFD+tica/gi, 'Informática'],
+  [/M\uFFFD+quinas/gi, 'Máquinas'],
+  [/Acess\uFFFD+rios/gi, 'Acessórios'],
+  [/Ve\uFFFD+culos/gi, (m) => (m[0] === 'v' ? 'veículos' : 'Veículos')],
+  [/Loca\uFFFD+o/gi, 'Locação'],
+  [/Provis\uFFFD+o/gi, 'Provisão'],
+  [/Distribui\uFFFD+o/gi, 'Distribuição'],
+  [/Intermedia\uFFFD+o/gi, 'Intermediação'],
+  [/Neg\uFFFD+cios/gi, 'Negócios'],
+  [/Divis\uFFFD+o/gi, 'Divisão'],
+  [/Honor\uFFFD+rios/gi, 'Honorários'],
+  [/Devolu\uFFFD+es/gi, 'Devoluções'],
+  [/M\uFFFD+tuo/gi, 'Mútuo'],
+  [/Sa\uFFFD+das/gi, 'Saídas'],
+  [/Participa\uFFFD+es/gi, 'Participações'],
+  [/Tribut\uFFFD+rias?/gi, (m) => (m.endsWith('s') || m.endsWith('S') ? 'Tributárias' : 'Tributária')],
+  [/A\uFFFD+ucar/gi, 'Açúcar'],
+  [/P\uFFFD+o/gi, 'Pão'],
+];
+
+const EXTRA_MOJIBAKE_C1_REPLACEMENTS: Record<string, string> = {
+  '\u00C3\u0081': 'Á', '\u00C3\u0083': 'Ã', '\u00C3\u0087': 'Ç',
+  '\u00C3\u008A': 'Ê', '\u00C3\u008D': 'Í', '\u00C3\u0093': 'Ó',
+  '\u00C3\u009A': 'Ú', '\u00C3\u00A0': 'à', '\u00C3\u00AD': 'í'
+};
+
 export const fixMojibake = (str: string): string => {
   if (!str) return '';
-  let result = str.trim();
+  let result = String(str).trim();
   try {
-    if (/[\u00C2\u00C3]/.test(result)) {
+    if (/[\u00C2\u00C3][\u0080-\u00BF]/.test(result)) {
       const decoded = decodeURIComponent(escape(result));
-      if (decoded && !/[\u00C2\u00C3]/.test(decoded)) {
-        return decoded.trim();
+      if (decoded && !/[\u00C2\u00C3][\u0080-\u00BF]/.test(decoded)) {
+        result = decoded.trim();
       }
     }
-  } catch (e) {}
+  } catch {}
 
   const replacements: Record<string, string> = {
     'Ã£': 'ã', 'Ã¡': 'á', 'Ã ': 'à', 'Ã¢': 'â', 'Ã¤': 'ä',
@@ -165,9 +231,18 @@ export const fixMojibake = (str: string): string => {
     'Âº': 'º', 'Âª': 'ª', 'Â§': '§', 'Â°': '°'
   };
 
-  for (const [bad, good] of Object.entries(replacements)) {
-    result = result.split(bad).join(good);
+  for (const [bad, good] of Object.entries({ ...replacements, ...EXTRA_MOJIBAKE_C1_REPLACEMENTS })) {
+    if (result.includes(bad)) {
+      result = result.split(bad).join(good);
+    }
   }
+
+  for (const [pattern, replacement] of CORRUPTED_TEXT_PATTERNS) {
+    result = typeof replacement === 'string'
+      ? result.replace(pattern, replacement)
+      : result.replace(pattern, replacement);
+  }
+
   return result.trim();
 };
 
@@ -182,7 +257,79 @@ export const normalizeEmpresa = (empresa: string): string => {
   return clean || 'Geral';
 };
 
+export const normalizeDepartamento = (raw?: string, applyTitleCase = true): string => {
+  const clean = fixMojibake(raw || '');
+  if (!clean) return '';
+  const mapped = DEPARTAMENTOS_MAP[clean] || DEPARTAMENTOS_MAP[toTitleCase(clean)] || clean;
+  const fixedMapped = fixMojibake(mapped);
+  return applyTitleCase ? toTitleCase(fixedMapped) : fixedMapped;
+};
+
+export const normalizeProjeto = (raw?: string, applyTitleCase = true): string => {
+  const clean = fixMojibake(raw || '');
+  if (!clean) return '';
+  const mapped = PROJETOS_MAP[clean] || PROJETOS_MAP[toTitleCase(clean)] || clean;
+  const fixedMapped = fixMojibake(mapped);
+  return applyTitleCase ? toTitleCase(fixedMapped) : fixedMapped;
+};
+
+export const normalizeContaDre = (raw?: string): string => {
+  return fixMojibake(raw || '').replace(/^[\d.]+\s*/, '').trim();
+};
+
+export const normalizeCategoria = (raw?: string, fallbackContaDre?: string): string => {
+  const clean = fixMojibake(raw || '');
+  const normalized = fixMojibake(CATEGORIAS_MAP[clean] || clean);
+  const upper = normalized.trim().toUpperCase();
+  if (!upper || upper === 'N/D' || upper === 'ND' || upper === 'SEM CATEGORIA') {
+    return fallbackContaDre ? normalizeContaDre(fallbackContaDre) : normalized;
+  }
+  return normalized;
+};
+
+export const sanitizeDreRow = (row: DreRow): DreRow => {
+  const empresa = normalizeEmpresa(row.Empresa ? String(row.Empresa) : 'Geral');
+  const contaDre = normalizeContaDre(row.ContaDRE ? String(row.ContaDRE) : 'Sem Conta DRE') || 'Sem Conta DRE';
+  const departamento = normalizeDepartamento(row.Departamento ? String(row.Departamento) : 'Sem Departamento') || 'Sem Departamento';
+  const projeto = normalizeProjeto(row.Projeto ? String(row.Projeto) : 'Sem Projeto') || 'Sem Projeto';
+  const categoria = normalizeCategoria(row.Categoria ? String(row.Categoria) : '', contaDre) || contaDre;
+  const fornecedor = fixMojibake(row.Fornecedor ? String(row.Fornecedor) : 'Sem Fornecedor') || 'Sem Fornecedor';
+  const contaCorrente = fixMojibake(row.ContaCorrente ? String(row.ContaCorrente) : 'Sem Conta Corrente') || 'Sem Conta Corrente';
+
+  return {
+    ...row,
+    Empresa: empresa,
+    Departamento: departamento,
+    ContaDRE: contaDre,
+    Projeto: projeto,
+    Categoria: categoria,
+    Fornecedor: fornecedor,
+    ContaCorrente: contaCorrente
+  };
+};
+
 export class DreService {
+  private static hasEncodingCorruption(results: Papa.ParseResult<any>): boolean {
+    const isBadText = (v: unknown): boolean =>
+      typeof v === 'string' &&
+      (v.includes('\uFFFD') || /[\u00C2\u00C3][\u0080-\u00BF\u0192\u201A-\u203A]/.test(v));
+
+    if (results.meta.fields?.some(isBadText)) {
+      return true;
+    }
+
+    const rows = Array.isArray(results.data) ? results.data : [];
+    const sampleLimit = Math.min(rows.length, 200);
+    for (let i = 0; i < sampleLimit; i++) {
+      const row = rows[i];
+      if (!row || typeof row !== 'object') continue;
+      for (const val of Object.values(row)) {
+        if (isBadText(val)) return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * LAYER 1: PARSING
    * Realiza a leitura e conversão robusta do CSV (ISO-8859-1 -> UTF-8 fallback)
@@ -197,14 +344,13 @@ export class DreService {
         delimiter: ";",
         complete: (results) => {
           const headerCount = results.meta.fields ? results.meta.fields.length : 0;
-          // Verifica se há caracteres corrompidos óbvios (como o caractere de substituição do unicode ou Ã do Windows-1252)
-          const hasCorrupted = results.meta.fields?.some(f => f.includes('\uFFFD') || f.includes('\u00C3')) || false;
-          
+          const hasCorrupted = DreService.hasEncodingCorruption(results);
+
           if (headerCount >= 3 && !hasCorrupted) {
             resolve(results.data);
             return;
           }
-          
+
           // Fallback 1: Tentar UTF-8 com vírgula
           Papa.parse(file, {
             header: true,
@@ -213,7 +359,7 @@ export class DreService {
             delimiter: ",",
             complete: (commaResults) => {
               const commaHeaderCount = commaResults.meta.fields ? commaResults.meta.fields.length : 0;
-              const commaHasCorrupted = commaResults.meta.fields?.some(f => f.includes('\uFFFD') || f.includes('\u00C3')) || false;
+              const commaHasCorrupted = DreService.hasEncodingCorruption(commaResults);
               if (commaHeaderCount >= 3 && !commaHasCorrupted) {
                 resolve(commaResults.data);
                 return;
@@ -407,11 +553,11 @@ export class DreService {
 
         if (!mesLabel) return;
 
-        const emp = colEmpresa ? row[colEmpresa]?.toString().trim() : 'Geral';
-        const dep = colDept ? row[colDept]?.toString().trim() : 'Sem Departamento';
-        const cDre = colContaDRE ? row[colContaDRE]?.toString().trim() : 'Sem Conta DRE';
-        const proj = colProjeto ? row[colProjeto]?.toString().trim() : 'Sem Projeto';
-        const cat = colCategoria ? row[colCategoria]?.toString().trim() : 'Sem Categoria';
+        const emp = colEmpresa ? fixMojibake(row[colEmpresa]?.toString().trim()) : 'Geral';
+        const dep = colDept ? fixMojibake(row[colDept]?.toString().trim()) : 'Sem Departamento';
+        const cDre = colContaDRE ? fixMojibake(row[colContaDRE]?.toString().trim()) : 'Sem Conta DRE';
+        const proj = colProjeto ? fixMojibake(row[colProjeto]?.toString().trim()) : 'Sem Projeto';
+        const cat = colCategoria ? fixMojibake(row[colCategoria]?.toString().trim()) : 'Sem Categoria';
         const forn = colFornecedor ? fixMojibake(row[colFornecedor]?.toString().trim()) : 'Sem Fornecedor';
         const cCorr = colContaCorrente ? fixMojibake(row[colContaCorrente]?.toString().trim()) : 'Sem Conta Corrente';
 
@@ -514,28 +660,7 @@ export class DreService {
     );
 
     data.forEach(row => {
-      const rawEmp = row['Empresa'] ? row['Empresa'].toString().trim() : 'Geral';
-      row['Empresa'] = normalizeEmpresa(rawEmp);
-      
-      const rawDept = row['Departamento'] ? row['Departamento'].toString().trim() : 'Sem Departamento';
-      const mappedDept = DEPARTAMENTOS_MAP[rawDept] || DEPARTAMENTOS_MAP[toTitleCase(rawDept)] || rawDept;
-      row['Departamento'] = toTitleCase(mappedDept);
-      
-      row['ContaDRE'] = row['ContaDRE'].toString().trim().replace(/^[\d.]+\s*/, '');
-      
-      const rawProj = row['Projeto'] ? row['Projeto'].toString().trim() : 'Sem Projeto';
-      const mappedProj = PROJETOS_MAP[rawProj] || PROJETOS_MAP[toTitleCase(rawProj)] || rawProj;
-      row['Projeto'] = toTitleCase(mappedProj);
-      
-      const rawCat = row['Categoria'] ? row['Categoria'].toString().trim() : 'Sem Categoria';
-      let normalizedCat = CATEGORIAS_MAP[rawCat] || rawCat;
-      const cleanCat = normalizedCat.trim().toUpperCase();
-      if (!cleanCat || cleanCat === 'N/D' || cleanCat === 'ND' || cleanCat === 'SEM CATEGORIA') {
-        normalizedCat = row['ContaDRE'];
-      }
-      row['Categoria'] = normalizedCat;
-      row['Fornecedor'] = fixMojibake(row['Fornecedor'] ? row['Fornecedor'].toString().trim() : 'Sem Fornecedor');
-      row['ContaCorrente'] = fixMojibake(row['ContaCorrente'] ? row['ContaCorrente'].toString().trim() : 'Sem Conta Corrente');
+      Object.assign(row, sanitizeDreRow(row));
     });
 
     // Coleta todas as chaves de meses únicas existentes em todas as linhas da tabela
@@ -585,23 +710,18 @@ export class DreService {
     };
   }
 
+  private static getSanitizedGroupKey(r: DreRow): { key: string; sanitized: DreRow } {
+    const sanitized = sanitizeDreRow(r);
+    const key = `${sanitized.Empresa}|${sanitized.Departamento}|${sanitized.ContaDRE}|${sanitized.Projeto}|${sanitized.Categoria}|${sanitized.Fornecedor}|${sanitized.ContaCorrente}`;
+    return { key, sanitized };
+  }
+
   /**
    * Mescla linhas de um novo upload do Omie com as linhas históricas existentes (ex: Jan/24 a Mai/25)
    * garantindo que nenhum período anterior seja descartado.
    */
   static mergeWithHistoricalRows(existingRows: DreRow[], newRows: DreRow[]): DreRow[] {
     const pivotMap = new Map<string, any>();
-
-    const getGroupKey = (r: any) => {
-      const emp = normalizeEmpresa(r.Empresa);
-      const dep = fixMojibake(r.Departamento || 'Sem Departamento');
-      const cDre = fixMojibake(r.ContaDRE || 'Sem Conta DRE').replace(/^[\d.]+\s*/, '');
-      const proj = fixMojibake(r.Projeto || 'Sem Projeto');
-      const cat = fixMojibake(r.Categoria || 'Sem Categoria');
-      const forn = fixMojibake(r.Fornecedor || 'Sem Fornecedor');
-      const cCorr = fixMojibake(r.ContaCorrente || 'Sem Conta Corrente');
-      return `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
-    };
 
     // Identificar quais empresas e quais períodos foram enviados no novo upload
     const newCompanies = new Set<string>();
@@ -617,9 +737,9 @@ export class DreService {
 
     // 1. Inserir dados históricos existentes
     existingRows.forEach(r => {
-      const emp = normalizeEmpresa(r.Empresa);
-      const k = getGroupKey(r);
-      const cloned = { ...r };
+      const { key: k, sanitized } = DreService.getSanitizedGroupKey(r);
+      const emp = sanitized.Empresa;
+      const cloned: any = { ...sanitized };
 
       // Se a linha pertence a uma das empresas enviadas no novo upload,
       // limpa nela apenas os períodos que estão sendo substituídos pelo novo arquivo.
@@ -632,13 +752,17 @@ export class DreService {
         });
       }
 
+      if (!Object.keys(cloned).some(col => col.includes('/'))) {
+        return;
+      }
+
       if (!pivotMap.has(k)) {
         pivotMap.set(k, cloned);
       } else {
         const item = pivotMap.get(k);
         Object.keys(cloned).forEach(col => {
           if (col.includes('/') && cloned[col] !== undefined && cloned[col] !== null) {
-            item[col] = cloned[col];
+            item[col] = (Number(item[col]) || 0) + (Number(cloned[col]) || 0);
           }
         });
       }
@@ -646,14 +770,14 @@ export class DreService {
 
     // 2. Mesclar/Sobrescrever com novos dados do upload
     newRows.forEach(r => {
-      const k = getGroupKey(r);
+      const { key: k, sanitized } = DreService.getSanitizedGroupKey(r);
       if (!pivotMap.has(k)) {
-        pivotMap.set(k, { ...r });
+        pivotMap.set(k, { ...sanitized });
       } else {
         const item = pivotMap.get(k);
-        Object.keys(r).forEach(col => {
-          if (col.includes('/') && r[col] !== undefined && r[col] !== null) {
-            item[col] = r[col];
+        Object.keys(sanitized).forEach(col => {
+          if (col.includes('/') && sanitized[col] !== undefined && sanitized[col] !== null) {
+            item[col] = sanitized[col];
           }
         });
       }
@@ -670,27 +794,16 @@ export class DreService {
   static mergeManualRows(baseRows: DreRow[], manualRows: DreRow[]): DreRow[] {
     const pivotMap = new Map<string, any>();
 
-    const getGroupKey = (r: any) => {
-      const emp = normalizeEmpresa(r.Empresa);
-      const dep = fixMojibake(r.Departamento || 'Sem Departamento');
-      const cDre = fixMojibake(r.ContaDRE || 'Sem Conta DRE').replace(/^[\d.]+\s*/, '');
-      const proj = fixMojibake(r.Projeto || 'Sem Projeto');
-      const cat = fixMojibake(r.Categoria || 'Sem Categoria');
-      const forn = fixMojibake(r.Fornecedor || 'Sem Fornecedor');
-      const cCorr = fixMojibake(r.ContaCorrente || 'Sem Conta Corrente');
-      return `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
-    };
-
     // 1. Inserir todas as linhas base existentes (100% intactas)
     baseRows.forEach(r => {
-      const k = getGroupKey(r);
+      const { key: k, sanitized } = DreService.getSanitizedGroupKey(r);
       if (!pivotMap.has(k)) {
-        pivotMap.set(k, { ...r });
+        pivotMap.set(k, { ...sanitized });
       } else {
         const item = pivotMap.get(k);
-        Object.keys(r).forEach(col => {
-          if (col.includes('/') && r[col] !== undefined && r[col] !== null) {
-            item[col] = (Number(item[col]) || 0) + (Number(r[col]) || 0);
+        Object.keys(sanitized).forEach(col => {
+          if (col.includes('/') && sanitized[col] !== undefined && sanitized[col] !== null) {
+            item[col] = (Number(item[col]) || 0) + (Number(sanitized[col]) || 0);
           }
         });
       }
@@ -698,19 +811,19 @@ export class DreService {
 
     // 2. Sobrepor cirurgicamente os lançamentos manuais: somar os valores nos períodos correspondentes
     manualRows.forEach(m => {
-      const k = getGroupKey(m);
+      const { key: k, sanitized } = DreService.getSanitizedGroupKey(m);
       if (pivotMap.has(k)) {
         const item = pivotMap.get(k);
-        Object.keys(m).forEach(col => {
-          if (col.includes('/') && m[col] !== undefined && m[col] !== null) {
-            const manualVal = Number(m[col]) || 0;
+        Object.keys(sanitized).forEach(col => {
+          if (col.includes('/') && sanitized[col] !== undefined && sanitized[col] !== null) {
+            const manualVal = Number(sanitized[col]) || 0;
             if (manualVal !== 0) {
               item[col] = Math.round(((Number(item[col]) || 0) + manualVal) * 100) / 100;
             }
           }
         });
       } else {
-        pivotMap.set(k, { ...m });
+        pivotMap.set(k, { ...sanitized });
       }
     });
 
@@ -751,10 +864,10 @@ export class DreService {
     });
 
     const empresas = Array.from(new Set(rows.map(d => normalizeEmpresa(d.Empresa)).filter(Boolean))).sort() as string[];
-    const departamentos = Array.from(new Set(rows.map(d => fixMojibake(d.Departamento || '')).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
-    const contasDre = Array.from(new Set(rows.map(d => fixMojibake(d.ContaDRE || '')).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
-    const projetos = Array.from(new Set(rows.map(d => fixMojibake(d.Projeto || '')).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
-    const categorias = Array.from(new Set(rows.map(d => fixMojibake(d.Categoria || '')).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const departamentos = Array.from(new Set(rows.map(d => normalizeDepartamento(d.Departamento)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const contasDre = Array.from(new Set(rows.map(d => normalizeContaDre(d.ContaDRE)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const projetos = Array.from(new Set(rows.map(d => normalizeProjeto(d.Projeto)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
+    const categorias = Array.from(new Set(rows.map(d => normalizeCategoria(d.Categoria, d.ContaDRE)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
     const invalidForn = new Set(['', 'Sem Fornecedor', 'N/D', 'ND', 'Não', 'Sim', 'nao', 'sim']);
     const fornecedores = Array.from(new Set(rows.map(d => fixMojibake(d.Fornecedor || '')).filter(f => f && !invalidForn.has(f)))).sort((a, b) => a.localeCompare(b, 'pt-BR')) as string[];
     const invalidContas = new Set(['', 'Sem Conta Corrente', 'N/D', 'ND']);
@@ -781,10 +894,18 @@ export class DreService {
     if (filters.empresas.length > 0) {
       df = df.filter(row => filters.empresas.includes(normalizeEmpresa(row.Empresa)) || filters.empresas.includes(row.Empresa));
     }
-    if (filters.departamentos.length > 0) df = df.filter(row => filters.departamentos.includes(row.Departamento));
-    if (filters.contasDre.length > 0) df = df.filter(row => filters.contasDre.includes(row.ContaDRE));
-    if (filters.projetos.length > 0) df = df.filter(row => filters.projetos.includes(row.Projeto));
-    if (filters.categorias.length > 0) df = df.filter(row => filters.categorias.includes(row.Categoria));
+    if (filters.departamentos.length > 0) {
+      df = df.filter(row => filters.departamentos.includes(normalizeDepartamento(row.Departamento)) || filters.departamentos.includes(fixMojibake(row.Departamento || '')) || filters.departamentos.includes(row.Departamento));
+    }
+    if (filters.contasDre.length > 0) {
+      df = df.filter(row => filters.contasDre.includes(normalizeContaDre(row.ContaDRE)) || filters.contasDre.includes(row.ContaDRE));
+    }
+    if (filters.projetos.length > 0) {
+      df = df.filter(row => filters.projetos.includes(normalizeProjeto(row.Projeto)) || filters.projetos.includes(fixMojibake(row.Projeto || '')) || filters.projetos.includes(row.Projeto));
+    }
+    if (filters.categorias.length > 0) {
+      df = df.filter(row => filters.categorias.includes(normalizeCategoria(row.Categoria, row.ContaDRE)) || filters.categorias.includes(fixMojibake(row.Categoria || '')) || filters.categorias.includes(row.Categoria));
+    }
     if (filters.fornecedores && filters.fornecedores.length > 0) {
       df = df.filter(row => filters.fornecedores!.includes(fixMojibake(row.Fornecedor || 'Sem Fornecedor')) || filters.fornecedores!.includes(row.Fornecedor || 'Sem Fornecedor'));
     }
