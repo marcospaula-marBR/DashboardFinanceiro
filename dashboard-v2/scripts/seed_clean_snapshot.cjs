@@ -1,35 +1,95 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
-const iconv = require('iconv-lite');
 const Papa = require('papaparse');
 
-const envContent = fs.readFileSync(path.join(__dirname, '../.env'), 'utf8');
-const env = {};
-envContent.split('\n').forEach(line => {
-  const trimmed = line.trim();
-  if (trimmed && !trimmed.startsWith('#')) {
-    const parts = trimmed.split('=');
-    if (parts.length >= 2) {
-      env[parts[0].trim()] = parts.slice(1).join('=').trim().replace(/(^['"]|['"]$)/g, '');
+function getSupabaseClient() {
+  const envContent = fs.readFileSync(path.join(__dirname, '../.env'), 'utf8');
+  const env = {};
+  envContent.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const parts = trimmed.split('=');
+      if (parts.length >= 2) {
+        env[parts[0].trim()] = parts.slice(1).join('=').trim().replace(/(^['"]|['"]$)/g, '');
+      }
     }
-  }
-});
-const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+  });
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+}
 
 const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+function decodeCsvBufferSmart(buf) {
+  try {
+    const utf8 = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    if (!utf8.includes('\uFFFD')) return utf8;
+  } catch {}
+  return new TextDecoder('windows-1252').decode(buf);
+}
+
+const CORRUPTED_TEXT_PATTERNS = [
+  [/Alimenta[\uFFFDçcãa]{0,5}o\s*\/\s*Refei[\uFFFDçcãa]{0,5}o/gi, 'Alimentação/Refeição'],
+  [/\bLicen(?:\uFFFD+|c)?a\b/gi, (m) => (m[0] === 'l' ? 'licença' : 'Licença')],
+  [/Capina\s+El(?:\uFFFD+|e)?trica/gi, 'Capina Elétrica'],
+  [/\bS(?:\uFFFD+)?o\s+Paulo\b/gi, 'São Paulo'],
+  [/Im(?:\uFFFD+)?veis\s+Guilhermina/gi, 'Imóveis Guilhermina'],
+  [/Terceiriza(?:\uFFFD+)?o/gi, 'Terceirização'],
+  [/Custo\s+dos\s+Servi(?:\uFFFD+)?os\s+Prestados/gi, 'Custo dos Serviços Prestados'],
+  [/Provis(?:\uFFFD+)?o(?=\s*-\s*IRPJ)/gi, 'Provisão'],
+  [/Recupera(?:\uFFFD+)?o\s+de\s+Despesas\s+Vari(?:\uFFFD+)?veis/gi, 'Recuperação de Despesas Variáveis'],
+  [/Despesas\s+Vari(?:\uFFFD+)?veis/gi, 'Despesas Variáveis'],
+  [/Dedu(?:\uFFFD+)?es\s+de\s+Receita/gi, 'Deduções de Receita'],
+  [/Cons(?:\uFFFD+)?rcios\s*-\s*a\s+contemplar/gi, 'Consórcios - a contemplar'],
+  [/Plano\s+de\s+Sa(?:\uFFFD+)?de/gi, 'Plano de Saúde'],
+  [/Loca(?:\uFFFD+)?o\s+647/gi, 'Locação 647'],
+  [/Loca(?:\uFFFD+)?o\s+Oftalmol(?:\uFFFD+)?gico/gi, 'Locação Oftalmológico'],
+  [/Climatiza(?:\uFFFD+)?o/gi, 'Climatização'],
+  [/Ribeir(?:\uFFFD+)?polis/gi, 'Ribeirópolis'],
+  [/\bGalp(?:\uFFFD+)?o\b/gi, 'Galpão'],
+  [/\bJur(?:\uFFFD+)?dico\b/gi, (m) => (m[0] === 'j' ? 'jurídico' : 'Jurídico')],
+  [/Juros\s+e\s+devolu(?:\uFFFD+)?es/gi, 'Juros e devoluções'],
+  [/M(?:\uFFFD+)?o\s+de\s+Obra/gi, 'Mão de Obra'],
+  [/\bServi(?:\uFFFD+)?os\b/gi, (m) => (m[0] === 's' ? 'serviços' : 'Serviços')],
+  [/Servi\uFFFD+os?/gi, (m) => (m.endsWith('s') || m.endsWith('S') ? 'Serviços' : 'Serviço')],
+  [/Manuten\uFFFD+o/gi, 'Manutenção'],
+  [/Inform\uFFFD+tica/gi, 'Informática'],
+  [/M\uFFFD+quinas/gi, 'Máquinas'],
+  [/Acess\uFFFD+rios/gi, 'Acessórios'],
+  [/Ve\uFFFD+culos/gi, (m) => (m[0] === 'v' ? 'veículos' : 'Veículos')],
+  [/Loca\uFFFD+o/gi, 'Locação'],
+  [/Provis\uFFFD+o/gi, 'Provisão'],
+  [/Distribui\uFFFD+o/gi, 'Distribuição'],
+  [/Intermedia\uFFFD+o/gi, 'Intermediação'],
+  [/Neg\uFFFD+cios/gi, 'Negócios'],
+  [/Divis\uFFFD+o/gi, 'Divisão'],
+  [/Honor\uFFFD+rios/gi, 'Honorários'],
+  [/Devolu\uFFFD+es/gi, 'Devoluções'],
+  [/M\uFFFD+tuo/gi, 'Mútuo'],
+  [/Sa\uFFFD+das/gi, 'Saídas'],
+  [/Participa\uFFFD+es/gi, 'Participações'],
+  [/Tribut\uFFFD+rias?/gi, (m) => (m.endsWith('s') || m.endsWith('S') ? 'Tributárias' : 'Tributária')],
+  [/A\uFFFD+ucar/gi, 'Açúcar'],
+  [/P\uFFFD+o/gi, 'Pão'],
+];
+
+const EXTRA_MOJIBAKE_C1_REPLACEMENTS = {
+  '\u00C3\u0081': 'Á', '\u00C3\u0083': 'Ã', '\u00C3\u0087': 'Ç',
+  '\u00C3\u008A': 'Ê', '\u00C3\u008D': 'Í', '\u00C3\u0093': 'Ó',
+  '\u00C3\u009A': 'Ú', '\u00C3\u00A0': 'à', '\u00C3\u00AD': 'í'
+};
+
 function fixMojibake(str) {
   if (!str) return '';
-  let result = str.trim();
+  let result = String(str).trim();
   try {
-    if (/[\u00C2\u00C3]/.test(result)) {
+    if (/[\u00C2\u00C3][\u0080-\u00BF]/.test(result)) {
       const decoded = decodeURIComponent(escape(result));
-      if (decoded && !/[\u00C2\u00C3]/.test(decoded)) {
-        return decoded.trim();
+      if (decoded && !/[\u00C2\u00C3][\u0080-\u00BF]/.test(decoded)) {
+        result = decoded.trim();
       }
     }
-  } catch (e) {}
+  } catch {}
 
   const replacements = {
     'Ã£': 'ã', 'Ã¡': 'á', 'Ã ': 'à', 'Ã¢': 'â', 'Ã¤': 'ä',
@@ -47,9 +107,18 @@ function fixMojibake(str) {
     'Âº': 'º', 'Âª': 'ª', 'Â§': '§', 'Â°': '°'
   };
 
-  for (const [bad, good] of Object.entries(replacements)) {
-    result = result.split(bad).join(good);
+  for (const [bad, good] of Object.entries({ ...replacements, ...EXTRA_MOJIBAKE_C1_REPLACEMENTS })) {
+    if (result.includes(bad)) {
+      result = result.split(bad).join(good);
+    }
   }
+
+  for (const [pattern, replacement] of CORRUPTED_TEXT_PATTERNS) {
+    result = typeof replacement === 'string'
+      ? result.replace(pattern, replacement)
+      : result.replace(pattern, replacement);
+  }
+
   return result.trim();
 }
 
@@ -69,25 +138,93 @@ const toTitleCase = (str) => fixMojibake((str || '').replace(/\w\S*/g, (txt) => 
 const DEPARTAMENTOS_MAP = {
   "Capina Eltrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
   "Capina Elétrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "Capina Eltrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "Capina Eletrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "Capina Elétrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
   "DZM - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
+  "Dzm - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
+  "DZM - Imóveis Guilhermina": "DZM - Imóveis Guilhermina",
   "DZM - Terceirizao": "DZM - Terceirização",
-  "So Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
+  "Dzm - Terceirizao": "DZM - Terceirização",
+  "DZM - Terceirização": "DZM - Terceirização",
+  "DZM - Locao 647": "DZM - Locação 647",
+  "Dzm - Locao 647": "DZM - Locação 647",
+  "DZM - Mar Brasil - Climatizao": "DZM - Mar Brasil - Climatização",
+  "Dzm - Mar Brasil - Climatizao": "DZM - Mar Brasil - Climatização",
+  "DZM - Ribeirpolis - Galpo 0643": "DZM - Ribeirópolis - Galpão 0643",
+  "Dzm - Ribeirpolis - Galpo 0643": "DZM - Ribeirópolis - Galpão 0643",
+  "So Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "São Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "São Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025",
+  "So Paulo Crsn Psp 6018/2025": "São Paulo Crsn Psp 6018/2025"
 };
 
 const PROJETOS_MAP = {
   "Bertioga Seduc 378/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
   "Bertioga Seduc 378/2024 54/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
   "Bertioga Seduc 378/2024": "Bertioga Seduc 378/2024 54/2024",
+  "Bertioga SEDUC 378/2024 54/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
+  "Bertioga Seduc 378/2024 54/2024": "Bertioga Seduc 378/2024 54/2024",
   "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024",
-  "Bertioga Sesap 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024"
+  "Bertioga Sesap 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024",
+  "Capina Eltrica / Mam / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
+  "Dzm - Imveis Guilhermina": "Dzm - Imóveis Guilhermina",
+  "Dzm - Terceirizao": "Dzm - Terceirização",
+  "So Paulo Cmsp Csp 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
 };
 
 const CATEGORIAS_MAP = {
   "Cursos e treinamentos (inativo)": "Cursos e treinamentos",
+  "Cursos e treinamentos (inativa)": "Cursos e treinamentos",
+  "Cursos e Treinamentos (inativa)": "Cursos e treinamentos",
+  "Cursos e Treinamentos": "Cursos e treinamentos",
+  "Custo dos Servios Prestados": "Custo dos Serviços Prestados",
   "Honorários Jurídico": "Honorários advocatícios",
+  "Honorórios advocatícios": "Honorários advocatícios",
   "Manutenção de Veículos": "Manutenção de veículos",
+  "Manutenção de veiculos": "Manutenção de veículos",
   "Pedágio": "Pedágio e/ou Cobrança automática (TAG)",
-  "Telefonia Móvel e/ou Fixa": "Telefonia móvel e/ou fixa"
+  "Pedágio / TAG": "Pedágio e/ou Cobrança automática (TAG)",
+  "Pedágio e/ou Cobrança automática (TAG)": "Pedágio e/ou Cobrança automática (TAG)",
+  "Proviso - IRPJ e CSSL Trimestral": "Provisão - IRPJ e CSSL Trimestral",
+  "Recuperao de Despesas Variveis": "Recuperação de Despesas Variáveis",
+  "Despesas Variveis": "Despesas Variáveis",
+  "Dedues de Receita": "Deduções de Receita",
+  "Consrcios - a contemplar": "Consórcios - a contemplar",
+  "Plano de Sade": "Plano de Saúde",
+  "Telefonia Móvel e/ou Fixa": "Telefonia móvel e/ou fixa",
+  "Telefonia móvel e/ou fixa": "Telefonia móvel e/ou fixa",
+  "Táxi e/ou Aplicativos de transporte": "Táxi e/ou aplicativos de transporte",
+  "Táxi e/ou aplicativos de transporte": "Táxi e/ou aplicativos de transporte"
+};
+
+const normalizeDepartamento = (raw, applyTitleCase = true) => {
+  const clean = fixMojibake(raw || '');
+  if (!clean) return '';
+  const mapped = DEPARTAMENTOS_MAP[clean] || DEPARTAMENTOS_MAP[toTitleCase(clean)] || clean;
+  const fixedMapped = fixMojibake(mapped);
+  return applyTitleCase ? toTitleCase(fixedMapped) : fixedMapped;
+};
+
+const normalizeProjeto = (raw, applyTitleCase = true) => {
+  const clean = fixMojibake(raw || '');
+  if (!clean) return '';
+  const mapped = PROJETOS_MAP[clean] || PROJETOS_MAP[toTitleCase(clean)] || clean;
+  const fixedMapped = fixMojibake(mapped);
+  return applyTitleCase ? toTitleCase(fixedMapped) : fixedMapped;
+};
+
+const normalizeContaDre = (raw) => fixMojibake(raw || '').replace(/^[\d.]+\s*/, '').trim();
+
+const normalizeCategoria = (raw, fallbackContaDre) => {
+  const clean = fixMojibake(raw || '');
+  const normalized = fixMojibake(CATEGORIAS_MAP[clean] || clean);
+  const upper = normalized.trim().toUpperCase();
+  if (!upper || upper === 'N/D' || upper === 'ND' || upper === 'SEM CATEGORIA') {
+    return fallbackContaDre ? normalizeContaDre(fallbackContaDre) : normalized;
+  }
+  return normalized;
 };
 
 function normalizeMes(mes) {
@@ -95,16 +232,17 @@ function normalizeMes(mes) {
 }
 
 async function consolidateAndUploadCleanSnapshot() {
+  const supabase = getSupabaseClient();
   console.log("🚀 Consolidando dados com UTF-8 perfeito e fixMojibake...");
 
-  // 1. Base Manual
+  // 1. Base Manual (detecção automática UTF-8 vs Windows-1252)
   const bufManual = fs.readFileSync('public/base_manual_dre.csv');
-  const contentManual = iconv.decode(bufManual, 'win1252');
+  const contentManual = decodeCsvBufferSmart(bufManual);
   const parsedManual = Papa.parse(contentManual, { header: true, skipEmptyLines: true, delimiter: ";" });
 
-  // 2. Omie Transacional (Lido como UTF-8 direto)
+  // 2. Omie Transacional (detecção automática UTF-8 vs Windows-1252)
   const rawBufOmie = fs.readFileSync('public/dados_tratado_jun25_em_diante.csv');
-  const contentOmie = rawBufOmie.toString('utf8');
+  const contentOmie = decodeCsvBufferSmart(rawBufOmie);
   const parsedOmie = Papa.parse(contentOmie, { header: true, skipEmptyLines: true, delimiter: ";" });
 
   console.log(`Base Manual: ${parsedManual.data.length} linhas | Omie Transacional: ${parsedOmie.data.length} linhas`);
@@ -118,12 +256,12 @@ async function consolidateAndUploadCleanSnapshot() {
   parsedManual.data.forEach(row => {
     const rawEmp = row['Empresa'] || 'Geral';
     const emp = normalizeEmpresa(rawEmp);
-    const dep = toTitleCase(fixMojibake(row['Departamento'] || row['Projeto'] || 'Sem Departamento'));
-    const cDre = fixMojibake((row['ContaDRE'] || row['Categoria'] || 'Sem Conta DRE').trim().replace(/^\d+\.\s*/, ''));
-    const proj = toTitleCase(fixMojibake(row['Projeto'] || 'Sem Projeto'));
-    const cat = fixMojibake(row['Categoria'] || cDre);
-    const forn = fixMojibake(row['Fornecedor'] || 'Sem Fornecedor');
-    const cCorr = fixMojibake(row['ContaCorrente'] || row['Conta Corrente'] || 'Sem Conta Corrente');
+    const dep = normalizeDepartamento(row['Departamento'] || row['Projeto'] || 'Sem Departamento') || 'Sem Departamento';
+    const cDre = normalizeContaDre(row['ContaDRE'] || row['Categoria'] || 'Sem Conta DRE') || 'Sem Conta DRE';
+    const proj = normalizeProjeto(row['Projeto'] || 'Sem Projeto') || 'Sem Projeto';
+    const cat = normalizeCategoria(row['Categoria'] || cDre, cDre) || cDre;
+    const forn = fixMojibake(row['Fornecedor'] || 'Sem Fornecedor') || 'Sem Fornecedor';
+    const cCorr = fixMojibake(row['ContaCorrente'] || row['Conta Corrente'] || 'Sem Conta Corrente') || 'Sem Conta Corrente';
 
     const key = `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
 
@@ -185,17 +323,13 @@ async function consolidateAndUploadCleanSnapshot() {
 
     const rawEmp = row['Nome do Meu Aplicativo'] || row['Minha Empresa (Nome Fantasia)'] || 'Geral';
     const emp = normalizeEmpresa(rawEmp);
-    const rawDept = fixMojibake(row['Departamento'] || 'Sem Departamento');
-    const dep = toTitleCase(DEPARTAMENTOS_MAP[rawDept] || rawDept);
-    const cDre = fixMojibake((row['Conta do DRE'] || 'Sem Conta DRE').trim().replace(/^\d+\.\s*/, ''));
-    const rawProj = fixMojibake(row['Projeto'] || 'Sem Projeto');
-    const proj = toTitleCase(PROJETOS_MAP[rawProj] || rawProj);
-    const rawCat = fixMojibake(row['Categoria'] || cDre);
-    let cat = CATEGORIAS_MAP[rawCat] || rawCat;
-    if (cat.toUpperCase() === 'N/D' || !cat) cat = cDre;
+    const dep = normalizeDepartamento(row['Departamento'] || 'Sem Departamento') || 'Sem Departamento';
+    const cDre = normalizeContaDre(row['Conta do DRE'] || 'Sem Conta DRE') || 'Sem Conta DRE';
+    const proj = normalizeProjeto(row['Projeto'] || 'Sem Projeto') || 'Sem Projeto';
+    const cat = normalizeCategoria(row['Categoria'] || cDre, cDre) || cDre;
 
-    const forn = fixMojibake(row['Cliente ou Fornecedor'] || 'Sem Fornecedor');
-    const cCorr = fixMojibake(row['Conta Corrente'] || 'Sem Conta Corrente');
+    const forn = fixMojibake(row['Cliente ou Fornecedor'] || 'Sem Fornecedor') || 'Sem Fornecedor';
+    const cCorr = fixMojibake(row['Conta Corrente'] || 'Sem Conta Corrente') || 'Sem Conta Corrente';
 
     const key = `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
 
@@ -305,4 +439,21 @@ async function consolidateAndUploadCleanSnapshot() {
   }
 }
 
-consolidateAndUploadCleanSnapshot();
+module.exports = {
+  decodeCsvBufferSmart,
+  fixMojibake,
+  DEPARTAMENTOS_MAP,
+  PROJETOS_MAP,
+  CATEGORIAS_MAP,
+  normalizeEmpresa,
+  normalizeDepartamento,
+  normalizeProjeto,
+  normalizeContaDre,
+  normalizeCategoria,
+  toTitleCase,
+  consolidateAndUploadCleanSnapshot
+};
+
+if (require.main === module) {
+  consolidateAndUploadCleanSnapshot();
+}

@@ -172,9 +172,14 @@ const CORRUPTED_TEXT_PATTERNS: Array<[RegExp, string | ((substring: string) => s
   [/Cons(?:\uFFFD+)?rcios\s*-\s*a\s+contemplar/gi, 'Consórcios - a contemplar'],
   [/Plano\s+de\s+Sa(?:\uFFFD+)?de/gi, 'Plano de Saúde'],
   [/Loca(?:\uFFFD+)?o\s+647/gi, 'Locação 647'],
+  [/Loca(?:\uFFFD+)?o\s+Oftalmol(?:\uFFFD+)?gico/gi, 'Locação Oftalmológico'],
   [/Climatiza(?:\uFFFD+)?o/gi, 'Climatização'],
   [/Ribeir(?:\uFFFD+)?polis/gi, 'Ribeirópolis'],
   [/\bGalp(?:\uFFFD+)?o\b/gi, 'Galpão'],
+  [/\bJur(?:\uFFFD+)?dico\b/gi, (m) => (m[0] === 'j' ? 'jurídico' : 'Jurídico')],
+  [/Juros\s+e\s+devolu(?:\uFFFD+)?es/gi, 'Juros e devoluções'],
+  [/M(?:\uFFFD+)?o\s+de\s+Obra/gi, 'Mão de Obra'],
+  [/\bServi(?:\uFFFD+)?os\b/gi, (m) => (m[0] === 's' ? 'serviços' : 'Serviços')],
   [/Servi\uFFFD+os?/gi, (m) => (m.endsWith('s') || m.endsWith('S') ? 'Serviços' : 'Serviço')],
   [/Manuten\uFFFD+o/gi, 'Manutenção'],
   [/Inform\uFFFD+tica/gi, 'Informática'],
@@ -308,8 +313,22 @@ export const sanitizeDreRow = (row: DreRow): DreRow => {
   };
 };
 
+const sanitizeFilterValues = (arr: string[] | undefined, normalizer: (v: string) => string): string[] =>
+  Array.from(new Set((arr || []).map(v => normalizer(v)).filter(Boolean)));
+
+export const sanitizeDreFilters = (filters: DreFilters): DreFilters => ({
+  ...filters,
+  empresas: sanitizeFilterValues(filters.empresas, normalizeEmpresa),
+  departamentos: sanitizeFilterValues(filters.departamentos, v => normalizeDepartamento(v)),
+  contasDre: sanitizeFilterValues(filters.contasDre, normalizeContaDre),
+  projetos: sanitizeFilterValues(filters.projetos, v => normalizeProjeto(v)),
+  categorias: sanitizeFilterValues(filters.categorias, v => normalizeCategoria(v)),
+  fornecedores: sanitizeFilterValues(filters.fornecedores, fixMojibake),
+  contasCorrentes: sanitizeFilterValues(filters.contasCorrentes, fixMojibake)
+});
+
 export class DreService {
-  private static hasEncodingCorruption(results: Papa.ParseResult<any>): boolean {
+  static hasEncodingCorruption(results: Papa.ParseResult<any>): boolean {
     const isBadText = (v: unknown): boolean =>
       typeof v === 'string' &&
       (v.includes('\uFFFD') || /[\u00C2\u00C3][\u0080-\u00BF\u0192\u201A-\u203A]/.test(v));

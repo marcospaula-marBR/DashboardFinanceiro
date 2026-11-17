@@ -21,6 +21,7 @@ import {
   normalizeEmpresa,
   fixMojibake,
   sanitizeDreRow,
+  sanitizeDreFilters,
   PRE_JUN25_PERIODS,
   CONECTIUS_HISTORICAL_PERIODS
 } from '@/services/dre.service';
@@ -191,26 +192,27 @@ export default function DrePage() {
   // 4. Sincroniza dados filtrados e filtros no localStorage para que a página estática de Indicadores os utilize
   useEffect(() => {
     if (typeof window !== 'undefined' && rawData.length > 0) {
+      const cleanFilters = sanitizeDreFilters(filters);
       // Pré-filtra as linhas de acordo com os filtros ativos na tela da DRE
       let filteredRows = rawData;
-      if (filters.empresas && filters.empresas.length > 0) {
-        filteredRows = filteredRows.filter(row => filters.empresas.includes(row.Empresa));
+      if (cleanFilters.empresas.length > 0) {
+        filteredRows = filteredRows.filter(row => cleanFilters.empresas.includes(row.Empresa));
       }
-      if (filters.departamentos && filters.departamentos.length > 0) {
-        filteredRows = filteredRows.filter(row => filters.departamentos.includes(row.Departamento));
+      if (cleanFilters.departamentos.length > 0) {
+        filteredRows = filteredRows.filter(row => cleanFilters.departamentos.includes(row.Departamento));
       }
-      if (filters.contasDre && filters.contasDre.length > 0) {
-        filteredRows = filteredRows.filter(row => filters.contasDre.includes(row.ContaDRE));
+      if (cleanFilters.contasDre.length > 0) {
+        filteredRows = filteredRows.filter(row => cleanFilters.contasDre.includes(row.ContaDRE));
       }
-      if (filters.projetos && filters.projetos.length > 0) {
-        filteredRows = filteredRows.filter(row => filters.projetos.includes(row.Projeto));
+      if (cleanFilters.projetos.length > 0) {
+        filteredRows = filteredRows.filter(row => cleanFilters.projetos.includes(row.Projeto));
       }
-      if (filters.categorias && filters.categorias.length > 0) {
-        filteredRows = filteredRows.filter(row => filters.categorias.includes(row.Categoria));
+      if (cleanFilters.categorias.length > 0) {
+        filteredRows = filteredRows.filter(row => cleanFilters.categorias.includes(row.Categoria));
       }
 
       localStorage.setItem('dre_raw_data', JSON.stringify(filteredRows));
-      localStorage.setItem('dre_filters', JSON.stringify(filters));
+      localStorage.setItem('dre_filters', JSON.stringify(cleanFilters));
     }
   }, [rawData, filters]);
 
@@ -561,7 +563,7 @@ export default function DrePage() {
   };
 
   const handleFilterChange = useCallback((newFilters: DreFilters) => {
-    setFilters(newFilters);
+    setFilters(sanitizeDreFilters(newFilters));
   }, []);
 
   const allowedDeptsForEquipments = useMemo(() => {

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node test/clara-omie.test.cjs && node test/dre-encoding-sanitization.test.cjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

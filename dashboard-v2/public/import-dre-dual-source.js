@@ -6,8 +6,18 @@
  */
 
 import fs from 'fs';
-import iconv from 'iconv-lite';
 import path from 'path';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const {
+  decodeCsvBufferSmart,
+  normalizeEmpresa,
+  normalizeDepartamento,
+  normalizeProjeto,
+  normalizeContaDre,
+  normalizeCategoria
+} = require('../scripts/seed_clean_snapshot.cjs');
 
 // Supabase REST endpoint e chave (Lido do .env na raiz do projeto)
 const ENV_PATH = path.join(process.cwd(), '../../.env');
@@ -28,14 +38,13 @@ try {
 const FILE_MAI25 = 'base_manual_dre.csv';
 const FILE_JUN25 = 'dados_tratado_jun25_em_diante.csv';
 
-// Função para ler CSV com encoding correto (Windows-1252)
+// Função para ler CSV com detecção automática de encoding (UTF-8 vs Windows-1252)
 function readCSVFile(filename) {
     if (!fs.existsSync(filename)) {
         throw new Error(`Arquivo não encontrado: ${filename}`);
     }
     const buffer = fs.readFileSync(filename);
-    const content = iconv.decode(buffer, 'win1252');
-    return content;
+    return decodeCsvBufferSmart(buffer);
 }
 
 // Função para parse CSV
@@ -74,26 +83,24 @@ function mergeDataSources() {
 
     const dataMap = new Map(); // key: empresa|departamento|contaDRE|projeto|categoria
 
-    const getKey = (row) => {
-        const emp = row['Empresa'] || 'Geral';
-        const dep = row['Departamento'] || 'Sem Departamento';
-        const conta = row['ContaDRE'] || row['Conta do DRE'] || 'Sem Conta DRE';
-        const proj = row['Projeto'] || 'Sem Projeto';
-        const cat = row['Categoria'] || 'Sem Categoria';
-        return `${emp}|${dep}|${conta}|${proj}|${cat}`;
+    const getNormalizedDimensions = (row) => {
+        const emp = normalizeEmpresa(row['Empresa'] || 'Geral');
+        const conta = normalizeContaDre(row['ContaDRE'] || row['Conta do DRE'] || 'Sem Conta DRE') || 'Sem Conta DRE';
+        const dep = normalizeDepartamento(row['Departamento'] || 'Sem Departamento') || 'Sem Departamento';
+        const proj = normalizeProjeto(row['Projeto'] || 'Sem Projeto') || 'Sem Projeto';
+        const cat = normalizeCategoria(row['Categoria'] || '', conta) || conta;
+        return { Empresa: emp, Departamento: dep, ContaDRE: conta, Projeto: proj, Categoria: cat };
     };
+
+    const getKey = (dims) =>
+        `${dims.Empresa}|${dims.Departamento}|${dims.ContaDRE}|${dims.Projeto}|${dims.Categoria}`;
 
     // Carregar Base Manual (Arquivo 1)
     data1.forEach(row => {
-        const key = getKey(row);
+        const dims = getNormalizedDimensions(row);
+        const key = getKey(dims);
         if (!dataMap.has(key)) {
-            dataMap.set(key, { 
-                Empresa: row['Empresa'] || 'Geral',
-                Departamento: row['Departamento'] || 'Sem Departamento',
-                ContaDRE: row['ContaDRE'] || row['Conta do DRE'] || 'Sem Conta DRE',
-                Projeto: row['Projeto'] || 'Sem Projeto',
-                Categoria: row['Categoria'] || 'Sem Categoria'
-            });
+            dataMap.set(key, { ...dims });
         }
         const item = dataMap.get(key);
         // Puxar todas as colunas de meses (que contém '/')
@@ -105,15 +112,10 @@ function mergeDataSources() {
 
     // Aplicar Upsert do Omie (Arquivo 2)
     data2.forEach(row => {
-        const key = getKey(row);
+        const dims = getNormalizedDimensions(row);
+        const key = getKey(dims);
         if (!dataMap.has(key)) {
-            dataMap.set(key, { 
-                Empresa: row['Empresa'] || 'Geral',
-                Departamento: row['Departamento'] || 'Sem Departamento',
-                ContaDRE: row['ContaDRE'] || row['Conta do DRE'] || 'Sem Conta DRE',
-                Projeto: row['Projeto'] || 'Sem Projeto',
-                Categoria: row['Categoria'] || 'Sem Categoria'
-            });
+            dataMap.set(key, { ...dims });
         }
         const item = dataMap.get(key);
         // Sobrescrever com valores do Omie para as competências que vieram

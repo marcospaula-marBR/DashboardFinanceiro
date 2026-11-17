@@ -1,75 +1,50 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
-const iconv = require('iconv-lite');
 const Papa = require('papaparse');
+const {
+  decodeCsvBufferSmart,
+  fixMojibake,
+  normalizeEmpresa,
+  normalizeDepartamento,
+  normalizeProjeto,
+  normalizeContaDre,
+  normalizeCategoria
+} = require('./seed_clean_snapshot.cjs');
 
-const envContent = fs.readFileSync(path.join(__dirname, '../.env'), 'utf8');
-const env = {};
-envContent.split('\n').forEach(line => {
-  const trimmed = line.trim();
-  if (trimmed && !trimmed.startsWith('#')) {
-    const parts = trimmed.split('=');
-    if (parts.length >= 2) {
-      env[parts[0].trim()] = parts.slice(1).join('=').trim().replace(/(^['"]|['"]$)/g, '');
+function getSupabaseClient() {
+  const envContent = fs.readFileSync(path.join(__dirname, '../.env'), 'utf8');
+  const env = {};
+  envContent.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const parts = trimmed.split('=');
+      if (parts.length >= 2) {
+        env[parts[0].trim()] = parts.slice(1).join('=').trim().replace(/(^['"]|['"]$)/g, '');
+      }
     }
-  }
-});
-const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+  });
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+}
 
 const MESES_ORDEM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-const normalizeEmpresa = (empresa) => {
-  const norm = (empresa || '').trim().toUpperCase();
-  if (norm.includes('CONECTIUS')) return 'Conectius';
-  if (norm.includes('MAR BRASIL') || norm.includes('MARBR') || norm.includes('MAR BR')) return 'MarBR';
-  if (norm.includes('DZM') || norm.includes('D.Z.M') || norm.includes('D Z M')) return 'DZM';
-  if (norm.includes('YBOX') || norm.includes('Y BOX')) return 'Ybox';
-  if (norm.includes('G2') || norm.includes('G 2')) return 'G2';
-  return empresa || 'Geral';
-};
-
-const toTitleCase = (str) => (str || '').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
-
-const DEPARTAMENTOS_MAP = {
-  "Capina Eltrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
-  "Capina Elétrica / MAM / Crestani / Zasso": "Capina Elétrica / Mam / Crestani / Zasso",
-  "DZM - Imveis Guilhermina": "DZM - Imóveis Guilhermina",
-  "DZM - Terceirizao": "DZM - Terceirização",
-  "So Paulo CMSP CSP 274/2024 03/2025": "São Paulo Cmsp Csp 274/2024 03/2025"
-};
-
-const PROJETOS_MAP = {
-  "Bertioga Seduc 378/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
-  "Bertioga Seduc 378/2024 54/2024 (Inativo)": "Bertioga Seduc 378/2024 54/2024",
-  "Bertioga Seduc 378/2024": "Bertioga Seduc 378/2024 54/2024",
-  "Bertioga Sesap 1390/2024 71/2024 (Inativo)": "Bertioga Sesap 1390/2024 71/2024",
-  "Bertioga Sesap 1390/2024 71/2024": "Bertioga Sesap 1390/2024 71/2024"
-};
-
-const CATEGORIAS_MAP = {
-  "Cursos e treinamentos (inativo)": "Cursos e treinamentos",
-  "Honorários Jurídico": "Honorários advocatícios",
-  "Manutenção de Veículos": "Manutenção de veículos",
-  "Pedágio": "Pedágio e/ou Cobrança automática (TAG)",
-  "Telefonia Móvel e/ou Fixa": "Telefonia móvel e/ou fixa"
-};
 
 function normalizeMes(mes) {
   return mes.trim().charAt(0).toUpperCase() + mes.trim().slice(1).toLowerCase();
 }
 
 async function consolidateAndUploadSnapshot() {
+  const supabase = getSupabaseClient();
   console.log("🚀 Iniciando consolidação com Fornecedores, Contas Correntes e Conectius unificado...");
 
-  // 1. Ler Base Manual
+  // 1. Ler Base Manual (detecção automática UTF-8 vs Windows-1252)
   const bufManual = fs.readFileSync('public/base_manual_dre.csv');
-  const contentManual = iconv.decode(bufManual, 'win1252');
+  const contentManual = decodeCsvBufferSmart(bufManual);
   const parsedManual = Papa.parse(contentManual, { header: true, skipEmptyLines: true, delimiter: ";" });
 
-  // 2. Ler Omie Transacional
+  // 2. Ler Omie Transacional (detecção automática UTF-8 vs Windows-1252)
   const bufOmie = fs.readFileSync('public/dados_tratado_jun25_em_diante.csv');
-  const contentOmie = iconv.decode(bufOmie, 'win1252');
+  const contentOmie = decodeCsvBufferSmart(bufOmie);
   const parsedOmie = Papa.parse(contentOmie, { header: true, skipEmptyLines: true, delimiter: ";" });
 
   console.log(`Base Manual: ${parsedManual.data.length} linhas | Omie Transacional: ${parsedOmie.data.length} linhas`);
@@ -84,12 +59,12 @@ async function consolidateAndUploadSnapshot() {
   parsedManual.data.forEach(row => {
     const rawEmp = row['Empresa'] || 'Geral';
     const emp = normalizeEmpresa(rawEmp);
-    const dep = toTitleCase(row['Departamento'] || row['Projeto'] || 'Sem Departamento');
-    const cDre = (row['ContaDRE'] || row['Categoria'] || 'Sem Conta DRE').trim().replace(/^\d+\.\s*/, '');
-    const proj = toTitleCase(row['Projeto'] || 'Sem Projeto');
-    const cat = row['Categoria'] || cDre;
-    const forn = (row['Fornecedor'] || 'Sem Fornecedor').trim();
-    const cCorr = (row['ContaCorrente'] || row['Conta Corrente'] || 'Sem Conta Corrente').trim();
+    const dep = normalizeDepartamento(row['Departamento'] || row['Projeto'] || 'Sem Departamento') || 'Sem Departamento';
+    const cDre = normalizeContaDre(row['ContaDRE'] || row['Categoria'] || 'Sem Conta DRE') || 'Sem Conta DRE';
+    const proj = normalizeProjeto(row['Projeto'] || 'Sem Projeto') || 'Sem Projeto';
+    const cat = normalizeCategoria(row['Categoria'] || cDre, cDre) || cDre;
+    const forn = fixMojibake(row['Fornecedor'] || 'Sem Fornecedor') || 'Sem Fornecedor';
+    const cCorr = fixMojibake(row['ContaCorrente'] || row['Conta Corrente'] || 'Sem Conta Corrente') || 'Sem Conta Corrente';
 
     const key = `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
 
@@ -151,17 +126,13 @@ async function consolidateAndUploadSnapshot() {
 
     const rawEmp = row['Nome do Meu Aplicativo'] || row['Minha Empresa (Nome Fantasia)'] || 'Geral';
     const emp = normalizeEmpresa(rawEmp);
-    const rawDept = row['Departamento'] || 'Sem Departamento';
-    const dep = toTitleCase(DEPARTAMENTOS_MAP[rawDept] || rawDept);
-    const cDre = (row['Conta do DRE'] || 'Sem Conta DRE').trim().replace(/^\d+\.\s*/, '');
-    const rawProj = row['Projeto'] || 'Sem Projeto';
-    const proj = toTitleCase(PROJETOS_MAP[rawProj] || rawProj);
-    const rawCat = row['Categoria'] || cDre;
-    let cat = CATEGORIAS_MAP[rawCat] || rawCat;
-    if (cat.toUpperCase() === 'N/D' || !cat) cat = cDre;
+    const dep = normalizeDepartamento(row['Departamento'] || 'Sem Departamento') || 'Sem Departamento';
+    const cDre = normalizeContaDre(row['Conta do DRE'] || 'Sem Conta DRE') || 'Sem Conta DRE';
+    const proj = normalizeProjeto(row['Projeto'] || 'Sem Projeto') || 'Sem Projeto';
+    const cat = normalizeCategoria(row['Categoria'] || cDre, cDre) || cDre;
 
-    const forn = (row['Cliente ou Fornecedor'] || 'Sem Fornecedor').trim();
-    const cCorr = (row['Conta Corrente'] || 'Sem Conta Corrente').trim();
+    const forn = fixMojibake(row['Cliente ou Fornecedor'] || 'Sem Fornecedor') || 'Sem Fornecedor';
+    const cCorr = fixMojibake(row['Conta Corrente'] || 'Sem Conta Corrente') || 'Sem Conta Corrente';
 
     const key = `${emp}|${dep}|${cDre}|${proj}|${cat}|${forn}|${cCorr}`;
 
