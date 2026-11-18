@@ -6,14 +6,22 @@ export function calculateNameSimilarity(nameA: string, nameB: string): number {
   if (!nameA || !nameB) return 0;
   
   const normalize = (str: string) => {
-    return str
+    let s = str
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9\s]/g, "")
-      .replace(/\b(de|da|do|dos|das|e)\b/g, "")
-      .split(/\s+/)
-      .filter(w => w.length > 0);
+      .replace(/[^a-z0-9\s]/g, " ");
+    
+    // Normalizações fonéticas e variações frequentes em português
+    s = s
+      .replace(/\bsouza\b/g, "sousa")
+      .replace(/\bluiz\b/g, "luis")
+      .replace(/\bmontte\b/g, "monte")
+      .replace(/\bnetto\b/g, "neto")
+      .replace(/\bterceirizad[oa]\b/g, "")
+      .replace(/\b(de|da|do|dos|das|e)\b/g, " ");
+    
+    return s.split(/\s+/).filter(w => w.length > 0);
   };
 
   const wordsA = normalize(nameA);
@@ -32,18 +40,22 @@ export function calculateNameSimilarity(nameA: string, nameB: string): number {
   const union = new Set([...wordsA, ...wordsB]);
   const tokenScore = intersection.length / union.size;
 
-  // First & Last Name Match
+  // First & Last Name Match (com suporte a prefixos truncados como Ferreir vs Ferreira, Carl vs Carlos)
   const firstNameA = wordsA[0];
   const firstNameB = wordsB[0];
   const lastNameA = wordsA[wordsA.length - 1];
   const lastNameB = wordsB[wordsB.length - 1];
 
+  const firstMatches = firstNameA === firstNameB;
+  const lastMatches = lastNameA === lastNameB || 
+    (lastNameA.length >= 4 && lastNameB.length >= 4 && (lastNameA.startsWith(lastNameB) || lastNameB.startsWith(lastNameA)));
+
   let boundaryBonus = 0;
-  if (firstNameA === firstNameB && wordsA.length > 1 && wordsB.length > 1) {
-    if (lastNameA === lastNameB) {
-      boundaryBonus = 0.4;
+  if (firstMatches && wordsA.length > 1 && wordsB.length > 1) {
+    if (lastMatches) {
+      boundaryBonus = 0.5;
     } else {
-      boundaryBonus = 0.2;
+      boundaryBonus = 0.25;
     }
   }
 
@@ -69,7 +81,13 @@ export function calculateNameSimilarity(nameA: string, nameB: string): number {
   const maxLen = Math.max(strA.length, strB.length);
   const levScore = maxLen > 0 ? (1 - levDistance(strA, strB) / maxLen) : 0;
 
-  const finalScore = (tokenScore * 0.5) + (levScore * 0.3) + (boundaryBonus * 0.2);
+  let finalScore = (tokenScore * 0.45) + (levScore * 0.25) + (boundaryBonus * 0.3);
+
+  // Se o primeiro e o último nome combinam e há interseção de palavras relevante, garante similaridade alta
+  if (firstMatches && lastMatches && intersection.length >= 2) {
+    finalScore = Math.max(0.88, finalScore);
+  }
+
   return Math.min(1.0, Math.max(0, finalScore));
 }
 

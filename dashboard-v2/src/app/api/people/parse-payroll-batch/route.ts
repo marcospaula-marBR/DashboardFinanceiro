@@ -139,22 +139,24 @@ Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos
 `;
     } else if (isBenefitsMode) {
       prompt = `
-Analise este documento (PDF ou imagem) contendo um Relatório, Demonstrativo ou Planilha de Benefícios (Vale Transporte / VT, Vale Refeição / Alimentação / Cesta, Flash, Sodexo, Alelo, VR, Bonificação, Premiação, Bônus, Ajuda de Custo).
+Analise este documento (PDF ou imagem) contendo um Relatório, Demonstrativo, Recibo ou Planilha de Benefícios, Pagamentos ou Valores de Colaboradores (Vale Transporte / VT, Vale Refeição / Alimentação / Cesta, Flash, Sodexo, Alelo, VR, Bonificação, Premiação, Bônus, Ajuda de Custo).
 
 Instruções de Extração:
 1. **Competência**: Identifique a competência (mês/ano) de referência no cabeçalho ou datas do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho/2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01'). Se não encontrar, retorne string vazia "".
-2. **Colaboradores**: Extraia cada linha ou registro individual de colaborador contido no relatório.
+2. **Colaboradores**: Extraia RIGOROSAMENTE CADA LINHA ou registro individual de colaborador contido no relatório (sem pular nenhum colaborador da lista).
 3. **Valores dos Benefícios**:
-   - "name": Nome completo do colaborador.
-   - "cpf": CPF do colaborador (formatado 000.000.000-00 ou números puros).
+   - "name": Nome completo do colaborador exatamente como grafado no documento (ex: 'Flavio Pereira da Silva', 'Bruno Viana de Souza Chaves', 'Andrea Aparecida de Oliveira Ferreira').
+   - "cpf": CPF do colaborador (formatado 000.000.000-00 ou números puros se constar).
    - "matricula": Matrícula ou código se houver.
    - "cargo": Cargo se houver.
-   - "valor_vt": Valor de Vale Transporte (crédito recebido, recarga no cartão, Sodexo VT, Top, etc.).
-   - "valor_vr": Valor de Vale Refeição / Alimentação creditado ao colaborador.
-   - "valor_cesta": Valor de Cesta Básica ou VR/Cesta creditado.
-   - "valor_bonus": Valor de Bonificação, Premiação, Bônus ou Incentivo concedido.
+   - "valor": O valor monetário total a pagar, creditado ou concedido ao colaborador (ex: colunas 'TOTAL A PAGAR', 'VALOR LIQUIDO', 'VALOR TOTAL', 'VALOR', 'CREDITO', 'TOTAL'). Caso haja múltiplas colunas de valor diário ou sábado, capture a coluna do TOTAL GERAL/FINAL A PAGAR para aquele colaborador (ex: 491.40, 288.50, 421.60, etc.).
+   - "valor_vt": Caso seja relatório de Vale Transporte (VT), preencha também com o valor do VT.
+   - "valor_vr": Valor de Vale Refeição / Alimentação se especificado.
+   - "valor_cesta": Valor de Cesta Básica se especificado.
+   - "valor_bonus": Valor de Bonificação ou Bônus se especificado.
+   - "valor_premiacao": Valor de Premiação ou Incentivo se especificado.
    - "valor_ajuda_custo": Ajuda de custo, home-office ou conectividade.
-   - "observacao": Descrição ou categoria do benefício (ex: 'Recarga VT Sodexo', 'Premiação', 'VR / Cesta').
+   - "observacao": Descrição ou categoria do benefício (ex: 'Planilha VT', 'Recarga VT Sodexo', 'Premiação', 'VR / Cesta').
 
 Retorne obrigatoriamente um objeto JSON com o seguinte formato:
 {
@@ -165,17 +167,19 @@ Retorne obrigatoriamente um objeto JSON com o seguinte formato:
       "name": "Nome Completo do Colaborador",
       "cpf": "000.000.000-00",
       "cargo": "Cargo",
+      "valor": 0.00,
       "valor_vt": 0.00,
       "valor_vr": 0.00,
       "valor_cesta": 0.00,
       "valor_bonus": 0.00,
+      "valor_premiacao": 0.00,
       "valor_ajuda_custo": 0.00,
-      "observacao": "Recarga Benefícios"
+      "observacao": "Benefício"
     }
   ]
 }
 
-Valores monetários devem ser estritamente numéricos decimais (ex: 273.00, 500.00).
+Valores monetários devem ser estritamente numéricos decimais (ex: 273.00, 421.60, 500.00).
 Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
 `;
     } else {

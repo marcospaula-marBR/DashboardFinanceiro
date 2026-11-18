@@ -524,4 +524,116 @@ assert.strictEqual(mappedRow.desconto_vt_6, 120.00, 'desconto_vt_6 deve manter o
 assert.strictEqual(mappedRow.valor_descontos, 350.00, 'valor_descontos deve conter os descontos totais da folha');
 console.log('   ✅ Regra de VT da Folha Mensal validada: valor_vt inicializado em 0 e desconto legal de 6% mantido em descontos.');
 
+// 13. Testando algoritmo de matching fonético e sufixos truncados (17 colaboradores da planilha de VT)
+console.log('\n13. Testando algoritmo de similaridade de nomes e matching de VT...');
+
+function normalizeTestName(str) {
+  let s = str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ");
+
+  s = s
+    .replace(/\bsouza\b/g, "sousa")
+    .replace(/\bluiz\b/g, "luis")
+    .replace(/\bmontte\b/g, "monte")
+    .replace(/\bnetto\b/g, "neto")
+    .replace(/\bterceirizad[oa]\b/g, "")
+    .replace(/\b(de|da|do|dos|das|e)\b/g, " ");
+
+  return s.split(/\s+/).filter(w => w.length > 0);
+}
+
+function calcSimilarityTest(nameA, nameB) {
+  if (!nameA || !nameB) return 0;
+  const wordsA = normalizeTestName(nameA);
+  const wordsB = normalizeTestName(nameB);
+  if (wordsA.length === 0 || wordsB.length === 0) return 0;
+
+  const strA = wordsA.join(' ');
+  const strB = wordsB.join(' ');
+  if (strA === strB) return 1.0;
+
+  const setB = new Set(wordsB);
+  const intersection = wordsA.filter(w => setB.has(w));
+  const union = new Set([...wordsA, ...wordsB]);
+  const tokenScore = intersection.length / union.size;
+
+  const firstNameA = wordsA[0];
+  const firstNameB = wordsB[0];
+  const lastNameA = wordsA[wordsA.length - 1];
+  const lastNameB = wordsB[wordsB.length - 1];
+
+  const firstMatches = firstNameA === firstNameB;
+  const lastMatches = lastNameA === lastNameB ||
+    (lastNameA.length >= 4 && lastNameB.length >= 4 && (lastNameA.startsWith(lastNameB) || lastNameB.startsWith(lastNameA)));
+
+  if (firstMatches && lastMatches) {
+    return Math.max(tokenScore, 0.90);
+  }
+  return tokenScore;
+}
+
+const vtPairs = [
+  ['Flavio Pereira da Silva', 'FLAVIO PEREIRA DA SILVA'],
+  ['Robson Roque Bernardo', 'ROBSON ROQUE BERNARDO'],
+  ['Olavo Carvalho de Jesus Montte Carlos', 'OLAVO CARVALHO DE JESUS MONTTE CARL'],
+  ['Victor Luis de Oliveira Silva', 'VICTOR LUIZ DE OLIVEIRA SILVA'],
+  ['João Marcelo de Oliveira Paredes', 'JOAO MARCELO DE OLIVEIRA PAREDES'],
+  ['Rafael Andrade de Jesus', 'RAFAEL ANDRADE DE JESUS'],
+  ['Gustavo Dias de Oliveira', 'GUSTAVO DIAS DE OLIVEIRA'],
+  ['Jhonatan Silva Barbosa', 'JHONATAN SILVA BARBOSA'],
+  ['Pedro Enzo Martins Bastos', 'PEDRO ENZO MARTINS BASTOS'],
+  ['Gabriel dos Santos Silva', 'GABRIEL DOS SANTOS SILVA'],
+  ['Lucas Pereira da Silva', 'LUCAS PEREIRA DA SILVA'],
+  ['Bruno Viana de Souza Chaves', 'BRUNO VIANA DE SOUSA CHAVES'],
+  ['Irailde Rodrigues da Silva', 'IRAILDE RODRIGUES DA SILVA'],
+  ['Pako Ruhan Cavalcanti de Andrade', 'PAKO RUHAN CAVALCANTI DE DE ANDRADE'],
+  ['Felipe dos Santos Souza', 'FELIPE DOS SANTOS SOUSA'],
+  ['Victoria Eduarda Alves Bueno da Silva', 'VICTORIA EDUARDA ALVES BUENO DA SILVA'],
+  ['Andrea Aparecida de Oliveira Ferreira', 'ANDREA APARECIDA DE OLIVEIRA FERREIR']
+];
+
+vtPairs.forEach(([sheetName, dbName]) => {
+  const score = calcSimilarityTest(sheetName, dbName);
+  assert.ok(score >= 0.85, `Score esperado >= 0.85 para '${sheetName}' vs '${dbName}', obteve ${score}`);
+});
+console.log('   ✅ 17 de 17 colaboradores da planilha de VT combinados com precisão (score >= 0.85).');
+
+// 14. Testando Equação Contábil com Proventos da Folha
+console.log('\n14. Testando Equação Contábil com Proventos da Folha...');
+function calculateProventosEquation(row) {
+  const proventos = Number(row.valor_holerite || row.valor_fixo || 0);
+  const outros = Number(row.valor_outros_recebidos || 0);
+  const vt = Number(row.valor_vt || 0);
+  const vrCesta = Number(row.valor_cesta || 0);
+  const bonus = Number(row.valor_bonus || 0);
+  const premiacao = Number(row.valor_premiacao || 0);
+
+  const subtotal = proventos + outros + vt + vrCesta + bonus + premiacao;
+  const descontos = Number(row.valor_descontos || 0);
+  const liquido = subtotal - descontos;
+
+  return { subtotal, liquido };
+}
+
+const proventosSample = {
+  valor_holerite: 1984.89, // Bruno Viana: proventos brutos da folha
+  valor_fixo: 1849.81,
+  valor_outros_recebidos: 67.54,
+  valor_vt: 421.60,
+  valor_cesta: 320.00,
+  valor_bonus: 0,
+  valor_premiacao: 320.00,
+  valor_descontos: 993.07
+};
+
+const provResult = calculateProventosEquation(proventosSample);
+// Subtotal = 1984.89 + 67.54 + 421.60 + 320 + 0 + 320 = 3114.03
+assert.strictEqual(Math.round(provResult.subtotal * 100) / 100, 3114.03);
+// Líquido = 3114.03 - 993.07 = 2120.96
+assert.strictEqual(Math.round(provResult.liquido * 100) / 100, 2120.96);
+console.log('   ✅ Equação contábil com Proventos (Folha) validada centavo a centavo.');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

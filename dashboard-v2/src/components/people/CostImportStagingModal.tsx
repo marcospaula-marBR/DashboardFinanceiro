@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   X,
   FileSpreadsheet,
@@ -32,7 +32,9 @@ import {
   Gift,
   AlertCircle,
   Banknote,
-  Award
+  Award,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { parseCltFile, CltParseResult, CltParsedEmployee } from "@/utils/cltFileParser";
 import { findBestNameMatch } from "@/utils/nameSimilarity";
@@ -137,15 +139,20 @@ export function CostImportStagingModal({
   const [bulkVtValue, setBulkVtValue] = useState<string>("");
   const [bulkCestaValue, setBulkCestaValue] = useState<string>("");
 
+  // Modo Tela Cheia (Fullscreen)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Modal de seleção da coluna de benefício a importar
+  const [isBenefitModalOpen, setIsBenefitModalOpen] = useState(false);
+  const [benefitTargetColumn, setBenefitTargetColumn] = useState<"VT" | "VR_CESTA" | "BONUS" | "PREMIACAO" | "OUTROS">("VT");
+  const benefitFileInputRef = useRef<HTMLInputElement>(null);
+
   // Estado para linha inspecionada/editada em modal detalhado
   const [inspectRow, setInspectRow] = useState<StagingCostRow | null>(null);
 
-  // Estados de detecção preventiva de conflitos
+  // Custos existentes no banco para verificação no grid
   const [existingCostsInDb, setExistingCostsInDb] = useState<Map<string, MonthlyCost>>(new Map());
   const [isLoadingExistingCosts, setIsLoadingExistingCosts] = useState(false);
-  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
-  const [conflictingRows, setConflictingRows] = useState<{ row: StagingCostRow; existingCost: MonthlyCost }[]>([]);
-  const [conflictDecisions, setConflictDecisions] = useState<Record<string, "ACCEPT_NEW" | "KEEP_DB">>({});
 
   // Estados de gravação
   const [isCommitting, setIsCommitting] = useState(false);
@@ -161,8 +168,6 @@ export function CostImportStagingModal({
       setErrorMessage(null);
       setMergeSuccessMessage(null);
       setIsCommitting(false);
-      setShowCorrectionModal(false);
-      setConflictingRows([]);
     }
   }, [isOpen]);
 
@@ -241,11 +246,11 @@ export function CostImportStagingModal({
   }, [stagingRows, selectedCompetencia, existingCostsInDb]);
 
   // Estatísticas do Lote Selecionado: Equação Contábil
-  // Salário Base + Outros Recebidos + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto Folha = Líquido
+  // Proventos (Folha) + Outros Recebidos + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto Folha = Líquido
   const selectedStats = useMemo(() => {
     const selected = stagingRows.filter((r) => r.isSelected && r.competencia.slice(0, 7) === selectedCompetencia.slice(0, 7));
     const count = selected.length;
-    let totalSalarioBase = 0;
+    let totalProventosFolha = 0;
     let totalOutrosRecebidos = 0;
     let totalVt = 0;
     let totalVrCesta = 0;
@@ -256,18 +261,18 @@ export function CostImportStagingModal({
     let totalLiquido = 0;
 
     selected.forEach((r) => {
-      const base = Number(r.valor_fixo || 0);
+      const proventos = Number(r.valor_holerite || r.valor_fixo || 0);
       const outros = Number(r.valor_outros_recebidos || (r.valor_hora_extra || 0) + (r.valor_adicional_not || 0));
       const vt = Number(r.valor_vt || 0);
       const vrCesta = Number((r.valor_cesta || 0) + (r.valor_vr || 0));
       const bonus = Number(r.valor_bonus || 0);
       const premiacao = Number(r.valor_premiacao !== undefined ? r.valor_premiacao : (r.valor_ajuda_custo || 0));
 
-      const subtotal = base + outros + vt + vrCesta + bonus + premiacao;
+      const subtotal = proventos + outros + vt + vrCesta + bonus + premiacao;
       const desc = Number(r.valor_descontos || 0);
       const liq = subtotal - desc;
 
-      totalSalarioBase += base;
+      totalProventosFolha += proventos;
       totalOutrosRecebidos += outros;
       totalVt += vt;
       totalVrCesta += vrCesta;
@@ -280,7 +285,8 @@ export function CostImportStagingModal({
 
     return {
       count,
-      totalSalarioBase,
+      totalProventosFolha,
+      totalSalarioBase: totalProventosFolha, // Mantido para compatibilidade
       totalOutrosRecebidos,
       totalVt,
       totalVrCesta,
@@ -290,7 +296,7 @@ export function CostImportStagingModal({
       totalDescontosFolha,
       totalLiquido,
       // Compatibilidade legada
-      totalHolerite: totalSalarioBase + totalOutrosRecebidos,
+      totalHolerite: totalProventosFolha + totalOutrosRecebidos,
       totalDescontos: totalDescontosFolha,
       totalAdiantamento: 0,
       totalVtRecebido: totalVt,
@@ -375,7 +381,7 @@ export function CostImportStagingModal({
           cargo: rec.cargo || matchedEmp?.job_role || "",
           competencia: comp,
           sourceType: "PAYROLL_EXTRATO",
-          valor_fixo: rec.valor_fixo || holeriteBruto,
+          valor_fixo: holeriteBruto,
           valor_holerite: holeriteBruto,
           valor_outros_recebidos: rec.outros_ajustes || 0,
           valor_adiantamento: rec.valor_adiantamento || 0,
@@ -558,7 +564,16 @@ export function CostImportStagingModal({
     }
   };
 
-  // 3. Processamento de Relatório de Benefícios (PDF / Imagem via IA)
+  // Abrir seletor de arquivo após escolha do benefício
+  const handleOpenBenefitImport = (targetCol: "VT" | "VR_CESTA" | "BONUS" | "PREMIACAO" | "OUTROS") => {
+    setBenefitTargetColumn(targetCol);
+    setIsBenefitModalOpen(false);
+    setTimeout(() => {
+      benefitFileInputRef.current?.click();
+    }, 100);
+  };
+
+  // 3. Processamento de Relatório de Benefícios (PDF / Imagem via IA com Destino Definido pelo Usuário)
   const handleUploadBenefitsFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -567,11 +582,21 @@ export function CostImportStagingModal({
       setIsProcessing(true);
       setErrorMessage(null);
       setMergeSuccessMessage(null);
-      setProcessingStatusText("Extraindo relatório de benefícios via IA...");
+
+      const columnLabels: Record<string, string> = {
+        VT: "Vale Transporte (VT)",
+        VR_CESTA: "VR / Cesta Básica",
+        BONUS: "Bônus",
+        PREMIACAO: "Premiação",
+        OUTROS: "Outros Recebidos",
+      };
+      const label = columnLabels[benefitTargetColumn] || benefitTargetColumn;
+      setProcessingStatusText(`Extraindo e vinculando ${label} via IA...`);
 
       const formData = new FormData();
       formData.append("file", file);
       formData.append("type", "benefits");
+      formData.append("targetColumn", benefitTargetColumn);
 
       const response = await fetch("/api/people/parse-payroll-batch", {
         method: "POST",
@@ -593,30 +618,73 @@ export function CostImportStagingModal({
 
       if (stagingRows.length > 0) {
         let matchedCount = 0;
-        setStagingRows((prev) =>
-          prev.map((r) => {
-            const cleanCpfRow = (r.documentId || "").replace(/\D/g, "");
-            const matchRec = result.records.find((rec: any) => {
-              const recCpf = (rec.cpf || "").replace(/\D/g, "");
-              if (recCpf && cleanCpfRow && recCpf === cleanCpfRow) return true;
-              return findBestNameMatch(rec.name || "", [{ id: r.targetEmployeeId, name: r.employeeName } as any])?.similarity > 0.82;
-            });
+        const updatedRows = [...stagingRows];
 
-            if (matchRec) {
-              matchedCount++;
-              return {
-                ...r,
-                valor_vt: matchRec.valor_vt !== undefined && matchRec.valor_vt > 0 ? matchRec.valor_vt : r.valor_vt,
-                valor_cesta: matchRec.valor_cesta !== undefined && matchRec.valor_cesta > 0 ? matchRec.valor_cesta : r.valor_cesta,
-                valor_vr: matchRec.valor_vr !== undefined && matchRec.valor_vr > 0 ? matchRec.valor_vr : r.valor_vr,
-                valor_bonus: matchRec.valor_bonus !== undefined && matchRec.valor_bonus > 0 ? matchRec.valor_bonus : r.valor_bonus,
-                valor_ajuda_custo: matchRec.valor_ajuda_custo !== undefined && matchRec.valor_ajuda_custo > 0 ? matchRec.valor_ajuda_custo : r.valor_ajuda_custo,
-              };
+        // Preparar lista de candidatos no staging para matching robusto
+        const candidateRows = updatedRows.map((r) => ({
+          id: r.id,
+          name: r.employeeName,
+          cpf: (r.documentId || "").replace(/\D/g, ""),
+        }));
+
+        result.records.forEach((rec: any) => {
+          const cleanRecCpf = (rec.cpf || "").replace(/\D/g, "");
+          const recName = (rec.name || "").trim();
+
+          const recValue = Number(
+            rec.valor !== undefined && rec.valor !== null
+              ? rec.valor
+              : benefitTargetColumn === "VT"
+              ? rec.valor_vt || 0
+              : benefitTargetColumn === "VR_CESTA"
+              ? rec.valor_cesta || rec.valor_vr || 0
+              : benefitTargetColumn === "BONUS"
+              ? rec.valor_bonus || 0
+              : benefitTargetColumn === "PREMIACAO"
+              ? rec.valor_premiacao || rec.valor_ajuda_custo || 0
+              : rec.valor_outros_recebidos || 0
+          );
+
+          let matchedRowId: string | null = null;
+
+          // 1. Prioridade 1: Match por CPF (caso presente)
+          if (cleanRecCpf && cleanRecCpf.length >= 7) {
+            const foundByCpf = candidateRows.find(
+              (c) => c.cpf && (c.cpf.includes(cleanRecCpf) || cleanRecCpf.includes(c.cpf))
+            );
+            if (foundByCpf) matchedRowId = foundByCpf.id;
+          }
+
+          // 2. Prioridade 2: Match por Nome com Algoritmo Fonético e Truncamento
+          if (!matchedRowId && recName) {
+            const best = findBestNameMatch(recName, candidateRows as any);
+            if (best && best.matchedEmployeeId && (best.status === "EXACT" || best.status === "SIMILAR" || best.similarity >= 0.55)) {
+              matchedRowId = best.matchedEmployeeId;
             }
-            return r;
-          })
-        );
-        setMergeSuccessMessage(`✨ Benefícios mesclados com sucesso para ${matchedCount} colaboradores no grid.`);
+          }
+
+          if (matchedRowId) {
+            const rIdx = updatedRows.findIndex((r) => r.id === matchedRowId);
+            if (rIdx !== -1) {
+              matchedCount++;
+              const cur = updatedRows[rIdx];
+              if (benefitTargetColumn === "VT") {
+                updatedRows[rIdx] = { ...cur, valor_vt: recValue };
+              } else if (benefitTargetColumn === "VR_CESTA") {
+                updatedRows[rIdx] = { ...cur, valor_cesta: recValue };
+              } else if (benefitTargetColumn === "BONUS") {
+                updatedRows[rIdx] = { ...cur, valor_bonus: recValue };
+              } else if (benefitTargetColumn === "PREMIACAO") {
+                updatedRows[rIdx] = { ...cur, valor_premiacao: recValue, valor_ajuda_custo: recValue };
+              } else if (benefitTargetColumn === "OUTROS") {
+                updatedRows[rIdx] = { ...cur, valor_outros_recebidos: recValue };
+              }
+            }
+          }
+        });
+
+        setStagingRows(updatedRows);
+        setMergeSuccessMessage(`✨ Sucesso! Coluna ${label} alimentada para ${matchedCount} de ${result.records.length} colaboradores.`);
       } else {
         const newRows: StagingCostRow[] = result.records.map((rec: any, idx: number) => {
           const cleanName = (rec.name || "").trim();
@@ -636,7 +704,7 @@ export function CostImportStagingModal({
             targetEmployeeId = matchedEmp.id;
           } else {
             const best = findBestNameMatch(cleanName, existingEmployees);
-            if (best && best.matchedEmployeeId && (best.status === "EXACT" || best.status === "SIMILAR")) {
+            if (best && best.matchedEmployeeId && (best.status === "EXACT" || best.status === "SIMILAR" || best.similarity >= 0.55)) {
               matchType = best.status === "EXACT" ? "EXACT" : "SIMILAR";
               matchScore = best.similarity;
               targetEmployeeId = best.matchedEmployeeId;
@@ -645,6 +713,19 @@ export function CostImportStagingModal({
           }
 
           const fixoBase = matchedEmp?.remuneration_fixed || matchedEmp?.remuneration || 0;
+          const recValue = Number(
+            rec.valor !== undefined && rec.valor !== null
+              ? rec.valor
+              : benefitTargetColumn === "VT"
+              ? rec.valor_vt || 0
+              : benefitTargetColumn === "VR_CESTA"
+              ? rec.valor_cesta || rec.valor_vr || 0
+              : benefitTargetColumn === "BONUS"
+              ? rec.valor_bonus || 0
+              : benefitTargetColumn === "PREMIACAO"
+              ? rec.valor_premiacao || rec.valor_ajuda_custo || 0
+              : rec.valor_outros_recebidos || 0
+          );
 
           return {
             id: `benefit-${Date.now()}-${idx}`,
@@ -658,16 +739,17 @@ export function CostImportStagingModal({
             sourceType: "BENEFICIOS_PDF",
             valor_fixo: fixoBase,
             valor_holerite: fixoBase,
-            valor_outros_recebidos: 0,
+            valor_outros_recebidos: benefitTargetColumn === "OUTROS" ? recValue : 0,
             valor_adiantamento: 0,
             valor_hora_extra: 0,
             valor_adicional_not: 0,
-            valor_vt: rec.valor_vt || 0,
+            valor_vt: benefitTargetColumn === "VT" ? recValue : 0,
             desconto_vt_6: 0,
-            valor_cesta: rec.valor_cesta || 0,
-            valor_vr: rec.valor_vr || 0,
-            valor_bonus: rec.valor_bonus || 0,
-            valor_ajuda_custo: rec.valor_ajuda_custo || 0,
+            valor_cesta: benefitTargetColumn === "VR_CESTA" ? recValue : 0,
+            valor_vr: 0,
+            valor_bonus: benefitTargetColumn === "BONUS" ? recValue : 0,
+            valor_premiacao: benefitTargetColumn === "PREMIACAO" ? recValue : 0,
+            valor_ajuda_custo: benefitTargetColumn === "PREMIACAO" ? recValue : 0,
             valor_ferias: 0,
             valor_rescisao: 0,
             valor_decimo_terceiro: 0,
@@ -679,14 +761,14 @@ export function CostImportStagingModal({
             valor_consignado: 0,
             valor_pensao_alimenticia: 0,
             valor_fgts: 0,
-            folha_liquido: fixoBase + (rec.valor_vt || 0) + (rec.valor_cesta || rec.valor_vr || 0) + (rec.valor_bonus || 0),
-            observacao: rec.observacao || "Importado de relatório de benefícios",
+            folha_liquido: fixoBase + recValue,
+            observacao: rec.observacao || `Importado via Benefícios (${label})`,
             isSelected: true,
           };
         });
 
         setStagingRows(newRows);
-        setMergeSuccessMessage(`✨ Sucesso! ${newRows.length} colaboradores carregados a partir do relatório de benefícios.`);
+        setMergeSuccessMessage(`✨ Sucesso! ${newRows.length} colaboradores carregados com ${label}.`);
       }
     } catch (err: any) {
       console.error("Erro ao importar benefícios por IA:", err);
@@ -694,6 +776,7 @@ export function CostImportStagingModal({
     } finally {
       setIsProcessing(false);
       setProcessingStatusText("");
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -912,71 +995,15 @@ export function CostImportStagingModal({
     }
   };
 
-  // 5. Gravação Final no Custo Histórico (Supabase) com trava e verificação de correção
-  const handleCommitBatch = async (forceOverwrite: boolean = false, skipExisting: boolean = false) => {
-    let selected = stagingRows.filter((r) => r.isSelected);
+  // 5. Gravação Final no Custo Histórico (Supabase) direto a partir do Grid (sem confirmação duplicada)
+  const handleCommitBatch = async () => {
+    const selected = stagingRows.filter((r) => r.isSelected);
     if (selected.length === 0) {
       alert("Selecione pelo menos um colaborador para gravar.");
       return;
     }
 
-
-
-    if (!forceOverwrite && !skipExisting) {
-      const conflicts = selected
-        .filter((r) => r.targetEmployeeId !== "NEW" && existingCostsInDb.has(r.targetEmployeeId))
-        .map((r) => ({
-          row: r,
-          existingCost: existingCostsInDb.get(r.targetEmployeeId)!,
-        }));
-
-      if (conflicts.length > 0) {
-        // Inicializa todas as decisões como 'ACCEPT_NEW' por padrão
-        const initialDecisions: Record<string, "ACCEPT_NEW" | "KEEP_DB"> = {};
-        conflicts.forEach((c) => {
-          initialDecisions[c.row.id] = "ACCEPT_NEW";
-        });
-        setConflictDecisions(initialDecisions);
-        setConflictingRows(conflicts);
-        setShowCorrectionModal(true);
-        return;
-      }
-    }
-
-    if (skipExisting) {
-      selected = selected.filter((r) => r.targetEmployeeId === "NEW" || !existingCostsInDb.has(r.targetEmployeeId));
-      if (selected.length === 0) {
-        alert("Todos os colaboradores selecionados já possuem lançamento nesta competência. Nenhum novo registro a salvar.");
-        setShowCorrectionModal(false);
-        return;
-      }
-    }
-
-    setShowCorrectionModal(false);
     executeSaveRows(selected);
-  };
-
-  // Confirmação com base nas decisões lado a lado do usuário
-  const handleConfirmConflictDecisions = () => {
-    let selected = stagingRows.filter((r) => r.isSelected);
-
-    // Filtra: se estava em conflito e usuário escolheu KEEP_DB, remove do lote para não alterar o banco!
-    const filteredToSave = selected.filter((r) => {
-      const hasConflict = r.targetEmployeeId !== "NEW" && existingCostsInDb.has(r.targetEmployeeId);
-      if (hasConflict) {
-        return conflictDecisions[r.id] === "ACCEPT_NEW";
-      }
-      return true;
-    });
-
-    if (filteredToSave.length === 0) {
-      alert("Todos os lançamentos em conflito foram mantidos com os valores atuais do banco. Nenhum novo dado a salvar.");
-      setShowCorrectionModal(false);
-      return;
-    }
-
-    setShowCorrectionModal(false);
-    executeSaveRows(filteredToSave);
   };
 
   const executeSaveRows = async (rowsToSave: StagingCostRow[]) => {
@@ -1003,8 +1030,8 @@ export function CostImportStagingModal({
             status: "Ativo",
             job_role: row.cargo || "Colaborador",
             document_id: row.documentId || undefined,
-            remuneration_fixed: row.valor_fixo || row.valor_holerite,
-            remuneration: row.valor_fixo || row.valor_holerite,
+            remuneration_fixed: row.valor_holerite || row.valor_fixo,
+            remuneration: row.valor_holerite || row.valor_fixo,
           });
           if (created && created.id) {
             finalEmployeeId = created.id;
@@ -1012,15 +1039,15 @@ export function CostImportStagingModal({
         }
 
         if (finalEmployeeId && finalEmployeeId !== "NEW") {
-          // Equação Contábil Unificada: Salário Base + Outros Recebidos + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto Folha = Líquido
-          const base = Number(row.valor_fixo || 0);
+          // Equação Contábil Unificada: Proventos + Outros Recebidos + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto Folha = Líquido
+          const proventos = Number(row.valor_holerite || row.valor_fixo || 0);
           const outros = Number(row.valor_outros_recebidos || (row.valor_hora_extra || 0) + (row.valor_adicional_not || 0));
           const vt = Number(row.valor_vt || 0);
           const vrCesta = Number((row.valor_cesta || 0) + (row.valor_vr || 0));
           const bonus = Number(row.valor_bonus || 0);
           const premiacao = Number(row.valor_premiacao !== undefined ? row.valor_premiacao : (row.valor_ajuda_custo || 0));
 
-          const subtotal = base + outros + vt + vrCesta + bonus + premiacao;
+          const subtotal = proventos + outros + vt + vrCesta + bonus + premiacao;
           const totalDescontos = Number(row.valor_descontos || 0);
           const liquidoReal = subtotal - totalDescontos;
 
@@ -1028,8 +1055,8 @@ export function CostImportStagingModal({
             employee_id: finalEmployeeId,
             competencia: row.competencia,
             vinculo_tipo: "CLT",
-            valor_fixo: base,
-            valor_holerite: base + outros,
+            valor_fixo: proventos,
+            valor_holerite: proventos,
             valor_adiantamento: Number(row.valor_adiantamento || 0),
             outros_ajustes: outros,
             valor_hora_extra: Number(row.valor_hora_extra || 0),
@@ -1074,8 +1101,8 @@ export function CostImportStagingModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-7xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center ${isFullscreen ? "p-0" : "p-2 sm:p-4"} bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200`}>
+      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 ${isFullscreen ? "w-screen h-screen rounded-none max-w-none max-h-none border-0" : "rounded-3xl w-full max-w-7xl max-h-[96vh]"} flex flex-col shadow-2xl overflow-hidden`}>
         
         {/* CABEÇALHO DO MODAL */}
         <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/50">
@@ -1096,13 +1123,25 @@ export function CostImportStagingModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-xs font-bold"
+              title={isFullscreen ? "Restaurar visualização normal" : "Expandir para tela toda"}
+            >
+              {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+              <span className="hidden sm:inline">{isFullscreen ? "Restaurar" : "Tela Cheia"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* FEEDBACK DE MENSAGENS E SUCESSO DE MESCLAGEM */}
@@ -1153,7 +1192,7 @@ export function CostImportStagingModal({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
                 {/* CARD 1: FOLHA MENSAL */}
                 <div className="bg-gradient-to-b from-emerald-500/5 to-transparent border-2 border-emerald-500/30 dark:border-emerald-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-emerald-500 transition-all shadow-sm group">
                   <div className="space-y-3">
@@ -1170,7 +1209,7 @@ export function CostImportStagingModal({
                       Folha Mensal (PDF/Foto)
                     </h5>
                     <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Envie o extrato mensal da folha de pagamento. A IA extrai salários, proventos, INSS, IRRF e descontos com precisão centavo a centavo.
+                      Envie o extrato mensal da folha de pagamento. A IA extrai proventos brutos, INSS, IRRF e descontos centavo a centavo.
                     </p>
                   </div>
 
@@ -1188,75 +1227,39 @@ export function CostImportStagingModal({
                   </div>
                 </div>
 
-                {/* CARD 2: BÔNUS & PREMIAÇÃO (AUDITORIA IA) */}
+                {/* CARD 2: BENEFÍCIOS (PDF / PLANILHA) COM ESCOLHA DE COLUNA */}
                 <div className="bg-gradient-to-b from-blue-500/5 to-transparent border-2 border-blue-500/30 dark:border-blue-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-blue-500 transition-all shadow-sm group">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="w-11 h-11 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                        <Award size={22} />
-                      </div>
-                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                        Auditoria IA • Incentivos
-                      </span>
-                    </div>
-
-                    <h5 className="text-sm font-black text-slate-900 dark:text-white">
-                      Bônus & Premiação (PDF/Foto)
-                    </h5>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Envie relatórios, demonstrativos ou recibos de bônus, bonificações e premiações. A IA audita por CPF/nome e preenche as colunas automaticamente.
-                    </p>
-                  </div>
-
-                  <div className="pt-5">
-                    <label className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
-                      <Upload size={14} />
-                      <span>Carregar Bônus & Premiação</span>
-                      <input
-                        type="file"
-                        accept=".pdf,image/png,image/jpeg"
-                        onChange={handleUploadBonusFile}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                {/* CARD 3: PLANILHA DE BENEFÍCIOS */}
-                <div className="bg-gradient-to-b from-amber-500/5 to-transparent border-2 border-amber-500/30 dark:border-amber-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-amber-500 transition-all shadow-sm group">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                         <Gift size={22} />
                       </div>
-                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                        VT, VR/Cesta & Bônus
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        VT, VR/Cesta, Bônus & Premiação
                       </span>
                     </div>
 
                     <h5 className="text-sm font-black text-slate-900 dark:text-white">
-                      Benefícios & Bônus (PDF)
+                      Importar Benefícios (PDF)
                     </h5>
                     <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Importe relatórios de recarga de VT (Sodexo, Top), VR, Cesta ou Bonificação. Lê valores concedidos e permite complementar ou mesclar com o grid.
+                      Importe relatórios de VT, VR/Cesta, Bônus, Premiação ou Outros. Você escolhe a coluna de destino e a busca alimenta os colaboradores correspondentes.
                     </p>
                   </div>
 
                   <div className="pt-5">
-                    <label className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
-                      <Upload size={14} />
+                    <button
+                      type="button"
+                      onClick={() => setIsBenefitModalOpen(true)}
+                      className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                    >
+                      <Gift size={14} />
                       <span>Carregar Benefícios</span>
-                      <input
-                        type="file"
-                        accept=".pdf,image/png,image/jpeg"
-                        onChange={handleUploadBenefitsFile}
-                        className="hidden"
-                      />
-                    </label>
+                    </button>
                   </div>
                 </div>
 
-                {/* CARD 4: PLANILHA EXCEL RETROATIVA */}
+                {/* CARD 3: PLANILHA EXCEL RETROATIVA */}
                 <div className="bg-gradient-to-b from-slate-500/5 to-transparent border-2 border-slate-300 dark:border-slate-800 rounded-3xl p-5 flex flex-col justify-between hover:border-slate-400 transition-all shadow-sm group">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -1367,29 +1370,23 @@ export function CostImportStagingModal({
                 {/* FERRAMENTAS DE MESCLAGEM E PREENCHIMENTO EM MASSA */}
                 <div className="flex items-center gap-2 flex-wrap">
                   
-                  {/* IMPORTAR / MESCLAR BÔNUS & PREMIAÇÃO (AUDITORIA IA) */}
-                  <label className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs font-black rounded-xl hover:bg-blue-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
-                    <Award size={13} className="text-blue-600" />
-                    <span>Importar Bônus & Premiação (PDF)</span>
-                    <input
-                      type="file"
-                      accept=".pdf,image/png,image/jpeg"
-                      onChange={handleUploadBonusFile}
-                      className="hidden"
-                    />
-                  </label>
-
-                  {/* MESCLAR BENEFÍCIOS PDF */}
-                  <label className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs font-black rounded-xl hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
-                    <Gift size={13} className="text-amber-600" />
-                    <span>Mesclar PDF de Benefícios</span>
-                    <input
-                      type="file"
-                      accept=".pdf,image/png,image/jpeg"
-                      onChange={handleUploadBenefitsFile}
-                      className="hidden"
-                    />
-                  </label>
+                  {/* IMPORTAR BENEFÍCIOS (PDF) COM SELEÇÃO PRÉVIA DE DESTINO */}
+                  <button
+                    type="button"
+                    onClick={() => setIsBenefitModalOpen(true)}
+                    className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs font-black rounded-xl hover:bg-blue-100 transition-all flex items-center gap-1.5 shadow-2xs"
+                    title="Importar PDF de VT, VR/Cesta, Bônus, Premiação ou Outros com seleção de destino"
+                  >
+                    <Gift size={14} className="text-blue-600" />
+                    <span>Importar Benefícios (PDF)</span>
+                  </button>
+                  <input
+                    ref={benefitFileInputRef}
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg"
+                    onChange={handleUploadBenefitsFile}
+                    className="hidden"
+                  />
 
                   {/* VT Padrão */}
                   <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800/60 rounded-xl px-2 py-1 shadow-2xs">
@@ -1445,13 +1442,13 @@ export function CostImportStagingModal({
                 </div>
               </div>
 
-              {/* CARDS COM A EQUAÇÃO EXECUTIVA RESUMIDA: Base + Outros + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Descontos = Líquido */}
+              {/* CARDS COM A EQUAÇÃO EXECUTIVA RESUMIDA: Proventos + Outros + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Descontos = Líquido */}
               <div className="p-3 bg-slate-100/70 dark:bg-slate-850/50 border-b border-slate-200 dark:border-slate-800">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2">
                   <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <span className="text-[9px] font-black text-slate-500 uppercase block">1. Salário Base</span>
+                    <span className="text-[9px] font-black text-slate-500 uppercase block">1. Proventos (Folha)</span>
                     <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums">
-                      {formatCurrency(selectedStats.totalSalarioBase)}
+                      {formatCurrency(selectedStats.totalProventosFolha)}
                     </span>
                   </div>
                   <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/50">
@@ -1520,7 +1517,7 @@ export function CostImportStagingModal({
                         </button>
                       </th>
                       <th className="px-3 py-2 text-[10px] font-black uppercase text-slate-500">Colaborador</th>
-                      <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-600 text-right">Salário Base ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-600 text-right">Proventos ✏️</th>
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-blue-600 text-right">+ Outros ✏️</th>
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 text-right bg-emerald-500/10 rounded-t">+ VT ✏️</th>
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 text-right bg-amber-500/10 rounded-t">+ VR / Cesta ✏️</th>
@@ -1535,14 +1532,14 @@ export function CostImportStagingModal({
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {visibleRows.map((row) => {
-                      const base = Number(row.valor_fixo || 0);
+                      const proventos = Number(row.valor_holerite || row.valor_fixo || 0);
                       const outros = Number(row.valor_outros_recebidos || (row.valor_hora_extra || 0) + (row.valor_adicional_not || 0));
                       const vt = Number(row.valor_vt || 0);
                       const vrCesta = Number((row.valor_cesta || 0) + (row.valor_vr || 0));
                       const bonus = Number(row.valor_bonus || 0);
                       const premiacao = Number(row.valor_premiacao !== undefined ? row.valor_premiacao : (row.valor_ajuda_custo || 0));
 
-                      const subtotalRow = base + outros + vt + vrCesta + bonus + premiacao;
+                      const subtotalRow = proventos + outros + vt + vrCesta + bonus + premiacao;
                       const totalDescRow = Number(row.valor_descontos || 0);
                       const liquidoRealRow = subtotalRow - totalDescRow;
 
@@ -1594,17 +1591,19 @@ export function CostImportStagingModal({
                             </div>
                           </td>
 
-                          {/* SALÁRIO BASE (EDITÁVEL INLINE) */}
+                          {/* PROVENTOS BRUTOS DA FOLHA (EDITÁVEL INLINE) */}
                           <td className="px-2 py-2 text-right align-middle">
                             <div className="flex items-center justify-end gap-1">
                               <span className="text-[10px] text-slate-400 font-bold">R$</span>
                               <input
                                 type="number"
                                 step="0.01"
-                                value={row.valor_fixo === 0 ? "" : row.valor_fixo}
-                                onChange={(e) =>
-                                  handleUpdateRowField(row.id, "valor_fixo", parseFloat(e.target.value) || 0)
-                                }
+                                value={(row.valor_holerite || row.valor_fixo) === 0 ? "" : (row.valor_holerite || row.valor_fixo)}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  handleUpdateRowField(row.id, "valor_holerite", val);
+                                  handleUpdateRowField(row.id, "valor_fixo", val);
+                                }}
                                 placeholder="0,00"
                                 className="w-20 px-1.5 py-1 text-xs font-bold text-right text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg outline-none focus:ring-1 focus:ring-emerald-500"
                               />
@@ -1803,7 +1802,7 @@ export function CostImportStagingModal({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => handleCommitBatch(false, false)}
+                    onClick={() => handleCommitBatch()}
                     disabled={isCommitting || stagingRows.filter((r) => r.isSelected).length === 0}
                     className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50 transition-all"
                   >
@@ -1836,259 +1835,139 @@ export function CostImportStagingModal({
           </div>
         )}
 
-        {/* MODAL DE CONCILIAÇÃO E COMPARAÇÃO LADO A LADO (DB vs NOVA FOLHA) */}
-        {showCorrectionModal && (
-          <div className="fixed inset-0 z-70 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 max-w-4xl w-full shadow-2xl flex flex-col max-h-[92vh] animate-in zoom-in-95">
-              
-              {/* CABEÇALHO DO MODAL DE CONCILIAÇÃO */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                    <SlidersHorizontal size={22} />
+        {/* MODAL DE SELEÇÃO DE DESTINO PARA IMPORTAR BENEFÍCIOS (PDF) */}
+        {isBenefitModalOpen && (
+          <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                    <Gift size={18} />
                   </div>
                   <div>
-                    <h4 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>Comparação Lado a Lado & Decisão de Valores</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 uppercase">
-                        {conflictingRows.length} Conflito{conflictingRows.length !== 1 ? 's' : ''}
-                      </span>
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white">
+                      Importar Benefícios (PDF)
                     </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Competência {selectedCompetencia.slice(0, 7)}: Foram detectados registros já existentes. Escolha individualmente se acata o novo valor extraído ou se mantém o atual do banco.
+                    <p className="text-[11px] text-slate-500">
+                      Qual coluna você deseja alimentar com este documento?
                     </p>
                   </div>
                 </div>
-
                 <button
                   type="button"
-                  onClick={() => setShowCorrectionModal(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                  onClick={() => setIsBenefitModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              {/* BARRA DE AÇÕES GLOBAIS RÁPIDAS */}
-              <div className="py-3 px-3 bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-200/80 dark:border-slate-800 my-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase">Decisão em Massa:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const allNew: Record<string, "ACCEPT_NEW" | "KEEP_DB"> = {};
-                      conflictingRows.forEach((c) => {
-                        allNew[c.row.id] = "ACCEPT_NEW";
-                      });
-                      setConflictDecisions(allNew);
-                    }}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xs"
-                  >
-                    Acatar Todos os Novos da Folha
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const allDb: Record<string, "ACCEPT_NEW" | "KEEP_DB"> = {};
-                      conflictingRows.forEach((c) => {
-                        allDb[c.row.id] = "KEEP_DB";
-                      });
-                      setConflictDecisions(allDb);
-                    }}
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xs"
-                  >
-                    Manter Todos Atuais do DB
-                  </button>
-                </div>
-
-                <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">
-                    {Object.values(conflictDecisions).filter((d) => d === "ACCEPT_NEW").length} Novos
-                  </span>{" "}
-                  •{" "}
-                  <span className="text-amber-700 dark:text-amber-400 font-bold">
-                    {Object.values(conflictDecisions).filter((d) => d === "KEEP_DB").length} Mantidos do DB
-                  </span>
-                </div>
-              </div>
-
-              {/* LISTA COMPARATIVA LADO A LADO POR COLABORADOR */}
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                {conflictingRows.map(({ row, existingCost }) => {
-                  const decision = conflictDecisions[row.id] || "ACCEPT_NEW";
-                  
-                  // Valores Atuais no Banco
-                  const dbFixo = existingCost.valor_fixo || 0;
-                  const dbProventos = existingCost.valor_holerite || (dbFixo + (existingCost.valor_hora_extra || 0) + (existingCost.valor_adicional_not || 0));
-                  const dbDescontos = existingCost.valor_descontos || 0;
-                  const dbLiqFolha = Math.max(0, dbProventos - dbDescontos);
-                  const dbAdiantamento = existingCost.valor_adiantamento || 0;
-                  const dbBeneficios = (existingCost.valor_vt || 0) + (existingCost.valor_cesta || 0) + (existingCost.valor_vr || 0) + (existingCost.valor_bonus || 0) + (existingCost.valor_ajuda_custo || 0);
-                  const dbTotalPago = (existingCost.valor_liquido || 0) + (existingCost.vinculo_tipo === 'CLT' && existingCost.valor_liquido === dbLiqFolha ? dbAdiantamento : 0);
-
-                  // Novos Valores Extraídos
-                  const newFixo = row.valor_fixo || 0;
-                  const newProventos = (row.valor_holerite || (newFixo + row.valor_hora_extra + row.valor_adicional_not)) + (row.valor_outros_recebidos || 0);
-                  const newDescontos = row.valor_descontos || 0;
-                  const newLiqFolha = Math.max(0, newProventos - newDescontos);
-                  const newAdiantamento = row.valor_adiantamento || 0;
-                  const newBeneficios = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
-                  const newTotalPago = newLiqFolha + newAdiantamento + newBeneficios;
-
-                  return (
-                    <div
-                      key={row.id}
-                      className={`p-4 rounded-2xl border transition-all ${
-                        decision === "ACCEPT_NEW"
-                          ? "bg-emerald-50/20 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800"
-                          : "bg-amber-50/20 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800"
-                      }`}
-                    >
-                      {/* HEADER DO CARD DO COLABORADOR */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-xs text-slate-900 dark:text-white uppercase tracking-tight">
-                              {row.employeeName}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {row.documentId ? `CPF: ${row.documentId}` : "CLT"}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                            Cargo: {row.cargo || "Colaborador"} • Origem DB: {existingCost.origem || "Histórico"}
-                          </p>
-                        </div>
-
-                        {/* SELETOR DE DECISÃO */}
-                        <div className="flex items-center gap-1.5 self-start sm:self-auto bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setConflictDecisions((prev) => ({
-                                ...prev,
-                                [row.id]: "ACCEPT_NEW",
-                              }))
-                            }
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
-                              decision === "ACCEPT_NEW"
-                                ? "bg-emerald-600 text-white shadow-xs"
-                                : "text-slate-600 dark:text-slate-400 hover:text-emerald-700"
-                            }`}
-                          >
-                            <CheckCircle2 size={13} />
-                            <span>Acatar Novo da Folha</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setConflictDecisions((prev) => ({
-                                ...prev,
-                                [row.id]: "KEEP_DB",
-                              }))
-                            }
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
-                              decision === "KEEP_DB"
-                                ? "bg-amber-600 text-white shadow-xs"
-                                : "text-slate-600 dark:text-slate-400 hover:text-amber-700"
-                            }`}
-                          >
-                            <Database size={13} />
-                            <span>Manter Atual do DB</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* GRADE COMPARATIVA LADO A LADO */}
-                      <div className="mt-3 overflow-x-auto">
-                        <table className="w-full text-xs text-left">
-                          <thead>
-                            <tr className="text-[10px] font-black uppercase text-slate-400 border-b border-slate-200/50">
-                              <th className="py-1">Pilar / Rubrica</th>
-                              <th className="py-1 text-right text-slate-600 dark:text-slate-400">Atual no Banco (DB)</th>
-                              <th className="py-1 text-right text-emerald-700 dark:text-emerald-400">Novo Extraído (Folha)</th>
-                              <th className="py-1 text-right text-slate-500">Variação</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-[11px] tabular-nums font-semibold">
-                            <tr>
-                              <td className="py-1 text-slate-600 dark:text-slate-400">1. Salário Fixo / Base</td>
-                              <td className="py-1 text-right">{formatCurrency(dbFixo)}</td>
-                              <td className="py-1 text-right text-emerald-700 dark:text-emerald-400">{formatCurrency(newFixo)}</td>
-                              <td className="py-1 text-right text-slate-400">{formatCurrency(newFixo - dbFixo)}</td>
-                            </tr>
-                            <tr>
-                              <td className="py-1 text-slate-600 dark:text-slate-400">1. Proventos Brutos da Folha</td>
-                              <td className="py-1 text-right">{formatCurrency(dbProventos)}</td>
-                              <td className="py-1 text-right text-emerald-700 dark:text-emerald-400">{formatCurrency(newProventos)}</td>
-                              <td className="py-1 text-right text-slate-400">{formatCurrency(newProventos - dbProventos)}</td>
-                            </tr>
-                            <tr>
-                              <td className="py-1 text-rose-600 dark:text-rose-400">2. Descontos em Folha</td>
-                              <td className="py-1 text-right text-rose-600">-{formatCurrency(dbDescontos)}</td>
-                              <td className="py-1 text-right text-rose-600">-{formatCurrency(newDescontos)}</td>
-                              <td className="py-1 text-right text-slate-400">{formatCurrency(newDescontos - dbDescontos)}</td>
-                            </tr>
-                            <tr>
-                              <td className="py-1 text-slate-800 dark:text-slate-200 font-bold">3. Salário Líquido da Folha</td>
-                              <td className="py-1 text-right font-bold">{formatCurrency(dbLiqFolha)}</td>
-                              <td className="py-1 text-right text-emerald-700 dark:text-emerald-400 font-bold">{formatCurrency(newLiqFolha)}</td>
-                              <td className="py-1 text-right text-slate-400">{formatCurrency(newLiqFolha - dbLiqFolha)}</td>
-                            </tr>
-                            <tr>
-                              <td className="py-1 text-blue-600 dark:text-blue-400">4. Adiantamento Salarial</td>
-                              <td className="py-1 text-right text-blue-600">+{formatCurrency(dbAdiantamento)}</td>
-                              <td className="py-1 text-right text-blue-600">+{formatCurrency(newAdiantamento)}</td>
-                              <td className="py-1 text-right text-slate-400">{formatCurrency(newAdiantamento - dbAdiantamento)}</td>
-                            </tr>
-                            <tr>
-                              <td className="py-1 text-emerald-600 dark:text-emerald-400">4. Benefícios Extras (VT, VR, Bônus)</td>
-                              <td className="py-1 text-right text-emerald-600">+{formatCurrency(dbBeneficios)}</td>
-                              <td className="py-1 text-right text-emerald-600">+{formatCurrency(newBeneficios)}</td>
-                              <td className="py-1 text-right text-slate-400">{formatCurrency(newBeneficios - dbBeneficios)}</td>
-                            </tr>
-                            <tr className="bg-slate-100/60 dark:bg-slate-800/40 font-black text-xs">
-                              <td className="py-1.5 text-slate-900 dark:text-white uppercase">5. Total Pago ao Colaborador</td>
-                              <td className="py-1.5 text-right text-slate-900 dark:text-white">{formatCurrency(dbTotalPago)}</td>
-                              <td className="py-1.5 text-right text-emerald-600 dark:text-emerald-400">{formatCurrency(newTotalPago)}</td>
-                              <td className="py-1.5 text-right text-emerald-700 dark:text-emerald-300 font-extrabold">
-                                {formatCurrency(newTotalPago - dbTotalPago)}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
+              <div className="grid grid-cols-1 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleOpenBenefitImport("VT")}
+                  className="p-3 text-left rounded-2xl border-2 border-emerald-500/30 hover:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 hover:bg-emerald-50 transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🚌</span>
+                    <div>
+                      <span className="text-xs font-black text-slate-900 dark:text-white block group-hover:text-emerald-700">
+                        Vale Transporte (VT)
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Alimenta a coluna <strong>+ VT</strong> (recargas Sodexo, Top, passagens)
+                      </span>
                     </div>
-                  );
-                })}
+                  </div>
+                  <ArrowRight size={16} className="text-emerald-600 shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenBenefitImport("VR_CESTA")}
+                  className="p-3 text-left rounded-2xl border-2 border-amber-500/30 hover:border-amber-500 bg-amber-50/50 dark:bg-amber-950/30 hover:bg-amber-50 transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🍽️</span>
+                    <div>
+                      <span className="text-xs font-black text-slate-900 dark:text-white block group-hover:text-amber-700">
+                        Vale Refeição / Cesta Básica
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Alimenta a coluna <strong>+ VR / Cesta</strong> (Flash, Sodexo, Alelo)
+                      </span>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-amber-600 shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenBenefitImport("BONUS")}
+                  className="p-3 text-left rounded-2xl border-2 border-indigo-500/30 hover:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 hover:bg-indigo-50 transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🎁</span>
+                    <div>
+                      <span className="text-xs font-black text-slate-900 dark:text-white block group-hover:text-indigo-700">
+                        Bônus
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Alimenta a coluna <strong>+ Bônus</strong> (metas e bonificações)
+                      </span>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-indigo-600 shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenBenefitImport("PREMIACAO")}
+                  className="p-3 text-left rounded-2xl border-2 border-teal-500/30 hover:border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 hover:bg-teal-50 transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🏆</span>
+                    <div>
+                      <span className="text-xs font-black text-slate-900 dark:text-white block group-hover:text-teal-700">
+                        Premiação
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Alimenta a coluna <strong>+ Premiação</strong> (campanhas e incentivos)
+                      </span>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-teal-600 shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenBenefitImport("OUTROS")}
+                  className="p-3 text-left rounded-2xl border-2 border-slate-300 dark:border-slate-700 hover:border-slate-500 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">➕</span>
+                    <div>
+                      <span className="text-xs font-black text-slate-900 dark:text-white block group-hover:text-slate-800 dark:group-hover:text-slate-200">
+                        Outros Recebidos
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Alimenta a coluna <strong>+ Outros</strong> (ajudas de custo, reembolsos)
+                      </span>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-slate-600 shrink-0" />
+                </button>
               </div>
 
-              {/* RODAPÉ DO MODAL DE DECISÕES */}
-              <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-                <span className="text-xs text-slate-500">
-                  Total de <strong>{conflictingRows.length}</strong> decisões prontas para gravação com rastreabilidade auditada.
-                </span>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setShowCorrectionModal(false)}
-                    className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all"
-                  >
-                    Cancelar e Revisar no Grid
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleConfirmConflictDecisions}
-                    className="flex-1 sm:flex-none px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2"
-                  >
-                    <Check size={16} />
-                    <span>Confirmar e Gravar Decisões</span>
-                  </button>
-                </div>
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => setIsBenefitModalOpen(false)}
+                  className="text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                >
+                  Cancelar
+                </button>
               </div>
-
             </div>
           </div>
         )}
