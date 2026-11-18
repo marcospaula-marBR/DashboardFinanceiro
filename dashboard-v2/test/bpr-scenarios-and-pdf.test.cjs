@@ -673,4 +673,41 @@ const afterOutros = applyBenefitToRow(baseRow, 'OUTROS', 350);
 assert.strictEqual(afterOutros.valor_outros_recebidos, 350);
 console.log('   ✅ Todas as 5 categorias de benefícios alimentam as colunas corretas com isolamento perfeito.');
 
+// 16. Testando Equação Unificada com Adiantamento Salarial Recomposto
+console.log('\n16. Testando Equação Unificada com Adiantamento Salarial (desc.adiant.salarial)...');
+function calculateUnifiedEquationWithAdiantamento(row) {
+  const proventos = Number(row.valor_holerite || row.valor_fixo || 0);
+  const outros = Number(row.valor_outros_recebidos || 0);
+  const vt = Number(row.valor_vt || 0);
+  const vrCesta = Number(row.valor_cesta || 0);
+  const bonus = Number(row.valor_bonus || 0);
+  const premiacao = Number(row.valor_premiacao || 0);
+  const adiantamento = Number(row.valor_adiantamento || 0);
+
+  const subtotal = proventos + outros + vt + vrCesta + bonus + premiacao;
+  const descontos = Number(row.valor_descontos || 0);
+  const liquido = subtotal - descontos + adiantamento;
+
+  return { subtotal, liquido };
+}
+
+// Exemplo Bruno Viana: Proventos 1984.89, Descontos 993.07 (que contém desc. adiantamento 739.92), Adiantamento 739.92
+const brunoSample = {
+  valor_holerite: 1984.89,
+  valor_outros_recebidos: 0,
+  valor_vt: 421.60,
+  valor_cesta: 320.00,
+  valor_bonus: 0,
+  valor_premiacao: 320.00,
+  valor_descontos: 993.07,
+  valor_adiantamento: 739.92
+};
+
+const brunoRes = calculateUnifiedEquationWithAdiantamento(brunoSample);
+// Subtotal = 1984.89 + 0 + 421.60 + 320 + 0 + 320 = 3046.49
+assert.strictEqual(Math.round(brunoRes.subtotal * 100) / 100, 3046.49);
+// Líquido = 3046.49 - 993.07 + 739.92 = 2793.34
+assert.strictEqual(Math.round(brunoRes.liquido * 100) / 100, 2793.34);
+console.log('   ✅ Equação unificada com Adiantamento Salarial recomposto validada centavo a centavo.');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

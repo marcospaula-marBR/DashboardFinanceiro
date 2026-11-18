@@ -41,6 +41,7 @@ import { findBestNameMatch } from "@/utils/nameSimilarity";
 import { PeopleHRService } from "@/services/people-hr.service";
 import { Employee, MonthlyCost } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
+import { supabase } from "@/lib/supabase";
 
 export interface StagingCostRow {
   id: string; // ID temporário no staging
@@ -141,6 +142,9 @@ export function CostImportStagingModal({
 
   // Modo Tela Cheia (Fullscreen)
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Empresa da Folha de Pagamento / Lote
+  const [selectedEmpresa, setSelectedEmpresa] = useState<string>("DZM");
 
   // Modal de seleção da coluna de benefício a importar
   const [isBenefitModalOpen, setIsBenefitModalOpen] = useState(false);

@@ -403,6 +403,11 @@ export function CompetenciasCostsListModal({
       totalPjBonusComissao,
       totalPjDeducoesGlosas,
       totalPjLiquido,
+      totalSubtotal: totalProventosBrutos + totalOutrosProventos + totalVtRecarga + totalVrCesta + totalBonus + totalAjudaCusto,
+      totalOutrosRecebidos: totalOutrosProventos,
+      totalVt: totalVtRecarga,
+      totalPremiacao: totalAjudaCusto,
+      totalAdiantamento: totalAdiantamentoSalarial,
     };
   }, [filteredRows]);
 
@@ -1682,86 +1687,76 @@ export function CompetenciasCostsListModal({
             </button>
           </div>
 
-          {/* 5 Cards Executivos de Totalizadores */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            {/* Card 1: Contratados */}
-            <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                <Users size={16} />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block truncate">Contratados</span>
-                <span className="text-sm font-black text-slate-800 dark:text-slate-200 block">
-                  {summaryTotals.uniqueEmployeesCount}
-                </span>
-                <span className="text-[9px] text-slate-400 font-bold block truncate">
-                  {summaryTotals.countClt} CLT • {summaryTotals.countPj} PJ
-                </span>
-              </div>
+          {/* 10 Cards Executivos Unificados (Idênticos à Central de Ingestão) */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
+            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+              <span className="text-[9px] font-black text-slate-500 uppercase block truncate">1. Proventos (Folha)</span>
+              <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums block truncate">
+                {showValues ? formatCurrency(summaryTotals.totalProventosBrutos) : '••••'}
+              </span>
             </div>
 
-            {/* Card 2: Proventos de Folha */}
-            <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                <Coins size={16} />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block truncate">Proventos Folha (Bruto)</span>
-                <span className="text-sm font-black text-emerald-800 dark:text-emerald-300 tabular-nums block">
-                  {showValues ? formatCurrency(summaryTotals.totalProventosBrutos) : '••••'}
-                </span>
-                <span className="text-[9px] text-slate-400 font-bold block truncate">
-                  Fixo + HE + 13º/Férias
-                </span>
-              </div>
+            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/50">
+              <span className="text-[9px] font-black text-blue-600 uppercase block truncate">2. + Outros</span>
+              <span className="text-xs sm:text-sm font-black text-blue-700 dark:text-blue-300 tabular-nums block truncate">
+                +{showValues ? formatCurrency(summaryTotals.totalOutrosProventos) : '••••'}
+              </span>
             </div>
 
-            {/* Card 3: Descontos de Folha */}
-            <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                <Receipt size={16} />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-wider block truncate">Descontos Folha</span>
-                <span className="text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums block">
-                  -{showValues ? formatCurrency(summaryTotals.totalDescontosFolha) : '••••'}
-                </span>
-                <span className="text-[9px] text-slate-400 font-bold block truncate">
-                  Líq. Folha: {showValues ? formatCurrency(summaryTotals.folhaLiquidaClt) : '••••'}
-                </span>
-              </div>
+            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
+              <span className="text-[9px] font-black text-emerald-600 uppercase block truncate">3. + VT</span>
+              <span className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums block truncate">
+                +{showValues ? formatCurrency(summaryTotals.totalVtRecarga) : '••••'}
+              </span>
             </div>
 
-            {/* Card 4: Extra-Folha & Benefícios */}
-            <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                <DollarSign size={16} />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[9px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-wider block truncate">Extra-Folha & Benefícios</span>
-                <span className="text-sm font-black text-blue-800 dark:text-blue-300 tabular-nums block">
-                  +{showValues ? formatCurrency(summaryTotals.totalExtraFolha) : '••••'}
-                </span>
-                <span className="text-[9px] text-slate-400 font-bold block truncate">
-                  Adiant. + VT + VR + Bônus
-                </span>
-              </div>
+            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-900/50">
+              <span className="text-[9px] font-black text-amber-600 uppercase block truncate">4. + VR / Cesta</span>
+              <span className="text-xs sm:text-sm font-black text-amber-700 dark:text-amber-300 tabular-nums block truncate">
+                +{showValues ? formatCurrency(summaryTotals.totalVrCesta) : '••••'}
+              </span>
             </div>
 
-            {/* Card 5: Total Real Desembolsado */}
-            <div className="bg-emerald-50/60 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-200/80 dark:border-emerald-800 flex items-center gap-2.5 col-span-2 sm:col-span-1">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
-                <Wallet size={16} />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block truncate">Total Desembolsado</span>
-                <span className="text-sm font-black text-emerald-800 dark:text-emerald-300 tabular-nums block">
-                  {showValues ? formatCurrency(summaryTotals.totalGeral) : '••••'}
-                </span>
-                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold block truncate">
-                  Líq. + Extra + PJ
-                </span>
-              </div>
+            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-sky-200 dark:border-sky-900/50">
+              <span className="text-[9px] font-black text-sky-600 uppercase block truncate">5. + Bônus</span>
+              <span className="text-xs sm:text-sm font-black text-sky-700 dark:text-sky-300 tabular-nums block truncate">
+                +{showValues ? formatCurrency(summaryTotals.totalBonus) : '••••'}
+              </span>
+            </div>
+
+            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-teal-200 dark:border-teal-900/50">
+              <span className="text-[9px] font-black text-teal-600 uppercase block truncate">6. + Premiação</span>
+              <span className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 tabular-nums block truncate">
+                +{showValues ? formatCurrency(summaryTotals.totalAjudaCusto) : '••••'}
+              </span>
+            </div>
+
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl border-2 border-blue-400 dark:border-blue-700 shadow-2xs">
+              <span className="text-[9px] font-black text-blue-800 dark:text-blue-300 uppercase block truncate">= Subtotal</span>
+              <span className="text-xs sm:text-sm font-black text-blue-900 dark:text-blue-200 tabular-nums block truncate">
+                {showValues ? formatCurrency(summaryTotals.totalSubtotal || (summaryTotals.totalProventosBrutos + summaryTotals.totalOutrosProventos + summaryTotals.totalVtRecarga + summaryTotals.totalVrCesta + summaryTotals.totalBonus + summaryTotals.totalAjudaCusto)) : '••••'}
+              </span>
+            </div>
+
+            <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-300 dark:border-rose-800">
+              <span className="text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase block truncate">(-) Desc. Folha</span>
+              <span className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums block truncate">
+                -{showValues ? formatCurrency(summaryTotals.totalDescontosFolha) : '••••'}
+              </span>
+            </div>
+
+            <div className="p-2 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-800">
+              <span className="text-[9px] font-black text-amber-700 dark:text-amber-400 uppercase block truncate">(+) Adiantamento</span>
+              <span className="text-xs sm:text-sm font-black text-amber-700 dark:text-amber-400 tabular-nums block truncate">
+                +{showValues ? formatCurrency(summaryTotals.totalAdiantamentoSalarial) : '••••'}
+              </span>
+            </div>
+
+            <div className="p-2 bg-emerald-100/80 dark:bg-emerald-950/80 rounded-xl border-2 border-emerald-500 dark:border-emerald-600 shadow-sm">
+              <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 uppercase block truncate">= Líquido</span>
+              <span className="text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-200 tabular-nums block truncate">
+                {showValues ? formatCurrency(summaryTotals.totalGeral) : '••••'}
+              </span>
             </div>
           </div>
         </div>
@@ -1901,42 +1896,54 @@ export function CompetenciasCostsListModal({
                     </div>
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
-                    Salário / Fixo
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 text-right bg-slate-500/10 rounded-t whitespace-nowrap">
+                    Proventos
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
-                    Adiantamento
+                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 text-right bg-blue-500/10 rounded-t whitespace-nowrap">
+                    + Outros
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
-                    HE & Noturno
+                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 text-right bg-emerald-500/10 rounded-t whitespace-nowrap">
+                    + VT
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
-                    Benefícios
+                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 text-right bg-amber-500/10 rounded-t whitespace-nowrap">
+                    + VR / Cesta
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
-                    13º & Férias
+                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300 text-right bg-sky-500/10 rounded-t whitespace-nowrap">
+                    + Bônus
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right whitespace-nowrap">
-                    Descontos
+                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300 text-right bg-teal-500/10 rounded-t whitespace-nowrap">
+                    + Premiação
+                  </th>
+
+                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-200 text-right bg-blue-500/20 whitespace-nowrap">
+                    = Subtotal
+                  </th>
+
+                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-rose-600 text-right bg-rose-500/10 rounded-t whitespace-nowrap">
+                    (-) Desc. Folha
+                  </th>
+
+                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 text-right bg-amber-500/10 rounded-t whitespace-nowrap">
+                    (+) Adiantamento
                   </th>
 
                   <th 
                     onClick={() => toggleSort('total')}
-                    className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 text-right cursor-pointer select-none whitespace-nowrap"
+                    className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 text-right bg-emerald-500/20 cursor-pointer select-none whitespace-nowrap"
                   >
                     <div className="flex items-center justify-end gap-1.5">
-                      Total Real
+                      = Líquido
                       <ArrowUpDown size={12} className={sortField === 'total' ? 'text-emerald-600' : 'opacity-40'} />
                     </div>
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center whitespace-nowrap">
-                    Origem
+                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center whitespace-nowrap">
+                    Vínculo
                   </th>
 
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-900 shadow-2xs whitespace-nowrap">
@@ -2026,86 +2033,123 @@ export function CompetenciasCostsListModal({
                         </div>
                       </td>
 
-                      {/* Salário / Fixo */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                        {showValues ? formatCurrency(fixo) : '••••••'}
+                      {/* Proventos */}
+                      <td className="px-3 py-3 align-middle text-right tabular-nums font-semibold text-slate-800 dark:text-slate-200 bg-slate-500/5 whitespace-nowrap">
+                        {showValues ? formatCurrency(Number(cost.valor_holerite || cost.valor_fixo || (isCLT ? fixo : realTotal) || 0)) : '••••••'}
                       </td>
 
-                      {/* Adiantamento */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
-                        {cost.valor_adiantamento && cost.valor_adiantamento > 0 ? (
-                          <span className="font-bold text-blue-600 dark:text-blue-400 block">
-                            +{showValues ? formatCurrency(cost.valor_adiantamento) : '••••'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700 block">—</span>
-                        )}
-                        {cost.outros_ajustes && cost.outros_ajustes > 0 ? (
-                          <span className="block text-[9px] text-slate-400 font-normal">
-                            Outros: +{showValues ? formatCurrency(cost.outros_ajustes) : '••••'}
-                          </span>
-                        ) : null}
-                      </td>
-
-                      {/* HE & Noturno */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
-                        {heNoturno > 0 ? (
-                          <span className="font-bold text-amber-600 dark:text-amber-400">
-                            +{showValues ? formatCurrency(heNoturno) : '••••'}
+                      {/* + Outros */}
+                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-blue-500/5 whitespace-nowrap">
+                        {Number(cost.outros_ajustes || heNoturno || 0) > 0 ? (
+                          <span className="font-bold text-blue-700 dark:text-blue-300">
+                            +{showValues ? formatCurrency(Number(cost.outros_ajustes || heNoturno || 0)) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
                         )}
                       </td>
 
-                      {/* Benefícios */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
-                        {beneficios > 0 ? (
-                          <span className="font-bold text-cyan-700 dark:text-cyan-400">
-                            +{showValues ? formatCurrency(beneficios) : '••••'}
+                      {/* + VT */}
+                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-emerald-500/5 whitespace-nowrap">
+                        {Number(cost.valor_vt || 0) > 0 ? (
+                          <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                            +{showValues ? formatCurrency(Number(cost.valor_vt || 0)) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
                         )}
                       </td>
 
-                      {/* 13º & Férias */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
-                        {decimoFerias > 0 ? (
-                          <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                            +{showValues ? formatCurrency(decimoFerias) : '••••'}
+                      {/* + VR / Cesta */}
+                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-amber-500/5 whitespace-nowrap">
+                        {Number((cost.valor_cesta || 0) + (cost.valor_vr || 0)) > 0 ? (
+                          <span className="font-bold text-amber-700 dark:text-amber-300">
+                            +{showValues ? formatCurrency(Number((cost.valor_cesta || 0) + (cost.valor_vr || 0))) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
                         )}
                       </td>
 
-                      {/* Descontos */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums whitespace-nowrap">
-                        {financials.descontosFolha > 0 ? (
+                      {/* + Bônus */}
+                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-sky-500/5 whitespace-nowrap">
+                        {Number(cost.valor_bonus || 0) > 0 ? (
+                          <span className="font-bold text-sky-700 dark:text-sky-300">
+                            +{showValues ? formatCurrency(Number(cost.valor_bonus || 0)) : '••••'}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-700">—</span>
+                        )}
+                      </td>
+
+                      {/* + Premiação */}
+                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-teal-500/5 whitespace-nowrap">
+                        {Number(cost.valor_ajuda_custo || cost.valor_incentivos || 0) > 0 ? (
+                          <span className="font-bold text-teal-700 dark:text-teal-300">
+                            +{showValues ? formatCurrency(Number(cost.valor_ajuda_custo || cost.valor_incentivos || 0)) : '••••'}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-700">—</span>
+                        )}
+                      </td>
+
+                      {/* = Subtotal */}
+                      <td className="px-3 py-3 align-middle text-right tabular-nums bg-blue-500/10 font-black text-blue-900 dark:text-blue-200 whitespace-nowrap">
+                        {(() => {
+                          const prov = Number(cost.valor_holerite || cost.valor_fixo || (isCLT ? fixo : realTotal) || 0);
+                          const out = Number(cost.outros_ajustes || heNoturno || 0);
+                          const v = Number(cost.valor_vt || 0);
+                          const vrC = Number((cost.valor_cesta || 0) + (cost.valor_vr || 0));
+                          const b = Number(cost.valor_bonus || 0);
+                          const p = Number(cost.valor_ajuda_custo || cost.valor_incentivos || 0);
+                          const subt = prov + out + v + vrC + b + p;
+                          return (
+                            <span className="inline-block px-2 py-0.5 rounded-lg bg-blue-100/70 dark:bg-blue-950/70 border border-blue-300 dark:border-blue-800">
+                              {showValues ? formatCurrency(subt) : '••••••'}
+                            </span>
+                          );
+                        })()}
+                      </td>
+
+                      {/* (-) Desc. Folha */}
+                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-rose-500/5 whitespace-nowrap">
+                        {Number(cost.valor_descontos || financials.descontosFolha || 0) > 0 ? (
                           <span className="font-bold text-rose-600 dark:text-rose-400">
-                            -{showValues ? formatCurrency(financials.descontosFolha) : '••••'}
+                            -{showValues ? formatCurrency(Number(cost.valor_descontos || financials.descontosFolha || 0)) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
                         )}
                       </td>
 
-                      {/* Total Real Desembolsado */}
-                      <td className="px-4 py-3 align-middle text-right tabular-nums whitespace-nowrap">
-                        <span className="inline-block px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-black text-xs shadow-2xs">
+                      {/* (+) Adiantamento */}
+                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-amber-500/5 whitespace-nowrap">
+                        {Number(cost.valor_adiantamento || 0) > 0 ? (
+                          <span className="font-bold text-amber-700 dark:text-amber-400">
+                            +{showValues ? formatCurrency(Number(cost.valor_adiantamento || 0)) : '••••'}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-700">—</span>
+                        )}
+                      </td>
+
+                      {/* = Líquido (Subtotal - Descontos + Adiantamento) */}
+                      <td className="px-3 py-3 align-middle text-right tabular-nums bg-emerald-500/15 whitespace-nowrap">
+                        <span className="inline-block px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-black text-xs shadow-2xs">
                           {showValues ? formatCurrency(realTotal) : '••••••'}
                         </span>
                       </td>
 
-                      {/* Origem */}
-                      <td className="px-3 py-3 align-middle text-center whitespace-nowrap">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200/50 dark:border-slate-700">
-                          {cost.origem === 'dianna_import' 
-                            ? 'Dianna' 
-                            : (cost.origem === 'dianna_batch_clt' 
-                              ? 'Folha CLT' 
-                              : (cost.origem || 'Manual'))}
+                      {/* Vínculo */}
+                      <td className="px-2 py-3 align-middle text-center whitespace-nowrap">
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                          isEstagio 
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-900' 
+                            : isCLT 
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-900'
+                        }`}>
+                          {isEstagio ? 'Estágio' : (isCLT ? 'CLT' : 'PJ')}
                         </span>
                       </td>
 

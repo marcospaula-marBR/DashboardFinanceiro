@@ -88,6 +88,7 @@ Instruções de Extração:
 Retorne obrigatoriamente um objeto JSON com o seguinte formato:
 {
   "competencia": "YYYY-MM-01",
+  "empresa": "DZM", // "DZM", "MarBR" ou "G2"
   "records": [
     {
       "matricula": "1",
@@ -187,6 +188,7 @@ Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos
 Analise este documento (PDF ou imagem) contendo o Extrato Mensal da folha de pagamento de múltiplos colaboradores (listagem celetista ou múltiplos recibos).
 
 Instruções de Extração:
+0. **Empresa Contratante**: Identifique a empresa empregadora / contratante no cabeçalho do documento (ex: 'D.Z.M. LTDA', 'DZM', 'MAR BRASIL', 'MARBR', 'G2', etc.) e retorne obrigatoriamente como 'DZM', 'MarBR' ou 'G2' no campo "empresa" no topo do JSON e no campo "empresa" de cada registro.
 1. **Competência**: Identifique a competência (mês/ano) da folha no cabeçalho do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho de 2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01').
 2. **Colaboradores**: Extraia os dados individuais de cada colaborador CLT celetista identificado no documento (identificado por 'Empr.:', 'Nome', 'CPF', etc.).
 3. **Verbas de Provento (Receita Bruta do Colaborador - uma por uma)**:
@@ -209,7 +211,7 @@ Instruções de Extração:
    - Empréstimo Consignado no campo "valor_consignado".
    - Pensão Alimentícia no campo "valor_pensao_alimenticia".
    - Desconto de Banco de Horas em "banco_horas" (em horas decimais).
-   - **Desconto de Adiantamento Salarial em Folha (CRUCIAL)**: Procure por rubricas de desconto de adiantamento ordinário da quinzena (como '981 DESC.ADIANT.SALARIAL', 'DESC. ADIANTAMENTO SALARIAL'). Capture no campo "desconto_adiantamento_folha" e no campo "valor_adiantamento".
+   - **Desconto de Adiantamento Salarial em Folha (CRUCIAL)**: Procure por rubricas de desconto de adiantamento ordinário da quinzena. ATENÇÃO ESTRITA: Capture única e exclusivamente a verba descrita expressamente como 'DESC.ADIANT.SALARIAL' ou código '981' (e mais nenhuma outra verba, como adiantamento de férias, empréstimos ou outros descontos). Capture no campo "desconto_adiantamento_folha" e no campo "valor_adiantamento". Se não houver expressamente 'DESC.ADIANT.SALARIAL', retorne obrigatoriamente 0.00.
      *ATENÇÃO RIGOROSA*: NUNCA capture adiantamento de férias como adiantamento salarial. Férias têm tratamento rescisório/gozo próprio em valor_ferias.
    - **Total de Descontos da Folha** no campo "valor_descontos" (soma exata de todos os descontos da folha, ex: '1.104,01').
    - Extraia a lista detalhada de cada desconto em "rubricas_descontos": [{"codigo": "998", "descricao": "INSS", "valor": 253.10}, ...].
