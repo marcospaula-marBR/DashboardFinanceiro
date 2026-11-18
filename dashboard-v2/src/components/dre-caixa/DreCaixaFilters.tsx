@@ -21,6 +21,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { DreCaixaFilters } from '@/types/dre-caixa';
+import { isContaCartaoOuBeneficio } from '@/services/dre-caixa.service';
 
 interface MultiSelectProps {
   label: string;
@@ -343,6 +344,20 @@ export function DreCaixaFiltersBar({
   const isAllEmpresas = filters.empresas.length === 0;
   const isAllPeriodos = filters.periodos.length === 0;
   const currentTipoPagamento = filters.tipoPagamento || 'TODOS';
+  const cardAccountsAvailable = (availableOptions.contasCorrentes || []).filter(c => isContaCartaoOuBeneficio(c));
+  const isSomenteCartoes =
+    cardAccountsAvailable.length > 0 &&
+    filters.contasCorrentes.length > 0 &&
+    cardAccountsAvailable.every(c => filters.contasCorrentes.includes(c)) &&
+    filters.contasCorrentes.every(c => isContaCartaoOuBeneficio(c));
+
+  const handleToggleSomenteCartoes = () => {
+    if (isSomenteCartoes) {
+      onChangeFilters({ ...filters, contasCorrentes: [] });
+    } else {
+      onChangeFilters({ ...filters, contasCorrentes: cardAccountsAvailable });
+    }
+  };
 
   return (
     <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 mb-6 shadow-sm">
@@ -570,6 +585,29 @@ export function DreCaixaFiltersBar({
             ⚡ Auditoria Rápida:
           </span>
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            {/* Botão Somente Cartões Corporativos & Flash */}
+            <button
+              type="button"
+              onClick={handleToggleSomenteCartoes}
+              disabled={cardAccountsAvailable.length === 0}
+              className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer disabled:opacity-50 ${
+                isSomenteCartoes
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-slate-400/30'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300'
+              }`}
+              title="Seleciona automaticamente todos os cartões corporativos e Flash da(s) empresa(s) filtrada(s)"
+            >
+              <CreditCard size={13} className={isSomenteCartoes ? 'text-emerald-400' : 'text-slate-600'} />
+              <span>Somente Cartões</span>
+              {cardAccountsAvailable.length > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  isSomenteCartoes ? 'bg-slate-700 text-emerald-300' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {cardAccountsAvailable.length}
+                </span>
+              )}
+            </button>
+
             {/* Botão Somente Recorrentes (Serviços e Estruturais contínuos, separando de parcelados) */}
             <button
               type="button"

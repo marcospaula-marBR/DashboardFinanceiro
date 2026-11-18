@@ -6,12 +6,14 @@ import {
   BprCamada, 
   BprLayerSummary, 
   BprCycle,
+  BprSavedScenario,
   BprSavedRun
 } from '@/types/bpr';
 import { supabase } from '@/lib/supabase';
 
 const BPR_STORAGE_KEY = 'marbrasil_bpr_config_v1';
 const BPR_RUNS_STORAGE_KEY = 'marbrasil_bpr_runs_history_v1';
+const BPR_SCENARIOS_STORAGE_KEY = 'marbrasil_bpr_scenarios_v2';
 
 export class BprService {
   
@@ -28,7 +30,9 @@ export class BprService {
         periodEndDate: `${year}-06-30`,
         paymentDate: `${year}-09-30`,
         totalPoolAmount: 100000,
+        splitMode: 'percentage',
         tierSplits: { E: 30, T: 40, O: 30 },
+        tierAmounts: { E: 30000, T: 40000, O: 30000 },
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -46,7 +50,9 @@ export class BprService {
         periodEndDate: `${year}-12-31`,
         paymentDate: `${year + 1}-03-31`,
         totalPoolAmount: 100000,
+        splitMode: 'percentage',
         tierSplits: { E: 30, T: 40, O: 30 },
+        tierAmounts: { E: 30000, T: 40000, O: 30000 },
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -63,7 +69,9 @@ export class BprService {
         periodEndDate: `${year}-12-31`,
         paymentDate: `${year}-12-31`,
         totalPoolAmount: 100000,
+        splitMode: 'percentage',
         tierSplits: { E: 30, T: 40, O: 30 },
+        tierAmounts: { E: 30000, T: 40000, O: 30000 },
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -411,39 +419,52 @@ export class BprService {
       }
     });
 
-    // 6. Rateio Financeiro por Camada
+    // 6. Rateio Financeiro por Camada (Porcentagem ou Valor Fixo R$)
+    const isAmountMode = config.splitMode === 'amount' && !!config.tierAmounts;
+    const effectiveTotalPool = isAmountMode 
+      ? Number(((config.tierAmounts?.E || 0) + (config.tierAmounts?.T || 0) + (config.tierAmounts?.O || 0)).toFixed(2))
+      : config.totalPoolAmount;
+
+    const layerAmountE = isAmountMode ? (config.tierAmounts?.E || 0) : (config.totalPoolAmount * config.tierSplits.E) / 100;
+    const layerAmountT = isAmountMode ? (config.tierAmounts?.T || 0) : (config.totalPoolAmount * config.tierSplits.T) / 100;
+    const layerAmountO = isAmountMode ? (config.tierAmounts?.O || 0) : (config.totalPoolAmount * config.tierSplits.O) / 100;
+
+    const layerPctE = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountE / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.E;
+    const layerPctT = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountT / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.T;
+    const layerPctO = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountO / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.O;
+
     const layers: Record<BprCamada, BprLayerSummary> = {
       E: {
         camada: 'E',
         label: 'Estratégico',
-        allocatedPercentage: config.tierSplits.E,
-        totalLayerAmount: (config.totalPoolAmount * config.tierSplits.E) / 100,
+        allocatedPercentage: layerPctE,
+        totalLayerAmount: Number(layerAmountE.toFixed(2)),
         eligibleCount: layerEligibleCounts.E,
         ineligibleCount: layerIneligibleCounts.E,
         amountPerEligible: layerEligibleCounts.E > 0 
-          ? Number(((config.totalPoolAmount * config.tierSplits.E) / 100 / layerEligibleCounts.E).toFixed(2)) 
+          ? Number((layerAmountE / layerEligibleCounts.E).toFixed(2)) 
           : 0
       },
       T: {
         camada: 'T',
         label: 'Tático',
-        allocatedPercentage: config.tierSplits.T,
-        totalLayerAmount: (config.totalPoolAmount * config.tierSplits.T) / 100,
+        allocatedPercentage: layerPctT,
+        totalLayerAmount: Number(layerAmountT.toFixed(2)),
         eligibleCount: layerEligibleCounts.T,
         ineligibleCount: layerIneligibleCounts.T,
         amountPerEligible: layerEligibleCounts.T > 0 
-          ? Number(((config.totalPoolAmount * config.tierSplits.T) / 100 / layerEligibleCounts.T).toFixed(2)) 
+          ? Number((layerAmountT / layerEligibleCounts.T).toFixed(2)) 
           : 0
       },
       O: {
         camada: 'O',
         label: 'Operacional/CLTs',
-        allocatedPercentage: config.tierSplits.O,
-        totalLayerAmount: (config.totalPoolAmount * config.tierSplits.O) / 100,
+        allocatedPercentage: layerPctO,
+        totalLayerAmount: Number(layerAmountO.toFixed(2)),
         eligibleCount: layerEligibleCounts.O,
         ineligibleCount: layerIneligibleCounts.O,
         amountPerEligible: layerEligibleCounts.O > 0 
-          ? Number(((config.totalPoolAmount * config.tierSplits.O) / 100 / layerEligibleCounts.O).toFixed(2)) 
+          ? Number((layerAmountO / layerEligibleCounts.O).toFixed(2)) 
           : 0
       }
     };
@@ -463,10 +484,10 @@ export class BprService {
       }
     });
 
-    const residualAmount = Math.max(0, config.totalPoolAmount - totalDistributed);
+    const residualAmount = Math.max(0, effectiveTotalPool - totalDistributed);
 
     return {
-      totalPoolAmount: config.totalPoolAmount,
+      totalPoolAmount: effectiveTotalPool,
       totalDistributedAmount: Number(totalDistributed.toFixed(2)),
       residualAmount: Number(residualAmount.toFixed(2)),
       totalCandidates: candidates.length,
@@ -553,17 +574,72 @@ export class BprService {
   }
 
   /**
-   * Salva um snapshot histórico de apuração
+   * Salva um cenário de apuração no cache local
    */
-  static async saveBprRunAsync(run: BprSavedRun): Promise<void> {
+  static saveScenario(scenario: BprSavedScenario): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const existing = this.loadSavedScenarios();
+      const updated = [scenario, ...existing.filter(s => s.id !== scenario.id)].slice(0, 50);
+      localStorage.setItem(BPR_SCENARIOS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+  }
+
+  /**
+   * Carrega a lista de cenários salvos
+   */
+  static loadSavedScenarios(): BprSavedScenario[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      const data = localStorage.getItem(BPR_SCENARIOS_STORAGE_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+      // Migração suave de histórico anterior se houver
+      const legacyRuns = localStorage.getItem(BPR_RUNS_STORAGE_KEY);
+      if (legacyRuns) {
+        const parsed = JSON.parse(legacyRuns);
+        return parsed.map((r: any) => ({
+          id: r.id,
+          name: r.name || 'Cenário Salvo',
+          studyDate: r.createdAt ? r.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          criteriaDescription: 'Critérios padrão do ciclo',
+          createdAt: r.createdAt || new Date().toISOString(),
+          config: r.config,
+          summary: {
+            ...r.summary,
+            residualAmount: 0,
+            totalCandidates: r.summary.totalEligible || 0,
+            totalIneligible: 0,
+            layers: {}
+          },
+          candidatesSnapshot: []
+        }));
+      }
+    } catch {}
+    return [];
+  }
+
+  /**
+   * Remove um cenário salvo do cache local
+   */
+  static deleteScenario(id: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const existing = this.loadSavedScenarios();
+      const updated = existing.filter(s => s.id !== id);
+      localStorage.setItem(BPR_SCENARIOS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+  }
+
+  /**
+   * Salva um cenário de forma assíncrona (LocalStorage + Supabase __SYSTEM_GLOBAL_CONFIG__)
+   */
+  static async saveScenarioAsync(scenario: BprSavedScenario): Promise<void> {
     if (typeof window === 'undefined') return;
     
     // 1. Salvar no LocalStorage
-    try {
-      const existing = this.loadSavedRuns();
-      const updated = [run, ...existing.filter(r => r.id !== run.id)].slice(0, 50);
-      localStorage.setItem(BPR_RUNS_STORAGE_KEY, JSON.stringify(updated));
-    } catch {}
+    this.saveScenario(scenario);
 
     // 2. Persistir no Supabase no registro global __SYSTEM_GLOBAL_CONFIG__
     try {
@@ -574,16 +650,17 @@ export class BprService {
         .maybeSingle();
 
       const existingMetadata = data?.metadata || {};
-      const currentRuns: BprSavedRun[] = existingMetadata.bpr_runs || [];
-      const mergedRuns = [run, ...currentRuns.filter(r => r.id !== run.id)].slice(0, 50);
+      const currentScenarios: BprSavedScenario[] = existingMetadata.bpr_scenarios || existingMetadata.bpr_runs || [];
+      const mergedScenarios = [scenario, ...currentScenarios.filter(s => s.id !== scenario.id)].slice(0, 50);
 
       await supabase
         .from('employees')
         .update({
           metadata: {
             ...existingMetadata,
-            bpr_runs: mergedRuns,
-            last_bpr_update: new Date().toISOString()
+            bpr_scenarios: mergedScenarios,
+            bpr_runs: mergedScenarios, // compatibilidade
+            last_bpr_scenario_update: new Date().toISOString()
           }
         })
         .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__');
@@ -593,14 +670,47 @@ export class BprService {
   }
 
   /**
-   * Carrega a lista de snapshots históricos de apuração
+   * Exclui um cenário de forma assíncrona (LocalStorage + Supabase)
    */
-  static loadSavedRuns(): BprSavedRun[] {
-    if (typeof window === 'undefined') return [];
+  static async deleteScenarioAsync(id: string): Promise<void> {
+    if (typeof window === 'undefined') return;
+    this.deleteScenario(id);
+
     try {
-      const data = localStorage.getItem(BPR_RUNS_STORAGE_KEY);
-      if (data) return JSON.parse(data);
-    } catch {}
-    return [];
+      const { data } = await supabase
+        .from('employees')
+        .select('metadata')
+        .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
+        .maybeSingle();
+
+      const existingMetadata = data?.metadata || {};
+      const currentScenarios: BprSavedScenario[] = existingMetadata.bpr_scenarios || existingMetadata.bpr_runs || [];
+      const filtered = currentScenarios.filter(s => s.id !== id);
+
+      await supabase
+        .from('employees')
+        .update({
+          metadata: {
+            ...existingMetadata,
+            bpr_scenarios: filtered,
+            bpr_runs: filtered,
+            last_bpr_scenario_update: new Date().toISOString()
+          }
+        })
+        .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__');
+    } catch (e) {
+      console.warn('Erro ao excluir cenário no Supabase', e);
+    }
+  }
+
+  /**
+   * Aliases para compatibilidade com BprSavedRun
+   */
+  static async saveBprRunAsync(run: any): Promise<void> {
+    return this.saveScenarioAsync(run);
+  }
+
+  static loadSavedRuns(): any[] {
+    return this.loadSavedScenarios();
   }
 }

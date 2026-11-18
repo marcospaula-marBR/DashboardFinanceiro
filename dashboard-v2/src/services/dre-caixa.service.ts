@@ -17,38 +17,161 @@ import {
 
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-const KNOWN_ACCOUNTS: Record<string, string> = {
-  '12291364271': 'Clara - Prestadores',
-  '7665602672': 'Bradesco - Cartão 8583/2192',
-  '7669310486': 'Sicredi - Cartão 0137/0129',
-  '7687200485': 'Elo - 9693',
-  '7769825595': 'Visa - 6391 BNDS',
-  '7918604403': 'Diretoria - 1924',
-  '12211377291': 'Omie.CASH - Cartão',
-  '7654276902': 'Caixinha Dinheiro',
+export const KNOWN_ACCOUNTS: Record<string, string> = {
+  // Mar Brasil
+  '7654276902': 'Caixinha',
   '7654276943': 'Omie.CASH',
   '7662736722': 'Bradesco',
   '7662737142': 'PagBank (PagSeguro)',
   '7662738731': 'Banco do Brasil',
   '7662742215': 'Itaú Unibanco',
   '7662747917': 'Sicredi',
+  '7665602672': 'Bradesco - Cartão 8583 / 2192',
+  '7669310486': 'Cartão - Sicredi 0137 / 0129',
   '7670894051': 'Flash - Prestadores',
+  '7687200485': 'Elo - 9693',
   '7687296428': 'PagSeguro - Pessoal',
   '7687299201': 'Flash - Funcionários',
-  '7701412641': 'Consórcio Contemplado',
-  '7721355816': 'Provisão Impostos',
-  '7721357315': 'Provisão 13º Salário',
-  '7721358027': 'Provisão Férias',
-  '7721360080': 'Provisão Contingências',
-  '7722457245': 'Investimentos Bradesco',
+  '7701412641': 'Consórcio Contemplado - Massey Ferguson',
+  '7721355816': 'Provisão - Impostos Trimestrais',
+  '7721357315': 'Provisão - 13o salário e encargos',
+  '7721358027': 'Provisão - Férias e encargos',
+  '7721360080': 'Provisão - Contingências',
+  '7722457245': 'Investimentos - Bradesco',
   '7727306587': 'Banco do Brasil - Investimentos',
   '7769416232': 'Sicredi - Investimentos',
-  '7845157479': 'Pri PF - Itaú',
+  '7769825595': 'Visa - 6391 BNDS',
+  '7845157479': 'Pri PF - Itaú Unibanco',
   '7845159602': 'Pri PF - Bradesco',
-  '7845161677': 'Pri PF - BB',
+  '7845161677': 'Pri PF - Banco do Brasil',
   '7845162357': 'Pri PF - Nubank',
-  '7845165094': 'Dauren PF - Itaú'
+  '7845165094': 'Dauren PF - Itaú Unibanco',
+  '7845166213': 'Dauren PF - Bradesco',
+  '7845167362': 'Dauren PF - Nubank',
+  '7854722119': 'Créditos - DZM',
+  '7854729147': 'Terceirização DZM',
+  '7854729354': 'Intermediação DZM',
+  '7918604403': 'Diretoria - 1924',
+  '12211377291': 'Omie.CASH - Cartão Omie',
+  '12211377371': 'Omie.CASH - Cartão Omie (Garantia)',
+  '12291364271': 'Clara - Prestadores',
+  '12340529395': 'Ourocard - 1405',
+  '12356684319': 'Pri Itaú 3182',
+  // DZM
+  '11336184940': 'Caixinha',
+  '11336185283': 'Omie.CASH',
+  '11342253946': 'Bradesco - DZM',
+  '11342254146': 'PagBank',
+  '11376418802': 'Bradesco - Visa 6827 / 1787',
+  '11382946596': 'Flash - Prestadores',
+  '11382947215': 'Flash - Funcionários',
+  '11407026355': 'Provisão - Impostos Trimestrais',
+  '11407027456': 'Provisão - 13o salário e encargos',
+  '11407027813': 'Provisão - Férias e encargos',
+  '11407033136': 'Provisão - Contingências',
+  '11432492826': 'Bradesco - DAUREN UNIPESSOAL LTDA',
+  '11437305971': 'Omie.CASH (Recebíveis de Cartões)',
+  '11491956521': 'Conta Gestão Click',
+  '11550021250': 'PagBank Pessoal',
+  '11563485368': 'Pri PF - Itaú Unibanco',
+  '11599289752': 'Sicredi - DZM',
+  '11615886788': 'Cartão G2 - 0021',
+  '11617365367': 'Omie.CASH - Cartão Omie',
+  '11617365735': 'Omie.CASH - Cartão Omie (Garantia)',
+  '11667394630': 'Bradesco - G2',
+  '11672312219': 'Dauren PF - Nubank',
+  '11674122399': 'Visa - G2',
+  '11678121338': 'Nubank - D.Z.M LTDA',
+  '11682709851': 'Investimentos Sicredi - DZM',
+  '11695465517': 'Pri PF - Itaú Unibanco',
+  '11704272090': 'Clara - Prestadores',
+  '11723376524': 'Bradesco - DZM - Investimento',
+  '11745251012': 'Diretoria - 1405',
+  '11758961141': 'Omie.CASH - (Recebíveis de Cartão (Z))',
+  // G2
+  '2510826184': 'Caixinha',
+  '2510826233': 'Omie.CASH',
+  '2510841995': 'Bradesco - G2',
+  '2511653449': 'Bradesco - 6277 / 8112',
+  '2511653916': 'MasterCard - Asaas',
+  '2515689855': 'PagSeguro - Pessoal',
+  '2516219502': 'Omie.CASH - Cartão Omie',
+  '2516219521': 'Omie.CASH - Cartão Omie (Garantia)',
+  '2517837273': 'Pri PF - Itaú Unibanco',
+  '2542958255': 'Omie.CASH - (Recebíveis de Cartão (Z))',
+  // Conectius
+  '2115786554': 'Caixinha',
+  '2115786872': 'Omie.CASH',
+  '2118266430': 'PagBank (PagSeguro)',
+  '2118309101': 'Bradesco',
+  '2121941303': 'Itaú Unibanco',
+  '2121945886': 'BNDES - 5821',
+  '2163170854': 'Omie.CASH - (Recebíveis de Cartão (Z))'
 };
+
+export const CARD_ACCOUNT_IDS: ReadonlySet<string> = new Set([
+  '7665602672',
+  '7669310486',
+  '7670894051',
+  '7687200485',
+  '7687299201',
+  '7769825595',
+  '7845167362',
+  '7918604403',
+  '12211377291',
+  '12211377371',
+  '12291364271',
+  '12340529395',
+  '12356684319',
+  '11376418802',
+  '11382946596',
+  '11382947215',
+  '11615886788',
+  '11617365367',
+  '11617365735',
+  '11672312219',
+  '11674122399',
+  '11704272090',
+  '11745251012',
+  '2511653449',
+  '2511653916',
+  '2516219502',
+  '2516219521',
+  '2121945886'
+]);
+
+const CARD_KEYWORDS = [
+  'cartão',
+  'cartao',
+  'clara',
+  'elo',
+  'sicredi 0137',
+  'visa',
+  'flash',
+  'diretoria - 1924',
+  'diretoria - 1405',
+  'ourocard',
+  'dauren pf - nubank',
+  '6277 / 8112',
+  '6827 / 1787',
+  'mastercard',
+  'bndes - 5821',
+  'pri itaú 3182',
+  'pri itau 3182'
+];
+
+export function isContaCartaoOuBeneficio(conta?: string | null, idCC?: string | null): boolean {
+  const idClean = String(idCC || '').trim();
+  if (idClean && CARD_ACCOUNT_IDS.has(idClean)) {
+    return true;
+  }
+  const ccLower = decodeHtmlEntities(String(conta || '')).toLowerCase().trim();
+  if (!ccLower) return false;
+  if (ccLower.includes('recebíveis de cart') || ccLower.includes('recebiveis de cart')) {
+    return false;
+  }
+  return CARD_KEYWORDS.some(kw => ccLower.includes(kw));
+}
 
 export function formatCurrencyBRL(val: number): string {
   return new Intl.NumberFormat('pt-BR', {
@@ -244,6 +367,7 @@ export class DreCaixaService {
           .gte('data_pagamento', '2025-06-01') // Trava mandatória: Omie utilizado apenas a partir de Junho/2025
           .neq('status', 'CANCELADO')
           .order('data_pagamento', { ascending: false })
+          .order('id', { ascending: true })
           .range(from, from + limit - 1);
 
         if (error) {
@@ -314,6 +438,15 @@ export class DreCaixaService {
         const obs = String(rawDet.observacao || raw.observacao || '').toLowerCase();
         const emp = normalizeEmpresa(item.empresa_nome);
 
+        // Resolução antecipada da Conta Corrente (identificação precisa de cartões corporativos e Flash)
+        const idCC = String(raw.id_conta_corrente || rawDet.nCodCC || raw.nCodCC || rawDet.cContaCorrente || '').trim();
+        let contaCorrente = KNOWN_ACCOUNTS[idCC] || rawDet.cContaCorrente || raw.cContaCorrente || 'Conta Principal';
+        if (!idCC || idCC === 'null' || idCC === 'undefined') {
+          contaCorrente = item.tipo_registro === 'MOVIMENTO' ? 'Extrato Bancário' : 'Conta Operacional';
+        }
+        contaCorrente = decodeHtmlEntities(contaCorrente);
+        const isCartao = isContaCartaoOuBeneficio(contaCorrente, idCC);
+
         // 1. REGRA: DESCONSIDERAR TRANSFERÊNCIAS
         // Filtra qualquer categoria iniciada por '0.' (ex: 0.01, 0.01.01), origens de transferência ou descrições
         const isTransferencia = 
@@ -337,66 +470,82 @@ export class DreCaixaService {
         // provisões, mútuos, rendimentos de aplicações,
         // renda fixa, recarga de cartão, integralização de capital, estornos, devoluções,
         // créditos mar Brasil, antecipações DZM, aporte de capital e a classificar
-        const isExcluidoCaixa =
-          catNomeLower.includes('provis') ||
-          obs.includes('provis') ||
-          catNomeLower.includes('mutuo') ||
-          catNomeLower.includes('mútuo') ||
-          obs.includes('mutuo') ||
-          obs.includes('mútuo') ||
-          catNomeLower.includes('rendimento') ||
-          obs.includes('rendimento') ||
-          catNomeLower.includes('renda fixa') ||
-          obs.includes('renda fixa') ||
-          catNomeLower.includes('recarga') ||
-          obs.includes('recarga') ||
-          catNomeLower.includes('integraliza') ||
-          obs.includes('integraliza') ||
-          catNomeLower.includes('estorno') ||
-          obs.includes('estorno') ||
-          catNomeLower.includes('devolu') ||
-          obs.includes('devolu') ||
-          catNomeLower.includes('créditos mar brasil') ||
-          catNomeLower.includes('creditos mar brasil') ||
-          catNomeLower.includes('crédito mar brasil') ||
-          catNomeLower.includes('credito mar brasil') ||
-          obs.includes('créditos mar brasil') ||
-          obs.includes('creditos mar brasil') ||
-          catNomeLower.includes('antecipa') ||
-          obs.includes('antecipa') ||
-          catNomeLower.includes('aporte') ||
-          obs.includes('aporte') ||
-          catNomeLower.includes('classificar') ||
-          obs.includes('classificar');
+        if (isCartao) {
+          // Na DZM Clara - Prestadores (11704272090), a rubrica 2.06.95 (IOF) não possui conta DRE vinculada no Omie
+          if (emp === 'DZM' && idCC === '11704272090' && catCodigo === '2.06.95') {
+            return;
+          }
+        } else {
+          const isExcluidoCaixa =
+            catNomeLower.includes('provis') ||
+            obs.includes('provis') ||
+            catNomeLower.includes('mutuo') ||
+            catNomeLower.includes('mútuo') ||
+            obs.includes('mutuo') ||
+            obs.includes('mútuo') ||
+            catNomeLower.includes('rendimento') ||
+            obs.includes('rendimento') ||
+            catNomeLower.includes('renda fixa') ||
+            obs.includes('renda fixa') ||
+            catNomeLower.includes('recarga') ||
+            obs.includes('recarga') ||
+            catNomeLower.includes('integraliza') ||
+            obs.includes('integraliza') ||
+            catNomeLower.includes('estorno') ||
+            obs.includes('estorno') ||
+            catNomeLower.includes('devolu') ||
+            obs.includes('devolu') ||
+            catNomeLower.includes('créditos mar brasil') ||
+            catNomeLower.includes('creditos mar brasil') ||
+            catNomeLower.includes('crédito mar brasil') ||
+            catNomeLower.includes('credito mar brasil') ||
+            obs.includes('créditos mar brasil') ||
+            obs.includes('creditos mar brasil') ||
+            catNomeLower.includes('antecipa') ||
+            obs.includes('antecipa') ||
+            catNomeLower.includes('aporte') ||
+            obs.includes('aporte') ||
+            catNomeLower.includes('classificar') ||
+            obs.includes('classificar');
 
-        if (isExcluidoCaixa) return;
-
-        // 4. REGRA DE CLASSIFICAÇÃO: ENTRADA (RECEITA) VS SAÍDA (PAGAMENTO)
-        const cNat = String(rawDet.cNatureza || '').toUpperCase();
-        let isEntrada = false;
-
-        if (item.tipo_registro === 'RECEBER') {
-          isEntrada = true;
-        } else if (cNat === 'R' || cGrupo.includes('REC') || cGrupo === 'CONTA_A_RECEBER' || cGrupo === 'CONTA_CORRENTE_REC') {
-          isEntrada = true;
-        } else if (catCodigo.startsWith('1.') || catNomeLower.includes('receita') || catNomeLower.includes('serviços prestados') || catNomeLower.includes('faturamento') || catNomeLower.includes('venda de')) {
-          isEntrada = true;
-        } else if (item.tipo_registro === 'MOVIMENTO' && Number(item.valor_total) > 0) {
-          isEntrada = true;
+          if (isExcluidoCaixa) return;
         }
 
-        const valRound = Math.round(Math.abs(Number(item.valor_alocado || item.valor_total || 0)) * 100) / 100;
+        // 4. REGRA DE CLASSIFICAÇÃO: ENTRADA (RECEITA) VS SAÍDA (PAGAMENTO) E ABATIMENTOS EM CARTÕES
+        const cNat = String(rawDet.cNatureza || '').toUpperCase();
+        const rawSignedVal = Number(item.valor_alocado ?? item.valor_total ?? 0);
+        const isEstornoCartao = isCartao && (cOrigem === 'EXTR' || cNat === 'R' || rawSignedVal > 0);
+        let isEntrada = false;
+
+        if (!isEstornoCartao) {
+          if (item.tipo_registro === 'RECEBER') {
+            isEntrada = true;
+          } else if (cNat === 'R' || cGrupo.includes('REC') || cGrupo === 'CONTA_A_RECEBER' || cGrupo === 'CONTA_CORRENTE_REC') {
+            isEntrada = true;
+          } else if (catCodigo.startsWith('1.') || catNomeLower.includes('receita') || catNomeLower.includes('serviços prestados') || catNomeLower.includes('faturamento') || catNomeLower.includes('venda de')) {
+            isEntrada = true;
+          } else if (item.tipo_registro === 'MOVIMENTO' && Number(item.valor_total) > 0) {
+            isEntrada = true;
+          }
+        }
+
+        const valRound = Math.round(Math.abs(rawSignedVal) * 100) / 100;
         if (valRound <= 0) return;
 
         const omieId = item.omie_id ? String(item.omie_id).trim() : '';
         const nCodTit = String(rawDet.nCodTitulo || '').trim();
         const depto = normalizeDepartamento(decodeHtmlEntities(normalizeProjectName(String(item.departamento_nome || ''))), false);
         const deptoLower = depto.toLowerCase();
-        const isMovimento = item.tipo_registro === 'MOVIMENTO' || !!rawDet.cOrigem || !!rawDet.nCodMovCC || (raw.resumo && !raw.codigo_lancamento_omie);
+        const isMovimento =
+          item.tipo_registro === 'MOVIMENTO' ||
+          (!isCartao &&
+            item.tipo_registro !== 'PAGAR' &&
+            item.tipo_registro !== 'RECEBER' &&
+            (!!rawDet.cOrigem || !!rawDet.nCodMovCC || (raw.resumo && !raw.codigo_lancamento_omie)));
 
         // 5. REGRA MANDATÓRIA: DESCARTE DE MOVIMENTO BANCÁRIO ESPELHO
         // Se um pagamento ou recebimento já existe como Título (CP/CR), o extrato bancário correspondente é descartado
-        if (isMovimento) {
+        if (!isCartao && isMovimento) {
           if (nCodTit && nCodTit !== '0') {
             const titleKey = `${emp}-${nCodTit}`;
             if (knownCpTitles.has(titleKey) || knownCpOmieIds.has(titleKey) || knownCrTitles.has(titleKey) || knownCrOmieIds.has(titleKey)) {
@@ -420,7 +569,9 @@ export class DreCaixaService {
         }
 
         // 7. DEDUPLICAÇÃO DE LINHA IDÊNTICA DE SINCRONIZAÇÃO
-        const lineKey = `${emp}__${omieId}__${depto}__${item.data_pagamento}__${valRound}__${isEntrada ? 'R' : 'P'}`;
+        const lineKey = isCartao
+          ? String(item.id)
+          : `${emp}__${omieId}__${depto}__${item.data_pagamento}__${valRound}__${isEntrada ? 'R' : 'P'}`;
         if (seenExactLines.has(lineKey)) {
           return;
         }
@@ -455,24 +606,18 @@ export class DreCaixaService {
           }
         } else {
           // Para Saídas / Despesas (PAGAR):
-          const sig = `${emp}-${omieId || nCodTit || item.id}-${item.data_pagamento}-${valRound}-${catCodigo}-${depto}`;
+          const sig = isCartao
+            ? String(item.id)
+            : `${emp}-${omieId || nCodTit || item.id}-${item.data_pagamento}-${valRound}-${catCodigo}-${depto}`;
           if (processedSignatures.has(sig)) return;
           processedSignatures.add(sig);
 
-          if (isMovimento && nCodTit && nCodTit !== '0') {
+          if (!isCartao && isMovimento && nCodTit && nCodTit !== '0') {
             const titleKey = `${emp}-${nCodTit}`;
             if (processedMovTitles.has(titleKey)) return;
             processedMovTitles.add(titleKey);
           }
         }
-
-        // Resolução da Conta Corrente
-        const idCC = String(raw.id_conta_corrente || rawDet.nCodCC || rawDet.cContaCorrente || '');
-        let contaCorrente = KNOWN_ACCOUNTS[idCC] || rawDet.cContaCorrente || raw.cContaCorrente || 'Conta Principal';
-        if (!idCC || idCC === 'null' || idCC === 'undefined') {
-          contaCorrente = item.tipo_registro === 'MOVIMENTO' ? 'Extrato Bancário' : 'Conta Operacional';
-        }
-        contaCorrente = decodeHtmlEntities(contaCorrente);
 
         // Resolução do Fornecedor / Cliente / Favorecido (ex: Funcionários e Fornecedores)
         const codigoCF = String(raw.codigo_cliente_fornecedor || rawDet.nCodCliente || '').trim();
@@ -490,9 +635,10 @@ export class DreCaixaService {
 
         const { periodo, periodoNum } = parsePeriodoFromDate(item.data_pagamento);
 
-        const valTotal = Math.abs(Number(item.valor_alocado || item.valor_total || 0));
+        const valTotal = Math.abs(rawSignedVal);
         const tipoFinal = isEntrada ? 'RECEBER' : 'PAGAR';
-        const sinal = isEntrada ? 1 : -1;
+        const valorForRecord = isEstornoCartao ? -valTotal : valTotal;
+        const sinalValor = isEntrada ? valTotal : isEstornoCartao ? valTotal : -valTotal;
 
         // Resolução Rigorosa do Setor (Coluna Projeto do Omie)
         const codProj = String(
@@ -644,8 +790,8 @@ export class DreCaixaService {
           omie_id: item.omie_id ? Number(item.omie_id) : null,
           tipo: tipoFinal,
           status: item.status || 'PAGO',
-          valor: valTotal,
-          sinal_valor: valTotal * sinal,
+          valor: valorForRecord,
+          sinal_valor: sinalValor,
           data_pagamento: item.data_pagamento,
           periodo,
           periodoNum,
@@ -1164,7 +1310,7 @@ export class DreCaixaService {
     selectedConta?: string,
     onlyCompras: boolean = false
   ): PurchasesAuditSummary {
-    const pagamentos = lancamentos.filter(l => l.sinal_valor < 0 || l.tipo === 'PAGAR');
+    const pagamentos = lancamentos.filter(l => l.tipo === 'PAGAR' || l.sinal_valor < 0);
 
     let totalGeralPago = 0;
     let totalCompras = 0;
@@ -1192,14 +1338,14 @@ export class DreCaixaService {
     let selContaCount = 0;
 
     pagamentos.forEach(item => {
-      const val = Math.abs(item.valor);
+      const val = item.tipo === 'PAGAR' ? item.valor : Math.abs(item.valor);
       const isRec = isDespesaRecorrente(item.categoria, item.conta_dre, item.fornecedor_cliente);
 
       // 1. Cartões e Meios de Pagamento: sempre apura todos os cartões para manter a visão comparativa e o seletor completo
       const cc = decodeHtmlEntities(item.conta_corrente || 'Conta Operacional');
       const ccLower = cc.toLowerCase();
       const isFlash = ccLower.includes('flash');
-      const isCartao = isFlash || ccLower.includes('cartão') || ccLower.includes('cartao') || ccLower.includes('clara') || ccLower.includes('elo') || ccLower.includes('sicredi') || ccLower.includes('visa');
+      const isCartao = isContaCartaoOuBeneficio(cc);
 
       if (!cartaoMap.has(cc)) {
         cartaoMap.set(cc, { total: 0, count: 0, isCartao, isFlash });

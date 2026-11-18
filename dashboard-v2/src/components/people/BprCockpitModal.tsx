@@ -1,20 +1,24 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Employee, MonthlyCost, normalizeCompanyName } from "@/types/loans";
 import { 
   BprRuleConfig, 
   BprCandidateResult, 
   BprCycle, 
   BprCamada, 
+  BprCalculationSummary,
+  BprSavedScenario,
   BprSavedRun 
 } from "@/types/bpr";
 import { BprService } from "@/services/bpr.service";
+import { BprPdfService, ScenarioComparisonItem, BprPdfMeta } from "@/services/bpr-pdf.service";
 import { formatCurrency } from "@/services/loans.service";
 import { 
   Award, X, CheckCircle2, AlertTriangle,
-  DollarSign, FileSpreadsheet, Save, FileUp, Sparkles, 
-  Search, Calendar, ArrowLeft
+  DollarSign, FileText, Printer, Download, Save, FileUp, Sparkles, 
+  Search, Calendar, ArrowLeft, FolderArchive, Scale, Trash2, 
+  RotateCcw, Check, Eye, HelpCircle
 } from "lucide-react";
 
 interface BprCockpitModalProps {
@@ -36,8 +40,8 @@ export function BprCockpitModal({
     return saved || BprService.getDefaultConfig('ciclo_1', new Date().getFullYear());
   });
 
-  // Modos de Visualização e Filtros da Tabela
-  const [statusFilter, setStatusFilter] = useState<'all' | 'eligible' | 'ineligible'>('all');
+  // Modos de Visualização e Filtros da Tabela - SEMPRE FOCAR EM ELEGÍVEIS LOGO AO ABRIR
+  const [statusFilter, setStatusFilter] = useState<'all' | 'eligible' | 'ineligible'>('eligible');
   const [camadaFilter, setCamadaFilter] = useState<'all' | BprCamada>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -49,6 +53,31 @@ export function BprCockpitModal({
   const [importedPatch, setImportedPatch] = useState<Partial<BprRuleConfig> | null>(null);
   const [isConfirmPatchOpen, setIsConfirmPatchOpen] = useState(false);
   const [saveSuccessToast, setSaveSuccessToast] = useState<string | null>(null);
+
+  // Cenários Salvos & Comparador
+  const [savedScenarios, setSavedScenarios] = useState<BprSavedScenario[]>([]);
+  const [isSaveScenarioModalOpen, setIsSaveScenarioModalOpen] = useState(false);
+  const [isSavedScenariosModalOpen, setIsSavedScenariosModalOpen] = useState(false);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+
+  // Campos do Modal de Salvar Cenário
+  const [scenarioNameInput, setScenarioNameInput] = useState('');
+  const [studyDateInput, setStudyDateInput] = useState(() => new Date().toISOString().slice(0, 10));
+  const [criteriaDescriptionInput, setCriteriaDescriptionInput] = useState('');
+
+  // Busca e Seleção na Central de Cenários
+  const [scenarioSearchQuery, setScenarioSearchQuery] = useState('');
+  const [selectedScenarioIdsForCompare, setSelectedScenarioIdsForCompare] = useState<string[]>([]);
+  const [compareOnlyDiffs, setCompareOnlyDiffs] = useState(false);
+  const [compareSearchQuery, setCompareSearchQuery] = useState('');
+
+  // Carrega cenários salvos ao abrir o modal
+  useEffect(() => {
+    if (isOpen) {
+      setSavedScenarios(BprService.loadSavedScenarios());
+      setStatusFilter('eligible'); // Garante foco em elegíveis ao abrir
+    }
+  }, [isOpen]);
 
   // Seletor de Empresas e Vínculos
   const availableCompanies = useMemo(() => {
@@ -65,9 +94,12 @@ export function BprCockpitModal({
     return BprService.calculateBpr(employees, monthlyCosts, config);
   }, [employees, monthlyCosts, config]);
 
-  // Validação da Soma de Splits (deve ser 100%)
+  // Validação da Soma de Splits ou Montante
+  const isAmountMode = config.splitMode === 'amount';
   const totalSplitPercent = config.tierSplits.E + config.tierSplits.T + config.tierSplits.O;
-  const isSplitValid = totalSplitPercent === 100;
+  const isSplitValid = isAmountMode 
+    ? (summary.totalPoolAmount > 0) 
+    : (totalSplitPercent === 100);
 
   // Atualização de Ciclo
   const handleCycleChange = (cycle: BprCycle) => {
@@ -120,75 +152,157 @@ export function BprCockpitModal({
     });
   }, [summary.candidates, statusFilter, camadaFilter, searchQuery]);
 
-  // Salvar Configuração
-  const handleSaveConfig = async () => {
+  // Resumo Dinâmico dos Critérios Ativos
+  const generateCurrentCriteriaSummary = () => {
+    const cycleLabel = config.cycle === 'ciclo_1' ? '1º Semestre' : config.cycle === 'ciclo_2' ? '2º Semestre' : 'Custom';
+    const splitDesc = config.splitMode === 'amount' && config.tierAmounts
+      ? `Rateio por Valor R$: Estratégico R$ ${config.tierAmounts.E.toLocaleString('pt-BR')}, Tático R$ ${config.tierAmounts.T.toLocaleString('pt-BR')}, Operacional R$ ${config.tierAmounts.O.toLocaleString('pt-BR')}`
+      : `Rateio Percentual: Estratégico ${config.tierSplits.E}%, Tático ${config.tierSplits.T}%, Operacional ${config.tierSplits.O}%`;
+    const glosaDesc = config.allowGlosados
+      ? `Glosados incluídos (${config.selectedGlosadosExceptions.length} exceções)`
+      : 'Glosados desclassificados';
+    const inativoDesc = config.allowInativos
+      ? `Inativos na data de pagamento incluídos (${config.selectedInativosExceptions.length} exceções)`
+      : 'Inativos desclassificados';
+    const empresasDesc = config.companiesFilter.length > 0 ? `Empresas: ${config.companiesFilter.join(', ')}` : 'Todas as empresas';
+    const vinculosDesc = config.linkTypesFilter.length > 0 ? `Vínculos: ${config.linkTypesFilter.join(', ')}` : 'Todos os regimes (CLT, PJ, etc.)';
+
+    return `Ciclo ${cycleLabel} ${config.year} | Montante R$ ${summary.totalPoolAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ${splitDesc} | ${glosaDesc} | ${inativoDesc} | ${empresasDesc} | ${vinculosDesc}`;
+  };
+
+  // Abrir Modal de Salvar Cenário
+  const handleOpenSaveScenarioModal = () => {
+    const defaultName = `Cenário BPR ${config.cycle === 'ciclo_1' ? '1º Sem' : config.cycle === 'ciclo_2' ? '2º Sem' : 'Estudo'} ${config.year} - ${new Date().toLocaleDateString('pt-BR')}`;
+    setScenarioNameInput(defaultName);
+    setStudyDateInput(new Date().toISOString().slice(0, 10));
+    setCriteriaDescriptionInput(generateCurrentCriteriaSummary());
+    setIsSaveScenarioModalOpen(true);
+  };
+
+  // Confirmar e Salvar Cenário
+  const handleConfirmSaveScenario = async () => {
+    if (!scenarioNameInput.trim()) return;
+
+    // Salva configuração ativa
     BprService.saveConfig(config);
 
-    const runSnapshot: BprSavedRun = {
-      id: `bpr-run-${Date.now()}`,
-      name: `Apuração BPR ${config.cycle === 'ciclo_1' ? '1º Sem' : config.cycle === 'ciclo_2' ? '2º Sem' : 'Custom'} ${config.year}`,
+    const newScenario: BprSavedScenario = {
+      id: `bpr-scen-${Date.now()}`,
+      name: scenarioNameInput.trim(),
+      studyDate: studyDateInput || new Date().toISOString().slice(0, 10),
+      criteriaDescription: criteriaDescriptionInput.trim() || generateCurrentCriteriaSummary(),
       createdAt: new Date().toISOString(),
-      config,
+      config: JSON.parse(JSON.stringify(config)),
       summary: {
         totalPoolAmount: summary.totalPoolAmount,
         totalDistributedAmount: summary.totalDistributedAmount,
+        residualAmount: summary.residualAmount,
+        totalCandidates: summary.totalCandidates,
         totalEligible: summary.totalEligible,
+        totalIneligible: summary.totalIneligible,
         amountPerE: summary.layers.E.amountPerEligible,
         amountPerT: summary.layers.T.amountPerEligible,
-        amountPerO: summary.layers.O.amountPerEligible
-      }
+        amountPerO: summary.layers.O.amountPerEligible,
+        layers: summary.layers
+      },
+      candidatesSnapshot: summary.candidates
     };
 
-    await BprService.saveBprRunAsync(runSnapshot);
-
-    setSaveSuccessToast('Parâmetros e apuração do BPR salvos com sucesso!');
+    await BprService.saveScenarioAsync(newScenario);
+    setSavedScenarios(BprService.loadSavedScenarios());
+    setIsSaveScenarioModalOpen(false);
+    setSaveSuccessToast(`Cenário "${newScenario.name}" salvo com sucesso!`);
     setTimeout(() => setSaveSuccessToast(null), 3500);
   };
 
-  // Exportar Planilha CSV
-  const handleExportCsv = () => {
-    const headers = [
-      'ID Contratado',
-      'Nome / Razao Social',
-      'Responsavel',
-      'Empresa',
-      'Departamento',
-      'Escopo',
-      'Regime',
-      'Camada',
-      'Entregaveis Media Ciclo (%)',
-      'Fator Bonus',
-      'Status Elegibilidade',
-      'Valor Base Camada (R$)',
-      'Valor Final BPR (R$)',
-      'Motivos Inelegibilidade / Excecoes'
-    ];
-
-    const rows = summary.candidates.map(c => [
-      `"${c.employeeId}"`,
-      `"${c.corporateName || c.name}"`,
-      `"${c.responsibleName || ''}"`,
-      `"${c.company}"`,
-      `"${c.department}"`,
-      `"${c.jobRole}"`,
-      `"${c.linkType}"`,
-      `"${c.camadaLabel}"`,
-      c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100% (Padrao)',
-      `"${c.performanceFactorLabel || '100%'}"`,
-      `"${c.isEligible ? 'Elegível' : 'Inelegível'}"`,
-      c.baseAmount.toFixed(2),
-      c.allocatedAmount.toFixed(2),
-      `"${c.ineligibilityReasons.join('; ')}"`
-    ]);
-
-    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Apuracao_BPR_${config.cycle}_${config.year}_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
+  // Excluir Cenário Salvo
+  const handleDeleteScenario = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este cenário salvo?')) return;
+    await BprService.deleteScenarioAsync(id);
+    const updated = BprService.loadSavedScenarios();
+    setSavedScenarios(updated);
+    setSelectedScenarioIdsForCompare(prev => prev.filter(scId => scId !== id));
+    setSaveSuccessToast('Cenário excluído com sucesso.');
+    setTimeout(() => setSaveSuccessToast(null), 3000);
   };
+
+  // Restaurar / Carregar Cenário no Cockpit Ativo
+  const handleRestoreScenario = (scenario: BprSavedScenario) => {
+    setConfig(scenario.config);
+    setIsSavedScenariosModalOpen(false);
+    setSaveSuccessToast(`Cenário "${scenario.name}" restaurado no simulador!`);
+    setTimeout(() => setSaveSuccessToast(null), 3500);
+  };
+
+  // Exportar PDF Direto
+  const handleExportPdfDirect = (customSummary?: BprCalculationSummary, customConfig?: BprRuleConfig, meta?: BprPdfMeta) => {
+    BprPdfService.exportBprPdf(
+      customSummary || summary, 
+      customConfig || config, 
+      meta || {
+        scenarioName: `Apuração BPR ${config.cycle === 'ciclo_1' ? '1º Sem' : config.cycle === 'ciclo_2' ? '2º Sem' : 'Custom'} ${config.year}`,
+        studyDate: new Date().toISOString().slice(0, 10),
+        criteria: generateCurrentCriteriaSummary()
+      }
+    );
+  };
+
+  // Abrir Visualização de Impressão / Salvar PDF
+  const handleOpenPrintPreview = (customSummary?: BprCalculationSummary, customConfig?: BprRuleConfig, meta?: BprPdfMeta) => {
+    BprPdfService.openPrintableReport(
+      customSummary || summary,
+      customConfig || config,
+      meta || {
+        scenarioName: `Apuração BPR ${config.cycle === 'ciclo_1' ? '1º Sem' : config.cycle === 'ciclo_2' ? '2º Sem' : 'Custom'} ${config.year}`,
+        studyDate: new Date().toISOString().slice(0, 10),
+        criteria: generateCurrentCriteriaSummary()
+      }
+    );
+  };
+
+  // Alternar Seleção de Cenário para Comparação
+  const handleToggleSelectScenarioForCompare = (id: string) => {
+    setSelectedScenarioIdsForCompare(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  // Lista de Cenários Filtrados para a Central de Cenários
+  const filteredSavedScenarios = useMemo(() => {
+    if (!scenarioSearchQuery.trim()) return savedScenarios;
+    const q = scenarioSearchQuery.toLowerCase();
+    return savedScenarios.filter(s => 
+      s.name.toLowerCase().includes(q) ||
+      s.studyDate.includes(q) ||
+      s.criteriaDescription.toLowerCase().includes(q) ||
+      s.config.cycle.toLowerCase().includes(q) ||
+      String(s.config.year).includes(q)
+    );
+  }, [savedScenarios, scenarioSearchQuery]);
+
+  // Lista de Cenários Selecionados para o Comparador
+  const scenariosToCompare = useMemo(() => {
+    return savedScenarios.filter(s => selectedScenarioIdsForCompare.includes(s.id));
+  }, [savedScenarios, selectedScenarioIdsForCompare]);
+
+  // Linhas Analíticas do Comparador
+  const comparisonRows = useMemo(() => {
+    if (scenariosToCompare.length === 0) return [];
+    const rows = BprPdfService.buildComparisonRows(scenariosToCompare);
+    
+    return rows.filter(r => {
+      if (compareOnlyDiffs && scenariosToCompare.length >= 2) {
+        if (Math.abs(r.delta || 0) < 0.01) return false;
+      }
+      if (compareSearchQuery.trim()) {
+        const q = compareSearchQuery.toLowerCase();
+        const matchesName = r.name.toLowerCase().includes(q) || (r.corporateName || '').toLowerCase().includes(q);
+        const matchesRole = (r.jobRole || '').toLowerCase().includes(q) || (r.department || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesRole) return false;
+      }
+      return true;
+    });
+  }, [scenariosToCompare, compareOnlyDiffs, compareSearchQuery]);
 
   // Interpretar Texto de Regras e Abrir Modal de Confirmação (Diff)
   const handlePreviewImportedText = () => {
@@ -250,37 +364,69 @@ export function BprCockpitModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={() => setIsDocImportModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 cursor-pointer"
               title="Importar regulamento ou ata para auto-configurar regras"
             >
               <FileUp size={15} className="text-amber-500" />
-              <span>Importar Regras</span>
+              <span className="hidden sm:inline">Importar Regras</span>
             </button>
 
+            {/* Ações de Exportação PDF: Download Direto e Visualizar/Imprimir */}
+            <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => handleExportPdfDirect()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm cursor-pointer"
+                title="Baixar apuração atual em PDF vetorial (.pdf)"
+              >
+                <Download size={14} />
+                <span>Exportar PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenPrintPreview()}
+                className="p-1.5 text-emerald-800 hover:bg-emerald-200/60 rounded-lg transition-all cursor-pointer"
+                title="Abrir relatório formatado para impressão física ou salvar como PDF no navegador"
+              >
+                <Printer size={15} />
+              </button>
+            </div>
+
+            {/* Central de Cenários Salvos com Badge de Contagem */}
             <button
-              onClick={handleExportCsv}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-black uppercase tracking-wider transition-all active:scale-95 shadow-md shadow-emerald-700/20 cursor-pointer"
-              title="Exportar dados para folha / contabilidade em CSV"
+              type="button"
+              onClick={() => setIsSavedScenariosModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 cursor-pointer relative"
+              title="Consultar cenários anteriores, comparar estudos e imprimir a qualquer momento"
             >
-              <FileSpreadsheet size={15} />
-              <span>Exportar CSV</span>
+              <FolderArchive size={15} className="text-amber-600" />
+              <span>Cenários Salvos</span>
+              {savedScenarios.length > 0 && (
+                <span className="bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full min-w-[18px] text-center">
+                  {savedScenarios.length}
+                </span>
+              )}
             </button>
 
+            {/* Salvar Novo Cenário / Estudo */}
             <button
-              onClick={handleSaveConfig}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-black uppercase tracking-wider transition-all active:scale-95 shadow-md shadow-indigo-700/20 cursor-pointer"
-              title="Salvar snapshot desta apuração"
+              type="button"
+              onClick={handleOpenSaveScenarioModal}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all active:scale-95 shadow-md shadow-indigo-700/20 cursor-pointer"
+              title="Salvar cenário e congelar critérios com data do estudo para impressão posterior"
             >
               <Save size={15} />
-              <span>Salvar Apuração</span>
+              <span>Salvar Cenário</span>
             </button>
 
             <button
+              type="button"
               onClick={onClose}
-              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-all cursor-pointer ml-1 font-bold text-sm"
+              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center gap-1 transition-all cursor-pointer ml-1 font-bold text-xs sm:text-sm"
               title="Fechar cockpit e voltar à página People"
             >
               <X size={18} />
@@ -493,57 +639,168 @@ export function BprCockpitModal({
           {/* 2. DISTRIBUIÇÃO DO BOLO & RATEIO POR CAMADA */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             
-            {/* Lado Esquerdo: Input de Montante Total & Sliders Percentuais */}
+            {/* Lado Esquerdo: Input de Montante Total & Rateio por Camada (% ou R$) */}
             <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
                   <DollarSign size={17} className="text-emerald-600" />
                   <span className="text-sm font-black uppercase tracking-wider text-slate-700">
-                    Montante Total &amp; Alíquotas por Camada
+                    Montante &amp; Rateio por Perfil
                   </span>
                 </div>
                 
-                <span className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
+                {/* Seletor de Modo: % vs R$ Fixo */}
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setConfig(prev => ({ ...prev, splitMode: 'percentage' }))}
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                      config.splitMode !== 'amount' 
+                        ? 'bg-white text-slate-900 shadow-sm font-black' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Por %
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfig(prev => {
+                      const eAmt = prev.tierAmounts?.E ?? Math.round((prev.totalPoolAmount * prev.tierSplits.E) / 100);
+                      const tAmt = prev.tierAmounts?.T ?? Math.round((prev.totalPoolAmount * prev.tierSplits.T) / 100);
+                      const oAmt = prev.tierAmounts?.O ?? Math.round((prev.totalPoolAmount * prev.tierSplits.O) / 100);
+                      return {
+                        ...prev,
+                        splitMode: 'amount',
+                        tierAmounts: { E: eAmt, T: tAmt, O: oAmt },
+                        totalPoolAmount: eAmt + tAmt + oAmt
+                      };
+                    })}
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                      config.splitMode === 'amount' 
+                        ? 'bg-white text-emerald-700 shadow-sm font-black' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Por Valor (R$)
+                  </button>
+                </div>
+              </div>
+
+              {/* Status do Rateio */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-bold">
+                  {config.splitMode === 'amount' ? 'Modo: Valores Fixos por Perfil (R$)' : 'Modo: Percentuais do Montante Global (%)'}
+                </span>
+                <span className={`font-black px-2.5 py-0.5 rounded-full ${
                   isSplitValid 
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
                     : 'bg-rose-50 text-rose-600 border border-rose-200 animate-pulse'
                 }`}>
-                  Soma: {totalSplitPercent}% {isSplitValid ? '✓' : `(Ajuste ${100 - totalSplitPercent > 0 ? `+${100 - totalSplitPercent}%` : `${100 - totalSplitPercent}%`})`}
+                  {config.splitMode === 'amount' 
+                    ? `Total: ${formatCurrency(summary.totalPoolAmount)}`
+                    : `Soma: ${totalSplitPercent}% ${isSplitValid ? '✓' : `(Ajuste ${100 - totalSplitPercent > 0 ? `+${100 - totalSplitPercent}%` : `${100 - totalSplitPercent}%`})`}`
+                  }
                 </span>
               </div>
 
               {/* Input de Montante Total R$ */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                  Valor Total a ser Rateado no BPR (R$)
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                  <span>Valor Total a ser Rateado no BPR (R$)</span>
+                  {config.splitMode === 'amount' && (
+                    <span className="text-[10px] text-emerald-600 font-bold">(Soma dos 3 perfis)</span>
+                  )}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">R$</span>
                   <input
                     type="number"
                     step="1000"
+                    disabled={config.splitMode === 'amount'}
                     value={config.totalPoolAmount}
-                    onChange={e => setConfig(prev => ({
-                      ...prev,
-                      totalPoolAmount: Math.max(0, parseFloat(e.target.value) || 0)
-                    }))}
-                    className="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-4 py-3 text-lg font-black text-emerald-600 font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10"
+                    onChange={e => {
+                      const val = Math.max(0, parseFloat(e.target.value) || 0);
+                      setConfig(prev => ({
+                        ...prev,
+                        totalPoolAmount: val,
+                        tierAmounts: {
+                          E: Math.round((val * prev.tierSplits.E) / 100),
+                          T: Math.round((val * prev.tierSplits.T) / 100),
+                          O: Math.round((val * prev.tierSplits.O) / 100)
+                        }
+                      }));
+                    }}
+                    className={`w-full border rounded-xl pl-10 pr-4 py-3 text-lg font-black font-mono outline-none ${
+                      config.splitMode === 'amount' 
+                        ? 'bg-slate-50 border-slate-200 text-slate-700' 
+                        : 'bg-white border-slate-300 text-emerald-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10'
+                    }`}
                   />
                 </div>
               </div>
 
-              {/* Sliders das Camadas */}
+              {/* Controles das Camadas (Percentual ou Valor R$) */}
               <div className="space-y-3.5 pt-1">
-                {/* Estratégico */}
+                {/* Estratégico (E) */}
                 <div className="bg-blue-50 p-3.5 rounded-xl border border-blue-100 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-black text-blue-700 flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
                       Estratégico (E)
                     </span>
-                    <div className="flex items-center gap-1">
+
+                    {config.splitMode === 'amount' ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-blue-600">R$</span>
+                        <input
+                          type="number"
+                          step="1000"
+                          min="0"
+                          value={config.tierAmounts?.E ?? Math.round((config.totalPoolAmount * config.tierSplits.E) / 100)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setConfig(prev => {
+                              const cur = prev.tierAmounts || { E: 0, T: 0, O: 0 };
+                              const updated = { ...cur, E: val };
+                              const newTotal = updated.E + updated.T + updated.O;
+                              const newSplits = newTotal > 0 ? {
+                                E: Math.round((updated.E / newTotal) * 100),
+                                T: Math.round((updated.T / newTotal) * 100),
+                                O: Math.round((updated.O / newTotal) * 100)
+                              } : prev.tierSplits;
+                              return { ...prev, tierAmounts: updated, totalPoolAmount: newTotal, tierSplits: newSplits };
+                            });
+                          }}
+                          className="w-28 bg-white border border-blue-300 rounded-lg px-2.5 py-1 text-right font-black text-sm text-blue-800 font-mono shadow-sm"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={config.tierSplits.E}
+                          onChange={e => setConfig(prev => ({
+                            ...prev,
+                            tierSplits: { ...prev.tierSplits, E: parseInt(e.target.value) || 0 }
+                          }))}
+                          className="w-16 bg-white border border-blue-200 rounded-lg px-2 py-1 text-right font-black text-sm text-blue-700 font-mono"
+                        />
+                        <span className="text-sm font-bold text-slate-500">%</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {config.splitMode === 'amount' ? (
+                    <div className="flex justify-between items-center text-xs font-bold text-blue-600/80">
+                      <span>Equivalência percentual:</span>
+                      <span>{summary.layers.E.allocatedPercentage}% do montante</span>
+                    </div>
+                  ) : (
+                    <>
                       <input
-                        type="number"
+                        type="range"
                         min="0"
                         max="100"
                         value={config.tierSplits.E}
@@ -551,34 +808,76 @@ export function BprCockpitModal({
                           ...prev,
                           tierSplits: { ...prev.tierSplits, E: parseInt(e.target.value) || 0 }
                         }))}
-                        className="w-16 bg-white border border-blue-200 rounded-lg px-2 py-1 text-right font-black text-sm text-blue-700 font-mono"
+                        className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
                       />
-                      <span className="text-sm font-bold text-slate-500">%</span>
-                    </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={config.tierSplits.E}
-                    onChange={e => setConfig(prev => ({
-                      ...prev,
-                      tierSplits: { ...prev.tierSplits, E: parseInt(e.target.value) || 0 }
-                    }))}
-                    className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
+                      <div className="flex justify-between items-center text-[11px] font-bold text-blue-600">
+                        <span>Equivalente em R$:</span>
+                        <span className="font-mono">{formatCurrency(summary.layers.E.totalLayerAmount)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {/* Tático */}
+                {/* Tático (T) */}
                 <div className="bg-indigo-50 p-3.5 rounded-xl border border-indigo-100 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-black text-indigo-700 flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span>
                       Tático (T)
                     </span>
-                    <div className="flex items-center gap-1">
+
+                    {config.splitMode === 'amount' ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-indigo-600">R$</span>
+                        <input
+                          type="number"
+                          step="1000"
+                          min="0"
+                          value={config.tierAmounts?.T ?? Math.round((config.totalPoolAmount * config.tierSplits.T) / 100)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setConfig(prev => {
+                              const cur = prev.tierAmounts || { E: 0, T: 0, O: 0 };
+                              const updated = { ...cur, T: val };
+                              const newTotal = updated.E + updated.T + updated.O;
+                              const newSplits = newTotal > 0 ? {
+                                E: Math.round((updated.E / newTotal) * 100),
+                                T: Math.round((updated.T / newTotal) * 100),
+                                O: Math.round((updated.O / newTotal) * 100)
+                              } : prev.tierSplits;
+                              return { ...prev, tierAmounts: updated, totalPoolAmount: newTotal, tierSplits: newSplits };
+                            });
+                          }}
+                          className="w-28 bg-white border border-indigo-300 rounded-lg px-2.5 py-1 text-right font-black text-sm text-indigo-800 font-mono shadow-sm"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={config.tierSplits.T}
+                          onChange={e => setConfig(prev => ({
+                            ...prev,
+                            tierSplits: { ...prev.tierSplits, T: parseInt(e.target.value) || 0 }
+                          }))}
+                          className="w-16 bg-white border border-indigo-200 rounded-lg px-2 py-1 text-right font-black text-sm text-indigo-700 font-mono"
+                        />
+                        <span className="text-sm font-bold text-slate-500">%</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {config.splitMode === 'amount' ? (
+                    <div className="flex justify-between items-center text-xs font-bold text-indigo-600/80">
+                      <span>Equivalência percentual:</span>
+                      <span>{summary.layers.T.allocatedPercentage}% do montante</span>
+                    </div>
+                  ) : (
+                    <>
                       <input
-                        type="number"
+                        type="range"
                         min="0"
                         max="100"
                         value={config.tierSplits.T}
@@ -586,34 +885,76 @@ export function BprCockpitModal({
                           ...prev,
                           tierSplits: { ...prev.tierSplits, T: parseInt(e.target.value) || 0 }
                         }))}
-                        className="w-16 bg-white border border-indigo-200 rounded-lg px-2 py-1 text-right font-black text-sm text-indigo-700 font-mono"
+                        className="w-full h-2 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                       />
-                      <span className="text-sm font-bold text-slate-500">%</span>
-                    </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={config.tierSplits.T}
-                    onChange={e => setConfig(prev => ({
-                      ...prev,
-                      tierSplits: { ...prev.tierSplits, T: parseInt(e.target.value) || 0 }
-                    }))}
-                    className="w-full h-2 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                  />
+                      <div className="flex justify-between items-center text-[11px] font-bold text-indigo-600">
+                        <span>Equivalente em R$:</span>
+                        <span className="font-mono">{formatCurrency(summary.layers.T.totalLayerAmount)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {/* Operacional/CLTs */}
+                {/* Operacional/CLTs (O) */}
                 <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-100 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-black text-emerald-700 flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                      Operacional/CLTs (O)
+                      Operacional / CLTs (O)
                     </span>
-                    <div className="flex items-center gap-1">
+
+                    {config.splitMode === 'amount' ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-emerald-600">R$</span>
+                        <input
+                          type="number"
+                          step="1000"
+                          min="0"
+                          value={config.tierAmounts?.O ?? Math.round((config.totalPoolAmount * config.tierSplits.O) / 100)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setConfig(prev => {
+                              const cur = prev.tierAmounts || { E: 0, T: 0, O: 0 };
+                              const updated = { ...cur, O: val };
+                              const newTotal = updated.E + updated.T + updated.O;
+                              const newSplits = newTotal > 0 ? {
+                                E: Math.round((updated.E / newTotal) * 100),
+                                T: Math.round((updated.T / newTotal) * 100),
+                                O: Math.round((updated.O / newTotal) * 100)
+                              } : prev.tierSplits;
+                              return { ...prev, tierAmounts: updated, totalPoolAmount: newTotal, tierSplits: newSplits };
+                            });
+                          }}
+                          className="w-28 bg-white border border-emerald-300 rounded-lg px-2.5 py-1 text-right font-black text-sm text-emerald-800 font-mono shadow-sm"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={config.tierSplits.O}
+                          onChange={e => setConfig(prev => ({
+                            ...prev,
+                            tierSplits: { ...prev.tierSplits, O: parseInt(e.target.value) || 0 }
+                          }))}
+                          className="w-16 bg-white border border-emerald-200 rounded-lg px-2 py-1 text-right font-black text-sm text-emerald-700 font-mono"
+                        />
+                        <span className="text-sm font-bold text-slate-500">%</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {config.splitMode === 'amount' ? (
+                    <div className="flex justify-between items-center text-xs font-bold text-emerald-600/80">
+                      <span>Equivalência percentual:</span>
+                      <span>{summary.layers.O.allocatedPercentage}% do montante</span>
+                    </div>
+                  ) : (
+                    <>
                       <input
-                        type="number"
+                        type="range"
                         min="0"
                         max="100"
                         value={config.tierSplits.O}
@@ -621,22 +962,14 @@ export function BprCockpitModal({
                           ...prev,
                           tierSplits: { ...prev.tierSplits, O: parseInt(e.target.value) || 0 }
                         }))}
-                        className="w-16 bg-white border border-emerald-200 rounded-lg px-2 py-1 text-right font-black text-sm text-emerald-700 font-mono"
+                        className="w-full h-2 bg-emerald-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                       />
-                      <span className="text-sm font-bold text-slate-500">%</span>
-                    </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={config.tierSplits.O}
-                    onChange={e => setConfig(prev => ({
-                      ...prev,
-                      tierSplits: { ...prev.tierSplits, O: parseInt(e.target.value) || 0 }
-                    }))}
-                    className="w-full h-2 bg-emerald-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                  />
+                      <div className="flex justify-between items-center text-[11px] font-bold text-emerald-600">
+                        <span>Equivalente em R$:</span>
+                        <span className="font-mono">{formatCurrency(summary.layers.O.totalLayerAmount)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1116,13 +1449,26 @@ export function BprCockpitModal({
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleExportCsv}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-2 text-sm"
-            >
-              <FileSpreadsheet size={16} />
-              <span>Exportar Planilha</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleExportPdfDirect()}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black transition-all cursor-pointer flex items-center gap-2 text-sm shadow-sm active:scale-95"
+                title="Baixar apuração atual em PDF vetorial (.pdf)"
+              >
+                <Download size={16} />
+                <span>Exportar PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenPrintPreview()}
+                className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 text-sm"
+                title="Abrir relatório formatado para impressão física ou salvar como PDF no navegador"
+              >
+                <Printer size={16} />
+                <span className="hidden sm:inline">Imprimir</span>
+              </button>
+            </div>
 
             <button
               onClick={onClose}
@@ -1429,15 +1775,569 @@ export function BprCockpitModal({
         </div>
       )}
 
-      {/* Toast de Feedback */}
-      {saveSuccessToast && (
-        <div className="fixed bottom-6 right-6 z-70 bg-white text-slate-900 border border-emerald-200 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom max-w-md">
-          <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-            <CheckCircle2 size={20} />
+      {/* ── MODAL: SALVAR CENÁRIO DE APURAÇÃO ── */}
+      {isSaveScenarioModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-2xl w-full space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center">
+                  <Save size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Salvar Cenário de BPR</h3>
+                  <p className="text-xs text-slate-500">Grave os critérios, parâmetros e o snapshot desta apuração para consulta e impressão futura</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsSaveScenarioModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Nome do Cenário */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                  Nome do Cenário / Estudo <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={scenarioNameInput}
+                  onChange={e => setScenarioNameInput(e.target.value)}
+                  placeholder="Ex: Cenário Base C1 2026 - Versão Diretoria"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10"
+                />
+              </div>
+
+              {/* Data do Estudo */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                  Data de Realização do Estudo <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={studyDateInput}
+                  onChange={e => setStudyDateInput(e.target.value)}
+                  className="w-full sm:w-60 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10"
+                />
+              </div>
+
+              {/* Critérios e Premissas Adotadas */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Critérios &amp; Premissas Adotadas
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setCriteriaDescriptionInput(generateCurrentCriteriaSummary())}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    Auto-preencher dos filtros ativos
+                  </button>
+                </div>
+                <textarea
+                  rows={3}
+                  value={criteriaDescriptionInput}
+                  onChange={e => setCriteriaDescriptionInput(e.target.value)}
+                  placeholder="Descreva as premissas, justificativas e critérios de corte aplicados neste estudo..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-800 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 resize-none"
+                />
+              </div>
+
+              {/* Resumo do Snapshot que será Congelado */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs">
+                <span className="font-bold text-slate-500 uppercase tracking-wider block">Valores que serão congelados neste snapshot:</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Montante Total</span>
+                    <strong className="text-emerald-700 font-bold text-sm">{formatCurrency(summary.totalPoolAmount)}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Total Rateado</span>
+                    <strong className="text-slate-800 font-bold text-sm">{formatCurrency(summary.totalDistributedAmount)}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Elegíveis</span>
+                    <strong className="text-slate-800 font-bold text-sm">{summary.totalEligible} de {summary.totalCandidates}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Resíduo</span>
+                    <strong className="text-amber-700 font-bold text-sm">{formatCurrency(summary.residualAmount)}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsSaveScenarioModalOpen(false)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSaveScenario}
+                disabled={!scenarioNameInput.trim()}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-sm font-black uppercase tracking-wider flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all cursor-pointer active:scale-95"
+              >
+                <Save size={16} />
+                <span>Salvar Estudo</span>
+              </button>
+            </div>
           </div>
-          <p className="text-sm font-bold text-slate-700 leading-snug">
-            {saveSuccessToast}
-          </p>
+        </div>
+      )}
+
+      {/* ── MODAL: CENTRAL DE CENÁRIOS SALVOS & BUSCA ── */}
+      {isSavedScenariosModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-slate-950/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+            {/* Cabeçalho */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-md shadow-amber-500/20">
+                  <FolderArchive size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight">
+                      Central de Cenários e Estudos de BPR
+                    </h3>
+                    <span className="bg-amber-100 text-amber-800 text-[11px] font-black px-2 py-0.5 rounded-full">
+                      {savedScenarios.length} {savedScenarios.length === 1 ? 'cenário salvo' : 'cenários salvos'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Pesquise, imprima ou compare relatórios históricos de apuração a qualquer momento
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsSavedScenariosModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-700 text-2xl font-bold p-1 leading-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Barra de Pesquisa e Ferramentas de Comparação */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-white space-y-3 shrink-0">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="relative flex-1">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={scenarioSearchQuery}
+                    onChange={e => setScenarioSearchQuery(e.target.value)}
+                    placeholder="Pesquisar estudos por nome, data, critérios, ciclo ou ano..."
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                  />
+                  {scenarioSearchQuery && (
+                    <button 
+                      type="button"
+                      onClick={() => setScenarioSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 font-bold"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+
+                {/* Botão de Ação do Comparador quando há seleção */}
+                {selectedScenarioIdsForCompare.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCompareModalOpen(true)}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all cursor-pointer active:scale-95"
+                    >
+                      <Scale size={16} />
+                      <span>Comparar ({selectedScenarioIdsForCompare.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedScenarioIdsForCompare([])}
+                      className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Desmarcar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Lista Scrollável de Cenários */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50">
+              {filteredSavedScenarios.length === 0 ? (
+                <div className="py-16 text-center space-y-3 bg-white rounded-3xl border border-dashed border-slate-200 p-6">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto">
+                    <FolderArchive size={28} />
+                  </div>
+                  <h4 className="text-base font-bold text-slate-800">
+                    {savedScenarios.length === 0 ? 'Nenhum cenário salvo ainda' : 'Nenhum estudo corresponde à busca'}
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    {savedScenarios.length === 0 
+                      ? 'Configure os parâmetros do rateio no cockpit e clique em "Salvar Cenário" para gravar versões históricas com critérios e data do estudo.'
+                      : 'Tente utilizar outros termos na barra de pesquisa acima.'}
+                  </p>
+                </div>
+              ) : (
+                filteredSavedScenarios.map(scenario => {
+                  const isSelectedForCompare = selectedScenarioIdsForCompare.includes(scenario.id);
+                  const cycleName = scenario.config.cycle === 'ciclo_1' ? '1º Semestre' : scenario.config.cycle === 'ciclo_2' ? '2º Semestre' : 'Custom';
+
+                  return (
+                    <div 
+                      key={scenario.id}
+                      className={`bg-white border rounded-2xl p-4 sm:p-5 shadow-sm transition-all space-y-3 ${
+                        isSelectedForCompare ? 'border-indigo-400 ring-2 ring-indigo-500/10' : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {/* Linha Superior: Checkbox + Título + Badges */}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer mt-0.5">
+                            <input
+                              type="checkbox"
+                              checked={isSelectedForCompare}
+                              onChange={() => handleToggleSelectScenarioForCompare(scenario.id)}
+                              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
+                            />
+                            <span className="text-[11px] font-bold text-slate-500 uppercase select-none">Comparar</span>
+                          </label>
+
+                          <div>
+                            <h4 className="text-base font-black text-slate-900 leading-snug">
+                              {scenario.name}
+                            </h4>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold px-2 py-0.5 rounded-md">
+                                <Calendar size={12} />
+                                Data do Estudo: {scenario.studyDate ? scenario.studyDate.split('-').reverse().join('/') : '-'}
+                              </span>
+                              <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-md">
+                                {cycleName} / {scenario.config.year}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                Gravado em: {new Date(scenario.createdAt).toLocaleDateString('pt-BR')} às {new Date(scenario.createdAt).toLocaleTimeString('pt-BR')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Botões Rápidos de Impressão, Download e Ação */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleExportPdfDirect(
+                              scenario.summary as any,
+                              scenario.config,
+                              { scenarioName: scenario.name, studyDate: scenario.studyDate, criteria: scenario.criteriaDescription }
+                            )}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
+                            title="Baixar PDF deste estudo histórico"
+                          >
+                            <Download size={13} />
+                            <span>Baixar PDF</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPrintPreview(
+                              scenario.summary as any,
+                              scenario.config,
+                              { scenarioName: scenario.name, studyDate: scenario.studyDate, criteria: scenario.criteriaDescription }
+                            )}
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all cursor-pointer"
+                            title="Visualizar para impressão física ou salvar como PDF"
+                          >
+                            <Printer size={16} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRestoreScenario(scenario)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                            title="Carregar todos os critérios deste cenário no simulador ativo"
+                          >
+                            <RotateCcw size={13} />
+                            <span>Carregar no Cockpit</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteScenario(scenario.id)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer ml-1"
+                            title="Excluir este cenário salvo"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Critérios do Cenário */}
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs text-slate-700 space-y-1">
+                        <strong className="text-[11px] font-bold text-slate-900 uppercase block tracking-wider">Critérios e Premissas:</strong>
+                        <p className="line-clamp-2 leading-relaxed text-slate-600 font-medium">
+                          {scenario.criteriaDescription || 'Sem observações adicionais.'}
+                        </p>
+                      </div>
+
+                      {/* KPIs do Snapshot Congelado */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-xs">
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Montante Total</span>
+                          <strong className="text-sm font-black text-emerald-700">{formatCurrency(scenario.summary.totalPoolAmount)}</strong>
+                        </div>
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Rateado</span>
+                          <strong className="text-sm font-black text-slate-900">{formatCurrency(scenario.summary.totalDistributedAmount)}</strong>
+                        </div>
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Elegíveis</span>
+                          <strong className="text-sm font-black text-slate-800">{scenario.summary.totalEligible} colaboradores</strong>
+                        </div>
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Valor Base E / T / O</span>
+                          <span className="text-[11px] font-bold text-slate-700 block truncate">
+                            E: {formatCurrency(scenario.summary.amountPerE || 0)} | T: {formatCurrency(scenario.summary.amountPerT || 0)} | O: {formatCurrency(scenario.summary.amountPerO || 0)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Rodapé da Central de Cenários */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+              <span className="text-xs text-slate-500 font-bold">
+                {selectedScenarioIdsForCompare.length > 0 
+                  ? `${selectedScenarioIdsForCompare.length} de ${savedScenarios.length} estudos selecionados para comparação`
+                  : 'Marque a caixa "Comparar" em 2 ou mais cenários para analisar as variações por colaborador'}
+              </span>
+
+              <div className="flex items-center gap-2">
+                {selectedScenarioIdsForCompare.length >= 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCompareModalOpen(true)}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl uppercase tracking-wider text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 cursor-pointer"
+                  >
+                    <Scale size={15} />
+                    <span>Abrir Tabela Comparativa</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsSavedScenariosModalOpen(false)}
+                  className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs uppercase cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: COMPARADOR DE CENÁRIOS BPR ── */}
+      {isCompareModalOpen && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-6 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-6xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl">
+            {/* Header do Comparador */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-md shadow-indigo-600/20">
+                  <Scale size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight">
+                    Comparativo Executivo de Cenários BPR
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Tabela comparativa direta de valores calculados para cada colaborador entre os estudos selecionados
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => BprPdfService.exportComparisonPdf(scenariosToCompare, comparisonRows)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
+                  title="Baixar comparativo em PDF"
+                >
+                  <Download size={14} />
+                  <span>Baixar PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => BprPdfService.openPrintableComparison(scenariosToCompare, comparisonRows)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  title="Imprimir relatório comparativo"
+                >
+                  <Printer size={15} />
+                  <span className="hidden sm:inline">Imprimir</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setIsCompareModalOpen(false)} 
+                  className="text-slate-400 hover:text-slate-700 text-2xl font-bold p-1 leading-none cursor-pointer ml-1"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Cards de Resumo Lado a Lado dos Cenários Comparados */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-white shrink-0 overflow-x-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 min-w-[500px]">
+                {scenariosToCompare.map((sc, idx) => (
+                  <div key={sc.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">Cenário #{idx + 1}</span>
+                      <span className="text-[11px] font-bold text-slate-500">
+                        {sc.studyDate ? sc.studyDate.split('-').reverse().join('/') : '-'}
+                      </span>
+                    </div>
+                    <h5 className="font-black text-sm text-slate-900 truncate" title={sc.name}>{sc.name}</h5>
+                    <div className="pt-1.5 border-t border-slate-200/70 grid grid-cols-2 gap-2 text-xs font-mono">
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase block font-sans">Montante</span>
+                        <strong className="text-emerald-700">{formatCurrency(sc.summary.totalPoolAmount)}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase block font-sans">Elegíveis</span>
+                        <strong className="text-slate-800">{sc.summary.totalEligible} pessoas</strong>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Barra de Filtros da Tabela Comparativa */}
+            <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="relative w-full sm:w-80">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={compareSearchQuery}
+                  onChange={e => setCompareSearchQuery(e.target.value)}
+                  placeholder="Filtrar colaborador no comparativo..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {scenariosToCompare.length >= 2 && (
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={compareOnlyDiffs}
+                    onChange={e => setCompareOnlyDiffs(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
+                  />
+                  <span>Exibir apenas colaboradores com variação de valor</span>
+                </label>
+              )}
+
+              <span className="text-xs font-bold text-slate-500">
+                {comparisonRows.length} colaboradores listados
+              </span>
+            </div>
+
+            {/* Tabela Analítica de Comparação */}
+            <div className="flex-1 overflow-auto p-4 sm:p-6 bg-white">
+              <table className="w-full border-collapse text-left text-xs font-sans">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase text-[10px] font-black tracking-wider sticky top-0">
+                    <th className="py-2.5 px-3">Colaborador / Razão Social</th>
+                    <th className="py-2.5 px-3">Empresa</th>
+                    <th className="py-2.5 px-3">Cargo</th>
+                    <th className="py-2.5 px-3 text-center">Camada</th>
+                    {scenariosToCompare.map(sc => (
+                      <th key={sc.id} className="py-2.5 px-3 text-right">
+                        {sc.name}
+                      </th>
+                    ))}
+                    {scenariosToCompare.length >= 2 && (
+                      <th className="py-2.5 px-3 text-right">Diferença (Delta)</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {comparisonRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5 + scenariosToCompare.length} className="py-12 text-center text-slate-400">
+                        Nenhum colaborador encontrado com os filtros selecionados.
+                      </td>
+                    </tr>
+                  ) : (
+                    comparisonRows.map(row => (
+                      <tr key={row.employeeId} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2.5 px-3 font-bold text-slate-900">
+                          {row.corporateName || row.name}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-600">{row.company}</td>
+                        <td className="py-2.5 px-3 text-slate-600">{row.jobRole}</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-700">
+                            {row.camadaLabel}
+                          </span>
+                        </td>
+                        {scenariosToCompare.map(sc => {
+                          const item = row.scenarioValues[sc.id];
+                          const amt = item && item.isEligible ? item.amount : 0;
+                          return (
+                            <td key={sc.id} className="py-2.5 px-3 text-right font-mono font-bold">
+                              {amt > 0 ? (
+                                <span className="text-slate-900">{formatCurrency(amt)}</span>
+                              ) : (
+                                <span className="text-slate-300">R$ 0,00</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        {scenariosToCompare.length >= 2 && (
+                          <td className="py-2.5 px-3 text-right font-mono font-black">
+                            {(row.delta || 0) > 0 ? (
+                              <span className="text-emerald-600">+{formatCurrency(row.delta || 0)}</span>
+                            ) : (row.delta || 0) < 0 ? (
+                              <span className="text-rose-600">{formatCurrency(row.delta || 0)}</span>
+                            ) : (
+                              <span className="text-slate-400">R$ 0,00</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer do Comparador */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCompareModalOpen(false)}
+                className="px-6 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs uppercase cursor-pointer"
+              >
+                Fechar Comparador
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -139,6 +139,7 @@ export function isDespesaRecorrente(categoria: string, contaDre?: string, fornec
 }
 
 export const BANK_NAMES_MAP: Record<string, string> = {
+  // Mar Brasil
   '7654276902': 'Caixinha',
   '7654276943': 'Omie.CASH',
   '7662736722': 'Bradesco',
@@ -175,7 +176,58 @@ export const BANK_NAMES_MAP: Record<string, string> = {
   '12211377291': 'Omie.CASH - Cartão Omie',
   '12211377371': 'Omie.CASH - Cartão Omie (Garantia)',
   '12291364271': 'Clara - Prestadores',
-  '12340529395': 'Ourocard - 1405'
+  '12340529395': 'Ourocard - 1405',
+  '12356684319': 'Pri Itaú 3182',
+  // DZM
+  '11336184940': 'Caixinha',
+  '11336185283': 'Omie.CASH',
+  '11342253946': 'Bradesco - DZM',
+  '11342254146': 'PagBank',
+  '11376418802': 'Bradesco - Visa 6827 / 1787',
+  '11382946596': 'Flash - Prestadores',
+  '11382947215': 'Flash - Funcionários',
+  '11407026355': 'Provisão - Impostos Trimestrais',
+  '11407027456': 'Provisão - 13o salário e encargos',
+  '11407027813': 'Provisão - Férias e encargos',
+  '11407033136': 'Provisão - Contingências',
+  '11432492826': 'Bradesco - DAUREN UNIPESSOAL LTDA',
+  '11437305971': 'Omie.CASH (Recebíveis de Cartões)',
+  '11491956521': 'Conta Gestão Click',
+  '11550021250': 'PagBank Pessoal',
+  '11563485368': 'Pri PF - Itaú Unibanco',
+  '11599289752': 'Sicredi - DZM',
+  '11615886788': 'Cartão G2 - 0021',
+  '11617365367': 'Omie.CASH - Cartão Omie',
+  '11617365735': 'Omie.CASH - Cartão Omie (Garantia)',
+  '11667394630': 'Bradesco - G2',
+  '11672312219': 'Dauren PF - Nubank',
+  '11674122399': 'Visa - G2',
+  '11678121338': 'Nubank - D.Z.M LTDA',
+  '11682709851': 'Investimentos Sicredi - DZM',
+  '11695465517': 'Pri PF - Itaú Unibanco',
+  '11704272090': 'Clara - Prestadores',
+  '11723376524': 'Bradesco - DZM - Investimento',
+  '11745251012': 'Diretoria - 1405',
+  '11758961141': 'Omie.CASH - (Recebíveis de Cartão (Z))',
+  // G2
+  '2510826184': 'Caixinha',
+  '2510826233': 'Omie.CASH',
+  '2510841995': 'Bradesco - G2',
+  '2511653449': 'Bradesco - 6277 / 8112',
+  '2511653916': 'MasterCard - Asaas',
+  '2515689855': 'PagSeguro - Pessoal',
+  '2516219502': 'Omie.CASH - Cartão Omie',
+  '2516219521': 'Omie.CASH - Cartão Omie (Garantia)',
+  '2517837273': 'Pri PF - Itaú Unibanco',
+  '2542958255': 'Omie.CASH - (Recebíveis de Cartão (Z))',
+  // Conectius
+  '2115786554': 'Caixinha',
+  '2115786872': 'Omie.CASH',
+  '2118266430': 'PagBank (PagSeguro)',
+  '2118309101': 'Bradesco',
+  '2121941303': 'Itaú Unibanco',
+  '2121945886': 'BNDES - 5821',
+  '2163170854': 'Omie.CASH - (Recebíveis de Cartão (Z))'
 };
 
 export function resolveContaCorrente(raw: any, rawDet: any): string {

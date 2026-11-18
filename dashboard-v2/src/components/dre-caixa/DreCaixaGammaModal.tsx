@@ -82,15 +82,15 @@ export function DreCaixaGammaModal({
 
     const items = lancamentos.filter(
       l => (l.conta_corrente || '').trim().toLowerCase() === selectedConta.trim().toLowerCase() &&
-           (l.sinal_valor < 0 || l.tipo === 'PAGAR')
+           (l.tipo === 'PAGAR' || l.sinal_valor < 0)
     );
-    const total = items.reduce((acc, l) => acc + Math.abs(l.valor), 0);
+    const total = items.reduce((acc, l) => acc + (l.tipo === 'PAGAR' ? l.valor : Math.abs(l.valor)), 0);
     const projMap = new Map<string, number>();
     const catMap = new Map<string, number>();
     const fornMap = new Map<string, { total: number; count: number }>();
 
     items.forEach(l => {
-      const v = Math.abs(l.valor);
+      const v = l.tipo === 'PAGAR' ? l.valor : Math.abs(l.valor);
       const p = decodeHtmlEntities(l.projeto || 'Operacional / Geral');
       const c = decodeHtmlEntities(l.categoria || 'Geral');
       const f = decodeHtmlEntities(l.fornecedor_cliente || 'Outros / Não Informado');
@@ -287,7 +287,7 @@ export function DreCaixaGammaModal({
       md += `|---|---|---|---|---|\n`;
       const passadas = lancamentos
         .filter(l => {
-          if (l.sinal_valor >= 0 && l.tipo !== 'PAGAR') return false;
+          if (l.tipo !== 'PAGAR' && l.sinal_valor >= 0) return false;
           if (selectedConta && (l.conta_corrente || '').trim().toLowerCase() !== selectedConta.trim().toLowerCase()) return false;
           if (onlyCompras && isDespesaRecorrente(l.categoria, l.conta_dre, l.fornecedor_cliente)) return false;
           return (l.parcela_atual || 1) > 1;

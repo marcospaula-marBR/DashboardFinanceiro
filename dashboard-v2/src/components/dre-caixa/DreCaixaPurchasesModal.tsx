@@ -26,7 +26,13 @@ import {
   Check
 } from 'lucide-react';
 import { DreCaixaLancamento, PurchasesAuditSummary } from '@/types/dre-caixa';
-import { DreCaixaService, formatCurrencyBRL, isDespesaRecorrente, decodeHtmlEntities } from '@/services/dre-caixa.service';
+import {
+  DreCaixaService,
+  formatCurrencyBRL,
+  isDespesaRecorrente,
+  decodeHtmlEntities,
+  isContaCartaoOuBeneficio
+} from '@/services/dre-caixa.service';
 
 interface DreCaixaPurchasesModalProps {
   isOpen: boolean;
@@ -47,7 +53,7 @@ export function DreCaixaPurchasesModal({
 }: DreCaixaPurchasesModalProps) {
   // 1. Estados sempre no topo incondicionalmente
   const [activeTab, setActiveTab] = useState<'sumario' | 'cartoes' | 'parcelas' | 'fornecedores'>('sumario');
-  const [onlyCompras, setOnlyCompras] = useState(true);
+  const [onlyCompras, setOnlyCompras] = useState(false);
   const [selectedConta, setSelectedConta] = useState<string>('');
   const [cardSubTab, setCardSubTab] = useState<'projetos' | 'categorias' | 'fornecedores'>('projetos');
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,12 +68,13 @@ export function DreCaixaPurchasesModal({
     if (!isOpen || !lancamentos) return [];
     const map = new Map<string, { total: number; count: number }>();
     lancamentos
-      .filter(l => l.sinal_valor < 0 || l.tipo === 'PAGAR')
+      .filter(l => l.tipo === 'PAGAR' || l.sinal_valor < 0)
       .forEach(l => {
         const cat = (l.categoria || 'Geral').trim();
         const curr = map.get(cat) || { total: 0, count: 0 };
+        const val = l.tipo === 'PAGAR' ? l.valor : Math.abs(l.valor);
         map.set(cat, {
-          total: curr.total + Math.abs(l.valor),
+          total: curr.total + val,
           count: curr.count + 1
         });
       });
@@ -100,9 +107,8 @@ export function DreCaixaPurchasesModal({
   // Lançamentos de todos os cartões corporativos e Flash combinados
   const cardLancamentos = useMemo(() => {
     return effectiveLancamentos.filter(l => {
-      if (l.sinal_valor >= 0 && l.tipo !== 'PAGAR') return false;
-      const cc = (l.conta_corrente || '').toLowerCase();
-      return cc.includes('cartão') || cc.includes('cartao') || cc.includes('flash') || cc.includes('clara') || cc.includes('elo') || cc.includes('sicredi') || cc.includes('visa');
+      if (l.tipo !== 'PAGAR' && l.sinal_valor >= 0) return false;
+      return isContaCartaoOuBeneficio(l.conta_corrente);
     });
   }, [effectiveLancamentos]);
 
@@ -134,17 +140,17 @@ export function DreCaixaPurchasesModal({
     const items = isFiltered
       ? effectiveLancamentos.filter(
           l => (l.conta_corrente || '').trim().toLowerCase() === selectedConta.trim().toLowerCase() &&
-            (l.sinal_valor < 0 || l.tipo === 'PAGAR')
+            (l.tipo === 'PAGAR' || l.sinal_valor < 0)
         )
       : cardLancamentos;
 
-    const total = items.reduce((acc, l) => acc + Math.abs(l.valor), 0);
+    const total = items.reduce((acc, l) => acc + (l.tipo === 'PAGAR' ? l.valor : Math.abs(l.valor)), 0);
     const projMap = new Map<string, number>();
     const catMap = new Map<string, number>();
     const fornMap = new Map<string, { total: number; count: number }>();
 
     items.forEach(l => {
-      const v = Math.abs(l.valor);
+      const v = l.tipo === 'PAGAR' ? l.valor : Math.abs(l.valor);
       const p = decodeHtmlEntities(l.projeto || 'Operacional / Geral');
       const c = decodeHtmlEntities(l.categoria || 'Geral');
       const f = decodeHtmlEntities(l.fornecedor_cliente || 'Outros / Não Informado');
@@ -182,7 +188,7 @@ export function DreCaixaPurchasesModal({
 
   // Lançamentos filtrados para a aba de parcelas (respeitando seletor de cartão, categorias e toggle de compras)
   const parcelasLancamentos = useMemo(() => {
-    let items = effectiveLancamentos.filter(l => l.sinal_valor < 0 || l.tipo === 'PAGAR');
+    let items = effectiveLancamentos.filter(l => l.tipo === 'PAGAR' || l.sinal_valor < 0);
     if (selectedConta) {
       const sc = selectedConta.trim().toLowerCase();
       items = items.filter(l => (l.conta_corrente || '').trim().toLowerCase() === sc);
@@ -209,10 +215,11 @@ export function DreCaixaPurchasesModal({
   const parcelasCategories = useMemo(() => {
     const map = new Map<string, number>();
     lancamentos
-      .filter(l => (l.sinal_valor < 0 || l.tipo === 'PAGAR') && (l.total_parcelas || 1) > 1)
+      .filter(l => (l.tipo === 'PAGAR' || l.sinal_valor < 0) && (l.total_parcelas || 1) > 1)
       .forEach(l => {
         const c = (l.categoria || 'Geral').trim();
-        map.set(c, (map.get(c) || 0) + Math.abs(l.valor));
+        const val = l.tipo === 'PAGAR' ? l.valor : Math.abs(l.valor);
+        map.set(c, (map.get(c) || 0) + val);
       });
     return Array.from(map.entries())
       .map(([nome, total]) => ({ nome, total }))
@@ -223,7 +230,7 @@ export function DreCaixaPurchasesModal({
   const handleExportCsv = () => {
     const headers = ['Empresa', 'Data', 'Favorecido', 'Categoria', 'Setor/Projeto', 'Conta/Cartão', 'Parcela', 'Modalidade', 'Tipo Econômico', 'Valor (R$)'];
     const rows = effectiveLancamentos
-      .filter(l => l.sinal_valor < 0 || l.tipo === 'PAGAR')
+      .filter(l => l.tipo === 'PAGAR' || l.sinal_valor < 0)
       .map(item => {
         const pAtual = item.parcela_atual || 1;
         const pTotal = item.total_parcelas || 1;

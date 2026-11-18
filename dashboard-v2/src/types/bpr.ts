@@ -2,10 +2,18 @@ export type BprCycle = 'ciclo_1' | 'ciclo_2' | 'custom';
 
 export type BprCamada = 'E' | 'T' | 'O'; // Estratégico, Tático, Operacional
 
+export type BprSplitMode = 'percentage' | 'amount'; // Rateio por % ou por Valor R$ Fixo
+
 export interface BprTierSplit {
-  E: number; // % Estratégico (ex: 35)
+  E: number; // % Estratégico (ex: 30)
   T: number; // % Tático (ex: 40)
-  O: number; // % Operacional (ex: 25)
+  O: number; // % Operacional (ex: 30)
+}
+
+export interface BprTierAmounts {
+  E: number; // R$ Estratégico (ex: 30000)
+  T: number; // R$ Tático (ex: 40000)
+  O: number; // R$ Operacional (ex: 30000)
 }
 
 export interface BprRuleConfig {
@@ -15,7 +23,9 @@ export interface BprRuleConfig {
   periodEndDate: string;   // YYYY-MM-DD
   paymentDate: string;     // YYYY-MM-DD
   totalPoolAmount: number; // R$ Montante total a ratear
+  splitMode?: BprSplitMode; // 'percentage' | 'amount'
   tierSplits: BprTierSplit; // Percentuais por camada
+  tierAmounts?: BprTierAmounts; // Valores fixos em R$ por camada
   allowGlosados: boolean;
   selectedGlosadosExceptions: string[]; // IDs de colaboradores glosados que farão jus excepcionalmente
   allowInativos: boolean;
@@ -109,17 +119,28 @@ export interface BprCalculationSummary {
   inativosCandidates: BprCandidateResult[];
 }
 
-export interface BprSavedRun {
+export interface BprSavedScenario {
   id: string;
-  name: string;
-  createdAt: string;
-  config: BprRuleConfig;
+  name: string;                // Nome do cenário / estudo (ex: "Simulação C1 2026 - Aumento Fator Operacional")
+  studyDate: string;           // Data do estudo (YYYY-MM-DD)
+  criteriaDescription: string; // Descrição dos critérios e premissas definidos pelo usuário
+  createdAt: string;           // ISO timestamp
+  updatedAt?: string;
+  config: BprRuleConfig;       // Configurações do simulador
   summary: {
     totalPoolAmount: number;
     totalDistributedAmount: number;
+    residualAmount: number;
+    totalCandidates: number;
     totalEligible: number;
+    totalIneligible: number;
     amountPerE: number;
     amountPerT: number;
     amountPerO: number;
+    layers: Record<BprCamada, BprLayerSummary>;
   };
+  candidatesSnapshot: BprCandidateResult[]; // Snapshot dos candidatos para impressão fiel histórica
 }
+
+// Retrocompatibilidade com BprSavedRun
+export type BprSavedRun = BprSavedScenario;
