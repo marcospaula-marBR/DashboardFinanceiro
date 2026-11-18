@@ -145,7 +145,6 @@ export function CostImportStagingModal({
   // Modal de seleção da coluna de benefício a importar
   const [isBenefitModalOpen, setIsBenefitModalOpen] = useState(false);
   const [benefitTargetColumn, setBenefitTargetColumn] = useState<"VT" | "VR_CESTA" | "BONUS" | "PREMIACAO" | "OUTROS">("VT");
-  const benefitFileInputRef = useRef<HTMLInputElement>(null);
 
   // Estado para linha inspecionada/editada em modal detalhado
   const [inspectRow, setInspectRow] = useState<StagingCostRow | null>(null);
@@ -564,19 +563,17 @@ export function CostImportStagingModal({
     }
   };
 
-  // Abrir seletor de arquivo após escolha do benefício
-  const handleOpenBenefitImport = (targetCol: "VT" | "VR_CESTA" | "BONUS" | "PREMIACAO" | "OUTROS") => {
-    setBenefitTargetColumn(targetCol);
-    setIsBenefitModalOpen(false);
-    setTimeout(() => {
-      benefitFileInputRef.current?.click();
-    }, 100);
-  };
-
   // 3. Processamento de Relatório de Benefícios (PDF / Imagem via IA com Destino Definido pelo Usuário)
-  const handleUploadBenefitsFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadBenefitsFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    explicitTargetCol?: "VT" | "VR_CESTA" | "BONUS" | "PREMIACAO" | "OUTROS"
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const colToUse = explicitTargetCol || benefitTargetColumn;
+    setBenefitTargetColumn(colToUse);
+    setIsBenefitModalOpen(false);
 
     try {
       setIsProcessing(true);
@@ -590,13 +587,13 @@ export function CostImportStagingModal({
         PREMIACAO: "Premiação",
         OUTROS: "Outros Recebidos",
       };
-      const label = columnLabels[benefitTargetColumn] || benefitTargetColumn;
+      const label = columnLabels[colToUse] || colToUse;
       setProcessingStatusText(`Extraindo e vinculando ${label} via IA...`);
 
       const formData = new FormData();
       formData.append("file", file);
       formData.append("type", "benefits");
-      formData.append("targetColumn", benefitTargetColumn);
+      formData.append("targetColumn", colToUse);
 
       const response = await fetch("/api/people/parse-payroll-batch", {
         method: "POST",
@@ -634,13 +631,13 @@ export function CostImportStagingModal({
           const recValue = Number(
             rec.valor !== undefined && rec.valor !== null
               ? rec.valor
-              : benefitTargetColumn === "VT"
+              : colToUse === "VT"
               ? rec.valor_vt || 0
-              : benefitTargetColumn === "VR_CESTA"
+              : colToUse === "VR_CESTA"
               ? rec.valor_cesta || rec.valor_vr || 0
-              : benefitTargetColumn === "BONUS"
+              : colToUse === "BONUS"
               ? rec.valor_bonus || 0
-              : benefitTargetColumn === "PREMIACAO"
+              : colToUse === "PREMIACAO"
               ? rec.valor_premiacao || rec.valor_ajuda_custo || 0
               : rec.valor_outros_recebidos || 0
           );
@@ -668,15 +665,15 @@ export function CostImportStagingModal({
             if (rIdx !== -1) {
               matchedCount++;
               const cur = updatedRows[rIdx];
-              if (benefitTargetColumn === "VT") {
+              if (colToUse === "VT") {
                 updatedRows[rIdx] = { ...cur, valor_vt: recValue };
-              } else if (benefitTargetColumn === "VR_CESTA") {
+              } else if (colToUse === "VR_CESTA") {
                 updatedRows[rIdx] = { ...cur, valor_cesta: recValue };
-              } else if (benefitTargetColumn === "BONUS") {
+              } else if (colToUse === "BONUS") {
                 updatedRows[rIdx] = { ...cur, valor_bonus: recValue };
-              } else if (benefitTargetColumn === "PREMIACAO") {
+              } else if (colToUse === "PREMIACAO") {
                 updatedRows[rIdx] = { ...cur, valor_premiacao: recValue, valor_ajuda_custo: recValue };
-              } else if (benefitTargetColumn === "OUTROS") {
+              } else if (colToUse === "OUTROS") {
                 updatedRows[rIdx] = { ...cur, valor_outros_recebidos: recValue };
               }
             }
@@ -716,13 +713,13 @@ export function CostImportStagingModal({
           const recValue = Number(
             rec.valor !== undefined && rec.valor !== null
               ? rec.valor
-              : benefitTargetColumn === "VT"
+              : colToUse === "VT"
               ? rec.valor_vt || 0
-              : benefitTargetColumn === "VR_CESTA"
+              : colToUse === "VR_CESTA"
               ? rec.valor_cesta || rec.valor_vr || 0
-              : benefitTargetColumn === "BONUS"
+              : colToUse === "BONUS"
               ? rec.valor_bonus || 0
-              : benefitTargetColumn === "PREMIACAO"
+              : colToUse === "PREMIACAO"
               ? rec.valor_premiacao || rec.valor_ajuda_custo || 0
               : rec.valor_outros_recebidos || 0
           );
@@ -739,17 +736,17 @@ export function CostImportStagingModal({
             sourceType: "BENEFICIOS_PDF",
             valor_fixo: fixoBase,
             valor_holerite: fixoBase,
-            valor_outros_recebidos: benefitTargetColumn === "OUTROS" ? recValue : 0,
+            valor_outros_recebidos: colToUse === "OUTROS" ? recValue : 0,
             valor_adiantamento: 0,
             valor_hora_extra: 0,
             valor_adicional_not: 0,
-            valor_vt: benefitTargetColumn === "VT" ? recValue : 0,
+            valor_vt: colToUse === "VT" ? recValue : 0,
             desconto_vt_6: 0,
-            valor_cesta: benefitTargetColumn === "VR_CESTA" ? recValue : 0,
+            valor_cesta: colToUse === "VR_CESTA" ? recValue : 0,
             valor_vr: 0,
-            valor_bonus: benefitTargetColumn === "BONUS" ? recValue : 0,
-            valor_premiacao: benefitTargetColumn === "PREMIACAO" ? recValue : 0,
-            valor_ajuda_custo: benefitTargetColumn === "PREMIACAO" ? recValue : 0,
+            valor_bonus: colToUse === "BONUS" ? recValue : 0,
+            valor_premiacao: colToUse === "PREMIACAO" ? recValue : 0,
+            valor_ajuda_custo: colToUse === "PREMIACAO" ? recValue : 0,
             valor_ferias: 0,
             valor_rescisao: 0,
             valor_decimo_terceiro: 0,
@@ -1380,13 +1377,6 @@ export function CostImportStagingModal({
                     <Gift size={14} className="text-blue-600" />
                     <span>Importar Benefícios (PDF)</span>
                   </button>
-                  <input
-                    ref={benefitFileInputRef}
-                    type="file"
-                    accept=".pdf,image/png,image/jpeg"
-                    onChange={handleUploadBenefitsFile}
-                    className="hidden"
-                  />
 
                   {/* VT Padrão */}
                   <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800/60 rounded-xl px-2 py-1 shadow-2xs">
@@ -1863,11 +1853,7 @@ export function CostImportStagingModal({
               </div>
 
               <div className="grid grid-cols-1 gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleOpenBenefitImport("VT")}
-                  className="p-3 text-left rounded-2xl border-2 border-emerald-500/30 hover:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 hover:bg-emerald-50 transition-all flex items-center justify-between group"
-                >
+                <label className="p-3 text-left rounded-2xl border-2 border-emerald-500/30 hover:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 hover:bg-emerald-50 transition-all flex items-center justify-between group cursor-pointer">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">🚌</span>
                     <div>
@@ -1880,13 +1866,18 @@ export function CostImportStagingModal({
                     </div>
                   </div>
                   <ArrowRight size={16} className="text-emerald-600 shrink-0" />
-                </button>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg"
+                    onChange={(e) => {
+                      handleUploadBenefitsFile(e, "VT");
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
 
-                <button
-                  type="button"
-                  onClick={() => handleOpenBenefitImport("VR_CESTA")}
-                  className="p-3 text-left rounded-2xl border-2 border-amber-500/30 hover:border-amber-500 bg-amber-50/50 dark:bg-amber-950/30 hover:bg-amber-50 transition-all flex items-center justify-between group"
-                >
+                <label className="p-3 text-left rounded-2xl border-2 border-amber-500/30 hover:border-amber-500 bg-amber-50/50 dark:bg-amber-950/30 hover:bg-amber-50 transition-all flex items-center justify-between group cursor-pointer">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">🍽️</span>
                     <div>
@@ -1899,17 +1890,22 @@ export function CostImportStagingModal({
                     </div>
                   </div>
                   <ArrowRight size={16} className="text-amber-600 shrink-0" />
-                </button>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg"
+                    onChange={(e) => {
+                      handleUploadBenefitsFile(e, "VR_CESTA");
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
 
-                <button
-                  type="button"
-                  onClick={() => handleOpenBenefitImport("BONUS")}
-                  className="p-3 text-left rounded-2xl border-2 border-indigo-500/30 hover:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 hover:bg-indigo-50 transition-all flex items-center justify-between group"
-                >
+                <label className="p-3 text-left rounded-2xl border-2 border-blue-500/30 hover:border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 hover:bg-blue-50 transition-all flex items-center justify-between group cursor-pointer">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">🎁</span>
                     <div>
-                      <span className="text-xs font-black text-slate-900 dark:text-white block group-hover:text-indigo-700">
+                      <span className="text-xs font-black text-slate-900 dark:text-white block group-hover:text-blue-700">
                         Bônus
                       </span>
                       <span className="text-[10px] text-slate-500">
@@ -1917,14 +1913,19 @@ export function CostImportStagingModal({
                       </span>
                     </div>
                   </div>
-                  <ArrowRight size={16} className="text-indigo-600 shrink-0" />
-                </button>
+                  <ArrowRight size={16} className="text-blue-600 shrink-0" />
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg"
+                    onChange={(e) => {
+                      handleUploadBenefitsFile(e, "BONUS");
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
 
-                <button
-                  type="button"
-                  onClick={() => handleOpenBenefitImport("PREMIACAO")}
-                  className="p-3 text-left rounded-2xl border-2 border-teal-500/30 hover:border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 hover:bg-teal-50 transition-all flex items-center justify-between group"
-                >
+                <label className="p-3 text-left rounded-2xl border-2 border-teal-500/30 hover:border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 hover:bg-teal-50 transition-all flex items-center justify-between group cursor-pointer">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">🏆</span>
                     <div>
@@ -1937,13 +1938,18 @@ export function CostImportStagingModal({
                     </div>
                   </div>
                   <ArrowRight size={16} className="text-teal-600 shrink-0" />
-                </button>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg"
+                    onChange={(e) => {
+                      handleUploadBenefitsFile(e, "PREMIACAO");
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
 
-                <button
-                  type="button"
-                  onClick={() => handleOpenBenefitImport("OUTROS")}
-                  className="p-3 text-left rounded-2xl border-2 border-slate-300 dark:border-slate-700 hover:border-slate-500 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 transition-all flex items-center justify-between group"
-                >
+                <label className="p-3 text-left rounded-2xl border-2 border-slate-300 dark:border-slate-700 hover:border-slate-500 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 transition-all flex items-center justify-between group cursor-pointer">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">➕</span>
                     <div>
@@ -1956,7 +1962,16 @@ export function CostImportStagingModal({
                     </div>
                   </div>
                   <ArrowRight size={16} className="text-slate-600 shrink-0" />
-                </button>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg"
+                    onChange={(e) => {
+                      handleUploadBenefitsFile(e, "OUTROS");
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
               </div>
 
               <div className="pt-2 text-center">
