@@ -2040,13 +2040,17 @@ export function CompetenciasCostsListModal({
 
                       {/* + Outros */}
                       <td className="px-2 py-3 align-middle text-right tabular-nums bg-blue-500/5 whitespace-nowrap">
-                        {Number(cost.outros_ajustes || heNoturno || 0) > 0 ? (
-                          <span className="font-bold text-blue-700 dark:text-blue-300">
-                            +{showValues ? formatCurrency(Number(cost.outros_ajustes || heNoturno || 0)) : '••••'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
-                        )}
+                        {(() => {
+                          const hasHol = Number(cost.valor_holerite || 0) > 0;
+                          const outVal = hasHol ? Number(cost.outros_ajustes || 0) : Number(cost.outros_ajustes || heNoturno || 0);
+                          return outVal > 0 ? (
+                            <span className="font-bold text-blue-700 dark:text-blue-300">
+                              +{showValues ? formatCurrency(outVal) : '••••'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-700">—</span>
+                          );
+                        })()}
                       </td>
 
                       {/* + VT */}
@@ -2084,9 +2088,9 @@ export function CompetenciasCostsListModal({
 
                       {/* + Premiação */}
                       <td className="px-2 py-3 align-middle text-right tabular-nums bg-teal-500/5 whitespace-nowrap">
-                        {Number(cost.valor_ajuda_custo || cost.valor_incentivos || 0) > 0 ? (
+                        {Number(cost.valor_ajuda_custo || 0) > 0 ? (
                           <span className="font-bold text-teal-700 dark:text-teal-300">
-                            +{showValues ? formatCurrency(Number(cost.valor_ajuda_custo || cost.valor_incentivos || 0)) : '••••'}
+                            +{showValues ? formatCurrency(Number(cost.valor_ajuda_custo || 0)) : '••••'}
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">—</span>
@@ -2096,12 +2100,13 @@ export function CompetenciasCostsListModal({
                       {/* = Subtotal */}
                       <td className="px-3 py-3 align-middle text-right tabular-nums bg-blue-500/10 font-black text-blue-900 dark:text-blue-200 whitespace-nowrap">
                         {(() => {
+                          const hasHol = Number(cost.valor_holerite || 0) > 0;
                           const prov = Number(cost.valor_holerite || cost.valor_fixo || (isCLT ? fixo : realTotal) || 0);
-                          const out = Number(cost.outros_ajustes || heNoturno || 0);
+                          const out = hasHol ? Number(cost.outros_ajustes || 0) : Number(cost.outros_ajustes || heNoturno || 0);
                           const v = Number(cost.valor_vt || 0);
                           const vrC = Number((cost.valor_cesta || 0) + (cost.valor_vr || 0));
                           const b = Number(cost.valor_bonus || 0);
-                          const p = Number(cost.valor_ajuda_custo || cost.valor_incentivos || 0);
+                          const p = Number(cost.valor_ajuda_custo || 0);
                           const subt = prov + out + v + vrC + b + p;
                           return (
                             <span className="inline-block px-2 py-0.5 rounded-lg bg-blue-100/70 dark:bg-blue-950/70 border border-blue-300 dark:border-blue-800">
