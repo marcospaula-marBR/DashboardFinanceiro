@@ -501,6 +501,162 @@ export class BprService {
   }
 
   /**
+   * Recalcula a distribuição financeira de um snapshot congelado com base em nova configuração de rateio.
+   * Preserva rigorosamente a lista de colaboradores, status de elegibilidade e fatores de desempenho originais.
+   */
+  static recalculateSnapshotWithNewConfig(
+    candidatesSnapshot: BprCandidateResult[],
+    newConfig: BprRuleConfig
+  ): BprCalculationSummary {
+    const layerEligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+    const layerIneligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+
+    candidatesSnapshot.forEach(c => {
+      if (c.isEligible) {
+        layerEligibleCounts[c.camada] = (layerEligibleCounts[c.camada] || 0) + 1;
+      } else {
+        layerIneligibleCounts[c.camada] = (layerIneligibleCounts[c.camada] || 0) + 1;
+      }
+    });
+
+    const isAmountMode = newConfig.splitMode === 'amount' && !!newConfig.tierAmounts;
+    const effectiveTotalPool = isAmountMode 
+      ? Number(((newConfig.tierAmounts?.E || 0) + (newConfig.tierAmounts?.T || 0) + (newConfig.tierAmounts?.O || 0)).toFixed(2))
+      : newConfig.totalPoolAmount;
+
+    const layerAmountE = isAmountMode ? (newConfig.tierAmounts?.E || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.E) / 100;
+    const layerAmountT = isAmountMode ? (newConfig.tierAmounts?.T || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.T) / 100;
+    const layerAmountO = isAmountMode ? (newConfig.tierAmounts?.O || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.O) / 100;
+
+    const layerPctE = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountE / effectiveTotalPool) * 100).toFixed(1)) : 0) : newConfig.tierSplits.E;
+    const layerPctT = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountT / effectiveTotalPool) * 100).toFixed(1)) : 0) : newConfig.tierSplits.T;
+    const layerPctO = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountO / effectiveTotalPool) * 100).toFixed(1)) : 0) : newConfig.tierSplits.O;
+
+    const layers: Record<BprCamada, BprLayerSummary> = {
+      E: {
+        camada: 'E',
+        label: 'Estratégico',
+        allocatedPercentage: layerPctE,
+        totalLayerAmount: Number(layerAmountE.toFixed(2)),
+        eligibleCount: layerEligibleCounts.E,
+        ineligibleCount: layerIneligibleCounts.E,
+        amountPerEligible: layerEligibleCounts.E > 0 
+          ? Number((layerAmountE / layerEligibleCounts.E).toFixed(2)) 
+          : 0
+      },
+      T: {
+        camada: 'T',
+        label: 'Tático',
+        allocatedPercentage: layerPctT,
+        totalLayerAmount: Number(layerAmountT.toFixed(2)),
+        eligibleCount: layerEligibleCounts.T,
+        ineligibleCount: layerIneligibleCounts.T,
+        amountPerEligible: layerEligibleCounts.T > 0 
+          ? Number((layerAmountT / layerEligibleCounts.T).toFixed(2)) 
+          : 0
+      },
+      O: {
+        camada: 'O',
+        label: 'Operacional/CLTs',
+        allocatedPercentage: layerPctO,
+        totalLayerAmount: Number(layerAmountO.toFixed(2)),
+        eligibleCount: layerEligibleCounts.O,
+        ineligibleCount: layerIneligibleCounts.O,
+        amountPerEligible: layerEligibleCounts.O > 0 
+          ? Number((layerAmountO / layerEligibleCounts.O).toFixed(2)) 
+          : 0
+      }
+    };
+
+    let totalDistributed = 0;
+    const updatedCandidates: BprCandidateResult[] = candidatesSnapshot.map(c => {
+      if (c.isEligible) {
+        const baseVal = layers[c.camada]?.amountPerEligible || 0;
+        const finalVal = Number((baseVal * (c.performanceFactor ?? 1.0)).toFixed(2));
+        totalDistributed += finalVal;
+        return {
+          ...c,
+          baseAmount: baseVal,
+          allocatedAmount: finalVal
+        };
+      } else {
+        return {
+          ...c,
+          baseAmount: 0,
+          allocatedAmount: 0
+        };
+      }
+    });
+
+    const residualAmount = Math.max(0, effectiveTotalPool - totalDistributed);
+
+    return {
+      totalPoolAmount: effectiveTotalPool,
+      totalDistributedAmount: Number(totalDistributed.toFixed(2)),
+      residualAmount: Number(residualAmount.toFixed(2)),
+      totalCandidates: updatedCandidates.length,
+      totalEligible: layerEligibleCounts.E + layerEligibleCounts.T + layerEligibleCounts.O,
+      totalIneligible: layerIneligibleCounts.E + layerIneligibleCounts.T + layerIneligibleCounts.O,
+      layers,
+      candidates: updatedCandidates,
+      glosadosCandidates: updatedCandidates.filter(c => c.hasGlosaInPeriod),
+      inativosCandidates: updatedCandidates.filter(c => c.isInactiveAtPaymentDate)
+    };
+  }
+
+  /**
+   * Clona um cenário existente gerando uma nova variação incremental com snapshot histórico recalculado.
+   */
+  static createClonedScenario(
+    baseScenario: BprSavedScenario,
+    params: {
+      name: string;
+      studyDate: string;
+      criteriaDescription: string;
+      newConfig: BprRuleConfig;
+    },
+    allEmployeesFallback: Employee[] = [],
+    monthlyCostsFallback: MonthlyCost[] = []
+  ): BprSavedScenario {
+    let recalculated: BprCalculationSummary;
+    if (baseScenario.candidatesSnapshot && baseScenario.candidatesSnapshot.length > 0) {
+      recalculated = this.recalculateSnapshotWithNewConfig(
+        baseScenario.candidatesSnapshot,
+        params.newConfig
+      );
+    } else {
+      recalculated = this.calculateBpr(
+        allEmployeesFallback,
+        monthlyCostsFallback,
+        params.newConfig
+      );
+    }
+
+    return {
+      id: `bpr-scen-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name: params.name.trim(),
+      studyDate: params.studyDate,
+      criteriaDescription: params.criteriaDescription.trim(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      config: params.newConfig,
+      summary: {
+        totalPoolAmount: recalculated.totalPoolAmount,
+        totalDistributedAmount: recalculated.totalDistributedAmount,
+        residualAmount: recalculated.residualAmount,
+        totalCandidates: recalculated.totalCandidates,
+        totalEligible: recalculated.totalEligible,
+        totalIneligible: recalculated.totalIneligible,
+        amountPerE: recalculated.layers.E.amountPerEligible,
+        amountPerT: recalculated.layers.T.amountPerEligible,
+        amountPerO: recalculated.layers.O.amountPerEligible,
+        layers: recalculated.layers
+      },
+      candidatesSnapshot: recalculated.candidates
+    };
+  }
+
+  /**
    * Parser inteligente de regras a partir de texto / documento
    */
   static parseRulesFromText(text: string, currentConfig: BprRuleConfig): Partial<BprRuleConfig> {

@@ -18,7 +18,7 @@ import {
   Award, X, CheckCircle2, AlertTriangle,
   DollarSign, FileText, Printer, Download, Save, FileUp, Sparkles, 
   Search, Calendar, ArrowLeft, FolderArchive, Scale, Trash2, 
-  RotateCcw, Check, Eye, HelpCircle
+  RotateCcw, Check, Eye, HelpCircle, Copy
 } from "lucide-react";
 
 interface BprCockpitModalProps {
@@ -85,6 +85,17 @@ export function BprCockpitModal({
   const [compareOnlyDiffs, setCompareOnlyDiffs] = useState(false);
   const [compareSearchQuery, setCompareSearchQuery] = useState('');
 
+  // Modal de Clonagem / Variação de Cenário
+  const [isCloneScenarioModalOpen, setIsCloneScenarioModalOpen] = useState(false);
+  const [cloneTargetScenario, setCloneTargetScenario] = useState<BprSavedScenario | null>(null);
+  const [cloneNameInput, setCloneNameInput] = useState('');
+  const [cloneStudyDateInput, setCloneStudyDateInput] = useState(() => new Date().toISOString().slice(0, 10));
+  const [cloneCriteriaInput, setCloneCriteriaInput] = useState('');
+  const [cloneSplitMode, setCloneSplitMode] = useState<'percentage' | 'amount'>('percentage');
+  const [cloneTotalPool, setCloneTotalPool] = useState(0);
+  const [cloneTierSplits, setCloneTierSplits] = useState<{ E: number; T: number; O: number }>({ E: 30, T: 40, O: 30 });
+  const [cloneTierAmounts, setCloneTierAmounts] = useState<{ E: number; T: number; O: number }>({ E: 0, T: 0, O: 0 });
+
   // Carrega cenários salvos ao abrir o modal
   useEffect(() => {
     if (isOpen) {
@@ -107,6 +118,36 @@ export function BprCockpitModal({
   const summary = useMemo(() => {
     return BprService.calculateBpr(employees, monthlyCosts, config);
   }, [employees, monthlyCosts, config]);
+
+  // Pré-visualização Reativa do Cenário Cloned / Variação
+  const clonePreviewSummary = useMemo(() => {
+    if (!cloneTargetScenario) return null;
+    const tempConfig: BprRuleConfig = {
+      ...cloneTargetScenario.config,
+      splitMode: cloneSplitMode,
+      totalPoolAmount: cloneSplitMode === 'amount'
+        ? Number(((cloneTierAmounts.E || 0) + (cloneTierAmounts.T || 0) + (cloneTierAmounts.O || 0)).toFixed(2))
+        : cloneTotalPool,
+      tierSplits: cloneTierSplits,
+      tierAmounts: cloneTierAmounts
+    };
+
+    if (cloneTargetScenario.candidatesSnapshot && cloneTargetScenario.candidatesSnapshot.length > 0) {
+      return BprService.recalculateSnapshotWithNewConfig(
+        cloneTargetScenario.candidatesSnapshot,
+        tempConfig
+      );
+    }
+    return BprService.calculateBpr(employees, monthlyCosts, tempConfig);
+  }, [
+    cloneTargetScenario,
+    cloneSplitMode,
+    cloneTotalPool,
+    cloneTierSplits,
+    cloneTierAmounts,
+    employees,
+    monthlyCosts
+  ]);
 
   // Validação da Soma de Splits ou Montante
   const isAmountMode = config.splitMode === 'amount';
@@ -245,6 +286,83 @@ export function BprCockpitModal({
     setConfig(scenario.config);
     setIsSavedScenariosModalOpen(false);
     setSaveSuccessToast(`Cenário "${scenario.name}" restaurado no simulador!`);
+    setTimeout(() => setSaveSuccessToast(null), 3500);
+  };
+
+  // Abrir Modal de Clonagem de Cenário
+  const handleOpenCloneModal = (scenario: BprSavedScenario) => {
+    setCloneTargetScenario(scenario);
+    setCloneNameInput(`${scenario.name} (Variação)`);
+    setCloneStudyDateInput(new Date().toISOString().slice(0, 10));
+    setCloneCriteriaInput(`Variação baseada em "${scenario.name}": `);
+    const mode = scenario.config.splitMode || 'percentage';
+    setCloneSplitMode(mode);
+    setCloneTotalPool(scenario.config.totalPoolAmount || scenario.summary.totalPoolAmount || 0);
+    setCloneTierSplits(scenario.config.tierSplits ? { ...scenario.config.tierSplits } : { E: 30, T: 40, O: 30 });
+    setCloneTierAmounts(scenario.config.tierAmounts ? { ...scenario.config.tierAmounts } : { E: 0, T: 0, O: 0 });
+    setIsCloneScenarioModalOpen(true);
+  };
+
+  // Confirmar e Salvar Cenário Cloned / Variação
+  const handleConfirmSaveClone = async () => {
+    if (!cloneTargetScenario || !cloneNameInput.trim()) return;
+
+    if (cloneSplitMode === 'percentage') {
+      const sumSplits = (cloneTierSplits.E || 0) + (cloneTierSplits.T || 0) + (cloneTierSplits.O || 0);
+      if (sumSplits !== 100) {
+        alert(`A soma dos percentuais deve ser exatamente 100% (atual: ${sumSplits}%). Ajuste os valores antes de salvar.`);
+        return;
+      }
+    }
+
+    const newConfig: BprRuleConfig = {
+      ...cloneTargetScenario.config,
+      splitMode: cloneSplitMode,
+      totalPoolAmount: cloneSplitMode === 'amount'
+        ? Number(((cloneTierAmounts.E || 0) + (cloneTierAmounts.T || 0) + (cloneTierAmounts.O || 0)).toFixed(2))
+        : cloneTotalPool,
+      tierSplits: cloneTierSplits,
+      tierAmounts: cloneTierAmounts
+    };
+
+    const clonedScenario = BprService.createClonedScenario(
+      cloneTargetScenario,
+      {
+        name: cloneNameInput.trim(),
+        studyDate: cloneStudyDateInput || new Date().toISOString().slice(0, 10),
+        criteriaDescription: cloneCriteriaInput.trim() || `Variação a partir de "${cloneTargetScenario.name}"`,
+        newConfig
+      },
+      employees,
+      monthlyCosts
+    );
+
+    await BprService.saveScenarioAsync(clonedScenario);
+    const updatedScenarios = BprService.loadSavedScenarios();
+    setSavedScenarios(updatedScenarios);
+    setIsCloneScenarioModalOpen(false);
+    setSaveSuccessToast(`Variação "${clonedScenario.name}" salva com sucesso na Central de Cenários!`);
+    setTimeout(() => setSaveSuccessToast(null), 3500);
+  };
+
+  // Carregar Configuração da Variação no Cockpit Ativo
+  const handleApplyCloneToSimulator = () => {
+    if (!cloneTargetScenario) return;
+
+    const newConfig: BprRuleConfig = {
+      ...cloneTargetScenario.config,
+      splitMode: cloneSplitMode,
+      totalPoolAmount: cloneSplitMode === 'amount'
+        ? Number(((cloneTierAmounts.E || 0) + (cloneTierAmounts.T || 0) + (cloneTierAmounts.O || 0)).toFixed(2))
+        : cloneTotalPool,
+      tierSplits: cloneTierSplits,
+      tierAmounts: cloneTierAmounts
+    };
+
+    setConfig(newConfig);
+    setIsCloneScenarioModalOpen(false);
+    setIsSavedScenariosModalOpen(false);
+    setSaveSuccessToast(`Parâmetros da variação de "${cloneTargetScenario.name}" carregados no Cockpit!`);
     setTimeout(() => setSaveSuccessToast(null), 3500);
   };
 
@@ -2097,7 +2215,17 @@ export function BprCockpitModal({
                         </div>
 
                         {/* Botões Rápidos de Impressão, Download e Ação */}
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCloneModal(scenario)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                            title="Clonar este cenário e criar variação incremental rápida (ajustar % ou R$)"
+                          >
+                            <Copy size={13} className="text-amber-600" />
+                            <span>Clonar / Variação</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => handleOpenExportOptionsModal(
@@ -2398,6 +2526,406 @@ export function BprCockpitModal({
               >
                 Fechar Comparador
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: CLONAR CENÁRIO & CRIAR VARIAÇÃO INCREMENTAL ── */}
+      {isCloneScenarioModalOpen && cloneTargetScenario && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-6 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+            {/* Cabeçalho */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-md shadow-amber-500/20">
+                  <Copy size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                    <span>Clonar Cenário &amp; Criar Variação</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                      Incremental
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Estudo base: <strong className="text-slate-700">{cloneTargetScenario.name}</strong> · Base de elegíveis congelada do estudo original
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCloneScenarioModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Conteúdo com Scroll */}
+            <div className="p-6 overflow-y-auto space-y-5 bg-white">
+              {/* Banner do Estudo Base */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Estudo Base Original</span>
+                  <strong className="text-sm font-black text-slate-800">{cloneTargetScenario.name}</strong>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Data do estudo: {cloneTargetScenario.studyDate ? cloneTargetScenario.studyDate.split('-').reverse().join('/') : '-'} · {cloneTargetScenario.summary.totalEligible} elegíveis apurados
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 sm:pl-4">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Pool Original</span>
+                    <strong className="text-xs font-black text-slate-800">{formatCurrency(cloneTargetScenario.summary.totalPoolAmount)}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Rateado Original</span>
+                    <strong className="text-xs font-black text-emerald-700">{formatCurrency(cloneTargetScenario.summary.totalDistributedAmount)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* 1. Identificação da Nova Variação */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center text-[10px]">1</span>
+                  <span>Identificação do Novo Cenário</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                      Nome do Cenário Cloned / Variação
+                    </label>
+                    <input
+                      type="text"
+                      value={cloneNameInput}
+                      onChange={e => setCloneNameInput(e.target.value)}
+                      placeholder="Ex: Simulação C1 2026 - Aumento 5% no Operacional"
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-bold outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                      Data do Novo Estudo
+                    </label>
+                    <input
+                      type="date"
+                      value={cloneStudyDateInput}
+                      onChange={e => setCloneStudyDateInput(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-mono outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                    Premissas e Justificativa da Variação
+                  </label>
+                  <textarea
+                    value={cloneCriteriaInput}
+                    onChange={e => setCloneCriteriaInput(e.target.value)}
+                    placeholder="Descreva o objetivo desta variação (ex: Aumento de 5% no Operacional para incentivar retenção de equipe técnica)"
+                    rows={2}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Ajuste dos Parâmetros de Rateio */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center text-[10px]">2</span>
+                    <span>Ajuste Incremental dos Parâmetros</span>
+                  </h4>
+
+                  {/* Alternador de Modo: % vs R$ */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setCloneSplitMode('percentage')}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                        cloneSplitMode === 'percentage'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Porcentagem (%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCloneSplitMode('amount');
+                        if (!cloneTierAmounts.E && !cloneTierAmounts.T && !cloneTierAmounts.O) {
+                          const pool = cloneTotalPool || 100000;
+                          setCloneTierAmounts({
+                            E: Number(((pool * cloneTierSplits.E) / 100).toFixed(2)),
+                            T: Number(((pool * cloneTierSplits.T) / 100).toFixed(2)),
+                            O: Number(((pool * cloneTierSplits.O) / 100).toFixed(2))
+                          });
+                        }
+                      }}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                        cloneSplitMode === 'amount'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Valor Fixo (R$)
+                    </button>
+                  </div>
+                </div>
+
+                {cloneSplitMode === 'percentage' ? (
+                  <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                        Montante Total do Pool (R$)
+                      </label>
+                      <input
+                        type="number"
+                        step="1000"
+                        value={cloneTotalPool}
+                        onChange={e => setCloneTotalPool(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                          Estratégico (%)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={cloneTierSplits.E}
+                            onChange={e => setCloneTierSplits(prev => ({ ...prev, E: parseInt(e.target.value) || 0 }))}
+                            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 pr-8"
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">%</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                          Tático (%)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={cloneTierSplits.T}
+                            onChange={e => setCloneTierSplits(prev => ({ ...prev, T: parseInt(e.target.value) || 0 }))}
+                            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 pr-8"
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">%</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                          Operacional (%)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={cloneTierSplits.O}
+                            onChange={e => setCloneTierSplits(prev => ({ ...prev, O: parseInt(e.target.value) || 0 }))}
+                            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 pr-8"
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Indicador de Soma de 100% */}
+                    {(() => {
+                      const sum = (cloneTierSplits.E || 0) + (cloneTierSplits.T || 0) + (cloneTierSplits.O || 0);
+                      return (
+                        <div className={`flex items-center justify-between text-xs px-3 py-1.5 rounded-xl font-bold ${
+                          sum === 100 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
+                        }`}>
+                          <span>Soma dos percentuais: {sum}%</span>
+                          <span>{sum === 100 ? '✓ Equilibrado em 100%' : `⚠️ Divergência de ${100 - sum}%`}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                          Estratégico (R$)
+                        </label>
+                        <input
+                          type="number"
+                          step="500"
+                          value={cloneTierAmounts.E}
+                          onChange={e => setCloneTierAmounts(prev => ({ ...prev, E: parseFloat(e.target.value) || 0 }))}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                          Tático (R$)
+                        </label>
+                        <input
+                          type="number"
+                          step="500"
+                          value={cloneTierAmounts.T}
+                          onChange={e => setCloneTierAmounts(prev => ({ ...prev, T: parseFloat(e.target.value) || 0 }))}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                          Operacional (R$)
+                        </label>
+                        <input
+                          type="number"
+                          step="500"
+                          value={cloneTierAmounts.O}
+                          onChange={e => setCloneTierAmounts(prev => ({ ...prev, O: parseFloat(e.target.value) || 0 }))}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-between text-xs font-mono font-bold">
+                      <span className="text-slate-500 uppercase tracking-wider text-[10px]">Pool Total Resultante (E + T + O):</span>
+                      <span className="text-sm font-black text-emerald-700">
+                        {formatCurrency((cloneTierAmounts.E || 0) + (cloneTierAmounts.T || 0) + (cloneTierAmounts.O || 0))}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Comparativo / Delta em Tempo Real */}
+              {clonePreviewSummary && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center text-[10px]">3</span>
+                    <span>Impacto da Variação em Relação ao Estudo Original</span>
+                  </h4>
+
+                  <div className="bg-slate-900 text-white rounded-2xl p-4 font-mono text-xs space-y-3 shadow-md">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                      <span className="text-slate-400 font-sans text-xs">Base congelada:</span>
+                      <span className="text-amber-400 font-bold">{clonePreviewSummary.totalEligible} elegíveis mantidos</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center sm:text-left">
+                      {/* Total Pool */}
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-sans">Pool Total</span>
+                        <div className="text-sm font-black text-white">{formatCurrency(clonePreviewSummary.totalPoolAmount)}</div>
+                        {(() => {
+                          const diff = clonePreviewSummary.totalPoolAmount - cloneTargetScenario.summary.totalPoolAmount;
+                          if (Math.abs(diff) < 0.01) return <span className="text-[10px] text-slate-400">Sem variação</span>;
+                          return (
+                            <span className={`text-[10px] font-bold ${diff > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {diff > 0 ? `+${formatCurrency(diff)}` : formatCurrency(diff)}
+                            </span>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Estratégico */}
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-sans">Estratégico (p/ elegível)</span>
+                        <div className="text-sm font-black text-white">{formatCurrency(clonePreviewSummary.layers.E.amountPerEligible)}</div>
+                        {(() => {
+                          const orig = cloneTargetScenario.summary.amountPerE || cloneTargetScenario.summary.layers?.E?.amountPerEligible || 0;
+                          const diff = clonePreviewSummary.layers.E.amountPerEligible - orig;
+                          if (Math.abs(diff) < 0.01) return <span className="text-[10px] text-slate-400">Sem variação</span>;
+                          return (
+                            <span className={`text-[10px] font-bold ${diff > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {diff > 0 ? `+${formatCurrency(diff)}` : formatCurrency(diff)}
+                            </span>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Tático */}
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-sans">Tático (p/ elegível)</span>
+                        <div className="text-sm font-black text-white">{formatCurrency(clonePreviewSummary.layers.T.amountPerEligible)}</div>
+                        {(() => {
+                          const orig = cloneTargetScenario.summary.amountPerT || cloneTargetScenario.summary.layers?.T?.amountPerEligible || 0;
+                          const diff = clonePreviewSummary.layers.T.amountPerEligible - orig;
+                          if (Math.abs(diff) < 0.01) return <span className="text-[10px] text-slate-400">Sem variação</span>;
+                          return (
+                            <span className={`text-[10px] font-bold ${diff > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {diff > 0 ? `+${formatCurrency(diff)}` : formatCurrency(diff)}
+                            </span>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Operacional */}
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-sans">Operacional (p/ elegível)</span>
+                        <div className="text-sm font-black text-white">{formatCurrency(clonePreviewSummary.layers.O.amountPerEligible)}</div>
+                        {(() => {
+                          const orig = cloneTargetScenario.summary.amountPerO || cloneTargetScenario.summary.layers?.O?.amountPerEligible || 0;
+                          const diff = clonePreviewSummary.layers.O.amountPerEligible - orig;
+                          if (Math.abs(diff) < 0.01) return <span className="text-[10px] text-slate-400">Sem variação</span>;
+                          return (
+                            <span className={`text-[10px] font-bold ${diff > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {diff > 0 ? `+${formatCurrency(diff)}` : formatCurrency(diff)}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé com Ações */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCloneScenarioModalOpen(false)}
+                className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs uppercase cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleApplyCloneToSimulator}
+                  className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                  title="Carrega esta nova variação no simulador ativo para continuar ajustando"
+                >
+                  <RotateCcw size={14} />
+                  <span>Carregar no Cockpit</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmSaveClone}
+                  disabled={!cloneNameInput.trim()}
+                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+                >
+                  <Save size={15} />
+                  <span>Salvar como Novo Cenário</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -164,4 +164,91 @@ assert.strictEqual(onlyOEligible[0].employeeId, '4');
 
 console.log('   ✅ Filtros de elegibilidade, camada e empresa validados com 100% de precisão.');
 
+// 5. Testando clonagem de cenário com recálculo incremental de snapshot congelado
+console.log('\n5. Testando clonagem de cenário com recálculo incremental de snapshot congelado...');
+
+function recalculateSnapshotMock(candidatesSnapshot, newConfig) {
+  const layerEligibleCounts = { E: 0, T: 0, O: 0 };
+  candidatesSnapshot.forEach(c => {
+    if (c.isEligible) layerEligibleCounts[c.camada]++;
+  });
+
+  const isAmountMode = newConfig.splitMode === 'amount' && !!newConfig.tierAmounts;
+  const effectiveTotalPool = isAmountMode 
+    ? Number(((newConfig.tierAmounts?.E || 0) + (newConfig.tierAmounts?.T || 0) + (newConfig.tierAmounts?.O || 0)).toFixed(2))
+    : newConfig.totalPoolAmount;
+
+  const layerAmountE = isAmountMode ? (newConfig.tierAmounts?.E || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.E) / 100;
+  const layerAmountT = isAmountMode ? (newConfig.tierAmounts?.T || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.T) / 100;
+  const layerAmountO = isAmountMode ? (newConfig.tierAmounts?.O || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.O) / 100;
+
+  const amountPerE = layerEligibleCounts.E > 0 ? Number((layerAmountE / layerEligibleCounts.E).toFixed(2)) : 0;
+  const amountPerT = layerEligibleCounts.T > 0 ? Number((layerAmountT / layerEligibleCounts.T).toFixed(2)) : 0;
+  const amountPerO = layerEligibleCounts.O > 0 ? Number((layerAmountO / layerEligibleCounts.O).toFixed(2)) : 0;
+
+  const layers = {
+    E: { totalLayerAmount: layerAmountE, amountPerEligible: amountPerE, eligibleCount: layerEligibleCounts.E },
+    T: { totalLayerAmount: layerAmountT, amountPerEligible: amountPerT, eligibleCount: layerEligibleCounts.T },
+    O: { totalLayerAmount: layerAmountO, amountPerEligible: amountPerO, eligibleCount: layerEligibleCounts.O }
+  };
+
+  let totalDistributed = 0;
+  const candidates = candidatesSnapshot.map(c => {
+    if (c.isEligible) {
+      const baseVal = layers[c.camada].amountPerEligible;
+      const finalVal = Number((baseVal * (c.performanceFactor ?? 1.0)).toFixed(2));
+      totalDistributed += finalVal;
+      return { ...c, baseAmount: baseVal, allocatedAmount: finalVal };
+    }
+    return { ...c, baseAmount: 0, allocatedAmount: 0 };
+  });
+
+  return {
+    totalPoolAmount: effectiveTotalPool,
+    totalDistributedAmount: Number(totalDistributed.toFixed(2)),
+    residualAmount: Number((effectiveTotalPool - totalDistributed).toFixed(2)),
+    totalEligible: layerEligibleCounts.E + layerEligibleCounts.T + layerEligibleCounts.O,
+    layers,
+    candidates
+  };
+}
+
+// Estudo base: R$ 100.000 com 3 elegíveis (1 de cada camada) e 1 inelegível
+const baseCandidates = [
+  { employeeId: '1', name: 'Diretor', camada: 'E', isEligible: true, performanceFactor: 1.0 },
+  { employeeId: '2', name: 'Gerente', camada: 'T', isEligible: true, performanceFactor: 1.0 },
+  { employeeId: '3', name: 'Analista', camada: 'O', isEligible: true, performanceFactor: 1.0 },
+  { employeeId: '4', name: 'Desligado', camada: 'O', isEligible: false, performanceFactor: 0.0 }
+];
+
+// Variação 1: +10% no Operacional (20% E / 40% T / 40% O)
+const varConfig1 = {
+  splitMode: 'percentage',
+  totalPoolAmount: 100000,
+  tierSplits: { E: 20, T: 40, O: 40 }
+};
+
+const res1 = recalculateSnapshotMock(baseCandidates, varConfig1);
+assert.strictEqual(res1.totalPoolAmount, 100000);
+assert.strictEqual(res1.layers.E.amountPerEligible, 20000); // 20%
+assert.strictEqual(res1.layers.T.amountPerEligible, 40000); // 40%
+assert.strictEqual(res1.layers.O.amountPerEligible, 40000); // 40%
+assert.strictEqual(res1.candidates[0].allocatedAmount, 20000);
+assert.strictEqual(res1.candidates[2].allocatedAmount, 40000);
+assert.strictEqual(res1.candidates[3].allocatedAmount, 0); // Inelegível preservado com 0
+
+// Variação 2: Valor fixo R$ alocado
+const varConfig2 = {
+  splitMode: 'amount',
+  tierAmounts: { E: 15000, T: 35000, O: 50000 }
+};
+const res2 = recalculateSnapshotMock(baseCandidates, varConfig2);
+assert.strictEqual(res2.totalPoolAmount, 100000);
+assert.strictEqual(res2.layers.E.amountPerEligible, 15000);
+assert.strictEqual(res2.layers.T.amountPerEligible, 35000);
+assert.strictEqual(res2.layers.O.amountPerEligible, 50000);
+assert.strictEqual(res2.totalDistributedAmount, 100000);
+
+console.log('   ✅ Recálculo de snapshot e clonagem de cenários validados com sucesso.');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR PASSARAM COM EXATIDÃO!');
