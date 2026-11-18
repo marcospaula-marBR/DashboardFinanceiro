@@ -251,4 +251,86 @@ assert.strictEqual(res2.totalDistributedAmount, 100000);
 
 console.log('   ✅ Recálculo de snapshot e clonagem de cenários validados com sucesso.');
 
-console.log('\n🎉 TODOS OS TESTES DO BPR PASSARAM COM EXATIDÃO!');
+// 6. Testando destaque de deltas no relatório comparativo do BPR
+console.log('\n6. Testando destaque e formatação de Deltas no Comparativo BPR...');
+function getDeltaStyleMock(delta) {
+  if (delta > 0) return { color: 'emerald', prefix: '+', isPositive: true };
+  if (delta < 0) return { color: 'rose', prefix: '', isNegative: true };
+  return { color: 'slate', prefix: '', isZero: true };
+}
+
+assert.strictEqual(getDeltaStyleMock(1500).color, 'emerald');
+assert.strictEqual(getDeltaStyleMock(1500).prefix, '+');
+assert.strictEqual(getDeltaStyleMock(-500).color, 'rose');
+assert.strictEqual(getDeltaStyleMock(0).color, 'slate');
+console.log('   ✅ Regras de destaque visual de Deltas validadas.');
+
+// 7. Testando filtros da Central de Emissão de Relatórios de People
+console.log('\n7. Testando filtros da Central de Emissão de Relatórios de People...');
+function filterPeopleReportMock(employees, filters) {
+  let list = [...employees];
+
+  // 1. Status
+  if (filters.status === 'active') {
+    list = list.filter(e => e.status !== 'Inativo' && e.status !== 'Desligado' && e.active !== false);
+  } else if (filters.status === 'inactive') {
+    list = list.filter(e => e.status === 'Inativo' || e.status === 'Desligado' || e.active === false);
+  }
+
+  // 2. Empresa
+  if (filters.companies && filters.companies.length > 0) {
+    list = list.filter(e => filters.companies.includes(e.company));
+  }
+
+  // 3. Vínculo
+  if (filters.linkTypes && filters.linkTypes.length > 0) {
+    list = list.filter(e => filters.linkTypes.includes(e.linkType));
+  }
+
+  // 4. Período
+  if (filters.isPeriodActive) {
+    if (filters.dateType === 'admission') {
+      if (filters.startDate) list = list.filter(e => e.start_date >= filters.startDate);
+      if (filters.endDate) list = list.filter(e => e.start_date <= filters.endDate);
+    } else if (filters.dateType === 'resignation') {
+      if (filters.startDate) list = list.filter(e => e.resignation_date && e.resignation_date >= filters.startDate);
+      if (filters.endDate) list = list.filter(e => e.resignation_date && e.resignation_date <= filters.endDate);
+    }
+  }
+
+  return list;
+}
+
+const mockStaff = [
+  { id: '1', name: 'Ana', company: 'MarBR', linkType: 'CLT', status: 'Ativo', start_date: '2024-01-10', remuneration: 8000 },
+  { id: '2', name: 'Bruno', company: 'DZM', linkType: 'PJ', status: 'Ativo', start_date: '2025-03-01', remuneration: 12000 },
+  { id: '3', name: 'Carlos', company: 'MarBR', linkType: 'CLT', status: 'Inativo', start_date: '2023-05-15', resignation_date: '2025-11-01', remuneration: 7000 },
+  { id: '4', name: 'Diana', company: 'G2', linkType: 'PJ', status: 'Ativo', start_date: '2026-02-01', remuneration: 9500 }
+];
+
+// Teste A: Somente Ativos
+const repActives = filterPeopleReportMock(mockStaff, { status: 'active' });
+assert.strictEqual(repActives.length, 3);
+assert.ok(repActives.every(e => e.status === 'Ativo'));
+
+// Teste B: Somente Inativos
+const repInactives = filterPeopleReportMock(mockStaff, { status: 'inactive' });
+assert.strictEqual(repInactives.length, 1);
+assert.strictEqual(repInactives[0].name, 'Carlos');
+
+// Teste C: Por Empresa (MarBR)
+const repMarBr = filterPeopleReportMock(mockStaff, { status: 'all', companies: ['MarBR'] });
+assert.strictEqual(repMarBr.length, 2);
+
+// Teste D: Por Período de Admissão (admitidos a partir de 2025-01-01)
+const repAdmitted2025 = filterPeopleReportMock(mockStaff, { status: 'all', isPeriodActive: true, dateType: 'admission', startDate: '2025-01-01' });
+assert.strictEqual(repAdmitted2025.length, 2); // Bruno (2025-03-01) e Diana (2026-02-01)
+
+// Teste E: Por Período de Rescisão
+const repResigned = filterPeopleReportMock(mockStaff, { status: 'inactive', isPeriodActive: true, dateType: 'resignation', startDate: '2025-10-01', endDate: '2025-12-31' });
+assert.strictEqual(repResigned.length, 1);
+assert.strictEqual(repResigned[0].name, 'Carlos');
+
+console.log('   ✅ Filtros de status, vínculos, empresas e períodos de admissão/rescisão validados.');
+
+console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

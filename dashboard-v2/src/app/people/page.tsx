@@ -1412,15 +1412,15 @@ export default function PeoplePage() {
             <button
               onClick={() => setIsBatchPdfModalOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-sm"
-              title="Gerar relatórios de auditoria de faturamento e custos ou fichas em lote (PDF / CSV)"
+              title="Gerar relatórios customizados de colaboradores (headcount), auditoria de custos e fichas cadastrais (PDF / Impressão)"
             >
-              <FileText size={14} /> Relatórios & Auditoria em Lote
+              <FileText size={15} /> Gerar Relatórios
             </button>
 
             {/* BOTÃO ATALHO: TERCEIRIZAÇÃO */}
             <button
               onClick={() => setIsOutsourcingModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 border border-purple-300 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-md"
+              className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all active:scale-95 shrink-0 uppercase shadow-md"
               title="Gestão & Apuração de Terceirização (Custos, Empréstimos e Repasses)"
             >
               <Building2 size={15} /> Terceirização

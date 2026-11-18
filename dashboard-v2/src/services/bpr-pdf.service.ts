@@ -899,8 +899,56 @@ export class BprPdfService {
         fontStyle: 'bold',
         fontSize: 7.5
       },
-      bodyStyles: { fontSize: 7 }
+      bodyStyles: { fontSize: 7 },
+      didParseCell: (data) => {
+        if (data.section === 'body' && scenarios.length >= 2 && data.column.index === tableHeaders.length - 1) {
+          const rawVal = data.cell.raw as string;
+          if (rawVal && rawVal.startsWith('+')) {
+            data.cell.styles.textColor = [4, 120, 87]; // emerald-700
+            data.cell.styles.fillColor = [236, 253, 245]; // emerald-50
+            data.cell.styles.fontStyle = 'bold';
+          } else if (rawVal && rawVal.startsWith('-')) {
+            data.cell.styles.textColor = [190, 18, 60]; // rose-700
+            data.cell.styles.fillColor = [254, 242, 242]; // rose-50
+            data.cell.styles.fontStyle = 'bold';
+          } else {
+            data.cell.styles.textColor = [100, 116, 139]; // slate-500
+          }
+        }
+      }
     });
+
+    // Bloco de Assinaturas Executivas
+    const finalTableY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY : 170;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let sigY = finalTableY + 18;
+    if (sigY + 25 > pageHeight) {
+      doc.addPage();
+      sigY = 30;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+
+    const sigWidth = 70;
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+
+    // Assinatura 1: Diretoria
+    doc.line(20, sigY, 20 + sigWidth, sigY);
+    doc.text('DIRETORIA EXECUTIVA', 20 + sigWidth / 2, sigY + 4, { align: 'center' });
+    doc.text('Aprovação Final da Diretoria', 20 + sigWidth / 2, sigY + 8, { align: 'center' });
+
+    // Assinatura 2: Recursos Humanos
+    doc.line(110, sigY, 110 + sigWidth, sigY);
+    doc.text('GESTÃO DE PESSOAS / RH', 110 + sigWidth / 2, sigY + 4, { align: 'center' });
+    doc.text('Validação de Elegibilidade', 110 + sigWidth / 2, sigY + 8, { align: 'center' });
+
+    // Assinatura 3: Controladoria
+    doc.line(200, sigY, 200 + sigWidth, sigY);
+    doc.text('CONTROLADORIA FINANCEIRA', 200 + sigWidth / 2, sigY + 4, { align: 'center' });
+    doc.text('Auditoria Orçamentária', 200 + sigWidth / 2, sigY + 8, { align: 'center' });
 
     doc.save(`Comparativo_BPR_${new Date().toISOString().slice(0, 10)}.pdf`);
   }
@@ -1001,7 +1049,7 @@ export class BprPdfService {
                   return `<td class="amount" style="color: ${amt > 0 ? '#0f172a' : '#94a3b8'};">${formatCurrency(amt)}</td>`;
                 }).join('')}
                 ${scenarios.length >= 2 ? `
-                  <td class="amount" style="color: ${(r.delta || 0) > 0 ? '#047857' : (r.delta || 0) < 0 ? '#be123c' : '#64748b'};">
+                  <td class="amount" style="background-color: ${(r.delta || 0) > 0 ? '#ecfdf5' : (r.delta || 0) < 0 ? '#fef2f2' : 'transparent'}; color: ${(r.delta || 0) > 0 ? '#047857' : (r.delta || 0) < 0 ? '#be123c' : '#64748b'}; font-weight: bold; padding: 4px 8px; border-radius: 4px;">
                     ${(r.delta || 0) > 0 ? '+' : ''}${formatCurrency(r.delta || 0)}
                   </td>
                 ` : ''}
@@ -1009,6 +1057,21 @@ export class BprPdfService {
             `).join('')}
           </tbody>
         </table>
+
+        <div style="margin-top: 40px; page-break-inside: avoid; display: flex; justify-content: space-around; text-align: center; font-size: 9px; color: #475569;">
+          <div style="border-top: 1px solid #cbd5e1; width: 220px; padding-top: 6px;">
+            <strong style="display: block; color: #0f172a;">DIRETORIA EXECUTIVA</strong>
+            <span>Aprovação Final da Diretoria</span>
+          </div>
+          <div style="border-top: 1px solid #cbd5e1; width: 220px; padding-top: 6px;">
+            <strong style="display: block; color: #0f172a;">GESTÃO DE PESSOAS / RH</strong>
+            <span>Validação de Elegibilidade</span>
+          </div>
+          <div style="border-top: 1px solid #cbd5e1; width: 220px; padding-top: 6px;">
+            <strong style="display: block; color: #0f172a;">CONTROLADORIA FINANCEIRA</strong>
+            <span>Auditoria Orçamentária</span>
+          </div>
+        </div>
 
         <script>
           window.onload = function() { window.print(); };

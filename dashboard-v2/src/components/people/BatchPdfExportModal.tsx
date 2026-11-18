@@ -3,8 +3,11 @@
 import React, { useState, useMemo } from 'react';
 import { 
   X, Download, Printer, FileText, CheckSquare, Square, Users, Building2, Briefcase, 
-  Filter, FileSpreadsheet, Search, ShieldCheck, Calculator, AlertCircle, CheckCircle2, ChevronRight, HelpCircle
+  Filter, FileSpreadsheet, Search, ShieldCheck, Calculator, AlertCircle, CheckCircle2, ChevronRight, HelpCircle,
+  Calendar, DollarSign, Check
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel } from '@/types/loans';
 import { formatCurrency } from '@/services/loans.service';
 import { getCompanyLogoUrl } from './PeopleBadges';
@@ -26,16 +29,26 @@ export function BatchPdfExportModal({
   allBonds = []
 }: BatchPdfExportModalProps) {
   // Modo do relatório e formato
-  const [reportMode, setReportMode] = useState<'audit' | 'full'>('audit');
+  const [reportMode, setReportMode] = useState<'general' | 'audit' | 'full'>('general');
   const [exportFormat, setExportFormat] = useState<'pdf' | 'csv'>('pdf');
 
-  // Filtros de seleção
+  // Filtros de seleção gerais
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedLinkTypes, setSelectedLinkTypes] = useState<string[]>([]);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [searchEmployeeQuery, setSearchEmployeeQuery] = useState('');
+
+  // Novos Filtros Especializados de Relatório (Status, Período e Exibições)
+  const [selectedStatus, setSelectedStatus] = useState<'active' | 'all' | 'inactive' | 'ferias'>('active');
+  const [dateFilterType, setDateFilterType] = useState<'admission' | 'resignation'>('admission');
+  const [isPeriodFilterActive, setIsPeriodFilterActive] = useState(false);
+  const [periodStartDate, setPeriodStartDate] = useState('');
+  const [periodEndDate, setPeriodEndDate] = useState('');
+  const [includeFinancials, setIncludeFinancials] = useState(true);
+  const [includeSummaryCards, setIncludeSummaryCards] = useState(true);
+  const [includeSignatures, setIncludeSignatures] = useState(true);
 
   // Módulos a incluir (no modo ficha cadastral completa)
   const [includePersonal, setIncludePersonal] = useState(true);
@@ -70,32 +83,143 @@ export function BatchPdfExportModal({
     return Array.from(years).sort().reverse();
   }, [allMonthlyCosts]);
 
-  // Colaboradores filtrados com base nas escolhas de empresa, setor e vínculo
+  // Colaboradores filtrados com base em todos os critérios
   const targetEmployees = useMemo(() => {
     let list = [...employees];
+
+    // Ignora registros internos de sistema se houver
+    list = list.filter(e => {
+      const nameUpper = (e.name || '').toUpperCase();
+      const corpUpper = (e.corporate_name || '').toUpperCase();
+      return !nameUpper.includes('SYSTEM_GLOBAL') && !corpUpper.includes('SYSTEM_GLOBAL') && e.id !== '__SYSTEM_GLOBAL_CONFIG__';
+    });
+
+    // 1. Filtro de Status
+    if (selectedStatus === 'active') {
+      list = list.filter(e => {
+        const st = (e.status || '').toLowerCase();
+        return st !== 'inativo' && st !== 'desligado' && st !== 'demitido' && (e as any).active !== false;
+      });
+    } else if (selectedStatus === 'inactive') {
+      list = list.filter(e => {
+        const st = (e.status || '').toLowerCase();
+        return st === 'inativo' || st === 'desligado' || st === 'demitido' || (e as any).active === false;
+      });
+    } else if (selectedStatus === 'ferias') {
+      list = list.filter(e => {
+        const st = (e.status || '').toLowerCase();
+        return st === 'férias' || st === 'ferias' || st === 'afastado';
+      });
+    }
+
+    // 2. Filtro de Empresa
     if (selectedCompanies.length > 0) {
       list = list.filter(e => selectedCompanies.includes(e.company || ''));
     }
+
+    // 3. Filtro de Departamento
     if (selectedDepartments.length > 0) {
       list = list.filter(e => selectedDepartments.includes(e.department || ''));
     }
+
+    // 4. Filtro de Vínculo
     if (selectedLinkTypes.length > 0) {
       list = list.filter(e => selectedLinkTypes.includes(e.linkType || ''));
     }
+
+    // 5. Filtro de Período de Contratação / Admissão vs Desligamento
+    if (isPeriodFilterActive) {
+      if (dateFilterType === 'admission') {
+        if (periodStartDate) {
+          list = list.filter(e => e.start_date && e.start_date >= periodStartDate);
+        }
+        if (periodEndDate) {
+          list = list.filter(e => e.start_date && e.start_date <= periodEndDate);
+        }
+      } else if (dateFilterType === 'resignation') {
+        if (periodStartDate) {
+          list = list.filter(e => {
+            const resDate = e.resignation_date || (e as any).real_resignation_date;
+            return resDate && resDate >= periodStartDate;
+          });
+        }
+        if (periodEndDate) {
+          list = list.filter(e => {
+            const resDate = e.resignation_date || (e as any).real_resignation_date;
+            return resDate && resDate <= periodEndDate;
+          });
+        }
+      }
+    }
+
+    // 6. Seleção nominal individual
     if (selectedEmployeeIds.length > 0) {
       list = list.filter(e => selectedEmployeeIds.includes(e.id));
     }
+
+    // 7. Busca textual
     if (searchEmployeeQuery.trim()) {
       const q = searchEmployeeQuery.toLowerCase();
       list = list.filter(e => 
         (e.name || '').toLowerCase().includes(q) ||
+        (e.corporate_name || '').toLowerCase().includes(q) ||
         (e.document_id || '').includes(q) ||
         (e.job_role || '').toLowerCase().includes(q) ||
         (e.company || '').toLowerCase().includes(q)
       );
     }
+
     return list;
-  }, [employees, selectedCompanies, selectedDepartments, selectedLinkTypes, selectedEmployeeIds, searchEmployeeQuery]);
+  }, [
+    employees,
+    selectedStatus,
+    selectedCompanies,
+    selectedDepartments,
+    selectedLinkTypes,
+    isPeriodFilterActive,
+    dateFilterType,
+    periodStartDate,
+    periodEndDate,
+    selectedEmployeeIds,
+    searchEmployeeQuery
+  ]);
+
+  // Indicadores de Headcount e Massa Salarial para o modo Geral
+  const reportKpis = useMemo(() => {
+    let totalRemuneration = 0;
+    let cltCount = 0;
+    let pjCount = 0;
+    let otherCount = 0;
+    let activeCount = 0;
+    let inactiveCount = 0;
+
+    targetEmployees.forEach(e => {
+      const rem = Number(e.remuneration_fixed || e.remuneration || 0);
+      totalRemuneration += rem;
+      
+      const link = (e.linkType || '').toUpperCase();
+      if (link.includes('CLT')) cltCount++;
+      else if (link.includes('PJ') || link.includes('MEI')) pjCount++;
+      else otherCount++;
+
+      const st = (e.status || '').toLowerCase();
+      if (st !== 'inativo' && st !== 'desligado' && st !== 'demitido' && (e as any).active !== false) {
+        activeCount++;
+      } else {
+        inactiveCount++;
+      }
+    });
+
+    return {
+      totalEmployees: targetEmployees.length,
+      totalRemuneration,
+      cltCount,
+      pjCount,
+      otherCount,
+      activeCount,
+      inactiveCount
+    };
+  }, [targetEmployees]);
 
   // Total de competências a serem auditadas no escopo filtrado
   const filteredCostsScope = useMemo(() => {
@@ -124,7 +248,7 @@ export function BatchPdfExportModal({
     }
   };
 
-  // EXPORTAÇÃO CSV EM LOTE (AUDITORIA CONSOLIDADA OU FICHA COMPLETA)
+  // EXPORTAÇÃO CSV
   const handleExportBatchCSV = () => {
     if (targetEmployees.length === 0) {
       alert('Nenhum contratado selecionado para geração em lote.');
@@ -133,13 +257,49 @@ export function BatchPdfExportModal({
 
     let csv = '';
 
-    if (reportMode === 'audit') {
-      csv += `"RELATÓRIO CONSOLIDADO DE AUDITORIA DE FATURAMENTO E CUSTOS"\n`;
-      csv += `"Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}"\n`;
-      csv += `"Escopo: ${targetEmployees.length} contratados selecionados | ${filteredCostsScope.length} competências analisadas"\n`;
-      csv += `"Filtro de Ano: ${selectedYear === 'all' ? 'Todas as Competências' : `Ano ${selectedYear}`}"\n\n`;
+    // MODO 0: RELATÓRIO GERAL DE COLABORADORES
+    if (reportMode === 'general') {
+      csv += `"RELATÓRIO GERAL DE COLABORADORES & QUADRO DE PESSOAL"
+`;
+      csv += `"Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}"
+`;
+      csv += `"Total Colaboradores: ${targetEmployees.length}"
 
-      csv += `Colaborador;CPF / CNPJ;Empresa;Regime;Cargo / Escopo;Competência;Fonte / Origem da Informação;Valor Previsto Contratual;Valor Fixo Real;Bônus;Comissão;Horas Extras;Benefícios;FGTS;13º & Férias;Glosas / Descontos;Custo Real Desembolsado;Diferença (Real - Previsto);Status Auditoria;Observações\n`;
+`;
+
+      csv += `Nº;Colaborador;CPF / CNPJ;Empresa;Regime;Cargo;Departamento;Data de Admissão;Data de Desligamento;${includeFinancials ? 'Remuneração / Honorários;' : ''}Status
+`;
+
+      targetEmployees.forEach((e, idx) => {
+        const rem = Number(e.remuneration_fixed || e.remuneration || 0);
+        csv += `${idx + 1};${sanitize(e.corporate_name || e.name)};${sanitize(e.document_id || e.pj_type)};${sanitize(e.company)};${sanitize(e.linkType)};${sanitize(e.job_role)};${sanitize(e.department)};${sanitize(e.start_date || '-')};${sanitize(e.resignation_date || (e as any).real_resignation_date || '-')};${includeFinancials ? sanitize(rem.toFixed(2)) + ';' : ''}${sanitize(e.status || ((e as any).active !== false ? 'Ativo' : 'Inativo'))}
+`;
+      });
+
+      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Relatorio_Colaboradores_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
+    if (reportMode === 'audit') {
+      csv += `"RELATÓRIO CONSOLIDADO DE AUDITORIA DE FATURAMENTO E CUSTOS"
+`;
+      csv += `"Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}"
+`;
+      csv += `"Escopo: ${targetEmployees.length} contratados selecionados | ${filteredCostsScope.length} competências analisadas"
+`;
+      csv += `"Filtro de Ano: ${selectedYear === 'all' ? 'Todas as Competências' : `Ano ${selectedYear}`}"
+
+`;
+
+      csv += `Colaborador;CPF / CNPJ;Empresa;Regime;Cargo / Escopo;Competência;Fonte / Origem da Informação;Valor Previsto Contratual;Valor Fixo Real;Bônus;Comissão;Horas Extras;Benefícios;FGTS;13º & Férias;Glosas / Descontos;Custo Real Desembolsado;Diferença (Real - Previsto);Status Auditoria;Observações
+`;
 
       let totalGeralPrevisto = 0;
       let totalGeralFixo = 0;
@@ -161,71 +321,214 @@ export function BatchPdfExportModal({
 
         const previsto = emp.remuneration_fixed || emp.remuneration || 0;
 
-        empCosts.forEach(c => {
-          const isCLT = c.vinculo_tipo === 'CLT';
-          const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
-          const diff = cReal - previsto;
-          const statusAuditoria = Math.abs(diff) < 0.01 ? 'Conciliado' : (diff > 0 ? 'Acima do Previsto (+)' : 'Abaixo do Previsto (-)');
-          const origemLabel = formatCostOrigem(c.origem);
-          const ben = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0);
-          const decFer = (c.valor_decimo_terceiro || 0) + (c.valor_ferias || 0);
+        empCosts.forEach(cost => {
+          const isCLT = cost.vinculo_tipo === 'CLT';
+          const realCost = (cost.valor_liquido || 0) + (isCLT ? (cost.valor_adiantamento || 0) : 0);
+          const diff = realCost - previsto;
+          const statusAuditoria = Math.abs(diff) < 0.01 ? 'CONCILIADO' : (diff > 0 ? 'ACIMA DO PREVISTO' : 'ABAIXO DO PREVISTO');
+          const totalBen = (cost.valor_vr || 0) + (cost.valor_vt || 0) + (cost.valor_cesta || 0) + (cost.valor_ajuda_custo || 0);
+          const totalDecFer = (cost.valor_decimo_terceiro || 0) + (cost.valor_ferias || 0);
 
           totalGeralPrevisto += previsto;
-          totalGeralFixo += (c.valor_fixo || 0);
-          totalGeralBonus += (c.valor_bonus || 0);
-          totalGeralComissao += (c.valor_comissao || 0);
-          totalGeralExtras += (c.valor_hora_extra || 0);
-          totalGeralBeneficios += ben;
-          totalGeralFgts += (c.valor_fgts || 0);
-          totalGeralDecFer += decFer;
-          totalGeralDescontos += (c.valor_descontos || 0);
-          totalGeralReal += cReal;
+          totalGeralFixo += cost.valor_fixo || 0;
+          totalGeralBonus += cost.valor_bonus || 0;
+          totalGeralComissao += cost.valor_comissao || 0;
+          totalGeralExtras += cost.valor_hora_extra || 0;
+          totalGeralBeneficios += totalBen;
+          totalGeralFgts += cost.valor_fgts || 0;
+          totalGeralDecFer += totalDecFer;
+          totalGeralDescontos += cost.valor_descontos || 0;
+          totalGeralReal += realCost;
 
-          csv += `${sanitize(emp.name)};${sanitize(emp.document_id || emp.pj_type || '-')};${sanitize(emp.company || '-')};${sanitize(emp.linkType || '-')};${sanitize(emp.job_role || '-')};${sanitize(c.competencia.slice(0, 7))};${sanitize(origemLabel)};${previsto.toFixed(2).replace('.', ',')};${(c.valor_fixo || 0).toFixed(2).replace('.', ',')};${(c.valor_bonus || 0).toFixed(2).replace('.', ',')};${(c.valor_comissao || 0).toFixed(2).replace('.', ',')};${(c.valor_hora_extra || 0).toFixed(2).replace('.', ',')};${ben.toFixed(2).replace('.', ',')};${(c.valor_fgts || 0).toFixed(2).replace('.', ',')};${decFer.toFixed(2).replace('.', ',')};${(c.valor_descontos || 0).toFixed(2).replace('.', ',')};${cReal.toFixed(2).replace('.', ',')};${diff.toFixed(2).replace('.', ',')};${sanitize(statusAuditoria)};${sanitize(c.observacao || '')}\n`;
+          csv += `${sanitize(emp.corporate_name || emp.name)};${sanitize(emp.document_id || emp.pj_type)};${sanitize(emp.company)};${sanitize(emp.linkType)};${sanitize(emp.job_role)};${sanitize(cost.competencia.slice(0, 7))};${sanitize(formatCostOrigem(cost.origem))};${previsto.toFixed(2)};${(cost.valor_fixo || 0).toFixed(2)};${(cost.valor_bonus || 0).toFixed(2)};${(cost.valor_comissao || 0).toFixed(2)};${(cost.valor_hora_extra || 0).toFixed(2)};${totalBen.toFixed(2)};${(cost.valor_fgts || 0).toFixed(2)};${totalDecFer.toFixed(2)};${(cost.valor_descontos || 0).toFixed(2)};${realCost.toFixed(2)};${diff.toFixed(2)};${statusAuditoria};${sanitize(cost.observacao || '')}
+`;
         });
       });
 
-      const totalDiffGeral = totalGeralReal - totalGeralPrevisto;
-      const statusGeral = Math.abs(totalDiffGeral) < 0.01 ? 'Conciliado' : (totalDiffGeral > 0 ? 'Acima do Previsto (+)' : 'Abaixo do Previsto (-)');
+      csv += `
+"TOTAL GERAL CONSOLIDADO";"";"";"";"";"";"";${totalGeralPrevisto.toFixed(2)};${totalGeralFixo.toFixed(2)};${totalGeralBonus.toFixed(2)};${totalGeralComissao.toFixed(2)};${totalGeralExtras.toFixed(2)};${totalGeralBeneficios.toFixed(2)};${totalGeralFgts.toFixed(2)};${totalGeralDecFer.toFixed(2)};${totalGeralDescontos.toFixed(2)};${totalGeralReal.toFixed(2)};${(totalGeralReal - totalGeralPrevisto).toFixed(2)};"";""
+`;
 
-      csv += `\nTOTAL GERAL CONSOLIDADO;TOTAL GERAL;-;-;-;${filteredCostsScope.length} COMPETÊNCIAS;TOTAL;${totalGeralPrevisto.toFixed(2).replace('.', ',')};${totalGeralFixo.toFixed(2).replace('.', ',')};${totalGeralBonus.toFixed(2).replace('.', ',')};${totalGeralComissao.toFixed(2).replace('.', ',')};${totalGeralExtras.toFixed(2).replace('.', ',')};${totalGeralBeneficios.toFixed(2).replace('.', ',')};${totalGeralFgts.toFixed(2).replace('.', ',')};${totalGeralDecFer.toFixed(2).replace('.', ',')};${totalGeralDescontos.toFixed(2).replace('.', ',')};${totalGeralReal.toFixed(2).replace('.', ',')};${totalDiffGeral.toFixed(2).replace('.', ',')};${sanitize(statusGeral)};-\n`;
-
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Auditoria_Consolidada_Faturamento_Custos_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      onClose();
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Auditoria_Consolidada_Lote_${selectedYear !== 'all' ? selectedYear : 'Total'}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       return;
     }
 
-    // Modo Fichas Cadastrais
-    csv += `"CADASTRO DE CONTRATADOS EM LOTE"\n`;
-    csv += `"Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}"\n\n`;
-    csv += `Nome;CPF;RG;Gênero;Empresa;Regime;Cargo / Escopo;Setor;Início Contrato;Vencimento Contrato;Status;E-mail;Telefone;Cidade;UF;Chave PIX;Valor Contratual\n`;
-
+    // MODO 2: FICHA CADASTRAL COMPLETA EM CSV
+    csv += `Nome;CPF;RG;Razao Social;CNPJ;Resp Legal;Empresa;Regime;Setor;Cargo;Cidade;UF;Email;Telefone;Chave PIX;Valor Contrato;Status
+`;
     targetEmployees.forEach(e => {
-      csv += `${sanitize(e.name)};${sanitize(e.document_id)};${sanitize(e.document_rg)};${sanitize(e.gender)};${sanitize(e.company)};${sanitize(e.linkType)};${sanitize(e.job_role)};${sanitize(e.department)};${sanitize(formatDate(e.start_date))};${sanitize(formatDate(e.contract_expiry_date))};${sanitize(e.status || 'Ativo')};${sanitize(e.email_professional || e.email)};${sanitize(e.phone_professional || e.phone)};${sanitize(e.city)};${sanitize(e.state)};${sanitize(e.pix_key)};${(e.remuneration_fixed || e.remuneration || 0).toFixed(2).replace('.', ',')}\n`;
+      csv += `${sanitize(e.name)};${sanitize(e.document_id)};${sanitize(e.document_rg)};${sanitize(e.corporate_name)};${sanitize(e.pj_type)};${sanitize(e.responsible_name)};${sanitize(e.company)};${sanitize(e.linkType)};${sanitize(e.department)};${sanitize(e.job_role)};${sanitize(e.city)};${sanitize(e.state)};${sanitize(e.email_professional || e.email)};${sanitize(e.phone_professional || e.phone)};${sanitize(e.pix_key)};${(e.remuneration_fixed || e.remuneration || 0).toFixed(2)};${sanitize(e.status)}
+`;
     });
 
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Contratados_Lote_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    onClose();
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Fichas_Cadastrais_Lote_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  // EXPORTAÇÃO PDF EM LOTE (AUDITORIA CONSOLIDADA OU FICHAS CADASTRAIS)
+  // EXPORTAÇÃO PDF VETORIAL (MODO GERAL)
+  const handleExportGeneralPdf = () => {
+    if (targetEmployees.length === 0) {
+      alert('Nenhum colaborador encontrado com os filtros selecionados.');
+      return;
+    }
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(15, 23, 42);
+    doc.text('RELATÓRIO GERAL DE COLABORADORES & QUADRO DE PESSOAL', 14, 15);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+
+    const statusLabel = selectedStatus === 'active' ? 'Somente Ativos' : selectedStatus === 'inactive' ? 'Somente Desligados/Inativos' : selectedStatus === 'ferias' ? 'Férias/Afastados' : 'Todos os Status';
+    const companiesLabel = selectedCompanies.length > 0 ? selectedCompanies.join(', ') : 'Todas as Empresas';
+    const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todos os Regimes';
+    const dateLabel = isPeriodFilterActive
+      ? `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate || 'início'} até ${periodEndDate || 'hoje'}`
+      : 'Histórico Geral Completo';
+
+    doc.text(`ESCOPO: ${companiesLabel} • REGIMES: ${linksLabel} • STATUS: ${statusLabel} • ${dateLabel}`, 14, 21);
+    doc.text(`EMISSÃO: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} • TOTAL: ${targetEmployees.length} COLABORADORES`, 14, 26);
+
+    let currentY = 31;
+
+    // Cards de Resumo no Topo se includeSummaryCards
+    if (includeSummaryCards) {
+      const cardWidth = includeFinancials ? 63 : 84;
+      const cardHeight = 14;
+      const cardsData = [
+        { label: 'HEADCOUNT TOTAL', value: `${reportKpis.totalEmployees} colaboradores`, color: [15, 23, 42] },
+        { label: 'DISTRIBUIÇÃO REGIME', value: `${reportKpis.cltCount} CLT • ${reportKpis.pjCount} PJ • ${reportKpis.otherCount} Outros`, color: [30, 41, 59] },
+        { label: 'STATUS ATIVO/INATIVO', value: `${reportKpis.activeCount} Ativos • ${reportKpis.inactiveCount} Desligados`, color: [30, 41, 59] },
+        ...(includeFinancials ? [{ label: 'MASSA SALARIAL MENSAL', value: formatCurrency(reportKpis.totalRemuneration), color: [4, 120, 87] }] : [])
+      ];
+
+      cardsData.forEach((c, idx) => {
+        const x = 14 + idx * (cardWidth + 4);
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(x, currentY, cardWidth, cardHeight, 2, 2, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(c.label, x + 4, currentY + 5);
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(c.color[0], c.color[1], c.color[2]);
+        doc.text(c.value, x + 4, currentY + 10.5);
+      });
+
+      currentY += cardHeight + 6;
+    }
+
+    const tableHeaders = [
+      '#',
+      'Colaborador / Razão Social',
+      'CPF / CNPJ',
+      'Empresa',
+      'Regime',
+      'Cargo / Escopo',
+      'Departamento',
+      'Admissão',
+      ...(selectedStatus !== 'active' ? ['Desligamento'] : []),
+      ...(includeFinancials ? ['Remuneração'] : []),
+      'Status'
+    ];
+
+    const bodyRows = targetEmployees.map((e, index) => {
+      const rem = Number(e.remuneration_fixed || e.remuneration || 0);
+      const row = [
+        String(index + 1),
+        e.corporate_name || e.name || 'Sem nome',
+        e.document_id || e.pj_type || '-',
+        e.company || 'MarBR',
+        e.linkType || 'CLT',
+        e.job_role || '-',
+        e.department || 'Geral',
+        e.start_date ? e.start_date.split('-').reverse().join('/') : '-',
+        ...(selectedStatus !== 'active' ? [
+          (e.resignation_date || (e as any).real_resignation_date)
+            ? (e.resignation_date || (e as any).real_resignation_date).slice(0, 10).split('-').reverse().join('/')
+            : '-'
+        ] : []),
+        ...(includeFinancials ? [formatCurrency(rem)] : []),
+        e.status || ((e as any).active !== false ? 'Ativo' : 'Inativo')
+      ];
+      return row;
+    });
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [tableHeaders],
+      body: bodyRows,
+      theme: 'striped',
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 7.5
+      },
+      bodyStyles: { fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 8, halign: 'center' },
+        ...(includeFinancials ? { [tableHeaders.indexOf('Remuneração')]: { halign: 'right', fontStyle: 'bold' } } : {})
+      }
+    });
+
+    if (includeSignatures) {
+      const finalTableY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY : 170;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let sigY = finalTableY + 18;
+      if (sigY + 25 > pageHeight) {
+        doc.addPage();
+        sigY = 30;
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+
+      const sigWidth = 70;
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.3);
+
+      doc.line(40, sigY, 40 + sigWidth, sigY);
+      doc.text('GESTÃO DE PESSOAS / RH', 40 + sigWidth / 2, sigY + 4, { align: 'center' });
+      doc.text('Emissão e Validação Cadastral', 40 + sigWidth / 2, sigY + 8, { align: 'center' });
+
+      doc.line(170, sigY, 170 + sigWidth, sigY);
+      doc.text('DIRETORIA EXECUTIVA', 170 + sigWidth / 2, sigY + 4, { align: 'center' });
+      doc.text('Aprovação Institucional', 170 + sigWidth / 2, sigY + 8, { align: 'center' });
+    }
+
+    doc.save(`Relatorio_Colaboradores_People_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  // EXPORTAÇÃO IMPRESSÃO EM HTML (MODO GERAL, AUDITORIA OU FICHAS)
   const handleExportBatchPDF = () => {
     if (targetEmployees.length === 0) {
-      alert('Nenhum contratado selecionado para geração em lote.');
+      alert('Nenhum contratado selecionado para geração.');
       return;
     }
 
@@ -235,13 +538,176 @@ export function BatchPdfExportModal({
       return;
     }
 
+    // MODO 0: RELATÓRIO GERAL DE COLABORADORES
+    if (reportMode === 'general') {
+      const statusLabel = selectedStatus === 'active' ? 'Somente Ativos' : selectedStatus === 'inactive' ? 'Somente Desligados/Inativos' : selectedStatus === 'ferias' ? 'Férias/Afastados' : 'Todos os Status';
+      const companiesLabel = selectedCompanies.length > 0 ? selectedCompanies.join(', ') : 'Todas as Empresas';
+      const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todos os Regimes';
+      const dateLabel = isPeriodFilterActive
+        ? `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate || 'início'} até ${periodEndDate || 'hoje'}`
+        : 'Histórico Geral Completo';
+
+      const generalHtml = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Relatório Geral de Colaboradores & Quadro de Pessoal (${targetEmployees.length} Registros)</title>
+          <style>
+            @page { size: A4 landscape; margin: 12mm 10mm 12mm 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 10px; font-size: 11px; }
+            .header { border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }
+            .title { font-size: 16px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin: 0; }
+            .meta { font-size: 9px; color: #475569; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
+            .kpis { display: flex; gap: 8px; margin-bottom: 15px; }
+            .kpi-card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; }
+            .kpi-label { font-size: 8px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+            .kpi-value { font-size: 12px; font-weight: 900; color: #0f172a; margin-top: 2px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 9.5px; }
+            th { background: #0f172a; color: white; font-weight: 800; text-transform: uppercase; padding: 6px 8px; border: 1px solid #0f172a; text-align: left; font-size: 8.5px; }
+            td { padding: 5px 8px; border: 1px solid #e2e8f0; }
+            tr:nth-child(even) td { background: #f8fafc; }
+            .amount { text-align: right; font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+            .status-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 700; text-transform: uppercase; }
+            .status-active { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+            .status-inactive { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+            .signatures { margin-top: 35px; page-break-inside: avoid; display: flex; justify-content: space-around; text-align: center; font-size: 9px; color: #475569; }
+            .sig-line { border-top: 1px solid #cbd5e1; width: 220px; padding-top: 6px; }
+            @media print { .no-print { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="no-print" style="margin-bottom: 12px; padding: 10px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 700; color: #92400e;">Relatório Geral de Colaboradores & Quadro de Pessoal</span>
+            <div>
+              <button onclick="window.print()" style="padding: 6px 14px; background: #059669; color: white; border: none; border-radius: 6px; font-weight: 800; cursor: pointer;">Imprimir / Salvar PDF</button>
+              <button onclick="window.close()" style="padding: 6px 14px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; margin-left: 6px;">Fechar</button>
+            </div>
+          </div>
+
+          <div class="header">
+            <div>
+              <h1 class="title">Relatório Geral de Colaboradores &amp; Quadro de Pessoal</h1>
+              <div class="meta">Escopo: ${companiesLabel} • Regimes: ${linksLabel} • Status: ${statusLabel} • ${dateLabel}</div>
+              <div class="meta" style="color: #64748b;">Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} • Total: ${targetEmployees.length} Colaboradores</div>
+            </div>
+            <div style="text-align: right;">
+              <span style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase;">MAR BRASIL • DZM • G2</span>
+            </div>
+          </div>
+
+          ${includeSummaryCards ? `
+            <div class="kpis">
+              <div class="kpi-card">
+                <div class="kpi-label">Headcount Total</div>
+                <div class="kpi-value">${reportKpis.totalEmployees} pessoas</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Distribuição por Regime</div>
+                <div class="kpi-value">${reportKpis.cltCount} CLT &bull; ${reportKpis.pjCount} PJ &bull; ${reportKpis.otherCount} Outros</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Status Ativo / Inativo</div>
+                <div class="kpi-value">${reportKpis.activeCount} Ativos &bull; ${reportKpis.inactiveCount} Desligados</div>
+              </div>
+              ${includeFinancials ? `
+                <div class="kpi-card" style="border-left: 3px solid #059669;">
+                  <div class="kpi-label" style="color: #047857;">Massa Salarial Mensal</div>
+                  <div class="kpi-value" style="color: #047857;">${formatCurrency(reportKpis.totalRemuneration)}</div>
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25px; text-align: center;">#</th>
+                <th>Colaborador / Razão Social</th>
+                <th>CPF / CNPJ</th>
+                <th>Empresa</th>
+                <th>Regime</th>
+                <th>Cargo / Escopo</th>
+                <th>Departamento</th>
+                <th>Admissão</th>
+                ${selectedStatus !== 'active' ? '<th>Desligamento</th>' : ''}
+                ${includeFinancials ? '<th style="text-align: right;">Remuneração</th>' : ''}
+                <th style="text-align: center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${targetEmployees.map((e, index) => {
+                const rem = Number(e.remuneration_fixed || e.remuneration || 0);
+                const isActive = !['inativo', 'desligado', 'demitido'].includes((e.status || '').toLowerCase()) && (e as any).active !== false;
+                return `
+                  <tr>
+                    <td style="text-align: center; color: #64748b; font-weight: bold;">${index + 1}</td>
+                    <td><strong>${e.corporate_name || e.name || 'Sem nome'}</strong></td>
+                    <td style="font-family: monospace;">${e.document_id || e.pj_type || '-'}</td>
+                    <td><strong>${e.company || 'MarBR'}</strong></td>
+                    <td>${e.linkType || 'CLT'}</td>
+                    <td>${e.job_role || '-'}</td>
+                    <td>${e.department || 'Geral'}</td>
+                    <td>${e.start_date ? e.start_date.split('-').reverse().join('/') : '-'}</td>
+                    ${selectedStatus !== 'active' ? `<td>${(e.resignation_date || (e as any).real_resignation_date) ? (e.resignation_date || (e as any).real_resignation_date).slice(0, 10).split('-').reverse().join('/') : '-'}</td>` : ''}
+                    ${includeFinancials ? `<td class="amount">${formatCurrency(rem)}</td>` : ''}
+                    <td style="text-align: center;">
+                      <span class="status-badge ${isActive ? 'status-active' : 'status-inactive'}">
+                        ${e.status || (isActive ? 'Ativo' : 'Inativo')}
+                      </span>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+            ${includeFinancials ? `
+              <tfoot>
+                <tr style="background: #f1f5f9; font-weight: bold;">
+                  <td colspan="${selectedStatus !== 'active' ? 9 : 8}" style="text-align: right; text-transform: uppercase;">Total Geral (${targetEmployees.length} colaboradores):</td>
+                  <td class="amount" style="color: #047857;">${formatCurrency(reportKpis.totalRemuneration)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            ` : ''}
+          </table>
+
+          ${includeSignatures ? `
+            <div class="signatures">
+              <div class="sig-line">
+                <strong style="display: block; color: #0f172a;">GESTÃO DE PESSOAS / RH</strong>
+                <span>Emissão e Validação Cadastral</span>
+              </div>
+              <div class="sig-line">
+                <strong style="display: block; color: #0f172a;">DIRETORIA EXECUTIVA</strong>
+                <span>Aprovação Institucional</span>
+              </div>
+            </div>
+          ` : ''}
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            }
+          </script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.open();
+      printWindow.document.write(generalHtml);
+      printWindow.document.close();
+      return;
+    }
+
     // MODO 1: RELATÓRIO CONSOLIDADO DE AUDITORIA DE FATURAMENTO E CUSTOS
     if (reportMode === 'audit') {
       let totalPrevistoConsolidado = 0;
       let totalRealConsolidado = 0;
       let totalCompetenciasCount = 0;
 
-      // Resumo executivo por colaborador para a tabela da capa
       const collaboratorsSummary = targetEmployees.map(emp => {
         const empCosts = allMonthlyCosts.filter(c => {
           if (c.employee_id !== emp.id) return false;
@@ -249,254 +715,113 @@ export function BatchPdfExportModal({
           return true;
         }).sort((a, b) => a.competencia.localeCompare(b.competencia));
 
-        const previstoMensal = emp.remuneration_fixed || emp.remuneration || 0;
-        const previstoTotal = previstoMensal * empCosts.length;
-        const realTotal = empCosts.reduce((acc, c) => acc + (c.valor_liquido || 0) + (c.vinculo_tipo === 'CLT' ? (c.valor_adiantamento || 0) : 0), 0);
-        const diffTotal = realTotal - previstoTotal;
+        const previsto = emp.remuneration_fixed || emp.remuneration || 0;
+        const totalReal = empCosts.reduce((acc, c) => {
+          const isCLT = c.vinculo_tipo === 'CLT';
+          return acc + (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
+        }, 0);
 
-        totalPrevistoConsolidado += previstoTotal;
-        totalRealConsolidado += realTotal;
+        totalPrevistoConsolidado += (previsto * empCosts.length);
+        totalRealConsolidado += totalReal;
         totalCompetenciasCount += empCosts.length;
 
         return {
           emp,
           costs: empCosts,
-          previstoMensal,
-          previstoTotal,
-          realTotal,
-          diffTotal,
-          status: Math.abs(diffTotal) < 0.01 ? 'Conciliado' : (diffTotal > 0 ? 'Acima (+)' : 'Abaixo (-)')
+          previsto,
+          totalReal,
+          mediaReal: empCosts.length > 0 ? totalReal / empCosts.length : 0,
+          diff: totalReal - (previsto * empCosts.length)
         };
       });
 
-      const diffGeralTotal = totalRealConsolidado - totalPrevistoConsolidado;
-
-      let auditBatchHtml = `
+      const auditBatchHtml = `
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Relatório Consolidado de Auditoria — ${targetEmployees.length} Contratados</title>
+          <title>Relatório Consolidado de Auditoria (${targetEmployees.length} Contratados)</title>
           <style>
-            @page { size: A4 landscape; margin: 12mm; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 0; font-size: 11px; background: #fff; }
+            @page { size: A4 landscape; margin: 12mm 10mm 12mm 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; background: #fff; margin: 0; padding: 0; font-size: 10px; }
+            .header { border-bottom: 2px solid #f59e0b; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }
+            .title { font-size: 16px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin: 0; }
+            .meta { font-size: 9px; color: #64748b; font-weight: 700; text-transform: uppercase; margin-top: 3px; }
+            .kpis { display: flex; gap: 8px; margin-bottom: 12px; }
+            .kpi-card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; }
+            .kpi-label { font-size: 8px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+            .kpi-value { font-size: 12px; font-weight: 900; color: #0f172a; margin-top: 2px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 9px; }
+            th { background: #0f172a; color: white; font-weight: 800; text-transform: uppercase; padding: 5px 6px; border: 1px solid #0f172a; text-align: left; }
+            td { padding: 4.5px 6px; border: 1px solid #e2e8f0; }
+            tr:nth-child(even) td { background: #f8fafc; }
+            .amount { text-align: right; font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
             .page-break { page-break-after: always; }
-            .header { border-bottom: 2px solid #f59e0b; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
-            .badge-source { display: inline-block; padding: 2px 5px; border-radius: 4px; font-size: 8.5px; font-weight: 700; text-transform: uppercase; border: 1px solid transparent; }
-            .badge-status { display: inline-block; padding: 2px 6px; border-radius: 9999px; font-size: 8.5px; font-weight: 800; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
-            th { background: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; font-size: 9px; text-align: left; padding: 6px 5px; border: 1px solid #e2e8f0; }
-            td { padding: 5px; border: 1px solid #e2e8f0; color: #334155; }
-            .section-box { margin-bottom: 16px; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; page-break-inside: avoid; }
-            @media print { body { margin: 0; } }
+            @media print { .no-print { display: none; } }
           </style>
         </head>
         <body>
-          <!-- CAPA EXECUTIVA CONSOLIDADA -->
           <div class="header">
             <div>
-              <span style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 6px; font-size: 9.5px; font-weight: 800; text-transform: uppercase; display: inline-block; margin-bottom: 4px;">
-                Auditoria Consolidada de Faturamento &amp; Custos
-              </span>
-              <h1 style="font-size: 20px; margin: 0; color: #0f172a; font-weight: 800;">
-                Relatório de Auditoria Financeira de Contratados
-              </h1>
-              <p style="margin: 2px 0 0 0; color: #64748b; font-size: 11px; font-weight: 600;">
-                Batimento de Valores Previstos em Contrato vs Custos Reais com Rastreabilidade de Fontes (Dianna, Manual, Folha CLT)
-              </p>
+              <h1 class="title">Auditoria Consolidada de Faturamento &amp; Custos</h1>
+              <div class="meta">
+                ${selectedYear === 'all' ? 'Todas as Competências' : `Competências de ${selectedYear}`} • ${targetEmployees.length} Contratados • ${totalCompetenciasCount} Lançamentos Auditados
+              </div>
             </div>
             <div style="text-align: right;">
-              <p style="font-size: 9.5px; color: #94a3b8; margin: 0;">Emitido em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
-              <p style="font-size: 10px; font-weight: 700; color: #334155; margin: 2px 0 0 0;">Filtro: ${selectedYear === 'all' ? 'Todas as Competências' : `Competências de ${selectedYear}`}</p>
+              <span style="font-size: 11px; font-weight: 900; color: #0f172a;">MAR BRASIL • DZM • G2</span>
             </div>
           </div>
 
-          <!-- Cards de KPIs Consolidados -->
-          <div style="margin-bottom: 16px; background: #fffdf5; border: 1.5px solid #fde68a; padding: 12px; border-radius: 8px;">
-            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
-              <div style="background: #ffffff; padding: 8px 10px; border-radius: 6px; border-left: 3px solid #f59e0b;">
-                <span style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block;">Contratados Auditados</span>
-                <span style="font-size: 14px; font-weight: 800; color: #0f172a; display: block; margin-top: 2px;">${targetEmployees.length} contratado(s)</span>
-              </div>
-              <div style="background: #ffffff; padding: 8px 10px; border-radius: 6px; border-left: 3px solid #10b981;">
-                <span style="font-size: 9px; font-weight: 700; color: #047857; text-transform: uppercase; display: block;">Competências Analisadas</span>
-                <span style="font-size: 14px; font-weight: 800; color: #047857; display: block; margin-top: 2px;">${totalCompetenciasCount} competência(s)</span>
-              </div>
-              <div style="background: #ffffff; padding: 8px 10px; border-radius: 6px; border-left: 3px solid #6366f1;">
-                <span style="font-size: 9px; font-weight: 700; color: #4338ca; text-transform: uppercase; display: block;">Total Previsto Contratual</span>
-                <span style="font-size: 14px; font-weight: 800; color: #4338ca; display: block; margin-top: 2px;">${formatCurrency(totalPrevistoConsolidado)}</span>
-              </div>
-              <div style="background: #ffffff; padding: 8px 10px; border-radius: 6px; border-left: 3px solid #b45309;">
-                <span style="font-size: 9px; font-weight: 700; color: #92400e; text-transform: uppercase; display: block;">Total Real Desembolsado</span>
-                <span style="font-size: 14px; font-weight: 800; color: #b45309; display: block; margin-top: 2px;">${formatCurrency(totalRealConsolidado)}</span>
-              </div>
-              <div style="background: ${Math.abs(diffGeralTotal) < 0.01 ? '#ecfdf5' : (diffGeralTotal > 0 ? '#fff1f2' : '#f0f9ff')}; padding: 8px 10px; border-radius: 6px; border-left: 3px solid ${Math.abs(diffGeralTotal) < 0.01 ? '#10b981' : (diffGeralTotal > 0 ? '#f43f5e' : '#0284c7')};">
-                <span style="font-size: 9px; font-weight: 700; color: ${Math.abs(diffGeralTotal) < 0.01 ? '#047857' : (diffGeralTotal > 0 ? '#be123c' : '#0369a1')}; text-transform: uppercase; display: block;">Divergência Consolidada</span>
-                <span style="font-size: 14px; font-weight: 800; color: ${Math.abs(diffGeralTotal) < 0.01 ? '#047857' : (diffGeralTotal > 0 ? '#be123c' : '#0369a1')}; display: block; margin-top: 2px;">
-                  ${diffGeralTotal > 0 ? '+' : ''}${formatCurrency(diffGeralTotal)}
-                </span>
+          <div class="kpis">
+            <div class="kpi-card">
+              <div class="kpi-label">Total Real Desembolsado</div>
+              <div class="kpi-value" style="color: #047857;">${formatCurrency(totalRealConsolidado)}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Total Previsto Acumulado</div>
+              <div class="kpi-value">${formatCurrency(totalPrevistoConsolidado)}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Variação Geral (Real - Previsto)</div>
+              <div class="kpi-value" style="color: ${totalRealConsolidado - totalPrevistoConsolidado >= 0 ? '#b45309' : '#047857'};">
+                ${formatCurrency(totalRealConsolidado - totalPrevistoConsolidado)}
               </div>
             </div>
           </div>
 
-          <!-- TABELA DE RESUMO EXECUTIVO (CONCILIAÇÃO POR CONTRATADO) -->
-          <div style="margin-bottom: 20px;">
-            <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 6px;">
-              Quadro Geral de Conciliação Financeira por Contratado
-            </div>
-            <table>
-              <thead>
+          <table>
+            <thead>
+              <tr>
+                <th>Contratado</th>
+                <th>Empresa</th>
+                <th>Regime</th>
+                <th>Cargo / Escopo</th>
+                <th style="text-align: right;">Previsto / Mês</th>
+                <th style="text-align: center;">Meses</th>
+                <th style="text-align: right;">Média Real</th>
+                <th style="text-align: right;">Total Real</th>
+                <th style="text-align: right;">Diferença</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${collaboratorsSummary.map(c => `
                 <tr>
-                  <th>Contratado</th>
-                  <th>Empresa</th>
-                  <th>Regime</th>
-                  <th>Cargo / Escopo</th>
-                  <th style="text-align: center;">Competências</th>
-                  <th style="text-align: right;">Previsto Total</th>
-                  <th style="text-align: right;">Custo Real Total</th>
-                  <th style="text-align: right;">Divergência</th>
-                  <th style="text-align: center;">Status Auditoria</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${collaboratorsSummary.map(item => {
-                  const isMatch = Math.abs(item.diffTotal) < 0.01;
-                  return `
-                  <tr>
-                    <td><strong>${item.emp.name}</strong></td>
-                    <td>${item.emp.company || '-'}</td>
-                    <td>${item.emp.linkType || '-'}</td>
-                    <td>${item.emp.job_role || '-'}</td>
-                    <td style="text-align: center;">${item.costs.length}</td>
-                    <td style="text-align: right;">${formatCurrency(item.previstoTotal)}</td>
-                    <td style="text-align: right; font-weight: 700; color: #b45309;">${formatCurrency(item.realTotal)}</td>
-                    <td style="text-align: right; font-weight: 700; color: ${isMatch ? '#047857' : (item.diffTotal > 0 ? '#be123c' : '#0369a1')};">
-                      ${item.diffTotal > 0 ? '+' : ''}${formatCurrency(item.diffTotal)}
-                    </td>
-                    <td style="text-align: center;">
-                      <span class="badge-status" style="background: ${isMatch ? '#ecfdf5' : (item.diffTotal > 0 ? '#fff1f2' : '#f0f9ff')}; color: ${isMatch ? '#047857' : (item.diffTotal > 0 ? '#be123c' : '#0369a1')}; border: 1px solid ${isMatch ? '#a7f3d0' : (item.diffTotal > 0 ? '#fecdd3' : '#bae6fd')};">
-                        ${isMatch ? 'Conciliado' : (item.diffTotal > 0 ? 'Acima (+)' : 'Abaixo (-)')}
-                      </span>
-                    </td>
-                  </tr>
-                  `;
-                }).join('')}
-              </tbody>
-              <tfoot>
-                <tr style="background: #fffbeb; font-weight: 800; color: #92400e; border-top: 2px solid #fde68a;">
-                  <td colspan="4">TOTAL GERAL CONSOLIDADO (${targetEmployees.length} CONTRATADOS)</td>
-                  <td style="text-align: center;">${totalCompetenciasCount}</td>
-                  <td style="text-align: right;">${formatCurrency(totalPrevistoConsolidado)}</td>
-                  <td style="text-align: right; color: #b45309;">${formatCurrency(totalRealConsolidado)}</td>
-                  <td style="text-align: right; color: ${Math.abs(diffGeralTotal) < 0.01 ? '#047857' : (diffGeralTotal > 0 ? '#be123c' : '#0369a1')};">
-                    ${diffGeralTotal > 0 ? '+' : ''}${formatCurrency(diffGeralTotal)}
+                  <td><strong>${c.emp.corporate_name || c.emp.name}</strong></td>
+                  <td>${c.emp.company || 'MarBR'}</td>
+                  <td>${c.emp.linkType || 'CLT'}</td>
+                  <td>${c.emp.job_role || '-'}</td>
+                  <td class="amount">${formatCurrency(c.previsto)}</td>
+                  <td style="text-align: center;">${c.costs.length}</td>
+                  <td class="amount">${formatCurrency(c.mediaReal)}</td>
+                  <td class="amount" style="color: #047857;">${formatCurrency(c.totalReal)}</td>
+                  <td class="amount" style="color: ${c.diff > 0 ? '#b45309' : c.diff < 0 ? '#047857' : '#64748b'};">
+                    ${c.diff > 0 ? '+' : ''}${formatCurrency(c.diff)}
                   </td>
-                  <td style="text-align: center;">${Math.abs(diffGeralTotal) < 0.01 ? '100% OK' : 'Com Divergências'}</td>
                 </tr>
-              </tfoot>
-            </table>
-          </div>
-
-          <div class="page-break"></div>
-
-          <!-- DETALHAMENTO DE CADA CONTRATADO E SUAS RESPECTIVAS COMPETÊNCIAS -->
-          <div style="font-size: 13px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 12px; border-bottom: 2px solid #f59e0b; padding-bottom: 4px;">
-            Detalhamento Individual de Competências e Fontes dos Contratados
-          </div>
-
-          ${collaboratorsSummary.map((item, idx) => {
-            const { emp, costs, previstoMensal, previstoTotal, realTotal, diffTotal } = item;
-            if (costs.length === 0) return '';
-
-            return `
-              <div class="section-box">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 8px;">
-                  <div>
-                    <h3 style="font-size: 13px; margin: 0; color: #0f172a; font-weight: 800;">
-                      ${idx + 1}. ${emp.name} 
-                      <span style="font-size: 10px; font-weight: 600; color: #64748b; margin-left: 6px;">
-                        (${emp.linkType || 'CLT'} • ${emp.company || 'MarBR'} • ${emp.job_role || 'Função não informada'})
-                      </span>
-                    </h3>
-                  </div>
-                  <div style="font-size: 10px; font-weight: 700; color: #334155;">
-                    Previsto Mensal: <strong>${formatCurrency(previstoMensal)}</strong> &nbsp;|&nbsp; 
-                    Real Total: <strong style="color: #b45309;">${formatCurrency(realTotal)}</strong> &nbsp;|&nbsp;
-                    Diferença: <strong style="color: ${Math.abs(diffTotal) < 0.01 ? '#047857' : (diffTotal > 0 ? '#be123c' : '#0369a1')}">${diffTotal > 0 ? '+' : ''}${formatCurrency(diffTotal)}</strong>
-                  </div>
-                </div>
-
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Competência</th>
-                      <th>Regime</th>
-                      <th>Fonte / Origem da Informação</th>
-                      <th>Previsto Contrato</th>
-                      <th>Valor Fixo Real</th>
-                      <th>Bônus/Comissão</th>
-                      <th>Benef./Encargos</th>
-                      <th>Descontos</th>
-                      <th style="text-align: right;">Custo Real</th>
-                      <th style="text-align: right;">Diferença</th>
-                      <th style="text-align: center;">Status</th>
-                      <th>Observação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${costs.map(c => {
-                      const isCLT = c.vinculo_tipo === 'CLT';
-                      const cReal = (c.valor_liquido || 0) + (isCLT ? (c.valor_adiantamento || 0) : 0);
-                      const diff = cReal - previstoMensal;
-                      const isMatch = Math.abs(diff) < 0.01;
-                      const badgeOrigem = getCostOrigemBadgeStyle(c.origem);
-                      const benEnc = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0) + (c.valor_fgts || 0);
-                      const varTotal = (c.valor_bonus || 0) + (c.valor_comissao || 0);
-
-                      return `
-                      <tr>
-                        <td><strong>${c.competencia.slice(0, 7)}</strong></td>
-                        <td>${c.vinculo_tipo}</td>
-                        <td>
-                          <span class="badge-source" style="background: ${badgeOrigem.bg}; color: ${badgeOrigem.color}; border-color: ${badgeOrigem.border};">
-                            ${formatCostOrigem(c.origem)}
-                          </span>
-                        </td>
-                        <td>${formatCurrency(previstoMensal)}</td>
-                        <td>${formatCurrency(c.valor_fixo || 0)}</td>
-                        <td>${formatCurrency(varTotal)}</td>
-                        <td>${formatCurrency(benEnc)}</td>
-                        <td>${formatCurrency(c.valor_descontos || 0)}</td>
-                        <td style="text-align: right; font-weight: 700; color: #b45309;">${formatCurrency(cReal)}</td>
-                        <td style="text-align: right; font-weight: 700; color: ${isMatch ? '#047857' : (diff > 0 ? '#b91c1c' : '#0369a1')};">
-                          ${diff > 0 ? '+' : ''}${formatCurrency(diff)}
-                        </td>
-                        <td style="text-align: center;">
-                          <span class="badge-status" style="background: ${isMatch ? '#ecfdf5' : (diff > 0 ? '#fff1f2' : '#f0f9ff')}; color: ${isMatch ? '#047857' : (diff > 0 ? '#be123c' : '#0369a1')}; border: 1px solid ${isMatch ? '#a7f3d0' : (diff > 0 ? '#fecdd3' : '#bae6fd')};">
-                            ${isMatch ? 'Conciliado' : (diff > 0 ? 'Acima (+)' : 'Abaixo (-)')}
-                          </span>
-                        </td>
-                        <td style="font-size: 9px; color: #64748b;">${c.observacao || '-'}</td>
-                      </tr>
-                      `;
-                    }).join('')}
-                  </tbody>
-                  <tfoot>
-                    <tr style="background: #f8fafc; font-weight: 700;">
-                      <td colspan="3">SUBTOTAL (${costs.length} COMPETÊNCIAS)</td>
-                      <td>${formatCurrency(previstoTotal)}</td>
-                      <td colspan="4">-</td>
-                      <td style="text-align: right; color: #b45309;">${formatCurrency(realTotal)}</td>
-                      <td style="text-align: right; color: ${Math.abs(diffTotal) < 0.01 ? '#047857' : (diffTotal > 0 ? '#be123c' : '#0369a1')};">
-                        ${diffTotal > 0 ? '+' : ''}${formatCurrency(diffTotal)}
-                      </td>
-                      <td style="text-align: center;">${Math.abs(diffTotal) < 0.01 ? 'OK' : 'Divergente'}</td>
-                      <td>-</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            `;
-          }).join('')}
+              `).join('')}
+            </tbody>
+          </table>
 
           <script>
             window.onload = function() {
@@ -562,8 +887,6 @@ export function BatchPdfExportModal({
         acc.realCost += realCost;
         return acc;
       }, { fixed: 0, bonus: 0, comissao: 0, horaExtra: 0, beneficios: 0, fgts: 0, decimo: 0, ferias: 0, descontos: 0, realCost: 0 }) : null;
-
-      const avgMonthlyCost = costTotals && empCosts.length > 0 ? costTotals.realCost / empCosts.length : 0;
 
       batchHtml += `
         <div class="header">
@@ -648,16 +971,14 @@ export function BatchPdfExportModal({
             <div class="section-title">5. Honorários Contratuais</div>
             <div class="grid-3">
               <div class="field"><span class="field-label">Valor Contrato</span><span class="field-value">${formatCurrency(profile.remuneration_fixed || profile.remuneration || 0)}</span></div>
-              <div class="field"><span class="field-label">Bônus</span><span class="field-value">${formatCurrency(profile.remuneration_bonus || 0)}</span></div>
-              <div class="field"><span class="field-label">Comissões</span><span class="field-value">${formatCurrency(profile.remuneration_commission || 0)}</span></div>
             </div>
           </div>
         `;
       }
 
-      if (includeCostsHistory && empCosts.length > 0 && costTotals) {
-        const isPJ = profile.linkType === 'PJ' || profile.linkType === 'MEI';
+      if (includeCostsHistory && costTotals) {
         const sortedCosts = [...empCosts].sort((a, b) => a.competencia.localeCompare(b.competencia));
+        const isPJ = profile.linkType?.toUpperCase().includes('PJ') || profile.linkType?.toUpperCase().includes('MEI');
 
         batchHtml += `
           <div class="section">
@@ -669,7 +990,7 @@ export function BatchPdfExportModal({
                 <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total Bônus</span><span class="field-value">${formatCurrency(costTotals.bonus)}</span></div>
                 <div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total Comissões</span><span class="field-value">${formatCurrency(costTotals.comissao)}</span></div>
                 ${!isPJ ? `<div class="field" style="border-left: 3px solid #f59e0b;"><span class="field-label">Total FGTS</span><span class="field-value">${formatCurrency(costTotals.fgts)}</span></div>` : ''}
-                <div class="field" style="border-left: 3px solid #10b981;"><span class="field-label" style="color: #047857;">Média por Competência</span><span class="field-value" style="color: #047857;">${formatCurrency(avgMonthlyCost)}</span></div>
+                <div class="field" style="border-left: 3px solid #10b981;"><span class="field-label" style="color: #047857;">Média por Competência</span><span class="field-value" style="color: #047857;">${formatCurrency(costTotals.realCost / (empCosts.length || 1))}</span></div>
                 <div class="field" style="border-left: 4px solid #b45309; background: #fef3c7;"><span class="field-label" style="color: #92400e; font-weight:800;">TOTAL ACUMULADO</span><span class="field-value" style="color: #b45309;">${formatCurrency(costTotals.realCost)}</span></div>
               </div>
             </div>
@@ -738,26 +1059,28 @@ export function BatchPdfExportModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
         
         {/* Header */}
         <div className="p-5 border-b border-slate-100 bg-slate-900 text-white flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 shrink-0 shadow-md font-black">
-              {reportMode === 'audit' ? <Calculator size={20} /> : <Printer size={20} />}
+              {reportMode === 'general' ? <Users size={20} /> : reportMode === 'audit' ? <Calculator size={20} /> : <Printer size={20} />}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black uppercase tracking-wide">
-                  {reportMode === 'audit' ? 'Auditoria de Faturamento & Custos em Lote' : 'Exportação de Fichas em Lote'}
+                  Central de Emissão de Relatórios — People
                 </h2>
                 <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
                   {targetEmployees.length} Selecionados
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                {reportMode === 'audit'
+                {reportMode === 'general'
+                  ? 'Gere a relação nominal executiva customizada com filtros de status, regimes, datas e opções financeiras'
+                  : reportMode === 'audit'
                   ? 'Geração consolidada de auditoria de múltiplos contratados com batimento de fontes e valores previstos'
                   : 'Gere relatórios executivos cadastrais consolidados para múltiplos contratados'}
               </p>
@@ -768,36 +1091,48 @@ export function BatchPdfExportModal({
           </button>
         </div>
 
-        {/* Barra de Seleção de Modo (Auditoria vs Ficha Completa) */}
-        <div className="px-6 pt-3.5 pb-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+        {/* Barra de Seleção de Modo (3 Abas Unificadas) */}
+        <div className="px-6 pt-3.5 pb-2 bg-slate-50 border-b border-slate-100 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setReportMode('general')}
+            className={`flex-1 min-w-[200px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              reportMode === 'general'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Users size={16} />
+            <span>Relação Geral de Colaboradores (Quadro / Headcount)</span>
+          </button>
           <button
             type="button"
             onClick={() => setReportMode('audit')}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[180px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
               reportMode === 'audit'
                 ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
             }`}
           >
             <ShieldCheck size={16} />
-            <span>Relatório de Auditoria de Faturamento &amp; Custos (Lote)</span>
+            <span>Auditoria de Custos &amp; Faturamento</span>
           </button>
           <button
             type="button"
             onClick={() => setReportMode('full')}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[180px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
               reportMode === 'full'
                 ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
             }`}
           >
             <FileText size={16} />
-            <span>Fichas Cadastrais Completas (Dossiê)</span>
+            <span>Fichas Cadastrais (Dossiê)</span>
           </button>
         </div>
 
         {/* Barra de Formato (PDF vs CSV) */}
-        <div className="px-6 py-2.5 bg-slate-100/60 border-b border-slate-200 flex items-center justify-between gap-4">
+        <div className="px-6 py-2.5 bg-slate-100/60 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
           <div className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
             <span>Formato de Saída:</span>
             <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-white">
@@ -824,7 +1159,7 @@ export function BatchPdfExportModal({
             </div>
           </div>
 
-          {/* Filtro de Ano / Competência no modo auditoria */}
+          {/* Filtro de Ano na Auditoria */}
           {reportMode === 'audit' && (
             <div className="flex items-center gap-2 text-xs">
               <span className="font-bold text-slate-600">Ano da Competência:</span>
@@ -845,6 +1180,40 @@ export function BatchPdfExportModal({
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-5">
           
+          {/* Card de Prévia Executiva em Tempo Real (Modo Geral) */}
+          {reportMode === 'general' && (
+            <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-md space-y-3 font-sans">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Prévia do Recorte Selecionado
+                </span>
+                <span className="text-xs font-black text-amber-400">
+                  {targetEmployees.length} de {employees.length} colaboradores
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Headcount</span>
+                  <strong className="text-sm font-black text-white">{reportKpis.totalEmployees} pessoas</strong>
+                </div>
+                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Regimes</span>
+                  <span className="text-xs font-bold text-slate-200 block truncate">{reportKpis.cltCount} CLT &bull; {reportKpis.pjCount} PJ &bull; {reportKpis.otherCount} Outros</span>
+                </div>
+                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Status</span>
+                  <span className="text-xs font-bold text-slate-200 block">{reportKpis.activeCount} Ativos &bull; {reportKpis.inactiveCount} Desligados</span>
+                </div>
+                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Massa Salarial</span>
+                  <strong className="text-sm font-black text-emerald-400">
+                    {includeFinancials ? formatCurrency(reportKpis.totalRemuneration) : 'Oculto'}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Banner Explicativo do Modo Auditoria */}
           {reportMode === 'audit' && (
             <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-3 shadow-xs">
@@ -860,24 +1229,125 @@ export function BatchPdfExportModal({
             </div>
           )}
 
-          {/* Seleção de Filtros com botões "Todos" e "Limpar" */}
+          {/* 1. SELEÇÃO DE STATUS (NOVO REQUISITO) */}
+          {reportMode === 'general' && (
+            <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-800 block">
+                1. Status de Atividade
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { id: 'active', label: 'Somente Ativos', desc: 'Colaboradores com contrato ativo' },
+                  { id: 'all', label: 'Todos', desc: 'Ativos + Desligados' },
+                  { id: 'inactive', label: 'Somente Inativos / Desligados', desc: 'Histórico de rescisões' },
+                  { id: 'ferias', label: 'Férias / Afastados', desc: 'Ausências temporárias' }
+                ].map(item => {
+                  const isSel = selectedStatus === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedStatus(item.id as any)}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSel
+                          ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="text-xs font-bold leading-tight">{item.label}</div>
+                      <div className={`text-[10px] mt-0.5 ${isSel ? 'text-slate-900' : 'text-slate-400'}`}>{item.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 2. FILTRO DE PERÍODO DE CONTRATAÇÃO / DESLIGAMENTO (NOVO REQUISITO) */}
+          {reportMode === 'general' && (
+            <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                  <Calendar size={14} className="text-amber-600" />
+                  <span>2. Período de Contratação / Rescisão</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={isPeriodFilterActive}
+                    onChange={e => setIsPeriodFilterActive(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-300 cursor-pointer"
+                  />
+                  <span>Filtrar por intervalo de datas</span>
+                </label>
+              </div>
+
+              {isPeriodFilterActive && (
+                <div className="space-y-3 pt-2 border-t border-slate-200/80">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-bold text-slate-600">Critério de Data:</span>
+                    <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setDateFilterType('admission')}
+                        className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                          dateFilterType === 'admission' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Período de Admissão / Contratação
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDateFilterType('resignation')}
+                        className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                          dateFilterType === 'resignation' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Período de Desligamento / Rescisão
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Data Inicial (A partir de)</label>
+                      <input
+                        type="date"
+                        value={periodStartDate}
+                        onChange={e => setPeriodStartDate(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Data Final (Até)</label>
+                      <input
+                        type="date"
+                        value={periodEndDate}
+                        onChange={e => setPeriodEndDate(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 3. FILTROS DE ESCOPO DA EQUIPE (EMPRESA, SETOR, REGIME) */}
           <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Filter size={14} className="text-amber-600" />
-                Filtros e Escopo da Equipe ({targetEmployees.length} de {employees.length} selecionados)
-              </span>
-              <span className="text-[11px] font-bold text-slate-500 lowercase">
-                {filteredCostsScope.length} competência(s) no escopo
+                3. Filtros de Empresa, Setor e Regime ({targetEmployees.length} de {employees.length} selecionados)
               </span>
             </h3>
 
             {/* Filtro Empresa */}
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
-                <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Empresa</label>
+                <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Empresa Contratante</label>
                 <div className="flex items-center gap-2 text-[10px] font-bold">
-                  <button onClick={() => setSelectedCompanies([...companies])} className="text-amber-600 hover:underline cursor-pointer">Todos</button>
+                  <button onClick={() => setSelectedCompanies([...companies])} className="text-amber-600 hover:underline cursor-pointer">Todas</button>
                   <span className="text-slate-300">|</span>
                   <button onClick={() => setSelectedCompanies([])} className="text-slate-400 hover:underline cursor-pointer">Limpar</button>
                 </div>
@@ -889,9 +1359,35 @@ export function BatchPdfExportModal({
                     <button
                       key={c}
                       onClick={() => setSelectedCompanies(sel ? selectedCompanies.filter(x => x !== c) : [...selectedCompanies, c])}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${sel ? 'bg-amber-500 text-slate-950 font-black border-amber-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${sel ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                     >
                       {c}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Filtro Vínculo / Regime */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Regime / Tipo de Vínculo</label>
+                <div className="flex items-center gap-2 text-[10px] font-bold">
+                  <button onClick={() => setSelectedLinkTypes([...linkTypes])} className="text-amber-600 hover:underline cursor-pointer">Todos</button>
+                  <span className="text-slate-300">|</span>
+                  <button onClick={() => setSelectedLinkTypes([])} className="text-slate-400 hover:underline cursor-pointer">Limpar</button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {linkTypes.map(l => {
+                  const sel = selectedLinkTypes.includes(l);
+                  return (
+                    <button
+                      key={l}
+                      onClick={() => setSelectedLinkTypes(sel ? selectedLinkTypes.filter(x => x !== l) : [...selectedLinkTypes, l])}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${sel ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                    >
+                      {l}
                     </button>
                   );
                 })}
@@ -923,143 +1419,87 @@ export function BatchPdfExportModal({
                 })}
               </div>
             </div>
-
-            {/* Filtro Vínculo */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Regime (CLT / PJ)</label>
-                <div className="flex items-center gap-2 text-[10px] font-bold">
-                  <button onClick={() => setSelectedLinkTypes([...linkTypes])} className="text-amber-600 hover:underline cursor-pointer">Todos</button>
-                  <span className="text-slate-300">|</span>
-                  <button onClick={() => setSelectedLinkTypes([])} className="text-slate-400 hover:underline cursor-pointer">Limpar</button>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {linkTypes.map(l => {
-                  const sel = selectedLinkTypes.includes(l);
-                  return (
-                    <button
-                      key={l}
-                      onClick={() => setSelectedLinkTypes(sel ? selectedLinkTypes.filter(x => x !== l) : [...selectedLinkTypes, l])}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${sel ? 'bg-amber-500 text-slate-950 font-black border-amber-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                    >
-                      {l}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Busca & Seleção Fina de Contratados */}
-            <div className="space-y-2 pt-2 border-t border-slate-200">
-              <div className="flex justify-between items-center">
-                <label className="text-[10px] font-bold uppercase text-slate-500">
-                  Seleção Individual de Contratados ({selectedEmployeeIds.length > 0 ? `${selectedEmployeeIds.length} selecionados manualmente` : 'todos do filtro ativo'})
-                </label>
-                <div className="flex items-center gap-2 text-[10px] font-bold">
-                  <button 
-                    onClick={() => setSelectedEmployeeIds(targetEmployees.map(e => e.id))} 
-                    className="text-amber-600 hover:underline cursor-pointer"
-                  >
-                    Marcar Todos Filtrados
-                  </button>
-                  <span className="text-slate-300">|</span>
-                  <button 
-                    onClick={() => setSelectedEmployeeIds([])} 
-                    className="text-slate-400 hover:underline cursor-pointer"
-                  >
-                    Desmarcar
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar colaborador por nome, cargo ou CPF..."
-                  value={searchEmployeeQuery}
-                  onChange={e => setSearchEmployeeQuery(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                />
-              </div>
-
-              {/* Lista com scroll dos colaboradores */}
-              <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white p-1">
-                {targetEmployees.slice(0, 50).map(emp => {
-                  const isChecked = selectedEmployeeIds.length === 0 || selectedEmployeeIds.includes(emp.id);
-                  const empCostsCount = allMonthlyCosts.filter(c => c.employee_id === emp.id).length;
-
-                  return (
-                    <div
-                      key={emp.id}
-                      onClick={() => {
-                        if (selectedEmployeeIds.length === 0) {
-                          // Se estava em "todos", selecionar apenas este
-                          setSelectedEmployeeIds([emp.id]);
-                        } else if (selectedEmployeeIds.includes(emp.id)) {
-                          setSelectedEmployeeIds(selectedEmployeeIds.filter(id => id !== emp.id));
-                        } else {
-                          setSelectedEmployeeIds([...selectedEmployeeIds, emp.id]);
-                        }
-                      }}
-                      className="px-3 py-1.5 flex items-center justify-between hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={isChecked ? 'text-amber-600' : 'text-slate-300'}>
-                          {isChecked ? <CheckSquare size={16} /> : <Square size={16} />}
-                        </div>
-                        <div className="truncate">
-                          <span className="text-xs font-bold text-slate-800 block truncate">{emp.name}</span>
-                          <span className="text-[10px] text-slate-400 block truncate">
-                            {emp.job_role || 'Sem cargo'} • {emp.company || 'MarBR'} • {emp.linkType || 'CLT'}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
-                        {empCostsCount} comp.
-                      </span>
-                    </div>
-                  );
-                })}
-                {targetEmployees.length > 50 && (
-                  <p className="p-2 text-center text-[10px] text-slate-400 italic">
-                    Mostrando os primeiros 50 colaboradores. Use a busca acima para filtrar.
-                  </p>
-                )}
-              </div>
-            </div>
-
           </div>
 
-          {/* Módulos do Relatório (Apenas se em modo Ficha Completa) */}
+          {/* 4. OPÇÕES EXECUTIVAS DO RELATÓRIO (VALORES FINANCEIROS, CARDS, ASSINATURAS) */}
+          {reportMode === 'general' && (
+            <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-800 block">
+                4. Opções e Seções do Relatório
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={includeFinancials}
+                    onChange={e => setIncludeFinancials(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-300 mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800 block">Exibir Valores Financeiros</span>
+                    <span className="text-[10px] text-slate-500 block">Remuneração / honorários contratuais e somatório</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={includeSummaryCards}
+                    onChange={e => setIncludeSummaryCards(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-300 mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800 block">Cards de Indicadores</span>
+                    <span className="text-[10px] text-slate-500 block">Headcount, CLT vs PJ, ativos/inativos e massa salarial</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={includeSignatures}
+                    onChange={e => setIncludeSignatures(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-300 mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800 block">Bloco de Assinaturas</span>
+                    <span className="text-[10px] text-slate-500 block">Campos formais de validação de RH e Diretoria</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Opções das Fichas Cadastrais Completas */}
           {reportMode === 'full' && (
-            <div className="space-y-3">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">Campos &amp; Seções a Incluir nas Fichas</h3>
-              <div className="grid grid-cols-2 gap-3 text-xs font-bold text-slate-700">
-                <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
-                  <input type="checkbox" checked={includePersonal} onChange={e => setIncludePersonal(e.target.checked)} className="rounded text-amber-600" />
-                  <span>1. Dados Pessoais &amp; Documentos</span>
+            <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                Módulos a Incluir em Cada Ficha Cadastral
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                  <input type="checkbox" checked={includePersonal} onChange={e => setIncludePersonal(e.target.checked)} className="w-4 h-4 text-amber-500 rounded border-slate-300" />
+                  <span>1. Dados Pessoais / PJ</span>
                 </label>
-                <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
-                  <input type="checkbox" checked={includeContractual} onChange={e => setIncludeContractual(e.target.checked)} className="rounded text-amber-600" />
-                  <span>2. Dados Contratuais &amp; Regime</span>
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                  <input type="checkbox" checked={includeContractual} onChange={e => setIncludeContractual(e.target.checked)} className="w-4 h-4 text-amber-500 rounded border-slate-300" />
+                  <span>2. Dados Contratuais</span>
                 </label>
-                <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
-                  <input type="checkbox" checked={includeAddressContact} onChange={e => setIncludeAddressContact(e.target.checked)} className="rounded text-amber-600" />
-                  <span>3. Endereço &amp; Contatos</span>
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                  <input type="checkbox" checked={includeAddressContact} onChange={e => setIncludeAddressContact(e.target.checked)} className="w-4 h-4 text-amber-500 rounded border-slate-300" />
+                  <span>3. Endereço &amp; Contato</span>
                 </label>
-                <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
-                  <input type="checkbox" checked={includeBanking} onChange={e => setIncludeBanking(e.target.checked)} className="rounded text-amber-600" />
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                  <input type="checkbox" checked={includeBanking} onChange={e => setIncludeBanking(e.target.checked)} className="w-4 h-4 text-amber-500 rounded border-slate-300" />
                   <span>4. Dados Bancários &amp; PIX</span>
                 </label>
-                <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
-                  <input type="checkbox" checked={includeRemuneration} onChange={e => setIncludeRemuneration(e.target.checked)} className="rounded text-amber-600" />
-                  <span>5. Honorários Contratuais</span>
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                  <input type="checkbox" checked={includeRemuneration} onChange={e => setIncludeRemuneration(e.target.checked)} className="w-4 h-4 text-amber-500 rounded border-slate-300" />
+                  <span>5. Honorários / Salário</span>
                 </label>
-                <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
-                  <input type="checkbox" checked={includeCostsHistory} onChange={e => setIncludeCostsHistory(e.target.checked)} className="rounded text-amber-600" />
-                  <span>6. Histórico de Custos por Competência</span>
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                  <input type="checkbox" checked={includeCostsHistory} onChange={e => setIncludeCostsHistory(e.target.checked)} className="w-4 h-4 text-amber-500 rounded border-slate-300" />
+                  <span>6. Histórico de Custos</span>
                 </label>
               </div>
             </div>
@@ -1068,24 +1508,52 @@ export function BatchPdfExportModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-          <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 cursor-pointer">
+        <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs uppercase cursor-pointer transition-colors text-center"
+          >
             Cancelar
           </button>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={exportFormat === 'pdf' ? handleExportBatchPDF : handleExportBatchCSV}
-              disabled={targetEmployees.length === 0}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs uppercase shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-            >
-              {exportFormat === 'pdf' ? <Printer size={15} /> : <FileSpreadsheet size={15} />}
-              <span>
-                {exportFormat === 'pdf' 
-                  ? (reportMode === 'audit' ? `Gerar PDF de Auditoria (${targetEmployees.length} Contratados)` : `Gerar Fichas em PDF (${targetEmployees.length})`)
-                  : `Exportar Planilha CSV Consolidada (${targetEmployees.length})`
-                }
-              </span>
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {reportMode === 'general' && exportFormat === 'pdf' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportBatchPDF}
+                  disabled={targetEmployees.length === 0}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold rounded-xl text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                  title="Abrir pré-visualização formatada para impressão direta ou salvar como PDF"
+                >
+                  <Printer size={15} />
+                  <span>Visualizar Impressão</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportGeneralPdf}
+                  disabled={targetEmployees.length === 0}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                  title="Baixar arquivo PDF vetorial oficial timbrado"
+                >
+                  <Download size={15} />
+                  <span>Baixar Arquivo PDF ({targetEmployees.length})</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={exportFormat === 'pdf' ? handleExportBatchPDF : handleExportBatchCSV}
+                disabled={targetEmployees.length === 0}
+                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs uppercase shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                {exportFormat === 'pdf' ? <Printer size={15} /> : <FileSpreadsheet size={15} />}
+                <span>
+                  {exportFormat === 'pdf' 
+                    ? (reportMode === 'audit' ? `Gerar PDF de Auditoria (${targetEmployees.length} Contratados)` : `Gerar Fichas em PDF (${targetEmployees.length})`)
+                    : `Exportar Planilha CSV Consolidada (${targetEmployees.length})`
+                  }
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
