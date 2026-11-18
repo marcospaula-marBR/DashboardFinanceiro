@@ -13,6 +13,22 @@ import { formatCurrency } from '@/services/loans.service';
 import { getCompanyLogoUrl } from './PeopleBadges';
 import { formatCostOrigem, getCostOrigemBadgeStyle } from './ProfileExportModal';
 
+export const getEmployeeDisplayName = (e: { name?: string; corporate_name?: string; linkType?: string; company?: string }) => {
+  const isCltOrEstagio = !e.linkType || e.linkType.toUpperCase().includes('CLT') || e.linkType.toUpperCase().includes('ESTAG');
+  const corp = (e.corporate_name || '').trim();
+  const corpUpper = corp.toUpperCase();
+  const isEmployerCorp = corpUpper.includes('D.Z.M') || corpUpper === 'DZM' || corpUpper.includes('MAR BRASIL') || corpUpper === 'G2';
+  if (isCltOrEstagio || isEmployerCorp || !corp) {
+    return e.name || corp || 'Sem nome';
+  }
+  return corp || e.name || 'Sem nome';
+};
+
+export const getEmployeeNivel = (e: Employee): string => {
+  const val = e.nivel_enquadramento || e.nivel || (e.metadata as any)?.nivel || e.camada || (e.metadata as any)?.camada || (e.metadata as any)?.grau;
+  return val ? String(val).trim() : '-';
+};
+
 interface BatchPdfExportModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,6 +52,7 @@ export function BatchPdfExportModal({
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedLinkTypes, setSelectedLinkTypes] = useState<string[]>([]);
+  const [selectedNiveis, setSelectedNiveis] = useState<string[]>([]);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [searchEmployeeQuery, setSearchEmployeeQuery] = useState('');
@@ -70,6 +87,15 @@ export function BatchPdfExportModal({
 
   const linkTypes = useMemo(() => {
     return Array.from(new Set(employees.map(e => e.linkType).filter(Boolean))).sort() as string[];
+  }, [employees]);
+
+  const niveis = useMemo(() => {
+    const setN = new Set<string>();
+    employees.forEach(e => {
+      const n = getEmployeeNivel(e);
+      if (n && n !== '-') setN.add(n);
+    });
+    return Array.from(setN).sort();
   }, [employees]);
 
   // Lista de anos disponíveis nas competências
@@ -127,7 +153,12 @@ export function BatchPdfExportModal({
       list = list.filter(e => selectedLinkTypes.includes(e.linkType || ''));
     }
 
-    // 5. Filtro de Período de Contratação / Admissão vs Desligamento
+    // 5. Filtro de Nível
+    if (selectedNiveis.length > 0) {
+      list = list.filter(e => selectedNiveis.includes(getEmployeeNivel(e)));
+    }
+
+    // 6. Filtro de Período de Contratação / Admissão vs Desligamento
     if (isPeriodFilterActive) {
       if (dateFilterType === 'admission') {
         if (periodStartDate) {
@@ -176,6 +207,7 @@ export function BatchPdfExportModal({
     selectedCompanies,
     selectedDepartments,
     selectedLinkTypes,
+    selectedNiveis,
     isPeriodFilterActive,
     dateFilterType,
     periodStartDate,
@@ -267,12 +299,12 @@ export function BatchPdfExportModal({
 
 `;
 
-      csv += `Nº;Colaborador;CPF / CNPJ;Empresa;Regime;Cargo;Departamento;Data de Admissão;Data de Desligamento;${includeFinancials ? 'Remuneração / Honorários;' : ''}Status
+      csv += `Nº;Colaborador;CPF / CNPJ;Empresa;Regime;Cargo;Nível;Departamento;Data de Admissão;Data de Desligamento;${includeFinancials ? 'Remuneração / Honorários;' : ''}Status
 `;
 
       targetEmployees.forEach((e, idx) => {
         const rem = Number(e.remuneration_fixed || e.remuneration || 0);
-        csv += `${idx + 1};${sanitize(e.corporate_name || e.name)};${sanitize(e.document_id || e.pj_type)};${sanitize(e.company)};${sanitize(e.linkType)};${sanitize(e.job_role)};${sanitize(e.department)};${sanitize(e.start_date || '-')};${sanitize(e.resignation_date || (e as any).real_resignation_date || '-')};${includeFinancials ? sanitize(rem.toFixed(2)) + ';' : ''}${sanitize(e.status || ((e as any).active !== false ? 'Ativo' : 'Inativo'))}
+        csv += `${idx + 1};${sanitize(getEmployeeDisplayName(e))};${sanitize(e.document_id || e.pj_type)};${sanitize(e.company)};${sanitize(e.linkType)};${sanitize(e.job_role)};${sanitize(getEmployeeNivel(e))};${sanitize(e.department)};${sanitize(e.start_date || '-')};${sanitize(e.resignation_date || (e as any).real_resignation_date || '-')};${includeFinancials ? sanitize(rem.toFixed(2)) + ';' : ''}${sanitize(e.status || ((e as any).active !== false ? 'Ativo' : 'Inativo'))}
 `;
       });
 
@@ -340,7 +372,7 @@ export function BatchPdfExportModal({
           totalGeralDescontos += cost.valor_descontos || 0;
           totalGeralReal += realCost;
 
-          csv += `${sanitize(emp.corporate_name || emp.name)};${sanitize(emp.document_id || emp.pj_type)};${sanitize(emp.company)};${sanitize(emp.linkType)};${sanitize(emp.job_role)};${sanitize(cost.competencia.slice(0, 7))};${sanitize(formatCostOrigem(cost.origem))};${previsto.toFixed(2)};${(cost.valor_fixo || 0).toFixed(2)};${(cost.valor_bonus || 0).toFixed(2)};${(cost.valor_comissao || 0).toFixed(2)};${(cost.valor_hora_extra || 0).toFixed(2)};${totalBen.toFixed(2)};${(cost.valor_fgts || 0).toFixed(2)};${totalDecFer.toFixed(2)};${(cost.valor_descontos || 0).toFixed(2)};${realCost.toFixed(2)};${diff.toFixed(2)};${statusAuditoria};${sanitize(cost.observacao || '')}
+          csv += `${sanitize(getEmployeeDisplayName(emp))};${sanitize(emp.document_id || emp.pj_type)};${sanitize(emp.company)};${sanitize(emp.linkType)};${sanitize(emp.job_role)};${sanitize(cost.competencia.slice(0, 7))};${sanitize(formatCostOrigem(cost.origem))};${previsto.toFixed(2)};${(cost.valor_fixo || 0).toFixed(2)};${(cost.valor_bonus || 0).toFixed(2)};${(cost.valor_comissao || 0).toFixed(2)};${(cost.valor_hora_extra || 0).toFixed(2)};${totalBen.toFixed(2)};${(cost.valor_fgts || 0).toFixed(2)};${totalDecFer.toFixed(2)};${(cost.valor_descontos || 0).toFixed(2)};${realCost.toFixed(2)};${diff.toFixed(2)};${statusAuditoria};${sanitize(cost.observacao || '')}
 `;
         });
       });
@@ -403,11 +435,12 @@ export function BatchPdfExportModal({
     const statusLabel = selectedStatus === 'active' ? 'Somente Ativos' : selectedStatus === 'inactive' ? 'Somente Desligados/Inativos' : selectedStatus === 'ferias' ? 'Férias/Afastados' : 'Todos os Status';
     const companiesLabel = selectedCompanies.length > 0 ? selectedCompanies.join(', ') : 'Todas as Empresas';
     const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todos os Regimes';
+    const niveisLabel = selectedNiveis.length > 0 ? ` • NÍVEIS: ${selectedNiveis.join(', ')}` : '';
     const dateLabel = isPeriodFilterActive
       ? `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate || 'início'} até ${periodEndDate || 'hoje'}`
       : 'Histórico Geral Completo';
 
-    doc.text(`ESCOPO: ${companiesLabel} • REGIMES: ${linksLabel} • STATUS: ${statusLabel} • ${dateLabel}`, 14, 21);
+    doc.text(`ESCOPO: ${companiesLabel} • REGIMES: ${linksLabel}${niveisLabel} • STATUS: ${statusLabel} • ${dateLabel}`, 14, 21);
     doc.text(`EMISSÃO: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} • TOTAL: ${targetEmployees.length} COLABORADORES`, 14, 26);
 
     let currentY = 31;
@@ -449,6 +482,7 @@ export function BatchPdfExportModal({
       'Empresa',
       'Regime',
       'Cargo / Escopo',
+      'Nível',
       'Departamento',
       'Admissão',
       ...(selectedStatus !== 'active' ? ['Desligamento'] : []),
@@ -460,11 +494,12 @@ export function BatchPdfExportModal({
       const rem = Number(e.remuneration_fixed || e.remuneration || 0);
       const row = [
         String(index + 1),
-        e.corporate_name || e.name || 'Sem nome',
+        getEmployeeDisplayName(e),
         e.document_id || e.pj_type || '-',
         e.company || 'MarBR',
         e.linkType || 'CLT',
         e.job_role || '-',
+        getEmployeeNivel(e),
         e.department || 'Geral',
         e.start_date ? e.start_date.split('-').reverse().join('/') : '-',
         ...(selectedStatus !== 'active' ? [
@@ -543,6 +578,7 @@ export function BatchPdfExportModal({
       const statusLabel = selectedStatus === 'active' ? 'Somente Ativos' : selectedStatus === 'inactive' ? 'Somente Desligados/Inativos' : selectedStatus === 'ferias' ? 'Férias/Afastados' : 'Todos os Status';
       const companiesLabel = selectedCompanies.length > 0 ? selectedCompanies.join(', ') : 'Todas as Empresas';
       const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todos os Regimes';
+      const niveisLabel = selectedNiveis.length > 0 ? ` • NÍVEIS: ${selectedNiveis.join(', ')}` : '';
       const dateLabel = isPeriodFilterActive
         ? `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate || 'início'} até ${periodEndDate || 'hoje'}`
         : 'Histórico Geral Completo';
@@ -589,7 +625,7 @@ export function BatchPdfExportModal({
           <div class="header">
             <div>
               <h1 class="title">Relatório Geral de Colaboradores &amp; Quadro de Pessoal</h1>
-              <div class="meta">Escopo: ${companiesLabel} • Regimes: ${linksLabel} • Status: ${statusLabel} • ${dateLabel}</div>
+              <div class="meta">Escopo: ${companiesLabel} • Regimes: ${linksLabel}${niveisLabel} • Status: ${statusLabel} • ${dateLabel}</div>
               <div class="meta" style="color: #64748b;">Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} • Total: ${targetEmployees.length} Colaboradores</div>
             </div>
             <div style="text-align: right;">
@@ -629,6 +665,7 @@ export function BatchPdfExportModal({
                 <th>Empresa</th>
                 <th>Regime</th>
                 <th>Cargo / Escopo</th>
+                <th>Nível</th>
                 <th>Departamento</th>
                 <th>Admissão</th>
                 ${selectedStatus !== 'active' ? '<th>Desligamento</th>' : ''}
@@ -643,11 +680,12 @@ export function BatchPdfExportModal({
                 return `
                   <tr>
                     <td style="text-align: center; color: #64748b; font-weight: bold;">${index + 1}</td>
-                    <td><strong>${e.corporate_name || e.name || 'Sem nome'}</strong></td>
+                    <td><strong>${getEmployeeDisplayName(e)}</strong></td>
                     <td style="font-family: monospace;">${e.document_id || e.pj_type || '-'}</td>
                     <td><strong>${e.company || 'MarBR'}</strong></td>
                     <td>${e.linkType || 'CLT'}</td>
                     <td>${e.job_role || '-'}</td>
+                    <td><span style="display: inline-block; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; font-weight: bold; font-size: 10px;">${getEmployeeNivel(e)}</span></td>
                     <td>${e.department || 'Geral'}</td>
                     <td>${e.start_date ? e.start_date.split('-').reverse().join('/') : '-'}</td>
                     ${selectedStatus !== 'active' ? `<td>${(e.resignation_date || (e as any).real_resignation_date) ? (e.resignation_date || (e as any).real_resignation_date).slice(0, 10).split('-').reverse().join('/') : '-'}</td>` : ''}
@@ -807,7 +845,7 @@ export function BatchPdfExportModal({
             <tbody>
               ${collaboratorsSummary.map(c => `
                 <tr>
-                  <td><strong>${c.emp.corporate_name || c.emp.name}</strong></td>
+                  <td><strong>${getEmployeeDisplayName(c.emp)}</strong></td>
                   <td>${c.emp.company || 'MarBR'}</td>
                   <td>${c.emp.linkType || 'CLT'}</td>
                   <td>${c.emp.job_role || '-'}</td>
@@ -1419,6 +1457,34 @@ export function BatchPdfExportModal({
                 })}
               </div>
             </div>
+
+            {/* Filtro por Nível */}
+            {niveis.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Nível</label>
+                  <div className="flex items-center gap-2 text-[10px] font-bold">
+                    <button onClick={() => setSelectedNiveis([...niveis])} className="text-amber-600 hover:underline cursor-pointer">Todos</button>
+                    <span className="text-slate-300">|</span>
+                    <button onClick={() => setSelectedNiveis([])} className="text-slate-400 hover:underline cursor-pointer">Limpar</button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {niveis.map(n => {
+                    const sel = selectedNiveis.includes(n);
+                    return (
+                      <button
+                        key={n}
+                        onClick={() => setSelectedNiveis(sel ? selectedNiveis.filter(x => x !== n) : [...selectedNiveis, n])}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${sel ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                      >
+                        {n}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 4. OPÇÕES EXECUTIVAS DO RELATÓRIO (VALORES FINANCEIROS, CARDS, ASSINATURAS) */}

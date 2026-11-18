@@ -65,10 +65,46 @@ export async function POST(req: Request) {
 
     const isAdvanceMode = importType === 'advance';
     const isBenefitsMode = importType === 'benefits';
+    const isBonusMode = importType === 'bonus' || importType === 'premiacao';
 
     let prompt = "";
 
-    if (isAdvanceMode) {
+    if (isBonusMode) {
+      prompt = `
+Analise este documento (PDF ou imagem) contendo um Relatório, Demonstrativo, Recibo ou Planilha de Bônus, Bonificação, Premiação, Prêmios e Incentivos de colaboradores.
+
+Instruções de Extração:
+1. **Competência**: Identifique a competência (mês/ano) de referência no cabeçalho ou datas do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho/2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01'). Se não encontrar, retorne string vazia "".
+2. **Colaboradores**: Extraia cada linha ou registro individual de colaborador contido no relatório.
+3. **Valores de Bônus e Premiação**:
+   - "name": Nome completo do colaborador.
+   - "cpf": CPF do colaborador (formatado 000.000.000-00 ou números puros).
+   - "matricula": Matrícula ou código se houver.
+   - "cargo": Cargo se houver.
+   - "valor_bonus": Valor nominal de bônus ou bonificação de metas/performance (ex: 1500.00).
+   - "valor_premiacao": Valor nominal de premiação, incentivo comercial, prêmio de campanha ou ajuda de custo especial (ex: 500.00).
+   - "observacao": Descrição ou identificador (ex: 'Bônus de Metas', 'Premiação por Desempenho').
+
+Retorne obrigatoriamente um objeto JSON com o seguinte formato:
+{
+  "competencia": "YYYY-MM-01",
+  "records": [
+    {
+      "matricula": "1",
+      "name": "Nome Completo do Colaborador",
+      "cpf": "000.000.000-00",
+      "cargo": "Cargo",
+      "valor_bonus": 0.00,
+      "valor_premiacao": 0.00,
+      "observacao": "Bônus / Premiação"
+    }
+  ]
+}
+
+Valores monetários devem ser estritamente numéricos decimais (ex: 1500.00, 350.50).
+Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
+`;
+    } else if (isAdvanceMode) {
       prompt = `
 Analise este documento (PDF ou imagem) contendo a Folha de Adiantamento Salarial (Relação de Adiantamento Quinzenal, Folha de Vales ou Recibos de Adiantamento Salarial de colaboradores).
 

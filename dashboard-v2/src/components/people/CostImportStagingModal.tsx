@@ -31,7 +31,8 @@ import {
   RotateCcw,
   Gift,
   AlertCircle,
-  Banknote
+  Banknote,
+  Award
 } from "lucide-react";
 import { parseCltFile, CltParseResult, CltParsedEmployee } from "@/utils/cltFileParser";
 import { findBestNameMatch } from "@/utils/nameSimilarity";
@@ -73,7 +74,8 @@ export interface StagingCostRow {
   valor_cesta: number; // VR / CESTA BÁSICA CONCEDIDA
   valor_vr: number; // VALE REFEIÇÃO
   valor_adiantamento: number; // ADIANTAMENTO FOLHA (importado da folha de adiantamento)
-  valor_bonus: number; // BONIFICAÇÃO / PREMIAÇÃO
+  valor_bonus: number; // BONIFICAÇÃO / BÔNUS
+  valor_premiacao?: number; // PREMIAÇÃO / INCENTIVOS
   valor_ajuda_custo: number; // AJUDA DE CUSTO
   
   // Outras Verbas
@@ -238,49 +240,64 @@ export function CostImportStagingModal({
     ).length;
   }, [stagingRows, selectedCompetencia, existingCostsInDb]);
 
-  // Estatísticas do Lote Selecionado
+  // Estatísticas do Lote Selecionado: Equação Contábil
+  // Salário Base + Outros Recebidos + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto Folha = Líquido
   const selectedStats = useMemo(() => {
     const selected = stagingRows.filter((r) => r.isSelected && r.competencia.slice(0, 7) === selectedCompetencia.slice(0, 7));
     const count = selected.length;
-    let totalHolerite = 0;
+    let totalSalarioBase = 0;
     let totalOutrosRecebidos = 0;
-    let totalDescontos = 0;
-    let totalAdiantamento = 0;
-    let totalVtRecebido = 0;
-    let totalCesta = 0;
-    let totalOutrosBeneficios = 0;
-    let totalRecebido = 0;
-    let totalLiquidoReal = 0;
+    let totalVt = 0;
+    let totalVrCesta = 0;
+    let totalBonus = 0;
+    let totalPremiacao = 0;
+    let totalSubtotal = 0;
+    let totalDescontosFolha = 0;
+    let totalLiquido = 0;
 
     selected.forEach((r) => {
-      const proventos = (r.valor_holerite || (r.valor_fixo + r.valor_hora_extra + r.valor_adicional_not)) + (r.valor_outros_recebidos || 0);
-      const beneficios = (r.valor_vt || 0) + (r.valor_cesta || 0) + (r.valor_vr || 0) + (r.valor_adiantamento || 0) + (r.valor_bonus || 0) + (r.valor_ajuda_custo || 0);
-      const desc = r.valor_descontos || 0;
-      const rec = proventos + beneficios;
-      const liq = rec - desc;
+      const base = Number(r.valor_fixo || 0);
+      const outros = Number(r.valor_outros_recebidos || (r.valor_hora_extra || 0) + (r.valor_adicional_not || 0));
+      const vt = Number(r.valor_vt || 0);
+      const vrCesta = Number((r.valor_cesta || 0) + (r.valor_vr || 0));
+      const bonus = Number(r.valor_bonus || 0);
+      const premiacao = Number(r.valor_premiacao !== undefined ? r.valor_premiacao : (r.valor_ajuda_custo || 0));
 
-      totalHolerite += proventos;
-      totalOutrosRecebidos += r.valor_outros_recebidos || 0;
-      totalDescontos += desc;
-      totalAdiantamento += r.valor_adiantamento || 0;
-      totalVtRecebido += r.valor_vt || 0;
-      totalCesta += r.valor_cesta || 0;
-      totalOutrosBeneficios += (r.valor_vr || 0) + (r.valor_bonus || 0) + (r.valor_ajuda_custo || 0);
-      totalRecebido += rec;
-      totalLiquidoReal += liq;
+      const subtotal = base + outros + vt + vrCesta + bonus + premiacao;
+      const desc = Number(r.valor_descontos || 0);
+      const liq = subtotal - desc;
+
+      totalSalarioBase += base;
+      totalOutrosRecebidos += outros;
+      totalVt += vt;
+      totalVrCesta += vrCesta;
+      totalBonus += bonus;
+      totalPremiacao += premiacao;
+      totalSubtotal += subtotal;
+      totalDescontosFolha += desc;
+      totalLiquido += liq;
     });
 
     return {
       count,
-      totalHolerite,
+      totalSalarioBase,
       totalOutrosRecebidos,
-      totalDescontos,
-      totalAdiantamento,
-      totalVtRecebido,
-      totalCesta,
-      totalOutrosBeneficios,
-      totalRecebido,
-      totalLiquidoReal,
+      totalVt,
+      totalVrCesta,
+      totalBonus,
+      totalPremiacao,
+      totalSubtotal,
+      totalDescontosFolha,
+      totalLiquido,
+      // Compatibilidade legada
+      totalHolerite: totalSalarioBase + totalOutrosRecebidos,
+      totalDescontos: totalDescontosFolha,
+      totalAdiantamento: 0,
+      totalVtRecebido: totalVt,
+      totalCesta: totalVrCesta,
+      totalOutrosBeneficios: totalBonus + totalPremiacao,
+      totalRecebido: totalSubtotal,
+      totalLiquidoReal: totalLiquido,
     };
   }, [stagingRows, selectedCompetencia]);
 
@@ -397,8 +414,8 @@ export function CostImportStagingModal({
     }
   };
 
-  // 2. Processamento de Folha de Adiantamento Salarial (PDF / Imagem via IA)
-  const handleUploadAdvanceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 2. Processamento de Bônus & Premiação (PDF / Imagem via IA com Auditoria)
+  const handleUploadBonusFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -406,11 +423,11 @@ export function CostImportStagingModal({
       setIsProcessing(true);
       setErrorMessage(null);
       setMergeSuccessMessage(null);
-      setProcessingStatusText("Extraindo adiantamentos salariais via IA...");
+      setProcessingStatusText("Auditando e extraindo Bônus & Premiação via IA...");
 
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("type", "advance");
+      formData.append("type", "bonus");
 
       const response = await fetch("/api/people/parse-payroll-batch", {
         method: "POST",
@@ -424,7 +441,7 @@ export function CostImportStagingModal({
 
       const result = await response.json();
       if (!result.records || !Array.isArray(result.records) || result.records.length === 0) {
-        throw new Error("A IA não identificou colaboradores no documento de adiantamento.");
+        throw new Error("A IA não identificou colaboradores ou valores no documento de bônus e premiação.");
       }
 
       const comp = result.competencia || selectedCompetencia;
@@ -442,19 +459,23 @@ export function CostImportStagingModal({
               return findBestNameMatch(rec.name || "", [{ id: r.targetEmployeeId, name: r.employeeName } as any])?.similarity > 0.82;
             });
 
-            if (matchRec && (matchRec.valor_adiantamento !== undefined && matchRec.valor_adiantamento !== null)) {
+            if (matchRec) {
               matchedCount++;
+              const bVal = matchRec.valor_bonus !== undefined && matchRec.valor_bonus !== null ? Number(matchRec.valor_bonus) : r.valor_bonus;
+              const pVal = matchRec.valor_premiacao !== undefined && matchRec.valor_premiacao !== null ? Number(matchRec.valor_premiacao) : (r.valor_premiacao || 0);
               return {
                 ...r,
-                valor_adiantamento: matchRec.valor_adiantamento || r.valor_adiantamento,
+                valor_bonus: bVal,
+                valor_premiacao: pVal,
+                valor_ajuda_custo: pVal || r.valor_ajuda_custo
               };
             }
             return r;
           })
         );
-        setMergeSuccessMessage(`✨ Adiantamentos mesclados com sucesso para ${matchedCount} colaboradores no grid.`);
+        setMergeSuccessMessage(`✨ Bônus & Premiação auditados e mesclados com sucesso para ${matchedCount} colaboradores no grid.`);
       } else {
-        // Se o grid estiver vazio, cria linhas no staging com os adiantamentos
+        // Se o grid estiver vazio, cria linhas no staging com os bônus e premiações
         const newRows: StagingCostRow[] = result.records.map((rec: any, idx: number) => {
           const cleanName = (rec.name || "").trim();
           const cleanCpf = (rec.cpf || "").replace(/\D/g, "");
@@ -482,9 +503,11 @@ export function CostImportStagingModal({
           }
 
           const fixoBase = matchedEmp?.remuneration_fixed || matchedEmp?.remuneration || 0;
+          const bVal = Number(rec.valor_bonus || 0);
+          const pVal = Number(rec.valor_premiacao || 0);
 
           return {
-            id: `advance-${Date.now()}-${idx}`,
+            id: `bonus-${Date.now()}-${idx}`,
             targetEmployeeId,
             employeeName: cleanName || matchedEmp?.name || "Colaborador",
             documentId: rec.cpf || matchedEmp?.document_id || "",
@@ -492,19 +515,20 @@ export function CostImportStagingModal({
             matchType,
             cargo: rec.cargo || matchedEmp?.job_role || "",
             competencia: comp || selectedCompetencia,
-            sourceType: "ADVANCE_PDF",
+            sourceType: "PAYROLL_EXTRATO",
             valor_fixo: fixoBase,
             valor_holerite: fixoBase,
             valor_outros_recebidos: 0,
-            valor_adiantamento: rec.valor_adiantamento || 0,
+            valor_adiantamento: 0,
             valor_hora_extra: 0,
             valor_adicional_not: 0,
             valor_vt: 0,
             desconto_vt_6: 0,
             valor_cesta: 0,
             valor_vr: 0,
-            valor_bonus: 0,
-            valor_ajuda_custo: 0,
+            valor_bonus: bVal,
+            valor_premiacao: pVal,
+            valor_ajuda_custo: pVal,
             valor_ferias: 0,
             valor_rescisao: 0,
             valor_decimo_terceiro: 0,
@@ -516,18 +540,18 @@ export function CostImportStagingModal({
             valor_consignado: 0,
             valor_pensao_alimenticia: 0,
             valor_fgts: 0,
-            folha_liquido: fixoBase + (rec.valor_adiantamento || 0),
-            observacao: rec.observacao || "Importado de Folha de Adiantamento Salarial",
+            folha_liquido: fixoBase + bVal + pVal,
+            observacao: rec.observacao || "Bônus / Premiação auditado via IA",
             isSelected: true,
           };
         });
 
         setStagingRows(newRows);
-        setMergeSuccessMessage(`✨ Sucesso! ${newRows.length} colaboradores carregados a partir da Folha de Adiantamento.`);
+        setMergeSuccessMessage(`✨ Sucesso! ${newRows.length} colaboradores carregados a partir de Bônus / Premiação.`);
       }
     } catch (err: any) {
-      console.error("Erro ao importar adiantamento por IA:", err);
-      setErrorMessage(err.message || "Falha ao processar arquivo de adiantamento.");
+      console.error("Erro ao auditar bônus e premiação:", err);
+      setErrorMessage(err.message || "Falha ao processar arquivo de bônus e premiação.");
     } finally {
       setIsProcessing(false);
       setProcessingStatusText("");
@@ -988,45 +1012,44 @@ export function CostImportStagingModal({
         }
 
         if (finalEmployeeId && finalEmployeeId !== "NEW") {
-          // Cálculo financeiro dos 5 Pilares Executivos:
-          // Pilar 1: Total Proventos Brutos da Folha
-          const proventos = (row.valor_holerite || (row.valor_fixo + row.valor_hora_extra + row.valor_adicional_not)) + (row.valor_outros_recebidos || 0);
-          // Pilar 2: Total Descontos da Folha
-          const totalDescontos = row.valor_descontos || 0;
-          // Pilar 3: Salário Líquido da Folha
-          const folhaLiquido = proventos - totalDescontos;
-          // Pilar 4: Extra-folha (Adiantamento + Benefícios)
-          const adiantamento = row.valor_adiantamento || 0;
-          const beneficiosExtras = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
-          // Pilar 5: Total Real Pago / Desembolsado
-          const liquidoReal = folhaLiquido + adiantamento + beneficiosExtras;
+          // Equação Contábil Unificada: Salário Base + Outros Recebidos + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto Folha = Líquido
+          const base = Number(row.valor_fixo || 0);
+          const outros = Number(row.valor_outros_recebidos || (row.valor_hora_extra || 0) + (row.valor_adicional_not || 0));
+          const vt = Number(row.valor_vt || 0);
+          const vrCesta = Number((row.valor_cesta || 0) + (row.valor_vr || 0));
+          const bonus = Number(row.valor_bonus || 0);
+          const premiacao = Number(row.valor_premiacao !== undefined ? row.valor_premiacao : (row.valor_ajuda_custo || 0));
+
+          const subtotal = base + outros + vt + vrCesta + bonus + premiacao;
+          const totalDescontos = Number(row.valor_descontos || 0);
+          const liquidoReal = subtotal - totalDescontos;
 
           batchToSave.push({
             employee_id: finalEmployeeId,
             competencia: row.competencia,
             vinculo_tipo: "CLT",
-            valor_fixo: row.valor_fixo,
-            valor_holerite: proventos,
-            valor_adiantamento: adiantamento, // Adiantamento Salarial quinzenal (nunca de férias)
-            outros_ajustes: row.valor_outros_recebidos,
-            valor_hora_extra: row.valor_hora_extra,
-            valor_adicional_not: row.valor_adicional_not,
-            valor_vt: row.valor_vt,
-            valor_cesta: row.valor_cesta,
-            valor_vr: row.valor_vr,
-            valor_bonus: row.valor_bonus,
-            valor_ajuda_custo: row.valor_ajuda_custo,
-            valor_ferias: row.valor_ferias,
-            valor_rescisao: row.valor_rescisao,
-            valor_decimo_terceiro: row.valor_decimo_terceiro,
+            valor_fixo: base,
+            valor_holerite: base + outros,
+            valor_adiantamento: Number(row.valor_adiantamento || 0),
+            outros_ajustes: outros,
+            valor_hora_extra: Number(row.valor_hora_extra || 0),
+            valor_adicional_not: Number(row.valor_adicional_not || 0),
+            valor_vt: vt,
+            valor_cesta: vrCesta,
+            valor_vr: Number(row.valor_vr || 0),
+            valor_bonus: bonus,
+            valor_ajuda_custo: premiacao,
+            valor_ferias: Number(row.valor_ferias || 0),
+            valor_rescisao: Number(row.valor_rescisao || 0),
+            valor_decimo_terceiro: Number(row.valor_decimo_terceiro || 0),
             valor_descontos: totalDescontos,
-            inss_empregado: row.inss_empregado,
-            irrf_empregado: row.irrf_empregado,
-            valor_faltas: row.valor_faltas,
-            dias_faltas: row.dias_faltas,
-            valor_consignado: row.valor_consignado,
-            valor_pensao_alimenticia: row.valor_pensao_alimenticia,
-            valor_fgts: row.valor_fgts,
+            inss_empregado: Number(row.inss_empregado || 0),
+            irrf_empregado: Number(row.irrf_empregado || 0),
+            valor_faltas: Number(row.valor_faltas || 0),
+            dias_faltas: Number(row.dias_faltas || 0),
+            valor_consignado: Number(row.valor_consignado || 0),
+            valor_pensao_alimenticia: Number(row.valor_pensao_alimenticia || 0),
+            valor_fgts: Number(row.valor_fgts || 0),
             valor_liquido: liquidoReal,
             origem: row.sourceType === "PAYROLL_EXTRATO" ? "manual" : (row.sourceType === "EXCEL_RETROATIVO" ? "csv" : "manual"),
             observacao: row.observacao || "Importado via Central de Ingestão de Custos",
@@ -1165,34 +1188,34 @@ export function CostImportStagingModal({
                   </div>
                 </div>
 
-                {/* CARD 2: FOLHA DE ADIANTAMENTO (NOVO!) */}
+                {/* CARD 2: BÔNUS & PREMIAÇÃO (AUDITORIA IA) */}
                 <div className="bg-gradient-to-b from-blue-500/5 to-transparent border-2 border-blue-500/30 dark:border-blue-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-blue-500 transition-all shadow-sm group">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="w-11 h-11 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                        <Banknote size={22} />
+                        <Award size={22} />
                       </div>
                       <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                        Vales Quinzenais
+                        Auditoria IA • Incentivos
                       </span>
                     </div>
 
                     <h5 className="text-sm font-black text-slate-900 dark:text-white">
-                      Folha de Adiantamento (PDF/Foto)
+                      Bônus & Premiação (PDF/Foto)
                     </h5>
                     <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Envie a folha de adiantamento salarial quinzenal. Lê os valores líquidos concedidos a cada colaborador para alimentar a coluna de adiantamento.
+                      Envie relatórios, demonstrativos ou recibos de bônus, bonificações e premiações. A IA audita por CPF/nome e preenche as colunas automaticamente.
                     </p>
                   </div>
 
                   <div className="pt-5">
                     <label className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
                       <Upload size={14} />
-                      <span>Carregar Adiantamentos</span>
+                      <span>Carregar Bônus & Premiação</span>
                       <input
                         type="file"
                         accept=".pdf,image/png,image/jpeg"
-                        onChange={handleUploadAdvanceFile}
+                        onChange={handleUploadBonusFile}
                         className="hidden"
                       />
                     </label>
@@ -1344,14 +1367,14 @@ export function CostImportStagingModal({
                 {/* FERRAMENTAS DE MESCLAGEM E PREENCHIMENTO EM MASSA */}
                 <div className="flex items-center gap-2 flex-wrap">
                   
-                  {/* MESCLAR FOLHA DE ADIANTAMENTO (NOVO!) */}
+                  {/* IMPORTAR / MESCLAR BÔNUS & PREMIAÇÃO (AUDITORIA IA) */}
                   <label className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs font-black rounded-xl hover:bg-blue-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
-                    <Banknote size={13} className="text-blue-600" />
-                    <span>Mesclar Folha de Adiantamento</span>
+                    <Award size={13} className="text-blue-600" />
+                    <span>Importar Bônus & Premiação (PDF)</span>
                     <input
                       type="file"
                       accept=".pdf,image/png,image/jpeg"
-                      onChange={handleUploadAdvanceFile}
+                      onChange={handleUploadBonusFile}
                       className="hidden"
                     />
                   </label>
@@ -1422,45 +1445,63 @@ export function CostImportStagingModal({
                 </div>
               </div>
 
-              {/* CARDS COM OS 3 PILARES EXECUTIVOS DO LOTE */}
-              <div className="p-3 bg-slate-100/70 dark:bg-slate-850/50 border-b border-slate-200 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[9px] font-black text-slate-400 uppercase block">Colaboradores</span>
-                  <span className="text-sm font-black text-slate-800 dark:text-slate-200">{selectedStats.count}</span>
-                </div>
-                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[9px] font-black text-slate-500 uppercase block">Salários / Proventos</span>
-                  <span className="text-sm font-black text-slate-700 dark:text-slate-300 tabular-nums">
-                    {formatCurrency(selectedStats.totalHolerite)}
-                  </span>
-                </div>
-                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/50">
-                  <span className="text-[9px] font-black text-blue-600 uppercase block">Adiantamento Folha</span>
-                  <span className="text-sm font-black text-blue-700 dark:text-blue-300 tabular-nums">
-                    +{formatCurrency(selectedStats.totalAdiantamento)}
-                  </span>
-                </div>
-                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-rose-200 dark:border-rose-900/50">
-                  <span className="text-[9px] font-black text-rose-600 uppercase block">Total Descontos</span>
-                  <span className="text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums">
-                    -{formatCurrency(selectedStats.totalDescontos)}
-                  </span>
-                </div>
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                  <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase block">
-                    1. Total Recebido
-                  </span>
-                  <span className="text-sm font-black text-emerald-800 dark:text-emerald-300 tabular-nums">
-                    {formatCurrency(selectedStats.totalRecebido)}
-                  </span>
-                </div>
-                <div className="p-2 bg-teal-50 dark:bg-teal-950/40 rounded-xl border border-teal-200 dark:border-teal-800">
-                  <span className="text-[9px] font-black text-teal-700 dark:text-teal-400 uppercase block">
-                    3. Valor Líquido Real
-                  </span>
-                  <span className="text-sm font-black text-teal-800 dark:text-teal-300 tabular-nums">
-                    {formatCurrency(selectedStats.totalLiquidoReal)}
-                  </span>
+              {/* CARDS COM A EQUAÇÃO EXECUTIVA RESUMIDA: Base + Outros + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Descontos = Líquido */}
+              <div className="p-3 bg-slate-100/70 dark:bg-slate-850/50 border-b border-slate-200 dark:border-slate-800">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2">
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[9px] font-black text-slate-500 uppercase block">1. Salário Base</span>
+                    <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums">
+                      {formatCurrency(selectedStats.totalSalarioBase)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/50">
+                    <span className="text-[9px] font-black text-blue-600 uppercase block">2. + Outros Recebidos</span>
+                    <span className="text-xs sm:text-sm font-black text-blue-700 dark:text-blue-300 tabular-nums">
+                      +{formatCurrency(selectedStats.totalOutrosRecebidos)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
+                    <span className="text-[9px] font-black text-emerald-600 uppercase block">3. + VT</span>
+                    <span className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums">
+                      +{formatCurrency(selectedStats.totalVt)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-900/50">
+                    <span className="text-[9px] font-black text-amber-600 uppercase block">4. + VR / Cesta</span>
+                    <span className="text-xs sm:text-sm font-black text-amber-700 dark:text-amber-300 tabular-nums">
+                      +{formatCurrency(selectedStats.totalVrCesta)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-indigo-200 dark:border-indigo-900/50">
+                    <span className="text-[9px] font-black text-indigo-600 uppercase block">5. + Bônus</span>
+                    <span className="text-xs sm:text-sm font-black text-indigo-700 dark:text-indigo-300 tabular-nums">
+                      +{formatCurrency(selectedStats.totalBonus)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-teal-200 dark:border-teal-900/50">
+                    <span className="text-[9px] font-black text-teal-600 uppercase block">6. + Premiação</span>
+                    <span className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 tabular-nums">
+                      +{formatCurrency(selectedStats.totalPremiacao)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl border-2 border-blue-400 dark:border-blue-700 shadow-2xs">
+                    <span className="text-[9px] font-black text-blue-800 dark:text-blue-300 uppercase block">= Subtotal</span>
+                    <span className="text-xs sm:text-sm font-black text-blue-900 dark:text-blue-200 tabular-nums">
+                      {formatCurrency(selectedStats.totalSubtotal)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-300 dark:border-rose-800">
+                    <span className="text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase block">(-) Desc. Folha</span>
+                    <span className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums">
+                      -{formatCurrency(selectedStats.totalDescontosFolha)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-emerald-100/80 dark:bg-emerald-950/80 rounded-xl border-2 border-emerald-500 dark:border-emerald-600 shadow-sm col-span-2 sm:col-span-1">
+                    <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 uppercase block">= Líquido</span>
+                    <span className="text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-200 tabular-nums">
+                      {formatCurrency(selectedStats.totalLiquido)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1479,31 +1520,31 @@ export function CostImportStagingModal({
                         </button>
                       </th>
                       <th className="px-3 py-2 text-[10px] font-black uppercase text-slate-500">Colaborador</th>
-                      <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-600 text-right">Salário Fixo (R$) ✏️</th>
-                      <th className="px-2 py-2 text-[10px] font-black uppercase text-blue-600 text-right">Outros Recebidos ✏️</th>
-                      <th className="px-2 py-2 text-[10px] font-black uppercase text-rose-600 text-right">Desc. Folha ✏️</th>
-                      <th className="px-2 py-2 text-[10px] font-black uppercase text-blue-700 dark:text-blue-300 text-right bg-blue-500/10 rounded-t">
-                        Adiantamento Folha ✏️
-                      </th>
-                      <th className="px-2 py-2 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 text-right bg-emerald-500/10 rounded-t">
-                        VT Recebido (R$) ✏️
-                      </th>
-                      <th className="px-2 py-2 text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 text-right bg-amber-500/10 rounded-t">
-                        VR / Cesta (R$) ✏️
-                      </th>
-                      <th className="px-3 py-2 text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 text-right">Total Recebido</th>
-                      <th className="px-3 py-2 text-[10px] font-black uppercase text-teal-700 dark:text-teal-300 text-right">Líquido Real</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-600 text-right">Salário Base ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-blue-600 text-right">+ Outros ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 text-right bg-emerald-500/10 rounded-t">+ VT ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 text-right bg-amber-500/10 rounded-t">+ VR / Cesta ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-300 text-right bg-indigo-500/10 rounded-t">+ Bônus ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-teal-700 dark:text-teal-300 text-right bg-teal-500/10 rounded-t">+ Premiação ✏️</th>
+                      <th className="px-3 py-2 text-[10px] font-black uppercase text-blue-800 dark:text-blue-300 text-right bg-blue-500/10">= Subtotal</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-rose-600 text-right bg-rose-500/10 rounded-t">(-) Desc. Folha ✏️</th>
+                      <th className="px-3 py-2 text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 text-right bg-emerald-500/20">= Líquido</th>
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-500 text-center">Vínculo</th>
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-850">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {visibleRows.map((row) => {
-                      const proventos = (row.valor_holerite || (row.valor_fixo + row.valor_hora_extra + row.valor_adicional_not)) + (row.valor_outros_recebidos || 0);
-                      const beneficiosExtras = (row.valor_vt || 0) + (row.valor_cesta || 0) + (row.valor_vr || 0) + (row.valor_adiantamento || 0) + (row.valor_bonus || 0) + (row.valor_ajuda_custo || 0);
-                      const totalRecebidoRow = proventos + beneficiosExtras;
-                      const totalDescRow = row.valor_descontos || 0;
-                      const liquidoRealRow = totalRecebidoRow - totalDescRow;
+                      const base = Number(row.valor_fixo || 0);
+                      const outros = Number(row.valor_outros_recebidos || (row.valor_hora_extra || 0) + (row.valor_adicional_not || 0));
+                      const vt = Number(row.valor_vt || 0);
+                      const vrCesta = Number((row.valor_cesta || 0) + (row.valor_vr || 0));
+                      const bonus = Number(row.valor_bonus || 0);
+                      const premiacao = Number(row.valor_premiacao !== undefined ? row.valor_premiacao : (row.valor_ajuda_custo || 0));
+
+                      const subtotalRow = base + outros + vt + vrCesta + bonus + premiacao;
+                      const totalDescRow = Number(row.valor_descontos || 0);
+                      const liquidoRealRow = subtotalRow - totalDescRow;
 
                       const existingDbRecord = row.targetEmployeeId !== "NEW" ? existingCostsInDb.get(row.targetEmployeeId) : undefined;
 
@@ -1553,7 +1594,7 @@ export function CostImportStagingModal({
                             </div>
                           </td>
 
-                          {/* SALÁRIO FIXO (EDITÁVEL INLINE) */}
+                          {/* SALÁRIO BASE (EDITÁVEL INLINE) */}
                           <td className="px-2 py-2 text-right align-middle">
                             <div className="flex items-center justify-end gap-1">
                               <span className="text-[10px] text-slate-400 font-bold">R$</span>
@@ -1570,7 +1611,7 @@ export function CostImportStagingModal({
                             </div>
                           </td>
 
-                          {/* OUTROS VALORES RECEBIDOS (EDITÁVEL INLINE) */}
+                          {/* OUTROS RECEBIDOS (EDITÁVEL INLINE) */}
                           <td className="px-2 py-2 text-right align-middle">
                             <div className="flex items-center justify-end gap-1">
                               <span className="text-[10px] text-blue-500 font-bold">R$</span>
@@ -1587,46 +1628,7 @@ export function CostImportStagingModal({
                             </div>
                           </td>
 
-                          {/* DESCONTOS FOLHA (EDITÁVEL INLINE) */}
-                          <td className="px-2 py-2 text-right align-middle bg-rose-500/5">
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="text-[10px] text-rose-500 font-bold">R$</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={row.valor_descontos === 0 ? "" : row.valor_descontos}
-                                onChange={(e) =>
-                                  handleUpdateRowField(row.id, "valor_descontos", parseFloat(e.target.value) || 0)
-                                }
-                                placeholder="0,00"
-                                className="w-20 px-1.5 py-1 text-xs font-bold text-right text-rose-700 dark:text-rose-400 bg-white dark:bg-slate-950 border border-rose-300 dark:border-rose-700 rounded-lg outline-none focus:ring-1 focus:ring-rose-500"
-                              />
-                            </div>
-                            {row.desconto_vt_6 > 0 && (
-                              <span className="text-[9px] text-rose-400 block font-normal text-right mt-0.5">
-                                Desc 6% VT: {formatCurrency(row.desconto_vt_6)}
-                              </span>
-                            )}
-                          </td>
-
-                          {/* ADIANTAMENTO FOLHA (EDITÁVEL INLINE) */}
-                          <td className="px-2 py-2 text-right align-middle bg-blue-500/5">
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">R$</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={row.valor_adiantamento === 0 ? "" : row.valor_adiantamento}
-                                onChange={(e) =>
-                                  handleUpdateRowField(row.id, "valor_adiantamento", parseFloat(e.target.value) || 0)
-                                }
-                                placeholder="0,00"
-                                className="w-20 px-1.5 py-1 text-xs font-black text-right text-blue-800 dark:text-blue-300 bg-white dark:bg-slate-950 border border-blue-400 dark:border-blue-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
-                              />
-                            </div>
-                          </td>
-
-                          {/* VT RECEBIDO EFETIVO (EDITÁVEL INLINE) */}
+                          {/* VT RECEBIDO (EDITÁVEL INLINE) */}
                           <td className="px-2 py-2 text-right align-middle bg-emerald-500/5">
                             <div className="flex items-center justify-end gap-1">
                               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">R$</span>
@@ -1660,14 +1662,74 @@ export function CostImportStagingModal({
                             </div>
                           </td>
 
-                          {/* TOTAL RECEBIDO REAL */}
-                          <td className="px-3 py-2 text-right tabular-nums font-black text-emerald-700 dark:text-emerald-400 align-middle">
-                            {formatCurrency(totalRecebidoRow)}
+                          {/* BÔNUS (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle bg-indigo-500/5">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_bonus === 0 ? "" : row.valor_bonus}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_bonus", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-black text-right text-indigo-800 dark:text-indigo-300 bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20"
+                              />
+                            </div>
                           </td>
 
-                          {/* LÍQUIDO REAL PAGO */}
-                          <td className="px-3 py-2 text-right tabular-nums font-black text-slate-900 dark:text-white align-middle">
-                            <span className="inline-block px-2 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300">
+                          {/* PREMIAÇÃO (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle bg-teal-500/5">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={(row.valor_premiacao || row.valor_ajuda_custo || 0) === 0 ? "" : (row.valor_premiacao || row.valor_ajuda_custo)}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  handleUpdateRowField(row.id, "valor_premiacao", val);
+                                  handleUpdateRowField(row.id, "valor_ajuda_custo", val);
+                                }}
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-black text-right text-teal-800 dark:text-teal-300 bg-white dark:bg-slate-950 border border-teal-300 dark:border-teal-700 rounded-lg outline-none focus:ring-2 focus:ring-teal-500/20"
+                              />
+                            </div>
+                          </td>
+
+                          {/* SUBTOTAL (BASE + OUTROS + VT + VR/CESTA + BÔNUS + PREMIAÇÃO) */}
+                          <td className="px-3 py-2 text-right tabular-nums font-black text-blue-900 dark:text-blue-200 align-middle bg-blue-500/5">
+                            <span className="inline-block px-2 py-0.5 rounded-lg bg-blue-100/70 dark:bg-blue-950/70 border border-blue-300 dark:border-blue-800">
+                              {formatCurrency(subtotalRow)}
+                            </span>
+                          </td>
+
+                          {/* DESCONTOS FOLHA (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle bg-rose-500/5">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-rose-500 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_descontos === 0 ? "" : row.valor_descontos}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_descontos", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-bold text-right text-rose-700 dark:text-rose-400 bg-white dark:bg-slate-950 border border-rose-300 dark:border-rose-700 rounded-lg outline-none focus:ring-1 focus:ring-rose-500"
+                              />
+                            </div>
+                            {row.desconto_vt_6 > 0 && (
+                              <span className="text-[9px] text-rose-400 block font-normal text-right mt-0.5">
+                                Desc 6% VT: {formatCurrency(row.desconto_vt_6)}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* LÍQUIDO (SUBTOTAL - DESCONTOS) */}
+                          <td className="px-3 py-2 text-right tabular-nums font-black text-slate-900 dark:text-white align-middle bg-emerald-500/5">
+                            <span className="inline-block px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200">
                               {formatCurrency(liquidoRealRow)}
                             </span>
                           </td>

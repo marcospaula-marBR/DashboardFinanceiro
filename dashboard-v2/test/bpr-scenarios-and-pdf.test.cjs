@@ -333,4 +333,72 @@ assert.strictEqual(repResigned[0].name, 'Carlos');
 
 console.log('   ✅ Filtros de status, vínculos, empresas e períodos de admissão/rescisão validados.');
 
+// 8. Testando resolução do nome do colaborador (getEmployeeDisplayName)
+console.log('\n8. Testando resolução de nomes (getEmployeeDisplayName)...');
+function getEmployeeDisplayNameMock(e) {
+  const isCltOrEstagio = !e.linkType || e.linkType.toUpperCase().includes('CLT') || e.linkType.toUpperCase().includes('ESTAG');
+  const corp = (e.corporate_name || '').trim();
+  const corpUpper = corp.toUpperCase();
+  const isEmployerCorp = corpUpper.includes('D.Z.M') || corpUpper === 'DZM' || corpUpper.includes('MAR BRASIL') || corpUpper === 'G2';
+  if (isCltOrEstagio || isEmployerCorp || !corp) {
+    return e.name || corp || 'Sem nome';
+  }
+  return corp || e.name || 'Sem nome';
+}
+
+const cltWithEmployerCorp = {
+  name: 'BRUNO VIANA DE SOUSA CHAVES',
+  corporate_name: 'D.Z.M LTDA',
+  linkType: 'CLT',
+  company: 'DZM'
+};
+assert.strictEqual(getEmployeeDisplayNameMock(cltWithEmployerCorp), 'BRUNO VIANA DE SOUSA CHAVES');
+
+const pjWithOwnCorp = {
+  name: 'BRAIAN CASTRO FURQUIM DA MOTA',
+  corporate_name: '29.739.454 BRAIAN CASTRO FURQUIM DA MOTA',
+  linkType: 'PJ',
+  company: 'MarBR'
+};
+assert.strictEqual(getEmployeeDisplayNameMock(pjWithOwnCorp), '29.739.454 BRAIAN CASTRO FURQUIM DA MOTA');
+
+const unnamedEmp = { name: '', corporate_name: '', linkType: 'CLT' };
+assert.strictEqual(getEmployeeDisplayNameMock(unnamedEmp), 'Sem nome');
+console.log('   ✅ Resolução de nome para CLT e PJ validada.');
+
+// 9. Testando cálculo contábil unificado da Central de Ingestão e Conciliação
+console.log('\n9. Testando cálculo da Central de Ingestão e Conciliação...');
+function calculateConciliacaoMock(row) {
+  const base = Number(row.valor_fixo || 0);
+  const outros = Number(row.valor_outros_recebidos || (row.valor_hora_extra || 0) + (row.valor_adicional_not || 0));
+  const vt = Number(row.valor_vt || 0);
+  const vrCesta = Number((row.valor_cesta || 0) + (row.valor_vr || 0));
+  const bonus = Number(row.valor_bonus || 0);
+  const premiacao = Number(row.valor_premiacao !== undefined ? row.valor_premiacao : (row.valor_ajuda_custo || 0));
+
+  const subtotal = Math.round((base + outros + vt + vrCesta + bonus + premiacao) * 100) / 100;
+  const desc = Number(row.valor_descontos || 0);
+  const liquido = Math.round((subtotal - desc) * 100) / 100;
+
+  return { subtotal, desc, liquido };
+}
+
+const sampleRow = {
+  valor_fixo: 1849.81,
+  valor_outros_recebidos: 150.00,
+  valor_vt: 110.99,
+  valor_cesta: 320.00,
+  valor_vr: 0,
+  valor_bonus: 500.00,
+  valor_premiacao: 200.00,
+  valor_descontos: 250.00
+};
+
+const calcResult = calculateConciliacaoMock(sampleRow);
+// Subtotal = 1849.81 + 150 + 110.99 + 320 + 500 + 200 = 3130.80
+assert.strictEqual(calcResult.subtotal, 3130.8);
+// Líquido = 3130.80 - 250 = 2880.80
+assert.strictEqual(calcResult.liquido, 2880.8);
+console.log('   ✅ Equação contábil (Base + Outros + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto = Líquido) validada com 100% de precisão.');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');
