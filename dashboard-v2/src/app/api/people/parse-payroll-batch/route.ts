@@ -200,7 +200,7 @@ Instruções de Extração:
 4. **Verbas de Desconto da Folha (uma por uma)**:
    - INSS descontado no campo "inss_empregado" (rubrica 998 I.N.S.S.).
    - IRRF descontado no campo "irrf_empregado".
-   - Desconto de Vale Transporte 6% no campo "desconto_vt_6" (rubrica 48 VALE TRANSPORTE).
+   - Desconto de Vale Transporte 6% no campo "desconto_vt_6" (rubrica 48 VALE TRANSPORTE). *ATENÇÃO RIGOROSA*: A rubrica 48 é estritamente um DESCONTO (de até 6%) soportado pelo colaborador e já deve ser somada em "valor_descontos". NUNCA a capture como crédito ou provento em "valor_vt". Na folha mensal oficial, o campo "valor_vt" deve permanecer SEMPRE 0.00, pois benefícios/recargas de VT são geridos à parte.
    - Desconto de Faltas e DSR no campo "valor_faltas", com quantitativo em "dias_faltas".
    - Empréstimo Consignado no campo "valor_consignado".
    - Pensão Alimentícia no campo "valor_pensao_alimenticia".

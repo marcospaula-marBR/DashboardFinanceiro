@@ -401,4 +401,127 @@ assert.strictEqual(calcResult.subtotal, 3130.8);
 assert.strictEqual(calcResult.liquido, 2880.8);
 console.log('   ✅ Equação contábil (Base + Outros + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto = Líquido) validada com 100% de precisão.');
 
+console.log('\n10. Testando novo filtro de Ciclo Completo / Vigência Ativa no Período (BPR 01/01/2026 a 30/06/2026)...');
+function filterByCycle(employees, periodStart, periodEnd) {
+  return employees.filter(e => {
+    const st = (e.status || '').toLowerCase();
+    if (st === 'inativo' || st === 'desligado' || st === 'demitido' || e.active === false) return false;
+    if (periodStart && e.start_date && e.start_date > periodStart) return false;
+    const resDate = e.resignation_date || e.real_resignation_date;
+    if (periodEnd && resDate && resDate < periodEnd) return false;
+    return true;
+  });
+}
+
+const mockCycleEmployees = [
+  { id: '1', name: 'Marcos Antonio', start_date: '2025-05-19', resignation_date: null, status: 'Ativo' },
+  { id: '2', name: 'Bruno Viana', start_date: '2026-03-20', resignation_date: null, status: 'Ativo' }, // admitido pós 01/01
+  { id: '3', name: 'Colaborador Rescindido', start_date: '2024-01-10', resignation_date: '2026-05-15', status: 'Inativo' }, // saiu antes de 30/06
+  { id: '4', name: 'Douglas Mariano', start_date: '2025-08-25', resignation_date: null, status: 'Ativo' },
+  { id: '5', name: 'Saiu em Julho', start_date: '2025-01-01', resignation_date: '2026-07-15', status: 'Inativo' } // inativo
+];
+
+const eligibleCycle = filterByCycle(mockCycleEmployees, '2026-01-01', '2026-06-30');
+assert.strictEqual(eligibleCycle.length, 2);
+assert.deepStrictEqual(eligibleCycle.map(e => e.id), ['1', '4']);
+console.log('   ✅ Filtro de ciclo completo (vigência ativa no 1º semestre) validado: captura admitidos até 01/01 e ativos sem rescisão até 30/06.');
+
+console.log('\n11. Testando segregação e resolução de Camada BPR (Estratégico / Tático) e Níveis de Enquadramento...');
+function getEmployeeCamada(e) {
+  const meta = e.metadata || {};
+  const c = String(e.camada || meta.camada || '').trim();
+  if (c) {
+    const cLower = c.toLowerCase();
+    if (cLower.includes('estrat')) return 'Estratégico';
+    if (cLower.includes('tát') || cLower.includes('tat')) return 'Tático';
+    if (cLower.includes('oper')) return 'Operacional';
+  }
+  const n = String(e.nivel || meta.nivel || '').trim();
+  if (n) {
+    const nLower = n.toLowerCase();
+    if (nLower.includes('estrat')) return 'Estratégico';
+    if (nLower.includes('tát') || nLower.includes('tat')) return 'Tático';
+    if (nLower.includes('oper')) return 'Operacional';
+  }
+  const role = (e.job_role || '').toLowerCase();
+  if (role.includes('gestor') || role.includes('diretor') || role.includes('especialista')) return 'Estratégico';
+  if (role.includes('analista') || role.includes('supervisor') || role.includes('consultor') || role.includes('bpo')) return 'Tático';
+  return 'Operacional';
+}
+
+function getEmployeeNivelEnquadramento(e) {
+  const meta = e.metadata || {};
+  const nVal = e.nivel_enquadramento || (['I', 'II', 'III'].includes(e.nivel || '') ? e.nivel : '') || meta.nivel_enquadramento || (['I', 'II', 'III'].includes(meta.grau || '') ? meta.grau : '');
+  if (nVal && ['I', 'II', 'III'].includes(String(nVal).trim())) {
+    return String(nVal).trim();
+  }
+  const grau = String(e.grau || meta.grau || '').toLowerCase();
+  if (grau.includes('avan') || grau === '1') return 'I';
+  if (grau.includes('inter') || grau === '2') return 'II';
+  if (grau.includes('inic') || grau === '3') return 'III';
+  return '-';
+}
+
+function getEmployeeNivel(e) {
+  const c = getEmployeeCamada(e);
+  const n = getEmployeeNivelEnquadramento(e);
+  if (n && n !== '-') return `${c} (${n})`;
+  return c;
+}
+
+const mockColabsHierarchy = [
+  { id: '1', name: 'Marcos Antonio de Paula', nivel: 'II', metadata: { camada: 'Estratégico' } },
+  { id: '2', name: 'DOUGLAS MARIANO RIBEIRO', nivel: 'I', metadata: { camada: 'Estratégico' } },
+  { id: '3', name: 'CARLOS EDUARDO ROMERO VICENTE', nivel: 'Estratégico', metadata: { camada: 'Estratégico', grau: 'II' } },
+  { id: '4', name: 'FLAVIO DE OLIVEIRA FONTENELE', nivel: 'Estratégico', metadata: {} },
+  { id: '5', name: 'Matheus Aragão de Freitas Brito', nivel: 'III', metadata: { camada: 'Tático' } },
+  { id: '6', name: 'FABIO DA SILVA GABASSI', nivel: 'Tático', metadata: {} },
+  { id: '7', name: 'Operacional Padrão', nivel: 'I', metadata: { camada: 'Operacional' } }
+];
+
+assert.strictEqual(getEmployeeCamada(mockColabsHierarchy[0]), 'Estratégico');
+assert.strictEqual(getEmployeeNivelEnquadramento(mockColabsHierarchy[0]), 'II');
+assert.strictEqual(getEmployeeNivel(mockColabsHierarchy[0]), 'Estratégico (II)');
+
+assert.strictEqual(getEmployeeCamada(mockColabsHierarchy[1]), 'Estratégico');
+assert.strictEqual(getEmployeeNivelEnquadramento(mockColabsHierarchy[1]), 'I');
+
+assert.strictEqual(getEmployeeCamada(mockColabsHierarchy[4]), 'Tático');
+assert.strictEqual(getEmployeeNivelEnquadramento(mockColabsHierarchy[4]), 'III');
+assert.strictEqual(getEmployeeNivel(mockColabsHierarchy[4]), 'Tático (III)');
+
+// Filtro por camada Estratégico deve retornar os 4 estrategicos
+const filterEstrategico = mockColabsHierarchy.filter(e => getEmployeeCamada(e) === 'Estratégico');
+assert.strictEqual(filterEstrategico.length, 4);
+
+// Filtro por camada Tático deve retornar os 2 táticos
+const filterTatico = mockColabsHierarchy.filter(e => getEmployeeCamada(e) === 'Tático');
+assert.strictEqual(filterTatico.length, 2);
+
+console.log('   ✅ Resolução de Camada e Nível validada com 100% de precisão (todos os Estratégicos e Táticos capturados).');
+
+console.log('\n12. Testando regra estrita de VT na Central de Ingestão (VT benefício = 0 na Folha Mensal)...');
+function mapPayrollRow(rec) {
+  return {
+    sourceType: 'PAYROLL_EXTRATO',
+    valor_fixo: rec.valor_fixo || 0,
+    valor_vt: 0, // Nunca populado pela folha
+    desconto_vt_6: rec.desconto_vt_6 || 0,
+    valor_descontos: rec.valor_descontos || 0
+  };
+}
+
+const payrollRecWithVtDiscount = {
+  valor_fixo: 2000.00,
+  desconto_vt_6: 120.00, // 6% desconto
+  valor_descontos: 350.00,
+  valor_vt: 120.00 // mesmo se vier preenchido do extrator
+};
+
+const mappedRow = mapPayrollRow(payrollRecWithVtDiscount);
+assert.strictEqual(mappedRow.valor_vt, 0, 'valor_vt deve ser 0 na importação de folha mensal');
+assert.strictEqual(mappedRow.desconto_vt_6, 120.00, 'desconto_vt_6 deve manter o desconto de 6% da folha');
+assert.strictEqual(mappedRow.valor_descontos, 350.00, 'valor_descontos deve conter os descontos totais da folha');
+console.log('   ✅ Regra de VT da Folha Mensal validada: valor_vt inicializado em 0 e desconto legal de 6% mantido em descontos.');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

@@ -24,9 +24,46 @@ export const getEmployeeDisplayName = (e: { name?: string; corporate_name?: stri
   return corp || e.name || 'Sem nome';
 };
 
+export const getEmployeeCamada = (e: Employee): string => {
+  const meta = (e.metadata as any) || {};
+  const c = String(e.camada || meta.camada || '').trim();
+  if (c) {
+    const cLower = c.toLowerCase();
+    if (cLower.includes('estrat')) return 'Estratégico';
+    if (cLower.includes('tát') || cLower.includes('tat')) return 'Tático';
+    if (cLower.includes('oper')) return 'Operacional';
+  }
+  const n = String(e.nivel || meta.nivel || '').trim();
+  if (n) {
+    const nLower = n.toLowerCase();
+    if (nLower.includes('estrat')) return 'Estratégico';
+    if (nLower.includes('tát') || nLower.includes('tat')) return 'Tático';
+    if (nLower.includes('oper')) return 'Operacional';
+  }
+  const role = (e.job_role || '').toLowerCase();
+  if (role.includes('gestor') || role.includes('diretor') || role.includes('especialista')) return 'Estratégico';
+  if (role.includes('analista') || role.includes('supervisor') || role.includes('consultor') || role.includes('bpo')) return 'Tático';
+  return 'Operacional';
+};
+
+export const getEmployeeNivelEnquadramento = (e: Employee): string => {
+  const meta = (e.metadata as any) || {};
+  const nVal = e.nivel_enquadramento || (['I', 'II', 'III'].includes(e.nivel || '') ? e.nivel : '') || meta.nivel_enquadramento || (['I', 'II', 'III'].includes(meta.grau || '') ? meta.grau : '');
+  if (nVal && ['I', 'II', 'III'].includes(String(nVal).trim())) {
+    return String(nVal).trim();
+  }
+  const grau = String(e.grau || meta.grau || '').toLowerCase();
+  if (grau.includes('avan') || grau === '1') return 'I';
+  if (grau.includes('inter') || grau === '2') return 'II';
+  if (grau.includes('inic') || grau === '3') return 'III';
+  return '-';
+};
+
 export const getEmployeeNivel = (e: Employee): string => {
-  const val = e.nivel_enquadramento || e.nivel || (e.metadata as any)?.nivel || e.camada || (e.metadata as any)?.camada || (e.metadata as any)?.grau;
-  return val ? String(val).trim() : '-';
+  const c = getEmployeeCamada(e);
+  const n = getEmployeeNivelEnquadramento(e);
+  if (n && n !== '-') return `${c} (${n})`;
+  return c;
 };
 
 interface BatchPdfExportModalProps {
@@ -52,6 +89,7 @@ export function BatchPdfExportModal({
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedLinkTypes, setSelectedLinkTypes] = useState<string[]>([]);
+  const [selectedCamadas, setSelectedCamadas] = useState<string[]>([]);
   const [selectedNiveis, setSelectedNiveis] = useState<string[]>([]);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string>('all');
@@ -59,7 +97,7 @@ export function BatchPdfExportModal({
 
   // Novos Filtros Especializados de Relatório (Status, Período e Exibições)
   const [selectedStatus, setSelectedStatus] = useState<'active' | 'all' | 'inactive' | 'ferias'>('active');
-  const [dateFilterType, setDateFilterType] = useState<'admission' | 'resignation'>('admission');
+  const [dateFilterType, setDateFilterType] = useState<'admission' | 'resignation' | 'cycle'>('admission');
   const [isPeriodFilterActive, setIsPeriodFilterActive] = useState(false);
   const [periodStartDate, setPeriodStartDate] = useState('');
   const [periodEndDate, setPeriodEndDate] = useState('');
@@ -89,13 +127,31 @@ export function BatchPdfExportModal({
     return Array.from(new Set(employees.map(e => e.linkType).filter(Boolean))).sort() as string[];
   }, [employees]);
 
+  const camadas = useMemo(() => {
+    return ['Estratégico', 'Tático', 'Operacional'];
+  }, []);
+
   const niveis = useMemo(() => {
-    const setN = new Set<string>();
+    return ['I', 'II', 'III'];
+  }, []);
+
+  // Contagens dinâmicas por camada e nível
+  const camadaCounts = useMemo(() => {
+    const counts: Record<string, number> = { 'Estratégico': 0, 'Tático': 0, 'Operacional': 0 };
     employees.forEach(e => {
-      const n = getEmployeeNivel(e);
-      if (n && n !== '-') setN.add(n);
+      const c = getEmployeeCamada(e);
+      if (counts[c] !== undefined) counts[c]++;
     });
-    return Array.from(setN).sort();
+    return counts;
+  }, [employees]);
+
+  const nivelCounts = useMemo(() => {
+    const counts: Record<string, number> = { 'I': 0, 'II': 0, 'III': 0 };
+    employees.forEach(e => {
+      const n = getEmployeeNivelEnquadramento(e);
+      if (counts[n] !== undefined) counts[n]++;
+    });
+    return counts;
   }, [employees]);
 
   // Lista de anos disponíveis nas competências
@@ -153,12 +209,21 @@ export function BatchPdfExportModal({
       list = list.filter(e => selectedLinkTypes.includes(e.linkType || ''));
     }
 
-    // 5. Filtro de Nível
-    if (selectedNiveis.length > 0) {
-      list = list.filter(e => selectedNiveis.includes(getEmployeeNivel(e)));
+    // 5. Filtro de Camada / Perfil BPR (Estratégico, Tático, Operacional)
+    if (selectedCamadas.length > 0) {
+      list = list.filter(e => selectedCamadas.includes(getEmployeeCamada(e)));
     }
 
-    // 6. Filtro de Período de Contratação / Admissão vs Desligamento
+    // 5.1. Filtro de Nível de Enquadramento (I, II, III) ou compatibilidade com camadas
+    if (selectedNiveis.length > 0) {
+      list = list.filter(e => {
+        const n = getEmployeeNivelEnquadramento(e);
+        const c = getEmployeeCamada(e);
+        return selectedNiveis.includes(n) || selectedNiveis.includes(c);
+      });
+    }
+
+    // 6. Filtro de Período de Contratação / Admissão vs Desligamento vs Ciclo Completo
     if (isPeriodFilterActive) {
       if (dateFilterType === 'admission') {
         if (periodStartDate) {
@@ -180,6 +245,24 @@ export function BatchPdfExportModal({
             return resDate && resDate <= periodEndDate;
           });
         }
+      } else if (dateFilterType === 'cycle') {
+        // Colaboradores que cumpriram o ciclo completo no período especificado
+        if (periodStartDate) {
+          // Contratado até o início do ciclo (já estava ativo na data de início)
+          list = list.filter(e => !e.start_date || e.start_date <= periodStartDate);
+        }
+        if (periodEndDate) {
+          // Não foi desligado antes do fim do ciclo
+          list = list.filter(e => {
+            const resDate = e.resignation_date || (e as any).real_resignation_date;
+            return !resDate || resDate >= periodEndDate;
+          });
+        }
+        // Somente colaboradores com status ativo no período
+        list = list.filter(e => {
+          const st = (e.status || '').toLowerCase();
+          return st !== 'inativo' && st !== 'desligado' && st !== 'demitido' && (e as any).active !== false;
+        });
       }
     }
 
@@ -207,6 +290,7 @@ export function BatchPdfExportModal({
     selectedCompanies,
     selectedDepartments,
     selectedLinkTypes,
+    selectedCamadas,
     selectedNiveis,
     isPeriodFilterActive,
     dateFilterType,
@@ -299,12 +383,12 @@ export function BatchPdfExportModal({
 
 `;
 
-      csv += `Nº;Colaborador;CPF / CNPJ;Empresa;Regime;Cargo;Nível;Departamento;Data de Admissão;Data de Desligamento;${includeFinancials ? 'Remuneração / Honorários;' : ''}Status
+      csv += `Nº;Colaborador;CPF / CNPJ;Empresa;Regime;Cargo;Camada;Nível;Departamento;Data de Admissão;Data de Desligamento;${includeFinancials ? 'Remuneração / Honorários;' : ''}Status
 `;
 
       targetEmployees.forEach((e, idx) => {
         const rem = Number(e.remuneration_fixed || e.remuneration || 0);
-        csv += `${idx + 1};${sanitize(getEmployeeDisplayName(e))};${sanitize(e.document_id || e.pj_type)};${sanitize(e.company)};${sanitize(e.linkType)};${sanitize(e.job_role)};${sanitize(getEmployeeNivel(e))};${sanitize(e.department)};${sanitize(e.start_date || '-')};${sanitize(e.resignation_date || (e as any).real_resignation_date || '-')};${includeFinancials ? sanitize(rem.toFixed(2)) + ';' : ''}${sanitize(e.status || ((e as any).active !== false ? 'Ativo' : 'Inativo'))}
+        csv += `${idx + 1};${sanitize(getEmployeeDisplayName(e))};${sanitize(e.document_id || e.pj_type)};${sanitize(e.company)};${sanitize(e.linkType)};${sanitize(e.job_role)};${sanitize(getEmployeeCamada(e))};${sanitize(getEmployeeNivelEnquadramento(e))};${sanitize(e.department)};${sanitize(e.start_date || '-')};${sanitize(e.resignation_date || (e as any).real_resignation_date || '-')};${includeFinancials ? sanitize(rem.toFixed(2)) + ';' : ''}${sanitize(e.status || ((e as any).active !== false ? 'Ativo' : 'Inativo'))}
 `;
       });
 
@@ -435,12 +519,15 @@ export function BatchPdfExportModal({
     const statusLabel = selectedStatus === 'active' ? 'Somente Ativos' : selectedStatus === 'inactive' ? 'Somente Desligados/Inativos' : selectedStatus === 'ferias' ? 'Férias/Afastados' : 'Todos os Status';
     const companiesLabel = selectedCompanies.length > 0 ? selectedCompanies.join(', ') : 'Todas as Empresas';
     const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todos os Regimes';
+    const camadasLabel = selectedCamadas.length > 0 ? ` • CAMADAS: ${selectedCamadas.join(', ')}` : '';
     const niveisLabel = selectedNiveis.length > 0 ? ` • NÍVEIS: ${selectedNiveis.join(', ')}` : '';
     const dateLabel = isPeriodFilterActive
-      ? `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate || 'início'} até ${periodEndDate || 'hoje'}`
+      ? dateFilterType === 'cycle'
+        ? `Ciclo Completo BPR: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'fim'}`
+        : `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'hoje'}`
       : 'Histórico Geral Completo';
 
-    doc.text(`ESCOPO: ${companiesLabel} • REGIMES: ${linksLabel}${niveisLabel} • STATUS: ${statusLabel} • ${dateLabel}`, 14, 21);
+    doc.text(`ESCOPO: ${companiesLabel} • REGIMES: ${linksLabel}${camadasLabel}${niveisLabel} • STATUS: ${statusLabel} • ${dateLabel}`, 14, 21);
     doc.text(`EMISSÃO: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} • TOTAL: ${targetEmployees.length} COLABORADORES`, 14, 26);
 
     let currentY = 31;
@@ -482,7 +569,7 @@ export function BatchPdfExportModal({
       'Empresa',
       'Regime',
       'Cargo / Escopo',
-      'Nível',
+      'Camada / Nível',
       'Departamento',
       'Admissão',
       ...(selectedStatus !== 'active' ? ['Desligamento'] : []),
@@ -578,9 +665,12 @@ export function BatchPdfExportModal({
       const statusLabel = selectedStatus === 'active' ? 'Somente Ativos' : selectedStatus === 'inactive' ? 'Somente Desligados/Inativos' : selectedStatus === 'ferias' ? 'Férias/Afastados' : 'Todos os Status';
       const companiesLabel = selectedCompanies.length > 0 ? selectedCompanies.join(', ') : 'Todas as Empresas';
       const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todos os Regimes';
+      const camadasLabel = selectedCamadas.length > 0 ? ` • CAMADAS: ${selectedCamadas.join(', ')}` : '';
       const niveisLabel = selectedNiveis.length > 0 ? ` • NÍVEIS: ${selectedNiveis.join(', ')}` : '';
       const dateLabel = isPeriodFilterActive
-        ? `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate || 'início'} até ${periodEndDate || 'hoje'}`
+        ? dateFilterType === 'cycle'
+          ? `Ciclo Completo BPR: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'fim'}`
+          : `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'hoje'}`
         : 'Histórico Geral Completo';
 
       const generalHtml = `
@@ -625,7 +715,7 @@ export function BatchPdfExportModal({
           <div class="header">
             <div>
               <h1 class="title">Relatório Geral de Colaboradores &amp; Quadro de Pessoal</h1>
-              <div class="meta">Escopo: ${companiesLabel} • Regimes: ${linksLabel}${niveisLabel} • Status: ${statusLabel} • ${dateLabel}</div>
+              <div class="meta">Escopo: ${companiesLabel} • Regimes: ${linksLabel}${camadasLabel}${niveisLabel} • Status: ${statusLabel} • ${dateLabel}</div>
               <div class="meta" style="color: #64748b;">Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} • Total: ${targetEmployees.length} Colaboradores</div>
             </div>
             <div style="text-align: right;">
@@ -665,7 +755,7 @@ export function BatchPdfExportModal({
                 <th>Empresa</th>
                 <th>Regime</th>
                 <th>Cargo / Escopo</th>
-                <th>Nível</th>
+                <th>Camada / Nível</th>
                 <th>Departamento</th>
                 <th>Admissão</th>
                 ${selectedStatus !== 'active' ? '<th>Desligamento</th>' : ''}
@@ -1322,33 +1412,62 @@ export function BatchPdfExportModal({
 
               {isPeriodFilterActive && (
                 <div className="space-y-3 pt-2 border-t border-slate-200/80">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-bold text-slate-600">Critério de Data:</span>
-                    <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-white">
-                      <button
-                        type="button"
-                        onClick={() => setDateFilterType('admission')}
-                        className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                          dateFilterType === 'admission' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Período de Admissão / Contratação
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDateFilterType('resignation')}
-                        className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                          dateFilterType === 'resignation' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Período de Desligamento / Rescisão
-                      </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-slate-600">Critério de Data:</span>
+                      <div className="inline-flex flex-wrap rounded-lg border border-slate-200 p-0.5 bg-white">
+                        <button
+                          type="button"
+                          onClick={() => setDateFilterType('admission')}
+                          className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                            dateFilterType === 'admission' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Período de Admissão
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDateFilterType('resignation')}
+                          className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                            dateFilterType === 'resignation' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Período de Desligamento
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDateFilterType('cycle')}
+                          className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                            dateFilterType === 'cycle' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Ciclo Completo / Vigência Ativa (BPR)
+                        </button>
+                      </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFilterType('cycle');
+                        setIsPeriodFilterActive(true);
+                        setPeriodStartDate('2026-01-01');
+                        setPeriodEndDate('2026-06-30');
+                        setSelectedStatus('active');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 text-xs font-black transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                      title="Preenche automaticamente 01/01/2026 a 30/06/2026 com status ativo para elegibilidade BPR"
+                    >
+                      <CheckCircle2 size={13} className="text-emerald-600" />
+                      <span>✨ Preset BPR: 1º Semestre 2026 (01/01 a 30/06)</span>
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Data Inicial (A partir de)</label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                        {dateFilterType === 'cycle' ? 'Início do Ciclo (Admitido até)' : dateFilterType === 'admission' ? 'Data Inicial (A partir de)' : 'Desligamento (A partir de)'}
+                      </label>
                       <input
                         type="date"
                         value={periodStartDate}
@@ -1357,7 +1476,9 @@ export function BatchPdfExportModal({
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Data Final (Até)</label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                        {dateFilterType === 'cycle' ? 'Término do Ciclo (Sem rescisão antes de)' : dateFilterType === 'admission' ? 'Data Final (Até)' : 'Desligamento (Até)'}
+                      </label>
                       <input
                         type="date"
                         value={periodEndDate}
@@ -1366,6 +1487,11 @@ export function BatchPdfExportModal({
                       />
                     </div>
                   </div>
+                  {dateFilterType === 'cycle' && (
+                    <p className="text-[11px] text-emerald-800 bg-emerald-50/90 p-2.5 rounded-xl border border-emerald-200">
+                      💡 <strong>Elegibilidade de Ciclo BPR:</strong> Filtra colaboradores admitidos até o início do ciclo ({periodStartDate ? periodStartDate.split('-').reverse().join('/') : '01/01/2026'}) que continuaram ativos no quadro sem demissão até o encerramento do semestre ({periodEndDate ? periodEndDate.split('-').reverse().join('/') : '30/06/2026'}).
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -1458,33 +1584,65 @@ export function BatchPdfExportModal({
               </div>
             </div>
 
-            {/* Filtro por Nível */}
-            {niveis.length > 0 && (
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Nível</label>
-                  <div className="flex items-center gap-2 text-[10px] font-bold">
-                    <button onClick={() => setSelectedNiveis([...niveis])} className="text-amber-600 hover:underline cursor-pointer">Todos</button>
-                    <span className="text-slate-300">|</span>
-                    <button onClick={() => setSelectedNiveis([])} className="text-slate-400 hover:underline cursor-pointer">Limpar</button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {niveis.map(n => {
-                    const sel = selectedNiveis.includes(n);
-                    return (
-                      <button
-                        key={n}
-                        onClick={() => setSelectedNiveis(sel ? selectedNiveis.filter(x => x !== n) : [...selectedNiveis, n])}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${sel ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                      >
-                        {n}
-                      </button>
-                    );
-                  })}
+            {/* Filtro por Camada / Perfil BPR */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Perfil / Camada BPR</label>
+                <div className="flex items-center gap-2 text-[10px] font-bold">
+                  <button onClick={() => setSelectedCamadas([...camadas])} className="text-amber-600 hover:underline cursor-pointer">Todas</button>
+                  <span className="text-slate-300">|</span>
+                  <button onClick={() => setSelectedCamadas([])} className="text-slate-400 hover:underline cursor-pointer">Limpar</button>
                 </div>
               </div>
-            )}
+              <div className="flex flex-wrap gap-1.5">
+                {camadas.map(c => {
+                  const sel = selectedCamadas.includes(c);
+                  const count = camadaCounts[c] || 0;
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => setSelectedCamadas(sel ? selectedCamadas.filter(x => x !== c) : [...selectedCamadas, c])}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        sel ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{c}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-black ${sel ? 'bg-slate-950 text-amber-400' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Filtro por Nível de Enquadramento */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-bold uppercase text-slate-500">Filtrar por Nível de Enquadramento</label>
+                <div className="flex items-center gap-2 text-[10px] font-bold">
+                  <button onClick={() => setSelectedNiveis([...niveis])} className="text-amber-600 hover:underline cursor-pointer">Todos</button>
+                  <span className="text-slate-300">|</span>
+                  <button onClick={() => setSelectedNiveis([])} className="text-slate-400 hover:underline cursor-pointer">Limpar</button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {niveis.map(n => {
+                  const sel = selectedNiveis.includes(n);
+                  const count = nivelCounts[n] || 0;
+                  return (
+                    <button
+                      key={n}
+                      onClick={() => setSelectedNiveis(sel ? selectedNiveis.filter(x => x !== n) : [...selectedNiveis, n])}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        sel ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>Nível {n}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-black ${sel ? 'bg-slate-950 text-amber-400' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* 4. OPÇÕES EXECUTIVAS DO RELATÓRIO (VALORES FINANCEIROS, CARDS, ASSINATURAS) */}

@@ -381,7 +381,7 @@ export function CostImportStagingModal({
           valor_adiantamento: rec.valor_adiantamento || 0,
           valor_hora_extra: rec.valor_hora_extra || 0,
           valor_adicional_not: rec.valor_adicional_not || 0,
-          valor_vt: rec.valor_vt || 0,
+          valor_vt: 0, // VT recebido não é alimentado automaticamente pela folha mensal (o desconto de até 6% da rubrica 48 é desconto legal e já consta em desconto_vt_6 / valor_descontos)
           desconto_vt_6: rec.desconto_vt_6 || 0,
           valor_cesta: rec.valor_cesta || 0,
           valor_vr: rec.valor_vr || 0,
