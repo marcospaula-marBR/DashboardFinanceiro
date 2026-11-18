@@ -708,6 +708,23 @@ const brunoRes = calculateUnifiedEquationWithAdiantamento(brunoSample);
 assert.strictEqual(Math.round(brunoRes.subtotal * 100) / 100, 3046.49);
 // Líquido = 3046.49 - 993.07 + 739.92 = 2793.34
 assert.strictEqual(Math.round(brunoRes.liquido * 100) / 100, 2793.34);
-console.log('   ✅ Equação unificada com Adiantamento Salarial recomposto validada centavo a centavo.');
+
+// Exemplo Deuzelina: Proventos 5823.98, Hora Extra 169.74 (já embutida em Proventos), valor_outros_recebidos 0
+const deuzelinaSample = {
+  valor_holerite: 5823.98,
+  valor_hora_extra: 169.74,
+  valor_outros_recebidos: 0,
+  valor_vt: 0,
+  valor_cesta: 0,
+  valor_bonus: 0,
+  valor_premiacao: 0,
+  valor_descontos: 5823.96,
+  valor_adiantamento: 0
+};
+const deuzelinaRes = calculateUnifiedEquationWithAdiantamento(deuzelinaSample);
+// Subtotal deve ser estritamente igual a Proventos (5823.98), sem somar hora extra em duplicidade
+assert.strictEqual(Math.round(deuzelinaRes.subtotal * 100) / 100, 5823.98);
+assert.strictEqual(Math.round(deuzelinaRes.liquido * 100) / 100, 0.02);
+console.log('   ✅ Equação unificada com Adiantamento Salarial recomposto e isolamento de Proventos/Horas Extras validada centavo a centavo.');
 
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

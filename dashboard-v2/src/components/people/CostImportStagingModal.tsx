@@ -263,9 +263,11 @@ export function CostImportStagingModal({
     let totalDescontosFolha = 0;
     let totalLiquido = 0;
 
+    let totalAdiantamento = 0;
+
     selected.forEach((r) => {
       const proventos = Number(r.valor_holerite || r.valor_fixo || 0);
-      const outros = Number(r.valor_outros_recebidos || (r.valor_hora_extra || 0) + (r.valor_adicional_not || 0));
+      const outros = Number(r.valor_outros_recebidos || 0);
       const vt = Number(r.valor_vt || 0);
       const vrCesta = Number((r.valor_cesta || 0) + (r.valor_vr || 0));
       const bonus = Number(r.valor_bonus || 0);
@@ -273,7 +275,8 @@ export function CostImportStagingModal({
 
       const subtotal = proventos + outros + vt + vrCesta + bonus + premiacao;
       const desc = Number(r.valor_descontos || 0);
-      const liq = subtotal - desc;
+      const adiant = Number(r.valor_adiantamento || 0);
+      const liq = subtotal - desc + adiant;
 
       totalProventosFolha += proventos;
       totalOutrosRecebidos += outros;
@@ -283,6 +286,7 @@ export function CostImportStagingModal({
       totalPremiacao += premiacao;
       totalSubtotal += subtotal;
       totalDescontosFolha += desc;
+      totalAdiantamento += adiant;
       totalLiquido += liq;
     });
 
@@ -297,11 +301,11 @@ export function CostImportStagingModal({
       totalPremiacao,
       totalSubtotal,
       totalDescontosFolha,
+      totalAdiantamento,
       totalLiquido,
       // Compatibilidade legada
       totalHolerite: totalProventosFolha + totalOutrosRecebidos,
       totalDescontos: totalDescontosFolha,
-      totalAdiantamento: 0,
       totalVtRecebido: totalVt,
       totalCesta: totalVrCesta,
       totalOutrosBeneficios: totalBonus + totalPremiacao,
@@ -386,8 +390,8 @@ export function CostImportStagingModal({
           sourceType: "PAYROLL_EXTRATO",
           valor_fixo: holeriteBruto,
           valor_holerite: holeriteBruto,
-          valor_outros_recebidos: rec.outros_ajustes || 0,
-          valor_adiantamento: rec.valor_adiantamento || 0,
+          valor_outros_recebidos: Number(rec.valor_outros_recebidos || 0),
+          valor_adiantamento: Number(rec.valor_adiantamento || rec.desconto_adiantamento_folha || 0),
           valor_hora_extra: rec.valor_hora_extra || 0,
           valor_adicional_not: rec.valor_adicional_not || 0,
           valor_vt: 0, // VT recebido não é alimentado automaticamente pela folha mensal (o desconto de até 6% da rubrica 48 é desconto legal e já consta em desconto_vt_6 / valor_descontos)
@@ -1042,7 +1046,7 @@ export function CostImportStagingModal({
         if (finalEmployeeId && finalEmployeeId !== "NEW") {
           // Equação Contábil Unificada: Proventos + Outros Recebidos + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Desconto Folha = Líquido
           const proventos = Number(row.valor_holerite || row.valor_fixo || 0);
-          const outros = Number(row.valor_outros_recebidos || (row.valor_hora_extra || 0) + (row.valor_adicional_not || 0));
+          const outros = Number(row.valor_outros_recebidos || 0);
           const vt = Number(row.valor_vt || 0);
           const vrCesta = Number((row.valor_cesta || 0) + (row.valor_vr || 0));
           const bonus = Number(row.valor_bonus || 0);
@@ -1050,7 +1054,8 @@ export function CostImportStagingModal({
 
           const subtotal = proventos + outros + vt + vrCesta + bonus + premiacao;
           const totalDescontos = Number(row.valor_descontos || 0);
-          const liquidoReal = subtotal - totalDescontos;
+          const adiant = Number(row.valor_adiantamento || 0);
+          const liquidoReal = subtotal - totalDescontos + adiant;
 
           batchToSave.push({
             employee_id: finalEmployeeId,
@@ -1438,7 +1443,7 @@ export function CostImportStagingModal({
 
               {/* CARDS COM A EQUAÇÃO EXECUTIVA RESUMIDA: Proventos + Outros + VT + VR/Cesta + Bônus + Premiação = Subtotal (-) Descontos = Líquido */}
               <div className="p-3 bg-slate-100/70 dark:bg-slate-850/50 border-b border-slate-200 dark:border-slate-800">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-2">
                   <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
                     <span className="text-[9px] font-black text-slate-500 uppercase block">1. Proventos (Folha)</span>
                     <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums">
@@ -1487,8 +1492,14 @@ export function CostImportStagingModal({
                       -{formatCurrency(selectedStats.totalDescontosFolha)}
                     </span>
                   </div>
+                  <div className="p-2 bg-sky-50 dark:bg-sky-950/40 rounded-xl border border-sky-300 dark:border-sky-800">
+                    <span className="text-[9px] font-black text-sky-700 dark:text-sky-400 uppercase block truncate">9. (+) Adiantamento</span>
+                    <span className="text-xs sm:text-sm font-black text-sky-700 dark:text-sky-400 tabular-nums">
+                      +{formatCurrency(selectedStats.totalAdiantamento)}
+                    </span>
+                  </div>
                   <div className="p-2 bg-emerald-100/80 dark:bg-emerald-950/80 rounded-xl border-2 border-emerald-500 dark:border-emerald-600 shadow-sm col-span-2 sm:col-span-1">
-                    <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 uppercase block">= Líquido</span>
+                    <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 uppercase block">10. = Líquido</span>
                     <span className="text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-200 tabular-nums">
                       {formatCurrency(selectedStats.totalLiquido)}
                     </span>
@@ -1519,6 +1530,7 @@ export function CostImportStagingModal({
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-teal-700 dark:text-teal-300 text-right bg-teal-500/10 rounded-t">+ Premiação ✏️</th>
                       <th className="px-3 py-2 text-[10px] font-black uppercase text-blue-800 dark:text-blue-300 text-right bg-blue-500/10">= Subtotal</th>
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-rose-600 text-right bg-rose-500/10 rounded-t">(-) Desc. Folha ✏️</th>
+                      <th className="px-2 py-2 text-[10px] font-black uppercase text-sky-700 dark:text-sky-300 text-right bg-sky-500/10 rounded-t">(+) Adiantamento ✏️</th>
                       <th className="px-3 py-2 text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 text-right bg-emerald-500/20">= Líquido</th>
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-500 text-center">Vínculo</th>
                       <th className="px-2 py-2 text-[10px] font-black uppercase text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-850">Ações</th>
@@ -1527,7 +1539,7 @@ export function CostImportStagingModal({
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {visibleRows.map((row) => {
                       const proventos = Number(row.valor_holerite || row.valor_fixo || 0);
-                      const outros = Number(row.valor_outros_recebidos || (row.valor_hora_extra || 0) + (row.valor_adicional_not || 0));
+                      const outros = Number(row.valor_outros_recebidos || 0);
                       const vt = Number(row.valor_vt || 0);
                       const vrCesta = Number((row.valor_cesta || 0) + (row.valor_vr || 0));
                       const bonus = Number(row.valor_bonus || 0);
@@ -1535,7 +1547,8 @@ export function CostImportStagingModal({
 
                       const subtotalRow = proventos + outros + vt + vrCesta + bonus + premiacao;
                       const totalDescRow = Number(row.valor_descontos || 0);
-                      const liquidoRealRow = subtotalRow - totalDescRow;
+                      const adiantRow = Number(row.valor_adiantamento || 0);
+                      const liquidoRealRow = subtotalRow - totalDescRow + adiantRow;
 
                       const existingDbRecord = row.targetEmployeeId !== "NEW" ? existingCostsInDb.get(row.targetEmployeeId) : undefined;
 
@@ -1720,7 +1733,24 @@ export function CostImportStagingModal({
                             )}
                           </td>
 
-                          {/* LÍQUIDO (SUBTOTAL - DESCONTOS) */}
+                          {/* ADIANTAMENTO SALARIAL DA FOLHA (EDITÁVEL INLINE) */}
+                          <td className="px-2 py-2 text-right align-middle bg-sky-500/5">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={row.valor_adiantamento === 0 ? "" : row.valor_adiantamento}
+                                onChange={(e) =>
+                                  handleUpdateRowField(row.id, "valor_adiantamento", parseFloat(e.target.value) || 0)
+                                }
+                                placeholder="0,00"
+                                className="w-20 px-1.5 py-1 text-xs font-black text-right text-sky-800 dark:text-sky-200 bg-white dark:bg-slate-950 border border-sky-300 dark:border-sky-700 rounded-lg outline-none focus:ring-2 focus:ring-sky-500/20"
+                              />
+                            </div>
+                          </td>
+
+                          {/* LÍQUIDO (SUBTOTAL - DESCONTOS + ADIANTAMENTO) */}
                           <td className="px-3 py-2 text-right tabular-nums font-black text-slate-900 dark:text-white align-middle bg-emerald-500/5">
                             <span className="inline-block px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200">
                               {formatCurrency(liquidoRealRow)}
@@ -2238,11 +2268,12 @@ export function CostImportStagingModal({
 
                 {/* TOTALIZADORES RECALCULADOS AO VIVO */}
                 {(() => {
-                  const prov = (inspectRow.valor_fixo || 0) + (inspectRow.valor_hora_extra || 0) + (inspectRow.valor_outros_recebidos || 0) + (inspectRow.valor_adicional_not || 0);
-                  const ben = (inspectRow.valor_vt || 0) + (inspectRow.valor_cesta || 0) + (inspectRow.valor_adiantamento || 0) + (inspectRow.valor_bonus || 0) + (inspectRow.valor_ajuda_custo || 0);
+                  const prov = (inspectRow.valor_holerite || inspectRow.valor_fixo || 0) + (inspectRow.valor_outros_recebidos || 0);
+                  const ben = (inspectRow.valor_vt || 0) + (inspectRow.valor_cesta || 0) + (inspectRow.valor_bonus || 0) + (inspectRow.valor_ajuda_custo || 0);
                   const rec = prov + ben;
                   const desc = inspectRow.valor_descontos || 0;
-                  const liq = rec - desc;
+                  const adiant = inspectRow.valor_adiantamento || 0;
+                  const liq = rec - desc + adiant;
 
                   return (
                     <div className="grid grid-cols-3 gap-2 p-3 bg-slate-900 text-white rounded-2xl">

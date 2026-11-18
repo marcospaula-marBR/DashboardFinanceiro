@@ -211,8 +211,10 @@ Instruções de Extração:
    - Empréstimo Consignado no campo "valor_consignado".
    - Pensão Alimentícia no campo "valor_pensao_alimenticia".
    - Desconto de Banco de Horas em "banco_horas" (em horas decimais).
-   - **Desconto de Adiantamento Salarial em Folha (CRUCIAL)**: Procure por rubricas de desconto de adiantamento ordinário da quinzena. ATENÇÃO ESTRITA: Capture única e exclusivamente a verba descrita expressamente como 'DESC.ADIANT.SALARIAL' ou código '981' (e mais nenhuma outra verba, como adiantamento de férias, empréstimos ou outros descontos). Capture no campo "desconto_adiantamento_folha" e no campo "valor_adiantamento". Se não houver expressamente 'DESC.ADIANT.SALARIAL', retorne obrigatoriamente 0.00.
-     *ATENÇÃO RIGOROSA*: NUNCA capture adiantamento de férias como adiantamento salarial. Férias têm tratamento rescisório/gozo próprio em valor_ferias.
+   - **Desconto de Adiantamento Salarial em Folha (CRUCIAL)**: Procure na coluna de descontos por rubricas de adiantamento salarial da quinzena (dia 20).
+     Capture qualquer rubrica cujo código seja '981' ou cuja descrição mencione adiantamento salarial (ex: 'DESC.ADIANT.SALARIAL', 'DESC. ADIANT. SALARIAL', 'DESC ADIANT SALARIAL', 'Desc. Adiant. Salarial', 'DESC. ADIANTAMENTO', 'ADIANTAMENTO SALARIAL').
+     Preencha o valor desta rubrica tanto no campo "desconto_adiantamento_folha" quanto no campo "valor_adiantamento".
+     *ATENÇÃO RIGOROSA*: Capture exclusivamente o adiantamento salarial ordinário da quinzena; NUNCA capture adiantamento de férias (que possui linha e campo próprios em valor_ferias). Se não houver desconto de adiantamento salarial, retorne 0.00.
    - **Total de Descontos da Folha** no campo "valor_descontos" (soma exata de todos os descontos da folha, ex: '1.104,01').
    - Extraia a lista detalhada de cada desconto em "rubricas_descontos": [{"codigo": "998", "descricao": "INSS", "valor": 253.10}, ...].
 
@@ -294,6 +296,29 @@ Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos
     
     try {
       const parsedData = JSON.parse(textResponse);
+
+      // Sanitização e garantia determinística de Adiantamento Salarial da Quinzena
+      if (Array.isArray(parsedData.records)) {
+        for (const rec of parsedData.records) {
+          let adiant = Number(rec.valor_adiantamento || rec.desconto_adiantamento_folha || 0);
+
+          // Se não preencheu diretamente mas há rubricas de descontos extraídas, procura nelas
+          if (adiant === 0 && Array.isArray(rec.rubricas_descontos)) {
+            const item = rec.rubricas_descontos.find((d: any) => {
+              const desc = String(d.descricao || "").toLowerCase().replace(/[\s\.\-_]+/g, "");
+              const cod = String(d.codigo || "").replace(/\D/g, "");
+              return cod === "981" || desc.includes("descadiantsalarial") || desc.includes("descadiantamento") || desc.includes("adiantsalarial") || (desc.includes("adiant") && !desc.includes("ferias"));
+            });
+            if (item && Number(item.valor) > 0) {
+              adiant = Number(item.valor);
+            }
+          }
+
+          rec.valor_adiantamento = adiant;
+          rec.desconto_adiantamento_folha = adiant;
+        }
+      }
+
       return NextResponse.json(parsedData);
     } catch {
       return NextResponse.json({ 
