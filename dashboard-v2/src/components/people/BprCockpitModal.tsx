@@ -60,6 +60,20 @@ export function BprCockpitModal({
   const [isSavedScenariosModalOpen, setIsSavedScenariosModalOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
+  // Modal de Personalização da Exportação do Relatório (Elegíveis/Inelegíveis, Níveis, Empresas)
+  const [isExportOptionsModalOpen, setIsExportOptionsModalOpen] = useState(false);
+  const [exportCustomTargetSummary, setExportCustomTargetSummary] = useState<BprCalculationSummary | null>(null);
+  const [exportCustomTargetConfig, setExportCustomTargetConfig] = useState<BprRuleConfig | null>(null);
+  const [exportCustomTargetMeta, setExportCustomTargetMeta] = useState<BprPdfMeta | null>(null);
+
+  // Filtros de Escopo do Relatório
+  const [exportEligibility, setExportEligibility] = useState<'eligible_only' | 'ineligible_only' | 'all'>('eligible_only');
+  const [exportSelectedCamadas, setExportSelectedCamadas] = useState<BprCamada[]>(['E', 'T', 'O']);
+  const [exportSelectedCompanies, setExportSelectedCompanies] = useState<string[]>([]);
+  const [exportIncludeSummaryCards, setExportIncludeSummaryCards] = useState(true);
+  const [exportIncludeLayerSummary, setExportIncludeLayerSummary] = useState(true);
+  const [exportIncludeSignatures, setExportIncludeSignatures] = useState(true);
+
   // Campos do Modal de Salvar Cenário
   const [scenarioNameInput, setScenarioNameInput] = useState('');
   const [studyDateInput, setStudyDateInput] = useState(() => new Date().toISOString().slice(0, 10));
@@ -234,29 +248,77 @@ export function BprCockpitModal({
     setTimeout(() => setSaveSuccessToast(null), 3500);
   };
 
-  // Exportar PDF Direto
-  const handleExportPdfDirect = (customSummary?: BprCalculationSummary, customConfig?: BprRuleConfig, meta?: BprPdfMeta) => {
-    BprPdfService.exportBprPdf(
-      customSummary || summary, 
-      customConfig || config, 
-      meta || {
-        scenarioName: `Apuração BPR ${config.cycle === 'ciclo_1' ? '1º Sem' : config.cycle === 'ciclo_2' ? '2º Sem' : 'Custom'} ${config.year}`,
-        studyDate: new Date().toISOString().slice(0, 10),
-        criteria: generateCurrentCriteriaSummary()
-      }
+  // Abrir Modal de Opções de Personalização do Relatório (Elegíveis/Inelegíveis, Níveis, Empresas)
+  const handleOpenExportOptionsModal = (
+    customSummary?: BprCalculationSummary,
+    customConfig?: BprRuleConfig,
+    meta?: BprPdfMeta
+  ) => {
+    setExportCustomTargetSummary(customSummary || summary);
+    setExportCustomTargetConfig(customConfig || config);
+    setExportCustomTargetMeta(meta || {
+      scenarioName: `Apuração BPR ${config.cycle === 'ciclo_1' ? '1º Sem' : config.cycle === 'ciclo_2' ? '2º Sem' : 'Custom'} ${config.year}`,
+      studyDate: new Date().toISOString().slice(0, 10),
+      criteria: generateCurrentCriteriaSummary()
+    });
+    // Padrão executivo: foco estrito em elegíveis
+    setExportEligibility('eligible_only');
+    setExportSelectedCamadas(['E', 'T', 'O']);
+    setExportSelectedCompanies([]);
+    setExportIncludeSummaryCards(true);
+    setExportIncludeLayerSummary(true);
+    setExportIncludeSignatures(true);
+    setIsExportOptionsModalOpen(true);
+  };
+
+  // Confirmar Exportação com Filtros Selecionados
+  const handleConfirmExportPdf = (mode: 'download' | 'print') => {
+    const activeSumm = exportCustomTargetSummary || summary;
+    const activeConf = exportCustomTargetConfig || config;
+    const fullMeta: BprPdfMeta = {
+      ...(exportCustomTargetMeta || {}),
+      eligibilityFilter: exportEligibility,
+      selectedCamadas: exportSelectedCamadas,
+      selectedCompanies: exportSelectedCompanies,
+      includeSummaryCards: exportIncludeSummaryCards,
+      includeLayerSummary: exportIncludeLayerSummary,
+      includeSignatures: exportIncludeSignatures
+    };
+
+    if (mode === 'download') {
+      BprPdfService.exportBprPdf(activeSumm, activeConf, fullMeta);
+    } else {
+      BprPdfService.openPrintableReport(activeSumm, activeConf, fullMeta);
+    }
+
+    setIsExportOptionsModalOpen(false);
+  };
+
+  // Pré-visualização dos candidatos do relatório personalizado
+  const exportPreviewCandidates = useMemo(() => {
+    const targetCandidates = (exportCustomTargetSummary || summary).candidates || [];
+    return BprPdfService.filterCandidates(targetCandidates, {
+      eligibilityFilter: exportEligibility,
+      selectedCamadas: exportSelectedCamadas,
+      selectedCompanies: exportSelectedCompanies
+    });
+  }, [exportCustomTargetSummary, summary, exportEligibility, exportSelectedCamadas, exportSelectedCompanies]);
+
+  const exportPreviewTotalDistributed = useMemo(() => {
+    return exportPreviewCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
+  }, [exportPreviewCandidates]);
+
+  // Alternar Seleção de Empresa no Modal de Exportação
+  const handleToggleExportCompany = (comp: string) => {
+    setExportSelectedCompanies(prev => 
+      prev.includes(comp) ? prev.filter(c => c !== comp) : [...prev, comp]
     );
   };
 
-  // Abrir Visualização de Impressão / Salvar PDF
-  const handleOpenPrintPreview = (customSummary?: BprCalculationSummary, customConfig?: BprRuleConfig, meta?: BprPdfMeta) => {
-    BprPdfService.openPrintableReport(
-      customSummary || summary,
-      customConfig || config,
-      meta || {
-        scenarioName: `Apuração BPR ${config.cycle === 'ciclo_1' ? '1º Sem' : config.cycle === 'ciclo_2' ? '2º Sem' : 'Custom'} ${config.year}`,
-        studyDate: new Date().toISOString().slice(0, 10),
-        criteria: generateCurrentCriteriaSummary()
-      }
+  // Alternar Seleção de Camada no Modal de Exportação
+  const handleToggleExportCamada = (camada: BprCamada) => {
+    setExportSelectedCamadas(prev => 
+      prev.includes(camada) ? prev.filter(c => c !== camada) : [...prev, camada]
     );
   };
 
@@ -375,22 +437,22 @@ export function BprCockpitModal({
               <span className="hidden sm:inline">Importar Regras</span>
             </button>
 
-            {/* Ações de Exportação PDF: Download Direto e Visualizar/Imprimir */}
+            {/* Ações de Exportação PDF: Personalizar / Baixar / Imprimir */}
             <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 p-1 rounded-xl">
               <button
                 type="button"
-                onClick={() => handleExportPdfDirect()}
+                onClick={() => handleOpenExportOptionsModal()}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm cursor-pointer"
-                title="Baixar apuração atual em PDF vetorial (.pdf)"
+                title="Personalizar quais colaboradores, níveis e empresas constarão no PDF"
               >
                 <Download size={14} />
                 <span>Exportar PDF</span>
               </button>
               <button
                 type="button"
-                onClick={() => handleOpenPrintPreview()}
+                onClick={() => handleOpenExportOptionsModal()}
                 className="p-1.5 text-emerald-800 hover:bg-emerald-200/60 rounded-lg transition-all cursor-pointer"
-                title="Abrir relatório formatado para impressão física ou salvar como PDF no navegador"
+                title="Personalizar e abrir relatório formatado para impressão física ou salvar como PDF"
               >
                 <Printer size={15} />
               </button>
@@ -1452,18 +1514,18 @@ export function BprCockpitModal({
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => handleExportPdfDirect()}
+                onClick={() => handleOpenExportOptionsModal()}
                 className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black transition-all cursor-pointer flex items-center gap-2 text-sm shadow-sm active:scale-95"
-                title="Baixar apuração atual em PDF vetorial (.pdf)"
+                title="Personalizar quais colaboradores, níveis e empresas constarão no PDF"
               >
                 <Download size={16} />
                 <span>Exportar PDF</span>
               </button>
               <button
                 type="button"
-                onClick={() => handleOpenPrintPreview()}
+                onClick={() => handleOpenExportOptionsModal()}
                 className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 text-sm"
-                title="Abrir relatório formatado para impressão física ou salvar como PDF no navegador"
+                title="Personalizar e abrir relatório formatado para impressão física ou salvar como PDF"
               >
                 <Printer size={16} />
                 <span className="hidden sm:inline">Imprimir</span>
@@ -2038,13 +2100,13 @@ export function BprCockpitModal({
                         <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             type="button"
-                            onClick={() => handleExportPdfDirect(
+                            onClick={() => handleOpenExportOptionsModal(
                               scenario.summary as any,
                               scenario.config,
                               { scenarioName: scenario.name, studyDate: scenario.studyDate, criteria: scenario.criteriaDescription }
                             )}
                             className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
-                            title="Baixar PDF deste estudo histórico"
+                            title="Personalizar e baixar PDF deste estudo histórico"
                           >
                             <Download size={13} />
                             <span>Baixar PDF</span>
@@ -2052,13 +2114,13 @@ export function BprCockpitModal({
 
                           <button
                             type="button"
-                            onClick={() => handleOpenPrintPreview(
+                            onClick={() => handleOpenExportOptionsModal(
                               scenario.summary as any,
                               scenario.config,
                               { scenarioName: scenario.name, studyDate: scenario.studyDate, criteria: scenario.criteriaDescription }
                             )}
                             className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all cursor-pointer"
-                            title="Visualizar para impressão física ou salvar como PDF"
+                            title="Personalizar e visualizar para impressão física ou salvar como PDF"
                           >
                             <Printer size={16} />
                           </button>
@@ -2336,6 +2398,261 @@ export function BprCockpitModal({
               >
                 Fechar Comparador
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: PERSONALIZAR EXPORTAÇÃO DO RELATÓRIO BPR (PDF / IMPRESSÃO) ── */}
+      {isExportOptionsModalOpen && (
+        <div className="fixed inset-0 z-80 flex items-center justify-center p-3 sm:p-6 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-md shadow-emerald-600/20">
+                  <FileText size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight">
+                    Personalizar Relatório de BPR
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Defina o que constará no documento: elegibilidade, níveis e empresas
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsExportOptionsModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-700 text-2xl font-bold p-1 leading-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Conteúdo com os filtros */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 bg-white text-xs">
+              
+              {/* 1. SELEÇÃO DE ELEGIBILIDADE */}
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                  1. Quem deve constar no relatório?
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExportEligibility('eligible_only')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                      exportEligibility === 'eligible_only'
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-900 ring-2 ring-emerald-500/10'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs">Somente Elegíveis</span>
+                      {exportEligibility === 'eligible_only' && <Check size={14} className="text-emerald-600" />}
+                    </div>
+                    <span className="text-[11px] text-emerald-700 font-medium">Recomendado: omite quem não tem direito ao bônus</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setExportEligibility('all')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                      exportEligibility === 'all'
+                        ? 'bg-slate-100 border-slate-400 text-slate-900 ring-2 ring-slate-500/10'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs">Todos os Colaboradores</span>
+                      {exportEligibility === 'all' && <Check size={14} className="text-slate-800" />}
+                    </div>
+                    <span className="text-[11px] text-slate-500 font-medium">Elegíveis + Inelegíveis / Glosados</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setExportEligibility('ineligible_only')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                      exportEligibility === 'ineligible_only'
+                        ? 'bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-500/10'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs">Somente Inelegíveis</span>
+                      {exportEligibility === 'ineligible_only' && <Check size={14} className="text-rose-600" />}
+                    </div>
+                    <span className="text-[11px] text-rose-600 font-medium">Para auditoria de exclusões e glosas</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. SELEÇÃO DE CAMADAS / NÍVEIS */}
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                  2. Níveis / Camadas de Rateio:
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'E' as BprCamada, label: 'Estratégico (E)' },
+                    { id: 'T' as BprCamada, label: 'Tático (T)' },
+                    { id: 'O' as BprCamada, label: 'Operacional (O)' }
+                  ].map(c => {
+                    const isChecked = exportSelectedCamadas.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => handleToggleExportCamada(c.id)}
+                        className={`p-2.5 rounded-xl border font-bold text-xs flex items-center justify-between transition-all cursor-pointer ${
+                          isChecked 
+                            ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>{c.label}</span>
+                        {isChecked && <Check size={13} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. SELEÇÃO DE EMPRESAS */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                    3. Empresas Contratantes:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setExportSelectedCompanies([])}
+                    className="text-[11px] text-amber-600 hover:underline font-bold"
+                  >
+                    Marcar Todas
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setExportSelectedCompanies([])}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      exportSelectedCompanies.length === 0
+                        ? 'bg-amber-500 text-white shadow-sm font-black'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    Todas as Empresas
+                  </button>
+                  {availableCompanies.map(comp => {
+                    const isChecked = exportSelectedCompanies.includes(comp);
+                    return (
+                      <button
+                        key={comp}
+                        type="button"
+                        onClick={() => handleToggleExportCompany(comp)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          isChecked
+                            ? 'bg-slate-800 text-white shadow-sm'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                        }`}
+                      >
+                        <span>{comp}</span>
+                        {isChecked && <Check size={12} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 4. SEÇÕES ADICIONAIS DO DOCUMENTO */}
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                  4. Estrutura e Seções do Documento:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <label className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeSummaryCards}
+                      onChange={e => setExportIncludeSummaryCards(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                    />
+                    <span className="font-bold text-slate-700">Cards de Indicadores</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeLayerSummary}
+                      onChange={e => setExportIncludeLayerSummary(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                    />
+                    <span className="font-bold text-slate-700">Tabela de Camadas</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeSignatures}
+                      onChange={e => setExportIncludeSignatures(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                    />
+                    <span className="font-bold text-slate-700">Bloco de Assinaturas</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* 5. PRÉ-VISUALIZAÇÃO DO ESCOPO FINAL */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-mono">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-sans font-bold uppercase block">Recorte Selecionado</span>
+                  <strong className="text-sm text-slate-900 font-black font-sans">
+                    {exportPreviewCandidates.length} colaborador(es) no relatório
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-sans font-bold uppercase block sm:text-right">Total Rateado no Recorte</span>
+                  <strong className="text-sm text-emerald-700 font-black sm:text-right block">
+                    {formatCurrency(exportPreviewTotalDistributed)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer do Modal de Exportação */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsExportOptionsModalOpen(false)}
+                className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold uppercase cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleConfirmExportPdf('print')}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+                >
+                  <Printer size={15} />
+                  <span>Visualizar Impressão</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleConfirmExportPdf('download')}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md shadow-emerald-700/20 transition-all cursor-pointer active:scale-95"
+                >
+                  <Download size={15} />
+                  <span>Baixar Arquivo PDF</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

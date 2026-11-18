@@ -4,7 +4,8 @@ import {
   BprCalculationSummary, 
   BprRuleConfig, 
   BprSavedScenario,
-  BprCandidateResult
+  BprCandidateResult,
+  BprCamada
 } from '@/types/bpr';
 
 const formatCurrency = (val: number) => 
@@ -24,6 +25,13 @@ export interface BprPdfMeta {
   scenarioName?: string;
   studyDate?: string;
   criteria?: string;
+  // Filtros de seleção para o relatório
+  eligibilityFilter?: 'all' | 'eligible_only' | 'ineligible_only';
+  selectedCamadas?: BprCamada[];
+  selectedCompanies?: string[];
+  includeSummaryCards?: boolean;
+  includeLayerSummary?: boolean;
+  includeSignatures?: boolean;
 }
 
 export interface ScenarioComparisonItem {
@@ -39,6 +47,33 @@ export interface ScenarioComparisonItem {
 }
 
 export class BprPdfService {
+
+  /**
+   * Filtra a relação de colaboradores conforme os parâmetros de recorte do relatório
+   */
+  static filterCandidates(candidates: BprCandidateResult[], meta?: BprPdfMeta): BprCandidateResult[] {
+    // PADRÃO EXECUTIVO: Somente Elegíveis
+    const eligibilityFilter = meta?.eligibilityFilter || 'eligible_only';
+    const selectedCamadas = meta?.selectedCamadas || ['E', 'T', 'O'];
+    const selectedCompanies = (meta?.selectedCompanies || []).map(c => c.trim().toLowerCase());
+
+    return candidates.filter(c => {
+      // 1. Filtro de Elegibilidade
+      if (eligibilityFilter === 'eligible_only' && !c.isEligible) return false;
+      if (eligibilityFilter === 'ineligible_only' && c.isEligible) return false;
+
+      // 2. Filtro de Camadas / Perfis
+      if (selectedCamadas.length > 0 && !selectedCamadas.includes(c.camada)) return false;
+
+      // 3. Filtro de Empresas
+      if (selectedCompanies.length > 0) {
+        const comp = (c.company || '').trim().toLowerCase();
+        if (!selectedCompanies.includes(comp)) return false;
+      }
+
+      return true;
+    });
+  }
 
   /**
    * Exporta arquivo PDF vetorial executivo da apuração BPR via jsPDF + autoTable
@@ -63,6 +98,12 @@ export class BprPdfService {
     const scenarioTitle = meta?.scenarioName || `Apuração BPR ${cycleLabel} ${config.year}`;
     const studyDateFormatted = meta?.studyDate ? formatDatePtBr(meta.studyDate) : formatDatePtBr(new Date().toISOString().slice(0, 10));
 
+    // Filtragem dos Colaboradores para o Relatório
+    const filteredCandidates = this.filterCandidates(summary.candidates, meta);
+    const totalFilteredDistributed = filteredCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
+    const totalFilteredEligible = filteredCandidates.filter(c => c.isEligible).length;
+    const totalFilteredIneligible = filteredCandidates.filter(c => !c.isEligible).length;
+
     // Cabeçalho Principal Executivo
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
@@ -74,12 +115,12 @@ export class BprPdfService {
     doc.setTextColor(71, 85, 105); // slate-600
     doc.text('BÔNUS POR PARTICIPAÇÃO NOS RESULTADOS • APURAÇÃO DETERMINÍSTICA PER CAPITA', 14, 21);
 
-    // Box de Metadados do Estudo
+    // Box de Metadados do Estudo & Filtros Aplicados
     doc.setFillColor(248, 250, 252); // slate-50
     doc.setDrawColor(226, 232, 240); // slate-200
-    doc.roundedRect(14, 24, 269, 21, 2, 2, 'FD');
+    doc.roundedRect(14, 24, 269, 23, 2, 2, 'FD');
 
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
     doc.text(`CENÁRIO / ESTUDO:`, 18, 29);
@@ -89,124 +130,147 @@ export class BprPdfService {
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text(`DATA DO ESTUDO:`, 18, 35);
+    doc.text(`DATA DO ESTUDO:`, 18, 34);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(30, 41, 59);
-    doc.text(`${studyDateFormatted}  (Vigência: ${formatDatePtBr(config.periodStartDate)} a ${formatDatePtBr(config.periodEndDate)} · Pgto: ${formatDatePtBr(config.paymentDate)})`, 55, 35);
+    doc.text(`${studyDateFormatted}  (Vigência: ${formatDatePtBr(config.periodStartDate)} a ${formatDatePtBr(config.periodEndDate)} · Pgto: ${formatDatePtBr(config.paymentDate)})`, 55, 34);
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text(`CRITÉRIOS / PREMISSAS:`, 18, 41);
+    doc.text(`CRITÉRIOS / PREMISSAS:`, 18, 39);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
     const criteriaText = meta?.criteria 
       ? meta.criteria 
-      : `Modo: ${config.splitMode === 'amount' ? 'Valor Fixo R$' : 'Percentual'} | Splits: E (${config.tierSplits.E}%), T (${config.tierSplits.T}%), O (${config.tierSplits.O}%) | Glosados: ${config.allowGlosados ? 'Incluídos' : 'Excluídos'} | Inativos: ${config.allowInativos ? 'Incluídos' : 'Excluídos'}`;
-    const truncatedCriteria = criteriaText.length > 140 ? criteriaText.slice(0, 137) + '...' : criteriaText;
-    doc.text(truncatedCriteria, 58, 41);
+      : `Modo: ${config.splitMode === 'amount' ? 'Valor Fixo R$' : 'Percentual'} | Splits: E (${config.tierSplits.E}%), T (${config.tierSplits.T}%), O (${config.tierSplits.O}%)`;
+    const truncatedCriteria = criteriaText.length > 130 ? criteriaText.slice(0, 127) + '...' : criteriaText;
+    doc.text(truncatedCriteria, 58, 39);
 
-    // Cards de Resumo Financeiro
-    const startY = 48;
-    const boxW = 63;
-    const boxH = 15;
-    const gap = 5.5;
+    // Descrição do Recorte Filtrado no PDF
+    const eligLabel = meta?.eligibilityFilter === 'all' 
+      ? 'Todos (Elegíveis + Inelegíveis)' 
+      : meta?.eligibilityFilter === 'ineligible_only' 
+        ? 'Apenas Inelegíveis / Excluídos' 
+        : 'Apenas Colaboradores Elegíveis';
+    const camadasLabel = (meta?.selectedCamadas || ['E', 'T', 'O']).map(c => c === 'E' ? 'Estratégico' : c === 'T' ? 'Tático' : 'Operacional').join(', ');
+    const compsLabel = (meta?.selectedCompanies && meta.selectedCompanies.length > 0) ? meta.selectedCompanies.join(', ') : 'Todas';
 
-    // Card 1: Montante
-    doc.setFillColor(240, 253, 244); // emerald-50
-    doc.setDrawColor(187, 247, 208); // emerald-200
-    doc.roundedRect(14, startY, boxW, boxH, 2, 2, 'FD');
-    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(5, 150, 105); // emerald-600
-    doc.text('MONTANTE TOTAL PREVISTO', 18, startY + 5);
-    doc.setFontSize(11);
-    doc.setTextColor(6, 95, 70); // emerald-800
-    doc.text(formatCurrency(summary.totalPoolAmount), 18, startY + 11.5);
+    doc.setTextColor(5, 150, 105);
+    doc.text(`RECORTE DESTE RELATÓRIO:`, 18, 44);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${eligLabel}  •  Camadas: ${camadasLabel}  •  Empresas: ${compsLabel}  •  Total no Recorte: ${filteredCandidates.length}`, 65, 44);
 
-    // Card 2: Total Rateado
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(14 + boxW + gap, startY, boxW, boxH, 2, 2, 'FD');
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(71, 85, 105);
-    doc.text('TOTAL EFETIVAMENTE RATEADO', 18 + boxW + gap, startY + 5);
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text(formatCurrency(summary.totalDistributedAmount), 18 + boxW + gap, startY + 11.5);
+    let nextY = 50;
 
-    // Card 3: Elegíveis
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(14 + (boxW + gap) * 2, startY, boxW, boxH, 2, 2, 'FD');
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(71, 85, 105);
-    doc.text('COLABORADORES ELEGÍVEIS', 18 + (boxW + gap) * 2, startY + 5);
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text(`${summary.totalEligible} elegíveis  (${summary.totalIneligible} fora)`, 18 + (boxW + gap) * 2, startY + 11.5);
+    // Cards de Resumo Financeiro (Opcional)
+    if (meta?.includeSummaryCards !== false) {
+      const boxW = 63;
+      const boxH = 14;
+      const gap = 5.5;
 
-    // Card 4: Resíduo
-    doc.setFillColor(254, 243, 199); // amber-100
-    doc.setDrawColor(253, 230, 138); // amber-200
-    doc.roundedRect(14 + (boxW + gap) * 3, startY, boxW, boxH, 2, 2, 'FD');
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(180, 83, 9); // amber-700
-    doc.text('RESÍDUO NÃO RATEADO', 18 + (boxW + gap) * 3, startY + 5);
-    doc.setFontSize(11);
-    doc.setTextColor(146, 64, 14); // amber-800
-    doc.text(formatCurrency(summary.residualAmount), 18 + (boxW + gap) * 3, startY + 11.5);
+      // Card 1: Montante Total
+      doc.setFillColor(240, 253, 244);
+      doc.setDrawColor(187, 247, 208);
+      doc.roundedRect(14, nextY, boxW, boxH, 2, 2, 'FD');
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(5, 150, 105);
+      doc.text('MONTANTE TOTAL PREVISTO', 18, nextY + 4.5);
+      doc.setFontSize(10.5);
+      doc.setTextColor(6, 95, 70);
+      doc.text(formatCurrency(summary.totalPoolAmount), 18, nextY + 10.5);
 
-    // Tabela 1: Resumo das Camadas (E, T, O)
-    const layerRows = [
-      [
-        'Estratégico (E)',
-        `${summary.layers.E.allocatedPercentage}%`,
-        formatCurrency(summary.layers.E.totalLayerAmount),
-        `${summary.layers.E.eligibleCount} colaborador(es)`,
-        formatCurrency(summary.layers.E.amountPerEligible)
-      ],
-      [
-        'Tático (T)',
-        `${summary.layers.T.allocatedPercentage}%`,
-        formatCurrency(summary.layers.T.totalLayerAmount),
-        `${summary.layers.T.eligibleCount} colaborador(es)`,
-        formatCurrency(summary.layers.T.amountPerEligible)
-      ],
-      [
-        'Operacional / CLTs (O)',
-        `${summary.layers.O.allocatedPercentage}%`,
-        formatCurrency(summary.layers.O.totalLayerAmount),
-        `${summary.layers.O.eligibleCount} colaborador(es)`,
-        formatCurrency(summary.layers.O.amountPerEligible)
-      ]
-    ];
+      // Card 2: Total Rateado no Recorte
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(14 + boxW + gap, nextY, boxW, boxH, 2, 2, 'FD');
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(71, 85, 105);
+      doc.text('TOTAL RATEADO NO RECORTE', 18 + boxW + gap, nextY + 4.5);
+      doc.setFontSize(10.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(formatCurrency(totalFilteredDistributed), 18 + boxW + gap, nextY + 10.5);
 
-    autoTable(doc, {
-      startY: startY + boxH + 4,
-      head: [['Camada', 'Rateio (%)', 'Montante Alocado', 'Elegíveis', 'Valor Base / Pessoa']],
-      body: layerRows,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [15, 23, 42], // slate-900
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        fontSize: 8,
-        halign: 'left'
-      },
-      bodyStyles: {
-        fontSize: 8,
-        textColor: [30, 41, 59]
-      },
-      margin: { left: 14, right: 14 }
-    });
+      // Card 3: Elegíveis no Recorte
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(14 + (boxW + gap) * 2, nextY, boxW, boxH, 2, 2, 'FD');
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(71, 85, 105);
+      doc.text('ELEGÍVEIS NO RECORTE', 18 + (boxW + gap) * 2, nextY + 4.5);
+      doc.setFontSize(10.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${totalFilteredEligible} elegíveis  (${totalFilteredIneligible} fora)`, 18 + (boxW + gap) * 2, nextY + 10.5);
 
-    const finalY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 5 : 90;
+      // Card 4: Resíduo Global
+      doc.setFillColor(254, 243, 199);
+      doc.setDrawColor(253, 230, 138);
+      doc.roundedRect(14 + (boxW + gap) * 3, nextY, boxW, boxH, 2, 2, 'FD');
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(180, 83, 9);
+      doc.text('RESÍDUO GLOBAL NÃO RATEADO', 18 + (boxW + gap) * 3, nextY + 4.5);
+      doc.setFontSize(10.5);
+      doc.setTextColor(146, 64, 14);
+      doc.text(formatCurrency(summary.residualAmount), 18 + (boxW + gap) * 3, nextY + 10.5);
 
-    // Tabela 2: Relação dos Beneficiários Elegíveis (e Inelegíveis)
-    const candidateRows = summary.candidates.map(c => [
+      nextY += boxH + 4;
+    }
+
+    // Tabela 1: Resumo das Camadas (Opcional)
+    if (meta?.includeLayerSummary !== false) {
+      const layerRows = [
+        [
+          'Estratégico (E)',
+          `${summary.layers.E.allocatedPercentage}%`,
+          formatCurrency(summary.layers.E.totalLayerAmount),
+          `${summary.layers.E.eligibleCount} colaborador(es)`,
+          formatCurrency(summary.layers.E.amountPerEligible)
+        ],
+        [
+          'Tático (T)',
+          `${summary.layers.T.allocatedPercentage}%`,
+          formatCurrency(summary.layers.T.totalLayerAmount),
+          `${summary.layers.T.eligibleCount} colaborador(es)`,
+          formatCurrency(summary.layers.T.amountPerEligible)
+        ],
+        [
+          'Operacional / CLTs (O)',
+          `${summary.layers.O.allocatedPercentage}%`,
+          formatCurrency(summary.layers.O.totalLayerAmount),
+          `${summary.layers.O.eligibleCount} colaborador(es)`,
+          formatCurrency(summary.layers.O.amountPerEligible)
+        ]
+      ];
+
+      autoTable(doc, {
+        startY: nextY,
+        head: [['Camada / Perfil', 'Rateio (%)', 'Montante Alocado', 'Elegíveis Globais', 'Valor Base / Pessoa']],
+        body: layerRows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [15, 23, 42],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 7.5,
+          halign: 'left'
+        },
+        bodyStyles: {
+          fontSize: 7.5,
+          textColor: [30, 41, 59]
+        },
+        margin: { left: 14, right: 14 }
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 4 : nextY + 25;
+    }
+
+    // Tabela 2: Relação dos Colaboradores Selecionados
+    const candidateRows = filteredCandidates.map(c => [
       c.corporateName || c.name,
       c.company,
       c.department,
@@ -220,7 +284,7 @@ export class BprPdfService {
     ]);
 
     autoTable(doc, {
-      startY: finalY,
+      startY: nextY,
       head: [[
         'Colaborador / Razão Social',
         'Empresa',
@@ -236,7 +300,7 @@ export class BprPdfService {
       body: candidateRows,
       theme: 'striped',
       headStyles: {
-        fillColor: [30, 41, 59], // slate-800
+        fillColor: [30, 41, 59],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 7.5,
@@ -262,10 +326,10 @@ export class BprPdfService {
         fillColor: [248, 250, 252]
       },
       foot: [[
-        'TOTAL GERAL RATEADO',
+        'TOTAL GERAL RATEADO (RECORTE)',
         '', '', '', '', '', '', '',
-        `${summary.totalEligible} elegíveis`,
-        formatCurrency(summary.totalDistributedAmount)
+        `${totalFilteredEligible} elegíveis`,
+        formatCurrency(totalFilteredDistributed)
       ]],
       footStyles: {
         fillColor: [241, 245, 249],
@@ -313,6 +377,20 @@ export class BprPdfService {
 
     const scenarioTitle = meta?.scenarioName || `Apuração BPR ${cycleLabel} ${config.year}`;
     const studyDateFormatted = meta?.studyDate ? formatDatePtBr(meta.studyDate) : formatDatePtBr(new Date().toISOString().slice(0, 10));
+
+    // Filtragem dos Colaboradores
+    const filteredCandidates = this.filterCandidates(summary.candidates, meta);
+    const totalFilteredDistributed = filteredCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
+    const totalFilteredEligible = filteredCandidates.filter(c => c.isEligible).length;
+    const totalFilteredIneligible = filteredCandidates.filter(c => !c.isEligible).length;
+
+    const eligLabel = meta?.eligibilityFilter === 'all' 
+      ? 'Todos (Elegíveis + Inelegíveis)' 
+      : meta?.eligibilityFilter === 'ineligible_only' 
+        ? 'Apenas Inelegíveis / Excluídos' 
+        : 'Apenas Colaboradores Elegíveis';
+    const camadasLabel = (meta?.selectedCamadas || ['E', 'T', 'O']).map(c => c === 'E' ? 'Estratégico' : c === 'T' ? 'Tático' : 'Operacional').join(', ');
+    const compsLabel = (meta?.selectedCompanies && meta.selectedCompanies.length > 0) ? meta.selectedCompanies.join(', ') : 'Todas as Empresas';
 
     const html = `
       <!DOCTYPE html>
@@ -376,6 +454,18 @@ export class BprPdfService {
             color: #0f172a;
             font-size: 10px;
             text-transform: uppercase;
+          }
+          .scope-banner {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            border-radius: 8px;
+            padding: 6px 12px;
+            margin-bottom: 12px;
+            font-size: 10px;
+            color: #065f46;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
           }
           .kpi-grid {
             display: grid;
@@ -503,7 +593,7 @@ export class BprPdfService {
 
         <div class="meta-box">
           <div>
-            <div class="meta-item"><strong>Premissas & Critérios:</strong></div>
+            <div class="meta-item"><strong>Premissas &amp; Critérios:</strong></div>
             <div style="font-size: 10px; color: #475569; margin-top: 2px;">
               ${meta?.criteria || `Modo: ${config.splitMode === 'amount' ? 'Valor R$ Fixo' : 'Percentual'} | Splits: E (${config.tierSplits.E}%), T (${config.tierSplits.T}%), O (${config.tierSplits.O}%) | Glosas: ${config.allowGlosados ? 'Permitidas' : 'Excluídas'} | Inativos: ${config.allowInativos ? 'Permitidos' : 'Excluídos'}`}
             </div>
@@ -517,60 +607,74 @@ export class BprPdfService {
           </div>
         </div>
 
-        <div class="kpi-grid">
-          <div class="kpi-card" style="border-left: 3px solid #059669;">
-            <div class="kpi-label">Montante Total Previsto</div>
-            <div class="kpi-value" style="color: #047857;">${formatCurrency(summary.totalPoolAmount)}</div>
+        <!-- Escopo do Recorte Selecionado -->
+        <div class="scope-banner">
+          <div>
+            <strong>RECORTE DO RELATÓRIO:</strong> ${eligLabel} • Camadas: ${camadasLabel} • Empresas: ${compsLabel}
           </div>
-          <div class="kpi-card" style="border-left: 3px solid #0284c7;">
-            <div class="kpi-label">Total Efetivamente Rateado</div>
-            <div class="kpi-value">${formatCurrency(summary.totalDistributedAmount)}</div>
-          </div>
-          <div class="kpi-card" style="border-left: 3px solid #6366f1;">
-            <div class="kpi-label">Elegíveis no Ciclo</div>
-            <div class="kpi-value">${summary.totalEligible} <span style="font-size: 10px; color: #64748b; font-weight: normal;">de ${summary.totalCandidates}</span></div>
-          </div>
-          <div class="kpi-card" style="border-left: 3px solid #d97706;">
-            <div class="kpi-label">Resíduo Não Rateado</div>
-            <div class="kpi-value" style="color: #b45309;">${formatCurrency(summary.residualAmount)}</div>
+          <div style="font-weight: 800;">
+            ${filteredCandidates.length} colaborador(es) listado(s)
           </div>
         </div>
 
-        <div class="table-title">Distribuição por Camada (Rateio Per Capita)</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Camada</th>
-              <th style="text-align: center;">% Rateio</th>
-              <th style="text-align: right;">Montante da Camada</th>
-              <th style="text-align: center;">Elegíveis</th>
-              <th style="text-align: right;">Valor Base por Pessoa</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Estratégico (E)</strong></td>
-              <td style="text-align: center;">${summary.layers.E.allocatedPercentage}%</td>
-              <td class="amount-cell">${formatCurrency(summary.layers.E.totalLayerAmount)}</td>
-              <td style="text-align: center;">${summary.layers.E.eligibleCount} colaborador(es)</td>
-              <td class="amount-cell" style="color: #1d4ed8;">${formatCurrency(summary.layers.E.amountPerEligible)}</td>
-            </tr>
-            <tr>
-              <td><strong>Tático (T)</strong></td>
-              <td style="text-align: center;">${summary.layers.T.allocatedPercentage}%</td>
-              <td class="amount-cell">${formatCurrency(summary.layers.T.totalLayerAmount)}</td>
-              <td style="text-align: center;">${summary.layers.T.eligibleCount} colaborador(es)</td>
-              <td class="amount-cell" style="color: #4338ca;">${formatCurrency(summary.layers.T.amountPerEligible)}</td>
-            </tr>
-            <tr>
-              <td><strong>Operacional / CLTs (O)</strong></td>
-              <td style="text-align: center;">${summary.layers.O.allocatedPercentage}%</td>
-              <td class="amount-cell">${formatCurrency(summary.layers.O.totalLayerAmount)}</td>
-              <td style="text-align: center;">${summary.layers.O.eligibleCount} colaborador(es)</td>
-              <td class="amount-cell" style="color: #047857;">${formatCurrency(summary.layers.O.amountPerEligible)}</td>
-            </tr>
-          </tbody>
-        </table>
+        ${meta?.includeSummaryCards !== false ? `
+          <div class="kpi-grid">
+            <div class="kpi-card" style="border-left: 3px solid #059669;">
+              <div class="kpi-label">Montante Total Previsto</div>
+              <div class="kpi-value" style="color: #047857;">${formatCurrency(summary.totalPoolAmount)}</div>
+            </div>
+            <div class="kpi-card" style="border-left: 3px solid #0284c7;">
+              <div class="kpi-label">Total Rateado no Recorte</div>
+              <div class="kpi-value">${formatCurrency(totalFilteredDistributed)}</div>
+            </div>
+            <div class="kpi-card" style="border-left: 3px solid #6366f1;">
+              <div class="kpi-label">Elegíveis no Recorte</div>
+              <div class="kpi-value">${totalFilteredEligible} <span style="font-size: 10px; color: #64748b; font-weight: normal;">de ${filteredCandidates.length}</span></div>
+            </div>
+            <div class="kpi-card" style="border-left: 3px solid #d97706;">
+              <div class="kpi-label">Resíduo Global</div>
+              <div class="kpi-value" style="color: #b45309;">${formatCurrency(summary.residualAmount)}</div>
+            </div>
+          </div>
+        ` : ''}
+
+        ${meta?.includeLayerSummary !== false ? `
+          <div class="table-title">Distribuição por Camada (Rateio Per Capita)</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Camada / Perfil</th>
+                <th style="text-align: center;">% Rateio</th>
+                <th style="text-align: right;">Montante da Camada</th>
+                <th style="text-align: center;">Elegíveis Globais</th>
+                <th style="text-align: right;">Valor Base por Pessoa</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Estratégico (E)</strong></td>
+                <td style="text-align: center;">${summary.layers.E.allocatedPercentage}%</td>
+                <td class="amount-cell">${formatCurrency(summary.layers.E.totalLayerAmount)}</td>
+                <td style="text-align: center;">${summary.layers.E.eligibleCount} colaborador(es)</td>
+                <td class="amount-cell" style="color: #1d4ed8;">${formatCurrency(summary.layers.E.amountPerEligible)}</td>
+              </tr>
+              <tr>
+                <td><strong>Tático (T)</strong></td>
+                <td style="text-align: center;">${summary.layers.T.allocatedPercentage}%</td>
+                <td class="amount-cell">${formatCurrency(summary.layers.T.totalLayerAmount)}</td>
+                <td style="text-align: center;">${summary.layers.T.eligibleCount} colaborador(es)</td>
+                <td class="amount-cell" style="color: #4338ca;">${formatCurrency(summary.layers.T.amountPerEligible)}</td>
+              </tr>
+              <tr>
+                <td><strong>Operacional / CLTs (O)</strong></td>
+                <td style="text-align: center;">${summary.layers.O.allocatedPercentage}%</td>
+                <td class="amount-cell">${formatCurrency(summary.layers.O.totalLayerAmount)}</td>
+                <td style="text-align: center;">${summary.layers.O.eligibleCount} colaborador(es)</td>
+                <td class="amount-cell" style="color: #047857;">${formatCurrency(summary.layers.O.amountPerEligible)}</td>
+              </tr>
+            </tbody>
+          </table>
+        ` : ''}
 
         <div class="table-title">Relação Analítica de Colaboradores e Valores Individuais</div>
         <table>
@@ -589,7 +693,13 @@ export class BprPdfService {
             </tr>
           </thead>
           <tbody>
-            ${summary.candidates.map(c => `
+            ${filteredCandidates.length === 0 ? `
+              <tr>
+                <td colspan="10" style="text-align: center; padding: 20px; color: #94a3b8;">
+                  Nenhum colaborador encontrado para os filtros selecionados neste recorte.
+                </td>
+              </tr>
+            ` : filteredCandidates.map(c => `
               <tr>
                 <td><strong>${c.corporateName || c.name}</strong></td>
                 <td>${c.company}</td>
@@ -612,29 +722,31 @@ export class BprPdfService {
           </tbody>
           <tfoot>
             <tr style="background: #f1f5f9; font-weight: 900;">
-              <td colspan="8">TOTAL GERAL DISTRIBUÍDO (${summary.totalEligible} COLABORADORES ELEGÍVEIS)</td>
+              <td colspan="8">TOTAL NO RECORTE (${totalFilteredEligible} COLABORADORES ELEGÍVEIS)</td>
               <td style="text-align: center;">—</td>
               <td class="amount-cell" style="color: #047857; font-size: 11px;">
-                ${formatCurrency(summary.totalDistributedAmount)}
+                ${formatCurrency(totalFilteredDistributed)}
               </td>
             </tr>
           </tfoot>
         </table>
 
-        <div class="signatures">
-          <div>
-            <div class="sig-line">Diretoria Executiva</div>
-            <div class="sig-role">Aprovação & Governança</div>
+        ${meta?.includeSignatures !== false ? `
+          <div class="signatures">
+            <div>
+              <div class="sig-line">Diretoria Executiva</div>
+              <div class="sig-role">Aprovação &amp; Governança</div>
+            </div>
+            <div>
+              <div class="sig-line">Recursos Humanos / Gente &amp; Gestão</div>
+              <div class="sig-role">Apuração &amp; Elegibilidade</div>
+            </div>
+            <div>
+              <div class="sig-line">Controladoria &amp; Finanças</div>
+              <div class="sig-role">Liquidação &amp; Fechamento</div>
+            </div>
           </div>
-          <div>
-            <div class="sig-line">Recursos Humanos / Gente & Gestão</div>
-            <div class="sig-role">Apuração & Elegibilidade</div>
-          </div>
-          <div>
-            <div class="sig-line">Controladoria & Finanças</div>
-            <div class="sig-role">Liquidação & Fechamento</div>
-          </div>
-        </div>
+        ` : ''}
 
         <script>
           window.onload = function() {

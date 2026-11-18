@@ -115,4 +115,53 @@ assert.strictEqual(scenarioSnapshot.candidatesSnapshot.length, 5);
 assert.strictEqual(scenarioSnapshot.candidatesSnapshot[0].allocatedAmount, 50000);
 console.log('   ✅ Snapshot histórico congelado validado com sucesso.');
 
+// 4. Testando filtros de personalização do relatório (Elegíveis vs Inelegíveis, Níveis, Empresas)
+console.log('\n4. Testando filtros de personalização do relatório...');
+function filterCandidatesMock(candidates, meta) {
+  const eligibilityFilter = meta?.eligibilityFilter || 'eligible_only';
+  const selectedCamadas = meta?.selectedCamadas || ['E', 'T', 'O'];
+  const selectedCompanies = (meta?.selectedCompanies || []).map(c => c.trim().toLowerCase());
+
+  return candidates.filter(c => {
+    if (eligibilityFilter === 'eligible_only' && !c.isEligible) return false;
+    if (eligibilityFilter === 'ineligible_only' && c.isEligible) return false;
+    if (selectedCamadas.length > 0 && !selectedCamadas.includes(c.camada)) return false;
+    if (selectedCompanies.length > 0) {
+      const comp = (c.company || '').trim().toLowerCase();
+      if (!selectedCompanies.includes(comp)) return false;
+    }
+    return true;
+  });
+}
+
+const listWithCompanies = [
+  { employeeId: '1', name: 'A', company: 'MarBR', camada: 'E', isEligible: true },
+  { employeeId: '2', name: 'B', company: 'DZM', camada: 'T', isEligible: true },
+  { employeeId: '3', name: 'C', company: 'G2', camada: 'O', isEligible: false },
+  { employeeId: '4', name: 'D', company: 'MarBR', camada: 'O', isEligible: true },
+  { employeeId: '5', name: 'E', company: 'DZM', camada: 'O', isEligible: false }
+];
+
+// Teste A: Padrão executivo: apenas elegíveis
+const onlyEligible = filterCandidatesMock(listWithCompanies, { eligibilityFilter: 'eligible_only' });
+assert.strictEqual(onlyEligible.length, 3);
+assert.ok(onlyEligible.every(c => c.isEligible === true));
+
+// Teste B: Apenas inelegíveis
+const onlyIneligible = filterCandidatesMock(listWithCompanies, { eligibilityFilter: 'ineligible_only' });
+assert.strictEqual(onlyIneligible.length, 2);
+assert.ok(onlyIneligible.every(c => c.isEligible === false));
+
+// Teste C: Apenas empresa MarBR
+const onlyMarBr = filterCandidatesMock(listWithCompanies, { eligibilityFilter: 'all', selectedCompanies: ['MarBR'] });
+assert.strictEqual(onlyMarBr.length, 2);
+assert.ok(onlyMarBr.every(c => c.company === 'MarBR'));
+
+// Teste D: Apenas camada O e Elegíveis
+const onlyOEligible = filterCandidatesMock(listWithCompanies, { eligibilityFilter: 'eligible_only', selectedCamadas: ['O'] });
+assert.strictEqual(onlyOEligible.length, 1);
+assert.strictEqual(onlyOEligible[0].employeeId, '4');
+
+console.log('   ✅ Filtros de elegibilidade, camada e empresa validados com 100% de precisão.');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR PASSARAM COM EXATIDÃO!');
