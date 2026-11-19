@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   X, Calendar, Filter, Search, Trash2, Edit3, Loader2, 
   CheckCircle2, AlertTriangle, ArrowUpDown, DollarSign, Wallet, 
@@ -15,6 +16,7 @@ import {
   CompetenciasPdfReportType,
   partitionCompetenciaPdfRows,
 } from '@/services/competencias-costs-pdf.service';
+import { buildCompetenciasAnomalyMap } from '@/services/people-cost-anomaly.service';
 import { CostImportStagingModal } from '@/components/people/CostImportStagingModal';
 
 interface CompetenciasCostsListModalProps {
@@ -75,9 +77,11 @@ export function CompetenciasCostsListModal({
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'Ativo' | 'Inativo'>('all');
   const [selectedSetor, setSelectedSetor] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [onlyAnomalies, setOnlyAnomalies] = useState<boolean>(false);
   const [usePageScope, setUsePageScope] = useState<boolean>(() => {
     return Boolean(filteredEmployees && filteredEmployees.length > 0 && filteredEmployees.length < employees.length);
   });
+  const tableScrollRef = useRef<HTMLDivElement>(null);
 
   // Ações e ordenação
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -122,10 +126,13 @@ export function CompetenciasCostsListModal({
     }
   }, [isOpen, initialSearch, initialCompetencia]);
 
-  // Limpa seleção ao alterar filtros principais
+  // Limpa seleção ao alterar filtros principais e volta scroll da tabela virtualizada ao topo
   useEffect(() => {
     setSelectedCostIds(new Set());
-  }, [selectedYears, compFilterMode, selectedCompetencia, selectedVinculo, selectedEmpresa, selectedSetor, searchTerm]);
+    if (tableScrollRef.current) {
+      tableScrollRef.current.scrollTop = 0;
+    }
+  }, [selectedYears, compFilterMode, selectedCompetencia, selectedCompetencias, selectedVinculo, selectedEmpresa, selectedSetor, searchTerm, onlyAnomalies]);
 
   // Mapeamento de colaboradores por ID
   const employeesMap = useMemo(() => {
@@ -188,9 +195,9 @@ export function CompetenciasCostsListModal({
     return `${monthName}/${parts[0]}`;
   };
 
-  // Filtragem dos custos com todos os critérios
-  const filteredRows = useMemo(() => {
-    let rows = activeCosts.map(cost => {
+  // Enriquecimento único O(N) de todos os lançamentos (evita recalcular calculateRowFinancials a cada filtro)
+  const allRowsEnriched = useMemo(() => {
+    return activeCosts.map(cost => {
       const emp = employeesMap.get(cost.employee_id);
       const isCLT = cost.vinculo_tipo === 'CLT' || emp?.linkType === 'CLT';
       const isEstagio = emp?.linkType === 'Estagiário' || (emp?.linkType || '').toLowerCase().includes('estag');
@@ -209,6 +216,17 @@ export function CompetenciasCostsListModal({
         isEstagio,
       };
     });
+  }, [activeCosts, employeesMap]);
+
+  // Auditoria automática MoM O(N) sobre todo o histórico disponível (mesmo quando apenas 1 mês está filtrado)
+  const anomaliesByCostId = useMemo(
+    () => buildCompetenciasAnomalyMap(allRowsEnriched),
+    [allRowsEnriched]
+  );
+
+  // Filtragem base (antes do toggle de anomalias para preservar o contador de alertas do escopo)
+  const baseFilteredRows = useMemo(() => {
+    let rows = allRowsEnriched;
 
     // 1. Escopo de página ativa
     if (usePageScope && pageFilteredEmpIds) {
@@ -276,8 +294,8 @@ export function CompetenciasCostsListModal({
       );
     }
 
-    // 9. Ordenação
-    rows.sort((a, b) => {
+    // 9. Ordenação (em cópia rasa para não mutar allRowsEnriched)
+    return [...rows].sort((a, b) => {
       if (sortField === 'competencia') {
         const diff = a.cost.competencia.localeCompare(b.cost.competencia);
         return sortOrder === 'asc' ? diff : -diff;
@@ -292,14 +310,45 @@ export function CompetenciasCostsListModal({
       }
       return 0;
     });
-
-    return rows;
-  }, [activeCosts, 
-    monthlyCosts, employeesMap, usePageScope, pageFilteredEmpIds, 
+  }, [
+    allRowsEnriched, usePageScope, pageFilteredEmpIds,
     selectedYears, compFilterMode, selectedCompetencia, periodStart, periodEnd, selectedCompetencias,
-    selectedEmpresa, selectedVinculo, 
-    selectedStatus, selectedSetor, searchTerm, sortField, sortOrder
+    selectedEmpresa, selectedVinculo,
+    selectedStatus, selectedSetor, searchTerm, sortField, sortOrder,
   ]);
+
+  const anomaliesCountInScope = useMemo(
+    () => baseFilteredRows.reduce((acc, r) => acc + (anomaliesByCostId.has(r.cost.id) ? 1 : 0), 0),
+    [baseFilteredRows, anomaliesByCostId]
+  );
+
+  // Linhas finais exibidas na tabela (com filtro opcional de Alertas MoM)
+  const filteredRows = useMemo(() => {
+    if (!onlyAnomalies) return baseFilteredRows;
+    return baseFilteredRows.filter(r => anomaliesByCostId.has(r.cost.id));
+  }, [baseFilteredRows, onlyAnomalies, anomaliesByCostId]);
+
+  // Virtualização 60fps da tabela (suporta 2.150+ lançamentos sem congelamento de DOM)
+  const rowVirtualizer = useVirtualizer({
+    count: filteredRows.length,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: (index) => {
+      const row = filteredRows[index];
+      if (!row) return 60;
+      if (expandedRowIds.has(row.cost.id)) return 290;
+      return anomaliesByCostId.has(row.cost.id) ? 76 : 58;
+    },
+    overscan: 8,
+    useFlushSync: false,
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const rafId = requestAnimationFrame(() => {
+      rowVirtualizer.measure();
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [isOpen, expandedRowIds, filteredRows.length, sortField, sortOrder, rowVirtualizer]);
 
   // Particionamento por Natureza Jurídica (CLT, Estágio e PJ/MEI) — Fonte única compartilhada com o PDF
   const partitionedView = useMemo(
@@ -454,6 +503,7 @@ export function CompetenciasCostsListModal({
     selectedStatus !== 'all' ||
     selectedSetor !== 'all' ||
     searchTerm.trim() !== '' ||
+    onlyAnomalies ||
     usePageScope
   );
 
@@ -469,6 +519,7 @@ export function CompetenciasCostsListModal({
     setSelectedStatus('all');
     setSelectedSetor('all');
     setSearchTerm('');
+    setOnlyAnomalies(false);
     setUsePageScope(false);
   };
 
@@ -1343,6 +1394,21 @@ export function CompetenciasCostsListModal({
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                 {filteredRows.length} {isPjOnlyView ? (filteredRows.length === 1 ? 'faturamento' : 'faturamentos') : (filteredRows.length === 1 ? 'lançamento' : 'lançamentos')}
               </span>
+              {anomaliesCountInScope > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setOnlyAnomalies(prev => !prev)}
+                  className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                    onlyAnomalies
+                      ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                      : 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-100'
+                  }`}
+                  title="Filtrar lançamentos com variação MoM ≥15%, benefícios zerados ou divergência contratual"
+                >
+                  <AlertTriangle size={11} />
+                  <span>Alertas MoM ({anomaliesCountInScope})</span>
+                </button>
+              )}
             </div>
 
             {/* BOTÃO PRINCIPAL DE TRANSPARÊNCIA: COMPOSIÇÃO DAS VERBAS */}
@@ -1640,8 +1706,8 @@ export function CompetenciasCostsListModal({
           </div>
         )}
 
-        {/* TABELA DE LISTA DE COMPETÊNCIAS */}
-        <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 bg-slate-50/30 dark:bg-slate-950/20">
+        {/* TABELA DE LISTA DE COMPETÊNCIAS (VIRTUALIZADA 60fps) */}
+        <div ref={tableScrollRef} className="flex-1 overflow-y-auto overflow-x-auto min-h-0 bg-slate-50/30 dark:bg-slate-950/20">
           {filteredRows.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-16 text-slate-400">
               <Calendar size={48} className="opacity-30 mb-3" />
@@ -1820,10 +1886,28 @@ export function CompetenciasCostsListModal({
               </thead>
 
               <tbody 
-                key={`tbody-${selectedYears.join('-')}-${compFilterMode}-${selectedCompetencia}-${selectedVinculo}-${selectedEmpresa}-${selectedSetor}-${searchTerm}-${usePageScope}`}
                 className="divide-y divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900/60 font-medium"
               >
-                {filteredRows.map(({ cost, emp, name, financials, realTotal, isCLT, isEstagio, isPJ }, idx) => {
+                {(() => {
+                  const virtualItems = rowVirtualizer.getVirtualItems();
+                  const totalSize = rowVirtualizer.getTotalSize();
+                  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+                  const paddingBottom = virtualItems.length > 0 ? Math.max(0, totalSize - virtualItems[virtualItems.length - 1].end) : 0;
+                  const tableColCount = isPjOnlyView ? 10 : isEstagioOnlyView ? (hasEstagioAntecipacao ? 12 : 11) : 15;
+
+                  return (
+                    <>
+                      {paddingTop > 0 && (
+                        <tr aria-hidden="true">
+                          <td colSpan={tableColCount} style={{ height: `${paddingTop}px`, padding: 0, border: 0 }} />
+                        </tr>
+                      )}
+                      {virtualItems.map((virtualRow) => {
+                        const idx = virtualRow.index;
+                        const rowItem = filteredRows[idx];
+                        if (!rowItem) return null;
+                        const { cost, emp, name, financials, realTotal, isCLT, isEstagio, isPJ } = rowItem;
+                        const rowAnomalies = anomaliesByCostId.get(cost.id) || [];
                   const heNoturno = financials.heNoturno;
                   const fixo = financials.fixo;
                   const isDeletingThis = deletingId === cost.id;
@@ -1844,7 +1928,7 @@ export function CompetenciasCostsListModal({
                   const estSubtotal = estBolsa + estAuxTransp + estOutrosVal;
                   const estDeducoes = Number(cost.valor_descontos || financials.descontosFolha || 0);
                   const estAntecipacao = Number(cost.valor_adiantamento || 0);
-                  const expandedColSpan = isPjOnlyView ? 10 : isEstagioOnlyView ? (hasEstagioAntecipacao ? 12 : 11) : 15;
+                  const expandedColSpan = tableColCount;
 
                   return (
                     <React.Fragment key={`${cost.id || 'cost'}-${cost.competencia || 'comp'}-${idx}`}>
@@ -1920,6 +2004,24 @@ export function CompetenciasCostsListModal({
                                 </>
                               )}
                             </div>
+                            {rowAnomalies.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap mt-1">
+                                {rowAnomalies.map((anomaly) => (
+                                  <span
+                                    key={anomaly.code}
+                                    title={anomaly.detail}
+                                    className={`inline-flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border cursor-help ${
+                                      anomaly.severity === 'alert'
+                                        ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800'
+                                        : 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                                    }`}
+                                  >
+                                    <AlertTriangle size={9} className="shrink-0" />
+                                    {anomaly.shortLabel}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -2274,6 +2376,23 @@ export function CompetenciasCostsListModal({
                               </div>
                             </div>
 
+                            {rowAnomalies.length > 0 && (
+                              <div className="p-2.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 space-y-1">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                  <AlertTriangle size={12} />
+                                  Alertas de Auditoria MoM Detectados nesta Competência
+                                </span>
+                                <ul className="space-y-0.5 text-[11px] text-amber-900 dark:text-amber-200">
+                                  {rowAnomalies.map((anomaly) => (
+                                    <li key={anomaly.code} className="flex items-start gap-1.5">
+                                      <span className="font-black shrink-0">&bull; [{anomaly.shortLabel}]</span>
+                                      <span>{anomaly.detail}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
                             {rowDetail.regime === 'CLT' ? (
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 {/* Coluna 1: Proventos da Folha */}
@@ -2483,6 +2602,14 @@ export function CompetenciasCostsListModal({
                     </React.Fragment>
                   );
                 })}
+                      {paddingBottom > 0 && (
+                        <tr aria-hidden="true">
+                          <td colSpan={tableColCount} style={{ height: `${paddingBottom}px`, padding: 0, border: 0 }} />
+                        </tr>
+                      )}
+                    </>
+                  );
+                })()}
               </tbody>
             </table>
           )}

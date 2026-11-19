@@ -376,6 +376,21 @@ export default function PeoplePage() {
     };
   }, [filteredEmployees, allAuditIssues]);
 
+  // ⚡ Pré-indexação O(N) de custos por colaborador (elimina varreduras O(N*M) em renders/modais)
+  const monthlyCostsByEmployeeMap = useMemo(() => {
+    const map = new Map<string, MonthlyCost[]>();
+    for (const cost of monthlyCosts) {
+      if (!cost.employee_id) continue;
+      const list = map.get(cost.employee_id);
+      if (list) {
+        list.push(cost);
+      } else {
+        map.set(cost.employee_id, [cost]);
+      }
+    }
+    return map;
+  }, [monthlyCosts]);
+
   // 💰 Custos Históricos — agrega monthlyCosts dos colaboradores filtrados via PeopleHRService.computeCostStats
   const historicalCostsSummary = useMemo(() => {
     const count = filteredEmployees.length || 1;
@@ -388,7 +403,7 @@ export default function PeoplePage() {
     let totalGeral = 0;
 
     filteredEmployees.forEach(emp => {
-      const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
+      const empCosts = monthlyCostsByEmployeeMap.get(emp.id) || [];
       const stats = PeopleHRService.computeCostStats(empCosts);
       if (stats) {
         totalFixo += (stats.fixedTotal || 0);
@@ -411,7 +426,7 @@ export default function PeoplePage() {
       totalGeral,         avgGeral: totalGeral / count,
       count,
     };
-  }, [filteredEmployees, monthlyCosts]);
+  }, [filteredEmployees, monthlyCostsByEmployeeMap]);
 
   // Unique filter options from data
   const setores = useMemo(() => {
@@ -1895,9 +1910,9 @@ export default function PeoplePage() {
                   };
                   const { title: modalTitle, icon: modalIcon, color: modalColor } = modeLabels[costDetailMode] || modeLabels['total'];
 
-                  // Group by employee_id via PeopleHRService.computeCostStats
+                  // Group by employee_id via PeopleHRService.computeCostStats (O(1) lookup)
                   const costByEmployee = filteredEmployees.map(emp => {
-                    const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
+                    const empCosts = monthlyCostsByEmployeeMap.get(emp.id) || [];
                     const stats = PeopleHRService.computeCostStats(empCosts);
                     const totalFixoEmp       = stats?.fixedTotal || 0;
                     const totalExtrasEmp     = (stats?.horaExtraTotal || 0) + (stats?.adicionalNotTotal || 0);
@@ -2439,7 +2454,7 @@ export default function PeoplePage() {
                       }
                     }
 
-                    const empCosts = monthlyCosts.filter(c => c.employee_id === emp.id);
+                    const empCosts = monthlyCostsByEmployeeMap.get(emp.id) || [];
                     const stats = PeopleHRService.computeCostStats(empCosts);
                     const historicoCustoTotal = stats?.total;
                     const historicoCustoMedio = stats?.average;
@@ -2592,11 +2607,16 @@ export default function PeoplePage() {
           profile={exportTargetEmp}
           history={exportTargetHistory}
           bonds={exportTargetBonds}
-          costs={monthlyCosts.filter(
-            c => c.employee_id === exportTargetEmp.id || (exportTargetPrevProfile?.id && c.employee_id === exportTargetPrevProfile.id)
-          )}
+          costs={
+            exportTargetPrevProfile?.id && exportTargetPrevProfile.id !== exportTargetEmp.id
+              ? [
+                  ...(exportTargetEmp.id ? (monthlyCostsByEmployeeMap.get(exportTargetEmp.id) || []) : []),
+                  ...(monthlyCostsByEmployeeMap.get(exportTargetPrevProfile.id) || []),
+                ]
+              : (exportTargetEmp.id ? (monthlyCostsByEmployeeMap.get(exportTargetEmp.id) || []) : [])
+          }
           previousProfile={exportTargetPrevProfile}
-          previousCosts={exportTargetPrevProfile?.id ? monthlyCosts.filter(c => c.employee_id === exportTargetPrevProfile.id) : []}
+          previousCosts={exportTargetPrevProfile?.id ? (monthlyCostsByEmployeeMap.get(exportTargetPrevProfile.id) || []) : []}
           onOpenBatchAudit={() => {
             setExportTargetEmp(null);
             setIsBatchPdfModalOpen(true);

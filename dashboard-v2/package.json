@@ -7,11 +7,12 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node test/clara-omie.test.cjs && node test/dre-encoding-sanitization.test.cjs && node test/dre-caixa-cards-reconciliation.test.cjs && node test/bpr-scenarios-and-pdf.test.cjs && node test/competencias-costs-pdf.test.cjs"
+    "test": "node test/clara-omie.test.cjs && node test/dre-encoding-sanitization.test.cjs && node test/dre-caixa-cards-reconciliation.test.cjs && node test/bpr-scenarios-and-pdf.test.cjs && node test/competencias-costs-pdf.test.cjs && node test/people-headcount-report.test.cjs && node test/people-cost-anomaly.test.cjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "@supabase/supabase-js": "^2.100.1",
+    "@tanstack/react-virtual": "^3.14.26",
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",

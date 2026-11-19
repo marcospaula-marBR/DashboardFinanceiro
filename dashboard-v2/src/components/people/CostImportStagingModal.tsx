@@ -38,7 +38,12 @@ import {
 } from "lucide-react";
 import { parseCltFile, CltParseResult, CltParsedEmployee } from "@/utils/cltFileParser";
 import { findBestNameMatch } from "@/utils/nameSimilarity";
-import { PeopleHRService } from "@/services/people-hr.service";
+import { PeopleHRService, calculateRowFinancials } from "@/services/people-hr.service";
+import {
+  CostAnomaly,
+  evaluateRowAnomalies,
+  getPreviousCompetenciaKey,
+} from "@/services/people-cost-anomaly.service";
 import { Employee, MonthlyCost } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
 import { supabase } from "@/lib/supabase";
@@ -51,6 +56,7 @@ export interface StagingCostRow {
   matchScore: number;
   matchType: "EXACT" | "SIMILAR" | "NEW";
   cargo?: string;
+  empresa?: string;
   competencia: string; // YYYY-MM-01
   sourceType: "PAYROLL_EXTRATO" | "EXCEL_RETROATIVO" | "BENEFICIOS_PDF" | "ADVANCE_PDF";
   
@@ -153,9 +159,18 @@ export function CostImportStagingModal({
   // Estado para linha inspecionada/editada em modal detalhado
   const [inspectRow, setInspectRow] = useState<StagingCostRow | null>(null);
 
-  // Custos existentes no banco para verificação no grid
+  // Custos existentes no banco para verificação no grid + competência anterior para auditoria MoM
   const [existingCostsInDb, setExistingCostsInDb] = useState<Map<string, MonthlyCost>>(new Map());
+  const [previousCostsInDb, setPreviousCostsInDb] = useState<Map<string, MonthlyCost>>(new Map());
+  const [onlyStagingAnomalies, setOnlyStagingAnomalies] = useState(false);
   const [isLoadingExistingCosts, setIsLoadingExistingCosts] = useState(false);
+
+  // Mapa O(1) de colaboradores existentes para auditoria MoM e verificação contratual
+  const existingEmployeesMap = useMemo(() => {
+    const map = new Map<string, Employee>();
+    existingEmployees.forEach((emp) => map.set(emp.id, emp));
+    return map;
+  }, [existingEmployees]);
 
   // Estados de gravação
   const [isCommitting, setIsCommitting] = useState(false);
@@ -171,10 +186,11 @@ export function CostImportStagingModal({
       setErrorMessage(null);
       setMergeSuccessMessage(null);
       setIsCommitting(false);
+      setOnlyStagingAnomalies(false);
     }
   }, [isOpen]);
 
-  // Carrega custos já cadastrados para a competência ativa no Supabase
+  // Carrega custos já cadastrados na competência ativa e na competência imediatamente anterior (MoM)
   useEffect(() => {
     if (!selectedCompetencia || !isOpen) return;
     let isCancelled = false;
@@ -182,13 +198,25 @@ export function CostImportStagingModal({
     const loadExisting = async () => {
       try {
         setIsLoadingExistingCosts(true);
-        const costs = await PeopleHRService.getMonthlyCostsByCompetencia(selectedCompetencia);
+        const prevCompKey = getPreviousCompetenciaKey(selectedCompetencia);
+        const [costs, prevCosts] = await Promise.all([
+          PeopleHRService.getMonthlyCostsByCompetencia(selectedCompetencia),
+          prevCompKey
+            ? PeopleHRService.getMonthlyCostsByCompetencia(`${prevCompKey}-01`).catch(() => [] as MonthlyCost[])
+            : Promise.resolve([] as MonthlyCost[]),
+        ]);
         if (isCancelled) return;
         const map = new Map<string, MonthlyCost>();
         costs.forEach((c) => {
           map.set(c.employee_id, c);
         });
         setExistingCostsInDb(map);
+
+        const prevMap = new Map<string, MonthlyCost>();
+        prevCosts.forEach((c) => {
+          prevMap.set(c.employee_id, c);
+        });
+        setPreviousCostsInDb(prevMap);
       } catch (err) {
         console.error("Erro ao verificar custos existentes no banco:", err);
       } finally {
@@ -201,6 +229,69 @@ export function CostImportStagingModal({
       isCancelled = true;
     };
   }, [selectedCompetencia, isOpen]);
+
+  // Auditoria automática MoM em tempo real no staging (antes de gravar no Supabase)
+  const stagingAnomaliesMap = useMemo(() => {
+    const map = new Map<string, CostAnomaly[]>();
+    for (const row of stagingRows) {
+      if (row.competencia.slice(0, 7) !== selectedCompetencia.slice(0, 7)) continue;
+      const emp = row.targetEmployeeId !== "NEW" ? existingEmployeesMap.get(row.targetEmployeeId) : undefined;
+      const isEstagio = Boolean(emp?.linkType === "Estagiário" || (emp?.linkType || "").toLowerCase().includes("estag"));
+      const isPJ = Boolean(emp && !isEstagio && emp.linkType !== "CLT" && (emp.linkType === "PJ" || emp.linkType === "MEI"));
+      const isCLT = !isPJ;
+
+      const proventos = Number(row.valor_holerite || row.valor_fixo || 0);
+      const outros = Number(row.valor_outros_recebidos || 0);
+      const vt = Number(row.valor_vt || 0);
+      const vrCesta = Number((row.valor_cesta || 0) + (row.valor_vr || 0));
+      const bonus = Number(row.valor_bonus || 0);
+      const premiacao = Number(row.valor_premiacao !== undefined ? row.valor_premiacao : (row.valor_ajuda_custo || 0));
+      const subtotal = proventos + outros + vt + vrCesta + bonus + premiacao;
+      const desc = Number(row.valor_descontos || 0);
+      const adiant = Number(row.valor_adiantamento || 0);
+      const liquido = subtotal - desc + adiant;
+
+      const prevCost = row.targetEmployeeId !== "NEW" ? previousCostsInDb.get(row.targetEmployeeId) : undefined;
+      const prevFin = prevCost ? calculateRowFinancials(prevCost, isCLT) : undefined;
+
+      const issues = evaluateRowAnomalies(
+        {
+          id: row.id,
+          employeeId: row.targetEmployeeId,
+          competencia: row.competencia,
+          isCLT,
+          isEstagio,
+          isPJ,
+          proventosOrBase: proventos,
+          vt,
+          vrCesta,
+          liquido,
+          contractBase: Number(emp?.remuneration_fixed || emp?.remuneration || 0),
+        },
+        prevCost
+          ? {
+              id: prevCost.id,
+              employeeId: prevCost.employee_id,
+              competencia: prevCost.competencia,
+              isCLT,
+              isEstagio,
+              isPJ,
+              proventosOrBase: Number(prevCost.valor_holerite || prevCost.valor_fixo || prevFin?.fixo || 0),
+              vt: Number(prevCost.valor_vt || 0),
+              vrCesta: Number(prevCost.valor_cesta || 0) + Number(prevCost.valor_vr || 0),
+              liquido: Number(prevFin?.realTotal ?? prevCost.valor_liquido ?? 0),
+            }
+          : undefined
+      );
+
+      if (issues.length > 0) {
+        map.set(row.id, issues);
+      }
+    }
+    return map;
+  }, [stagingRows, selectedCompetencia, existingEmployeesMap, previousCostsInDb]);
+
+  const stagingAnomaliesCount = stagingAnomaliesMap.size;
 
   // Lista de competências disponíveis nas linhas do staging
   const availableStagingCompetencias = useMemo(() => {
@@ -233,9 +324,11 @@ export function CostImportStagingModal({
         (filterMatchType === "NEW" && r.matchType === "NEW") ||
         (filterMatchType === "EXISTING" && alreadyExists);
 
-      return matchSearch && matchComp && matchTypeOk;
+      const matchAnomalies = !onlyStagingAnomalies || stagingAnomaliesMap.has(r.id);
+
+      return matchSearch && matchComp && matchTypeOk && matchAnomalies;
     });
-  }, [stagingRows, searchQuery, selectedCompetencia, filterMatchType, existingCostsInDb]);
+  }, [stagingRows, searchQuery, selectedCompetencia, filterMatchType, existingCostsInDb, onlyStagingAnomalies, stagingAnomaliesMap]);
 
   // Contagem de conflitos para a competência selecionada
   const activeConflictsCount = useMemo(() => {
@@ -347,6 +440,14 @@ export function CostImportStagingModal({
       const comp = result.competencia || selectedCompetencia;
       setSelectedCompetencia(comp);
 
+      const detectedEmpresa =
+        typeof result.empresa === "string" && result.empresa.trim()
+          ? result.empresa.trim()
+          : "";
+      if (detectedEmpresa) {
+        setSelectedEmpresa(detectedEmpresa);
+      }
+
       // Converte registros para StagingCostRow cruzando com colaboradores existentes
       const newRows: StagingCostRow[] = result.records.map((rec: any, idx: number) => {
         const cleanName = (rec.name || "").trim();
@@ -386,6 +487,7 @@ export function CostImportStagingModal({
           matchScore,
           matchType,
           cargo: rec.cargo || matchedEmp?.job_role || "",
+          empresa: (typeof rec.empresa === "string" && rec.empresa.trim()) || detectedEmpresa || selectedEmpresa || "MarBR",
           competencia: comp,
           sourceType: "PAYROLL_EXTRATO",
           valor_fixo: holeriteBruto,
@@ -1030,7 +1132,7 @@ export function CostImportStagingModal({
           const created = await PeopleHRService.insertEmployee({
             name: row.employeeName,
             corporate_name: row.employeeName,
-            company: "MarBR",
+            company: row.empresa || selectedEmpresa || "MarBR",
             linkType: "CLT",
             status: "Ativo",
             job_role: row.cargo || "Colaborador",
@@ -1331,8 +1433,8 @@ export function CostImportStagingModal({
               {/* BARRA SUPERIOR DE FILTROS E AÇÕES EM MASSA */}
               <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 flex flex-wrap items-center justify-between gap-3">
                 
-                {/* SELETOR DE COMPETÊNCIA */}
-                <div className="flex items-center gap-2">
+                {/* SELETOR DE COMPETÊNCIA + EMPRESA + BUSCA + ALERTAS MoM */}
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 shadow-2xs">
                     <Calendar size={14} className="text-emerald-600" />
                     <span className="text-[10px] font-black uppercase text-slate-400">Competência:</span>
@@ -1348,6 +1450,27 @@ export function CostImportStagingModal({
                     />
                   </div>
 
+                  {/* Empresa do Lote (usada para novos cadastros sem vínculo prévio) */}
+                  <div
+                    className="flex items-center gap-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 shadow-2xs"
+                    title="Empresa padrão atribuída caso existam novos colaboradores detectados neste lote"
+                  >
+                    <Building2 size={14} className="text-teal-600 shrink-0" />
+                    <span className="text-[10px] font-black uppercase text-slate-400">Empresa:</span>
+                    <select
+                      value={selectedEmpresa}
+                      onChange={(e) => setSelectedEmpresa(e.target.value)}
+                      className="text-xs font-black bg-transparent text-slate-900 dark:text-white outline-none cursor-pointer"
+                    >
+                      <option value="DZM">DZM</option>
+                      <option value="MarBR">MarBR</option>
+                      <option value="G2">G2</option>
+                      {!["DZM", "MarBR", "G2"].includes(selectedEmpresa) && (
+                        <option value={selectedEmpresa}>{selectedEmpresa}</option>
+                      )}
+                    </select>
+                  </div>
+
                   <div className="relative">
                     <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
                     <input
@@ -1355,7 +1478,7 @@ export function CostImportStagingModal({
                       placeholder="Buscar colaborador no lote..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 w-48 text-slate-900 dark:text-white"
+                      className="pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 w-44 sm:w-48 text-slate-900 dark:text-white"
                     />
                   </div>
 
@@ -1371,6 +1494,22 @@ export function CostImportStagingModal({
                     )}
                     <span>Marcar Todos</span>
                   </button>
+
+                  {stagingAnomaliesCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setOnlyStagingAnomalies((prev) => !prev)}
+                      className={`px-2.5 py-1.5 text-xs font-black rounded-xl border transition-all flex items-center gap-1.5 shadow-2xs ${
+                        onlyStagingAnomalies
+                          ? "bg-amber-600 text-white border-amber-700"
+                          : "bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-100"
+                      }`}
+                      title="Filtrar apenas linhas com desvios MoM, benefícios ausentes ou divergência contratual antes de gravar"
+                    >
+                      <AlertTriangle size={13} />
+                      <span>Alertas MoM ({stagingAnomaliesCount})</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* FERRAMENTAS DE MESCLAGEM E PREENCHIMENTO EM MASSA */}
@@ -1551,6 +1690,7 @@ export function CostImportStagingModal({
                       const liquidoRealRow = subtotalRow - totalDescRow + adiantRow;
 
                       const existingDbRecord = row.targetEmployeeId !== "NEW" ? existingCostsInDb.get(row.targetEmployeeId) : undefined;
+                      const rowAnomalies = stagingAnomaliesMap.get(row.id) || [];
 
                       return (
                         <tr
@@ -1585,6 +1725,20 @@ export function CostImportStagingModal({
                                   Já Cadastrado ({formatCurrency(existingDbRecord.valor_liquido)})
                                 </span>
                               )}
+                              {rowAnomalies.map((anomaly) => (
+                                <span
+                                  key={anomaly.code}
+                                  title={anomaly.detail}
+                                  className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border cursor-help ${
+                                    anomaly.severity === "alert"
+                                      ? "bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800"
+                                      : "bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                                  }`}
+                                >
+                                  <AlertTriangle size={9} className="shrink-0" />
+                                  {anomaly.shortLabel}
+                                </span>
+                              ))}
                             </div>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               {row.documentId && (

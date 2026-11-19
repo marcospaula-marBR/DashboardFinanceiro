@@ -10,6 +10,12 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Employee, EmploymentContract, MonthlyCost, getRemunerationLabel } from '@/types/loans';
 import { formatCurrency } from '@/services/loans.service';
+import {
+  buildHeadcountGeneralCsv,
+  buildHeadcountPrintHtml,
+  partitionEmployeesByLegalNature,
+  renderHeadcountVectorPdf,
+} from '@/services/people-headcount-report.service';
 import { getCompanyLogoUrl } from './PeopleBadges';
 import { formatCostOrigem, getCostOrigemBadgeStyle } from './ProfileExportModal';
 
@@ -300,42 +306,26 @@ export function BatchPdfExportModal({
     searchEmployeeQuery
   ]);
 
-  // Indicadores de Headcount e Massa Salarial para o modo Geral
-  const reportKpis = useMemo(() => {
-    let totalRemuneration = 0;
-    let cltCount = 0;
-    let pjCount = 0;
-    let otherCount = 0;
-    let activeCount = 0;
-    let inactiveCount = 0;
+  // Particionamento jurídico e KPIs do modo Geral (CLT, Estágio e PJ/MEI segregados)
+  const headcountPartition = useMemo(
+    () => partitionEmployeesByLegalNature(targetEmployees),
+    [targetEmployees]
+  );
 
-    targetEmployees.forEach(e => {
-      const rem = Number(e.remuneration_fixed || e.remuneration || 0);
-      totalRemuneration += rem;
-      
-      const link = (e.linkType || '').toUpperCase();
-      if (link.includes('CLT')) cltCount++;
-      else if (link.includes('PJ') || link.includes('MEI')) pjCount++;
-      else otherCount++;
-
-      const st = (e.status || '').toLowerCase();
-      if (st !== 'inativo' && st !== 'desligado' && st !== 'demitido' && (e as any).active !== false) {
-        activeCount++;
-      } else {
-        inactiveCount++;
-      }
-    });
-
-    return {
-      totalEmployees: targetEmployees.length,
-      totalRemuneration,
-      cltCount,
-      pjCount,
-      otherCount,
-      activeCount,
-      inactiveCount
-    };
-  }, [targetEmployees]);
+  const reportKpis = useMemo(() => ({
+    totalEmployees: headcountPartition.grandSummary.totalCount,
+    totalRemuneration: headcountPartition.grandSummary.totalValue,
+    cltCount: headcountPartition.cltSummary.count,
+    cltTotal: headcountPartition.cltSummary.totalValue,
+    estagioCount: headcountPartition.estagioSummary.count,
+    estagioTotal: headcountPartition.estagioSummary.totalValue,
+    pjCount: headcountPartition.pjSummary.count,
+    pjTotal: headcountPartition.pjSummary.totalValue,
+    otherCount: headcountPartition.estagioSummary.count,
+    activeCount: headcountPartition.grandSummary.activeCount,
+    inactiveCount: headcountPartition.grandSummary.inactiveCount,
+    isMixed: headcountPartition.grandSummary.isMixed,
+  }), [headcountPartition]);
 
   // Total de competências a serem auditadas no escopo filtrado
   const filteredCostsScope = useMemo(() => {
@@ -373,30 +363,15 @@ export function BatchPdfExportModal({
 
     let csv = '';
 
-    // MODO 0: RELATÓRIO GERAL DE COLABORADORES
+    // MODO 0: RELATÓRIO GERAL SEGREGADO POR NATUREZA JURÍDICA (CSV)
     if (reportMode === 'general') {
-      csv += `"RELATÓRIO GERAL DE COLABORADORES & QUADRO DE PESSOAL"
-`;
-      csv += `"Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}"
-`;
-      csv += `"Total Colaboradores: ${targetEmployees.length}"
-
-`;
-
-      csv += `Nº;Colaborador;CPF / CNPJ;Empresa;Regime;Cargo;Camada;Nível;Departamento;Data de Admissão;Data de Desligamento;${includeFinancials ? 'Remuneração / Honorários;' : ''}Status
-`;
-
-      targetEmployees.forEach((e, idx) => {
-        const rem = Number(e.remuneration_fixed || e.remuneration || 0);
-        csv += `${idx + 1};${sanitize(getEmployeeDisplayName(e))};${sanitize(e.document_id || e.pj_type)};${sanitize(e.company)};${sanitize(e.linkType)};${sanitize(e.job_role)};${sanitize(getEmployeeCamada(e))};${sanitize(getEmployeeNivelEnquadramento(e))};${sanitize(e.department)};${sanitize(e.start_date || '-')};${sanitize(e.resignation_date || (e as any).real_resignation_date || '-')};${includeFinancials ? sanitize(rem.toFixed(2)) + ';' : ''}${sanitize(e.status || ((e as any).active !== false ? 'Ativo' : 'Inativo'))}
-`;
-      });
+      csv = buildHeadcountGeneralCsv(targetEmployees, includeFinancials, new Date());
 
       const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `Relatorio_Colaboradores_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.setAttribute('download', `Relatorio_Quadro_Natureza_Juridica_${new Date().toISOString().slice(0, 10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -494,10 +469,10 @@ export function BatchPdfExportModal({
     document.body.removeChild(link);
   };
 
-  // EXPORTAÇÃO PDF VETORIAL (MODO GERAL)
+  // EXPORTAÇÃO PDF VETORIAL (MODO GERAL — SEGREGADO POR NATUREZA JURÍDICA)
   const handleExportGeneralPdf = () => {
     if (targetEmployees.length === 0) {
-      alert('Nenhum colaborador encontrado com os filtros selecionados.');
+      alert('Nenhum registro encontrado com os filtros selecionados.');
       return;
     }
 
@@ -507,144 +482,32 @@ export function BatchPdfExportModal({
       format: 'a4'
     });
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
-    doc.setTextColor(15, 23, 42);
-    doc.text('RELATÓRIO GERAL DE COLABORADORES & QUADRO DE PESSOAL', 14, 15);
-
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(71, 85, 105);
-
     const statusLabel = selectedStatus === 'active' ? 'Somente Ativos' : selectedStatus === 'inactive' ? 'Somente Desligados/Inativos' : selectedStatus === 'ferias' ? 'Férias/Afastados' : 'Todos os Status';
     const companiesLabel = selectedCompanies.length > 0 ? selectedCompanies.join(', ') : 'Todas as Empresas';
-    const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todos os Regimes';
+    const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todas as Naturezas';
     const camadasLabel = selectedCamadas.length > 0 ? ` • CAMADAS: ${selectedCamadas.join(', ')}` : '';
     const niveisLabel = selectedNiveis.length > 0 ? ` • NÍVEIS: ${selectedNiveis.join(', ')}` : '';
     const dateLabel = isPeriodFilterActive
       ? dateFilterType === 'cycle'
         ? `Ciclo Completo BPR: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'fim'}`
-        : `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'hoje'}`
+        : `${dateFilterType === 'admission' ? 'Início / Admissão' : 'Encerramento / Desligamento'}: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'hoje'}`
       : 'Histórico Geral Completo';
 
-    doc.text(`ESCOPO: ${companiesLabel} • REGIMES: ${linksLabel}${camadasLabel}${niveisLabel} • STATUS: ${statusLabel} • ${dateLabel}`, 14, 21);
-    doc.text(`EMISSÃO: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} • TOTAL: ${targetEmployees.length} COLABORADORES`, 14, 26);
-
-    let currentY = 31;
-
-    // Cards de Resumo no Topo se includeSummaryCards
-    if (includeSummaryCards) {
-      const cardWidth = includeFinancials ? 63 : 84;
-      const cardHeight = 14;
-      const cardsData = [
-        { label: 'HEADCOUNT TOTAL', value: `${reportKpis.totalEmployees} colaboradores`, color: [15, 23, 42] },
-        { label: 'DISTRIBUIÇÃO REGIME', value: `${reportKpis.cltCount} CLT • ${reportKpis.pjCount} PJ • ${reportKpis.otherCount} Outros`, color: [30, 41, 59] },
-        { label: 'STATUS ATIVO/INATIVO', value: `${reportKpis.activeCount} Ativos • ${reportKpis.inactiveCount} Desligados`, color: [30, 41, 59] },
-        ...(includeFinancials ? [{ label: 'MASSA SALARIAL MENSAL', value: formatCurrency(reportKpis.totalRemuneration), color: [4, 120, 87] }] : [])
-      ];
-
-      cardsData.forEach((c, idx) => {
-        const x = 14 + idx * (cardWidth + 4);
-        doc.setFillColor(248, 250, 252);
-        doc.setDrawColor(226, 232, 240);
-        doc.roundedRect(x, currentY, cardWidth, cardHeight, 2, 2, 'FD');
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.setTextColor(100, 116, 139);
-        doc.text(c.label, x + 4, currentY + 5);
-
-        doc.setFontSize(8.5);
-        doc.setTextColor(c.color[0], c.color[1], c.color[2]);
-        doc.text(c.value, x + 4, currentY + 10.5);
-      });
-
-      currentY += cardHeight + 6;
-    }
-
-    const tableHeaders = [
-      '#',
-      'Colaborador / Razão Social',
-      'CPF / CNPJ',
-      'Empresa',
-      'Regime',
-      'Cargo / Escopo',
-      'Camada / Nível',
-      'Departamento',
-      'Admissão',
-      ...(selectedStatus !== 'active' ? ['Desligamento'] : []),
-      ...(includeFinancials ? ['Remuneração'] : []),
-      'Status'
-    ];
-
-    const bodyRows = targetEmployees.map((e, index) => {
-      const rem = Number(e.remuneration_fixed || e.remuneration || 0);
-      const row = [
-        String(index + 1),
-        getEmployeeDisplayName(e),
-        e.document_id || e.pj_type || '-',
-        e.company || 'MarBR',
-        e.linkType || 'CLT',
-        e.job_role || '-',
-        getEmployeeNivel(e),
-        e.department || 'Geral',
-        e.start_date ? e.start_date.split('-').reverse().join('/') : '-',
-        ...(selectedStatus !== 'active' ? [
-          (e.resignation_date || (e as any).real_resignation_date)
-            ? (e.resignation_date || (e as any).real_resignation_date).slice(0, 10).split('-').reverse().join('/')
-            : '-'
-        ] : []),
-        ...(includeFinancials ? [formatCurrency(rem)] : []),
-        e.status || ((e as any).active !== false ? 'Ativo' : 'Inativo')
-      ];
-      return row;
+    renderHeadcountVectorPdf(doc as any, autoTable as any, targetEmployees, {
+      companiesLabel,
+      linksLabel,
+      camadasLabel,
+      niveisLabel,
+      statusLabel,
+      dateLabel,
+      showResignationColumn: selectedStatus !== 'active',
+      includeFinancials,
+      includeSummaryCards,
+      includeSignatures,
+      generatedAt: new Date(),
     });
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [tableHeaders],
-      body: bodyRows,
-      theme: 'striped',
-      headStyles: {
-        fillColor: [15, 23, 42],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        fontSize: 7.5
-      },
-      bodyStyles: { fontSize: 7 },
-      columnStyles: {
-        0: { cellWidth: 8, halign: 'center' },
-        ...(includeFinancials ? { [tableHeaders.indexOf('Remuneração')]: { halign: 'right', fontStyle: 'bold' } } : {})
-      }
-    });
-
-    if (includeSignatures) {
-      const finalTableY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY : 170;
-      const pageHeight = doc.internal.pageSize.getHeight();
-      let sigY = finalTableY + 18;
-      if (sigY + 25 > pageHeight) {
-        doc.addPage();
-        sigY = 30;
-      }
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(100, 116, 139);
-
-      const sigWidth = 70;
-      doc.setDrawColor(203, 213, 225);
-      doc.setLineWidth(0.3);
-
-      doc.line(40, sigY, 40 + sigWidth, sigY);
-      doc.text('GESTÃO DE PESSOAS / RH', 40 + sigWidth / 2, sigY + 4, { align: 'center' });
-      doc.text('Emissão e Validação Cadastral', 40 + sigWidth / 2, sigY + 8, { align: 'center' });
-
-      doc.line(170, sigY, 170 + sigWidth, sigY);
-      doc.text('DIRETORIA EXECUTIVA', 170 + sigWidth / 2, sigY + 4, { align: 'center' });
-      doc.text('Aprovação Institucional', 170 + sigWidth / 2, sigY + 8, { align: 'center' });
-    }
-
-    doc.save(`Relatorio_Colaboradores_People_${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`Relatorio_Quadro_Natureza_Juridica_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   // EXPORTAÇÃO IMPRESSÃO EM HTML (MODO GERAL, AUDITORIA OU FICHAS)
@@ -660,169 +523,32 @@ export function BatchPdfExportModal({
       return;
     }
 
-    // MODO 0: RELATÓRIO GERAL DE COLABORADORES
+    // MODO 0: RELATÓRIO GERAL SEGREGADO POR NATUREZA JURÍDICA (IMPRESSÃO HTML)
     if (reportMode === 'general') {
       const statusLabel = selectedStatus === 'active' ? 'Somente Ativos' : selectedStatus === 'inactive' ? 'Somente Desligados/Inativos' : selectedStatus === 'ferias' ? 'Férias/Afastados' : 'Todos os Status';
       const companiesLabel = selectedCompanies.length > 0 ? selectedCompanies.join(', ') : 'Todas as Empresas';
-      const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todos os Regimes';
+      const linksLabel = selectedLinkTypes.length > 0 ? selectedLinkTypes.join(', ') : 'Todas as Naturezas';
       const camadasLabel = selectedCamadas.length > 0 ? ` • CAMADAS: ${selectedCamadas.join(', ')}` : '';
       const niveisLabel = selectedNiveis.length > 0 ? ` • NÍVEIS: ${selectedNiveis.join(', ')}` : '';
       const dateLabel = isPeriodFilterActive
         ? dateFilterType === 'cycle'
           ? `Ciclo Completo BPR: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'fim'}`
-          : `${dateFilterType === 'admission' ? 'Admissão' : 'Desligamento'}: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'hoje'}`
+          : `${dateFilterType === 'admission' ? 'Início / Admissão' : 'Encerramento / Desligamento'}: de ${periodStartDate ? periodStartDate.split('-').reverse().join('/') : 'início'} até ${periodEndDate ? periodEndDate.split('-').reverse().join('/') : 'hoje'}`
         : 'Histórico Geral Completo';
 
-      const generalHtml = `
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>Relatório Geral de Colaboradores & Quadro de Pessoal (${targetEmployees.length} Registros)</title>
-          <style>
-            @page { size: A4 landscape; margin: 12mm 10mm 12mm 10mm; }
-            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 10px; font-size: 11px; }
-            .header { border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }
-            .title { font-size: 16px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin: 0; }
-            .meta { font-size: 9px; color: #475569; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
-            .kpis { display: flex; gap: 8px; margin-bottom: 15px; }
-            .kpi-card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; }
-            .kpi-label { font-size: 8px; font-weight: 700; color: #64748b; text-transform: uppercase; }
-            .kpi-value { font-size: 12px; font-weight: 900; color: #0f172a; margin-top: 2px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 9.5px; }
-            th { background: #0f172a; color: white; font-weight: 800; text-transform: uppercase; padding: 6px 8px; border: 1px solid #0f172a; text-align: left; font-size: 8.5px; }
-            td { padding: 5px 8px; border: 1px solid #e2e8f0; }
-            tr:nth-child(even) td { background: #f8fafc; }
-            .amount { text-align: right; font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-            .status-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 700; text-transform: uppercase; }
-            .status-active { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
-            .status-inactive { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-            .signatures { margin-top: 35px; page-break-inside: avoid; display: flex; justify-content: space-around; text-align: center; font-size: 9px; color: #475569; }
-            .sig-line { border-top: 1px solid #cbd5e1; width: 220px; padding-top: 6px; }
-            @media print { .no-print { display: none; } }
-          </style>
-        </head>
-        <body>
-          <div class="no-print" style="margin-bottom: 12px; padding: 10px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-weight: 700; color: #92400e;">Relatório Geral de Colaboradores & Quadro de Pessoal</span>
-            <div>
-              <button onclick="window.print()" style="padding: 6px 14px; background: #059669; color: white; border: none; border-radius: 6px; font-weight: 800; cursor: pointer;">Imprimir / Salvar PDF</button>
-              <button onclick="window.close()" style="padding: 6px 14px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; margin-left: 6px;">Fechar</button>
-            </div>
-          </div>
-
-          <div class="header">
-            <div>
-              <h1 class="title">Relatório Geral de Colaboradores &amp; Quadro de Pessoal</h1>
-              <div class="meta">Escopo: ${companiesLabel} • Regimes: ${linksLabel}${camadasLabel}${niveisLabel} • Status: ${statusLabel} • ${dateLabel}</div>
-              <div class="meta" style="color: #64748b;">Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} • Total: ${targetEmployees.length} Colaboradores</div>
-            </div>
-            <div style="text-align: right;">
-              <span style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase;">MAR BRASIL • DZM • G2</span>
-            </div>
-          </div>
-
-          ${includeSummaryCards ? `
-            <div class="kpis">
-              <div class="kpi-card">
-                <div class="kpi-label">Headcount Total</div>
-                <div class="kpi-value">${reportKpis.totalEmployees} pessoas</div>
-              </div>
-              <div class="kpi-card">
-                <div class="kpi-label">Distribuição por Regime</div>
-                <div class="kpi-value">${reportKpis.cltCount} CLT &bull; ${reportKpis.pjCount} PJ &bull; ${reportKpis.otherCount} Outros</div>
-              </div>
-              <div class="kpi-card">
-                <div class="kpi-label">Status Ativo / Inativo</div>
-                <div class="kpi-value">${reportKpis.activeCount} Ativos &bull; ${reportKpis.inactiveCount} Desligados</div>
-              </div>
-              ${includeFinancials ? `
-                <div class="kpi-card" style="border-left: 3px solid #059669;">
-                  <div class="kpi-label" style="color: #047857;">Massa Salarial Mensal</div>
-                  <div class="kpi-value" style="color: #047857;">${formatCurrency(reportKpis.totalRemuneration)}</div>
-                </div>
-              ` : ''}
-            </div>
-          ` : ''}
-
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 25px; text-align: center;">#</th>
-                <th>Colaborador / Razão Social</th>
-                <th>CPF / CNPJ</th>
-                <th>Empresa</th>
-                <th>Regime</th>
-                <th>Cargo / Escopo</th>
-                <th>Camada / Nível</th>
-                <th>Departamento</th>
-                <th>Admissão</th>
-                ${selectedStatus !== 'active' ? '<th>Desligamento</th>' : ''}
-                ${includeFinancials ? '<th style="text-align: right;">Remuneração</th>' : ''}
-                <th style="text-align: center;">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${targetEmployees.map((e, index) => {
-                const rem = Number(e.remuneration_fixed || e.remuneration || 0);
-                const isActive = !['inativo', 'desligado', 'demitido'].includes((e.status || '').toLowerCase()) && (e as any).active !== false;
-                return `
-                  <tr>
-                    <td style="text-align: center; color: #64748b; font-weight: bold;">${index + 1}</td>
-                    <td><strong>${getEmployeeDisplayName(e)}</strong></td>
-                    <td style="font-family: monospace;">${e.document_id || e.pj_type || '-'}</td>
-                    <td><strong>${e.company || 'MarBR'}</strong></td>
-                    <td>${e.linkType || 'CLT'}</td>
-                    <td>${e.job_role || '-'}</td>
-                    <td><span style="display: inline-block; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; font-weight: bold; font-size: 10px;">${getEmployeeNivel(e)}</span></td>
-                    <td>${e.department || 'Geral'}</td>
-                    <td>${e.start_date ? e.start_date.split('-').reverse().join('/') : '-'}</td>
-                    ${selectedStatus !== 'active' ? `<td>${(e.resignation_date || (e as any).real_resignation_date) ? (e.resignation_date || (e as any).real_resignation_date).slice(0, 10).split('-').reverse().join('/') : '-'}</td>` : ''}
-                    ${includeFinancials ? `<td class="amount">${formatCurrency(rem)}</td>` : ''}
-                    <td style="text-align: center;">
-                      <span class="status-badge ${isActive ? 'status-active' : 'status-inactive'}">
-                        ${e.status || (isActive ? 'Ativo' : 'Inativo')}
-                      </span>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-            ${includeFinancials ? `
-              <tfoot>
-                <tr style="background: #f1f5f9; font-weight: bold;">
-                  <td colspan="${selectedStatus !== 'active' ? 9 : 8}" style="text-align: right; text-transform: uppercase;">Total Geral (${targetEmployees.length} colaboradores):</td>
-                  <td class="amount" style="color: #047857;">${formatCurrency(reportKpis.totalRemuneration)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            ` : ''}
-          </table>
-
-          ${includeSignatures ? `
-            <div class="signatures">
-              <div class="sig-line">
-                <strong style="display: block; color: #0f172a;">GESTÃO DE PESSOAS / RH</strong>
-                <span>Emissão e Validação Cadastral</span>
-              </div>
-              <div class="sig-line">
-                <strong style="display: block; color: #0f172a;">DIRETORIA EXECUTIVA</strong>
-                <span>Aprovação Institucional</span>
-              </div>
-            </div>
-          ` : ''}
-
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.print();
-              }, 400);
-            }
-          </script>
-        </body>
-        </html>
-      `;
+      const generalHtml = buildHeadcountPrintHtml(targetEmployees, {
+        companiesLabel,
+        linksLabel,
+        camadasLabel,
+        niveisLabel,
+        statusLabel,
+        dateLabel,
+        showResignationColumn: selectedStatus !== 'active',
+        includeFinancials,
+        includeSummaryCards,
+        includeSignatures,
+        generatedAt: new Date(),
+      });
 
       printWindow.document.open();
       printWindow.document.write(generalHtml);
@@ -1308,37 +1034,54 @@ export function BatchPdfExportModal({
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-5">
           
-          {/* Card de Prévia Executiva em Tempo Real (Modo Geral) */}
+          {/* Card de Prévia Executiva em Tempo Real (Modo Geral — Segregado por Natureza Jurídica) */}
           {reportMode === 'general' && (
             <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-md space-y-3 font-sans">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Prévia do Recorte Selecionado
+                  Prévia do Recorte Selecionado (Segregado por Natureza Jurídica)
                 </span>
                 <span className="text-xs font-black text-amber-400">
-                  {targetEmployees.length} de {employees.length} colaboradores
+                  {targetEmployees.length} de {employees.length} registros
                 </span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Headcount</span>
-                  <strong className="text-sm font-black text-white">{reportKpis.totalEmployees} pessoas</strong>
+                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-blue-900/60">
+                  <span className="text-[10px] text-blue-300 uppercase tracking-wider block font-bold">Empregados CLT</span>
+                  <strong className="text-sm font-black text-white block">{reportKpis.cltCount} CLT</strong>
+                  {includeFinancials && reportKpis.cltCount > 0 && (
+                    <span className="text-[10px] text-slate-300 font-bold tabular-nums">{formatCurrency(reportKpis.cltTotal)}</span>
+                  )}
                 </div>
-                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Regimes</span>
-                  <span className="text-xs font-bold text-slate-200 block truncate">{reportKpis.cltCount} CLT &bull; {reportKpis.pjCount} PJ &bull; {reportKpis.otherCount} Outros</span>
+                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-amber-900/60">
+                  <span className="text-[10px] text-amber-300 uppercase tracking-wider block font-bold">Estágio (Lei 11.788)</span>
+                  <strong className="text-sm font-black text-white block">{reportKpis.estagioCount} Estágio</strong>
+                  {includeFinancials && reportKpis.estagioCount > 0 && (
+                    <span className="text-[10px] text-slate-300 font-bold tabular-nums">{formatCurrency(reportKpis.estagioTotal)}</span>
+                  )}
                 </div>
-                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Status</span>
-                  <span className="text-xs font-bold text-slate-200 block">{reportKpis.activeCount} Ativos &bull; {reportKpis.inactiveCount} Desligados</span>
+                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-teal-900/60">
+                  <span className="text-[10px] text-teal-300 uppercase tracking-wider block font-bold">Contratadas PJ / MEI</span>
+                  <strong className="text-sm font-black text-white block">{reportKpis.pjCount} PJ/MEI</strong>
+                  {includeFinancials && reportKpis.pjCount > 0 && (
+                    <span className="text-[10px] text-slate-300 font-bold tabular-nums">{formatCurrency(reportKpis.pjTotal)}</span>
+                  )}
                 </div>
-                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Massa Salarial</span>
-                  <strong className="text-sm font-black text-emerald-400">
+                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-emerald-800/70">
+                  <span className="text-[10px] text-emerald-300 uppercase tracking-wider block font-bold">
+                    {reportKpis.isMixed ? 'Compromisso Mensal (Grupo)' : reportKpis.pjCount > 0 && reportKpis.cltCount === 0 ? 'Honorários Mensais (PJ)' : 'Massa Base Mensal'}
+                  </span>
+                  <strong className="text-sm font-black text-emerald-400 tabular-nums block">
                     {includeFinancials ? formatCurrency(reportKpis.totalRemuneration) : 'Oculto'}
                   </strong>
+                  <span className="text-[10px] text-slate-400">{reportKpis.activeCount} Ativos &bull; {reportKpis.inactiveCount} Inativos</span>
                 </div>
               </div>
+              {reportKpis.isMixed && reportKpis.pjCount > 0 && (
+                <div className="text-[11px] text-teal-200 bg-teal-950/50 border border-teal-800/60 rounded-xl px-3 py-1.5">
+                  <strong>Conformidade Jurídica Ativa:</strong> No PDF e na Impressão, Empregados CLT, Estagiários e Empresas Contratadas (PJ/MEI) serão emitidos em seções independentes, com o Caderno PJ em página própria destacável e assinatura de Gestão de Contratos.
+                </div>
+              )}
             </div>
           )}
 
