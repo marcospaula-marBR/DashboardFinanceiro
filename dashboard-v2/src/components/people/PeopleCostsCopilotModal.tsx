@@ -2,10 +2,12 @@
 
 import React, { useState } from "react";
 import {
+  AlertCircle,
   ChevronDown,
   ChevronRight,
   Database,
   Loader2,
+  RotateCcw,
   Send,
   Sparkles,
   X,
@@ -45,12 +47,20 @@ const SUGGESTED_QUESTIONS = [
 
 export function PeopleCostsCopilotModal({ isOpen, onClose }: PeopleCostsCopilotModalProps) {
   const [question, setQuestion] = useState("");
+  const [lastQuestion, setLastQuestion] = useState("");
   const [messages, setMessages] = useState<CopilotMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [expandedAuditIds, setExpandedAuditIds] = useState<Set<string>>(new Set());
 
   if (!isOpen) return null;
+
+  const resetConversation = () => {
+    setMessages([]);
+    setErrorMessage(null);
+    setQuestion("");
+    setExpandedAuditIds(new Set());
+  };
 
   const toggleAudit = (msgId: string) => {
     setExpandedAuditIds((prev) => {
@@ -61,10 +71,11 @@ export function PeopleCostsCopilotModal({ isOpen, onClose }: PeopleCostsCopilotM
     });
   };
 
-  const askQuestion = async (promptText: string) => {
+  const askQuestion = async (promptText: string, forceDeterministic = false) => {
     const clean = promptText.trim();
     if (!clean || isLoading) return;
 
+    setLastQuestion(clean);
     const userMsg: CopilotMessage = {
       id: `u-${Date.now()}`,
       role: "user",
@@ -79,7 +90,7 @@ export function PeopleCostsCopilotModal({ isOpen, onClose }: PeopleCostsCopilotM
       const res = await fetch("/api/people/costs-copilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: clean }),
+        body: JSON.stringify({ question: clean, forceDeterministic }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -124,14 +135,28 @@ export function PeopleCostsCopilotModal({ isOpen, onClose }: PeopleCostsCopilotM
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-w-[44px] min-h-[44px] rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white shrink-0"
-            title="Fechar Copiloto"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={resetConversation}
+                className="min-h-[44px] px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shrink-0 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                title="Nova Consulta / Limpar Histórico"
+              >
+                <RotateCcw size={14} />
+                <span className="hidden sm:inline">Nova Consulta</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-w-[44px] min-h-[44px] rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white shrink-0"
+              title="Fechar Copiloto"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* MENSAGENS */}
@@ -223,8 +248,36 @@ export function PeopleCostsCopilotModal({ isOpen, onClose }: PeopleCostsCopilotM
           )}
 
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-bold text-rose-700 dark:text-rose-300">
-              {errorMessage}
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 space-y-3">
+              <div className="flex items-start gap-2.5 text-rose-700 dark:text-rose-300">
+                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <div className="font-bold">Ocorreu um erro no processamento:</div>
+                  <div className="font-mono text-[11px] bg-rose-100/70 dark:bg-rose-900/40 p-2 rounded-lg break-words">
+                    {errorMessage}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                {lastQuestion && (
+                  <button
+                    type="button"
+                    onClick={() => askQuestion(lastQuestion, true)}
+                    className="min-h-[44px] px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Database size={14} />
+                    <span>Calcular via motor determinístico direto</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={resetConversation}
+                  className="min-h-[44px] px-3.5 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                >
+                  <RotateCcw size={14} />
+                  <span>Limpar conversa</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

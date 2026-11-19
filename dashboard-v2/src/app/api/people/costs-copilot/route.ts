@@ -259,6 +259,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const question = String(body?.question || '').trim();
     const forceRefresh = Boolean(body?.forceRefresh);
+    const forceDeterministic = Boolean(body?.forceDeterministic);
 
     if (!question) {
       return NextResponse.json({ error: 'Informe uma pergunta executiva sobre os custos.' }, { status: 400 });
@@ -272,7 +273,7 @@ export async function POST(req: Request) {
       maxCompetencia: dataset.maxCompetencia,
     };
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.GEMINI_API_KEY || forceDeterministic) {
       const fb = runDeterministicFallbackAnswer(question, dataset);
       return NextResponse.json({
         success: true,
@@ -282,8 +283,14 @@ export async function POST(req: Request) {
       });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const systemInstruction = `Você é o Copiloto Executivo de Custos de Pessoal e Contratos do Grupo Mar Brasil (MarBR, DZM e G2).
+    const toolExecutions: Array<{ tool: string; args: Record<string, unknown>; result: unknown }> = [];
+
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        apiVersion: 'v1beta',
+      });
+      const systemInstruction = `Você é o Copiloto Executivo de Custos de Pessoal e Contratos do Grupo Mar Brasil (MarBR, DZM e G2).
 REGRAS INVIOLÁVEIS:
 1. NUNCA invente, estime ou arredonde arbitrariamente qualquer número. Sempre consulte as ferramentas determinísticas disponíveis antes de responder.
 2. Cobertura total da base real carregada: ${dataset.enriched.length} lançamentos de ${dataset.minCompetencia} até ${dataset.maxCompetencia}.
@@ -293,49 +300,67 @@ REGRAS INVIOLÁVEIS:
    - Para PJ / MEI use EXCLUSIVAMENTE termos empresariais B2B: Empresas Contratadas, Honorários Base, Variável/Comissões, Conectividade, Glosas/Deduções e Valor Líquido NF. NUNCA chame PJ de "empregado", "salário" ou "folha".
 4. Responda em português executivo, direto, estruturado em Markdown com valores formatados em R$ (pt-BR), indicando claramente o período e os filtros utilizados.`;
 
-    const contents: Content[] = [{ role: 'user', parts: [{ text: question }] }];
-    const toolExecutions: Array<{ tool: string; args: Record<string, unknown>; result: unknown }> = [];
+      const contents: Content[] = [{ role: 'user', parts: [{ text: question }] }];
 
-    let finalAnswer = '';
-    for (let turn = 0; turn < 4; turn += 1) {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents,
-        config: {
-          temperature: 0,
-          systemInstruction,
-          tools: [{ functionDeclarations: COPILOT_TOOLS }],
-        },
-      });
-
-      const functionCalls = response.functionCalls;
-      if (functionCalls && functionCalls.length > 0) {
-        const modelContent = response.candidates?.[0]?.content;
-        if (modelContent) {
-          contents.push(modelContent);
-        }
-
-        const responseParts = functionCalls.map((call) => {
-          const toolName = String(call.name || '');
-          const args = (call.args as Record<string, unknown> | undefined) || {};
-          const result = executeDeterministicTool(toolName, args, dataset.enriched);
-          toolExecutions.push({ tool: toolName, args, result });
-          return {
-            functionResponse: {
-              name: toolName,
-              response: { result },
-            },
-          };
+      let finalAnswer = '';
+      for (let turn = 0; turn < 4; turn += 1) {
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents,
+          config: {
+            temperature: 0,
+            systemInstruction,
+            tools: [{ functionDeclarations: COPILOT_TOOLS }],
+          },
         });
 
-        contents.push({ role: 'user', parts: responseParts });
-      } else {
-        finalAnswer = response.text || '';
-        break;
-      }
-    }
+        const functionCalls = response.functionCalls;
+        if (functionCalls && functionCalls.length > 0) {
+          const modelContent = response.candidates?.[0]?.content;
+          if (modelContent) {
+            contents.push(modelContent);
+          }
 
-    if (!finalAnswer) {
+          const responseParts = functionCalls.map((call) => {
+            const toolName = String(call.name || '');
+            const args = (call.args as Record<string, unknown> | undefined) || {};
+            const result = executeDeterministicTool(toolName, args, dataset.enriched);
+            toolExecutions.push({ tool: toolName, args, result });
+            return {
+              functionResponse: {
+                name: toolName,
+                response: { result },
+              },
+            };
+          });
+
+          contents.push({ role: 'user', parts: responseParts });
+        } else {
+          finalAnswer = response.text || '';
+          break;
+        }
+      }
+
+      if (!finalAnswer) {
+        const fb = runDeterministicFallbackAnswer(question, dataset);
+        return NextResponse.json({
+          success: true,
+          mode: 'deterministic_fallback',
+          coverage,
+          answer: fb.answer,
+          toolExecutions: toolExecutions.length > 0 ? toolExecutions : fb.toolExecutions,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        mode: 'gemini_tool_calling',
+        coverage,
+        answer: finalAnswer,
+        toolExecutions,
+      });
+    } catch (aiError: unknown) {
+      console.warn('[costs-copilot] Gemini execution failed, falling back to deterministic math engine:', aiError);
       const fb = runDeterministicFallbackAnswer(question, dataset);
       return NextResponse.json({
         success: true,
@@ -343,16 +368,9 @@ REGRAS INVIOLÁVEIS:
         coverage,
         answer: fb.answer,
         toolExecutions: toolExecutions.length > 0 ? toolExecutions : fb.toolExecutions,
+        fallbackNotice: 'Cálculo executado com segurança pelo motor analítico determinístico auditado.',
       });
     }
-
-    return NextResponse.json({
-      success: true,
-      mode: 'gemini_tool_calling',
-      coverage,
-      answer: finalAnswer,
-      toolExecutions,
-    });
   } catch (error: unknown) {
     console.error('Erro no Copiloto de Custos:', error);
     return NextResponse.json(
