@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node test/clara-omie.test.cjs && node test/dre-encoding-sanitization.test.cjs && node test/dre-caixa-cards-reconciliation.test.cjs && node test/bpr-scenarios-and-pdf.test.cjs"
+    "test": "node test/clara-omie.test.cjs && node test/dre-encoding-sanitization.test.cjs && node test/dre-caixa-cards-reconciliation.test.cjs && node test/bpr-scenarios-and-pdf.test.cjs && node test/competencias-costs-pdf.test.cjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

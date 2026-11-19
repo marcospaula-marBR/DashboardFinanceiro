@@ -8,6 +8,7 @@ import {
 import { Employee, MonthlyCost } from '@/types/loans';
 import { PeopleHRService, calculateRowFinancials, RowFinancials } from '@/services/people-hr.service';
 import { formatCurrency } from '@/services/loans.service';
+import { buildCompetenciasCostsPdfHtml, CompetenciasPdfReportType } from '@/services/competencias-costs-pdf.service';
 import { CostImportStagingModal } from '@/components/people/CostImportStagingModal';
 
 interface CompetenciasCostsListModalProps {
@@ -87,9 +88,9 @@ export function CompetenciasCostsListModal({
   const [batchComplementos, setBatchComplementos] = useState<string>('');
   const [isSavingBatch, setIsSavingBatch] = useState(false);
 
-  // Estados do Modal de Relatório PDF (Analítico vs Sintético)
+  // Estados do Modal de Relatório PDF (Analítico 10 Colunas vs Sintético)
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
-  const [pdfReportType, setPdfReportType] = useState<'sintetico' | 'analitico'>('sintetico');
+  const [pdfReportType, setPdfReportType] = useState<CompetenciasPdfReportType>('analitico');
 
   // Estados para Edição Direta no Modal (Elimina Looping)
   const [editingRowCost, setEditingRowCost] = useState<{ cost: MonthlyCost; emp?: Employee } | null>(null);
@@ -698,8 +699,8 @@ export function CompetenciasCostsListModal({
     }
   };
 
-  // Geração e Emissão de Relatório PDF (Sintético e Analítico)
-  const handleGeneratePdf = (type: 'sintetico' | 'analitico') => {
+  // Geração e Emissão de Relatório PDF (Analítico 10 Colunas e Sintético Alinhado)
+  const handleGeneratePdf = (type: CompetenciasPdfReportType) => {
     if (filteredRows.length === 0) {
       alert("Nenhum lançamento filtrado para emitir relatório.");
       return;
@@ -711,390 +712,25 @@ export function CompetenciasCostsListModal({
       return;
     }
 
-    const todayStr = new Date().toLocaleDateString('pt-BR');
-    const todayTimeStr = new Date().toLocaleTimeString('pt-BR');
-
-    let totalSalarioFixo = 0;
-    let totalAdiantamento = 0;
-    let totalHorasExtras = 0;
-    let totalBeneficios = 0;
-    let totalDecimoFerias = 0;
-    let totalDescontos = 0;
-    let totalRealDesembolsado = 0;
-
-    filteredRows.forEach(r => {
-      const c = r.cost;
-      const fixo = c.valor_fixo !== undefined && c.valor_fixo !== null ? c.valor_fixo : (c.valor_liquido || 0);
-      const ben = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0) + (c.valor_bonus || 0);
-      const he = (c.valor_hora_extra || 0) + (c.valor_adicional_not || 0);
-      const df = (c.valor_decimo_terceiro || 0) + (c.valor_ferias || 0) + (c.valor_rescisao || 0);
-      const desc = c.valor_descontos || 0;
-      
-      totalSalarioFixo += fixo;
-      totalAdiantamento += c.valor_adiantamento || 0;
-      totalHorasExtras += he;
-      totalBeneficios += ben;
-      totalDecimoFerias += df;
-      totalDescontos += desc;
-      totalRealDesembolsado += r.realTotal;
+    const html = buildCompetenciasCostsPdfHtml({
+      reportType: type,
+      rows: filteredRows,
+      filters: {
+        selectedYears,
+        compFilterMode,
+        selectedCompetencia,
+        periodStart,
+        periodEnd,
+        selectedCompetencias,
+        selectedEmpresa,
+        selectedVinculo,
+        selectedStatus,
+        selectedSetor,
+        searchTerm,
+        usePageScope,
+      },
+      generatedAt: new Date(),
     });
-
-    const isSintetico = type === 'sintetico';
-
-    let html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Mar Brasil • Relatório ${isSintetico ? 'Sintético' : 'Analítico'} de Custos por Competência</title>
-        <meta charset="utf-8" />
-        <style>
-          @page {
-            size: A4 ${isSintetico ? 'portrait' : 'landscape'};
-            margin: 10mm;
-          }
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: #0f172a;
-            background: #ffffff;
-            margin: 0;
-            padding: 0;
-            font-size: 10px;
-          }
-          .header-box {
-            border-bottom: 2px solid #059669;
-            padding-bottom: 8px;
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-          }
-          .company-title {
-            font-size: 16px;
-            font-weight: 900;
-            color: #0f172a;
-            letter-spacing: -0.5px;
-            text-transform: uppercase;
-          }
-          .report-subtitle {
-            font-size: 11px;
-            font-weight: 700;
-            color: #059669;
-            margin-top: 2px;
-          }
-          .meta-info {
-            font-size: 9px;
-            color: #64748b;
-            text-align: right;
-            line-height: 1.4;
-          }
-          .kpi-cards {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            margin-bottom: 14px;
-          }
-          .kpi-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 8px 10px;
-          }
-          .kpi-label {
-            font-size: 8px;
-            font-weight: 800;
-            text-transform: uppercase;
-            color: #64748b;
-            letter-spacing: 0.5px;
-          }
-          .kpi-val {
-            font-size: 13px;
-            font-weight: 900;
-            color: #0f172a;
-            margin-top: 2px;
-            font-feature-settings: "tnum";
-          }
-          .kpi-val.highlight {
-            color: #059669;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 8.5px;
-            margin-top: 6px;
-          }
-          th {
-            background: #f1f5f9;
-            color: #334155;
-            font-weight: 800;
-            text-transform: uppercase;
-            font-size: 8px;
-            padding: 5px 6px;
-            border: 1px solid #cbd5e1;
-            text-align: left;
-          }
-          th.num, td.num {
-            text-align: right;
-            font-feature-settings: "tnum";
-          }
-          td {
-            padding: 4.5px 6px;
-            border: 1px solid #e2e8f0;
-          }
-          tr:nth-child(even) {
-            background: #f8fafc;
-          }
-          .badge-clt {
-            background: #dbeafe;
-            color: #1e40af;
-            font-weight: 800;
-            font-size: 7.5px;
-            padding: 1px 4px;
-            border-radius: 4px;
-            text-transform: uppercase;
-          }
-          .badge-pj {
-            background: #d1fae5;
-            color: #065f46;
-            font-weight: 800;
-            font-size: 7.5px;
-            padding: 1px 4px;
-            border-radius: 4px;
-            text-transform: uppercase;
-          }
-          .total-row {
-            background: #e2e8f0 !important;
-            font-weight: 900;
-            border-top: 2px solid #059669;
-          }
-          .signatures {
-            margin-top: 30px;
-            display: flex;
-            justify-content: space-around;
-            text-align: center;
-            page-break-inside: avoid;
-          }
-          .sig-line {
-            width: 180px;
-            border-top: 1px solid #94a3b8;
-            margin: 0 auto 4px auto;
-          }
-          .sig-label {
-            font-size: 8.5px;
-            color: #64748b;
-            font-weight: 700;
-            text-transform: uppercase;
-          }
-          @media print {
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header-box">
-          <div>
-            <div class="company-title">Mar Brasil • Grupo Empresarial</div>
-            <div class="report-subtitle">
-              ${isSintetico ? 'Demonstrativo Sintético de Custos por Competência (Visão Executiva)' : 'Demonstrativo Analítico e Contábil de Folha & Custos (Auditoria Completa)'}
-            </div>
-            <div style="font-size: 9px; color: #475569; margin-top: 3px;">
-              Escopo: ${selectedCompetencia !== 'all' ? formatCompetenciaLabel(selectedCompetencia) : 'Todas as Competências'} 
-              ${selectedVinculo !== 'all' ? `• Regime: ${selectedVinculo}` : ''}
-              ${selectedEmpresa !== 'all' ? `• Empresa: ${selectedEmpresa}` : ''}
-              • Total de Lançamentos: <strong>${filteredRows.length}</strong>
-            </div>
-          </div>
-          <div class="meta-info">
-            Emissão: <strong>${todayStr} às ${todayTimeStr}</strong><br/>
-            Responsável: Sistema Integrado People Cockpit<br/>
-            Segurança: Auditoria Rastreada
-          </div>
-        </div>
-
-        <div class="kpi-cards">
-          <div class="kpi-card">
-            <div class="kpi-label">Lançamentos / Contratados</div>
-            <div class="kpi-val">${filteredRows.length} <span style="font-size: 9px; color: #64748b; font-weight: normal;">(${summaryTotals.uniqueEmployeesCount} únicos)</span></div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Total Salários / Base</div>
-            <div class="kpi-val">${formatCurrency(totalSalarioFixo)}</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Total Benefícios & Extras</div>
-            <div class="kpi-val">${formatCurrency(totalBeneficios + totalAdiantamento)}</div>
-          </div>
-          <div class="kpi-card" style="border-color: #059669; background: #ecfdf5;">
-            <div class="kpi-label" style="color: #059669;">Total Real Desembolsado</div>
-            <div class="kpi-val highlight">${formatCurrency(totalRealDesembolsado)}</div>
-          </div>
-        </div>
-    `;
-
-    if (isSintetico) {
-      html += `
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 75px;">Competência</th>
-              <th>Colaborador</th>
-              <th>Empresa / Setor</th>
-              <th style="width: 45px; text-align: center;">Vínculo</th>
-              <th class="num">Salário / Base</th>
-              <th class="num">Adiantamento</th>
-              <th class="num">Benefícios</th>
-              <th class="num">Descontos</th>
-              <th class="num" style="color: #059669; font-weight: 900;">Total Real</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-
-      filteredRows.forEach(r => {
-        const c = r.cost;
-        const fixo = c.valor_fixo !== undefined && c.valor_fixo !== null ? c.valor_fixo : (c.valor_liquido || 0);
-        const ben = (c.valor_vr || 0) + (c.valor_vt || 0) + (c.valor_cesta || 0) + (c.valor_ajuda_custo || 0) + (c.valor_bonus || 0);
-        const desc = c.valor_descontos || 0;
-
-        html += `
-          <tr>
-            <td style="font-weight: 700;">${formatCompetenciaLabel(c.competencia)}</td>
-            <td style="font-weight: 700;">${r.name}</td>
-            <td style="color: #64748b;">${r.emp?.company || 'MarBR'} • ${r.emp?.job_role || r.emp?.department || '—'}</td>
-            <td style="text-align: center;"><span class="${r.isCLT ? 'badge-clt' : 'badge-pj'}">${r.isCLT ? 'CLT' : 'PJ'}</span></td>
-            <td class="num">${formatCurrency(fixo)}</td>
-            <td class="num">${c.valor_adiantamento ? '+' + formatCurrency(c.valor_adiantamento) : '—'}</td>
-            <td class="num">${ben > 0 ? '+' + formatCurrency(ben) : '—'}</td>
-            <td class="num" style="color: #e11d48;">${desc > 0 ? '-' + formatCurrency(desc) : '—'}</td>
-            <td class="num" style="font-weight: 900; color: #047857;">${formatCurrency(r.realTotal)}</td>
-          </tr>
-        `;
-      });
-
-      html += `
-          <tr class="total-row">
-            <td colspan="4" style="text-transform: uppercase;">Total Consolidado (${filteredRows.length} Lançamentos)</td>
-            <td class="num">${formatCurrency(totalSalarioFixo)}</td>
-            <td class="num">${formatCurrency(totalAdiantamento)}</td>
-            <td class="num">${formatCurrency(totalBeneficios)}</td>
-            <td class="num" style="color: #e11d48;">-${formatCurrency(totalDescontos)}</td>
-            <td class="num" style="color: #047857;">${formatCurrency(totalRealDesembolsado)}</td>
-          </tr>
-        </tbody>
-        </table>
-      `;
-    } else {
-      html += `
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 60px;">Comp.</th>
-              <th>Colaborador & CPF</th>
-              <th>Cargo / Setor</th>
-              <th style="width: 35px; text-align: center;">Reg.</th>
-              <th class="num">Salário Fixo</th>
-              <th class="num">HE & Not.</th>
-              <th class="num">13º & Fér.</th>
-              <th class="num" style="background: #e2e8f0; font-weight: 900;">Total Prov.</th>
-              <th class="num">INSS / IRRF</th>
-              <th class="num">Desc. VT 6%</th>
-              <th class="num">Faltas/Consig</th>
-              <th class="num" style="color: #e11d48; font-weight: 900;">Total Desc.</th>
-              <th class="num" style="background: #f1f5f9; font-weight: 900;">Líq. Folha</th>
-              <th class="num" style="color: #2563eb;">Adiant.</th>
-              <th class="num" style="color: #059669;">Benefícios</th>
-              <th class="num" style="color: #047857; font-weight: 900; background: #ecfdf5;">Total Pago</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-
-      filteredRows.forEach(r => {
-        const c = r.cost;
-        const fixo = c.valor_fixo !== undefined && c.valor_fixo !== null ? c.valor_fixo : (c.valor_liquido || 0);
-        const heNoturno = (c.valor_hora_extra || 0) + (c.valor_adicional_not || 0);
-        const decimoFerias = (c.valor_decimo_terceiro || 0) + (c.valor_ferias || 0) + (c.valor_rescisao || 0);
-        const proventos = c.valor_holerite || (fixo + heNoturno + (c.outros_ajustes || 0));
-        
-        const inssIrrf = (c.inss_empregado || 0) + (c.irrf_empregado || 0);
-        const descVt = (c as any).desconto_vt_6 || 0;
-        const faltasConsig = (c.valor_faltas || 0) + (c.valor_consignado || 0) + (c.valor_pensao_alimenticia || 0);
-        const totalDesc = c.valor_descontos || (inssIrrf + descVt + faltasConsig);
-        const liqFolha = Math.max(0, proventos - totalDesc);
-
-        const adiant = c.valor_adiantamento || 0;
-        const ben = (c.valor_vt || 0) + (c.valor_vr || 0) + (c.valor_cesta || 0) + (c.valor_bonus || 0) + (c.valor_ajuda_custo || 0);
-        const totalPago = r.realTotal;
-
-        html += `
-          <tr>
-            <td style="font-weight: 700;">${c.competencia.slice(2, 7)}</td>
-            <td style="font-weight: 700;">
-              ${r.name}
-              ${r.emp?.document_id ? `<br/><span style="color: #64748b; font-weight: normal; font-size: 7.5px;">CPF: ${r.emp.document_id}</span>` : ''}
-            </td>
-            <td style="color: #64748b;">${r.emp?.job_role || r.emp?.department || '—'}</td>
-            <td style="text-align: center;"><span class="${r.isCLT ? 'badge-clt' : 'badge-pj'}">${r.isCLT ? 'CLT' : 'PJ'}</span></td>
-            <td class="num">${formatCurrency(fixo)}</td>
-            <td class="num">${heNoturno > 0 ? '+' + formatCurrency(heNoturno) : '—'}</td>
-            <td class="num">${decimoFerias > 0 ? '+' + formatCurrency(decimoFerias) : '—'}</td>
-            <td class="num" style="background: #f8fafc; font-weight: 800;">${formatCurrency(proventos)}</td>
-            <td class="num" style="color: #e11d48;">${inssIrrf > 0 ? '-' + formatCurrency(inssIrrf) : '—'}</td>
-            <td class="num" style="color: #e11d48;">${descVt > 0 ? '-' + formatCurrency(descVt) : '—'}</td>
-            <td class="num" style="color: #e11d48;">${faltasConsig > 0 ? '-' + formatCurrency(faltasConsig) : '—'}</td>
-            <td class="num" style="color: #e11d48; font-weight: 800;">${totalDesc > 0 ? '-' + formatCurrency(totalDesc) : '—'}</td>
-            <td class="num" style="font-weight: 800; background: #f8fafc;">${formatCurrency(liqFolha)}</td>
-            <td class="num" style="color: #2563eb;">${adiant > 0 ? '+' + formatCurrency(adiant) : '—'}</td>
-            <td class="num" style="color: #059669;">${ben > 0 ? '+' + formatCurrency(ben) : '—'}</td>
-            <td class="num" style="color: #047857; font-weight: 900; background: #ecfdf5;">${formatCurrency(totalPago)}</td>
-          </tr>
-        `;
-      });
-
-      html += `
-          <tr class="total-row">
-            <td colspan="4" style="text-transform: uppercase;">Totais Auditados</td>
-            <td class="num">${formatCurrency(totalSalarioFixo)}</td>
-            <td class="num">${formatCurrency(totalHorasExtras)}</td>
-            <td class="num">${formatCurrency(totalDecimoFerias)}</td>
-            <td class="num" style="background: #e2e8f0;">${formatCurrency(totalSalarioFixo + totalHorasExtras + totalDecimoFerias)}</td>
-            <td class="num" colspan="3" style="text-align: center; color: #64748b;">Deduções da Folha</td>
-            <td class="num" style="color: #e11d48;">-${formatCurrency(totalDescontos)}</td>
-            <td class="num" style="background: #e2e8f0;">${formatCurrency((totalSalarioFixo + totalHorasExtras + totalDecimoFerias) - totalDescontos)}</td>
-            <td class="num" style="color: #2563eb;">+${formatCurrency(totalAdiantamento)}</td>
-            <td class="num" style="color: #059669;">+${formatCurrency(totalBeneficios)}</td>
-            <td class="num" style="color: #047857; background: #d1fae5;">${formatCurrency(totalRealDesembolsado)}</td>
-          </tr>
-        </tbody>
-        </table>
-      `;
-    }
-
-    html += `
-        <div class="signatures">
-          <div>
-            <div class="sig-line"></div>
-            <div class="sig-label">Departamento Pessoal (DP)</div>
-          </div>
-          <div>
-            <div class="sig-line"></div>
-            <div class="sig-label">Controladoria / Auditoria</div>
-          </div>
-          <div>
-            <div class="sig-line"></div>
-            <div class="sig-label">Diretoria Executiva / Financeiro</div>
-          </div>
-        </div>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 300);
-          };
-        </script>
-      </body>
-      </html>
-    `;
 
     printWindow.document.open();
     printWindow.document.write(html);
@@ -2434,10 +2070,10 @@ export function CompetenciasCostsListModal({
           />
         )}
 
-        {/* MODAL DE ESCOLHA DO RELATÓRIO PDF (SINTÉTICO OU ANALÍTICO) */}
+        {/* MODAL DE ESCOLHA DO RELATÓRIO PDF (ANALÍTICO 10 COLUNAS OU SINTÉTICO) */}
         {isPdfModalOpen && (
           <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-4 animate-in zoom-in-95">
               <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2.5">
                   <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
@@ -2451,67 +2087,72 @@ export function CompetenciasCostsListModal({
                 <button
                   type="button"
                   onClick={() => setIsPdfModalOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                  aria-label="Fechar modal de emissão de relatório PDF"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   <X size={18} />
                 </button>
               </div>
 
               <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
                   Selecione o Modelo de Relatório:
-                </label>
+                </span>
 
-                {/* OPÇÃO 1: SINTÉTICO */}
-                <div
-                  onClick={() => setPdfReportType('sintetico')}
-                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
-                    pdfReportType === 'sintetico'
-                      ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20'
-                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
-                      1. Relatório Sintético
-                    </span>
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 uppercase">
-                      Diretoria / Executivo
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Visão consolidada em retrato (Portrait) com KPIs, totais de salário, adiantamento, benefícios e total real desembolsado por colaborador.
-                  </p>
-                </div>
-
-                {/* OPÇÃO 2: ANALÍTICO */}
-                <div
+                {/* OPÇÃO 1: ANALÍTICO 10 COLUNAS (RECOMENDADO) */}
+                <button
+                  type="button"
                   onClick={() => setPdfReportType('analitico')}
-                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
+                  aria-pressed={pdfReportType === 'analitico'}
+                  className={`w-full text-left p-3.5 min-h-[44px] rounded-2xl border-2 cursor-pointer transition-all ${
                     pdfReportType === 'analitico'
                       ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20'
                       : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
-                      2. Relatório Analítico
+                      1. Relatório Analítico (10 Colunas)
                     </span>
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 uppercase">
-                      DP / Contabilidade
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 uppercase">
+                      Espelho da Tela • Paisagem
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Abertura contábil completa em paisagem (Landscape) com todas as rubricas: horas extras, adicional noturno, férias, 13º, INSS, IRRF, desc. VT 6%, faltas, consignados, líquido de folha, adiantamento e benefícios.
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Mesma quebra analítica da tela e da ingestão em A4 Paisagem com os 10 totalizadores e colunas: Proventos, + Outros, + VT, + VR/Cesta, + Bônus, + Premiação, = Subtotal, (-) Desc. Folha, (+) Adiantamento e = Líquido.
                   </p>
-                </div>
+                </button>
+
+                {/* OPÇÃO 2: SINTÉTICO */}
+                <button
+                  type="button"
+                  onClick={() => setPdfReportType('sintetico')}
+                  aria-pressed={pdfReportType === 'sintetico'}
+                  className={`w-full text-left p-3.5 min-h-[44px] rounded-2xl border-2 cursor-pointer transition-all ${
+                    pdfReportType === 'sintetico'
+                      ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
+                      2. Relatório Sintético (Resumido)
+                    </span>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 uppercase">
+                      Diretoria • Retrato
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Visão executiva consolidada em A4 Retrato alinhada à mesma equação: Proventos, Benefícios agrupados (VT, VR/Cesta, Bônus e Premiação), = Subtotal, (-) Desc. Folha, (+) Adiantamento e = Líquido.
+                  </p>
+                </button>
               </div>
 
-              <div className="pt-2 flex items-center gap-2">
+              <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <button
                   type="button"
                   onClick={() => handleGeneratePdf(pdfReportType)}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5"
+                  className="flex-1 min-h-[44px] py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5"
                 >
                   <Printer size={15} />
                   <span>Gerar e Imprimir PDF</span>
@@ -2519,7 +2160,7 @@ export function CompetenciasCostsListModal({
                 <button
                   type="button"
                   onClick={() => setIsPdfModalOpen(false)}
-                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all"
+                  className="min-h-[44px] px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all"
                 >
                   Cancelar
                 </button>
