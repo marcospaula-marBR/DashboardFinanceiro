@@ -222,7 +222,22 @@ export function calculateRowFinancials(cost: Partial<MonthlyCost>, isCLT: boolea
   }
 }
 
+const _competenciaCache = new Map<string, { fetchedAt: number; data: MonthlyCost[] }>();
+const COMPETENCIA_CACHE_TTL_MS = 60_000;
+
 export const PeopleHRService = {
+  invalidateCostsCache(competencia?: string): void {
+    if (!competencia) {
+      _competenciaCache.clear();
+      return;
+    }
+    const prefix = this.normalizeCompetenciaDate(competencia);
+    for (const key of _competenciaCache.keys()) {
+      if (key.startsWith(prefix)) {
+        _competenciaCache.delete(key);
+      }
+    }
+  },
   async getEmploymentContracts(employeeId: string): Promise<EmploymentContract[]> {
     const { data, error } = await supabase
       .from('employment_contracts')
@@ -938,6 +953,7 @@ export const PeopleHRService = {
       .select()
       .single();
     if (error) throw error;
+    this.invalidateCostsCache(cleanPayload.competencia);
     return data;
   },
 
@@ -952,10 +968,40 @@ export const PeopleHRService = {
       }
     }
 
-    // 2. Salva sequencialmente com trava de unicidade
-    for (const item of uniqueMap.values()) {
+    const dedupedItems = Array.from(uniqueMap.values());
+    if (dedupedItems.length === 0) return;
+
+    // 2. Tenta RPC atômica PostgreSQL (1 única transação < 300ms — Fase 3)
+    try {
+      const { error: rpcError } = await supabase.rpc('upsert_people_monthly_costs_batch', {
+        p_records: dedupedItems,
+      });
+
+      if (!rpcError) {
+        this.invalidateCostsCache();
+        return;
+      }
+
+      const code = String((rpcError as { code?: string })?.code || '');
+      const msg = String(rpcError.message || '').toLowerCase();
+      const isRpcMissing =
+        code === 'PGRST202' ||
+        code === '42883' ||
+        msg.includes('could not find the function') ||
+        msg.includes('does not exist');
+
+      if (!isRpcMissing) {
+        console.warn('[PeopleHRService] RPC batch retornou erro, acionando fallback seguro:', rpcError.message);
+      }
+    } catch {
+      // Fallback silencioso para upsert sequencial quando a migração SQL da Fase 3 ainda não foi aplicada
+    }
+
+    // 3. Fallback determinístico sequencial com trava de unicidade
+    for (const item of dedupedItems) {
       await this.upsertMonthlyCost(item);
     }
+    this.invalidateCostsCache();
   },
 
   async updateMonthlyCost(costId: string, payload: Partial<MonthlyCost>): Promise<void> {
@@ -965,6 +1011,7 @@ export const PeopleHRService = {
       .update(cleanPayload)
       .eq('id', costId);
     if (error) throw error;
+    this.invalidateCostsCache(cleanPayload.competencia);
   },
 
   async deleteMonthlyCost(costId: string): Promise<void> {
@@ -973,6 +1020,7 @@ export const PeopleHRService = {
       .delete()
       .eq('id', costId);
     if (error) throw error;
+    this.invalidateCostsCache();
   },
 
   async deleteMonthlyCostsByPeriod(employeeId?: string, startComp?: string, endComp?: string): Promise<number> {
@@ -990,18 +1038,30 @@ export const PeopleHRService = {
 
     const { data, count, error } = await query.select();
     if (error) throw error;
+    this.invalidateCostsCache();
     return count !== null && count !== undefined ? count : (data ? data.length : 0);
   },
 
   async getMonthlyCostsByCompetencia(competencia: string, vinculoFilter?: 'ALL' | 'CLT' | 'MEI'): Promise<MonthlyCost[]> {
     const normalizedComp = this.normalizeCompetenciaDate(competencia);
+    const cacheKey = `${normalizedComp}__${vinculoFilter || 'ALL'}`;
+    const cached = _competenciaCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < COMPETENCIA_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
     let query = supabase.from('people_monthly_costs').select('*').eq('competencia', normalizedComp);
     if (vinculoFilter && vinculoFilter !== 'ALL') {
       query = query.eq('vinculo_tipo', vinculoFilter);
     }
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    const rows = (data || []).map(row => ({
+      ...row,
+      ...(row.verbas_adicionais || {}),
+    }));
+    _competenciaCache.set(cacheKey, { fetchedAt: Date.now(), data: rows });
+    return rows;
   },
 
   async replicateCompetenciaBatch(originCompetencia: string, targetCompetencia: string, vinculoFilter?: 'ALL' | 'CLT' | 'MEI'): Promise<{ count: number }> {

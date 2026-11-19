@@ -20,6 +20,7 @@ import { BprCockpitModal } from "@/components/people/BprCockpitModal";
 import { CompetenciasCostsListModal } from "@/components/people/CompetenciasCostsListModal";
 import { ProfileExportModal } from "@/components/people/ProfileExportModal";
 import { PeopleHRService } from "@/services/people-hr.service";
+import { buildCompactExecutiveContext } from "@/services/people-costs-analytics.service";
 import { PeopleService } from "@/services/people.service";
 import { PjAdditiveService } from "@/services/pj-additive.service";
 import { BprService } from "@/services/bpr.service";
@@ -219,14 +220,7 @@ export default function PeoplePage() {
             remuneration_commission: showValues ? e.remuneration_commission : '••••••',
             balance: showValues ? e.balance : '••••••'
           })),
-          monthlyCostsSummary: monthlyCosts.slice(0, 100).map(c => ({
-            competencia: c.competencia,
-            vinculo_tipo: c.vinculo_tipo,
-            valor_liquido: showValues ? c.valor_liquido : '••••••',
-            valor_fixo: showValues ? c.valor_fixo : '••••••',
-            valor_bonus: showValues ? c.valor_bonus : '••••••',
-            valor_comissao: showValues ? c.valor_comissao : '••••••'
-          }))
+          monthlyCostsSummary: buildCompactExecutiveContext(monthlyCosts, employees, showValues)
         };
       };
     }

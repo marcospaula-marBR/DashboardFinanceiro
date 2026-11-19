@@ -4,7 +4,7 @@ import {
   X, Calendar, Filter, Search, Trash2, Edit3, Loader2, 
   CheckCircle2, AlertTriangle, ArrowUpDown, DollarSign, Wallet, 
   Users, ChevronRight, ChevronDown, FileSpreadsheet, RotateCcw, Building2, Briefcase, Download, Upload,
-  Printer, FileText, CheckSquare, Square, Check, SlidersHorizontal, Eye, Lock, Layers, Save, Coins, Receipt, Info
+  Printer, FileText, CheckSquare, Square, Check, SlidersHorizontal, Eye, Lock, Layers, Save, Coins, Receipt, Info, Sparkles
 } from 'lucide-react';
 import { Employee, MonthlyCost } from '@/types/loans';
 import { PeopleHRService, calculateRowFinancials, RowFinancials } from '@/services/people-hr.service';
@@ -18,6 +18,7 @@ import {
 } from '@/services/competencias-costs-pdf.service';
 import { buildCompetenciasAnomalyMap } from '@/services/people-cost-anomaly.service';
 import { CostImportStagingModal } from '@/components/people/CostImportStagingModal';
+import { PeopleCostsCopilotModal } from '@/components/people/PeopleCostsCopilotModal';
 
 interface CompetenciasCostsListModalProps {
   isOpen: boolean;
@@ -89,6 +90,7 @@ export function CompetenciasCostsListModal({
   const [sortField, setSortField] = useState<'competencia' | 'name' | 'total'>('competencia');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isCopilotModalOpen, setIsCopilotModalOpen] = useState(false);
 
   // Estados de Seleção em Lote (Checkboxes para Extra-Folha)
   const [selectedCostIds, setSelectedCostIds] = useState<Set<string>>(new Set());
@@ -973,7 +975,16 @@ export function CompetenciasCostsListModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsCopilotModalOpen(true)}
+              className="px-3 py-1.5 text-xs font-bold text-teal-800 dark:text-teal-200 bg-teal-50 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-800 hover:bg-teal-100 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs active:scale-95"
+              title="Consultar toda a série histórica de custos via Copiloto Determinístico (Tool Calling)"
+            >
+              <Sparkles size={14} className="text-teal-600 dark:text-teal-400" />
+              <span>Copiloto Custos</span>
+            </button>
             <button
               type="button"
               onClick={() => setIsImportModalOpen(true)}
@@ -3785,6 +3796,12 @@ export function CompetenciasCostsListModal({
             </div>
           </div>
         )}
+
+        {/* COPILOTO EXECUTIVO DE CUSTOS (TOOL CALLING DETERMINÍSTICO SOBRE 100% DO HISTÓRICO) */}
+        <PeopleCostsCopilotModal
+          isOpen={isCopilotModalOpen}
+          onClose={() => setIsCopilotModalOpen(false)}
+        />
 
       </div>
     </div>

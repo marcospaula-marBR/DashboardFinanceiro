@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node test/clara-omie.test.cjs && node test/dre-encoding-sanitization.test.cjs && node test/dre-caixa-cards-reconciliation.test.cjs && node test/bpr-scenarios-and-pdf.test.cjs && node test/competencias-costs-pdf.test.cjs && node test/people-headcount-report.test.cjs && node test/people-cost-anomaly.test.cjs && node test/people-ingestion-parser.test.cjs && node test/people-omie-pj-reconciliation.test.cjs"
+    "test": "node test/clara-omie.test.cjs && node test/dre-encoding-sanitization.test.cjs && node test/dre-caixa-cards-reconciliation.test.cjs && node test/bpr-scenarios-and-pdf.test.cjs && node test/competencias-costs-pdf.test.cjs && node test/people-headcount-report.test.cjs && node test/people-cost-anomaly.test.cjs && node test/people-ingestion-parser.test.cjs && node test/people-omie-pj-reconciliation.test.cjs && node test/people-costs-analytics.test.cjs"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",
