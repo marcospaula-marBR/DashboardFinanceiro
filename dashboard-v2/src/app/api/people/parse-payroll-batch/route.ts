@@ -1,10 +1,369 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI, Type, type Schema } from '@google/genai';
+// @ts-expect-error pdf-parse internal module has no bundled types
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
+import {
+  detectXmlDocumentType,
+  normalizeDetectedCompany,
+  parseBenefitsPdfText,
+  parseDominioPayrollText,
+  parseEsocialS1200Xml,
+  parseNfseXml,
+  sanitizeParsedPayrollRecords,
+} from '@/services/people-ingestion-parser.service';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+export const dynamic = 'force-dynamic';
+
+const RUBRICA_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    codigo: { type: Type.STRING },
+    descricao: { type: Type.STRING },
+    valor: { type: Type.NUMBER },
+  },
+  required: ['codigo', 'descricao', 'valor'],
+};
+
+const PAYROLL_RESPONSE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    competencia: { type: Type.STRING },
+    empresa: { type: Type.STRING },
+    records: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          matricula: { type: Type.STRING },
+          name: { type: Type.STRING },
+          cpf: { type: Type.STRING },
+          cargo: { type: Type.STRING },
+          empresa: { type: Type.STRING },
+          situation: { type: Type.STRING },
+          admission_date: { type: Type.STRING },
+          valor_fixo: { type: Type.NUMBER },
+          valor_hora_extra: { type: Type.NUMBER },
+          valor_adicional_not: { type: Type.NUMBER },
+          salario_familia: { type: Type.NUMBER },
+          valor_ferias: { type: Type.NUMBER },
+          valor_decimo_terceiro: { type: Type.NUMBER },
+          valor_rescisao: { type: Type.NUMBER },
+          valor_outros_recebidos: { type: Type.NUMBER },
+          valor_holerite: { type: Type.NUMBER },
+          inss_empregado: { type: Type.NUMBER },
+          irrf_empregado: { type: Type.NUMBER },
+          desconto_vt_6: { type: Type.NUMBER },
+          desconto_adiantamento_folha: { type: Type.NUMBER },
+          valor_adiantamento: { type: Type.NUMBER },
+          valor_faltas: { type: Type.NUMBER },
+          dias_faltas: { type: Type.NUMBER },
+          valor_consignado: { type: Type.NUMBER },
+          valor_pensao_alimenticia: { type: Type.NUMBER },
+          banco_horas: { type: Type.NUMBER },
+          valor_descontos: { type: Type.NUMBER },
+          valor_folha_liquido: { type: Type.NUMBER },
+          valor_fgts: { type: Type.NUMBER },
+          valor_vt: { type: Type.NUMBER },
+          valor_vr: { type: Type.NUMBER },
+          valor_cesta: { type: Type.NUMBER },
+          valor_bonus: { type: Type.NUMBER },
+          valor_ajuda_custo: { type: Type.NUMBER },
+          rubricas_proventos: { type: Type.ARRAY, items: RUBRICA_SCHEMA },
+          rubricas_descontos: { type: Type.ARRAY, items: RUBRICA_SCHEMA },
+          observacao: { type: Type.STRING },
+        },
+        required: ['name', 'valor_holerite', 'valor_descontos'],
+      },
+    },
+  },
+  required: ['competencia', 'records'],
+};
+
+const BENEFITS_RESPONSE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    competencia: { type: Type.STRING },
+    empresa: { type: Type.STRING },
+    records: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          matricula: { type: Type.STRING },
+          name: { type: Type.STRING },
+          cpf: { type: Type.STRING },
+          cargo: { type: Type.STRING },
+          valor: { type: Type.NUMBER },
+          valor_vt: { type: Type.NUMBER },
+          valor_vr: { type: Type.NUMBER },
+          valor_cesta: { type: Type.NUMBER },
+          valor_bonus: { type: Type.NUMBER },
+          valor_premiacao: { type: Type.NUMBER },
+          valor_ajuda_custo: { type: Type.NUMBER },
+          observacao: { type: Type.STRING },
+        },
+        required: ['name', 'valor'],
+      },
+    },
+  },
+  required: ['competencia', 'records'],
+};
+
+const ADVANCE_RESPONSE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    competencia: { type: Type.STRING },
+    empresa: { type: Type.STRING },
+    records: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          matricula: { type: Type.STRING },
+          name: { type: Type.STRING },
+          cpf: { type: Type.STRING },
+          cargo: { type: Type.STRING },
+          valor_adiantamento: { type: Type.NUMBER },
+          observacao: { type: Type.STRING },
+        },
+        required: ['name', 'valor_adiantamento'],
+      },
+    },
+  },
+  required: ['competencia', 'records'],
+};
+
+const BONUS_RESPONSE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    competencia: { type: Type.STRING },
+    empresa: { type: Type.STRING },
+    records: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          matricula: { type: Type.STRING },
+          name: { type: Type.STRING },
+          cpf: { type: Type.STRING },
+          cargo: { type: Type.STRING },
+          valor_bonus: { type: Type.NUMBER },
+          valor_premiacao: { type: Type.NUMBER },
+          observacao: { type: Type.STRING },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  required: ['competencia', 'records'],
+};
+
+function buildPromptForMode(importType: string): { prompt: string; schema: Schema } {
+  const isAdvanceMode = importType === 'advance';
+  const isBenefitsMode = importType === 'benefits';
+  const isBonusMode = importType === 'bonus' || importType === 'premiacao';
+
+  if (isBonusMode) {
+    return {
+      schema: BONUS_RESPONSE_SCHEMA,
+      prompt: `
+Analise este documento (PDF ou imagem) contendo um Relatório, Demonstrativo, Recibo ou Planilha de Bônus, Bonificação, Premiação, Prêmios e Incentivos de colaboradores.
+1. Identifique "competencia" no formato YYYY-MM-01 (ou "" se ausente) e "empresa" ("DZM", "MarBR" ou "G2").
+2. Extraia cada colaborador em "records" com: name, cpf, matricula, cargo, valor_bonus (metas/bonificação), valor_premiacao (prêmios/campanhas) e observacao.
+Valores estritamente numéricos decimais.`,
+    };
+  }
+
+  if (isAdvanceMode) {
+    return {
+      schema: ADVANCE_RESPONSE_SCHEMA,
+      prompt: `
+Analise este documento (PDF ou imagem) contendo a Folha de Adiantamento Salarial quinzenal.
+1. Identifique "competencia" no formato YYYY-MM-01 (ou "" se ausente) e "empresa" ("DZM", "MarBR" ou "G2").
+2. Extraia cada colaborador em "records" com: name, cpf, matricula, cargo, valor_adiantamento (valor efetivo a receber) e observacao.
+Valores estritamente numéricos decimais.`,
+    };
+  }
+
+  if (isBenefitsMode) {
+    return {
+      schema: BENEFITS_RESPONSE_SCHEMA,
+      prompt: `
+Analise este documento (PDF ou imagem) contendo um Relatório ou Planilha de Benefícios / Pagamentos de Colaboradores (Vale Transporte / VT, Vale Refeição / Alimentação / Cesta Básica, Flash, Sodexo, Alelo, Bônus, Premiação ou Outros).
+1. Identifique "competencia" no formato YYYY-MM-01 (ou "" se ausente) e "empresa" ("DZM", "MarBR" ou "G2").
+2. Extraia RIGOROSAMENTE CADA LINHA individual de colaborador sem pular nenhum nome.
+3. Em "valor", informe sempre o TOTAL FINAL A PAGAR / CREDITADO para aquele colaborador (ex.: coluna TOTAL A PAGAR, VALOR LIQUIDO, TOTAL). Preencha também o campo específico (valor_vt, valor_vr, valor_cesta, valor_bonus, valor_premiacao, valor_ajuda_custo) conforme a natureza do relatório.
+Valores estritamente numéricos decimais.`,
+    };
+  }
+
+  return {
+    schema: PAYROLL_RESPONSE_SCHEMA,
+    prompt: `
+Analise este documento (PDF ou imagem) contendo o Extrato Mensal da folha de pagamento celetista (listagem ou múltiplos holerites).
+REGRAS ESTRITAS:
+0. Empresa Contratante ("empresa"): identifique no cabeçalho e padronize como 'DZM', 'MarBR' ou 'G2' no topo e em cada registro.
+1. Competência ("competencia"): formate obrigatoriamente como 'YYYY-MM-01'.
+2. Proventos: extraia valor_fixo (salário base), valor_hora_extra (com reflexo DSR), valor_adicional_not, salario_familia, valor_ferias, valor_decimo_terceiro, valor_rescisao, valor_outros_recebidos, valor_holerite (TOTAL DE PROVENTOS) e rubricas_proventos.
+3. Descontos: extraia inss_empregado (998), irrf_empregado, desconto_vt_6 (rubrica 48 - ATENÇÃO: rubrica 48 é estritamente DESCONTO; mantenha valor_vt SEMPRE 0.00 na folha mensal), valor_faltas, dias_faltas, valor_consignado, valor_pensao_alimenticia, banco_horas, valor_descontos (TOTAL DE DESCONTOS) e rubricas_descontos.
+4. Adiantamento Salarial em Folha (CRUCIAL): procure exclusivamente pela rubrica 981 ou descrição 'DESC.ADIANT.SALARIAL' / 'Desc. Adiant. Salarial' / 'ADIANTAMENTO SALARIAL' na coluna de descontos (NUNCA adiantamento de férias) e preencha desconto_adiantamento_folha e valor_adiantamento com esse valor (ou 0.00 se ausente).
+5. Líquido e FGTS: preencha valor_folha_liquido (Proventos - Descontos) e valor_fgts (informativo da empresa).
+6. IGNORE bases informativas (Base FGTS, Base INSS, Base IRRF) — elas não são proventos nem descontos.`,
+  };
+}
 
 export async function POST(req: Request) {
+  const startedAt = Date.now();
   try {
+    let mimeType = 'application/pdf';
+    let fileName = '';
+    let buffer: Buffer;
+    let importType = 'payroll';
+    let forceAi = false;
+    const contentType = req.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const body = await req.json();
+      const { fileUrl, type, forceAi: forceAiFlag } = body;
+      if (type) importType = String(type);
+      if (forceAiFlag === true) forceAi = true;
+      if (!fileUrl) {
+        return NextResponse.json({ error: 'Nenhum fileUrl informado.' }, { status: 400 });
+      }
+
+      const fileRes = await fetch(fileUrl);
+      if (!fileRes.ok) {
+        return NextResponse.json(
+          { error: `Falha ao baixar o arquivo do storage (${fileRes.status}).` },
+          { status: 400 }
+        );
+      }
+      const resType = fileRes.headers.get('content-type');
+      if (resType) mimeType = resType;
+      fileName = String(fileUrl).split('/').pop() || '';
+      buffer = Buffer.from(await fileRes.arrayBuffer());
+    } else {
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
+      const typeParam = formData.get('type') as string | null;
+      const forceAiParam = formData.get('forceAi') as string | null;
+      if (typeParam) importType = typeParam;
+      if (forceAiParam === 'true') forceAi = true;
+
+      if (!file) {
+        return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
+      }
+      if (file.type) mimeType = file.type;
+      fileName = file.name || '';
+      buffer = Buffer.from(await file.arrayBuffer());
+    }
+
+    const fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
+    const lowerName = fileName.toLowerCase();
+    const isXmlFile =
+      importType === 'nfse_xml' ||
+      importType === 'esocial_xml' ||
+      lowerName.endsWith('.xml') ||
+      mimeType.includes('xml');
+
+    // ─── CAMADA 1A: PARSER DETERMINÍSTICO XML (NFS-e & eSocial S-1200) (< 20ms, custo zero) ───
+    if (isXmlFile) {
+      const xmlText = buffer.toString('utf8');
+      const detectedXml =
+        importType === 'nfse_xml'
+          ? 'nfse'
+          : importType === 'esocial_xml'
+            ? 'esocial_s1200'
+            : detectXmlDocumentType(xmlText);
+
+      if (detectedXml === 'nfse') {
+        const parsed = parseNfseXml(xmlText);
+        if (!parsed.matched) {
+          return NextResponse.json(
+            { error: parsed.reason || 'XML de NFS-e não reconhecido.' },
+            { status: 422 }
+          );
+        }
+        return NextResponse.json({
+          competencia: parsed.competencia,
+          empresa: parsed.empresa,
+          nfseRecords: parsed.records,
+          records: parsed.records,
+          engine: 'deterministic_xml_nfse',
+          fileHash,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+
+      if (detectedXml === 'esocial_s1200') {
+        const parsed = parseEsocialS1200Xml(xmlText);
+        if (!parsed.matched) {
+          return NextResponse.json(
+            { error: parsed.reason || 'XML eSocial S-1200 não reconhecido.' },
+            { status: 422 }
+          );
+        }
+        return NextResponse.json({
+          competencia: parsed.competencia,
+          empresa: parsed.empresa,
+          records: parsed.records,
+          engine: 'deterministic_xml_esocial',
+          fileHash,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+
+      return NextResponse.json(
+        { error: 'Arquivo XML não identificado como NFS-e (ABRASF/Nacional) nem eSocial S-1200.' },
+        { status: 422 }
+      );
+    }
+
+    // ─── CAMADA 1B: PARSER DETERMINÍSTICO DE PDF VETORIAL (< 50ms, custo zero) ───
+    let deterministicFallbackReason = '';
+    const isPdfFile = !mimeType.includes('image') && (mimeType.includes('pdf') || lowerName.endsWith('.pdf'));
+
+    if (!forceAi && isPdfFile && (importType === 'payroll' || importType === 'benefits')) {
+      try {
+        const parsedPdf = await pdfParse(buffer);
+        const extractedText = String(parsedPdf?.text || '');
+
+        if (importType === 'payroll') {
+          const detPayroll = parseDominioPayrollText(extractedText);
+          if (detPayroll.matched && detPayroll.records.length > 0) {
+            return NextResponse.json({
+              competencia: detPayroll.competencia,
+              empresa: detPayroll.empresa,
+              records: detPayroll.records,
+              engine: 'deterministic_pdf',
+              fileHash,
+              durationMs: Date.now() - startedAt,
+              totalCheck: detPayroll.totalCheck,
+            });
+          }
+          deterministicFallbackReason = detPayroll.reason || 'Layout não determinístico.';
+        } else if (importType === 'benefits') {
+          const detBenefits = parseBenefitsPdfText(extractedText);
+          if (detBenefits.matched && detBenefits.records.length > 0) {
+            return NextResponse.json({
+              competencia: detBenefits.competencia,
+              empresa: detBenefits.empresa,
+              records: detBenefits.records,
+              engine: 'deterministic_pdf',
+              fileHash,
+              durationMs: Date.now() - startedAt,
+              totalCheck: detBenefits.totalCheck,
+            });
+          }
+          deterministicFallbackReason = detBenefits.reason || 'Layout de benefícios não determinístico.';
+        }
+      } catch (pdfErr) {
+        deterministicFallbackReason = `Fallback pdf-parse: ${pdfErr instanceof Error ? pdfErr.message : String(pdfErr)}`;
+      }
+    }
+
+    // ─── CAMADA 2: @google/genai (Gemini 2.5 Flash + responseSchema estrito + temperature: 0) ───
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
         { error: 'A chave GEMINI_API_KEY não está configurada no servidor.' },
@@ -12,323 +371,73 @@ export async function POST(req: Request) {
       );
     }
 
-    let mimeType = 'application/pdf';
-    let base64Data = '';
-    let importType = 'payroll';
-    const contentType = req.headers.get('content-type') || '';
-    
-    if (contentType.includes('application/json')) {
-      const body = await req.json();
-      const { fileUrl, type } = body;
-      if (type) importType = type;
-      if (!fileUrl) {
-        return NextResponse.json({ error: 'Nenhum fileUrl informado.' }, { status: 400 });
-      }
-      
-      const fileRes = await fetch(fileUrl);
-      if (!fileRes.ok) {
-        return NextResponse.json(
-          { error: `Falha ao baixar o arquivo do storage (${fileRes.status}).` }, 
-          { status: 400 }
-        );
-      }
-      
-      const resType = fileRes.headers.get('content-type');
-      if (resType) mimeType = resType;
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const { prompt, schema } = buildPromptForMode(importType);
+    const base64Data = buffer.toString('base64');
 
-      const bytes = await fileRes.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      base64Data = buffer.toString('base64');
-    } else {
-      const formData = await req.formData();
-      const file = formData.get('file') as File | null;
-      const typeParam = formData.get('type') as string | null;
-      if (typeParam) importType = typeParam;
-
-      if (!file) {
-        return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
-      }
-
-      if (file.type) {
-        mimeType = file.type;
-      }
-
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      base64Data = buffer.toString('base64');
-    }
-
-    const model = genAI.getGenerativeModel({ 
+    const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      generationConfig: { responseMimeType: "application/json" }
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType.includes('image') ? mimeType : 'application/pdf',
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      ],
+      config: {
+        temperature: 0,
+        responseMimeType: 'application/json',
+        responseSchema: schema,
+      },
     });
 
-    const isAdvanceMode = importType === 'advance';
-    const isBenefitsMode = importType === 'benefits';
-    const isBonusMode = importType === 'bonus' || importType === 'premiacao';
+    const textResponse = response.text || '';
 
-    let prompt = "";
-
-    if (isBonusMode) {
-      prompt = `
-Analise este documento (PDF ou imagem) contendo um Relatório, Demonstrativo, Recibo ou Planilha de Bônus, Bonificação, Premiação, Prêmios e Incentivos de colaboradores.
-
-Instruções de Extração:
-1. **Competência**: Identifique a competência (mês/ano) de referência no cabeçalho ou datas do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho/2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01'). Se não encontrar, retorne string vazia "".
-2. **Colaboradores**: Extraia cada linha ou registro individual de colaborador contido no relatório.
-3. **Valores de Bônus e Premiação**:
-   - "name": Nome completo do colaborador.
-   - "cpf": CPF do colaborador (formatado 000.000.000-00 ou números puros).
-   - "matricula": Matrícula ou código se houver.
-   - "cargo": Cargo se houver.
-   - "valor_bonus": Valor nominal de bônus ou bonificação de metas/performance (ex: 1500.00).
-   - "valor_premiacao": Valor nominal de premiação, incentivo comercial, prêmio de campanha ou ajuda de custo especial (ex: 500.00).
-   - "observacao": Descrição ou identificador (ex: 'Bônus de Metas', 'Premiação por Desempenho').
-
-Retorne obrigatoriamente um objeto JSON com o seguinte formato:
-{
-  "competencia": "YYYY-MM-01",
-  "empresa": "DZM", // "DZM", "MarBR" ou "G2"
-  "records": [
-    {
-      "matricula": "1",
-      "name": "Nome Completo do Colaborador",
-      "cpf": "000.000.000-00",
-      "cargo": "Cargo",
-      "valor_bonus": 0.00,
-      "valor_premiacao": 0.00,
-      "observacao": "Bônus / Premiação"
-    }
-  ]
-}
-
-Valores monetários devem ser estritamente numéricos decimais (ex: 1500.00, 350.50).
-Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
-`;
-    } else if (isAdvanceMode) {
-      prompt = `
-Analise este documento (PDF ou imagem) contendo a Folha de Adiantamento Salarial (Relação de Adiantamento Quinzenal, Folha de Vales ou Recibos de Adiantamento Salarial de colaboradores).
-
-Instruções de Extração:
-1. **Competência**: Identifique a competência (mês/ano) de referência no cabeçalho ou datas do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho/2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01'). Se não encontrar, retorne string vazia "".
-2. **Colaboradores**: Extraia cada linha ou recibo individual de colaborador contido na relação de adiantamento salarial.
-3. **Valores do Adiantamento**:
-   - "name": Nome completo do colaborador.
-   - "cpf": CPF do colaborador (formatado 000.000.000-00 ou números puros).
-   - "matricula": Matrícula ou código se houver.
-   - "cargo": Cargo se houver.
-   - "valor_adiantamento": Valor nominal do adiantamento salarial a receber / crédito pago ao colaborador (ex: 1767.26, 800.00). Caso haja valor bruto e líquido do adiantamento, priorize o valor efetivo a receber.
-   - "observacao": Descrição ou identificador (ex: 'Folha de Adiantamento Quinzenal').
-
-Retorne obrigatoriamente um objeto JSON com o seguinte formato:
-{
-  "competencia": "YYYY-MM-01",
-  "records": [
-    {
-      "matricula": "1",
-      "name": "Nome Completo do Colaborador",
-      "cpf": "000.000.000-00",
-      "cargo": "Cargo",
-      "valor_adiantamento": 0.00,
-      "observacao": "Adiantamento Salarial"
-    }
-  ]
-}
-
-Valores monetários devem ser estritamente numéricos decimais (ex: 1767.26, 500.00).
-Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
-`;
-    } else if (isBenefitsMode) {
-      prompt = `
-Analise este documento (PDF ou imagem) contendo um Relatório, Demonstrativo, Recibo ou Planilha de Benefícios, Pagamentos ou Valores de Colaboradores (Vale Transporte / VT, Vale Refeição / Alimentação / Cesta, Flash, Sodexo, Alelo, VR, Bonificação, Premiação, Bônus, Ajuda de Custo).
-
-Instruções de Extração:
-1. **Competência**: Identifique a competência (mês/ano) de referência no cabeçalho ou datas do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho/2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01'). Se não encontrar, retorne string vazia "".
-2. **Colaboradores**: Extraia RIGOROSAMENTE CADA LINHA ou registro individual de colaborador contido no relatório (sem pular nenhum colaborador da lista).
-3. **Valores dos Benefícios**:
-   - "name": Nome completo do colaborador exatamente como grafado no documento (ex: 'Flavio Pereira da Silva', 'Bruno Viana de Souza Chaves', 'Andrea Aparecida de Oliveira Ferreira').
-   - "cpf": CPF do colaborador (formatado 000.000.000-00 ou números puros se constar).
-   - "matricula": Matrícula ou código se houver.
-   - "cargo": Cargo se houver.
-   - "valor": O valor monetário total a pagar, creditado ou concedido ao colaborador (ex: colunas 'TOTAL A PAGAR', 'VALOR LIQUIDO', 'VALOR TOTAL', 'VALOR', 'CREDITO', 'TOTAL'). Caso haja múltiplas colunas de valor diário ou sábado, capture a coluna do TOTAL GERAL/FINAL A PAGAR para aquele colaborador (ex: 491.40, 288.50, 421.60, etc.).
-   - "valor_vt": Caso seja relatório de Vale Transporte (VT), preencha também com o valor do VT.
-   - "valor_vr": Valor de Vale Refeição / Alimentação se especificado.
-   - "valor_cesta": Valor de Cesta Básica se especificado.
-   - "valor_bonus": Valor de Bonificação ou Bônus se especificado.
-   - "valor_premiacao": Valor de Premiação ou Incentivo se especificado.
-   - "valor_ajuda_custo": Ajuda de custo, home-office ou conectividade.
-   - "observacao": Descrição ou categoria do benefício (ex: 'Planilha VT', 'Recarga VT Sodexo', 'Premiação', 'VR / Cesta').
-
-Retorne obrigatoriamente um objeto JSON com o seguinte formato:
-{
-  "competencia": "YYYY-MM-01",
-  "records": [
-    {
-      "matricula": "1",
-      "name": "Nome Completo do Colaborador",
-      "cpf": "000.000.000-00",
-      "cargo": "Cargo",
-      "valor": 0.00,
-      "valor_vt": 0.00,
-      "valor_vr": 0.00,
-      "valor_cesta": 0.00,
-      "valor_bonus": 0.00,
-      "valor_premiacao": 0.00,
-      "valor_ajuda_custo": 0.00,
-      "observacao": "Benefício"
-    }
-  ]
-}
-
-Valores monetários devem ser estritamente numéricos decimais (ex: 273.00, 421.60, 500.00).
-Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
-`;
-    } else {
-      prompt = `
-Analise este documento (PDF ou imagem) contendo o Extrato Mensal da folha de pagamento de múltiplos colaboradores (listagem celetista ou múltiplos recibos).
-
-Instruções de Extração:
-0. **Empresa Contratante**: Identifique a empresa empregadora / contratante no cabeçalho do documento (ex: 'D.Z.M. LTDA', 'DZM', 'MAR BRASIL', 'MARBR', 'G2', etc.) e retorne obrigatoriamente como 'DZM', 'MarBR' ou 'G2' no campo "empresa" no topo do JSON e no campo "empresa" de cada registro.
-1. **Competência**: Identifique a competência (mês/ano) da folha no cabeçalho do documento (ex: '07/2026', 'Competência: 07/2026' ou 'Julho de 2026') e formate obrigatoriamente como 'YYYY-MM-01' (ex: '2026-07-01').
-2. **Colaboradores**: Extraia os dados individuais de cada colaborador CLT celetista identificado no documento (identificado por 'Empr.:', 'Nome', 'CPF', etc.).
-3. **Verbas de Provento (Receita Bruta do Colaborador - uma por uma)**:
-   - Salário base contratual no campo "valor_fixo".
-   - Horas Extras ('150 HORAS EXTRAS 50%', 100%, etc.) somando com reflexo DSR ('8125 REFLEXO HORAS EXTRAS DSR') no campo "valor_hora_extra".
-   - Adicional Noturno e reflexos no campo "valor_adicional_not".
-   - Salário Família no campo "salario_familia" (ex: rubrica 995 SALARIO FAMILIA).
-   - Férias gozadas / proporcionais + 1/3 Constitucional no campo "valor_ferias".
-   - 13º Salário (1ª/2ª parcela ou integral) no campo "valor_decimo_terceiro".
-   - Verbas Rescisórias no campo "valor_rescisao".
-   - Demais proventos no campo "valor_outros_recebidos".
-   - **Total de Proventos (Receita Bruta)** no campo "valor_holerite" (soma exata de todos os proventos da folha, ex: '3.037,67').
-   - Extraia a lista detalhada de cada provento em "rubricas_proventos": [{"codigo": "1", "descricao": "SALARIO BASE", "valor": 2211.68}, ...].
-
-4. **Verbas de Desconto da Folha (uma por uma)**:
-   - INSS descontado no campo "inss_empregado" (rubrica 998 I.N.S.S.).
-   - IRRF descontado no campo "irrf_empregado".
-   - Desconto de Vale Transporte 6% no campo "desconto_vt_6" (rubrica 48 VALE TRANSPORTE). *ATENÇÃO RIGOROSA*: A rubrica 48 é estritamente um DESCONTO (de até 6%) soportado pelo colaborador e já deve ser somada em "valor_descontos". NUNCA a capture como crédito ou provento em "valor_vt". Na folha mensal oficial, o campo "valor_vt" deve permanecer SEMPRE 0.00, pois benefícios/recargas de VT são geridos à parte.
-   - Desconto de Faltas e DSR no campo "valor_faltas", com quantitativo em "dias_faltas".
-   - Empréstimo Consignado no campo "valor_consignado".
-   - Pensão Alimentícia no campo "valor_pensao_alimenticia".
-   - Desconto de Banco de Horas em "banco_horas" (em horas decimais).
-   - **Desconto de Adiantamento Salarial em Folha (CRUCIAL)**: Procure na coluna de descontos por rubricas de adiantamento salarial da quinzena (dia 20).
-     Capture qualquer rubrica cujo código seja '981' ou cuja descrição mencione adiantamento salarial (ex: 'DESC.ADIANT.SALARIAL', 'DESC. ADIANT. SALARIAL', 'DESC ADIANT SALARIAL', 'Desc. Adiant. Salarial', 'DESC. ADIANTAMENTO', 'ADIANTAMENTO SALARIAL').
-     Preencha o valor desta rubrica tanto no campo "desconto_adiantamento_folha" quanto no campo "valor_adiantamento".
-     *ATENÇÃO RIGOROSA*: Capture exclusivamente o adiantamento salarial ordinário da quinzena; NUNCA capture adiantamento de férias (que possui linha e campo próprios em valor_ferias). Se não houver desconto de adiantamento salarial, retorne 0.00.
-   - **Total de Descontos da Folha** no campo "valor_descontos" (soma exata de todos os descontos da folha, ex: '1.104,01').
-   - Extraia a lista detalhada de cada desconto em "rubricas_descontos": [{"codigo": "998", "descricao": "INSS", "valor": 253.10}, ...].
-
-5. **Salário Líquido da Folha**:
-   - Salário líquido a receber da folha oficial no campo "valor_folha_liquido" (Total Proventos - Total Descontos).
-
-6. **Informativo FGTS da Empresa**:
-   - Valor do FGTS pago pela empresa em "valor_fgts" (das linhas informativas, ex: 'Valor FGTS: 243,01').
-
-7. **REGRA DE EXCLUSÃO DE BASES (CRUCIAL!)**:
-   - IGNORE E NÃO EXTRAIA bases informativas ('Base FGTS', 'Base INSS', 'Base IRRF'). Elas NÃO são proventos nem descontos.
-
-Retorne obrigatoriamente um objeto JSON com o seguinte formato:
-
-{
-  "competencia": "YYYY-MM-01",
-  "records": [
-    {
-      "matricula": "1",
-      "name": "Nome Completo do Colaborador",
-      "cpf": "000.000.000-00",
-      "cargo": "Cargo do colaborador",
-      "situation": "Trabalhando" ou "Demitido",
-      "admission_date": "YYYY-MM-DD",
-      "valor_fixo": 0.00,
-      "valor_hora_extra": 0.00,
-      "valor_adicional_not": 0.00,
-      "salario_familia": 0.00,
-      "valor_ferias": 0.00,
-      "valor_decimo_terceiro": 0.00,
-      "valor_rescisao": 0.00,
-      "valor_outros_recebidos": 0.00,
-      "valor_holerite": 0.00,
-      "inss_empregado": 0.00,
-      "irrf_empregado": 0.00,
-      "desconto_vt_6": 0.00,
-      "desconto_adiantamento_folha": 0.00,
-      "valor_adiantamento": 0.00,
-      "valor_faltas": 0.00,
-      "dias_faltas": 0.00,
-      "valor_consignado": 0.00,
-      "valor_pensao_alimenticia": 0.00,
-      "banco_horas": 0.00,
-      "valor_descontos": 0.00,
-      "valor_folha_liquido": 0.00,
-      "valor_fgts": 0.00,
-      "valor_vt": 0.00,
-      "valor_vr": 0.00,
-      "valor_cesta": 0.00,
-      "valor_bonus": 0.00,
-      "valor_ajuda_custo": 0.00,
-      "rubricas_proventos": [
-        {"codigo": "1", "descricao": "SALARIO BASE", "valor": 0.00}
-      ],
-      "rubricas_descontos": [
-        {"codigo": "998", "descricao": "INSS", "valor": 0.00}
-      ],
-      "observacao": "Folha Oficial CLT"
-    }
-  ]
-}
-
-Trabalhe com máxima precisão. Valores monetários devem ser estritamente numéricos decimais.
-Retorne APENAS o JSON, sem nenhuma outra formatação, texto adicional ou blocos de código markdown.
-`;
-    }
-
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType.includes('image') ? mimeType : 'application/pdf'
-        }
-      },
-      prompt
-    ]);
-
-    const textResponse = result.response.text();
-    
     try {
       const parsedData = JSON.parse(textResponse);
+      const detectedEmpresa = normalizeDetectedCompany(parsedData.empresa);
 
-      // Sanitização e garantia determinística de Adiantamento Salarial da Quinzena
-      if (Array.isArray(parsedData.records)) {
+      // ─── CAMADA 3: SANITIZAÇÃO CONTÁBIL DETERMINÍSTICA PÓS-IA ───
+      if (importType === 'payroll' && Array.isArray(parsedData.records)) {
+        parsedData.records = sanitizeParsedPayrollRecords(parsedData.records, 'payroll', detectedEmpresa);
+      } else if (Array.isArray(parsedData.records)) {
+        // Garante auto-cura de adiantamento caso venha em outros modos
         for (const rec of parsedData.records) {
-          let adiant = Number(rec.valor_adiantamento || rec.desconto_adiantamento_folha || 0);
-
-          // Se não preencheu diretamente mas há rubricas de descontos extraídas, procura nelas
-          if (adiant === 0 && Array.isArray(rec.rubricas_descontos)) {
-            const item = rec.rubricas_descontos.find((d: any) => {
-              const desc = String(d.descricao || "").toLowerCase().replace(/[\s\.\-_]+/g, "");
-              const cod = String(d.codigo || "").replace(/\D/g, "");
-              return cod === "981" || desc.includes("descadiantsalarial") || desc.includes("descadiantamento") || desc.includes("adiantsalarial") || (desc.includes("adiant") && !desc.includes("ferias"));
-            });
-            if (item && Number(item.valor) > 0) {
-              adiant = Number(item.valor);
-            }
+          if (rec && rec.desconto_adiantamento_folha !== undefined && rec.valor_adiantamento === undefined) {
+            rec.valor_adiantamento = Number(rec.desconto_adiantamento_folha || 0);
           }
-
-          rec.valor_adiantamento = adiant;
-          rec.desconto_adiantamento_folha = adiant;
         }
       }
 
-      return NextResponse.json(parsedData);
-    } catch {
-      return NextResponse.json({ 
-        rawText: textResponse,
-        error: 'A IA não retornou um JSON de lote perfeitamente válido.' 
-      }, { status: 422 });
-    }
+      if (detectedEmpresa) {
+        parsedData.empresa = detectedEmpresa;
+      }
 
+      return NextResponse.json({
+        ...parsedData,
+        engine: 'gemini_structured',
+        fileHash,
+        durationMs: Date.now() - startedAt,
+        deterministicFallbackReason: deterministicFallbackReason || undefined,
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          rawText: textResponse,
+          error: 'A IA não retornou um JSON de lote perfeitamente válido.',
+        },
+        { status: 422 }
+      );
+    }
   } catch (error: unknown) {
-    console.error('Erro ao processar folha de pagamento em lote por IA:', error);
+    console.error('Erro ao processar folha de pagamento em lote:', error);
     return NextResponse.json(
       { error: 'Erro interno durante o processamento do lote da folha.' },
       { status: 500 }

@@ -44,6 +44,13 @@ import {
   evaluateRowAnomalies,
   getPreviousCompetenciaKey,
 } from "@/services/people-cost-anomaly.service";
+import {
+  checkDuplicateImportHash,
+  createPreCommitImportSnapshot,
+  DuplicateImportCheckResult,
+} from "@/services/people-cost-import-audit.service";
+import { PjOmieReconciliationPanel } from "@/components/people/PjOmieReconciliationPanel";
+import { ImportSnapshotsHistoryPanel } from "@/components/people/ImportSnapshotsHistoryPanel";
 import { Employee, MonthlyCost } from "@/types/loans";
 import { formatCurrency } from "@/services/loans.service";
 import { supabase } from "@/lib/supabase";
@@ -117,8 +124,17 @@ export function CostImportStagingModal({
   existingEmployees,
   defaultCompetencia,
 }: CostImportStagingModalProps) {
-  // Controle de Fonte: 'FOLHA', 'ADVANCE', 'BENEFICIOS' ou 'EXCEL'
-  const [sourceMode, setSourceMode] = useState<"FOLHA" | "ADVANCE" | "BENEFICIOS" | "EXCEL">("FOLHA");
+  // Controle de Fonte: 'FOLHA', 'ADVANCE', 'BENEFICIOS', 'EXCEL' ou 'PJ_OMIE'
+  const [sourceMode, setSourceMode] = useState<"FOLHA" | "ADVANCE" | "BENEFICIOS" | "EXCEL" | "PJ_OMIE">("FOLHA");
+
+  // Telemetria da última extração híbrida (Determinístico vs Gemini Schema + SHA-256)
+  const [extractionTelemetry, setExtractionTelemetry] = useState<{
+    engine: string;
+    fileHash: string;
+    fileName: string;
+    durationMs: number;
+    duplicateInfo?: DuplicateImportCheckResult;
+  } | null>(null);
 
   // Estados de Upload e Parsing
   const [isProcessing, setIsProcessing] = useState(false);
@@ -187,6 +203,8 @@ export function CostImportStagingModal({
       setMergeSuccessMessage(null);
       setIsCommitting(false);
       setOnlyStagingAnomalies(false);
+      setSourceMode("FOLHA");
+      setExtractionTelemetry(null);
     }
   }, [isOpen]);
 
@@ -434,8 +452,18 @@ export function CostImportStagingModal({
 
       const result = await response.json();
       if (!result.records || !Array.isArray(result.records) || result.records.length === 0) {
-        throw new Error("A IA não identificou colaboradores no documento.");
+        throw new Error("A extração não identificou colaboradores no documento.");
       }
+
+      const fileHash = typeof result.fileHash === "string" ? result.fileHash : "";
+      const duplicateInfo = fileHash ? await checkDuplicateImportHash(fileHash) : undefined;
+      setExtractionTelemetry({
+        engine: typeof result.engine === "string" ? result.engine : "gemini_structured",
+        fileHash,
+        fileName: file.name,
+        durationMs: Number(result.durationMs || 0),
+        duplicateInfo,
+      });
 
       const comp = result.competencia || selectedCompetencia;
       setSelectedCompetencia(comp);
@@ -1192,9 +1220,30 @@ export function CostImportStagingModal({
         }
       }
 
+      // Snapshot pré-lote em public.audit_logs para Rollback em 1 clique
+      const targetComp = batchToSave[0]?.competencia || selectedCompetencia;
+      const committedEmpIds = batchToSave.map((b) => String(b.employee_id || "")).filter(Boolean);
+      const committedEmpSet = new Set(committedEmpIds);
+      const previousRowsForSnapshot = Array.from(existingCostsInDb.values()).filter((c) =>
+        committedEmpSet.has(c.employee_id)
+      );
+      const totalAmountCommitted = batchToSave.reduce((s, b) => s + Number(b.valor_liquido || 0), 0);
+      const hasExcelSource = rowsToSave.some((r) => r.sourceType === "EXCEL_RETROATIVO");
+
+      await createPreCommitImportSnapshot({
+        competencia: targetComp,
+        scope: hasExcelSource ? "EXCEL_RETROATIVO" : "CLT_FOLHA",
+        engine: extractionTelemetry?.engine || (hasExcelSource ? "excel_parser" : "manual"),
+        fileName: extractionTelemetry?.fileName || `Lote ${targetComp.slice(0, 7)}`,
+        fileHash: extractionTelemetry?.fileHash || null,
+        previousRows: previousRowsForSnapshot,
+        committedEmployeeIds: committedEmpIds,
+        totalAmountCommitted,
+      });
+
       await PeopleHRService.saveMonthlyCostsBatch(batchToSave);
 
-      alert(`Sucesso! ${batchToSave.length} lançamentos gravados no Custo Histórico com conciliação executiva.`);
+      alert(`Sucesso! ${batchToSave.length} lançamentos gravados no Custo Histórico com snapshot de rollback salvo.`);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -1283,12 +1332,74 @@ export function CostImportStagingModal({
           </div>
         )}
 
+        {/* TELEMETRIA DO MOTOR HÍBRIDO & ALERTA DE DUPLICIDADE SHA-256 */}
+        {extractionTelemetry && stagingRows.length > 0 && (
+          <div className="mx-4 sm:mx-6 mt-3 space-y-2">
+            <div className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className={`font-black uppercase tracking-wider px-2 py-0.5 rounded-full text-[10px] border ${
+                    extractionTelemetry.engine.startsWith("deterministic")
+                      ? "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                      : "bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-800"
+                  }`}
+                >
+                  {extractionTelemetry.engine === "deterministic_pdf"
+                    ? "⚡ Extração Determinística PDF"
+                    : extractionTelemetry.engine === "deterministic_xml_esocial"
+                      ? "⚡ eSocial S-1200 XML"
+                      : "✨ Gemini 2.5 Schema"}
+                </span>
+                <span className="font-bold text-slate-600 dark:text-slate-300 truncate max-w-[260px]">
+                  {extractionTelemetry.fileName}
+                </span>
+                {extractionTelemetry.durationMs > 0 && (
+                  <span className="font-mono text-slate-400">
+                    {extractionTelemetry.durationMs}ms
+                  </span>
+                )}
+              </div>
+              {extractionTelemetry.fileHash && (
+                <span className="font-mono text-[10px] text-slate-400" title={`SHA-256: ${extractionTelemetry.fileHash}`}>
+                  SHA-256: {extractionTelemetry.fileHash.slice(0, 12)}…
+                </span>
+              )}
+            </div>
+
+            {extractionTelemetry.duplicateInfo?.isDuplicate && (
+              <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex items-center gap-2 text-xs text-amber-900 dark:text-amber-200">
+                <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                <span>
+                  <strong>Idempotência SHA-256:</strong> Este arquivo idêntico já foi gravado em{" "}
+                  <strong>
+                    {extractionTelemetry.duplicateInfo.previousImportDate
+                      ? new Date(extractionTelemetry.duplicateInfo.previousImportDate).toLocaleString("pt-BR")
+                      : "data anterior"}
+                  </strong>{" "}
+                  (competência <strong>{extractionTelemetry.duplicateInfo.competencia?.slice(0, 7) || "—"}</strong>,{" "}
+                  {extractionTelemetry.duplicateInfo.rowsCount} lançamentos). Revise antes de gravar novamente.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ÁREA CENTRAL */}
         <div className="flex-1 overflow-hidden flex flex-col">
-          {stagingRows.length === 0 ? (
+          {sourceMode === "PJ_OMIE" ? (
+            <PjOmieReconciliationPanel
+              existingEmployees={existingEmployees}
+              initialCompetencia={selectedCompetencia}
+              onBack={() => setSourceMode("FOLHA")}
+              onCommitted={() => {
+                onSuccess();
+                onClose();
+              }}
+            />
+          ) : stagingRows.length === 0 ? (
             /* VISÃO INICIAL: 4 CARDS DE ESCOLHA DA FONTE */
             <div className="p-6 sm:p-8 flex-1 overflow-y-auto">
-              <div className="text-center max-w-xl mx-auto mb-6">
+              <div className="text-center max-w-2xl mx-auto mb-6">
                 <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
                   Passo 1 • Escolha a Fonte de Alimentação
                 </span>
@@ -1296,11 +1407,11 @@ export function CostImportStagingModal({
                   De onde você deseja importar os dados desta competência?
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Você pode iniciar por qualquer fonte e depois mesclar as demais com 1 clique.
+                  Motor Híbrido (Determinístico &lt; 50ms + Gemini 2.5 Schema), Conciliação PJ via Omie/XML NFS-e e Snapshot com Rollback em 1 clique.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
                 {/* CARD 1: FOLHA MENSAL */}
                 <div className="bg-gradient-to-b from-emerald-500/5 to-transparent border-2 border-emerald-500/30 dark:border-emerald-500/20 rounded-3xl p-5 flex flex-col justify-between hover:border-emerald-500 transition-all shadow-sm group">
                   <div className="space-y-3">
@@ -1309,29 +1420,61 @@ export function CostImportStagingModal({
                         <FileText size={22} />
                       </div>
                       <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                        Recomendado • Recente
+                        CLT • Híbrido
                       </span>
                     </div>
 
                     <h5 className="text-sm font-black text-slate-900 dark:text-white">
-                      Folha Mensal (PDF/Foto)
+                      Folha Mensal (PDF / XML eSocial)
                     </h5>
                     <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Envie o extrato mensal da folha de pagamento. A IA extrai proventos brutos, INSS, IRRF e descontos centavo a centavo.
+                      Extração determinística instantânea para PDFs Domínio e XML eSocial S-1200, com fallback automático para IA estruturada em fotos ou layouts novos.
                     </p>
                   </div>
 
                   <div className="pt-5">
-                    <label className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
+                    <label className="w-full min-h-[44px] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer">
                       <Upload size={14} />
                       <span>Carregar Folha Mensal</span>
                       <input
                         type="file"
-                        accept=".pdf,image/png,image/jpeg"
+                        accept=".pdf,image/png,image/jpeg,.xml,text/xml,application/xml"
                         onChange={handleUploadPayrollFile}
                         className="hidden"
                       />
                     </label>
+                  </div>
+                </div>
+
+                {/* CARD 2: CONCILIAÇÃO PJ / MEI (OMIE + XML NFS-e) */}
+                <div className="bg-gradient-to-b from-teal-500/5 to-transparent border-2 border-teal-500/35 dark:border-teal-500/25 rounded-3xl p-5 flex flex-col justify-between hover:border-teal-500 transition-all shadow-sm group">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-11 h-11 rounded-2xl bg-teal-500/15 text-teal-700 dark:text-teal-400 flex items-center justify-center">
+                        <Building2 size={22} />
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                        Novo • PJ / MEI B2B
+                      </span>
+                    </div>
+
+                    <h5 className="text-sm font-black text-slate-900 dark:text-white">
+                      Conciliar PJ (Omie + XML NFS-e)
+                    </h5>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Cruza títulos PAGAR do Omie por CNPJ/Razão Social ou lê XMLs de NFS-e, preenchendo Honorários, Variável, Conectividade e Glosas em 1 clique.
+                    </p>
+                  </div>
+
+                  <div className="pt-5">
+                    <button
+                      type="button"
+                      onClick={() => setSourceMode("PJ_OMIE")}
+                      className="w-full min-h-[44px] py-2.5 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                    >
+                      <Database size={14} />
+                      <span>Conciliar PJ via Omie</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1410,8 +1553,11 @@ export function CostImportStagingModal({
                 </div>
               </div>
 
+              {/* HISTÓRICO DE LOTES GRAVADOS & ROLLBACK EM 1 CLIQUE */}
+              <ImportSnapshotsHistoryPanel onRollbackSuccess={onSuccess} />
+
               {/* CARD DE ORIENTAÇÃO PEDAGÓGICA */}
-              <div className="max-w-4xl mx-auto mt-8 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex items-start gap-3">
+              <div className="max-w-6xl mx-auto mt-5 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex items-start gap-3">
                 <Info size={18} className="text-emerald-600 shrink-0 mt-0.5" />
                 <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
                   <span className="font-black text-emerald-800 dark:text-emerald-300 block">
