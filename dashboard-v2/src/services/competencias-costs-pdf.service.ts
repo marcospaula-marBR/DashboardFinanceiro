@@ -494,6 +494,370 @@ export function partitionCompetenciaPdfRows(
   };
 }
 
+export interface MirrorRowDetailClt {
+  regime: 'CLT';
+  entityName: string;
+  cpf: string;
+  company: string;
+  cargo: string;
+  competencia: string;
+  competenciaFull: string;
+  proventosTotal: number;
+  salarioBase: number;
+  horasExtras: number;
+  adicionalNoturno: number;
+  decimoTerceiro: number;
+  feriasRescisao: number;
+  outrosProventos: number;
+  descontosTotal: number;
+  inss: number;
+  irrf: number;
+  descontoVt6: number;
+  descontoAdiantamento: number;
+  faltasDsr: number;
+  consignadoPensao: number;
+  liquidoFolha: number;
+  extraFolhaTotal: number;
+  adiantamento: number;
+  vt: number;
+  vrCesta: number;
+  bonus: number;
+  premiacao: number;
+  subtotal: number;
+  valorLiquido: number;
+  observacao: string;
+}
+
+export interface MirrorRowDetailEstagio {
+  regime: 'ESTAGIO';
+  entityName: string;
+  cpf: string;
+  company: string;
+  area: string;
+  competencia: string;
+  competenciaFull: string;
+  bolsaAuxilio: number;
+  auxilioTransporte: number;
+  outrosAuxilios: number;
+  subtotal: number;
+  deducoes: number;
+  antecipacao: number;
+  valorLiquido: number;
+  observacao: string;
+}
+
+export interface MirrorRowDetailPj {
+  regime: 'PJ';
+  entityName: string;
+  cnpj: string;
+  responsibleName: string;
+  company: string;
+  escopo: string;
+  modalidade: 'MEI' | 'PJ';
+  competencia: string;
+  competenciaFull: string;
+  honorariosBase: number;
+  bonusContratual: number;
+  comissoes: number;
+  incentivosComerciais: number;
+  variavelTotal: number;
+  conectividadeReembolso: number;
+  valorBrutoNf: number;
+  glosaBase: number;
+  glosaBonus: number;
+  outrasDeducoes: number;
+  glosasTotal: number;
+  valorLiquidoNf: number;
+  observacao: string;
+}
+
+export type MirrorRowDetail = MirrorRowDetailClt | MirrorRowDetailEstagio | MirrorRowDetailPj;
+
+export function buildMirrorRowDetail(input: CompetenciaCostPdfInputRow): MirrorRowDetail {
+  const norm = normalizeCompetenciaCostRow(input);
+  const cost = input.cost || {};
+  const emp = input.emp || {};
+  const financials = input.financials || {};
+  const verbas = (cost.verbas_adicionais as Record<string, unknown> | undefined) || {};
+  const observacao = String(cost.observacao || '');
+
+  if (norm.regime === 'PJ') {
+    const bonusContratual = roundCurrency(toSafeNumber(cost.valor_bonus));
+    const comissoes = roundCurrency(toSafeNumber(cost.valor_comissao));
+    const incentivosComerciais = roundCurrency(toSafeNumber(cost.valor_incentivos));
+    const glosaBase = roundCurrency(toSafeNumber(cost.valor_glosa_base));
+    const glosaBonus = roundCurrency(toSafeNumber(cost.valor_glosa_bonus));
+    const outrasDeducoes = roundCurrency(toSafeNumber(cost.valor_deducoes));
+    const modalidade: 'MEI' | 'PJ' = emp.linkType === 'MEI' ? 'MEI' : 'PJ';
+
+    return {
+      regime: 'PJ',
+      entityName: norm.displayEntityName,
+      cnpj: norm.documentId,
+      responsibleName: norm.responsibleName,
+      company: norm.company,
+      escopo: norm.roleOrDept,
+      modalidade,
+      competencia: norm.competencia,
+      competenciaFull: norm.competenciaFull,
+      honorariosBase: norm.honorariosBase,
+      bonusContratual,
+      comissoes,
+      incentivosComerciais,
+      variavelTotal: norm.variavelComissoes,
+      conectividadeReembolso: norm.conectividadeReembolso,
+      valorBrutoNf: norm.valorBrutoNf,
+      glosaBase,
+      glosaBonus,
+      outrasDeducoes,
+      glosasTotal: norm.glosasDeducoes,
+      valorLiquidoNf: norm.valorLiquidoNf,
+      observacao,
+    };
+  }
+
+  if (norm.regime === 'ESTAGIO') {
+    return {
+      regime: 'ESTAGIO',
+      entityName: norm.displayEntityName,
+      cpf: norm.documentId,
+      company: norm.company,
+      area: norm.roleOrDept,
+      competencia: norm.competencia,
+      competenciaFull: norm.competenciaFull,
+      bolsaAuxilio: norm.bolsaAuxilio,
+      auxilioTransporte: norm.auxilioTransporte,
+      outrosAuxilios: norm.outrosAuxilios,
+      subtotal: norm.subtotal,
+      deducoes: norm.deducoesEstagio,
+      antecipacao: norm.antecipacaoEstagio,
+      valorLiquido: norm.liquido,
+      observacao,
+    };
+  }
+
+  const rawCost = cost as Record<string, unknown>;
+  const inss = roundCurrency(toSafeNumber(financials.inss ?? cost.inss_empregado ?? rawCost.inss ?? verbas.inss_empregado));
+  const irrf = roundCurrency(toSafeNumber(financials.irrf ?? cost.irrf_empregado ?? rawCost.irrf ?? verbas.irrf_empregado));
+  const descontoVt6 = roundCurrency(toSafeNumber(financials.descVt ?? rawCost.desconto_vt ?? verbas.desconto_vt));
+  const descontoAdiantamento = roundCurrency(toSafeNumber(financials.descAdt ?? rawCost.desconto_adiantamento ?? verbas.desconto_adiantamento));
+  const faltasDsr = roundCurrency(toSafeNumber(financials.faltas ?? cost.valor_faltas ?? verbas.valor_faltas));
+  const consignado = roundCurrency(toSafeNumber(financials.consig ?? cost.valor_consignado ?? verbas.valor_consignado));
+  const pensao = roundCurrency(toSafeNumber(financials.pensao ?? cost.valor_pensao_alimenticia ?? rawCost.pensao_alimenticia ?? verbas.valor_pensao_alimenticia));
+  const liquidoFolha = roundCurrency(Math.max(0, norm.proventos - norm.descontos));
+  const extraFolhaTotal = roundCurrency(norm.adiantamento + norm.vt + norm.vrCesta + norm.bonus + norm.premiacao);
+
+  return {
+    regime: 'CLT',
+    entityName: norm.displayEntityName,
+    cpf: norm.documentId,
+    company: norm.company,
+    cargo: norm.roleOrDept,
+    competencia: norm.competencia,
+    competenciaFull: norm.competenciaFull,
+    proventosTotal: norm.proventos,
+    salarioBase: roundCurrency(toSafeNumber(financials.fixo ?? cost.valor_fixo ?? cost.valor_liquido)),
+    horasExtras: roundCurrency(toSafeNumber(financials.he ?? cost.valor_hora_extra)),
+    adicionalNoturno: roundCurrency(toSafeNumber(financials.noturno ?? cost.valor_adicional_not)),
+    decimoTerceiro: roundCurrency(toSafeNumber(financials.decimo ?? cost.valor_decimo_terceiro)),
+    feriasRescisao: roundCurrency(toSafeNumber(cost.valor_ferias) + toSafeNumber(cost.valor_rescisao)),
+    outrosProventos: norm.outros,
+    descontosTotal: norm.descontos,
+    inss,
+    irrf,
+    descontoVt6,
+    descontoAdiantamento,
+    faltasDsr,
+    consignadoPensao: roundCurrency(consignado + pensao),
+    liquidoFolha,
+    extraFolhaTotal,
+    adiantamento: norm.adiantamento,
+    vt: norm.vt,
+    vrCesta: norm.vrCesta,
+    bonus: norm.bonus,
+    premiacao: norm.premiacao,
+    subtotal: norm.subtotal,
+    valorLiquido: norm.liquido,
+    observacao,
+  };
+}
+
+export interface SummaryCompositionData {
+  clt: {
+    countRows: number;
+    uniqueCount: number;
+    proventosTotal: number;
+    salarioBase: number;
+    horasExtras: number;
+    adicionalNoturno: number;
+    decimoFeriasRescisao: number;
+    outrosProventos: number;
+    descontosTotal: number;
+    inss: number;
+    irrf: number;
+    descontoVt6: number;
+    descontoAdiantamento: number;
+    faltasDsr: number;
+    consignadoPensaoOutros: number;
+    liquidoFolha: number;
+    extraFolhaTotal: number;
+    adiantamento: number;
+    vt: number;
+    vrCesta: number;
+    bonus: number;
+    premiacao: number;
+    liquidoTotal: number;
+  };
+  estagio: {
+    countRows: number;
+    uniqueCount: number;
+    bolsaAuxilio: number;
+    auxilioTransporte: number;
+    outrosAuxilios: number;
+    subtotal: number;
+    deducoes: number;
+    antecipacao: number;
+    liquidoTotal: number;
+  };
+  pj: {
+    countRows: number;
+    uniqueCount: number;
+    honorariosBase: number;
+    bonusContratual: number;
+    comissoes: number;
+    incentivosComerciais: number;
+    variavelTotal: number;
+    conectividadeReembolso: number;
+    valorBrutoNf: number;
+    glosaBase: number;
+    glosaBonus: number;
+    outrasDeducoes: number;
+    glosasTotal: number;
+    valorLiquidoNf: number;
+  };
+  regimesPresent: LegalRegimeType[];
+  isMixed: boolean;
+  totalRows: number;
+  totalUnique: number;
+  grandTotalLiquido: number;
+}
+
+export function buildSummaryCompositionData(
+  inputRows: CompetenciaCostPdfInputRow[]
+): SummaryCompositionData {
+  const partitioned = partitionCompetenciaPdfRows(inputRows);
+
+  let cltSalarioBase = 0;
+  let cltHe = 0;
+  let cltNoturno = 0;
+  let cltDecFerRes = 0;
+  let cltInss = 0;
+  let cltIrrf = 0;
+  let cltDescVt = 0;
+  let cltDescAdt = 0;
+  let cltFaltas = 0;
+  let cltConsigPensaoOutros = 0;
+
+  let pjBonusContratual = 0;
+  let pjComissoes = 0;
+  let pjIncentivos = 0;
+  let pjGlosaBase = 0;
+  let pjGlosaBonus = 0;
+  let pjOutrasDeducoes = 0;
+
+  for (const input of inputRows || []) {
+    const detail = buildMirrorRowDetail(input);
+    if (detail.regime === 'CLT') {
+      cltSalarioBase += detail.salarioBase;
+      cltHe += detail.horasExtras;
+      cltNoturno += detail.adicionalNoturno;
+      cltDecFerRes += detail.decimoTerceiro + detail.feriasRescisao;
+      cltInss += detail.inss;
+      cltIrrf += detail.irrf;
+      cltDescVt += detail.descontoVt6;
+      cltDescAdt += detail.descontoAdiantamento;
+      cltFaltas += detail.faltasDsr;
+      const sumDiscriminado = detail.inss + detail.irrf + detail.descontoVt6 + detail.descontoAdiantamento + detail.faltasDsr + detail.consignadoPensao;
+      const residualDesc = Math.max(0, detail.descontosTotal - sumDiscriminado);
+      cltConsigPensaoOutros += detail.consignadoPensao + residualDesc;
+    } else if (detail.regime === 'PJ') {
+      pjBonusContratual += detail.bonusContratual;
+      pjComissoes += detail.comissoes;
+      pjIncentivos += detail.incentivosComerciais;
+      pjGlosaBase += detail.glosaBase;
+      pjGlosaBonus += detail.glosaBonus;
+      pjOutrasDeducoes += detail.outrasDeducoes;
+    }
+  }
+
+  const cltTot = partitioned.cltTotals;
+  const estTot = partitioned.estagioTotals;
+  const pjTot = partitioned.pjTotals;
+
+  const cltLiquidoFolha = roundCurrency(Math.max(0, cltTot.proventos - cltTot.descontos));
+  const cltExtraFolha = roundCurrency(cltTot.adiantamento + cltTot.vt + cltTot.vrCesta + cltTot.bonus + cltTot.premiacao);
+
+  return {
+    clt: {
+      countRows: cltTot.countRows,
+      uniqueCount: cltTot.uniqueEmployeesCount,
+      proventosTotal: cltTot.proventos,
+      salarioBase: roundCurrency(cltSalarioBase),
+      horasExtras: roundCurrency(cltHe),
+      adicionalNoturno: roundCurrency(cltNoturno),
+      decimoFeriasRescisao: roundCurrency(cltDecFerRes),
+      outrosProventos: cltTot.outros,
+      descontosTotal: cltTot.descontos,
+      inss: roundCurrency(cltInss),
+      irrf: roundCurrency(cltIrrf),
+      descontoVt6: roundCurrency(cltDescVt),
+      descontoAdiantamento: roundCurrency(cltDescAdt),
+      faltasDsr: roundCurrency(cltFaltas),
+      consignadoPensaoOutros: roundCurrency(cltConsigPensaoOutros),
+      liquidoFolha: cltLiquidoFolha,
+      extraFolhaTotal: cltExtraFolha,
+      adiantamento: cltTot.adiantamento,
+      vt: cltTot.vt,
+      vrCesta: cltTot.vrCesta,
+      bonus: cltTot.bonus,
+      premiacao: cltTot.premiacao,
+      liquidoTotal: cltTot.liquido,
+    },
+    estagio: {
+      countRows: estTot.countRows,
+      uniqueCount: estTot.uniqueEmployeesCount,
+      bolsaAuxilio: estTot.bolsaAuxilio,
+      auxilioTransporte: estTot.auxilioTransporte,
+      outrosAuxilios: estTot.outrosAuxilios,
+      subtotal: estTot.subtotal,
+      deducoes: estTot.deducoesEstagio,
+      antecipacao: estTot.antecipacaoEstagio,
+      liquidoTotal: estTot.liquido,
+    },
+    pj: {
+      countRows: pjTot.countRows,
+      uniqueCount: pjTot.uniqueEmployeesCount,
+      honorariosBase: pjTot.honorariosBase,
+      bonusContratual: roundCurrency(pjBonusContratual),
+      comissoes: roundCurrency(pjComissoes),
+      incentivosComerciais: roundCurrency(pjIncentivos),
+      variavelTotal: pjTot.variavelComissoes,
+      conectividadeReembolso: pjTot.conectividadeReembolso,
+      valorBrutoNf: pjTot.valorBrutoNf,
+      glosaBase: roundCurrency(pjGlosaBase),
+      glosaBonus: roundCurrency(pjGlosaBonus),
+      outrasDeducoes: roundCurrency(pjOutrasDeducoes),
+      glosasTotal: pjTot.glosasDeducoes,
+      valorLiquidoNf: pjTot.valorLiquidoNf,
+    },
+    regimesPresent: partitioned.grandTotals.regimesPresent,
+    isMixed: partitioned.grandTotals.isMixed,
+    totalRows: partitioned.grandTotals.countRows,
+    totalUnique: partitioned.grandTotals.uniqueEmployeesCount,
+    grandTotalLiquido: partitioned.grandTotals.totalLiquidoGeral,
+  };
+}
+
 export function buildScopeDescription(filters?: CompetenciasPdfFilterContext): string {
   if (!filters) return 'Todas as Competências';
   const parts: string[] = [];

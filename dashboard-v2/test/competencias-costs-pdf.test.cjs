@@ -41,6 +41,8 @@ const {
   normalizeCompetenciaCostRow,
   summarizeCompetenciaPdfRows,
   partitionCompetenciaPdfRows,
+  buildMirrorRowDetail,
+  buildSummaryCompositionData,
   buildScopeDescription,
   buildCompetenciasCostsPdfHtml,
   escapeHtml,
@@ -403,4 +405,83 @@ assert.ok(xssHtml.includes('&lt;script&gt;evilPj()&lt;/script&gt;'));
 assert.ok(xssHtml.includes('&lt;b&gt;teste&lt;/b&gt;'));
 console.log('   ✅ Proteção XSS e tolerância a NaN/entradas inválidas validadas.');
 
-console.log('\n🎉 TODOS OS 11 CENÁRIOS DE RELATÓRIO PDF E BLINDAGEM JURÍDICA PASSARAM COM EXATIDÃO!');
+// 12. Testando buildMirrorRowDetail (Espelho da Competência) para PJ, Estágio e CLT
+console.log('\n12. Testando Espelho da Competência (buildMirrorRowDetail) para PJ, Estágio e CLT...');
+const pjMirror = buildMirrorRowDetail({
+  ...pjSampleInput,
+  cost: {
+    ...pjSampleInput.cost,
+    valor_glosa_base: 100,
+    valor_glosa_bonus: 50,
+    valor_deducoes: 100,
+  },
+  emp: {
+    ...pjSampleInput.emp,
+    responsible_name: 'BRAIAN CASTRO',
+  },
+});
+assert.strictEqual(pjMirror.regime, 'PJ');
+assert.strictEqual(pjMirror.entityName, '29.739.454 BRAIAN CASTRO FURQUIM DA MOTA');
+assert.strictEqual(pjMirror.cnpj, '29.739.454/0001-10');
+assert.strictEqual(pjMirror.responsibleName, 'BRAIAN CASTRO');
+assert.strictEqual(pjMirror.honorariosBase, 4500.00);
+assert.strictEqual(pjMirror.bonusContratual, 500.00);
+assert.strictEqual(pjMirror.comissoes, 200.00);
+assert.strictEqual(pjMirror.incentivosComerciais, 100.00);
+assert.strictEqual(pjMirror.variavelTotal, 800.00);
+assert.strictEqual(pjMirror.conectividadeReembolso, 150.00);
+assert.strictEqual(pjMirror.valorBrutoNf, 5450.00);
+assert.strictEqual(pjMirror.glosaBase, 100.00);
+assert.strictEqual(pjMirror.glosaBonus, 50.00);
+assert.strictEqual(pjMirror.outrasDeducoes, 100.00);
+assert.strictEqual(pjMirror.glosasTotal, 250.00);
+assert.strictEqual(pjMirror.valorLiquidoNf, 5200.00);
+assert.strictEqual('proventosTotal' in pjMirror, false, 'Espelho PJ não deve possuir propriedades CLT.');
+assert.strictEqual('vt' in pjMirror, false, 'Espelho PJ não deve possuir VT.');
+
+const estMirror = buildMirrorRowDetail(estagioSampleInput);
+assert.strictEqual(estMirror.regime, 'ESTAGIO');
+assert.strictEqual(estMirror.bolsaAuxilio, 1000.00);
+assert.strictEqual(estMirror.auxilioTransporte, 180.00);
+assert.strictEqual(estMirror.outrosAuxilios, 120.00);
+assert.strictEqual(estMirror.subtotal, 1300.00);
+assert.strictEqual(estMirror.deducoes, 50.00);
+assert.strictEqual(estMirror.valorLiquido, 1250.00);
+assert.strictEqual('salarioBase' in estMirror, false, 'Espelho Estágio não deve possuir salário CLT.');
+
+const cltMirror = buildMirrorRowDetail(cltSampleInput);
+assert.strictEqual(cltMirror.regime, 'CLT');
+assert.strictEqual(cltMirror.proventosTotal, 1984.89);
+assert.strictEqual(cltMirror.vt, 421.60);
+assert.strictEqual(cltMirror.vrCesta, 320.00);
+assert.strictEqual(cltMirror.bonus, 433.23);
+assert.strictEqual(cltMirror.premiacao, 150.00);
+assert.strictEqual(cltMirror.adiantamento, 739.92);
+assert.strictEqual(cltMirror.valorLiquido, 3056.57);
+console.log('   ✅ Espelho segregado (PJ B2B, Estágio Lei 11.788/08 e CLT) validado com isolamento estrito.');
+
+// 13. Testando buildSummaryCompositionData (Composição Detalhada dos Totalizadores)
+console.log('\n13. Testando Composição Detalhada dos Totalizadores (buildSummaryCompositionData)...');
+const compMixed = buildSummaryCompositionData([cltSampleInput, estagioSampleInput, pjSampleInput]);
+assert.strictEqual(compMixed.isMixed, true);
+assert.strictEqual(compMixed.clt.countRows, 1);
+assert.strictEqual(compMixed.clt.liquidoTotal, 3056.57);
+assert.strictEqual(compMixed.estagio.countRows, 1);
+assert.strictEqual(compMixed.estagio.liquidoTotal, 1250.00);
+assert.strictEqual(compMixed.pj.countRows, 1);
+assert.strictEqual(compMixed.pj.honorariosBase, 4500.00);
+assert.strictEqual(compMixed.pj.bonusContratual, 500.00);
+assert.strictEqual(compMixed.pj.comissoes, 200.00);
+assert.strictEqual(compMixed.pj.incentivosComerciais, 100.00);
+assert.strictEqual(compMixed.pj.conectividadeReembolso, 150.00);
+assert.strictEqual(compMixed.pj.valorBrutoNf, 5450.00);
+assert.strictEqual(compMixed.pj.glosasTotal, 250.00);
+assert.strictEqual(compMixed.pj.valorLiquidoNf, 5200.00);
+assert.strictEqual(compMixed.grandTotalLiquido, 9506.57);
+
+const compEmpty = buildSummaryCompositionData([]);
+assert.strictEqual(compEmpty.totalRows, 0);
+assert.strictEqual(compEmpty.grandTotalLiquido, 0);
+console.log('   ✅ Composição Detalhada dos Totalizadores fecha centavo a centavo nos 3 regimes e no caso vazio.');
+
+console.log('\n🎉 TODOS OS 13 CENÁRIOS DE RELATÓRIO PDF, ESPELHOS E BLINDAGEM JURÍDICA PASSARAM COM EXATIDÃO!');

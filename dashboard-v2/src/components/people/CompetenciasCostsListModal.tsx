@@ -10,6 +10,8 @@ import { PeopleHRService, calculateRowFinancials, RowFinancials } from '@/servic
 import { formatCurrency } from '@/services/loans.service';
 import {
   buildCompetenciasCostsPdfHtml,
+  buildMirrorRowDetail,
+  buildSummaryCompositionData,
   CompetenciasPdfReportType,
   partitionCompetenciaPdfRows,
 } from '@/services/competencias-costs-pdf.service';
@@ -302,6 +304,11 @@ export function CompetenciasCostsListModal({
   // Particionamento por Natureza Jurídica (CLT, Estágio e PJ/MEI) — Fonte única compartilhada com o PDF
   const partitionedView = useMemo(
     () => partitionCompetenciaPdfRows(filteredRows),
+    [filteredRows]
+  );
+
+  const summaryComposition = useMemo(
+    () => buildSummaryCompositionData(filteredRows),
     [filteredRows]
   );
 
@@ -2227,18 +2234,24 @@ export function CompetenciasCostsListModal({
                       </td>
                     </tr>
 
-                    {/* LINHA ACCORDION: COMPOSIÇÃO DE VERBAS EXPANDIDA NA TABELA */}
-                    {expandedRowIds.has(cost.id) && (
+                    {/* LINHA ACCORDION: COMPOSIÇÃO DETALHADA EXPANDIDA NA TABELA (SEGREGADA POR NATUREZA JURÍDICA) */}
+                    {expandedRowIds.has(cost.id) && (() => {
+                      const rowDetail = buildMirrorRowDetail({ cost, emp, name, financials, realTotal, isCLT, isPJ, isEstagio });
+                      return (
                       <tr 
                         key={`expanded-${cost.id || 'cost'}-${cost.competencia || 'comp'}-${idx}`}
                         className="bg-slate-50/90 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 animate-in fade-in"
                       >
-                        <td colSpan={expandedColSpan} className="px-6 py-4">
+                        <td colSpan={expandedColSpan} className="px-4 sm:px-6 py-4">
                           <div className="space-y-3">
-                            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
                               <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                                <Receipt size={14} className="text-emerald-600" />
-                                Composição Analítica das Verbas &bull; {name} &bull; {formatCompetenciaLabel(cost.competencia)}
+                                <Receipt size={14} className={rowDetail.regime === 'PJ' ? 'text-teal-600' : rowDetail.regime === 'ESTAGIO' ? 'text-amber-600' : 'text-emerald-600'} />
+                                {rowDetail.regime === 'PJ'
+                                  ? `Composição Contratual (${rowDetail.modalidade}) • ${rowDetail.entityName} • ${rowDetail.competenciaFull}`
+                                  : rowDetail.regime === 'ESTAGIO'
+                                    ? `Composição da Bolsa de Estágio (Lei nº 11.788/2008) • ${rowDetail.entityName} • ${rowDetail.competenciaFull}`
+                                    : `Composição Analítica da Folha CLT • ${rowDetail.entityName} • ${rowDetail.competenciaFull}`}
                               </span>
                               <div className="flex items-center gap-2">
                                 <button
@@ -2247,57 +2260,57 @@ export function CompetenciasCostsListModal({
                                   className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
                                 >
                                   <Edit3 size={12} />
-                                  Editar Verbas
+                                  {rowDetail.regime === 'PJ' ? 'Editar Faturamento' : rowDetail.regime === 'ESTAGIO' ? 'Editar Bolsa' : 'Editar Verbas'}
                                 </button>
                                 <span>&bull;</span>
                                 <button
                                   type="button"
-                                  onClick={() => setVerbasDetailRow({ cost, emp, name })}
+                                  onClick={() => setVerbasDetailRow({ cost, emp, name: rowDetail.entityName })}
                                   className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
                                 >
                                   <Eye size={12} />
-                                  Abrir Espelho Completo
+                                  {rowDetail.regime === 'PJ' ? 'Abrir Espelho PJ' : 'Abrir Espelho Completo'}
                                 </button>
                               </div>
                             </div>
 
-                            {isCLT ? (
+                            {rowDetail.regime === 'CLT' ? (
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 {/* Coluna 1: Proventos da Folha */}
                                 <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-2xs">
                                   <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
                                     <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400">1. Proventos Folha</span>
-                                    <span className="text-xs font-black text-emerald-700 dark:text-emerald-400">
-                                      {formatCurrency((fixo || 0) + (cost.valor_hora_extra || 0) + (cost.valor_adicional_not || 0) + (cost.valor_ferias || 0) + (cost.valor_decimo_terceiro || 0) + (cost.valor_rescisao || 0) + (cost.outros_ajustes || 0))}
+                                    <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 tabular-nums">
+                                      {showValues ? formatCurrency(rowDetail.proventosTotal) : '••••'}
                                     </span>
                                   </div>
                                   <div className="space-y-1 text-[11px]">
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>Salário Base / Fixo:</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(fixo || 0)}</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{showValues ? formatCurrency(rowDetail.salarioBase) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>Horas Extras (50%/100%):</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(cost.valor_hora_extra || 0)}</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{showValues ? formatCurrency(rowDetail.horasExtras) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>Adicional Noturno:</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(cost.valor_adicional_not || 0)}</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{showValues ? formatCurrency(rowDetail.adicionalNoturno) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>13º Salário:</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(cost.valor_decimo_terceiro || 0)}</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{showValues ? formatCurrency(rowDetail.decimoTerceiro) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>Férias / Rescisão:</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency((cost.valor_ferias || 0) + (cost.valor_rescisao || 0))}</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{showValues ? formatCurrency(rowDetail.feriasRescisao) : '••••'}</span>
                                     </div>
-                                    {cost.outros_ajustes && cost.outros_ajustes > 0 ? (
+                                    {rowDetail.outrosProventos !== 0 && (
                                       <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                                        <span>Outros Proventos:</span>
-                                        <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(cost.outros_ajustes)}</span>
+                                        <span>Outros Recebidos:</span>
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{showValues ? formatCurrency(rowDetail.outrosProventos) : '••••'}</span>
                                       </div>
-                                    ) : null}
+                                    )}
                                   </div>
                                 </div>
 
@@ -2305,34 +2318,34 @@ export function CompetenciasCostsListModal({
                                 <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-2xs">
                                   <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
                                     <span className="text-[10px] font-black uppercase text-rose-700 dark:text-rose-400">2. Descontos Folha</span>
-                                    <span className="text-xs font-black text-rose-700 dark:text-rose-400">
-                                      -{formatCurrency(cost.valor_descontos || 0)}
+                                    <span className="text-xs font-black text-rose-700 dark:text-rose-400 tabular-nums">
+                                      -{showValues ? formatCurrency(rowDetail.descontosTotal) : '••••'}
                                     </span>
                                   </div>
                                   <div className="space-y-1 text-[11px]">
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>INSS Empregado:</span>
-                                      <span className="font-semibold text-rose-600 dark:text-rose-400">-{formatCurrency(cost.inss_empregado || (cost as any).inss || 0)}</span>
+                                      <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">-{showValues ? formatCurrency(rowDetail.inss) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>IRRF Empregado:</span>
-                                      <span className="font-semibold text-rose-600 dark:text-rose-400">-{formatCurrency(cost.irrf_empregado || (cost as any).irrf || 0)}</span>
+                                      <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">-{showValues ? formatCurrency(rowDetail.irrf) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>Desc. VT (6%):</span>
-                                      <span className="font-semibold text-rose-600 dark:text-rose-400">-{formatCurrency((cost as any).desconto_vt || 0)}</span>
+                                      <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">-{showValues ? formatCurrency(rowDetail.descontoVt6) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>Desc. Adiantamento Folha:</span>
-                                      <span className="font-semibold text-rose-600 dark:text-rose-400">-{formatCurrency((cost as any).desconto_adiantamento || 0)}</span>
+                                      <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">-{showValues ? formatCurrency(rowDetail.descontoAdiantamento) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>Faltas / DSR:</span>
-                                      <span className="font-semibold text-rose-600 dark:text-rose-400">-{formatCurrency(cost.valor_faltas || 0)}</span>
+                                      <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">-{showValues ? formatCurrency(rowDetail.faltasDsr) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                       <span>Consignados / Pensão:</span>
-                                      <span className="font-semibold text-rose-600 dark:text-rose-400">-{formatCurrency((cost.valor_consignado || 0) + (cost.valor_pensao_alimenticia || (cost as any).pensao_alimenticia || 0))}</span>
+                                      <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">-{showValues ? formatCurrency(rowDetail.consignadoPensao) : '••••'}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -2341,60 +2354,103 @@ export function CompetenciasCostsListModal({
                                 <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-2xs">
                                   <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
                                     <span className="text-[10px] font-black uppercase text-blue-700 dark:text-blue-400">3. Extra-Folha & Benefícios</span>
-                                    <span className="text-xs font-black text-blue-700 dark:text-blue-400">
-                                      +{formatCurrency((cost.valor_adiantamento || 0) + (cost.valor_vt || 0) + (cost.valor_cesta || 0) + (cost.valor_vr || 0) + (cost.valor_bonus || 0) + (cost.valor_ajuda_custo || 0))}
+                                    <span className="text-xs font-black text-blue-700 dark:text-blue-400 tabular-nums">
+                                      +{showValues ? formatCurrency(rowDetail.extraFolhaTotal) : '••••'}
                                     </span>
                                   </div>
                                   <div className="space-y-1 text-[11px]">
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                                      <span>Adiantamento Salarial (dia 20):</span>
-                                      <span className="font-semibold text-blue-600 dark:text-blue-400">+{formatCurrency(cost.valor_adiantamento || 0)}</span>
+                                      <span>Adiantamento Salarial:</span>
+                                      <span className="font-semibold text-amber-700 dark:text-amber-400 tabular-nums">+{showValues ? formatCurrency(rowDetail.adiantamento) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                                      <span>Recarga Vale Transporte (VT):</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">+{formatCurrency(cost.valor_vt || 0)}</span>
+                                      <span>Vale Transporte (VT):</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">+{showValues ? formatCurrency(rowDetail.vt) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                                      <span>Vale Refeição / Cesta (VR):</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">+{formatCurrency((cost.valor_cesta || 0) + (cost.valor_vr || 0))}</span>
+                                      <span>VR / Cesta Básica:</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">+{showValues ? formatCurrency(rowDetail.vrCesta) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                                      <span>Bônus / Premiação:</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">+{formatCurrency(cost.valor_bonus || 0)}</span>
+                                      <span>Bônus:</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">+{showValues ? formatCurrency(rowDetail.bonus) : '••••'}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                                      <span>Ajuda de Custo / Complementos:</span>
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200">+{formatCurrency(cost.valor_ajuda_custo || 0)}</span>
+                                      <span>Premiação:</span>
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">+{showValues ? formatCurrency(rowDetail.premiacao) : '••••'}</span>
                                     </div>
                                   </div>
                                 </div>
                               </div>
+                            ) : rowDetail.regime === 'ESTAGIO' ? (
+                              /* Visão Estágio (Lei nº 11.788/2008) */
+                              <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-amber-200/80 dark:border-amber-900/50 space-y-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs tabular-nums">
+                                  <div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Bolsa-Auxílio:</span>
+                                    <span className="font-black text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(rowDetail.bolsaAuxilio) : '••••'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-bold text-emerald-600 uppercase block">+ Aux. Transporte:</span>
+                                    <span className="font-black text-emerald-700 dark:text-emerald-300">+{showValues ? formatCurrency(rowDetail.auxilioTransporte) : '••••'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-bold text-blue-600 uppercase block">+ Outros Auxílios:</span>
+                                    <span className="font-black text-blue-700 dark:text-blue-300">+{showValues ? formatCurrency(rowDetail.outrosAuxilios) : '••••'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-bold text-blue-800 uppercase block">= Subtotal:</span>
+                                    <span className="font-black text-blue-900 dark:text-blue-200">{showValues ? formatCurrency(rowDetail.subtotal) : '••••'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-bold text-rose-600 uppercase block">(-) Deduções:</span>
+                                    <span className="font-black text-rose-600">-{showValues ? formatCurrency(rowDetail.deducoes) : '••••'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-bold text-emerald-700 uppercase block">= Valor Líquido:</span>
+                                    <span className="font-black text-emerald-700 dark:text-emerald-300">{showValues ? formatCurrency(rowDetail.valorLiquido) : '••••'}</span>
+                                  </div>
+                                </div>
+                              </div>
                             ) : (
-                              /* Visão PJ */
-                              <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                              /* Visão Contratual PJ / MEI (100% B2B) */
+                              <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-teal-200/80 dark:border-teal-900/50 space-y-2">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 border-b border-slate-100 dark:border-slate-800 pb-2">
+                                  <span>Contratante: <strong className="text-slate-700 dark:text-slate-300">{rowDetail.company}</strong></span>
+                                  {rowDetail.cnpj && <span>CNPJ: <strong className="font-mono text-slate-700 dark:text-slate-300">{rowDetail.cnpj}</strong></span>}
+                                  <span>Escopo: <strong className="text-slate-700 dark:text-slate-300">{rowDetail.escopo}</strong></span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs tabular-nums">
                                   <div>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">NF Base / Honorários:</span>
-                                    <span className="font-black text-slate-800 dark:text-slate-200">{formatCurrency(fixo || 0)}</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Honorários / NF Base:</span>
+                                    <span className="font-black text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(rowDetail.honorariosBase) : '••••'}</span>
                                   </div>
                                   <div>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Bônus & Comissões PJ:</span>
-                                    <span className="font-black text-emerald-600">{formatCurrency((cost.valor_bonus || 0) + (cost.valor_comissao || 0))}</span>
+                                    <span className="text-[10px] font-bold text-sky-600 uppercase block">+ Variável / Comissões:</span>
+                                    <span className="font-black text-sky-700 dark:text-sky-300">+{showValues ? formatCurrency(rowDetail.variavelTotal) : '••••'}</span>
                                   </div>
                                   <div>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Glosas & Deduções PJ:</span>
-                                    <span className="font-black text-rose-600">-{formatCurrency((cost.valor_glosa_base || 0) + (cost.valor_deducoes || 0))}</span>
+                                    <span className="text-[10px] font-bold text-teal-600 uppercase block">+ Conectividade / Reemb.:</span>
+                                    <span className="font-black text-teal-700 dark:text-teal-300">+{showValues ? formatCurrency(rowDetail.conectividadeReembolso) : '••••'}</span>
                                   </div>
                                   <div>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Líquido Desembolsado:</span>
-                                    <span className="font-black text-emerald-700 dark:text-emerald-300">{formatCurrency(realTotal)}</span>
+                                    <span className="text-[10px] font-bold text-blue-800 uppercase block">= Valor Bruto NF:</span>
+                                    <span className="font-black text-blue-900 dark:text-blue-200">{showValues ? formatCurrency(rowDetail.valorBrutoNf) : '••••'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-bold text-rose-600 uppercase block">(-) Glosas / Deduções:</span>
+                                    <span className="font-black text-rose-600">-{showValues ? formatCurrency(rowDetail.glosasTotal) : '••••'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-bold text-emerald-700 uppercase block">= Valor Líquido NF:</span>
+                                    <span className="font-black text-emerald-700 dark:text-emerald-300">{showValues ? formatCurrency(rowDetail.valorLiquidoNf) : '••••'}</span>
                                   </div>
                                 </div>
                               </div>
                             )}
 
-                            {/* Verbas Adicionais Importadas (Rubricas personalizadas da folha) */}
-                            {cost.verbas_adicionais && Object.keys(cost.verbas_adicionais).length > 0 && (
+                            {/* Rubricas / Detalhamentos Adicionais */}
+                            {rowDetail.regime === 'CLT' && cost.verbas_adicionais && Object.keys(cost.verbas_adicionais).length > 0 && (
                               <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                                 <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">
                                   Rubricas Personalizadas Registradas na Folha de Pagamento:
@@ -2422,7 +2478,8 @@ export function CompetenciasCostsListModal({
                           </div>
                         </td>
                       </tr>
-                    )}
+                      );
+                    })()}
                     </React.Fragment>
                   );
                 })}
@@ -2599,195 +2656,367 @@ export function CompetenciasCostsListModal({
         )}
 
       
-        {/* MODAL EXECUTIVO: COMPOSIÇÃO CONSOLIDADA DOS TOTALIZADORES E VERBAS */}
+        {/* MODAL EXECUTIVO: COMPOSIÇÃO CONSOLIDADA DOS TOTALIZADORES (SEGREGADA POR NATUREZA JURÍDICA) */}
         {isSummaryVerbasModalOpen && (
           <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 max-w-5xl w-full shadow-2xl max-h-[90vh] overflow-y-auto space-y-5 animate-in zoom-in-95">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 max-w-5xl w-full shadow-2xl max-h-[90vh] overflow-y-auto space-y-5 animate-in zoom-in-95">
               {/* Header */}
               <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 ${
+                    isPjOnlyView
+                      ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
+                      : isEstagioOnlyView
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  }`}>
                     <Layers size={22} />
                   </div>
                   <div>
                     <h4 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      Composição Analítica dos Totalizadores
+                      {isPjOnlyView
+                        ? 'Composição Contratual dos Totalizadores (PJ / MEI)'
+                        : isEstagioOnlyView
+                          ? 'Composição das Bolsas de Estágio (Lei nº 11.788/2008)'
+                          : summaryComposition.isMixed
+                            ? 'Composição Analítica Segregada por Natureza Jurídica'
+                            : 'Composição Analítica dos Totalizadores (Folha CLT)'}
                     </h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Abertura de todas as rubricas e valores que formam o Total Desembolsado ({filteredRows.length} lançamentos filtrados)
+                      {isPjOnlyView
+                        ? `Abertura empresarial dos faturamentos e honorários contratuais (${summaryComposition.pj.countRows} faturamentos • ${summaryComposition.pj.uniqueCount} contratadas)`
+                        : isEstagioOnlyView
+                          ? `Abertura das bolsas-auxílio e auxílios sem vínculo empregatício (${summaryComposition.estagio.countRows} lançamentos • ${summaryComposition.estagio.uniqueCount} estagiários)`
+                          : `Abertura consolidada dos valores desembolsados (${summaryComposition.totalRows} registros • ${summaryComposition.totalUnique} únicos)`}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsSummaryVerbasModalOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  aria-label="Fechar composição dos totalizadores"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              {/* 4 Blocos da Equação Contábil */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Bloco 1: Proventos da Folha CLT */}
-                <div className="bg-emerald-50/40 dark:bg-emerald-950/20 p-4 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/60 space-y-2">
-                  <div className="flex items-center justify-between pb-2 border-b border-emerald-200/60 dark:border-emerald-800/40">
-                    <span className="text-[11px] font-black uppercase text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                      <Coins size={14} className="text-emerald-600" />
-                      1. Proventos Folha
-                    </span>
-                    <span className="text-sm font-black text-emerald-800 dark:text-emerald-300">
-                      {formatCurrency(summaryTotals.totalProventosBrutos)}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Salário Fixo / Base:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(summaryTotals.totalSalarioFixo)}</span>
+              {/* SEÇÃO 1: FOLHA DE PAGAMENTO CLT (Exibida apenas quando há CLT no recorte e NÃO é visão exclusiva PJ/Estágio) */}
+              {!isPjOnlyView && !isEstagioOnlyView && summaryComposition.clt.countRows > 0 && (
+                <div className="space-y-3">
+                  {summaryComposition.isMixed && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 dark:text-blue-200">
+                        Folha de Pagamento • Regime CLT ({summaryComposition.clt.countRows} lançamentos • {summaryComposition.clt.uniqueCount} empregados)
+                      </span>
+                      <span className="text-xs font-black text-blue-900 dark:text-blue-200 tabular-nums">
+                        Líquido CLT: {showValues ? formatCurrency(summaryComposition.clt.liquidoTotal) : '••••'}
+                      </span>
                     </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Horas Extras (50%/100%):</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(summaryTotals.totalHorasExtras)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Adicional Noturno:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(summaryTotals.totalAdicionalNoturno)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>13º, Férias & Rescisão:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(summaryTotals.totalDecimoFeriasRescisao)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Outros Proventos:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(summaryTotals.totalOutrosProventos)}</span>
-                    </div>
-                  </div>
-                </div>
+                  )}
 
-                {/* Bloco 2: Descontos da Folha CLT */}
-                <div className="bg-rose-50/40 dark:bg-rose-950/20 p-4 rounded-2xl border border-rose-200/80 dark:border-rose-800/60 space-y-2">
-                  <div className="flex items-center justify-between pb-2 border-b border-rose-200/60 dark:border-rose-800/40">
-                    <span className="text-[11px] font-black uppercase text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
-                      <Receipt size={14} className="text-rose-600" />
-                      2. Descontos Folha
-                    </span>
-                    <span className="text-sm font-black text-rose-700 dark:text-rose-400">
-                      -{formatCurrency(summaryTotals.totalDescontosFolha)}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>INSS Empregado:</span>
-                      <span className="font-bold text-rose-600 dark:text-rose-400">-{formatCurrency(summaryTotals.totalInss)}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Bloco 1: Proventos da Folha CLT */}
+                    <div className="bg-emerald-50/40 dark:bg-emerald-950/20 p-4 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/60 space-y-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-emerald-200/60 dark:border-emerald-800/40">
+                        <span className="text-[11px] font-black uppercase text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                          <Coins size={14} className="text-emerald-600" />
+                          1. Proventos Folha
+                        </span>
+                        <span className="text-sm font-black text-emerald-800 dark:text-emerald-300 tabular-nums">
+                          {showValues ? formatCurrency(summaryComposition.clt.proventosTotal) : '••••'}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs tabular-nums">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Salário Fixo / Base:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(summaryComposition.clt.salarioBase) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Horas Extras (50%/100%):</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(summaryComposition.clt.horasExtras) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Adicional Noturno:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(summaryComposition.clt.adicionalNoturno) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>13º, Férias & Rescisão:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(summaryComposition.clt.decimoFeriasRescisao) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Outros Recebidos:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(summaryComposition.clt.outrosProventos) : '••••'}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>IRRF Empregado:</span>
-                      <span className="font-bold text-rose-600 dark:text-rose-400">-{formatCurrency(summaryTotals.totalIrrf)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Desconto VT (6%):</span>
-                      <span className="font-bold text-rose-600 dark:text-rose-400">-{formatCurrency(summaryTotals.totalDescontoVt)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Desc. Adiantamento Folha:</span>
-                      <span className="font-bold text-rose-600 dark:text-rose-400">-{formatCurrency(summaryTotals.totalDescontoAdiantamento)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Faltas e DSR:</span>
-                      <span className="font-bold text-rose-600 dark:text-rose-400">-{formatCurrency(summaryTotals.totalFaltas)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Consignados & Pensão:</span>
-                      <span className="font-bold text-rose-600 dark:text-rose-400">-{formatCurrency(summaryTotals.totalConsignado + summaryTotals.totalPensaoOutros)}</span>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-rose-200/60 dark:border-rose-800/40 flex justify-between font-black text-xs text-slate-800 dark:text-slate-200">
-                    <span>= Líquido Folha CLT:</span>
-                    <span className="text-emerald-700 dark:text-emerald-400">{formatCurrency(summaryTotals.folhaLiquidaClt)}</span>
-                  </div>
-                </div>
 
-                {/* Bloco 3: Extra-Folha & Benefícios Pagos */}
-                <div className="bg-blue-50/40 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-200/80 dark:border-blue-800/60 space-y-2">
-                  <div className="flex items-center justify-between pb-2 border-b border-blue-200/60 dark:border-blue-800/40">
-                    <span className="text-[11px] font-black uppercase text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
-                      <DollarSign size={14} className="text-blue-600" />
-                      3. Extra-Folha & Benefícios
-                    </span>
-                    <span className="text-sm font-black text-blue-800 dark:text-blue-300">
-                      +{formatCurrency(summaryTotals.totalExtraFolha)}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Adiantamento Salarial (dia 20):</span>
-                      <span className="font-bold text-blue-600 dark:text-blue-400">+{formatCurrency(summaryTotals.totalAdiantamentoSalarial)}</span>
+                    {/* Bloco 2: Descontos da Folha CLT */}
+                    <div className="bg-rose-50/40 dark:bg-rose-950/20 p-4 rounded-2xl border border-rose-200/80 dark:border-rose-800/60 space-y-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-rose-200/60 dark:border-rose-800/40">
+                        <span className="text-[11px] font-black uppercase text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                          <Receipt size={14} className="text-rose-600" />
+                          2. Descontos Folha
+                        </span>
+                        <span className="text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums">
+                          -{showValues ? formatCurrency(summaryComposition.clt.descontosTotal) : '••••'}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs tabular-nums">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>INSS Empregado:</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400">-{showValues ? formatCurrency(summaryComposition.clt.inss) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>IRRF Empregado:</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400">-{showValues ? formatCurrency(summaryComposition.clt.irrf) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Desconto VT (6%):</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400">-{showValues ? formatCurrency(summaryComposition.clt.descontoVt6) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Desc. Adiantamento Folha:</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400">-{showValues ? formatCurrency(summaryComposition.clt.descontoAdiantamento) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Faltas e DSR:</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400">-{showValues ? formatCurrency(summaryComposition.clt.faltasDsr) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Consignados & Outros:</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400">-{showValues ? formatCurrency(summaryComposition.clt.consignadoPensaoOutros) : '••••'}</span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-rose-200/60 dark:border-rose-800/40 flex justify-between font-black text-xs text-slate-800 dark:text-slate-200 tabular-nums">
+                        <span>= Líquido Folha CLT:</span>
+                        <span className="text-emerald-700 dark:text-emerald-400">{showValues ? formatCurrency(summaryComposition.clt.liquidoFolha) : '••••'}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Recarga Vale Transporte (VT):</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">+{formatCurrency(summaryTotals.totalVtRecarga)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Vale Refeição & Cesta (VR):</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">+{formatCurrency(summaryTotals.totalVrCesta)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Bônus & Premiações CLT:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">+{formatCurrency(summaryTotals.totalBonus)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Ajuda de Custo / Complementos:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(summaryTotals.totalAjudaCusto)}</span>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Bloco 4: Contratos PJ / MEI */}
-                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                    <span className="text-[11px] font-black uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                      <Building2 size={14} className="text-slate-500" />
-                      4. Contratos PJ / MEI
-                    </span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white">
-                      {formatCurrency(summaryTotals.totalPjLiquido)}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Honorários / NF Base:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(summaryTotals.totalPjFixo)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Bônus & Comissões PJ:</span>
-                      <span className="font-bold text-emerald-600">{formatCurrency(summaryTotals.totalPjBonusComissao)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Glosas & Deduções PJ:</span>
-                      <span className="font-bold text-rose-600">-{formatCurrency(summaryTotals.totalPjDeducoesGlosas)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
-                      <span>Lançamentos PJ filtrados:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{summaryTotals.countPj}</span>
+                    {/* Bloco 3: Extra-Folha & Benefícios Pagos CLT */}
+                    <div className="bg-blue-50/40 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-200/80 dark:border-blue-800/60 space-y-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-blue-200/60 dark:border-blue-800/40">
+                        <span className="text-[11px] font-black uppercase text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                          <DollarSign size={14} className="text-blue-600" />
+                          3. Extra-Folha & Benefícios
+                        </span>
+                        <span className="text-sm font-black text-blue-800 dark:text-blue-300 tabular-nums">
+                          +{showValues ? formatCurrency(summaryComposition.clt.extraFolhaTotal) : '••••'}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs tabular-nums">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Adiantamento Salarial:</span>
+                          <span className="font-bold text-amber-700 dark:text-amber-400">+{showValues ? formatCurrency(summaryComposition.clt.adiantamento) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Vale Transporte (VT):</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">+{showValues ? formatCurrency(summaryComposition.clt.vt) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>VR / Cesta Básica:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">+{showValues ? formatCurrency(summaryComposition.clt.vrCesta) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Bônus CLT:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">+{showValues ? formatCurrency(summaryComposition.clt.bonus) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Premiação:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">+{showValues ? formatCurrency(summaryComposition.clt.premiacao) : '••••'}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* SEÇÃO 2: BOLSAS DE ESTÁGIO — LEI Nº 11.788/2008 */}
+              {!isPjOnlyView && summaryComposition.estagio.countRows > 0 && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Bolsas de Estágio • Lei nº 11.788/2008 ({summaryComposition.estagio.countRows} lançamentos • {summaryComposition.estagio.uniqueCount} estagiários)
+                    </span>
+                    <span className="text-xs font-black text-amber-900 dark:text-amber-200 tabular-nums">
+                      Líquido Estágio: {showValues ? formatCurrency(summaryComposition.estagio.liquidoTotal) : '••••'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-amber-50/40 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200/80 dark:border-amber-800/60 space-y-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-amber-800/40">
+                        <span className="text-[11px] font-black uppercase text-amber-800 dark:text-amber-300">1. Bolsa-Auxílio & Auxílios</span>
+                        <span className="text-sm font-black text-amber-900 dark:text-amber-200 tabular-nums">{showValues ? formatCurrency(summaryComposition.estagio.subtotal) : '••••'}</span>
+                      </div>
+                      <div className="space-y-1.5 text-xs tabular-nums">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Bolsa-Auxílio:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(summaryComposition.estagio.bolsaAuxilio) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Auxílio-Transporte:</span>
+                          <span className="font-bold text-emerald-700 dark:text-emerald-300">+{showValues ? formatCurrency(summaryComposition.estagio.auxilioTransporte) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Outros Auxílios:</span>
+                          <span className="font-bold text-blue-700 dark:text-blue-300">+{showValues ? formatCurrency(summaryComposition.estagio.outrosAuxilios) : '••••'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                        <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-300">2. Deduções & Fechamento</span>
+                        <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{showValues ? formatCurrency(summaryComposition.estagio.liquidoTotal) : '••••'}</span>
+                      </div>
+                      <div className="space-y-1.5 text-xs tabular-nums">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Deduções:</span>
+                          <span className="font-bold text-rose-600">-{showValues ? formatCurrency(summaryComposition.estagio.deducoes) : '••••'}</span>
+                        </div>
+                        {summaryComposition.estagio.antecipacao > 0 && (
+                          <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                            <span>Antecipação:</span>
+                            <span className="font-bold text-amber-700">+{showValues ? formatCurrency(summaryComposition.estagio.antecipacao) : '••••'}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-slate-800 dark:text-slate-200 font-black pt-1 border-t border-slate-200 dark:border-slate-800">
+                          <span>= Valor Líquido Estágio:</span>
+                          <span className="text-emerald-700 dark:text-emerald-300">{showValues ? formatCurrency(summaryComposition.estagio.liquidoTotal) : '••••'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SEÇÃO 3: PRESTAÇÃO DE SERVIÇOS — EMPRESAS CONTRATADAS PJ / MEI (100% B2B) */}
+              {!isEstagioOnlyView && (isPjOnlyView || summaryComposition.pj.countRows > 0) && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-teal-50/80 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900/60">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
+                      <Building2 size={14} className="text-teal-600" />
+                      Prestação de Serviços • Empresas Contratadas PJ / MEI ({summaryComposition.pj.countRows} faturamentos • {summaryComposition.pj.uniqueCount} contratadas)
+                    </span>
+                    <span className="text-xs font-black text-teal-900 dark:text-teal-200 tabular-nums">
+                      Valor Líquido NF: {showValues ? formatCurrency(summaryComposition.pj.valorLiquidoNf) : '••••'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Bloco B2B 1: Honorários & Variável */}
+                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                        <span className="text-[11px] font-black uppercase text-slate-800 dark:text-slate-200">1. Honorários & Variável</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
+                          {showValues ? formatCurrency(summaryComposition.pj.honorariosBase + summaryComposition.pj.variavelTotal) : '••••'}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs tabular-nums">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Honorários / NF Base:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{showValues ? formatCurrency(summaryComposition.pj.honorariosBase) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Bônus Contratual:</span>
+                          <span className="font-bold text-sky-700 dark:text-sky-300">+{showValues ? formatCurrency(summaryComposition.pj.bonusContratual) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Comissões:</span>
+                          <span className="font-bold text-sky-700 dark:text-sky-300">+{showValues ? formatCurrency(summaryComposition.pj.comissoes) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Incentivos Comerciais:</span>
+                          <span className="font-bold text-sky-700 dark:text-sky-300">+{showValues ? formatCurrency(summaryComposition.pj.incentivosComerciais) : '••••'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bloco B2B 2: Conectividade & Valor Bruto NF */}
+                    <div className="bg-teal-50/40 dark:bg-teal-950/20 p-4 rounded-2xl border border-teal-200/80 dark:border-teal-800/60 space-y-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-teal-200/60 dark:border-teal-800/40">
+                        <span className="text-[11px] font-black uppercase text-teal-800 dark:text-teal-300">2. Conectividade & Bruto NF</span>
+                        <span className="text-sm font-black text-blue-900 dark:text-blue-200 tabular-nums">
+                          {showValues ? formatCurrency(summaryComposition.pj.valorBrutoNf) : '••••'}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs tabular-nums">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Conectividade / Reembolso:</span>
+                          <span className="font-bold text-teal-700 dark:text-teal-300">+{showValues ? formatCurrency(summaryComposition.pj.conectividadeReembolso) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Total Variável / Comissões:</span>
+                          <span className="font-bold text-sky-700 dark:text-sky-300">+{showValues ? formatCurrency(summaryComposition.pj.variavelTotal) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-blue-900 dark:text-blue-200 font-black pt-1 border-t border-teal-200/60 dark:border-teal-800/40">
+                          <span>= Valor Bruto NF:</span>
+                          <span>{showValues ? formatCurrency(summaryComposition.pj.valorBrutoNf) : '••••'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bloco B2B 3: Glosas & Deduções Contratuais */}
+                    <div className="bg-rose-50/40 dark:bg-rose-950/20 p-4 rounded-2xl border border-rose-200/80 dark:border-rose-800/60 space-y-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-rose-200/60 dark:border-rose-800/40">
+                        <span className="text-[11px] font-black uppercase text-rose-800 dark:text-rose-300">3. Glosas & Deduções PJ</span>
+                        <span className="text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums">
+                          -{showValues ? formatCurrency(summaryComposition.pj.glosasTotal) : '••••'}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs tabular-nums">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Glosa sobre Base:</span>
+                          <span className="font-bold text-rose-600">-{showValues ? formatCurrency(summaryComposition.pj.glosaBase) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Glosa sobre Variável:</span>
+                          <span className="font-bold text-rose-600">-{showValues ? formatCurrency(summaryComposition.pj.glosaBonus) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>Outras Deduções / Retenções:</span>
+                          <span className="font-bold text-rose-600">-{showValues ? formatCurrency(summaryComposition.pj.outrasDeducoes) : '••••'}</span>
+                        </div>
+                        <div className="flex justify-between text-emerald-800 dark:text-emerald-300 font-black pt-1 border-t border-rose-200/60 dark:border-rose-800/40">
+                          <span>= Valor Líquido NF:</span>
+                          <span>{showValues ? formatCurrency(summaryComposition.pj.valorLiquidoNf) : '••••'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Caixa de Fechamento Contábil Executivo */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-slate-100 dark:to-slate-800 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
                   <span className="text-xs font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider block">
-                    Fórmula do Total Real Desembolsado
+                    {isPjOnlyView
+                      ? 'Equação Contratual de Faturamento (PJ / MEI)'
+                      : isEstagioOnlyView
+                        ? 'Equação Financeira de Estágios (Lei nº 11.788/2008)'
+                        : 'Fechamento Consolidado por Natureza Jurídica'}
                   </span>
-                  <p className="text-xs text-slate-600 dark:text-slate-400">
-                    Líquido Folha ({formatCurrency(summaryTotals.folhaLiquidaClt)}) + Extra-Folha ({formatCurrency(summaryTotals.totalExtraFolha)}) + Contratos PJ ({formatCurrency(summaryTotals.totalPjLiquido)})
+                  <p className="text-xs text-slate-600 dark:text-slate-400 tabular-nums">
+                    {isPjOnlyView
+                      ? `Valor Bruto NF (${showValues ? formatCurrency(summaryComposition.pj.valorBrutoNf) : '••••'}) (-) Glosas / Deduções (${showValues ? formatCurrency(summaryComposition.pj.glosasTotal) : '••••'})`
+                      : isEstagioOnlyView
+                        ? `Subtotal Bolsas & Auxílios (${showValues ? formatCurrency(summaryComposition.estagio.subtotal) : '••••'}) (-) Deduções (${showValues ? formatCurrency(summaryComposition.estagio.deducoes) : '••••'})${summaryComposition.estagio.antecipacao > 0 ? ` (+) Antecipação (${showValues ? formatCurrency(summaryComposition.estagio.antecipacao) : '••••'})` : ''}`
+                        : [
+                            summaryComposition.clt.countRows > 0 ? `Folha CLT (${showValues ? formatCurrency(summaryComposition.clt.liquidoTotal) : '••••'})` : null,
+                            summaryComposition.estagio.countRows > 0 ? `Estágio (${showValues ? formatCurrency(summaryComposition.estagio.liquidoTotal) : '••••'})` : null,
+                            summaryComposition.pj.countRows > 0 ? `Contratos PJ/MEI (${showValues ? formatCurrency(summaryComposition.pj.valorLiquidoNf) : '••••'})` : null,
+                          ].filter(Boolean).join(' + ')}
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Total Geral Desembolsado</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                    {isPjOnlyView ? 'Total Líquido NF (PJ / MEI)' : isEstagioOnlyView ? 'Total Líquido Estágio' : 'Total Geral Desembolsado'}
+                  </span>
                   <span className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-300 tabular-nums">
-                    {formatCurrency(summaryTotals.totalGeral)}
+                    {showValues ? formatCurrency(summaryComposition.grandTotalLiquido) : '••••••'}
                   </span>
                 </div>
               </div>
@@ -2796,7 +3025,7 @@ export function CompetenciasCostsListModal({
                 <button
                   type="button"
                   onClick={() => setIsSummaryVerbasModalOpen(false)}
-                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                  className="min-h-[44px] px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
                 >
                   Fechar Detalhamento
                 </button>
@@ -2805,98 +3034,214 @@ export function CompetenciasCostsListModal({
           </div>
         )}
 
-        {/* MODAL DETALHE DE VERBAS POR COLABORADOR */}
-        {verbasDetailRow && (
+        {/* MODAL ESPELHO DA COMPETÊNCIA (SEGREGADO POR NATUREZA JURÍDICA: CLT, ESTÁGIO OU PJ/MEI) */}
+        {verbasDetailRow && (() => {
+          const dCost = verbasDetailRow.cost;
+          const dEmp = verbasDetailRow.emp;
+          const dIsCLT = dCost.vinculo_tipo === 'CLT' || dEmp?.linkType === 'CLT';
+          const dIsEstagio = dEmp?.linkType === 'Estagiário' || (dEmp?.linkType || '').toLowerCase().includes('estag');
+          const dIsPJ = !dIsCLT && !dIsEstagio;
+          const dFin = calculateRowFinancials(dCost, dIsCLT);
+          const mirror = buildMirrorRowDetail({
+            cost: dCost,
+            emp: dEmp,
+            name: verbasDetailRow.name,
+            financials: dFin,
+            realTotal: dFin.realTotal,
+            isCLT: dIsCLT,
+            isPJ: dIsPJ,
+            isEstagio: dIsEstagio,
+          });
+
+          return (
           <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
               <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
-                    <Receipt size={20} />
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 ${
+                    mirror.regime === 'PJ'
+                      ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
+                      : mirror.regime === 'ESTAGIO'
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                        : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                  }`}>
+                    {mirror.regime === 'PJ' ? <Building2 size={20} /> : <Receipt size={20} />}
                   </div>
-                  <div>
-                    <h4 className="text-base font-black text-slate-900 dark:text-white">
-                      Espelho da Competência &bull; {verbasDetailRow.name}
+                  <div className="min-w-0">
+                    <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">
+                      {mirror.regime === 'PJ'
+                        ? `Espelho de Faturamento (${mirror.modalidade}) • ${mirror.entityName}`
+                        : mirror.regime === 'ESTAGIO'
+                          ? `Espelho da Bolsa de Estágio • ${mirror.entityName}`
+                          : `Espelho da Folha CLT • ${mirror.entityName}`}
                     </h4>
-                    <p className="text-xs text-slate-500">
-                      {formatCompetenciaLabel(verbasDetailRow.cost.competencia)} &bull; {verbasDetailRow.cost.vinculo_tipo || 'CLT'} {verbasDetailRow.emp?.company ? `• ${verbasDetailRow.emp.company}` : ''}
+                    <p className="text-xs text-slate-500 truncate">
+                      {mirror.regime === 'PJ'
+                        ? `${mirror.competenciaFull} • ${mirror.modalidade} • Contratante: ${mirror.company}${mirror.cnpj ? ` • CNPJ: ${mirror.cnpj}` : ''}`
+                        : mirror.regime === 'ESTAGIO'
+                          ? `${mirror.competenciaFull} • Estágio (Lei nº 11.788/2008) • ${mirror.company}${mirror.cpf ? ` • CPF: ${mirror.cpf}` : ''}`
+                          : `${mirror.competenciaFull} • CLT • ${mirror.company}${mirror.cpf ? ` • CPF: ${mirror.cpf}` : ''}`}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setVerbasDetailRow(null)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+                  aria-label="Fechar espelho da competência"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              {/* Conteúdo do Espelho */}
-              <div className="space-y-3">
-                {/* Proventos */}
-                <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-                  <div className="flex justify-between items-center text-xs font-black text-emerald-700 dark:text-emerald-400 border-b pb-1.5 border-slate-200 dark:border-slate-800">
-                    <span>PROVENTOS DA FOLHA</span>
-                    <span>{formatCurrency((verbasDetailRow.cost.valor_fixo || verbasDetailRow.cost.valor_liquido || 0) + (verbasDetailRow.cost.valor_hora_extra || 0) + (verbasDetailRow.cost.valor_adicional_not || 0) + (verbasDetailRow.cost.valor_ferias || 0) + (verbasDetailRow.cost.valor_decimo_terceiro || 0) + (verbasDetailRow.cost.valor_rescisao || 0) + (verbasDetailRow.cost.outros_ajustes || 0))}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex justify-between"><span className="text-slate-500">Salário Base:</span><span className="font-semibold">{formatCurrency(verbasDetailRow.cost.valor_fixo || verbasDetailRow.cost.valor_liquido || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Horas Extras:</span><span className="font-semibold">{formatCurrency(verbasDetailRow.cost.valor_hora_extra || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Adicional Noturno:</span><span className="font-semibold">{formatCurrency(verbasDetailRow.cost.valor_adicional_not || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">13º Salário:</span><span className="font-semibold">{formatCurrency(verbasDetailRow.cost.valor_decimo_terceiro || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Férias / Rescisão:</span><span className="font-semibold">{formatCurrency((verbasDetailRow.cost.valor_ferias || 0) + (verbasDetailRow.cost.valor_rescisao || 0))}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Outros Proventos:</span><span className="font-semibold">{formatCurrency(verbasDetailRow.cost.outros_ajustes || 0)}</span></div>
-                  </div>
-                </div>
-
-                {/* Descontos */}
-                <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-                  <div className="flex justify-between items-center text-xs font-black text-rose-700 dark:text-rose-400 border-b pb-1.5 border-slate-200 dark:border-slate-800">
-                    <span>DESCONTOS DA FOLHA</span>
-                    <span>-{formatCurrency(verbasDetailRow.cost.valor_descontos || 0)}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex justify-between"><span className="text-slate-500">INSS:</span><span className="font-semibold text-rose-600">-{formatCurrency(verbasDetailRow.cost.inss_empregado || (verbasDetailRow.cost as any).inss || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">IRRF:</span><span className="font-semibold text-rose-600">-{formatCurrency(verbasDetailRow.cost.irrf_empregado || (verbasDetailRow.cost as any).irrf || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Desc. VT (6%):</span><span className="font-semibold text-rose-600">-{formatCurrency((verbasDetailRow.cost as any).desconto_vt || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Desc. Adiantamento:</span><span className="font-semibold text-rose-600">-{formatCurrency((verbasDetailRow.cost as any).desconto_adiantamento || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Faltas / DSR:</span><span className="font-semibold text-rose-600">-{formatCurrency(verbasDetailRow.cost.valor_faltas || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Consignados / Pensão:</span><span className="font-semibold text-rose-600">-{formatCurrency((verbasDetailRow.cost.valor_consignado || 0) + (verbasDetailRow.cost.valor_pensao_alimenticia || (verbasDetailRow.cost as any).pensao_alimenticia || 0))}</span></div>
-                  </div>
-                </div>
-
-                {/* Extra-Folha */}
-                <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-                  <div className="flex justify-between items-center text-xs font-black text-blue-700 dark:text-blue-400 border-b pb-1.5 border-slate-200 dark:border-slate-800">
-                    <span>EXTRA-FOLHA & BENEFÍCIOS PAGOS</span>
-                    <span>+{formatCurrency((verbasDetailRow.cost.valor_adiantamento || 0) + (verbasDetailRow.cost.valor_vt || 0) + (verbasDetailRow.cost.valor_cesta || 0) + (verbasDetailRow.cost.valor_vr || 0) + (verbasDetailRow.cost.valor_bonus || 0) + (verbasDetailRow.cost.valor_ajuda_custo || 0))}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex justify-between"><span className="text-slate-500">Adiantamento Salarial:</span><span className="font-semibold text-blue-600">+{formatCurrency(verbasDetailRow.cost.valor_adiantamento || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Recarga VT:</span><span className="font-semibold">+{formatCurrency(verbasDetailRow.cost.valor_vt || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">VR / Cesta:</span><span className="font-semibold">+{formatCurrency((verbasDetailRow.cost.valor_cesta || 0) + (verbasDetailRow.cost.valor_vr || 0))}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Bônus / Gratificação:</span><span className="font-semibold">+{formatCurrency(verbasDetailRow.cost.valor_bonus || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Ajuda de Custo:</span><span className="font-semibold">+{formatCurrency(verbasDetailRow.cost.valor_ajuda_custo || 0)}</span></div>
-                  </div>
-                </div>
-
-                {/* Total da Competência */}
-                {(() => {
-                  const isCLT = verbasDetailRow.cost.vinculo_tipo === 'CLT' || verbasDetailRow.emp?.linkType === 'CLT';
-                  const detailFin = calculateRowFinancials(verbasDetailRow.cost, isCLT);
-                  return (
-                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
-                      <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase">Total Desembolsado na Competência:</span>
-                      <span className="text-base font-black text-emerald-800 dark:text-emerald-300">
-                        {formatCurrency(detailFin.realTotal)}
-                      </span>
+              {/* Conteúdo do Espelho — Estritamente aderente à Natureza Jurídica */}
+              {mirror.regime === 'PJ' ? (
+                <div className="space-y-3">
+                  {/* Identificação Contratual B2B */}
+                  <div className="bg-teal-50/40 dark:bg-teal-950/20 p-3 rounded-2xl border border-teal-200/70 dark:border-teal-900/50 text-xs space-y-1">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-600 dark:text-slate-300">
+                      <span><strong>Contratada:</strong> {mirror.entityName}</span>
+                      {mirror.cnpj && <span><strong>CNPJ:</strong> <span className="font-mono">{mirror.cnpj}</span></span>}
+                      <span><strong>Escopo:</strong> {mirror.escopo}</span>
+                      {mirror.responsibleName && <span><strong>Resp. Legal:</strong> {mirror.responsibleName}</span>}
                     </div>
-                  );
-                })()}
-              </div>
+                  </div>
 
-              <div className="flex items-center justify-between pt-2">
+                  {/* Honorários & Variável Contratual */}
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-black text-teal-800 dark:text-teal-300 border-b pb-1.5 border-slate-200 dark:border-slate-800">
+                      <span>HONORÁRIOS, VARIÁVEL & CONECTIVIDADE (BRUTO NF)</span>
+                      <span className="tabular-nums">{showValues ? formatCurrency(mirror.valorBrutoNf) : '••••'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs tabular-nums">
+                      <div className="flex justify-between"><span className="text-slate-500">Honorários / NF Base:</span><span className="font-semibold">{showValues ? formatCurrency(mirror.honorariosBase) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Bônus Contratual:</span><span className="font-semibold text-sky-700 dark:text-sky-300">+{showValues ? formatCurrency(mirror.bonusContratual) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Comissões:</span><span className="font-semibold text-sky-700 dark:text-sky-300">+{showValues ? formatCurrency(mirror.comissoes) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Incentivos Comerciais:</span><span className="font-semibold text-sky-700 dark:text-sky-300">+{showValues ? formatCurrency(mirror.incentivosComerciais) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Conectividade / Reembolso:</span><span className="font-semibold text-teal-700 dark:text-teal-300">+{showValues ? formatCurrency(mirror.conectividadeReembolso) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300 font-bold">= Valor Bruto NF:</span><span className="font-black text-blue-900 dark:text-blue-200">{showValues ? formatCurrency(mirror.valorBrutoNf) : '••••'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Glosas & Deduções Contratuais */}
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-black text-rose-700 dark:text-rose-400 border-b pb-1.5 border-slate-200 dark:border-slate-800">
+                      <span>GLOSAS & DEDUÇÕES CONTRATUAIS</span>
+                      <span className="tabular-nums">-{showValues ? formatCurrency(mirror.glosasTotal) : '••••'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs tabular-nums">
+                      <div className="flex justify-between"><span className="text-slate-500">Glosa sobre Base:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.glosaBase) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Glosa sobre Variável:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.glosaBonus) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Outras Deduções / Retenções:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.outrasDeducoes) : '••••'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Valor Líquido NF */}
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
+                    <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase">Valor Líquido NF (Faturado):</span>
+                    <span className="text-base font-black text-emerald-800 dark:text-emerald-300 tabular-nums">
+                      {showValues ? formatCurrency(mirror.valorLiquidoNf) : '••••••'}
+                    </span>
+                  </div>
+                </div>
+              ) : mirror.regime === 'ESTAGIO' ? (
+                <div className="space-y-3">
+                  {/* Bolsa-Auxílio & Auxílios (Lei nº 11.788/2008) */}
+                  <div className="bg-amber-50/40 dark:bg-amber-950/20 p-3.5 rounded-2xl border border-amber-200/80 dark:border-amber-900/50 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-black text-amber-800 dark:text-amber-300 border-b pb-1.5 border-amber-200/60 dark:border-amber-900/50">
+                      <span>BOLSA-AUXÍLIO & AUXÍLIOS (LEI Nº 11.788/2008)</span>
+                      <span className="tabular-nums">{showValues ? formatCurrency(mirror.subtotal) : '••••'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs tabular-nums">
+                      <div className="flex justify-between"><span className="text-slate-500">Bolsa-Auxílio:</span><span className="font-semibold">{showValues ? formatCurrency(mirror.bolsaAuxilio) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Auxílio-Transporte:</span><span className="font-semibold text-emerald-700">+{showValues ? formatCurrency(mirror.auxilioTransporte) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Outros Auxílios:</span><span className="font-semibold text-blue-700">+{showValues ? formatCurrency(mirror.outrosAuxilios) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300 font-bold">= Subtotal:</span><span className="font-black text-blue-900 dark:text-blue-200">{showValues ? formatCurrency(mirror.subtotal) : '••••'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Deduções Estágio */}
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-black text-rose-700 dark:text-rose-400 border-b pb-1.5 border-slate-200 dark:border-slate-800">
+                      <span>DEDUÇÕES{mirror.antecipacao > 0 ? ' & ANTECIPAÇÃO' : ''}</span>
+                      <span className="tabular-nums">-{showValues ? formatCurrency(mirror.deducoes) : '••••'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs tabular-nums">
+                      <div className="flex justify-between"><span className="text-slate-500">Deduções:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.deducoes) : '••••'}</span></div>
+                      {mirror.antecipacao > 0 && (
+                        <div className="flex justify-between"><span className="text-slate-500">Antecipação:</span><span className="font-semibold text-amber-700">+{showValues ? formatCurrency(mirror.antecipacao) : '••••'}</span></div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Valor Líquido Estágio */}
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
+                    <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase">Valor Líquido da Bolsa de Estágio:</span>
+                    <span className="text-base font-black text-emerald-800 dark:text-emerald-300 tabular-nums">
+                      {showValues ? formatCurrency(mirror.valorLiquido) : '••••••'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Proventos CLT */}
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-black text-emerald-700 dark:text-emerald-400 border-b pb-1.5 border-slate-200 dark:border-slate-800">
+                      <span>PROVENTOS DA FOLHA (CLT)</span>
+                      <span className="tabular-nums">{showValues ? formatCurrency(mirror.proventosTotal) : '••••'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs tabular-nums">
+                      <div className="flex justify-between"><span className="text-slate-500">Salário Base:</span><span className="font-semibold">{showValues ? formatCurrency(mirror.salarioBase) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Horas Extras:</span><span className="font-semibold">{showValues ? formatCurrency(mirror.horasExtras) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Adicional Noturno:</span><span className="font-semibold">{showValues ? formatCurrency(mirror.adicionalNoturno) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">13º Salário:</span><span className="font-semibold">{showValues ? formatCurrency(mirror.decimoTerceiro) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Férias / Rescisão:</span><span className="font-semibold">{showValues ? formatCurrency(mirror.feriasRescisao) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Outros Recebidos:</span><span className="font-semibold">{showValues ? formatCurrency(mirror.outrosProventos) : '••••'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Descontos CLT */}
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-black text-rose-700 dark:text-rose-400 border-b pb-1.5 border-slate-200 dark:border-slate-800">
+                      <span>DESCONTOS DA FOLHA</span>
+                      <span className="tabular-nums">-{showValues ? formatCurrency(mirror.descontosTotal) : '••••'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs tabular-nums">
+                      <div className="flex justify-between"><span className="text-slate-500">INSS:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.inss) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">IRRF:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.irrf) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Desc. VT (6%):</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.descontoVt6) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Desc. Adiantamento:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.descontoAdiantamento) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Faltas / DSR:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.faltasDsr) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Consignados / Pensão:</span><span className="font-semibold text-rose-600">-{showValues ? formatCurrency(mirror.consignadoPensao) : '••••'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Extra-Folha & Benefícios CLT */}
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-black text-blue-700 dark:text-blue-400 border-b pb-1.5 border-slate-200 dark:border-slate-800">
+                      <span>EXTRA-FOLHA & BENEFÍCIOS PAGOS</span>
+                      <span className="tabular-nums">+{showValues ? formatCurrency(mirror.extraFolhaTotal) : '••••'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs tabular-nums">
+                      <div className="flex justify-between"><span className="text-slate-500">Adiantamento Salarial:</span><span className="font-semibold text-amber-700">+{showValues ? formatCurrency(mirror.adiantamento) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Vale Transporte (VT):</span><span className="font-semibold">+{showValues ? formatCurrency(mirror.vt) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">VR / Cesta Básica:</span><span className="font-semibold">+{showValues ? formatCurrency(mirror.vrCesta) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Bônus:</span><span className="font-semibold">+{showValues ? formatCurrency(mirror.bonus) : '••••'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Premiação:</span><span className="font-semibold">+{showValues ? formatCurrency(mirror.premiacao) : '••••'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Total da Competência CLT */}
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
+                    <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase">Total Líquido Desembolsado (CLT):</span>
+                    <span className="text-base font-black text-emerald-800 dark:text-emerald-300 tabular-nums">
+                      {showValues ? formatCurrency(mirror.valorLiquido) : '••••••'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -2904,22 +3249,27 @@ export function CompetenciasCostsListModal({
                     setVerbasDetailRow(null);
                     handleOpenEditModal(row.cost, row.emp);
                   }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"
+                  className="min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
                 >
                   <Edit3 size={14} />
-                  Editar Esta Competência
+                  {mirror.regime === 'PJ'
+                    ? 'Editar Faturamento PJ'
+                    : mirror.regime === 'ESTAGIO'
+                      ? 'Editar Bolsa de Estágio'
+                      : 'Editar Esta Competência'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setVerbasDetailRow(null)}
-                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold"
+                  className="min-h-[44px] px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold"
                 >
                   Fechar
                 </button>
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* MODAL DE EDIÇÃO DIRETA NO PAINEL (ELIMINA O LOOPING COM A FICHA) */}
         {editingRowCost && (
@@ -2931,14 +3281,19 @@ export function CompetenciasCostsListModal({
                   <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
                     <Edit3 size={20} />
                   </div>
-                  <div>
-                    <h4 className="text-base font-black text-slate-900 dark:text-white">
-                      Editar Valores &bull; {editingRowCost.emp?.name || (editingRowCost.cost as any).nome_colaborador || 'Colaborador'}
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Competência: <strong>{formatCompetenciaLabel(editingRowCost.cost.competencia)}</strong> ({editingRowCost.cost.competencia}) &bull; Regime: <strong>{editingRowCost.cost.vinculo_tipo || 'CLT'}</strong>
-                    </p>
-                  </div>
+                    <div>
+                      <h4 className="text-base font-black text-slate-900 dark:text-white">
+                        {!(editingRowCost.cost.vinculo_tipo === 'CLT' || editingRowCost.emp?.linkType === 'CLT')
+                          ? `Editar Faturamento PJ • ${editingRowCost.emp?.corporate_name || editingRowCost.emp?.name || 'Empresa Contratada'}`
+                          : `Editar Valores • ${editingRowCost.emp?.name || (editingRowCost.cost as any).nome_colaborador || 'Colaborador'}`}
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Competência: <strong>{formatCompetenciaLabel(editingRowCost.cost.competencia)}</strong> ({editingRowCost.cost.competencia}) &bull; Natureza: <strong>{editingRowCost.emp?.linkType || editingRowCost.cost.vinculo_tipo || 'CLT'}</strong>
+                        {!(editingRowCost.cost.vinculo_tipo === 'CLT' || editingRowCost.emp?.linkType === 'CLT') && (editingRowCost.emp?.pj_type || editingRowCost.emp?.document_id)
+                          ? ` • CNPJ: ${editingRowCost.emp?.pj_type || editingRowCost.emp?.document_id}`
+                          : ''}
+                      </p>
+                    </div>
                 </div>
                 <button
                   type="button"
@@ -3181,8 +3536,8 @@ export function CompetenciasCostsListModal({
                       </div>
                     </div>
                   ) : (
-                    /* Edição PJ */
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    /* Edição PJ / MEI (B2B) */
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                       <div>
                         <label className="text-[10px] font-bold text-slate-500 block">Honorários / NF Base:</label>
                         <input
@@ -3194,17 +3549,27 @@ export function CompetenciasCostsListModal({
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 block">Bônus & Comissões PJ:</label>
+                        <label className="text-[10px] font-bold text-slate-500 block">Variável / Bônus Contratual:</label>
                         <input
                           type="number"
                           step="0.01"
                           value={editFormData.valor_bonus ?? ''}
                           onChange={e => setEditFormData(p => ({ ...p, valor_bonus: parseFloat(e.target.value) || 0 }))}
-                          className="w-full mt-0.5 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-emerald-600"
+                          className="w-full mt-0.5 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-sky-700 dark:text-sky-300"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 block">Glosas & Deduções PJ:</label>
+                        <label className="text-[10px] font-bold text-slate-500 block">Conectividade / Reembolso:</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editFormData.valor_ajuda_custo ?? ''}
+                          onChange={e => setEditFormData(p => ({ ...p, valor_ajuda_custo: parseFloat(e.target.value) || 0 }))}
+                          className="w-full mt-0.5 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-teal-700 dark:text-teal-300"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block">Glosas / Deduções PJ:</label>
                         <input
                           type="number"
                           step="0.01"
@@ -3224,7 +3589,7 @@ export function CompetenciasCostsListModal({
                       <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-slate-100 dark:to-slate-800 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
                         <div className="space-y-0.5">
                           <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">
-                            Conciliação Contábil em Tempo Real Desta Competência
+                            {isCLT ? 'Conciliação Contábil em Tempo Real Desta Competência' : 'Conciliação Contratual do Faturamento PJ'}
                           </span>
                           {isCLT ? (
                             <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
@@ -3232,12 +3597,14 @@ export function CompetenciasCostsListModal({
                             </p>
                           ) : (
                             <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
-                              NF Base ({formatCurrency(preview.fixo)}) + Bônus ({formatCurrency(preview.bonus)}) - Deduções ({formatCurrency(preview.descontosFolha)})
+                              Honorários Base ({formatCurrency(preview.fixo)}) + Variável ({formatCurrency(preview.bonus)}) + Conectividade ({formatCurrency(preview.ajudaCusto)}) - Glosas/Deduções ({formatCurrency(preview.descontosFolha)})
                             </p>
                           )}
                         </div>
                         <div className="text-right">
-                          <span className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">Total Real Desembolsado</span>
+                          <span className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">
+                            {isCLT ? 'Total Real Desembolsado' : 'Valor Líquido NF'}
+                          </span>
                           <span className="text-base sm:text-xl font-black text-emerald-700 dark:text-emerald-300 tabular-nums">
                             {formatCurrency(preview.realTotal)}
                           </span>
