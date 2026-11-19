@@ -2,6 +2,7 @@ import type { Employee, MonthlyCost } from '@/types/loans';
 import type { RowFinancials } from '@/services/people-hr.service';
 
 export type CompetenciasPdfReportType = 'sintetico' | 'analitico';
+export type LegalRegimeType = 'CLT' | 'ESTAGIO' | 'PJ';
 
 export interface CompetenciaCostPdfInputRow {
   cost: Partial<MonthlyCost>;
@@ -20,11 +21,16 @@ export interface CompetenciaCostPdfRow {
   competenciaFull: string;
   employeeId: string;
   name: string;
+  corporateName: string;
+  displayEntityName: string;
+  responsibleName: string;
   company: string;
   roleOrDept: string;
   documentId: string;
-  regime: 'CLT' | 'PJ' | 'ESTAGIO';
+  documentLabel: 'CNPJ' | 'CPF';
+  regime: LegalRegimeType;
   regimeLabel: string;
+  // Quebra analítica base (10 colunas CLT)
   proventos: number;
   outros: number;
   vt: number;
@@ -37,6 +43,19 @@ export interface CompetenciaCostPdfRow {
   liquido: number;
   beneficiosAgrupados: number;
   proventosComOutros: number;
+  // Quebra específica Estágio (Lei nº 11.788/2008)
+  bolsaAuxilio: number;
+  auxilioTransporte: number;
+  outrosAuxilios: number;
+  deducoesEstagio: number;
+  antecipacaoEstagio: number;
+  // Quebra específica PJ / MEI (Relação B2B / Contratual)
+  honorariosBase: number;
+  variavelComissoes: number;
+  conectividadeReembolso: number;
+  valorBrutoNf: number;
+  glosasDeducoes: number;
+  valorLiquidoNf: number;
 }
 
 export interface CompetenciasPdfTotals {
@@ -45,6 +64,7 @@ export interface CompetenciasPdfTotals {
   countClt: number;
   countPj: number;
   countEstagio: number;
+  // Totais CLT (10 colunas)
   proventos: number;
   outros: number;
   vt: number;
@@ -57,6 +77,36 @@ export interface CompetenciasPdfTotals {
   liquido: number;
   beneficiosAgrupados: number;
   proventosComOutros: number;
+  // Totais Estágio
+  bolsaAuxilio: number;
+  auxilioTransporte: number;
+  outrosAuxilios: number;
+  deducoesEstagio: number;
+  antecipacaoEstagio: number;
+  // Totais PJ / MEI
+  honorariosBase: number;
+  variavelComissoes: number;
+  conectividadeReembolso: number;
+  valorBrutoNf: number;
+  glosasDeducoes: number;
+  valorLiquidoNf: number;
+}
+
+export interface PartitionedCompetenciaPdfData {
+  allRows: CompetenciaCostPdfRow[];
+  cltRows: CompetenciaCostPdfRow[];
+  estagioRows: CompetenciaCostPdfRow[];
+  pjRows: CompetenciaCostPdfRow[];
+  cltTotals: CompetenciasPdfTotals;
+  estagioTotals: CompetenciasPdfTotals;
+  pjTotals: CompetenciasPdfTotals;
+  grandTotals: {
+    countRows: number;
+    uniqueEmployeesCount: number;
+    totalLiquidoGeral: number;
+    regimesPresent: LegalRegimeType[];
+    isMixed: boolean;
+  };
 }
 
 export interface CompetenciasPdfFilterContext {
@@ -161,7 +211,7 @@ export function normalizeCompetenciaCostRow(input: CompetenciaCostPdfInputRow): 
 
   const isEstagio = Boolean(input.isEstagio);
   const isCLT = Boolean(input.isCLT);
-  const regime: 'CLT' | 'PJ' | 'ESTAGIO' = isEstagio ? 'ESTAGIO' : (isCLT ? 'CLT' : 'PJ');
+  const regime: LegalRegimeType = isEstagio ? 'ESTAGIO' : (isCLT ? 'CLT' : 'PJ');
   const regimeLabel = isEstagio ? 'Estágio' : (isCLT ? 'CLT' : 'PJ');
 
   let proventos = 0;
@@ -173,28 +223,7 @@ export function normalizeCompetenciaCostRow(input: CompetenciaCostPdfInputRow): 
   let descontos = 0;
   let adiantamento = 0;
 
-  if (isCLT) {
-    const holerite = toSafeNumber(cost.valor_holerite);
-    const hasHol = holerite > 0;
-    const fixoBase = cost.valor_fixo !== undefined && cost.valor_fixo !== null
-      ? toSafeNumber(cost.valor_fixo)
-      : toSafeNumber(financials.fixo);
-    const heNoturno = toSafeNumber(financials.heNoturno) || (
-      toSafeNumber(cost.valor_hora_extra) + toSafeNumber(cost.valor_adicional_not)
-    );
-    const outrosAjustes = toSafeNumber(cost.outros_ajustes ?? verbasAdicionais.outros_ajustes);
-
-    proventos = roundCurrency(hasHol ? holerite : fixoBase);
-    // Isolamento de Proventos: quando há holerite importado, HE/Noturno já compõem os proventos
-    outros = roundCurrency(hasHol ? outrosAjustes : (outrosAjustes || heNoturno));
-    vt = roundCurrency(toSafeNumber(cost.valor_vt));
-    vrCesta = roundCurrency(toSafeNumber(cost.valor_cesta) + toSafeNumber(cost.valor_vr));
-    bonus = roundCurrency(toSafeNumber(cost.valor_bonus));
-    // Blindagem CLT: Premiação lê estritamente valor_ajuda_custo (nunca valor_incentivos)
-    premiacao = roundCurrency(toSafeNumber(cost.valor_ajuda_custo));
-    descontos = roundCurrency(toSafeNumber(cost.valor_descontos) || toSafeNumber(financials.descontosFolha));
-    adiantamento = roundCurrency(toSafeNumber(cost.valor_adiantamento));
-  } else {
+  if (regime === 'PJ') {
     const fixoPj = toSafeNumber(financials.fixo)
       || toSafeNumber(cost.valor_fixo)
       || toSafeNumber(cost.valor_liquido)
@@ -217,6 +246,28 @@ export function normalizeCompetenciaCostRow(input: CompetenciaCostPdfInputRow): 
     premiacao = roundCurrency(premiacaoPj);
     descontos = roundCurrency(descontosPj);
     adiantamento = 0;
+  } else {
+    // CLT ou Estágio
+    const holerite = toSafeNumber(cost.valor_holerite);
+    const hasHol = holerite > 0;
+    const fixoBase = cost.valor_fixo !== undefined && cost.valor_fixo !== null
+      ? toSafeNumber(cost.valor_fixo)
+      : toSafeNumber(financials.fixo);
+    const heNoturno = toSafeNumber(financials.heNoturno) || (
+      toSafeNumber(cost.valor_hora_extra) + toSafeNumber(cost.valor_adicional_not)
+    );
+    const outrosAjustes = toSafeNumber(cost.outros_ajustes ?? verbasAdicionais.outros_ajustes);
+
+    proventos = roundCurrency(hasHol ? holerite : fixoBase);
+    // Isolamento de Proventos: quando há holerite importado, HE/Noturno já compõem os proventos
+    outros = roundCurrency(hasHol ? outrosAjustes : (outrosAjustes || heNoturno));
+    vt = roundCurrency(toSafeNumber(cost.valor_vt));
+    vrCesta = roundCurrency(toSafeNumber(cost.valor_cesta) + toSafeNumber(cost.valor_vr));
+    bonus = roundCurrency(toSafeNumber(cost.valor_bonus));
+    // Blindagem CLT/Estágio: Premiação/Ajuda lê estritamente valor_ajuda_custo (nunca valor_incentivos)
+    premiacao = roundCurrency(toSafeNumber(cost.valor_ajuda_custo));
+    descontos = roundCurrency(toSafeNumber(cost.valor_descontos) || toSafeNumber(financials.descontosFolha));
+    adiantamento = roundCurrency(toSafeNumber(cost.valor_adiantamento));
   }
 
   const subtotal = roundCurrency(proventos + outros + vt + vrCesta + bonus + premiacao);
@@ -224,20 +275,50 @@ export function normalizeCompetenciaCostRow(input: CompetenciaCostPdfInputRow): 
   const beneficiosAgrupados = roundCurrency(vt + vrCesta + bonus + premiacao);
   const proventosComOutros = roundCurrency(proventos + outros);
 
+  // Campos Estágio (Lei nº 11.788/2008)
+  const bolsaAuxilio = proventos;
+  const auxilioTransporte = vt;
+  const outrosAuxilios = roundCurrency(outros + vrCesta + bonus + premiacao);
+  const deducoesEstagio = descontos;
+  const antecipacaoEstagio = adiantamento;
+
+  // Campos PJ / MEI (Contratual B2B)
+  const honorariosBase = proventos;
+  const variavelComissoes = bonus;
+  const conectividadeReembolso = premiacao;
+  const valorBrutoNf = roundCurrency(honorariosBase + variavelComissoes + conectividadeReembolso);
+  const glosasDeducoes = descontos;
+  const valorLiquidoNf = liquido;
+
   const compStr = String(cost.competencia || '');
   const company = emp.company || 'MarBR';
   const roleOrDept = emp.job_role || emp.department || '—';
-  const documentId = emp.document_id || emp.responsible_cpf || '';
+  const corporateName = (emp.corporate_name || '').trim();
+  const responsibleName = (emp.responsible_name || '').trim();
+
+  const displayEntityName = regime === 'PJ'
+    ? (corporateName || input.name || 'Empresa Contratada')
+    : (input.name || 'Colaborador');
+
+  const documentId = regime === 'PJ'
+    ? ((emp.pj_type || emp.document_id || '').trim())
+    : ((emp.document_id || emp.responsible_cpf || '').trim());
+
+  const documentLabel: 'CNPJ' | 'CPF' = regime === 'PJ' ? 'CNPJ' : 'CPF';
 
   return {
     competencia: compStr,
     competenciaShort: formatCompetenciaShort(compStr),
     competenciaFull: formatCompetenciaFull(compStr),
-    employeeId: String(cost.employee_id || input.name || ''),
-    name: input.name || 'Colaborador',
+    employeeId: String(cost.employee_id || displayEntityName || ''),
+    name: input.name || displayEntityName,
+    corporateName,
+    displayEntityName,
+    responsibleName,
     company,
     roleOrDept,
     documentId,
+    documentLabel,
     regime,
     regimeLabel,
     proventos,
@@ -252,6 +333,17 @@ export function normalizeCompetenciaCostRow(input: CompetenciaCostPdfInputRow): 
     liquido,
     beneficiosAgrupados,
     proventosComOutros,
+    bolsaAuxilio,
+    auxilioTransporte,
+    outrosAuxilios,
+    deducoesEstagio,
+    antecipacaoEstagio,
+    honorariosBase,
+    variavelComissoes,
+    conectividadeReembolso,
+    valorBrutoNf,
+    glosasDeducoes,
+    valorLiquidoNf,
   };
 }
 
@@ -272,6 +364,19 @@ export function summarizeCompetenciaPdfRows(rows: CompetenciaCostPdfRow[]): Comp
   let adiantamento = 0;
   let liquido = 0;
 
+  let bolsaAuxilio = 0;
+  let auxilioTransporte = 0;
+  let outrosAuxilios = 0;
+  let deducoesEstagio = 0;
+  let antecipacaoEstagio = 0;
+
+  let honorariosBase = 0;
+  let variavelComissoes = 0;
+  let conectividadeReembolso = 0;
+  let valorBrutoNf = 0;
+  let glosasDeducoes = 0;
+  let valorLiquidoNf = 0;
+
   for (const r of rows) {
     if (r.employeeId) uniqueIds.add(r.employeeId);
     if (r.regime === 'ESTAGIO') countEstagio += 1;
@@ -288,6 +393,19 @@ export function summarizeCompetenciaPdfRows(rows: CompetenciaCostPdfRow[]): Comp
     descontos += r.descontos;
     adiantamento += r.adiantamento;
     liquido += r.liquido;
+
+    bolsaAuxilio += r.bolsaAuxilio;
+    auxilioTransporte += r.auxilioTransporte;
+    outrosAuxilios += r.outrosAuxilios;
+    deducoesEstagio += r.deducoesEstagio;
+    antecipacaoEstagio += r.antecipacaoEstagio;
+
+    honorariosBase += r.honorariosBase;
+    variavelComissoes += r.variavelComissoes;
+    conectividadeReembolso += r.conectividadeReembolso;
+    valorBrutoNf += r.valorBrutoNf;
+    glosasDeducoes += r.glosasDeducoes;
+    valorLiquidoNf += r.valorLiquidoNf;
   }
 
   const roundedProventos = roundCurrency(proventos);
@@ -315,6 +433,64 @@ export function summarizeCompetenciaPdfRows(rows: CompetenciaCostPdfRow[]): Comp
     liquido: roundCurrency(liquido),
     beneficiosAgrupados: roundCurrency(roundedVt + roundedVrCesta + roundedBonus + roundedPremiacao),
     proventosComOutros: roundCurrency(roundedProventos + roundedOutros),
+    bolsaAuxilio: roundCurrency(bolsaAuxilio),
+    auxilioTransporte: roundCurrency(auxilioTransporte),
+    outrosAuxilios: roundCurrency(outrosAuxilios),
+    deducoesEstagio: roundCurrency(deducoesEstagio),
+    antecipacaoEstagio: roundCurrency(antecipacaoEstagio),
+    honorariosBase: roundCurrency(honorariosBase),
+    variavelComissoes: roundCurrency(variavelComissoes),
+    conectividadeReembolso: roundCurrency(conectividadeReembolso),
+    valorBrutoNf: roundCurrency(valorBrutoNf),
+    glosasDeducoes: roundCurrency(glosasDeducoes),
+    valorLiquidoNf: roundCurrency(valorLiquidoNf),
+  };
+}
+
+export function partitionCompetenciaPdfRows(
+  inputRows: CompetenciaCostPdfInputRow[]
+): PartitionedCompetenciaPdfData {
+  const allRows = (inputRows || []).map(normalizeCompetenciaCostRow);
+  const cltRows: CompetenciaCostPdfRow[] = [];
+  const estagioRows: CompetenciaCostPdfRow[] = [];
+  const pjRows: CompetenciaCostPdfRow[] = [];
+  const uniqueIds = new Set<string>();
+
+  for (const row of allRows) {
+    if (row.employeeId) uniqueIds.add(row.employeeId);
+    if (row.regime === 'CLT') cltRows.push(row);
+    else if (row.regime === 'ESTAGIO') estagioRows.push(row);
+    else pjRows.push(row);
+  }
+
+  const cltTotals = summarizeCompetenciaPdfRows(cltRows);
+  const estagioTotals = summarizeCompetenciaPdfRows(estagioRows);
+  const pjTotals = summarizeCompetenciaPdfRows(pjRows);
+
+  const regimesPresent: LegalRegimeType[] = [];
+  if (cltRows.length > 0) regimesPresent.push('CLT');
+  if (estagioRows.length > 0) regimesPresent.push('ESTAGIO');
+  if (pjRows.length > 0) regimesPresent.push('PJ');
+
+  const totalLiquidoGeral = roundCurrency(
+    cltTotals.liquido + estagioTotals.liquido + pjTotals.valorLiquidoNf
+  );
+
+  return {
+    allRows,
+    cltRows,
+    estagioRows,
+    pjRows,
+    cltTotals,
+    estagioTotals,
+    pjTotals,
+    grandTotals: {
+      countRows: allRows.length,
+      uniqueEmployeesCount: uniqueIds.size,
+      totalLiquidoGeral,
+      regimesPresent,
+      isMixed: regimesPresent.length > 1,
+    },
   };
 }
 
@@ -341,7 +517,7 @@ export function buildScopeDescription(filters?: CompetenciasPdfFilterContext): s
   }
 
   if (filters.selectedEmpresa && filters.selectedEmpresa !== 'all') {
-    parts.push(`Empresa: ${filters.selectedEmpresa}`);
+    parts.push(`Contratante: ${filters.selectedEmpresa}`);
   }
   if (filters.selectedVinculo && filters.selectedVinculo !== 'all') {
     const vinculoMap: Record<string, string> = {
@@ -349,10 +525,10 @@ export function buildScopeDescription(filters?: CompetenciasPdfFilterContext): s
       PJ: 'PJ / MEI',
       ESTAGIO: 'Estágio',
     };
-    parts.push(`Regime: ${vinculoMap[filters.selectedVinculo] || filters.selectedVinculo}`);
+    parts.push(`Natureza: ${vinculoMap[filters.selectedVinculo] || filters.selectedVinculo}`);
   }
   if (filters.selectedSetor && filters.selectedSetor !== 'all') {
-    parts.push(`Setor: ${filters.selectedSetor}`);
+    parts.push(`Área: ${filters.selectedSetor}`);
   }
   if (filters.selectedStatus && filters.selectedStatus !== 'all') {
     parts.push(`Status: ${filters.selectedStatus}`);
@@ -367,21 +543,98 @@ export function buildScopeDescription(filters?: CompetenciasPdfFilterContext): s
   return parts.join(' • ');
 }
 
-function getRegimeBadgeClass(regime: 'CLT' | 'PJ' | 'ESTAGIO'): string {
-  if (regime === 'ESTAGIO') return 'badge-estagio';
-  if (regime === 'CLT') return 'badge-clt';
-  return 'badge-pj';
-}
-
-function renderRegimeBreakdown(totals: CompetenciasPdfTotals): string {
+function renderRegimeCountsText(data: PartitionedCompetenciaPdfData): string {
   const parts: string[] = [];
-  if (totals.countClt > 0) parts.push(`${totals.countClt} CLT`);
-  if (totals.countPj > 0) parts.push(`${totals.countPj} PJ`);
-  if (totals.countEstagio > 0) parts.push(`${totals.countEstagio} Estágio`);
-  return parts.length > 0 ? parts.join(' • ') : '0 lançamentos';
+  if (data.cltRows.length > 0) parts.push(`${data.cltRows.length} CLT`);
+  if (data.estagioRows.length > 0) parts.push(`${data.estagioRows.length} Estágio`);
+  if (data.pjRows.length > 0) parts.push(`${data.pjRows.length} PJ/MEI`);
+  return parts.length > 0 ? parts.join(' • ') : '0 registros';
 }
 
-function buildAnaliticoCardsHtml(totals: CompetenciasPdfTotals): string {
+function buildSignaturesHtml(mode: 'CLT' | 'ESTAGIO' | 'PJ'): string {
+  const firstLabel = mode === 'PJ'
+    ? 'Gestão de Contratos / Compras'
+    : mode === 'ESTAGIO'
+      ? 'Gestão de Estágios / RH'
+      : 'Departamento Pessoal (DP)';
+
+  return `
+    <div class="signatures">
+      <div>
+        <div class="sig-line"></div>
+        <div class="sig-label">${escapeHtml(firstLabel)}</div>
+      </div>
+      <div>
+        <div class="sig-line"></div>
+        <div class="sig-label">Controladoria / Auditoria</div>
+      </div>
+      <div>
+        <div class="sig-line"></div>
+        <div class="sig-label">Diretoria Executiva / Financeiro</div>
+      </div>
+    </div>
+  `;
+}
+
+// --- BLOCO 0: RESUMO EXECUTIVO CONSOLIDADO (APENAS NO MODO MISTO — TERMOS 100% NEUTROS) ---
+function buildMixedExecutiveSummaryHtml(data: PartitionedCompetenciaPdfData): string {
+  const cards: string[] = [];
+
+  if (data.cltRows.length > 0) {
+    cards.push(`
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-label">Folha de Pagamento (CLT)</div>
+        <div class="kpi-val">${formatCurrencyBrl(data.cltTotals.liquido)}</div>
+        <div class="kpi-sub">${data.cltTotals.countRows} ${data.cltTotals.countRows === 1 ? 'lançamento' : 'lançamentos'} • ${data.cltTotals.uniqueEmployeesCount} empregados</div>
+      </div>
+    `);
+  }
+
+  if (data.estagioRows.length > 0) {
+    cards.push(`
+      <div class="kpi-card kpi-amber">
+        <div class="kpi-label">Bolsas de Estágio (Lei 11.788/08)</div>
+        <div class="kpi-val">${formatCurrencyBrl(data.estagioTotals.liquido)}</div>
+        <div class="kpi-sub">${data.estagioTotals.countRows} ${data.estagioTotals.countRows === 1 ? 'lançamento' : 'lançamentos'} • ${data.estagioTotals.uniqueEmployeesCount} estagiários</div>
+      </div>
+    `);
+  }
+
+  if (data.pjRows.length > 0) {
+    cards.push(`
+      <div class="kpi-card kpi-teal">
+        <div class="kpi-label">Prestação de Serviços (PJ / MEI)</div>
+        <div class="kpi-val">${formatCurrencyBrl(data.pjTotals.valorLiquidoNf)}</div>
+        <div class="kpi-sub">${data.pjTotals.countRows} ${data.pjTotals.countRows === 1 ? 'faturamento' : 'faturamentos'} • ${data.pjTotals.uniqueEmployeesCount} contratadas</div>
+      </div>
+    `);
+  }
+
+  cards.push(`
+    <div class="kpi-card kpi-liquido">
+      <div class="kpi-label">Total Geral Desembolsado (Grupo)</div>
+      <div class="kpi-val">${formatCurrencyBrl(data.grandTotals.totalLiquidoGeral)}</div>
+      <div class="kpi-sub">${data.grandTotals.countRows} registros • ${data.grandTotals.uniqueEmployeesCount} únicos</div>
+    </div>
+  `);
+
+  const gridCols = cards.length === 4 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)';
+
+  return `
+    <div class="summary-consolidado-box">
+      <div class="summary-consolidado-title">Resumo Executivo Consolidado por Natureza Jurídica</div>
+      <div class="kpi-grid-dynamic" style="grid-template-columns: ${gridCols};">
+        ${cards.join('')}
+      </div>
+      <div class="compliance-banner">
+        <strong>Segregação Jurídico-Contábil:</strong> Vínculos empregatícios (CLT), bolsas de estágio (Lei nº 11.788/2008) e prestação de serviços entre pessoas jurídicas (PJ/MEI) são demonstrados em cadernos independentes com nomenclatura específica de cada regime.${data.pjRows.length > 0 ? ' O Caderno B2B (PJ/MEI) inicia em página própria para conferência destacável.' : ''}
+      </div>
+    </div>
+  `;
+}
+
+// --- SEÇÃO CLT (10 COLUNAS ANALÍTICO / 6 COLUNAS SINTÉTICO) ---
+function buildCltAnaliticoCardsHtml(totals: CompetenciasPdfTotals): string {
   return `
     <div class="kpi-grid-10">
       <div class="kpi-card kpi-slate">
@@ -416,7 +669,7 @@ function buildAnaliticoCardsHtml(totals: CompetenciasPdfTotals): string {
         <div class="kpi-label">(-) Desc. Folha</div>
         <div class="kpi-val">${formatSignedCell(totals.descontos, '-', '-R$ 0,00')}</div>
       </div>
-      <div class="kpi-card kpi-adiantamento">
+      <div class="kpi-card kpi-amber-strong">
         <div class="kpi-label">(+) Adiantamento</div>
         <div class="kpi-val">${formatSignedCell(totals.adiantamento, '+', '+R$ 0,00')}</div>
       </div>
@@ -428,7 +681,7 @@ function buildAnaliticoCardsHtml(totals: CompetenciasPdfTotals): string {
   `;
 }
 
-function buildSinteticoCardsHtml(totals: CompetenciasPdfTotals): string {
+function buildCltSinteticoCardsHtml(totals: CompetenciasPdfTotals): string {
   const benDetailParts: string[] = [];
   if (totals.vt > 0) benDetailParts.push(`VT ${formatCurrencyBrl(totals.vt)}`);
   if (totals.vrCesta > 0) benDetailParts.push(`VR ${formatCurrencyBrl(totals.vrCesta)}`);
@@ -441,7 +694,7 @@ function buildSinteticoCardsHtml(totals: CompetenciasPdfTotals): string {
       <div class="kpi-card kpi-slate">
         <div class="kpi-label">1. Proventos + Outros</div>
         <div class="kpi-val">${formatCurrencyBrl(totals.proventosComOutros)}</div>
-        <div class="kpi-sub">${totals.uniqueEmployeesCount} únicos • ${renderRegimeBreakdown(totals)}</div>
+        <div class="kpi-sub">${totals.uniqueEmployeesCount} empregados CLT • ${totals.countRows} lançamentos</div>
       </div>
       <div class="kpi-card kpi-emerald">
         <div class="kpi-label">2. + Benefícios</div>
@@ -456,15 +709,15 @@ function buildSinteticoCardsHtml(totals: CompetenciasPdfTotals): string {
       <div class="kpi-card kpi-rose">
         <div class="kpi-label">4. (-) Desc. Folha</div>
         <div class="kpi-val">${formatSignedCell(totals.descontos, '-', '-R$ 0,00')}</div>
-        <div class="kpi-sub">Deduções e descontos da folha</div>
+        <div class="kpi-sub">Deduções e descontos em folha</div>
       </div>
-      <div class="kpi-card kpi-adiantamento">
+      <div class="kpi-card kpi-amber-strong">
         <div class="kpi-label">5. (+) Adiantamento</div>
         <div class="kpi-val">${formatSignedCell(totals.adiantamento, '+', '+R$ 0,00')}</div>
         <div class="kpi-sub">Adiantamento salarial recomposto</div>
       </div>
       <div class="kpi-card kpi-liquido">
-        <div class="kpi-label">6. = Líquido Desembolsado</div>
+        <div class="kpi-label">6. = Líquido Folha CLT</div>
         <div class="kpi-val">${formatCurrencyBrl(totals.liquido)}</div>
         <div class="kpi-sub">Subtotal - Desc. Folha + Adiant.</div>
       </div>
@@ -472,145 +725,529 @@ function buildSinteticoCardsHtml(totals: CompetenciasPdfTotals): string {
   `;
 }
 
-function buildAnaliticoTableHtml(rows: CompetenciaCostPdfRow[], totals: CompetenciasPdfTotals): string {
-  const bodyRows = rows.length === 0
-    ? `<tr><td colspan="13" style="text-align: center; padding: 14px; color: #64748b;">Nenhum lançamento encontrado para os filtros selecionados.</td></tr>`
-    : rows.map(r => `
-        <tr>
-          <td class="col-comp">${escapeHtml(r.competenciaShort)}</td>
-          <td class="col-name">
-            <div class="emp-name">${escapeHtml(r.name)}</div>
-            <div class="emp-meta">${escapeHtml(r.company)} • ${escapeHtml(r.roleOrDept)}${r.documentId ? ` • ${escapeHtml(r.documentId)}` : ''}</div>
-          </td>
-          <td class="col-regime"><span class="${getRegimeBadgeClass(r.regime)}">${escapeHtml(r.regime === 'ESTAGIO' ? 'EST' : r.regime)}</span></td>
-          <td class="num bg-slate-soft fw-bold">${formatCurrencyBrl(r.proventos)}</td>
-          <td class="num bg-blue-soft ${r.outros !== 0 ? 'txt-blue fw-bold' : 'txt-muted'}">${formatSignedCell(r.outros, '+')}</td>
-          <td class="num bg-emerald-soft ${r.vt !== 0 ? 'txt-emerald fw-bold' : 'txt-muted'}">${formatSignedCell(r.vt, '+')}</td>
-          <td class="num bg-amber-soft ${r.vrCesta !== 0 ? 'txt-amber fw-bold' : 'txt-muted'}">${formatSignedCell(r.vrCesta, '+')}</td>
-          <td class="num bg-sky-soft ${r.bonus !== 0 ? 'txt-sky fw-bold' : 'txt-muted'}">${formatSignedCell(r.bonus, '+')}</td>
-          <td class="num bg-teal-soft ${r.premiacao !== 0 ? 'txt-teal fw-bold' : 'txt-muted'}">${formatSignedCell(r.premiacao, '+')}</td>
-          <td class="num bg-subtotal txt-subtotal fw-black">${formatCurrencyBrl(r.subtotal)}</td>
-          <td class="num bg-rose-soft ${r.descontos !== 0 ? 'txt-rose fw-bold' : 'txt-muted'}">${formatSignedCell(r.descontos, '-')}</td>
-          <td class="num bg-adiant-soft ${r.adiantamento !== 0 ? 'txt-amber fw-bold' : 'txt-muted'}">${formatSignedCell(r.adiantamento, '+')}</td>
-          <td class="num bg-liquido txt-liquido fw-black">${formatCurrencyBrl(r.liquido)}</td>
-        </tr>
-      `).join('');
+function buildCltSectionHtml(
+  rows: CompetenciaCostPdfRow[],
+  totals: CompetenciasPdfTotals,
+  isSintetico: boolean,
+  sectionIndex: number | null
+): string {
+  const sectionBanner = sectionIndex !== null
+    ? `<div class="section-banner section-clt">
+         <span>SEÇÃO ${sectionIndex} • FOLHA DE PAGAMENTO — REGIME CLT (VÍNCULO EMPREGATÍCIO)</span>
+         <span class="section-meta">${totals.countRows} ${totals.countRows === 1 ? 'lançamento' : 'lançamentos'} • ${totals.uniqueEmployeesCount} empregados</span>
+       </div>`
+    : '';
+
+  const cardsHtml = isSintetico ? buildCltSinteticoCardsHtml(totals) : buildCltAnaliticoCardsHtml(totals);
+
+  const tableHtml = isSintetico
+    ? `
+      <table class="table-sintetico">
+        <thead>
+          <tr>
+            <th style="width: 48px;">Comp.</th>
+            <th>Colaborador</th>
+            <th style="width: 36px; text-align: center;">Reg.</th>
+            <th class="num th-slate">Proventos</th>
+            <th class="num th-emerald">+ Benefícios</th>
+            <th class="num th-subtotal">= Subtotal</th>
+            <th class="num th-rose">(-) Desc. Folha</th>
+            <th class="num th-adiant">(+) Adiant.</th>
+            <th class="num th-liquido">= Líquido</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td class="col-comp">${escapeHtml(r.competenciaShort)}</td>
+              <td class="col-name">
+                <div class="emp-name">${escapeHtml(r.displayEntityName)}</div>
+                <div class="emp-meta">${escapeHtml(r.company)} • ${escapeHtml(r.roleOrDept)}</div>
+              </td>
+              <td class="col-regime"><span class="badge-clt">CLT</span></td>
+              <td class="num bg-slate-soft fw-bold">${formatCurrencyBrl(r.proventosComOutros)}</td>
+              <td class="num bg-emerald-soft ${r.beneficiosAgrupados !== 0 ? 'txt-emerald fw-bold' : 'txt-muted'}">${formatSignedCell(r.beneficiosAgrupados, '+')}</td>
+              <td class="num bg-subtotal txt-subtotal fw-black">${formatCurrencyBrl(r.subtotal)}</td>
+              <td class="num bg-rose-soft ${r.descontos !== 0 ? 'txt-rose fw-bold' : 'txt-muted'}">${formatSignedCell(r.descontos, '-')}</td>
+              <td class="num bg-adiant-soft ${r.adiantamento !== 0 ? 'txt-amber fw-bold' : 'txt-muted'}">${formatSignedCell(r.adiantamento, '+')}</td>
+              <td class="num bg-liquido txt-liquido fw-black">${formatCurrencyBrl(r.liquido)}</td>
+            </tr>
+          `).join('')}
+          <tr class="total-row">
+            <td colspan="3" style="text-transform: uppercase;">Total Folha CLT (${totals.countRows} ${totals.countRows === 1 ? 'Lançamento' : 'Lançamentos'})</td>
+            <td class="num">${formatCurrencyBrl(totals.proventosComOutros)}</td>
+            <td class="num txt-emerald">${formatSignedCell(totals.beneficiosAgrupados, '+', 'R$ 0,00')}</td>
+            <td class="num bg-subtotal-total txt-subtotal">${formatCurrencyBrl(totals.subtotal)}</td>
+            <td class="num txt-rose">${formatSignedCell(totals.descontos, '-', 'R$ 0,00')}</td>
+            <td class="num txt-amber">${formatSignedCell(totals.adiantamento, '+', 'R$ 0,00')}</td>
+            <td class="num bg-liquido-total txt-liquido">${formatCurrencyBrl(totals.liquido)}</td>
+          </tr>
+        </tbody>
+      </table>
+    `
+    : `
+      <table class="table-analitico">
+        <thead>
+          <tr>
+            <th style="width: 44px;">Comp.</th>
+            <th style="min-width: 145px;">Colaborador</th>
+            <th style="width: 34px; text-align: center;">Reg.</th>
+            <th class="num th-slate">Proventos</th>
+            <th class="num th-blue">+ Outros</th>
+            <th class="num th-emerald">+ VT</th>
+            <th class="num th-amber">+ VR/Cesta</th>
+            <th class="num th-sky">+ Bônus</th>
+            <th class="num th-teal">+ Premiação</th>
+            <th class="num th-subtotal">= Subtotal</th>
+            <th class="num th-rose">(-) Desc. Folha</th>
+            <th class="num th-adiant">(+) Adiant.</th>
+            <th class="num th-liquido">= Líquido</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td class="col-comp">${escapeHtml(r.competenciaShort)}</td>
+              <td class="col-name">
+                <div class="emp-name">${escapeHtml(r.displayEntityName)}</div>
+                <div class="emp-meta">${escapeHtml(r.company)} • ${escapeHtml(r.roleOrDept)}${r.documentId ? ` • CPF: ${escapeHtml(r.documentId)}` : ''}</div>
+              </td>
+              <td class="col-regime"><span class="badge-clt">CLT</span></td>
+              <td class="num bg-slate-soft fw-bold">${formatCurrencyBrl(r.proventos)}</td>
+              <td class="num bg-blue-soft ${r.outros !== 0 ? 'txt-blue fw-bold' : 'txt-muted'}">${formatSignedCell(r.outros, '+')}</td>
+              <td class="num bg-emerald-soft ${r.vt !== 0 ? 'txt-emerald fw-bold' : 'txt-muted'}">${formatSignedCell(r.vt, '+')}</td>
+              <td class="num bg-amber-soft ${r.vrCesta !== 0 ? 'txt-amber fw-bold' : 'txt-muted'}">${formatSignedCell(r.vrCesta, '+')}</td>
+              <td class="num bg-sky-soft ${r.bonus !== 0 ? 'txt-sky fw-bold' : 'txt-muted'}">${formatSignedCell(r.bonus, '+')}</td>
+              <td class="num bg-teal-soft ${r.premiacao !== 0 ? 'txt-teal fw-bold' : 'txt-muted'}">${formatSignedCell(r.premiacao, '+')}</td>
+              <td class="num bg-subtotal txt-subtotal fw-black">${formatCurrencyBrl(r.subtotal)}</td>
+              <td class="num bg-rose-soft ${r.descontos !== 0 ? 'txt-rose fw-bold' : 'txt-muted'}">${formatSignedCell(r.descontos, '-')}</td>
+              <td class="num bg-adiant-soft ${r.adiantamento !== 0 ? 'txt-amber fw-bold' : 'txt-muted'}">${formatSignedCell(r.adiantamento, '+')}</td>
+              <td class="num bg-liquido txt-liquido fw-black">${formatCurrencyBrl(r.liquido)}</td>
+            </tr>
+          `).join('')}
+          <tr class="total-row">
+            <td colspan="3" style="text-transform: uppercase;">Total Folha CLT (${totals.countRows} ${totals.countRows === 1 ? 'Lançamento' : 'Lançamentos'})</td>
+            <td class="num">${formatCurrencyBrl(totals.proventos)}</td>
+            <td class="num txt-blue">${formatSignedCell(totals.outros, '+', 'R$ 0,00')}</td>
+            <td class="num txt-emerald">${formatSignedCell(totals.vt, '+', 'R$ 0,00')}</td>
+            <td class="num txt-amber">${formatSignedCell(totals.vrCesta, '+', 'R$ 0,00')}</td>
+            <td class="num txt-sky">${formatSignedCell(totals.bonus, '+', 'R$ 0,00')}</td>
+            <td class="num txt-teal">${formatSignedCell(totals.premiacao, '+', 'R$ 0,00')}</td>
+            <td class="num bg-subtotal-total txt-subtotal">${formatCurrencyBrl(totals.subtotal)}</td>
+            <td class="num txt-rose">${formatSignedCell(totals.descontos, '-', 'R$ 0,00')}</td>
+            <td class="num txt-amber">${formatSignedCell(totals.adiantamento, '+', 'R$ 0,00')}</td>
+            <td class="num bg-liquido-total txt-liquido">${formatCurrencyBrl(totals.liquido)}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
 
   return `
-    <table class="table-analitico">
+    <div class="regime-section">
+      ${sectionBanner}
+      ${cardsHtml}
+      ${tableHtml}
+      <div class="equation-note">
+        <span><strong>Equação CLT:</strong> Subtotal = Proventos + Outros + VT + VR/Cesta + Bônus + Premiação &nbsp;|&nbsp; Líquido = Subtotal (-) Desc. Folha (+) Adiantamento</span>
+        <span>Regime CLT • Vínculo Empregatício</span>
+      </div>
+    </div>
+  `;
+}
+
+// --- SEÇÃO ESTÁGIO (LEI Nº 11.788/2008 — SEM VÍNCULO EMPREGATÍCIO) ---
+function buildEstagioSectionHtml(
+  rows: CompetenciaCostPdfRow[],
+  totals: CompetenciasPdfTotals,
+  isSintetico: boolean,
+  sectionIndex: number | null
+): string {
+  const hasAntecipacao = totals.antecipacaoEstagio > 0;
+  const sectionBanner = sectionIndex !== null
+    ? `<div class="section-banner section-estagio">
+         <span>SEÇÃO ${sectionIndex} • BOLSAS DE ESTÁGIO — LEI Nº 11.788/2008 (SEM VÍNCULO EMPREGATÍCIO)</span>
+         <span class="section-meta">${totals.countRows} ${totals.countRows === 1 ? 'lançamento' : 'lançamentos'} • ${totals.uniqueEmployeesCount} estagiários</span>
+       </div>`
+    : '';
+
+  const cardsHtml = `
+    <div class="kpi-grid-6" style="${hasAntecipacao ? 'grid-template-columns: repeat(7, 1fr);' : ''}">
+      <div class="kpi-card kpi-slate">
+        <div class="kpi-label">1. Bolsa-Auxílio</div>
+        <div class="kpi-val">${formatCurrencyBrl(totals.bolsaAuxilio)}</div>
+      </div>
+      <div class="kpi-card kpi-emerald">
+        <div class="kpi-label">2. + Aux. Transporte</div>
+        <div class="kpi-val">${formatSignedCell(totals.auxilioTransporte, '+', '+R$ 0,00')}</div>
+      </div>
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-label">3. + Outros Auxílios</div>
+        <div class="kpi-val">${formatSignedCell(totals.outrosAuxilios, '+', '+R$ 0,00')}</div>
+      </div>
+      <div class="kpi-card kpi-subtotal">
+        <div class="kpi-label">= Subtotal</div>
+        <div class="kpi-val">${formatCurrencyBrl(totals.subtotal)}</div>
+      </div>
+      <div class="kpi-card kpi-rose">
+        <div class="kpi-label">(-) Deduções</div>
+        <div class="kpi-val">${formatSignedCell(totals.deducoesEstagio, '-', '-R$ 0,00')}</div>
+      </div>
+      ${hasAntecipacao ? `
+      <div class="kpi-card kpi-amber-strong">
+        <div class="kpi-label">(+) Antecipação</div>
+        <div class="kpi-val">${formatSignedCell(totals.antecipacaoEstagio, '+', '+R$ 0,00')}</div>
+      </div>` : ''}
+      <div class="kpi-card kpi-liquido">
+        <div class="kpi-label">= Valor Líquido</div>
+        <div class="kpi-val">${formatCurrencyBrl(totals.liquido)}</div>
+      </div>
+    </div>
+  `;
+
+  const tableClass = isSintetico ? 'table-sintetico' : 'table-analitico';
+
+  const tableHtml = `
+    <table class="${tableClass}">
       <thead>
         <tr>
-          <th style="width: 44px;">Comp.</th>
-          <th style="min-width: 145px;">Colaborador</th>
-          <th style="width: 34px; text-align: center;">Vínc.</th>
-          <th class="num th-slate">Proventos</th>
-          <th class="num th-blue">+ Outros</th>
-          <th class="num th-emerald">+ VT</th>
-          <th class="num th-amber">+ VR/Cesta</th>
-          <th class="num th-sky">+ Bônus</th>
-          <th class="num th-teal">+ Premiação</th>
+          <th style="width: 48px;">Comp.</th>
+          <th>Estagiário</th>
+          <th style="width: 42px; text-align: center;">Mod.</th>
+          <th class="num th-slate">Bolsa-Auxílio</th>
+          <th class="num th-emerald">+ Aux. Transporte</th>
+          <th class="num th-blue">+ Outros Auxílios</th>
           <th class="num th-subtotal">= Subtotal</th>
-          <th class="num th-rose">(-) Desc. Folha</th>
-          <th class="num th-adiant">(+) Adiant.</th>
-          <th class="num th-liquido">= Líquido</th>
+          <th class="num th-rose">(-) Deduções</th>
+          ${hasAntecipacao ? '<th class="num th-adiant">(+) Antecip.</th>' : ''}
+          <th class="num th-liquido">= Valor Líquido</th>
         </tr>
       </thead>
       <tbody>
-        ${bodyRows}
+        ${rows.map(r => `
+          <tr>
+            <td class="col-comp">${escapeHtml(r.competenciaShort)}</td>
+            <td class="col-name">
+              <div class="emp-name">${escapeHtml(r.displayEntityName)}</div>
+              <div class="emp-meta">${escapeHtml(r.company)} • ${escapeHtml(r.roleOrDept)}${r.documentId ? ` • CPF: ${escapeHtml(r.documentId)}` : ''}</div>
+            </td>
+            <td class="col-regime"><span class="badge-estagio">EST</span></td>
+            <td class="num bg-slate-soft fw-bold">${formatCurrencyBrl(r.bolsaAuxilio)}</td>
+            <td class="num bg-emerald-soft ${r.auxilioTransporte !== 0 ? 'txt-emerald fw-bold' : 'txt-muted'}">${formatSignedCell(r.auxilioTransporte, '+')}</td>
+            <td class="num bg-blue-soft ${r.outrosAuxilios !== 0 ? 'txt-blue fw-bold' : 'txt-muted'}">${formatSignedCell(r.outrosAuxilios, '+')}</td>
+            <td class="num bg-subtotal txt-subtotal fw-black">${formatCurrencyBrl(r.subtotal)}</td>
+            <td class="num bg-rose-soft ${r.deducoesEstagio !== 0 ? 'txt-rose fw-bold' : 'txt-muted'}">${formatSignedCell(r.deducoesEstagio, '-')}</td>
+            ${hasAntecipacao ? `<td class="num bg-adiant-soft ${r.antecipacaoEstagio !== 0 ? 'txt-amber fw-bold' : 'txt-muted'}">${formatSignedCell(r.antecipacaoEstagio, '+')}</td>` : ''}
+            <td class="num bg-liquido txt-liquido fw-black">${formatCurrencyBrl(r.liquido)}</td>
+          </tr>
+        `).join('')}
         <tr class="total-row">
-          <td colspan="3" style="text-transform: uppercase;">Total Consolidado (${totals.countRows} ${totals.countRows === 1 ? 'Lançamento' : 'Lançamentos'})</td>
-          <td class="num">${formatCurrencyBrl(totals.proventos)}</td>
-          <td class="num txt-blue">${formatSignedCell(totals.outros, '+', 'R$ 0,00')}</td>
-          <td class="num txt-emerald">${formatSignedCell(totals.vt, '+', 'R$ 0,00')}</td>
-          <td class="num txt-amber">${formatSignedCell(totals.vrCesta, '+', 'R$ 0,00')}</td>
-          <td class="num txt-sky">${formatSignedCell(totals.bonus, '+', 'R$ 0,00')}</td>
-          <td class="num txt-teal">${formatSignedCell(totals.premiacao, '+', 'R$ 0,00')}</td>
+          <td colspan="3" style="text-transform: uppercase;">Total Bolsas de Estágio (${totals.countRows} ${totals.countRows === 1 ? 'Lançamento' : 'Lançamentos'})</td>
+          <td class="num">${formatCurrencyBrl(totals.bolsaAuxilio)}</td>
+          <td class="num txt-emerald">${formatSignedCell(totals.auxilioTransporte, '+', 'R$ 0,00')}</td>
+          <td class="num txt-blue">${formatSignedCell(totals.outrosAuxilios, '+', 'R$ 0,00')}</td>
           <td class="num bg-subtotal-total txt-subtotal">${formatCurrencyBrl(totals.subtotal)}</td>
-          <td class="num txt-rose">${formatSignedCell(totals.descontos, '-', 'R$ 0,00')}</td>
-          <td class="num txt-amber">${formatSignedCell(totals.adiantamento, '+', 'R$ 0,00')}</td>
+          <td class="num txt-rose">${formatSignedCell(totals.deducoesEstagio, '-', 'R$ 0,00')}</td>
+          ${hasAntecipacao ? `<td class="num txt-amber">${formatSignedCell(totals.antecipacaoEstagio, '+', 'R$ 0,00')}</td>` : ''}
           <td class="num bg-liquido-total txt-liquido">${formatCurrencyBrl(totals.liquido)}</td>
         </tr>
       </tbody>
     </table>
   `;
-}
-
-function buildSinteticoTableHtml(rows: CompetenciaCostPdfRow[], totals: CompetenciasPdfTotals): string {
-  const bodyRows = rows.length === 0
-    ? `<tr><td colspan="9" style="text-align: center; padding: 14px; color: #64748b;">Nenhum lançamento encontrado para os filtros selecionados.</td></tr>`
-    : rows.map(r => `
-        <tr>
-          <td class="col-comp">${escapeHtml(r.competenciaShort)}</td>
-          <td class="col-name">
-            <div class="emp-name">${escapeHtml(r.name)}</div>
-            <div class="emp-meta">${escapeHtml(r.company)} • ${escapeHtml(r.roleOrDept)}</div>
-          </td>
-          <td class="col-regime"><span class="${getRegimeBadgeClass(r.regime)}">${escapeHtml(r.regime === 'ESTAGIO' ? 'EST' : r.regime)}</span></td>
-          <td class="num bg-slate-soft fw-bold">${formatCurrencyBrl(r.proventosComOutros)}</td>
-          <td class="num bg-emerald-soft ${r.beneficiosAgrupados !== 0 ? 'txt-emerald fw-bold' : 'txt-muted'}">${formatSignedCell(r.beneficiosAgrupados, '+')}</td>
-          <td class="num bg-subtotal txt-subtotal fw-black">${formatCurrencyBrl(r.subtotal)}</td>
-          <td class="num bg-rose-soft ${r.descontos !== 0 ? 'txt-rose fw-bold' : 'txt-muted'}">${formatSignedCell(r.descontos, '-')}</td>
-          <td class="num bg-adiant-soft ${r.adiantamento !== 0 ? 'txt-amber fw-bold' : 'txt-muted'}">${formatSignedCell(r.adiantamento, '+')}</td>
-          <td class="num bg-liquido txt-liquido fw-black">${formatCurrencyBrl(r.liquido)}</td>
-        </tr>
-      `).join('');
 
   return `
-    <table class="table-sintetico">
-      <thead>
-        <tr>
-          <th style="width: 48px;">Comp.</th>
-          <th>Colaborador</th>
-          <th style="width: 38px; text-align: center;">Vínc.</th>
-          <th class="num th-slate">Proventos</th>
-          <th class="num th-emerald">+ Benefícios</th>
-          <th class="num th-subtotal">= Subtotal</th>
-          <th class="num th-rose">(-) Desc. Folha</th>
-          <th class="num th-adiant">(+) Adiant.</th>
-          <th class="num th-liquido">= Líquido</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${bodyRows}
-        <tr class="total-row">
-          <td colspan="3" style="text-transform: uppercase;">Total Consolidado (${totals.countRows} ${totals.countRows === 1 ? 'Lançamento' : 'Lançamentos'})</td>
-          <td class="num">${formatCurrencyBrl(totals.proventosComOutros)}</td>
-          <td class="num txt-emerald">${formatSignedCell(totals.beneficiosAgrupados, '+', 'R$ 0,00')}</td>
-          <td class="num bg-subtotal-total txt-subtotal">${formatCurrencyBrl(totals.subtotal)}</td>
-          <td class="num txt-rose">${formatSignedCell(totals.descontos, '-', 'R$ 0,00')}</td>
-          <td class="num txt-amber">${formatSignedCell(totals.adiantamento, '+', 'R$ 0,00')}</td>
-          <td class="num bg-liquido-total txt-liquido">${formatCurrencyBrl(totals.liquido)}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="regime-section">
+      ${sectionBanner}
+      ${cardsHtml}
+      ${tableHtml}
+      <div class="equation-note">
+        <span><strong>Equação Estágio (Lei nº 11.788/2008):</strong> Subtotal = Bolsa-Auxílio + Auxílio-Transporte + Outros Auxílios &nbsp;|&nbsp; Valor Líquido = Subtotal (-) Deduções${hasAntecipacao ? ' (+) Antecipação' : ''}</span>
+        <span>Termo de Compromisso de Estágio • Sem Vínculo Empregatício</span>
+      </div>
+    </div>
+  `;
+}
+
+// --- SEÇÃO PJ / MEI (100% CONTRATUAL B2B — ZERO TERMOS TRABALHISTAS) ---
+function buildPjSectionHtml(
+  rows: CompetenciaCostPdfRow[],
+  totals: CompetenciasPdfTotals,
+  isSintetico: boolean,
+  sectionIndex: number | null
+): string {
+  const sectionBanner = sectionIndex !== null
+    ? `<div class="section-banner section-pj">
+         <span>SEÇÃO ${sectionIndex} • PRESTAÇÃO DE SERVIÇOS — EMPRESAS CONTRATADAS (PJ / MEI)</span>
+         <span class="section-meta">${totals.countRows} ${totals.countRows === 1 ? 'faturamento' : 'faturamentos'} • ${totals.uniqueEmployeesCount} contratadas</span>
+       </div>`
+    : '';
+
+  const cardsHtml = `
+    <div class="kpi-grid-6">
+      <div class="kpi-card kpi-slate">
+        <div class="kpi-label">1. Honorários / NF Base</div>
+        <div class="kpi-val">${formatCurrencyBrl(totals.honorariosBase)}</div>
+        <div class="kpi-sub">${totals.uniqueEmployeesCount} empresas contratadas</div>
+      </div>
+      <div class="kpi-card kpi-sky">
+        <div class="kpi-label">2. + Variável / Comissões</div>
+        <div class="kpi-val">${formatSignedCell(totals.variavelComissoes, '+', '+R$ 0,00')}</div>
+        <div class="kpi-sub">Metas contratuais e comissionamento</div>
+      </div>
+      <div class="kpi-card kpi-teal">
+        <div class="kpi-label">3. + Conectividade / Reemb.</div>
+        <div class="kpi-val">${formatSignedCell(totals.conectividadeReembolso, '+', '+R$ 0,00')}</div>
+        <div class="kpi-sub">Ajuda operacional / reembolso contratual</div>
+      </div>
+      <div class="kpi-card kpi-subtotal">
+        <div class="kpi-label">4. = Valor Bruto NF</div>
+        <div class="kpi-val">${formatCurrencyBrl(totals.valorBrutoNf)}</div>
+        <div class="kpi-sub">Honorários + Variável + Conectividade</div>
+      </div>
+      <div class="kpi-card kpi-rose">
+        <div class="kpi-label">5. (-) Glosas / Deduções</div>
+        <div class="kpi-val">${formatSignedCell(totals.glosasDeducoes, '-', '-R$ 0,00')}</div>
+        <div class="kpi-sub">Glosas contratuais e retenções</div>
+      </div>
+      <div class="kpi-card kpi-liquido">
+        <div class="kpi-label">6. = Valor Líquido NF</div>
+        <div class="kpi-val">${formatCurrencyBrl(totals.valorLiquidoNf)}</div>
+        <div class="kpi-sub">Valor Bruto NF (-) Glosas / Deduções</div>
+      </div>
+    </div>
+  `;
+
+  const tableHtml = isSintetico
+    ? `
+      <table class="table-sintetico">
+        <thead>
+          <tr>
+            <th style="width: 48px;">Comp.</th>
+            <th>Contratada (Razão Social) / CNPJ</th>
+            <th style="width: 38px; text-align: center;">Mod.</th>
+            <th class="num th-slate">Honorários Base</th>
+            <th class="num th-sky">+ Variável / Reemb.</th>
+            <th class="num th-subtotal">= Bruto NF</th>
+            <th class="num th-rose">(-) Glosas / Ded.</th>
+            <th class="num th-liquido">= Líquido NF</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => {
+            const varReemb = roundCurrency(r.variavelComissoes + r.conectividadeReembolso);
+            return `
+              <tr>
+                <td class="col-comp">${escapeHtml(r.competenciaShort)}</td>
+                <td class="col-name">
+                  <div class="emp-name">${escapeHtml(r.displayEntityName)}</div>
+                  <div class="emp-meta">Contratante: ${escapeHtml(r.company)} • ${escapeHtml(r.roleOrDept)}${r.documentId ? ` • CNPJ: ${escapeHtml(r.documentId)}` : ''}</div>
+                </td>
+                <td class="col-regime"><span class="badge-pj">PJ</span></td>
+                <td class="num bg-slate-soft fw-bold">${formatCurrencyBrl(r.honorariosBase)}</td>
+                <td class="num bg-sky-soft ${varReemb !== 0 ? 'txt-sky fw-bold' : 'txt-muted'}">${formatSignedCell(varReemb, '+')}</td>
+                <td class="num bg-subtotal txt-subtotal fw-black">${formatCurrencyBrl(r.valorBrutoNf)}</td>
+                <td class="num bg-rose-soft ${r.glosasDeducoes !== 0 ? 'txt-rose fw-bold' : 'txt-muted'}">${formatSignedCell(r.glosasDeducoes, '-')}</td>
+                <td class="num bg-liquido txt-liquido fw-black">${formatCurrencyBrl(r.valorLiquidoNf)}</td>
+              </tr>
+            `;
+          }).join('')}
+          <tr class="total-row">
+            <td colspan="3" style="text-transform: uppercase;">Total Prestação de Serviços — PJ/MEI (${totals.countRows} ${totals.countRows === 1 ? 'Registro' : 'Registros'})</td>
+            <td class="num">${formatCurrencyBrl(totals.honorariosBase)}</td>
+            <td class="num txt-sky">${formatSignedCell(roundCurrency(totals.variavelComissoes + totals.conectividadeReembolso), '+', 'R$ 0,00')}</td>
+            <td class="num bg-subtotal-total txt-subtotal">${formatCurrencyBrl(totals.valorBrutoNf)}</td>
+            <td class="num txt-rose">${formatSignedCell(totals.glosasDeducoes, '-', 'R$ 0,00')}</td>
+            <td class="num bg-liquido-total txt-liquido">${formatCurrencyBrl(totals.valorLiquidoNf)}</td>
+          </tr>
+        </tbody>
+      </table>
+    `
+    : `
+      <table class="table-analitico">
+        <thead>
+          <tr>
+            <th style="width: 48px;">Comp.</th>
+            <th style="min-width: 195px;">Contratada (Razão Social) / CNPJ</th>
+            <th style="width: 38px; text-align: center;">Mod.</th>
+            <th class="num th-slate">Honorários / NF Base</th>
+            <th class="num th-sky">+ Variável / Comissões</th>
+            <th class="num th-teal">+ Conectividade / Reemb.</th>
+            <th class="num th-subtotal">= Valor Bruto NF</th>
+            <th class="num th-rose">(-) Glosas / Deduções</th>
+            <th class="num th-liquido">= Valor Líquido NF</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td class="col-comp">${escapeHtml(r.competenciaShort)}</td>
+              <td class="col-name">
+                <div class="emp-name">${escapeHtml(r.displayEntityName)}</div>
+                <div class="emp-meta">Contratante: ${escapeHtml(r.company)} • Escopo: ${escapeHtml(r.roleOrDept)}${r.documentId ? ` • CNPJ: ${escapeHtml(r.documentId)}` : ''}</div>
+              </td>
+              <td class="col-regime"><span class="badge-pj">PJ</span></td>
+              <td class="num bg-slate-soft fw-bold">${formatCurrencyBrl(r.honorariosBase)}</td>
+              <td class="num bg-sky-soft ${r.variavelComissoes !== 0 ? 'txt-sky fw-bold' : 'txt-muted'}">${formatSignedCell(r.variavelComissoes, '+')}</td>
+              <td class="num bg-teal-soft ${r.conectividadeReembolso !== 0 ? 'txt-teal fw-bold' : 'txt-muted'}">${formatSignedCell(r.conectividadeReembolso, '+')}</td>
+              <td class="num bg-subtotal txt-subtotal fw-black">${formatCurrencyBrl(r.valorBrutoNf)}</td>
+              <td class="num bg-rose-soft ${r.glosasDeducoes !== 0 ? 'txt-rose fw-bold' : 'txt-muted'}">${formatSignedCell(r.glosasDeducoes, '-')}</td>
+              <td class="num bg-liquido txt-liquido fw-black">${formatCurrencyBrl(r.valorLiquidoNf)}</td>
+            </tr>
+          `).join('')}
+          <tr class="total-row">
+            <td colspan="3" style="text-transform: uppercase;">Total Prestação de Serviços — PJ/MEI (${totals.countRows} ${totals.countRows === 1 ? 'Registro' : 'Registros'})</td>
+            <td class="num">${formatCurrencyBrl(totals.honorariosBase)}</td>
+            <td class="num txt-sky">${formatSignedCell(totals.variavelComissoes, '+', 'R$ 0,00')}</td>
+            <td class="num txt-teal">${formatSignedCell(totals.conectividadeReembolso, '+', 'R$ 0,00')}</td>
+            <td class="num bg-subtotal-total txt-subtotal">${formatCurrencyBrl(totals.valorBrutoNf)}</td>
+            <td class="num txt-rose">${formatSignedCell(totals.glosasDeducoes, '-', 'R$ 0,00')}</td>
+            <td class="num bg-liquido-total txt-liquido">${formatCurrencyBrl(totals.valorLiquidoNf)}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+
+  return `
+    <div class="regime-section">
+      ${sectionBanner}
+      ${cardsHtml}
+      ${tableHtml}
+      <div class="equation-note">
+        <span><strong>Equação Contratual (PJ / MEI):</strong> Valor Bruto NF = Honorários Base + Variável/Comissões + Conectividade/Reembolso &nbsp;|&nbsp; Valor Líquido NF = Valor Bruto NF (-) Glosas/Deduções</span>
+        <span>Relação Empresarial B2B • Prestação de Serviços</span>
+      </div>
+    </div>
   `;
 }
 
 export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams): string {
   const isSintetico = params.reportType === 'sintetico';
-  const normalizedRows = (params.rows || []).map(normalizeCompetenciaCostRow);
-  const totals = summarizeCompetenciaPdfRows(normalizedRows);
+  const data = partitionCompetenciaPdfRows(params.rows || []);
   const scopeDesc = buildScopeDescription(params.filters);
 
   const now = params.generatedAt || new Date();
   const todayStr = now.toLocaleDateString('pt-BR');
   const todayTimeStr = now.toLocaleTimeString('pt-BR');
 
-  const titleLabel = isSintetico
+  const isOnlyPj = data.grandTotals.regimesPresent.length === 1 && data.grandTotals.regimesPresent[0] === 'PJ';
+  const isOnlyEstagio = data.grandTotals.regimesPresent.length === 1 && data.grandTotals.regimesPresent[0] === 'ESTAGIO';
+  const isOnlyClt = data.grandTotals.regimesPresent.length === 1 && data.grandTotals.regimesPresent[0] === 'CLT';
+  const isMixed = data.grandTotals.isMixed;
+
+  let titleLabel = isSintetico
     ? 'Relatório Sintético de Custos por Competência'
-    : 'Relatório Analítico de Custos por Competência (10 Colunas)';
+    : 'Relatório Analítico de Custos por Competência';
+  let subtitleLabel = isSintetico
+    ? 'Demonstrativo Sintético de Custos por Competência'
+    : 'Demonstrativo Analítico de Custos por Competência';
 
-  const subtitleLabel = isSintetico
-    ? 'Demonstrativo Sintético de Custos por Competência (Visão Executiva Consolidada)'
-    : 'Demonstrativo Analítico de Custos por Competência (Quebra Unificada — 10 Colunas)';
+  if (isOnlyClt) {
+    titleLabel = isSintetico
+      ? 'Relatório Sintético de Folha de Pagamento (CLT)'
+      : 'Relatório Analítico de Folha de Pagamento — CLT (10 Colunas)';
+    subtitleLabel = isSintetico
+      ? 'Demonstrativo Sintético de Folha de Pagamento • Regime CLT'
+      : 'Demonstrativo Analítico de Folha de Pagamento • Regime CLT (Quebra Unificada — 10 Colunas)';
+  } else if (isOnlyEstagio) {
+    titleLabel = isSintetico
+      ? 'Relatório Sintético de Bolsas de Estágio (Lei nº 11.788/2008)'
+      : 'Relatório Analítico de Bolsas de Estágio (Lei nº 11.788/2008)';
+    subtitleLabel = isSintetico
+      ? 'Demonstrativo Sintético de Bolsas e Auxílios de Estágio • Lei nº 11.788/2008'
+      : 'Demonstrativo Analítico de Bolsas e Auxílios de Estágio • Lei nº 11.788/2008';
+  } else if (isOnlyPj) {
+    titleLabel = isSintetico
+      ? 'Relatório Sintético de Prestação de Serviços (PJ / MEI)'
+      : 'Relatório Analítico de Prestação de Serviços (PJ / MEI)';
+    subtitleLabel = isSintetico
+      ? 'Demonstrativo Sintético de Faturamento e Honorários Contratuais • Empresas Contratadas (PJ / MEI)'
+      : 'Demonstrativo Analítico de Faturamento e Honorários Contratuais • Empresas Contratadas (PJ / MEI)';
+  } else if (isMixed) {
+    titleLabel = isSintetico
+      ? 'Relatório Sintético Consolidado por Natureza Jurídica'
+      : 'Relatório Analítico Consolidado por Natureza Jurídica';
+    subtitleLabel = isSintetico
+      ? 'Demonstrativo Sintético Segregado por Natureza Jurídica (Cadernos Independentes)'
+      : 'Demonstrativo Analítico Segregado por Natureza Jurídica (Cadernos Independentes)';
+  }
 
-  const cardsHtml = isSintetico
-    ? buildSinteticoCardsHtml(totals)
-    : buildAnaliticoCardsHtml(totals);
+  let bodyContentHtml = '';
 
-  const tableHtml = isSintetico
-    ? buildSinteticoTableHtml(normalizedRows, totals)
-    : buildAnaliticoTableHtml(normalizedRows, totals);
+  if (data.grandTotals.countRows === 0) {
+    bodyContentHtml = `
+      <div class="empty-state-box">
+        Nenhum registro encontrado para os filtros selecionados.
+      </div>
+    `;
+  } else if (isOnlyClt) {
+    bodyContentHtml = `
+      ${buildCltSectionHtml(data.cltRows, data.cltTotals, isSintetico, null)}
+      ${buildSignaturesHtml('CLT')}
+    `;
+  } else if (isOnlyEstagio) {
+    bodyContentHtml = `
+      ${buildEstagioSectionHtml(data.estagioRows, data.estagioTotals, isSintetico, null)}
+      ${buildSignaturesHtml('ESTAGIO')}
+    `;
+  } else if (isOnlyPj) {
+    bodyContentHtml = `
+      ${buildPjSectionHtml(data.pjRows, data.pjTotals, isSintetico, null)}
+      ${buildSignaturesHtml('PJ')}
+    `;
+  } else {
+    // MODO MISTO: Resumo Consolidado + Cadernos Segregados + Quebra de Página Obrigatória antes de PJ/MEI
+    const blocks: string[] = [];
+    blocks.push(buildMixedExecutiveSummaryHtml(data));
+
+    let sectionCounter = 1;
+    const hasInternalSections = data.cltRows.length > 0 || data.estagioRows.length > 0;
+
+    if (data.cltRows.length > 0) {
+      blocks.push(buildCltSectionHtml(data.cltRows, data.cltTotals, isSintetico, sectionCounter));
+      sectionCounter += 1;
+    }
+
+    if (data.estagioRows.length > 0) {
+      blocks.push(buildEstagioSectionHtml(data.estagioRows, data.estagioTotals, isSintetico, sectionCounter));
+      sectionCounter += 1;
+    }
+
+    if (hasInternalSections) {
+      blocks.push(buildSignaturesHtml(data.cltRows.length > 0 ? 'CLT' : 'ESTAGIO'));
+    }
+
+    if (data.pjRows.length > 0) {
+      // Caderno Independente B2B em nova página (destacável para auditoria/contabilidade)
+      const pjBookletHeader = `
+        <div class="pj-booklet-break">
+          <div class="header-box header-box-pj">
+            <div>
+              <div class="company-title">Mar Brasil • Grupo Empresarial</div>
+              <div class="report-subtitle" style="color: #0f766e;">
+                Caderno Independente • Prestação de Serviços — Empresas Contratadas (PJ / MEI)
+              </div>
+              <div class="scope-line">
+                ${escapeHtml(scopeDesc)} • <strong>${data.pjTotals.countRows} ${data.pjTotals.countRows === 1 ? 'faturamento' : 'faturamentos'}</strong> (${data.pjTotals.uniqueEmployeesCount} contratadas PJ/MEI)
+              </div>
+            </div>
+            <div class="meta-info">
+              Emissão: <strong>${escapeHtml(todayStr)} às ${escapeHtml(todayTimeStr)}</strong><br/>
+              Governança de Contratos B2B<br/>
+              Documento Destacável
+            </div>
+          </div>
+          ${buildPjSectionHtml(data.pjRows, data.pjTotals, isSintetico, sectionCounter)}
+          ${buildSignaturesHtml('PJ')}
+        </div>
+      `;
+      blocks.push(pjBookletHeader);
+    }
+
+    bodyContentHtml = blocks.join('\n');
+  }
+
+  const originMetaLine = isOnlyPj
+    ? 'Governança de Contratos B2B'
+    : 'Sistema Integrado People Cockpit';
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -643,6 +1280,9 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
       align-items: flex-start;
       gap: 12px;
     }
+    .header-box-pj {
+      border-bottom-color: #0f766e;
+    }
     .company-title {
       font-size: 15px;
       font-weight: 900;
@@ -668,17 +1308,102 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
       line-height: 1.4;
       white-space: nowrap;
     }
+    .summary-consolidado-box {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 9px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .summary-consolidado-title {
+      font-size: 8.5px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+    .compliance-banner {
+      margin-top: 6px;
+      font-size: 7.4px;
+      color: #475569;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-left: 3px solid #059669;
+      border-radius: 5px;
+      padding: 4.5px 7px;
+    }
+    .section-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5.5px 9px;
+      border-radius: 6px;
+      font-size: 8.5px;
+      font-weight: 900;
+      letter-spacing: 0.35px;
+      text-transform: uppercase;
+      margin: 10px 0 7px 0;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    .section-clt {
+      background: #eff6ff;
+      color: #1e3a8a;
+      border: 1px solid #bfdbfe;
+      border-left: 4px solid #2563eb;
+    }
+    .section-estagio {
+      background: #fffbeb;
+      color: #92400e;
+      border: 1px solid #fde68a;
+      border-left: 4px solid #d97706;
+    }
+    .section-pj {
+      background: #f0fdfa;
+      color: #134e4a;
+      border: 1px solid #99f6e4;
+      border-left: 4px solid #0f766e;
+    }
+    .section-meta {
+      font-size: 7.6px;
+      font-weight: 700;
+      opacity: 0.85;
+      text-transform: none;
+    }
+    .regime-section {
+      margin-bottom: 12px;
+    }
+    .pj-booklet-break {
+      page-break-before: always;
+      break-before: page;
+    }
+    .empty-state-box {
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 24px;
+      text-align: center;
+      color: #64748b;
+      font-weight: 700;
+      margin: 16px 0;
+    }
+    .kpi-grid-dynamic {
+      display: grid;
+      gap: 6px;
+    }
     .kpi-grid-10 {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 6px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     .kpi-grid-6 {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     .kpi-card {
       border-radius: 7px;
@@ -689,10 +1414,10 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
       break-inside: avoid;
     }
     .kpi-label {
-      font-size: 7.5px;
+      font-size: 7.4px;
       font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.35px;
+      letter-spacing: 0.3px;
       color: #475569;
     }
     .kpi-val {
@@ -743,9 +1468,9 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
     .kpi-rose .kpi-label { color: #be123c; }
     .kpi-rose .kpi-val { color: #be123c; }
 
-    .kpi-adiantamento { background: #fef3c7; border-color: #fcd34d; }
-    .kpi-adiantamento .kpi-label { color: #92400e; }
-    .kpi-adiantamento .kpi-val { color: #92400e; }
+    .kpi-amber-strong { background: #fef3c7; border-color: #fcd34d; }
+    .kpi-amber-strong .kpi-label { color: #92400e; }
+    .kpi-amber-strong .kpi-val { color: #92400e; }
 
     .kpi-liquido { background: #d1fae5; border: 1.5px solid #10b981; }
     .kpi-liquido .kpi-label { color: #064e3b; }
@@ -797,7 +1522,7 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
       white-space: nowrap;
     }
     .col-name {
-      max-width: 185px;
+      max-width: 215px;
     }
     .emp-name {
       font-weight: 800;
@@ -863,8 +1588,8 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
       display: inline-block;
     }
     .badge-pj {
-      background: #d1fae5;
-      color: #065f46;
+      background: #ccfbf1;
+      color: #134e4a;
       font-weight: 800;
       font-size: 6.8px;
       padding: 1.5px 4px;
@@ -890,8 +1615,8 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
       font-size: ${isSintetico ? '8.5px' : '7.9px'};
     }
     .equation-note {
-      margin-top: 7px;
-      font-size: 7.5px;
+      margin-top: 6px;
+      font-size: 7.3px;
       color: #64748b;
       display: flex;
       justify-content: space-between;
@@ -899,7 +1624,8 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
       flex-wrap: wrap;
     }
     .signatures {
-      margin-top: 24px;
+      margin-top: 22px;
+      margin-bottom: 10px;
       display: flex;
       justify-content: space-around;
       text-align: center;
@@ -926,43 +1652,22 @@ export function buildCompetenciasCostsPdfHtml(params: BuildCompetenciasPdfParams
   </style>
 </head>
 <body>
-  <div class="header-box">
+  <div class="header-box ${isOnlyPj ? 'header-box-pj' : ''}">
     <div>
       <div class="company-title">Mar Brasil • Grupo Empresarial</div>
-      <div class="report-subtitle">${escapeHtml(subtitleLabel)}</div>
+      <div class="report-subtitle" style="${isOnlyPj ? 'color: #0f766e;' : ''}">${escapeHtml(subtitleLabel)}</div>
       <div class="scope-line">
-        ${escapeHtml(scopeDesc)} • <strong>${totals.countRows} ${totals.countRows === 1 ? 'lançamento' : 'lançamentos'}</strong> (${totals.uniqueEmployeesCount} únicos • ${escapeHtml(renderRegimeBreakdown(totals))})
+        ${escapeHtml(scopeDesc)} • <strong>${data.grandTotals.countRows} ${data.grandTotals.countRows === 1 ? 'registro' : 'registros'}</strong> (${data.grandTotals.uniqueEmployeesCount} únicos • ${escapeHtml(renderRegimeCountsText(data))})
       </div>
     </div>
     <div class="meta-info">
       Emissão: <strong>${escapeHtml(todayStr)} às ${escapeHtml(todayTimeStr)}</strong><br/>
-      Sistema Integrado People Cockpit<br/>
+      ${escapeHtml(originMetaLine)}<br/>
       Auditoria Contábil Rastreada
     </div>
   </div>
 
-  ${cardsHtml}
-  ${tableHtml}
-
-  <div class="equation-note">
-    <span><strong>Equação Contábil Unificada:</strong> Subtotal = Proventos + Outros + VT + VR/Cesta + Bônus + Premiação &nbsp;|&nbsp; Líquido = Subtotal (-) Desc. Folha (+) Adiantamento</span>
-    <span>Espelho fiel aos totalizadores da Central de Lançamentos por Competência</span>
-  </div>
-
-  <div class="signatures">
-    <div>
-      <div class="sig-line"></div>
-      <div class="sig-label">Departamento Pessoal (DP)</div>
-    </div>
-    <div>
-      <div class="sig-line"></div>
-      <div class="sig-label">Controladoria / Auditoria</div>
-    </div>
-    <div>
-      <div class="sig-line"></div>
-      <div class="sig-label">Diretoria Executiva / Financeiro</div>
-    </div>
-  </div>
+  ${bodyContentHtml}
 
   <script>
     window.onload = function() {

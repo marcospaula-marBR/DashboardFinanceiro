@@ -8,7 +8,11 @@ import {
 import { Employee, MonthlyCost } from '@/types/loans';
 import { PeopleHRService, calculateRowFinancials, RowFinancials } from '@/services/people-hr.service';
 import { formatCurrency } from '@/services/loans.service';
-import { buildCompetenciasCostsPdfHtml, CompetenciasPdfReportType } from '@/services/competencias-costs-pdf.service';
+import {
+  buildCompetenciasCostsPdfHtml,
+  CompetenciasPdfReportType,
+  partitionCompetenciaPdfRows,
+} from '@/services/competencias-costs-pdf.service';
 import { CostImportStagingModal } from '@/components/people/CostImportStagingModal';
 
 interface CompetenciasCostsListModalProps {
@@ -294,6 +298,25 @@ export function CompetenciasCostsListModal({
     selectedEmpresa, selectedVinculo, 
     selectedStatus, selectedSetor, searchTerm, sortField, sortOrder
   ]);
+
+  // Particionamento por Natureza Jurídica (CLT, Estágio e PJ/MEI) — Fonte única compartilhada com o PDF
+  const partitionedView = useMemo(
+    () => partitionCompetenciaPdfRows(filteredRows),
+    [filteredRows]
+  );
+
+  const isPjOnlyView = selectedVinculo === 'PJ' || (
+    filteredRows.length > 0 &&
+    partitionedView.grandTotals.regimesPresent.length === 1 &&
+    partitionedView.grandTotals.regimesPresent[0] === 'PJ'
+  );
+  const isEstagioOnlyView = selectedVinculo === 'ESTAGIO' || (
+    filteredRows.length > 0 &&
+    partitionedView.grandTotals.regimesPresent.length === 1 &&
+    partitionedView.grandTotals.regimesPresent[0] === 'ESTAGIO'
+  );
+  const isMixedRegimeView = partitionedView.grandTotals.isMixed;
+  const hasEstagioAntecipacao = partitionedView.estagioTotals.antecipacaoEstagio > 0;
 
   // Totais analíticos e consolidados de todas as verbas do filtro ativo
   const summaryTotals = useMemo(() => {
@@ -1298,16 +1321,20 @@ export function CompetenciasCostsListModal({
         </div>
 
         {/* SUMMARY KPI CARDS & COMPOSIÇÃO DE VERBAS */}
-        <div className="px-6 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shrink-0 space-y-2">
+        <div className="px-4 sm:px-6 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shrink-0 space-y-2">
           {/* Cabeçalho dos Totalizadores com Botão de Composição */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Receipt size={14} className="text-emerald-600" />
-                Totalizadores Consolidados da Seleção
+                <Receipt size={14} className={isPjOnlyView ? 'text-teal-600' : isEstagioOnlyView ? 'text-amber-600' : 'text-emerald-600'} />
+                {isPjOnlyView
+                  ? 'Totalizadores Contratuais — Prestação de Serviços (PJ / MEI)'
+                  : isEstagioOnlyView
+                    ? 'Totalizadores — Bolsas de Estágio (Lei nº 11.788/2008)'
+                    : 'Totalizadores Consolidados da Seleção'}
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                {filteredRows.length} lançamentos
+                {filteredRows.length} {isPjOnlyView ? (filteredRows.length === 1 ? 'faturamento' : 'faturamentos') : (filteredRows.length === 1 ? 'lançamento' : 'lançamentos')}
               </span>
             </div>
 
@@ -1316,85 +1343,211 @@ export function CompetenciasCostsListModal({
               type="button"
               onClick={() => setIsSummaryVerbasModalOpen(true)}
               className="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black shadow-md transition-all cursor-pointer group"
-              title="Clique para ver o relatório executivo completo de cada verba, provento e desconto que formam os totalizadores"
+              title="Clique para ver o relatório executivo completo de cada verba e valor que formam os totalizadores"
             >
               <Layers size={14} className="group-hover:rotate-12 transition-transform" />
               <span>Ver Composição Detalhada dos Totalizadores</span>
             </button>
           </div>
 
-          {/* 10 Cards Executivos Unificados (Idênticos à Central de Ingestão) */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
-            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-              <span className="text-[9px] font-black text-slate-500 uppercase block truncate">1. Proventos (Folha)</span>
-              <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums block truncate">
-                {showValues ? formatCurrency(summaryTotals.totalProventosBrutos) : '••••'}
+          {/* Faixa Executiva de Segregação por Natureza Jurídica (quando múltiplos regimes estão visíveis) */}
+          {isMixedRegimeView && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-[11px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-black uppercase tracking-wider text-slate-500 text-[10px]">Por Natureza Jurídica:</span>
+                {partitionedView.cltRows.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 font-bold tabular-nums">
+                    Folha CLT ({partitionedView.cltTotals.countRows}): {showValues ? formatCurrency(partitionedView.cltTotals.liquido) : '••••'}
+                  </span>
+                )}
+                {partitionedView.estagioRows.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold tabular-nums">
+                    Estágio ({partitionedView.estagioTotals.countRows}): {showValues ? formatCurrency(partitionedView.estagioTotals.liquido) : '••••'}
+                  </span>
+                )}
+                {partitionedView.pjRows.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-200 font-bold tabular-nums">
+                    Contratos PJ/MEI ({partitionedView.pjTotals.countRows}): {showValues ? formatCurrency(partitionedView.pjTotals.valorLiquidoNf) : '••••'}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                No PDF, CLT, Estágio e PJ são segregados em cadernos independentes.
               </span>
             </div>
+          )}
 
-            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/50">
-              <span className="text-[9px] font-black text-blue-600 uppercase block truncate">2. + Outros</span>
-              <span className="text-xs sm:text-sm font-black text-blue-700 dark:text-blue-300 tabular-nums block truncate">
-                +{showValues ? formatCurrency(summaryTotals.totalOutrosProventos) : '••••'}
-              </span>
-            </div>
+          {/* Cards Dinâmicos por Natureza Jurídica: PJ B2B (6 cards) | Estágio (6/7 cards) | CLT (10 cards) */}
+          {isPjOnlyView ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                <span className="text-[9px] font-black text-slate-500 uppercase block truncate">1. Honorários / NF Base</span>
+                <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(partitionedView.pjTotals.honorariosBase) : '••••'}
+                </span>
+              </div>
 
-            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
-              <span className="text-[9px] font-black text-emerald-600 uppercase block truncate">3. + VT</span>
-              <span className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums block truncate">
-                +{showValues ? formatCurrency(summaryTotals.totalVtRecarga) : '••••'}
-              </span>
-            </div>
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-sky-200 dark:border-sky-900/50">
+                <span className="text-[9px] font-black text-sky-600 uppercase block truncate">2. + Variável / Comissões</span>
+                <span className="text-xs sm:text-sm font-black text-sky-700 dark:text-sky-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(partitionedView.pjTotals.variavelComissoes) : '••••'}
+                </span>
+              </div>
 
-            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-900/50">
-              <span className="text-[9px] font-black text-amber-600 uppercase block truncate">4. + VR / Cesta</span>
-              <span className="text-xs sm:text-sm font-black text-amber-700 dark:text-amber-300 tabular-nums block truncate">
-                +{showValues ? formatCurrency(summaryTotals.totalVrCesta) : '••••'}
-              </span>
-            </div>
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-teal-200 dark:border-teal-900/50">
+                <span className="text-[9px] font-black text-teal-600 uppercase block truncate">3. + Conectividade / Reemb.</span>
+                <span className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(partitionedView.pjTotals.conectividadeReembolso) : '••••'}
+                </span>
+              </div>
 
-            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-sky-200 dark:border-sky-900/50">
-              <span className="text-[9px] font-black text-sky-600 uppercase block truncate">5. + Bônus</span>
-              <span className="text-xs sm:text-sm font-black text-sky-700 dark:text-sky-300 tabular-nums block truncate">
-                +{showValues ? formatCurrency(summaryTotals.totalBonus) : '••••'}
-              </span>
-            </div>
+              <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl border-2 border-blue-400 dark:border-blue-700 shadow-2xs">
+                <span className="text-[9px] font-black text-blue-800 dark:text-blue-300 uppercase block truncate">= Valor Bruto NF</span>
+                <span className="text-xs sm:text-sm font-black text-blue-900 dark:text-blue-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(partitionedView.pjTotals.valorBrutoNf) : '••••'}
+                </span>
+              </div>
 
-            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-teal-200 dark:border-teal-900/50">
-              <span className="text-[9px] font-black text-teal-600 uppercase block truncate">6. + Premiação</span>
-              <span className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 tabular-nums block truncate">
-                +{showValues ? formatCurrency(summaryTotals.totalAjudaCusto) : '••••'}
-              </span>
-            </div>
+              <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-300 dark:border-rose-800">
+                <span className="text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase block truncate">(-) Glosas / Deduções</span>
+                <span className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums block truncate">
+                  -{showValues ? formatCurrency(partitionedView.pjTotals.glosasDeducoes) : '••••'}
+                </span>
+              </div>
 
-            <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl border-2 border-blue-400 dark:border-blue-700 shadow-2xs">
-              <span className="text-[9px] font-black text-blue-800 dark:text-blue-300 uppercase block truncate">= Subtotal</span>
-              <span className="text-xs sm:text-sm font-black text-blue-900 dark:text-blue-200 tabular-nums block truncate">
-                {showValues ? formatCurrency(summaryTotals.totalSubtotal || (summaryTotals.totalProventosBrutos + summaryTotals.totalOutrosProventos + summaryTotals.totalVtRecarga + summaryTotals.totalVrCesta + summaryTotals.totalBonus + summaryTotals.totalAjudaCusto)) : '••••'}
-              </span>
+              <div className="p-2 bg-emerald-100/80 dark:bg-emerald-950/80 rounded-xl border-2 border-emerald-500 dark:border-emerald-600 shadow-sm">
+                <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 uppercase block truncate">= Valor Líquido NF</span>
+                <span className="text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(partitionedView.pjTotals.valorLiquidoNf) : '••••'}
+                </span>
+              </div>
             </div>
+          ) : isEstagioOnlyView ? (
+            <div className={`grid grid-cols-2 sm:grid-cols-3 ${hasEstagioAntecipacao ? 'lg:grid-cols-7' : 'lg:grid-cols-6'} gap-2`}>
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                <span className="text-[9px] font-black text-slate-500 uppercase block truncate">1. Bolsa-Auxílio</span>
+                <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(partitionedView.estagioTotals.bolsaAuxilio) : '••••'}
+                </span>
+              </div>
 
-            <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-300 dark:border-rose-800">
-              <span className="text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase block truncate">(-) Desc. Folha</span>
-              <span className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums block truncate">
-                -{showValues ? formatCurrency(summaryTotals.totalDescontosFolha) : '••••'}
-              </span>
-            </div>
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
+                <span className="text-[9px] font-black text-emerald-600 uppercase block truncate">2. + Aux. Transporte</span>
+                <span className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(partitionedView.estagioTotals.auxilioTransporte) : '••••'}
+                </span>
+              </div>
 
-            <div className="p-2 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-800">
-              <span className="text-[9px] font-black text-amber-700 dark:text-amber-400 uppercase block truncate">(+) Adiantamento</span>
-              <span className="text-xs sm:text-sm font-black text-amber-700 dark:text-amber-400 tabular-nums block truncate">
-                +{showValues ? formatCurrency(summaryTotals.totalAdiantamentoSalarial) : '••••'}
-              </span>
-            </div>
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/50">
+                <span className="text-[9px] font-black text-blue-600 uppercase block truncate">3. + Outros Auxílios</span>
+                <span className="text-xs sm:text-sm font-black text-blue-700 dark:text-blue-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(partitionedView.estagioTotals.outrosAuxilios) : '••••'}
+                </span>
+              </div>
 
-            <div className="p-2 bg-emerald-100/80 dark:bg-emerald-950/80 rounded-xl border-2 border-emerald-500 dark:border-emerald-600 shadow-sm">
-              <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 uppercase block truncate">= Líquido</span>
-              <span className="text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-200 tabular-nums block truncate">
-                {showValues ? formatCurrency(summaryTotals.totalGeral) : '••••'}
-              </span>
+              <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl border-2 border-blue-400 dark:border-blue-700 shadow-2xs">
+                <span className="text-[9px] font-black text-blue-800 dark:text-blue-300 uppercase block truncate">= Subtotal</span>
+                <span className="text-xs sm:text-sm font-black text-blue-900 dark:text-blue-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(partitionedView.estagioTotals.subtotal) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-300 dark:border-rose-800">
+                <span className="text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase block truncate">(-) Deduções</span>
+                <span className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums block truncate">
+                  -{showValues ? formatCurrency(partitionedView.estagioTotals.deducoesEstagio) : '••••'}
+                </span>
+              </div>
+
+              {hasEstagioAntecipacao && (
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-800">
+                  <span className="text-[9px] font-black text-amber-700 dark:text-amber-400 uppercase block truncate">(+) Antecipação</span>
+                  <span className="text-xs sm:text-sm font-black text-amber-700 dark:text-amber-400 tabular-nums block truncate">
+                    +{showValues ? formatCurrency(partitionedView.estagioTotals.antecipacaoEstagio) : '••••'}
+                  </span>
+                </div>
+              )}
+
+              <div className="p-2 bg-emerald-100/80 dark:bg-emerald-950/80 rounded-xl border-2 border-emerald-500 dark:border-emerald-600 shadow-sm">
+                <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 uppercase block truncate">= Valor Líquido</span>
+                <span className="text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(partitionedView.estagioTotals.liquido) : '••••'}
+                </span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                <span className="text-[9px] font-black text-slate-500 uppercase block truncate">1. Proventos (Folha)</span>
+                <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(summaryTotals.totalProventosBrutos) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/50">
+                <span className="text-[9px] font-black text-blue-600 uppercase block truncate">2. + Outros</span>
+                <span className="text-xs sm:text-sm font-black text-blue-700 dark:text-blue-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(summaryTotals.totalOutrosProventos) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
+                <span className="text-[9px] font-black text-emerald-600 uppercase block truncate">3. + VT</span>
+                <span className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(summaryTotals.totalVtRecarga) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-900/50">
+                <span className="text-[9px] font-black text-amber-600 uppercase block truncate">4. + VR / Cesta</span>
+                <span className="text-xs sm:text-sm font-black text-amber-700 dark:text-amber-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(summaryTotals.totalVrCesta) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-sky-200 dark:border-sky-900/50">
+                <span className="text-[9px] font-black text-sky-600 uppercase block truncate">5. + Bônus</span>
+                <span className="text-xs sm:text-sm font-black text-sky-700 dark:text-sky-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(summaryTotals.totalBonus) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-teal-200 dark:border-teal-900/50">
+                <span className="text-[9px] font-black text-teal-600 uppercase block truncate">6. + Premiação</span>
+                <span className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(summaryTotals.totalAjudaCusto) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl border-2 border-blue-400 dark:border-blue-700 shadow-2xs">
+                <span className="text-[9px] font-black text-blue-800 dark:text-blue-300 uppercase block truncate">= Subtotal</span>
+                <span className="text-xs sm:text-sm font-black text-blue-900 dark:text-blue-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(summaryTotals.totalSubtotal || (summaryTotals.totalProventosBrutos + summaryTotals.totalOutrosProventos + summaryTotals.totalVtRecarga + summaryTotals.totalVrCesta + summaryTotals.totalBonus + summaryTotals.totalAjudaCusto)) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-300 dark:border-rose-800">
+                <span className="text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase block truncate">(-) Desc. Folha</span>
+                <span className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-400 tabular-nums block truncate">
+                  -{showValues ? formatCurrency(summaryTotals.totalDescontosFolha) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-800">
+                <span className="text-[9px] font-black text-amber-700 dark:text-amber-400 uppercase block truncate">(+) Adiantamento</span>
+                <span className="text-xs sm:text-sm font-black text-amber-700 dark:text-amber-400 tabular-nums block truncate">
+                  +{showValues ? formatCurrency(summaryTotals.totalAdiantamentoSalarial) : '••••'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-emerald-100/80 dark:bg-emerald-950/80 rounded-xl border-2 border-emerald-500 dark:border-emerald-600 shadow-sm">
+                <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 uppercase block truncate">{isMixedRegimeView ? '= Total Grupo' : '= Líquido'}</span>
+                <span className="text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-200 tabular-nums block truncate">
+                  {showValues ? formatCurrency(summaryTotals.totalGeral) : '••••'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* BARRA DE AÇÃO EM LOTE PARA VERBAS EXTRA-FOLHA (QUANDO CHECKBOX ATIVO) */}
@@ -1502,15 +1655,17 @@ export function CompetenciasCostsListModal({
             <table className="w-full text-left text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-2xs">
                 <tr>
-                  <th className="px-3 py-3 w-10 text-center select-none">
-                    <input
-                      type="checkbox"
-                      checked={isAllSelected}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
-                      title="Selecionar todos os colaboradores CLT visíveis"
-                    />
-                  </th>
+                  {!isPjOnlyView && (
+                    <th className="px-3 py-3 w-10 text-center select-none">
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                        title="Selecionar todos os colaboradores CLT visíveis"
+                      />
+                    </th>
+                  )}
 
                   <th 
                     onClick={() => toggleSort('competencia')}
@@ -1527,60 +1682,129 @@ export function CompetenciasCostsListModal({
                     className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer hover:text-emerald-600 select-none"
                   >
                     <div className="flex items-center gap-1.5">
-                      Colaborador / Regime
+                      {isPjOnlyView ? 'Contratada (Razão Social) / CNPJ' : isEstagioOnlyView ? 'Estagiário / Modalidade' : 'Colaborador / Regime'}
                       <ArrowUpDown size={12} className={sortField === 'name' ? 'text-emerald-600' : 'opacity-40'} />
                     </div>
                   </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 text-right bg-slate-500/10 rounded-t whitespace-nowrap">
-                    Proventos
-                  </th>
+                  {isPjOnlyView ? (
+                    <>
+                      <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 text-right bg-slate-500/10 rounded-t whitespace-nowrap">
+                        Honorários / NF Base
+                      </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300 text-right bg-sky-500/10 rounded-t whitespace-nowrap">
+                        + Variável / Comissões
+                      </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300 text-right bg-teal-500/10 rounded-t whitespace-nowrap">
+                        + Conectividade / Reemb.
+                      </th>
+                      <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-200 text-right bg-blue-500/20 whitespace-nowrap">
+                        = Valor Bruto NF
+                      </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-rose-600 text-right bg-rose-500/10 rounded-t whitespace-nowrap">
+                        (-) Glosas / Deduções
+                      </th>
+                      <th 
+                        onClick={() => toggleSort('total')}
+                        className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 text-right bg-emerald-500/20 cursor-pointer select-none whitespace-nowrap"
+                      >
+                        <div className="flex items-center justify-end gap-1.5">
+                          = Valor Líquido NF
+                          <ArrowUpDown size={12} className={sortField === 'total' ? 'text-emerald-600' : 'opacity-40'} />
+                        </div>
+                      </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center whitespace-nowrap">
+                        Modalidade
+                      </th>
+                    </>
+                  ) : isEstagioOnlyView ? (
+                    <>
+                      <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 text-right bg-slate-500/10 rounded-t whitespace-nowrap">
+                        Bolsa-Auxílio
+                      </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 text-right bg-emerald-500/10 rounded-t whitespace-nowrap">
+                        + Aux. Transporte
+                      </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 text-right bg-blue-500/10 rounded-t whitespace-nowrap">
+                        + Outros Auxílios
+                      </th>
+                      <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-200 text-right bg-blue-500/20 whitespace-nowrap">
+                        = Subtotal
+                      </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-rose-600 text-right bg-rose-500/10 rounded-t whitespace-nowrap">
+                        (-) Deduções
+                      </th>
+                      {hasEstagioAntecipacao && (
+                        <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 text-right bg-amber-500/10 rounded-t whitespace-nowrap">
+                          (+) Antecipação
+                        </th>
+                      )}
+                      <th 
+                        onClick={() => toggleSort('total')}
+                        className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 text-right bg-emerald-500/20 cursor-pointer select-none whitespace-nowrap"
+                      >
+                        <div className="flex items-center justify-end gap-1.5">
+                          = Valor Líquido
+                          <ArrowUpDown size={12} className={sortField === 'total' ? 'text-emerald-600' : 'opacity-40'} />
+                        </div>
+                      </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center whitespace-nowrap">
+                        Modalidade
+                      </th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 text-right bg-slate-500/10 rounded-t whitespace-nowrap">
+                        Proventos
+                      </th>
 
-                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 text-right bg-blue-500/10 rounded-t whitespace-nowrap">
-                    + Outros
-                  </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 text-right bg-blue-500/10 rounded-t whitespace-nowrap">
+                        + Outros
+                      </th>
 
-                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 text-right bg-emerald-500/10 rounded-t whitespace-nowrap">
-                    + VT
-                  </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 text-right bg-emerald-500/10 rounded-t whitespace-nowrap">
+                        + VT
+                      </th>
 
-                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 text-right bg-amber-500/10 rounded-t whitespace-nowrap">
-                    + VR / Cesta
-                  </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 text-right bg-amber-500/10 rounded-t whitespace-nowrap">
+                        + VR / Cesta
+                      </th>
 
-                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300 text-right bg-sky-500/10 rounded-t whitespace-nowrap">
-                    + Bônus
-                  </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300 text-right bg-sky-500/10 rounded-t whitespace-nowrap">
+                        + Bônus
+                      </th>
 
-                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300 text-right bg-teal-500/10 rounded-t whitespace-nowrap">
-                    + Premiação
-                  </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300 text-right bg-teal-500/10 rounded-t whitespace-nowrap">
+                        + Premiação
+                      </th>
 
-                  <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-200 text-right bg-blue-500/20 whitespace-nowrap">
-                    = Subtotal
-                  </th>
+                      <th className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-200 text-right bg-blue-500/20 whitespace-nowrap">
+                        = Subtotal
+                      </th>
 
-                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-rose-600 text-right bg-rose-500/10 rounded-t whitespace-nowrap">
-                    (-) Desc. Folha
-                  </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-rose-600 text-right bg-rose-500/10 rounded-t whitespace-nowrap">
+                        (-) Desc. Folha
+                      </th>
 
-                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 text-right bg-amber-500/10 rounded-t whitespace-nowrap">
-                    (+) Adiantamento
-                  </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 text-right bg-amber-500/10 rounded-t whitespace-nowrap">
+                        (+) Adiantamento
+                      </th>
 
-                  <th 
-                    onClick={() => toggleSort('total')}
-                    className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 text-right bg-emerald-500/20 cursor-pointer select-none whitespace-nowrap"
-                  >
-                    <div className="flex items-center justify-end gap-1.5">
-                      = Líquido
-                      <ArrowUpDown size={12} className={sortField === 'total' ? 'text-emerald-600' : 'opacity-40'} />
-                    </div>
-                  </th>
+                      <th 
+                        onClick={() => toggleSort('total')}
+                        className="px-3 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 text-right bg-emerald-500/20 cursor-pointer select-none whitespace-nowrap"
+                      >
+                        <div className="flex items-center justify-end gap-1.5">
+                          = Líquido
+                          <ArrowUpDown size={12} className={sortField === 'total' ? 'text-emerald-600' : 'opacity-40'} />
+                        </div>
+                      </th>
 
-                  <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center whitespace-nowrap">
-                    Vínculo
-                  </th>
+                      <th className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center whitespace-nowrap">
+                        Vínculo
+                      </th>
+                    </>
+                  )}
 
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 text-center sticky right-0 bg-slate-100 dark:bg-slate-900 shadow-2xs whitespace-nowrap">
                     Ações
@@ -1592,12 +1816,28 @@ export function CompetenciasCostsListModal({
                 key={`tbody-${selectedYears.join('-')}-${compFilterMode}-${selectedCompetencia}-${selectedVinculo}-${selectedEmpresa}-${selectedSetor}-${searchTerm}-${usePageScope}`}
                 className="divide-y divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900/60 font-medium"
               >
-                {filteredRows.map(({ cost, emp, name, financials, realTotal, isCLT, isEstagio }, idx) => {
-                  const beneficios = financials.beneficios;
+                {filteredRows.map(({ cost, emp, name, financials, realTotal, isCLT, isEstagio, isPJ }, idx) => {
                   const heNoturno = financials.heNoturno;
-                  const decimoFerias = financials.decimoFerias;
                   const fixo = financials.fixo;
                   const isDeletingThis = deletingId === cost.id;
+                  const pjDisplayName = (emp?.corporate_name || '').trim() || name;
+                  const pjCnpj = (emp?.pj_type || emp?.document_id || '').trim();
+                  const pjHonorarios = Number(financials.fixo || cost.valor_fixo || cost.valor_liquido || realTotal || 0);
+                  const pjVariavel = Number(financials.bonus || 0);
+                  const pjConectividade = Number(financials.ajudaCusto || cost.valor_ajuda_custo || 0);
+                  const pjBruto = pjHonorarios + pjVariavel + pjConectividade;
+                  const pjGlosas = Number(financials.descontosFolha || 0);
+                  const hasHol = Number(cost.valor_holerite || 0) > 0;
+                  const estBolsa = Number(hasHol ? cost.valor_holerite : (cost.valor_fixo ?? fixo) || 0);
+                  const estAuxTransp = Number(cost.valor_vt || 0);
+                  const estOutrosVal = (hasHol ? Number(cost.outros_ajustes || 0) : Number(cost.outros_ajustes || heNoturno || 0))
+                    + Number((cost.valor_cesta || 0) + (cost.valor_vr || 0))
+                    + Number(cost.valor_bonus || 0)
+                    + Number(cost.valor_ajuda_custo || 0);
+                  const estSubtotal = estBolsa + estAuxTransp + estOutrosVal;
+                  const estDeducoes = Number(cost.valor_descontos || financials.descontosFolha || 0);
+                  const estAntecipacao = Number(cost.valor_adiantamento || 0);
+                  const expandedColSpan = isPjOnlyView ? 10 : isEstagioOnlyView ? (hasEstagioAntecipacao ? 12 : 11) : 15;
 
                   return (
                     <React.Fragment key={`${cost.id || 'cost'}-${cost.competencia || 'comp'}-${idx}`}>
@@ -1606,19 +1846,21 @@ export function CompetenciasCostsListModal({
                           selectedCostIds.has(cost.id) ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''
                         }`}
                       >
-                      {/* Checkbox de Seleção (Apenas CLT) */}
-                      <td className="px-3 py-3 text-center align-middle">
-                        {isCLT ? (
-                          <input
-                            type="checkbox"
-                            checked={selectedCostIds.has(cost.id)}
-                            onChange={() => toggleSelectRow(cost.id)}
-                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
-                          />
-                        ) : (
-                          <span className="text-[10px] text-slate-300 dark:text-slate-700 font-mono">—</span>
-                        )}
-                      </td>
+                      {/* Checkbox de Seleção (Apenas CLT / Estágio quando fora da visão exclusiva PJ) */}
+                      {!isPjOnlyView && (
+                        <td className="px-3 py-3 text-center align-middle">
+                          {isCLT ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedCostIds.has(cost.id)}
+                              onChange={() => toggleSelectRow(cost.id)}
+                              className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                            />
+                          ) : (
+                            <span className="text-[10px] text-slate-300 dark:text-slate-700 font-mono">—</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Competência */}
                       <td className="px-4 py-3 align-middle font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
@@ -1630,14 +1872,14 @@ export function CompetenciasCostsListModal({
                         </span>
                       </td>
 
-                      {/* Colaborador */}
+                      {/* Identificação: Contratada PJ vs Estagiário vs Colaborador CLT */}
                       <td className="px-4 py-3 align-middle">
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => toggleExpandRow(cost.id)}
                             className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors shrink-0"
-                            title={expandedRowIds.has(cost.id) ? "Recolher composição das verbas" : "Ver composição detalhada das verbas desta linha"}
+                            title={expandedRowIds.has(cost.id) ? "Recolher composição detalhada" : "Ver composição detalhada desta linha"}
                           >
                             {expandedRowIds.has(cost.id) ? (
                               <ChevronDown size={14} className="text-emerald-600 font-bold" />
@@ -1647,152 +1889,302 @@ export function CompetenciasCostsListModal({
                           </button>
                           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
                             isEstagio
-                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-900'
                               : isCLT 
                                 ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-900' 
-                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900'
+                                : 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-900'
                           }`}>
                             {isEstagio ? 'Estágio' : (isCLT ? 'CLT' : 'PJ')}
                           </span>
                           <div className="min-w-0">
                             <p className="font-black text-slate-900 dark:text-slate-100 text-xs truncate max-w-[200px] sm:max-w-[260px]">
-                              {name}
+                              {isPJ ? pjDisplayName : name}
                             </p>
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate max-w-[240px]">
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate max-w-[260px]">
                               {emp?.company && (
                                 <span className="font-bold text-slate-500 uppercase">{emp.company}</span>
                               )}
                               {emp?.company && <span>&bull;</span>}
                               <span className="truncate">{emp?.job_role || emp?.department || '—'}</span>
+                              {isPJ && pjCnpj && (
+                                <>
+                                  <span>&bull;</span>
+                                  <span className="font-mono text-slate-500">CNPJ: {pjCnpj}</span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Proventos */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums font-semibold text-slate-800 dark:text-slate-200 bg-slate-500/5 whitespace-nowrap">
-                        {showValues ? formatCurrency(Number(cost.valor_holerite || cost.valor_fixo || (isCLT ? fixo : realTotal) || 0)) : '••••••'}
-                      </td>
+                      {isPjOnlyView ? (
+                        <>
+                          {/* Honorários / NF Base */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums font-semibold text-slate-800 dark:text-slate-200 bg-slate-500/5 whitespace-nowrap">
+                            {showValues ? formatCurrency(pjHonorarios) : '••••••'}
+                          </td>
 
-                      {/* + Outros */}
-                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-blue-500/5 whitespace-nowrap">
-                        {(() => {
-                          const hasHol = Number(cost.valor_holerite || 0) > 0;
-                          const outVal = hasHol ? Number(cost.outros_ajustes || 0) : Number(cost.outros_ajustes || heNoturno || 0);
-                          return outVal > 0 ? (
-                            <span className="font-bold text-blue-700 dark:text-blue-300">
-                              +{showValues ? formatCurrency(outVal) : '••••'}
-                            </span>
-                          ) : (
-                            <span className="text-slate-300 dark:text-slate-700">—</span>
-                          );
-                        })()}
-                      </td>
+                          {/* + Variável / Comissões */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-sky-500/5 whitespace-nowrap">
+                            {pjVariavel > 0 ? (
+                              <span className="font-bold text-sky-700 dark:text-sky-300">
+                                +{showValues ? formatCurrency(pjVariavel) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
 
-                      {/* + VT */}
-                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-emerald-500/5 whitespace-nowrap">
-                        {Number(cost.valor_vt || 0) > 0 ? (
-                          <span className="font-bold text-emerald-700 dark:text-emerald-300">
-                            +{showValues ? formatCurrency(Number(cost.valor_vt || 0)) : '••••'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
-                        )}
-                      </td>
+                          {/* + Conectividade / Reemb. */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-teal-500/5 whitespace-nowrap">
+                            {pjConectividade > 0 ? (
+                              <span className="font-bold text-teal-700 dark:text-teal-300">
+                                +{showValues ? formatCurrency(pjConectividade) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
 
-                      {/* + VR / Cesta */}
-                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-amber-500/5 whitespace-nowrap">
-                        {Number((cost.valor_cesta || 0) + (cost.valor_vr || 0)) > 0 ? (
-                          <span className="font-bold text-amber-700 dark:text-amber-300">
-                            +{showValues ? formatCurrency(Number((cost.valor_cesta || 0) + (cost.valor_vr || 0))) : '••••'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
-                        )}
-                      </td>
-
-                      {/* + Bônus */}
-                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-sky-500/5 whitespace-nowrap">
-                        {Number(cost.valor_bonus || 0) > 0 ? (
-                          <span className="font-bold text-sky-700 dark:text-sky-300">
-                            +{showValues ? formatCurrency(Number(cost.valor_bonus || 0)) : '••••'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
-                        )}
-                      </td>
-
-                      {/* + Premiação */}
-                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-teal-500/5 whitespace-nowrap">
-                        {Number(cost.valor_ajuda_custo || 0) > 0 ? (
-                          <span className="font-bold text-teal-700 dark:text-teal-300">
-                            +{showValues ? formatCurrency(Number(cost.valor_ajuda_custo || 0)) : '••••'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
-                        )}
-                      </td>
-
-                      {/* = Subtotal */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums bg-blue-500/10 font-black text-blue-900 dark:text-blue-200 whitespace-nowrap">
-                        {(() => {
-                          const hasHol = Number(cost.valor_holerite || 0) > 0;
-                          const prov = Number(cost.valor_holerite || cost.valor_fixo || (isCLT ? fixo : realTotal) || 0);
-                          const out = hasHol ? Number(cost.outros_ajustes || 0) : Number(cost.outros_ajustes || heNoturno || 0);
-                          const v = Number(cost.valor_vt || 0);
-                          const vrC = Number((cost.valor_cesta || 0) + (cost.valor_vr || 0));
-                          const b = Number(cost.valor_bonus || 0);
-                          const p = Number(cost.valor_ajuda_custo || 0);
-                          const subt = prov + out + v + vrC + b + p;
-                          return (
+                          {/* = Valor Bruto NF */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums bg-blue-500/10 font-black text-blue-900 dark:text-blue-200 whitespace-nowrap">
                             <span className="inline-block px-2 py-0.5 rounded-lg bg-blue-100/70 dark:bg-blue-950/70 border border-blue-300 dark:border-blue-800">
-                              {showValues ? formatCurrency(subt) : '••••••'}
+                              {showValues ? formatCurrency(pjBruto) : '••••••'}
                             </span>
-                          );
-                        })()}
-                      </td>
+                          </td>
 
-                      {/* (-) Desc. Folha */}
-                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-rose-500/5 whitespace-nowrap">
-                        {Number(cost.valor_descontos || financials.descontosFolha || 0) > 0 ? (
-                          <span className="font-bold text-rose-600 dark:text-rose-400">
-                            -{showValues ? formatCurrency(Number(cost.valor_descontos || financials.descontosFolha || 0)) : '••••'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
-                        )}
-                      </td>
+                          {/* (-) Glosas / Deduções */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-rose-500/5 whitespace-nowrap">
+                            {pjGlosas > 0 ? (
+                              <span className="font-bold text-rose-600 dark:text-rose-400">
+                                -{showValues ? formatCurrency(pjGlosas) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
 
-                      {/* (+) Adiantamento */}
-                      <td className="px-2 py-3 align-middle text-right tabular-nums bg-amber-500/5 whitespace-nowrap">
-                        {Number(cost.valor_adiantamento || 0) > 0 ? (
-                          <span className="font-bold text-amber-700 dark:text-amber-400">
-                            +{showValues ? formatCurrency(Number(cost.valor_adiantamento || 0)) : '••••'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
-                        )}
-                      </td>
+                          {/* = Valor Líquido NF */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums bg-emerald-500/15 whitespace-nowrap">
+                            <span className="inline-block px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-black text-xs shadow-2xs">
+                              {showValues ? formatCurrency(realTotal) : '••••••'}
+                            </span>
+                          </td>
 
-                      {/* = Líquido (Subtotal - Descontos + Adiantamento) */}
-                      <td className="px-3 py-3 align-middle text-right tabular-nums bg-emerald-500/15 whitespace-nowrap">
-                        <span className="inline-block px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-black text-xs shadow-2xs">
-                          {showValues ? formatCurrency(realTotal) : '••••••'}
-                        </span>
-                      </td>
+                          {/* Modalidade PJ */}
+                          <td className="px-2 py-3 align-middle text-center whitespace-nowrap">
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md border bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border-teal-200 dark:border-teal-900">
+                              {emp?.linkType === 'MEI' ? 'MEI' : 'PJ'}
+                            </span>
+                          </td>
+                        </>
+                      ) : isEstagioOnlyView ? (
+                        <>
+                          {/* Bolsa-Auxílio */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums font-semibold text-slate-800 dark:text-slate-200 bg-slate-500/5 whitespace-nowrap">
+                            {showValues ? formatCurrency(estBolsa) : '••••••'}
+                          </td>
 
-                      {/* Vínculo */}
-                      <td className="px-2 py-3 align-middle text-center whitespace-nowrap">
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                          isEstagio 
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-900' 
-                            : isCLT 
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
-                              : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-900'
-                        }`}>
-                          {isEstagio ? 'Estágio' : (isCLT ? 'CLT' : 'PJ')}
-                        </span>
-                      </td>
+                          {/* + Aux. Transporte */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-emerald-500/5 whitespace-nowrap">
+                            {estAuxTransp > 0 ? (
+                              <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                                +{showValues ? formatCurrency(estAuxTransp) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {/* + Outros Auxílios */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-blue-500/5 whitespace-nowrap">
+                            {estOutrosVal > 0 ? (
+                              <span className="font-bold text-blue-700 dark:text-blue-300">
+                                +{showValues ? formatCurrency(estOutrosVal) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {/* = Subtotal Estágio */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums bg-blue-500/10 font-black text-blue-900 dark:text-blue-200 whitespace-nowrap">
+                            <span className="inline-block px-2 py-0.5 rounded-lg bg-blue-100/70 dark:bg-blue-950/70 border border-blue-300 dark:border-blue-800">
+                              {showValues ? formatCurrency(estSubtotal) : '••••••'}
+                            </span>
+                          </td>
+
+                          {/* (-) Deduções Estágio */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-rose-500/5 whitespace-nowrap">
+                            {estDeducoes > 0 ? (
+                              <span className="font-bold text-rose-600 dark:text-rose-400">
+                                -{showValues ? formatCurrency(estDeducoes) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {hasEstagioAntecipacao && (
+                            <td className="px-2 py-3 align-middle text-right tabular-nums bg-amber-500/5 whitespace-nowrap">
+                              {estAntecipacao > 0 ? (
+                                <span className="font-bold text-amber-700 dark:text-amber-400">
+                                  +{showValues ? formatCurrency(estAntecipacao) : '••••'}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-700">—</span>
+                              )}
+                            </td>
+                          )}
+
+                          {/* = Valor Líquido Estágio */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums bg-emerald-500/15 whitespace-nowrap">
+                            <span className="inline-block px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-black text-xs shadow-2xs">
+                              {showValues ? formatCurrency(realTotal) : '••••••'}
+                            </span>
+                          </td>
+
+                          {/* Modalidade Estágio */}
+                          <td className="px-2 py-3 align-middle text-center whitespace-nowrap">
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md border bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-900">
+                              Estágio
+                            </span>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          {/* Proventos */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums font-semibold text-slate-800 dark:text-slate-200 bg-slate-500/5 whitespace-nowrap">
+                            {showValues ? formatCurrency(isPJ ? pjHonorarios : Number(cost.valor_holerite || cost.valor_fixo || fixo || 0)) : '••••••'}
+                          </td>
+
+                          {/* + Outros */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-blue-500/5 whitespace-nowrap">
+                            {(() => {
+                              if (isPJ) return <span className="text-slate-300 dark:text-slate-700">—</span>;
+                              const outVal = hasHol ? Number(cost.outros_ajustes || 0) : Number(cost.outros_ajustes || heNoturno || 0);
+                              return outVal > 0 ? (
+                                <span className="font-bold text-blue-700 dark:text-blue-300">
+                                  +{showValues ? formatCurrency(outVal) : '••••'}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-700">—</span>
+                              );
+                            })()}
+                          </td>
+
+                          {/* + VT */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-emerald-500/5 whitespace-nowrap">
+                            {!isPJ && Number(cost.valor_vt || 0) > 0 ? (
+                              <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                                +{showValues ? formatCurrency(Number(cost.valor_vt || 0)) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {/* + VR / Cesta */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-amber-500/5 whitespace-nowrap">
+                            {!isPJ && Number((cost.valor_cesta || 0) + (cost.valor_vr || 0)) > 0 ? (
+                              <span className="font-bold text-amber-700 dark:text-amber-300">
+                                +{showValues ? formatCurrency(Number((cost.valor_cesta || 0) + (cost.valor_vr || 0))) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {/* + Bônus */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-sky-500/5 whitespace-nowrap">
+                            {(isPJ ? pjVariavel : Number(cost.valor_bonus || 0)) > 0 ? (
+                              <span className="font-bold text-sky-700 dark:text-sky-300">
+                                +{showValues ? formatCurrency(isPJ ? pjVariavel : Number(cost.valor_bonus || 0)) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {/* + Premiação */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-teal-500/5 whitespace-nowrap">
+                            {Number(cost.valor_ajuda_custo || 0) > 0 ? (
+                              <span className="font-bold text-teal-700 dark:text-teal-300">
+                                +{showValues ? formatCurrency(Number(cost.valor_ajuda_custo || 0)) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {/* = Subtotal */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums bg-blue-500/10 font-black text-blue-900 dark:text-blue-200 whitespace-nowrap">
+                            {(() => {
+                              if (isPJ) {
+                                return (
+                                  <span className="inline-block px-2 py-0.5 rounded-lg bg-blue-100/70 dark:bg-blue-950/70 border border-blue-300 dark:border-blue-800">
+                                    {showValues ? formatCurrency(pjBruto) : '••••••'}
+                                  </span>
+                                );
+                              }
+                              const prov = Number(cost.valor_holerite || cost.valor_fixo || fixo || 0);
+                              const out = hasHol ? Number(cost.outros_ajustes || 0) : Number(cost.outros_ajustes || heNoturno || 0);
+                              const v = Number(cost.valor_vt || 0);
+                              const vrC = Number((cost.valor_cesta || 0) + (cost.valor_vr || 0));
+                              const b = Number(cost.valor_bonus || 0);
+                              const p = Number(cost.valor_ajuda_custo || 0);
+                              const subt = prov + out + v + vrC + b + p;
+                              return (
+                                <span className="inline-block px-2 py-0.5 rounded-lg bg-blue-100/70 dark:bg-blue-950/70 border border-blue-300 dark:border-blue-800">
+                                  {showValues ? formatCurrency(subt) : '••••••'}
+                                </span>
+                              );
+                            })()}
+                          </td>
+
+                          {/* (-) Desc. Folha */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-rose-500/5 whitespace-nowrap">
+                            {(isPJ ? pjGlosas : Number(cost.valor_descontos || financials.descontosFolha || 0)) > 0 ? (
+                              <span className="font-bold text-rose-600 dark:text-rose-400">
+                                -{showValues ? formatCurrency(isPJ ? pjGlosas : Number(cost.valor_descontos || financials.descontosFolha || 0)) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {/* (+) Adiantamento */}
+                          <td className="px-2 py-3 align-middle text-right tabular-nums bg-amber-500/5 whitespace-nowrap">
+                            {!isPJ && Number(cost.valor_adiantamento || 0) > 0 ? (
+                              <span className="font-bold text-amber-700 dark:text-amber-400">
+                                +{showValues ? formatCurrency(Number(cost.valor_adiantamento || 0)) : '••••'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-700">—</span>
+                            )}
+                          </td>
+
+                          {/* = Líquido (Subtotal - Descontos + Adiantamento) */}
+                          <td className="px-3 py-3 align-middle text-right tabular-nums bg-emerald-500/15 whitespace-nowrap">
+                            <span className="inline-block px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-black text-xs shadow-2xs">
+                              {showValues ? formatCurrency(realTotal) : '••••••'}
+                            </span>
+                          </td>
+
+                          {/* Vínculo */}
+                          <td className="px-2 py-3 align-middle text-center whitespace-nowrap">
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                              isEstagio 
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-900' 
+                                : isCLT 
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
+                                  : 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border-teal-200 dark:border-teal-900'
+                            }`}>
+                              {isEstagio ? 'Estágio' : (isCLT ? 'CLT' : 'PJ')}
+                            </span>
+                          </td>
+                        </>
+                      )}
 
                       {/* Ações */}
                       <td className="px-4 py-3 align-middle text-center sticky right-0 bg-white dark:bg-slate-900 shadow-2xs whitespace-nowrap">
@@ -1800,9 +2192,9 @@ export function CompetenciasCostsListModal({
                           {/* Botão Ver Composição Analítica */}
                           <button
                             type="button"
-                            onClick={() => setVerbasDetailRow({ cost, emp, name })}
+                            onClick={() => setVerbasDetailRow({ cost, emp, name: isPJ ? pjDisplayName : name })}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors"
-                            title="Ver espelho e composição detalhada das verbas desta competência"
+                            title="Ver espelho e composição detalhada desta competência"
                           >
                             <Eye size={15} />
                           </button>
@@ -1821,7 +2213,7 @@ export function CompetenciasCostsListModal({
                           <button
                             type="button"
                             disabled={isDeletingThis}
-                            onClick={() => handleDeleteCost(cost.id, name, cost.competencia)}
+                            onClick={() => handleDeleteCost(cost.id, isPJ ? pjDisplayName : name, cost.competencia)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors disabled:opacity-50"
                             title="Excluir lançamento permanentemente"
                           >
@@ -1841,7 +2233,7 @@ export function CompetenciasCostsListModal({
                         key={`expanded-${cost.id || 'cost'}-${cost.competencia || 'comp'}-${idx}`}
                         className="bg-slate-50/90 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 animate-in fade-in"
                       >
-                        <td colSpan={10} className="px-6 py-4">
+                        <td colSpan={expandedColSpan} className="px-6 py-4">
                           <div className="space-y-3">
                             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
                               <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
@@ -2095,11 +2487,44 @@ export function CompetenciasCostsListModal({
               </div>
 
               <div className="space-y-3">
+                {/* Banner de Conformidade Jurídica (CLT vs Estágio vs PJ/MEI) */}
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {isMixedRegimeView ? (
+                    <>
+                      <span className="font-black text-emerald-700 dark:text-emerald-400 uppercase block mb-0.5">
+                        Segregação Jurídica Automática Ativa
+                      </span>
+                      Este recorte contém múltiplos regimes. O PDF exibirá um <strong>Resumo Consolidado</strong> neutro no topo e segregará <strong>Folha CLT</strong>, <strong>Estágio</strong> e <strong>Prestação de Serviços (PJ/MEI)</strong> em seções independentes, iniciando o <strong>Caderno B2B (PJ/MEI)</strong> em nova página destacável sem terminologia trabalhista.
+                    </>
+                  ) : isPjOnlyView ? (
+                    <>
+                      <span className="font-black text-teal-700 dark:text-teal-400 uppercase block mb-0.5">
+                        Modo Contratual B2B (PJ / MEI)
+                      </span>
+                      Relatório emitido exclusivamente com nomenclatura empresarial (<strong>Razão Social, CNPJ, Honorários/NF Base, Variável/Comissões, Conectividade, Glosas e Valor Líquido NF</strong>) e assinatura de <strong>Gestão de Contratos</strong>.
+                    </>
+                  ) : isEstagioOnlyView ? (
+                    <>
+                      <span className="font-black text-amber-700 dark:text-amber-400 uppercase block mb-0.5">
+                        Modo Estágio (Lei nº 11.788/2008)
+                      </span>
+                      Relatório emitido com nomenclatura própria de estágio (<strong>Bolsa-Auxílio, Auxílio-Transporte, Outros Auxílios, Deduções e Valor Líquido</strong>), sem vínculo empregatício CLT.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-black text-blue-700 dark:text-blue-400 uppercase block mb-0.5">
+                        Modo Folha de Pagamento (Regime CLT)
+                      </span>
+                      Relatório emitido com a quebra executiva completa das <strong>10 colunas da folha CLT</strong> e assinatura de Departamento Pessoal.
+                    </>
+                  )}
+                </div>
+
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
                   Selecione o Modelo de Relatório:
                 </span>
 
-                {/* OPÇÃO 1: ANALÍTICO 10 COLUNAS (RECOMENDADO) */}
+                {/* OPÇÃO 1: ANALÍTICO (RECOMENDADO) */}
                 <button
                   type="button"
                   onClick={() => setPdfReportType('analitico')}
@@ -2112,14 +2537,18 @@ export function CompetenciasCostsListModal({
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
-                      1. Relatório Analítico (10 Colunas)
+                      {isPjOnlyView ? '1. Relatório Analítico Contratual (PJ)' : isEstagioOnlyView ? '1. Relatório Analítico de Estágio' : '1. Relatório Analítico (10 Colunas)'}
                     </span>
                     <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 uppercase">
                       Espelho da Tela • Paisagem
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    Mesma quebra analítica da tela e da ingestão em A4 Paisagem com os 10 totalizadores e colunas: Proventos, + Outros, + VT, + VR/Cesta, + Bônus, + Premiação, = Subtotal, (-) Desc. Folha, (+) Adiantamento e = Líquido.
+                    {isPjOnlyView
+                      ? 'Quebra completa em A4 Paisagem com Razão Social, CNPJ, Honorários/NF Base, + Variável/Comissões, + Conectividade/Reembolso, = Valor Bruto NF, (-) Glosas/Deduções e = Valor Líquido NF.'
+                      : isEstagioOnlyView
+                        ? 'Quebra completa em A4 Paisagem com Bolsa-Auxílio, + Auxílio-Transporte, + Outros Auxílios, = Subtotal, (-) Deduções e = Valor Líquido.'
+                        : 'Mesma quebra analítica da tela em A4 Paisagem com todas as colunas por natureza jurídica (10 colunas para CLT, seções próprias para Estágio e Caderno B2B destacável para PJ/MEI).'}
                   </p>
                 </button>
 
@@ -2143,7 +2572,7 @@ export function CompetenciasCostsListModal({
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    Visão executiva consolidada em A4 Retrato alinhada à mesma equação: Proventos, Benefícios agrupados (VT, VR/Cesta, Bônus e Premiação), = Subtotal, (-) Desc. Folha, (+) Adiantamento e = Líquido.
+                    Visão executiva consolidada em A4 Retrato mantendo a mesma equação contábil e segregação jurídica entre CLT, Estágio e PJ/MEI.
                   </p>
                 </button>
               </div>
